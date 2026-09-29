@@ -84,7 +84,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W38 | Set up inventory: categories, then add items of each tracking kind           | quartermaster          | `/inventory/admin/setup`, `/inventory/admin/items`         | ✅     |
 | W39 | Issue equipment to a member, the member sees it, return it                   | quartermaster → member | `/inventory/admin/members`, `/inventory/my-equipment`      | ✅     |
 | W40 | Pool items, checkouts, kits and variant groups                               | quartermaster          | `/inventory/admin/pool`, `/inventory/checkouts`            | ✅     |
-| W41 | A member's request, return, write-off and reorder, and the approvals         | member → quartermaster | `/inventory/admin/requests`, `/inventory/admin/returns`    | ⬜     |
+| W41 | A member's request, return, write-off and reorder, and the approvals         | member → quartermaster | `/inventory/admin/requests`, `/inventory/admin/returns`    | ✅     |
 | W42 | Maintenance records, vendors, charges and issuance allowances                | quartermaster          | `/inventory/admin/maintenance`, `/inventory/admin/charges` | ⬜     |
 | W43 | Storage areas, barcode labels and CSV import                                 | quartermaster          | `/inventory/storage-areas`, `/inventory/import`            | ⬜     |
 | W44 | NFC: tag in bulk, put away, shelf audit, items not seen                      | quartermaster          | `/inventory/admin/nfc/*`, `/inventory/shelf-audit`         | ⬜     |
@@ -172,11 +172,6 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   … Powered by The Logbook · End-to-end encrypted · Self-hosted ·
   HIPAA-aware") prints under the apparatus check-in sheet and the shift
   report (W37-3).
-- **W41** — a return notice stays "requested" after the quartermaster
-  receives the gear through Return on the members page, so it lingers in the
-  returns queue, on the hub and in the member's Pending (W39-5, flagged). The
-  row also keeps offering "Notify quartermaster of return" after a notice
-  (W39-9).
 - **W48** — the basic apparatus form (`/apparatus-basic` → Add Apparatus)
   names none of its fields: unit number, name, type, crew size and every
   position select are placeholders or nothing (W30).
@@ -188,6 +183,22 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W41 — A member's request, return, write-off and reorder, and the approvals — 2026-09-29
+
+Driven as: `member` at 390×844 → `quartermaster` at 1280×900, with `member`
+refused. Held: a zero quantity was refused; six double-clicks acted once;
+declined and issued decisions reached the member with the quartermaster's note;
+a stale return notice could not take back an item now held by someone else;
+the member got 403 on every write and Access Denied on all four pages. Fixed:
+W41-1 (MED — fulfilling pool stock opened on a method the server always
+refuses), W41-2 (LOW — a multi-unit return was refused on the pre-filled count
+of 1), W41-3 (LOW — the return dialog was unnamed and its row actions
+identical), W41-4 (LOW — the reorder form and steps had unnamed fields and
+unmarked requirements). Flagged: W41-5 (MED — a reorder made in the app can
+never be received; labelled), W41-6 (MED — a write-off raised for one returned
+box would retire the whole pool item). Open: W41-7 (NIT). Gate: typecheck, lint
+and the inventory suites clean. Next: W42.
 
 ### W40 — Pool items, checkouts, kits and variant groups — 2026-09-29
 

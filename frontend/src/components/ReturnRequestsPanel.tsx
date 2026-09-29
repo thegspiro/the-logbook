@@ -20,6 +20,12 @@ const STATUS_BADGES: Record<string, string> = {
 const CONDITION_OPTIONS = ['excellent', 'good', 'fair', 'poor', 'damaged', 'out_of_service'] as const;
 const UNSAFE_CONDITIONS = ['poor', 'damaged', 'out_of_service'] as const;
 
+/** "out_of_service" → "Out of service". */
+const conditionLabel = (condition: string): string => {
+  const words = condition.replace(/_/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
+
 const ReturnRequestsPanel: React.FC = () => {
   const tz = useTimezone();
   const [requests, setRequests] = useState<ReturnRequestItem[]>([]);
@@ -33,7 +39,10 @@ const ReturnRequestsPanel: React.FC = () => {
   const [reviewNotes, setReviewNotes] = useState('');
   const [observedCondition, setObservedCondition] = useState('');
   const [verifiedIdentifier, setVerifiedIdentifier] = useState('');
-  const [receivedQuantity, setReceivedQuantity] = useState(1);
+  // Starts empty: it attests to a count, and the server accepts only the
+  // quantity the member is returning. A pre-filled 1 was refused for every
+  // multi-unit return and invited a receipt nobody had counted.
+  const [receivedQuantity, setReceivedQuantity] = useState('');
   const [followUp, setFollowUp] = useState<'auto' | 'maintenance' | 'charge_review' | 'write_off'>('auto');
   const [submitting, setSubmitting] = useState(false);
 
@@ -76,7 +85,9 @@ const ReturnRequestsPanel: React.FC = () => {
             ? verifiedIdentifier.trim()
             : undefined,
         received_quantity:
-          reviewAction === 'received' && reviewModal.request.return_type === 'issuance' ? receivedQuantity : undefined,
+          reviewAction === 'received' && reviewModal.request.return_type === 'issuance'
+            ? Number(receivedQuantity)
+            : undefined,
         // Only send a follow-up when the selector was actually shown -- a
         // choice made on a previous, unsafe-condition review must not carry
         // over silently to a later review of a different, safe-condition item.
@@ -90,7 +101,7 @@ const ReturnRequestsPanel: React.FC = () => {
       setReviewNotes('');
       setObservedCondition('');
       setVerifiedIdentifier('');
-      setReceivedQuantity(1);
+      setReceivedQuantity('');
       setFollowUp('auto');
       await loadRequests();
     } catch (err: unknown) {
@@ -177,13 +188,14 @@ const ReturnRequestsPanel: React.FC = () => {
                   {req.status === 'requested' && (
                     <div className="flex gap-1">
                       <button
+                        aria-label={`Receive ${req.item_name} from ${req.requester_name || 'unknown member'}`}
                         onClick={() => {
                           setReviewModal({ open: true, request: req });
                           setReviewAction('received');
                           setObservedCondition('');
                           setVerifiedIdentifier('');
                           setReviewNotes('');
-                          setReceivedQuantity(1);
+                          setReceivedQuantity('');
                           setFollowUp('auto');
                         }}
                         className="rounded-lg bg-green-700 p-1.5 text-white transition-colors hover:bg-green-800"
@@ -192,13 +204,14 @@ const ReturnRequestsPanel: React.FC = () => {
                         <CheckCircle className="h-4 w-4" />
                       </button>
                       <button
+                        aria-label={`Deny return of ${req.item_name} from ${req.requester_name || 'unknown member'}`}
                         onClick={() => {
                           setReviewModal({ open: true, request: req });
                           setReviewAction('denied');
                           setObservedCondition('');
                           setVerifiedIdentifier('');
                           setReviewNotes('');
-                          setReceivedQuantity(1);
+                          setReceivedQuantity('');
                           setFollowUp('auto');
                         }}
                         className="rounded-lg bg-red-800 p-1.5 text-white transition-colors hover:bg-red-900"
@@ -221,6 +234,7 @@ const ReturnRequestsPanel: React.FC = () => {
           className="fixed inset-0 z-50 overflow-y-auto"
           role="dialog"
           aria-modal="true"
+          aria-labelledby="return-review-title"
           onKeyDown={(e) => {
             if (e.key === 'Escape') setReviewModal({ open: false, request: null });
           }}
@@ -232,7 +246,7 @@ const ReturnRequestsPanel: React.FC = () => {
               className="relative w-full max-w-md"
             >
               <div className="px-4 pt-5 pb-4 sm:px-6">
-                <h3 className="text-theme-text-primary mb-4 text-lg font-medium">
+                <h3 id="return-review-title" className="text-theme-text-primary mb-4 text-lg font-medium">
                   {reviewAction === 'received' ? 'Receive Item' : 'Deny Request'}
                 </h3>
                 <div className="space-y-4">
@@ -268,7 +282,7 @@ const ReturnRequestsPanel: React.FC = () => {
                         <option value="">Select the condition you observe…</option>
                         {CONDITION_OPTIONS.map((c) => (
                           <option key={c} value={c}>
-                            {c.replace('_', ' ')}
+                            {conditionLabel(c)}
                           </option>
                         ))}
                       </select>
@@ -301,8 +315,13 @@ const ReturnRequestsPanel: React.FC = () => {
                         max={reviewModal.request.quantity_returning}
                         className="form-input"
                         value={receivedQuantity}
-                        onChange={(e) => setReceivedQuantity(Number(e.target.value))}
+                        onChange={(e) => setReceivedQuantity(e.target.value)}
+                        aria-describedby="received-quantity-hint"
                       />
+                      <p id="received-quantity-hint" className="text-theme-text-muted mt-1 text-xs">
+                        Count what came back. It must match the {reviewModal.request.quantity_returning} the member
+                        reported.
+                      </p>
                     </div>
                   )}
                   {reviewAction === 'received' &&
@@ -359,7 +378,7 @@ const ReturnRequestsPanel: React.FC = () => {
                       (!observedCondition ||
                         (reviewModal.request.return_type !== 'issuance'
                           ? !verifiedIdentifier.trim()
-                          : receivedQuantity < 1)))
+                          : Number(receivedQuantity) !== reviewModal.request.quantity_returning)))
                   }
                   className={`rounded-lg px-4 py-2 text-white transition-colors disabled:opacity-50 ${
                     reviewAction === 'received' ? 'bg-green-700 hover:bg-green-800' : 'bg-red-800 hover:bg-red-900'
