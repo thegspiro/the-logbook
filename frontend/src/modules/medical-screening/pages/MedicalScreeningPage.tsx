@@ -133,7 +133,9 @@ export const MedicalScreeningPage: React.FC = () => {
         toast.success('Record deleted');
       }
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to delete'));
+      toast.error(
+        getErrorMessage(err, `Failed to delete ${deleteTarget.type === 'requirement' ? 'requirement' : 'record'}`)
+      );
     }
     setDeleteTarget(null);
   }, [deleteTarget, deleteRequirement, deleteRecord]);
@@ -153,7 +155,7 @@ export const MedicalScreeningPage: React.FC = () => {
           <div>
             <h1 className="text-theme-text-primary text-2xl font-bold">Medical Screening</h1>
             <p className="text-theme-text-muted text-sm">
-              Manage medical requirements, track screenings, and monitor compliance.
+              Set screening requirements, record screenings, and see which ones expire soon.
             </p>
           </div>
         </div>
@@ -242,9 +244,9 @@ export const MedicalScreeningPage: React.FC = () => {
           {requirements.length === 0 ? (
             <div className="border-theme-surface-border rounded-lg border border-dashed py-12 text-center">
               <Shield className="text-theme-text-muted mx-auto mb-2 h-8 w-8" />
-              <p className="text-theme-text-muted mb-1">No screening requirements configured.</p>
+              <p className="text-theme-text-muted mb-1">No screening requirements yet.</p>
               <p className="text-theme-text-muted text-sm">
-                Add requirements to define what medical screenings members need.
+                Add a requirement for each screening members must complete.
               </p>
             </div>
           ) : (
@@ -306,7 +308,7 @@ export const MedicalScreeningPage: React.FC = () => {
             <div className="border-theme-surface-border rounded-lg border border-dashed py-12 text-center">
               <Stethoscope className="text-theme-text-muted mx-auto mb-2 h-8 w-8" />
               <p className="text-theme-text-muted mb-1">No screening records yet.</p>
-              <p className="text-theme-text-muted text-sm">Add records as members complete their screenings.</p>
+              <p className="text-theme-text-muted text-sm">Add a record when a screening is scheduled or completed.</p>
             </div>
           ) : (
             records.map((record) => (
@@ -323,7 +325,9 @@ export const MedicalScreeningPage: React.FC = () => {
                     </span>
                   </div>
                   <p className="text-theme-text-muted mt-1 text-xs">
-                    {record.user_name ?? record.prospect_name ?? 'Unknown'}
+                    {record.user_name ??
+                      record.prospect_name ??
+                      (record.user_id || record.prospect_id ? 'Unknown' : 'Not linked to a member or prospect')}
                     {record.provider_name ? ` — ${record.provider_name}` : ''}
                     {record.scheduled_date ? ` — Scheduled: ${record.scheduled_date}` : ''}
                     {record.expiration_date ? ` — Expires: ${record.expiration_date}` : ''}
@@ -336,7 +340,7 @@ export const MedicalScreeningPage: React.FC = () => {
                       setShowRecordForm(true);
                     }}
                     className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
-                    aria-label="Edit record"
+                    aria-label={`Edit ${SCREENING_TYPE_LABELS[record.screening_type] ?? record.screening_type} record`}
                   >
                     <Edit2 className="h-4 w-4" />
                   </button>
@@ -349,7 +353,7 @@ export const MedicalScreeningPage: React.FC = () => {
                       })
                     }
                     className="text-theme-text-muted transition-colors hover:text-red-700 dark:hover:text-red-400"
-                    aria-label="Delete record"
+                    aria-label={`Delete ${SCREENING_TYPE_LABELS[record.screening_type] ?? record.screening_type} record`}
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -392,8 +396,12 @@ export const MedicalScreeningPage: React.FC = () => {
       <ConfirmDialog
         isOpen={!!deleteTarget}
         title={`Delete ${deleteTarget?.type === 'requirement' ? 'Requirement' : 'Record'}`}
-        message={`Are you sure you want to delete "${deleteTarget?.name ?? ''}"? This action cannot be undone.`}
-        confirmLabel="Delete"
+        message={
+          deleteTarget?.type === 'requirement'
+            ? `Delete "${deleteTarget.name}"? You can't undo this.`
+            : `Delete this ${deleteTarget?.name ?? ''} record? You can't undo this.`
+        }
+        confirmLabel={deleteTarget?.type === 'requirement' ? 'Delete Requirement' : 'Delete Record'}
         variant="danger"
         onConfirm={() => void handleDelete()}
         onClose={() => setDeleteTarget(null)}
