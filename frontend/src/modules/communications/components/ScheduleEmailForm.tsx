@@ -41,7 +41,7 @@ const ScheduleEmailForm: React.FC<ScheduleEmailFormProps> = ({ templates, onClos
     e.preventDefault();
 
     const errors: Record<string, string> = {};
-    if (!templateType) errors.templateType = 'Please select a template';
+    if (!templateType) errors.templateType = 'Choose a template';
     if (!toEmails.trim()) errors.toEmails = 'At least one recipient is required';
     if (!scheduledDate) errors.scheduledDate = 'Date is required';
     if (!scheduledTime) errors.scheduledTime = 'Time is required';
@@ -55,7 +55,7 @@ const ScheduleEmailForm: React.FC<ScheduleEmailFormProps> = ({ templates, onClos
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
-      const first = Object.values(errors)[0] ?? 'Please fix the errors below';
+      const first = Object.values(errors)[0] ?? 'Fix the errors below';
       toast.error(first);
       return;
     }
@@ -85,10 +85,10 @@ const ScheduleEmailForm: React.FC<ScheduleEmailFormProps> = ({ templates, onClos
 
     try {
       await scheduleEmail(data);
-      toast.success('Email scheduled successfully');
+      toast.success('Email scheduled');
       onClose();
     } catch {
-      toast.error('Failed to schedule email. Please try again.');
+      toast.error('Unable to schedule the email. Try again.');
     }
   };
 

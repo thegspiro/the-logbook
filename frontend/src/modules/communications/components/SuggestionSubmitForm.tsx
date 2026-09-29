@@ -57,7 +57,7 @@ const SuggestionSubmitForm: React.FC<SuggestionSubmitFormProps> = ({ onSubmitted
         setBoxId((current) => current || (data.length === 1 ? (data[0]?.id ?? '') : ''));
       })
       .catch(() => {
-        if (!cancelled) setLoadError('Unable to load suggestion boxes. Please try again.');
+        if (!cancelled) setLoadError('Unable to load suggestion boxes. Try again.');
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);
@@ -96,7 +96,7 @@ const SuggestionSubmitForm: React.FC<SuggestionSubmitFormProps> = ({ onSubmitted
       if (!result.followUpKey) toast.success('Thank you — your submission was sent.');
       onSubmitted?.();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Unable to submit. Please try again.'));
+      toast.error(getErrorMessage(err, 'Unable to submit. Try again.'));
     } finally {
       setIsSubmitting(false);
     }

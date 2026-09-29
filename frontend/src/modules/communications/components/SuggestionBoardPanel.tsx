@@ -106,7 +106,7 @@ const SuggestionBoardPanel: React.FC<SuggestionBoardPanelProps> = ({ boxes }) =>
       setItems(page.items);
       setTotal(page.total);
     } catch {
-      setError('Unable to load the idea board. Please try again.');
+      setError('Unable to load the idea board. Try again.');
     } finally {
       setIsLoading(false);
     }

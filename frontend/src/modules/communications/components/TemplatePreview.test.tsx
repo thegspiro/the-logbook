@@ -7,7 +7,7 @@ describe('TemplatePreview', () => {
   it('renders empty state when no preview', () => {
     render(<TemplatePreview preview={null} isPreviewing={false} onRefresh={vi.fn()} />);
 
-    expect(screen.getByText(/click "refresh" to generate a preview/i)).toBeInTheDocument();
+    expect(screen.getByText(/press refresh to preview this template with sample data/i)).toBeInTheDocument();
   });
 
   it('renders loading state', () => {

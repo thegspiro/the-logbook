@@ -389,7 +389,7 @@ const SuggestionReviewPanel: React.FC<SuggestionReviewPanelProps> = ({ boxes, se
       setItems(page.items);
       setTotal(page.total);
     } catch {
-      setError('Unable to load submissions. Please try again.');
+      setError('Unable to load submissions. Try again.');
     } finally {
       setIsLoading(false);
     }
@@ -505,7 +505,7 @@ const SuggestionReviewPanel: React.FC<SuggestionReviewPanelProps> = ({ boxes, se
           {isLoading ? (
             <p className="text-theme-text-muted text-sm">Loading…</p>
           ) : items.length === 0 ? (
-            <EmptyState icon={Inbox} title="Nothing here" description="No submissions match these filters." />
+            <EmptyState icon={Inbox} title="No submissions" description="No submissions match these filters." />
           ) : (
             <ul className="space-y-2" aria-label="Submissions">
               {items.map((item) => (

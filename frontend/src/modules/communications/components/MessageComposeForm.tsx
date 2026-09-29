@@ -147,9 +147,7 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ message, onSave
       toast.success(scheduledAt ? 'Message scheduled' : 'Message posted');
       onSaved();
     } catch {
-      setError(
-        isEditing ? 'Unable to save your changes. Please try again.' : 'Unable to post the message. Please try again.'
-      );
+      setError(isEditing ? 'Unable to save your changes. Try again.' : 'Unable to post the message. Try again.');
     } finally {
       setSubmitting(false);
     }
@@ -319,7 +317,7 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ message, onSave
             checked={isPersistent}
             onChange={(e) => setIsPersistent(e.target.checked)}
           />
-          Persistent
+          Keep in inbox after it is read
         </label>
         <label className="flex items-center gap-2 text-sm">
           <input
