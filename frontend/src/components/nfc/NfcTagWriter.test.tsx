@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NfcTagWriter } from './NfcTagWriter';
@@ -47,6 +47,7 @@ beforeEach(() => {
 
 afterEach(() => {
   delete (window as { NDEFReader?: unknown }).NDEFReader;
+  vi.unstubAllGlobals();
 });
 
 describe('NfcTagWriter', () => {
@@ -56,6 +57,19 @@ describe('NfcTagWriter', () => {
 
     expect(screen.getByText(/NFC tags:/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /write tag/i })).not.toBeInTheDocument();
+  });
+
+  it('adds the HTTPS reason only when the page is on an insecure origin', () => {
+    delete (window as { NDEFReader?: unknown }).NDEFReader;
+    vi.stubGlobal('isSecureContext', true);
+    const { container, unmount } = render(<NfcTagWriter url={URL_UNDER_TEST} targetLabel="Monthly Drill" />);
+    expect(container).toHaveTextContent('open this page in Chrome on an Android phone.');
+    expect(container).not.toHaveTextContent(/does not support NFC|HTTPS/);
+    unmount();
+
+    vi.stubGlobal('isSecureContext', false);
+    const { container: insecureContainer } = render(<NfcTagWriter url={URL_UNDER_TEST} targetLabel="Monthly Drill" />);
+    expect(insecureContainer).toHaveTextContent('Open this page over HTTPS to use NFC tags.');
   });
 
   it('writes the check-in URL as a url record and confirms success', async () => {

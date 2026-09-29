@@ -28,12 +28,16 @@ export const NfcTagWriter: React.FC<NfcTagWriterProps> = ({ url, targetLabel, ac
   const { supported, unavailableReason, status, error, writeUrl, cancel, reset } = useNfcWriter();
 
   if (!supported) {
+    // The browser-support reason repeats the "Chrome on Android" sentence
+    // below, so only the insecure-origin reason — the one it does not cover —
+    // is appended.
+    const insecureOrigin = typeof window !== 'undefined' && !window.isSecureContext;
     return (
       <div className="text-theme-text-muted mt-6 flex items-start gap-2 text-sm">
         <Nfc className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
         <p>
-          <span className="font-medium">NFC tags:</span> open this page in Chrome on an Android phone to write this link
-          to an NFC tag. {unavailableReason}
+          <span className="font-medium">NFC tags:</span> to write this link to a tag, open this page in Chrome on an
+          Android phone.{insecureOrigin && unavailableReason ? ` ${unavailableReason}` : ''}
         </p>
       </div>
     );
@@ -47,7 +51,7 @@ export const NfcTagWriter: React.FC<NfcTagWriterProps> = ({ url, targetLabel, ac
       </div>
 
       <p className="text-theme-text-secondary mb-4 text-sm">
-        Encode this link onto a blank NFC tag or sticker. Members tap the tag with their phone to open {targetLabel}{' '}
+        Write this link to a blank NFC tag or sticker. Members tap the tag with their phone to open {targetLabel}{' '}
         {actionNoun} — no camera needed.
       </p>
 
