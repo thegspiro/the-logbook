@@ -657,8 +657,12 @@ const VariantGroupsPage: React.FC = () => {
               {detailGroup.items && detailGroup.items.length > 0 ? (
                 <StockMatrix items={detailGroup.items} />
               ) : (
+                // The item form has no field for choosing a group, so the old
+                // "assign them to this group" pointed at a step that does not
+                // exist. Say what does work until a picker is added.
                 <p className="text-theme-text-muted text-sm">
-                  No variants in this group yet. Add inventory items and assign them to this group.
+                  No variants in this group yet. Items can&apos;t be added to an existing group from the app yet.
+                  Generating size variants from All Items → Add Item creates a new group holding them.
                 </p>
               )}
             </div>

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { act, screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 
@@ -335,6 +335,54 @@ describe('EquipmentRequestsPage', () => {
       });
     });
     expect(mockToastSuccess).toHaveBeenCalledWith('Issued to John Doe');
+  });
+
+  // The member named the pool item and said "temporary", so the method opened
+  // on checkout — which the server refuses for pool stock, every time.
+  it('opens fulfilment of a named pool item as an issuance', async () => {
+    const user = userEvent.setup();
+    mockGetEquipmentRequests.mockResolvedValue({
+      requests: [
+        makeRequest({
+          item_name: 'Nitrile Gloves',
+          status: 'approved',
+          item_id: 'item-3',
+          requested_item: { tracking_type: 'pool' },
+        }),
+      ],
+    });
+    renderWithRouter(<EquipmentRequestsPage />);
+    await screen.findByText('Nitrile Gloves');
+
+    await user.click(screen.getByText('Fulfill'));
+
+    expect(await screen.findByLabelText('Final fulfillment method')).toHaveValue('issuance');
+  });
+
+  it('moves the method to issuance when a pool item is picked by hand', async () => {
+    const user = userEvent.setup();
+    mockGetEquipmentRequests.mockResolvedValue({ requests: [makeRequest({ status: 'approved' })] });
+    mockGetFulfillmentOptions.mockResolvedValue(
+      fulfillmentOptions({ options: [option('item-3', { name: 'Nitrile Gloves', tracking_type: 'pool' })] })
+    );
+    renderWithRouter(<EquipmentRequestsPage />);
+    await screen.findByText('Radio XTS 5000');
+
+    await user.click(screen.getByText('Fulfill'));
+    const method = await screen.findByLabelText('Final fulfillment method');
+    expect(method).toHaveValue('checkout');
+    const itemSelect = screen.getByLabelText('Item to fulfill with');
+    await waitFor(() => expect(within(itemSelect).getAllByRole('option')).toHaveLength(2));
+    await user.selectOptions(itemSelect, 'item-3');
+
+    expect(method).toHaveValue('issuance');
+  });
+
+  it('names each Review button after the item and the member', async () => {
+    renderWithRouter(<EquipmentRequestsPage />);
+
+    expect(await screen.findByRole('button', { name: 'Review Radio XTS 5000 for John Doe' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeInTheDocument();
   });
 
   const poloRequest = (overrides: Record<string, unknown> = {}) =>

@@ -321,6 +321,7 @@ const InventoryMembersPage: React.FC = () => {
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as SortOption)}
+            aria-label="Sort members"
             className="form-input py-2 text-sm"
           >
             {SORT_OPTIONS.map((o) => (
@@ -441,6 +442,7 @@ const InventoryMembersPage: React.FC = () => {
                         className="btn-success btn-sm flex items-center justify-center gap-1 active:opacity-80"
                         onClick={() => openScanModal(member)}
                         title="Assign items to this member"
+                        aria-label={`Assign items to ${name}`}
                       >
                         <ArrowDownToLine className="h-3.5 w-3.5" /> Assign
                       </button>
@@ -450,6 +452,7 @@ const InventoryMembersPage: React.FC = () => {
                           className="btn-secondary btn-sm flex items-center justify-center gap-1 active:opacity-80"
                           onClick={() => openReturnModal(member)}
                           title="Return items from this member"
+                          aria-label={`Return items from ${name}`}
                         >
                           <ArrowUpFromLine className="h-3.5 w-3.5" /> Return
                         </button>
@@ -461,6 +464,7 @@ const InventoryMembersPage: React.FC = () => {
                           setSizesTarget({ userId: member.user_id, memberName: member.full_name || member.username })
                         }
                         title="Edit this member's sizes"
+                        aria-label={`Edit sizes for ${name}`}
                       >
                         <Ruler className="h-3.5 w-3.5" /> Sizes
                       </button>

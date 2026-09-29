@@ -41,7 +41,7 @@ import type {
   Location,
 } from '../types';
 import { getStatusStyle, getStatusLabel, getConditionColor, sizeLabel, styleAttributesLabel } from '../types';
-import { getErrorMessage } from '../../../utils/errorHandling';
+import { getErrorMessage, toAppError } from '../../../utils/errorHandling';
 import { ITEM_CONDITION_OPTIONS } from '../../../constants/enums';
 import { Modal } from '../../../components/Modal';
 import { ItemFormModal } from '../components/ItemFormModal';
@@ -174,7 +174,16 @@ const ItemDetailPage: React.FC = () => {
   // is — would be ignored.
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get('tab');
-  const activeTab: Tab = ITEM_DETAIL_TABS.includes(requestedTab as Tab) ? (requestedTab as Tab) : 'history';
+  //
+  // History is the item's chain of custody, and GET /items/{id}/history is
+  // gated on inventory.manage for that reason. A member reaches this page from
+  // their own gear, so History is neither offered to nor requested for them:
+  // the request could only fail, and the refusal read as an empty history.
+  const defaultTab: Tab = canManage ? 'history' : 'stock';
+  const activeTab: Tab =
+    ITEM_DETAIL_TABS.includes(requestedTab as Tab) && (requestedTab !== 'history' || canManage)
+      ? (requestedTab as Tab)
+      : defaultTab;
   const setActiveTab = (tab: Tab) => setSearchParams({ tab });
   const [history, setHistory] = useState<ItemHistoryEvent[]>([]);
   const [maintenance, setMaintenance] = useState<MaintenanceRecord[]>([]);
@@ -271,8 +280,14 @@ const ItemDetailPage: React.FC = () => {
           const records = await inventoryService.getItemMaintenanceHistory(id);
           setMaintenance(records);
         } else if (tab === 'nfpa') {
-          const data = await inventoryService.getNFPACompliance(id);
-          setNfpa(data);
+          // A 404 here means no compliance record has been started for the
+          // item yet, which the tab already says; it is not a failure.
+          try {
+            setNfpa(await inventoryService.getNFPACompliance(id));
+          } catch (err: unknown) {
+            if (toAppError(err).status !== 404) throw err;
+            setNfpa(null);
+          }
         } else if (tab === 'exposures') {
           const data = await inventoryService.getExposureRecords(id);
           setExposures(data);
@@ -337,7 +352,7 @@ const ItemDetailPage: React.FC = () => {
 
   /* ---------- available tabs -------------------------------------- */
   const tabs: { key: Tab; label: string; show: boolean }[] = [
-    { key: 'history', label: 'History', show: true },
+    { key: 'history', label: 'History', show: canManage },
     { key: 'stock', label: 'Stock Lots', show: true },
     { key: 'nfpa', label: 'NFPA Compliance', show: isNfpa },
     { key: 'inspections', label: 'Inspections', show: hasMaintenance },

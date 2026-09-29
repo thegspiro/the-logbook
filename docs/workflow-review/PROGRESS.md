@@ -82,10 +82,10 @@ build on each other's data, so run them in order unless a row says otherwise.
 | #   | Activity                                                                     | Acts as                | Starts at                                                  | Status |
 | --- | ---------------------------------------------------------------------------- | ---------------------- | ---------------------------------------------------------- | ------ |
 | W38 | Set up inventory: categories, then add items of each tracking kind           | quartermaster          | `/inventory/admin/setup`, `/inventory/admin/items`         | ✅     |
-| W39 | Issue equipment to a member, the member sees it, return it                   | quartermaster → member | `/inventory/admin/members`, `/inventory/my-equipment`      | ⬜     |
-| W40 | Pool items, checkouts, kits and variant groups                               | quartermaster          | `/inventory/admin/pool`, `/inventory/checkouts`            | ⬜     |
-| W41 | A member's request, return, write-off and reorder, and the approvals         | member → quartermaster | `/inventory/admin/requests`, `/inventory/admin/returns`    | ⬜     |
-| W42 | Maintenance records, vendors, charges and issuance allowances                | quartermaster          | `/inventory/admin/maintenance`, `/inventory/admin/charges` | ⬜     |
+| W39 | Issue equipment to a member, the member sees it, return it                   | quartermaster → member | `/inventory/admin/members`, `/inventory/my-equipment`      | ✅     |
+| W40 | Pool items, checkouts, kits and variant groups                               | quartermaster          | `/inventory/admin/pool`, `/inventory/checkouts`            | ✅     |
+| W41 | A member's request, return, write-off and reorder, and the approvals         | member → quartermaster | `/inventory/admin/requests`, `/inventory/admin/returns`    | ✅     |
+| W42 | Maintenance records, vendors, charges and issuance allowances                | quartermaster          | `/inventory/admin/maintenance`, `/inventory/admin/charges` | ✅     |
 | W43 | Storage areas, barcode labels and CSV import                                 | quartermaster          | `/inventory/storage-areas`, `/inventory/import`            | ⬜     |
 | W44 | NFC: tag in bulk, put away, shelf audit, items not seen                      | quartermaster          | `/inventory/admin/nfc/*`, `/inventory/shelf-audit`         | ⬜     |
 | W45 | The self-service kiosk                                                       | member                 | `/inventory/kiosk`                                         | ⬜     |
@@ -183,6 +183,71 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W42 — Maintenance records, vendors, charges and issuance allowances — 2026-09-29
+
+Driven as: `quartermaster` at 1280×900, with `member` refused at 390×844.
+Held: an inspection set the coat's next due date from its category interval
+and left it assigned; a vendor was created once and a cleared phone saved as a
+clear; an allowance was created once and applied in the pool Issue dialog; four
+double-clicks acted once; the member got 403 on every write and Access Denied
+on all four pages. Fixed: W42-1 (LOW — an inspection logged after 7 PM Central
+was dated tomorrow), W42-2 (LOW — the maintenance note said a passed
+inspection keeps an in-service item out of service), W42-3 (LOW — the action
+choice and fields had no state or names), W42-4 (LOW — a charge could be
+applied at $0 and then never corrected; the dialog was unnamed), W42-5 (LOW —
+Issue stayed live for an over-allowance quantity the server refuses). Open:
+W42-6, W42-7 (NIT). Gate: typecheck, lint and the inventory suites clean.
+Next: W43.
+
+### W41 — A member's request, return, write-off and reorder, and the approvals — 2026-09-29
+
+Driven as: `member` at 390×844 → `quartermaster` at 1280×900, with `member`
+refused. Held: a zero quantity was refused; six double-clicks acted once;
+declined and issued decisions reached the member with the quartermaster's note;
+a stale return notice could not take back an item now held by someone else;
+the member got 403 on every write and Access Denied on all four pages. Fixed:
+W41-1 (MED — fulfilling pool stock opened on a method the server always
+refuses), W41-2 (LOW — a multi-unit return was refused on the pre-filled count
+of 1), W41-3 (LOW — the return dialog was unnamed and its row actions
+identical), W41-4 (LOW — the reorder form and steps had unnamed fields and
+unmarked requirements). Flagged: W41-5 (MED — a reorder made in the app can
+never be received; labelled), W41-6 (MED — a write-off raised for one returned
+box would retire the whole pool item). Open: W41-7 (NIT). Gate: typecheck, lint
+and the inventory suites clean. Next: W42.
+
+### W40 — Pool items, checkouts, kits and variant groups — 2026-09-29
+
+Driven as: `quartermaster` at 1280×900 and 390×844, with `member` refused.
+Held: issuing, returning and bulk issuing moved the counts exactly; five
+double-clicks acted once; a past loan extension was refused; a kit issued the
+coat as an assignment and the gloves as a pool issuance; the member got 403 on
+every write and Access Denied on all four pages. Fixed: W40-1 (MED — a quantity
+above what was on hand was silently lowered to the maximum and issued, emptying
+the shelf), W40-2 (LOW — "0/-1 used … -1 remaining"), W40-3 (LOW — the
+issuance list showed user-id prefixes, not names), W40-4 (LOW — unnamed
+controls across the pool page and kit form), W40-5 (LOW — an extended loan
+came back due a day early), W40-6 (LOW — one tap on a name issued a whole kit).
+Flagged: W40-7 (MED — a variant group made on its page can never be filled).
+Open: W40-8, W40-9 (NIT). Gate: typecheck, lint and the inventory suites clean.
+Next: W41.
+
+### W39 — Issue equipment to a member, the member sees it, return it — 2026-09-29
+
+Driven as: `quartermaster` → `member` at 1280×900 and 390×844, with `member`
+refused. Held: an assignment and a pool issuance of 2 were each made once
+despite a double-clicked Confirm; the member saw both; a double-clicked return
+notice made one and a second was refused; a double-clicked Return returned
+once; the member got 403 on every inventory write and Access Denied on the
+members page. Fixed: W39-3 (MED — the Return Items dialog could not be used
+without a mouse), W39-1 (LOW — a member opening their own gear got
+"Insufficient permissions" over an empty History), W39-2 (LOW — a missing NFPA
+record toasted as an error), W39-4 (LOW — Pending read 0 with a return notice
+open; the notice's fields had no names), W39-6 (LOW — identical per-member
+action names), W39-7 (LOW — a loan's return time was bounded in UTC). Flagged:
+W39-5 (MED — receiving gear back leaves the member's return notice open). Open:
+W39-8, W39-9 (NIT). Gate: typecheck, lint and the inventory suites clean. Next:
+W40.
 
 ### W38 — Set up inventory: categories, then add items of each tracking kind — 2026-09-29
 

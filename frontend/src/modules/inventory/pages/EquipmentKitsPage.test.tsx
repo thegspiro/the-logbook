@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 import type { EquipmentKit } from '../types';
@@ -180,9 +180,52 @@ describe('EquipmentKitsPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Issue Recruit Kit to a member' }));
     await user.click(await screen.findByRole('button', { name: 'pick-member' }));
+    await user.click(await screen.findByRole('button', { name: 'Issue to Picked' }));
 
     await waitFor(() => expect(mockIssueKitToMember).toHaveBeenCalledWith('k-1', 'u-9'));
     expect(mockToastSuccess).toHaveBeenCalledWith('Issued 3 items from "Recruit Kit"');
+  });
+
+  // Tapping a name in the picker issued the whole kit at once, so a slip onto
+  // the neighbouring row handed every item to the wrong member.
+  it('names the member and waits for a confirmation before issuing a kit', async () => {
+    // Shaped like the list response: an item_count and no line items.
+    mockGetEquipmentKits.mockResolvedValue([
+      {
+        id: 'k-1',
+        organization_id: 'org-1',
+        name: 'Recruit Kit',
+        active: true,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+        item_count: 3,
+      },
+    ]);
+    const user = userEvent.setup();
+    renderWithRouter(<EquipmentKitsPage />);
+    await screen.findByText('Recruit Kit');
+
+    await user.click(screen.getByRole('button', { name: 'Issue Recruit Kit to a member' }));
+    await user.click(await screen.findByRole('button', { name: 'pick-member' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Issue Recruit Kit?' });
+    expect(dialog).toHaveTextContent(/Issue 3 items from "Recruit Kit" to Picked\./);
+    await user.click(screen.getByRole('button', { name: "Don't issue" }));
+
+    expect(mockIssueKitToMember).not.toHaveBeenCalled();
+  });
+
+  it('names the fields of each line item', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<EquipmentKitsPage />);
+    await screen.findByText(/No active kits yet/);
+
+    await user.click(screen.getAllByRole('button', { name: /Add Kit/ })[0] ?? document.body);
+    const dialog = await screen.findByRole('dialog', { name: 'Add Equipment Kit' });
+
+    expect(within(dialog).getByRole('combobox', { name: 'Item' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('combobox', { name: 'Category' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('spinbutton', { name: 'Qty' })).toHaveValue(1);
   });
 
   it('hides management actions without the manage permission', async () => {

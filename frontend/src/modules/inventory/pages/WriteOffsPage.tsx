@@ -117,6 +117,7 @@ const WriteOffsPage: React.FC = () => {
               void loadWriteOffs();
             }}
             className="btn-secondary btn-md shrink-0 self-start sm:self-auto"
+            aria-label="Refresh"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
