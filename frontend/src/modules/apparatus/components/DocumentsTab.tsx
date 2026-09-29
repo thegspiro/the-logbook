@@ -61,7 +61,7 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ id }) => {
       setDeleteTarget(null);
       void loadData();
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to delete'));
+      toast.error(getErrorMessage(err, `Failed to delete ${deleteTarget.type}`));
     }
   };
 
@@ -87,7 +87,7 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ id }) => {
         </div>
 
         {photos.length === 0 ? (
-          <p className="text-theme-text-muted py-8 text-center">No photos uploaded yet.</p>
+          <p className="text-theme-text-muted py-8 text-center">No photos on file for this apparatus.</p>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
             {photos.map((photo) => (
@@ -139,7 +139,7 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ id }) => {
         </div>
 
         {documents.length === 0 ? (
-          <p className="text-theme-text-muted py-8 text-center">No documents uploaded yet.</p>
+          <p className="text-theme-text-muted py-8 text-center">No documents on file for this apparatus.</p>
         ) : (
           <div className="space-y-3">
             {documents.map((doc) => (
@@ -198,7 +198,7 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ id }) => {
         onClose={() => setDeleteTarget(null)}
         onConfirm={() => void handleDelete()}
         title={`Delete ${deleteTarget?.type === 'photo' ? 'Photo' : 'Document'}`}
-        message={`Are you sure you want to delete "${deleteTarget?.name ?? ''}"? This action cannot be undone.`}
+        message={`Delete "${deleteTarget?.name ?? ''}"? You can't undo this.`}
         confirmLabel="Delete"
         variant="danger"
       />

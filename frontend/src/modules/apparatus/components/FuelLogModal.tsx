@@ -90,11 +90,11 @@ export const FuelLogModal: React.FC<FuelLogModalProps> = ({ isOpen, onClose, onS
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!f.gallons || Number(f.gallons) <= 0) {
-      toast.error('Please enter a valid gallons amount');
+      toast.error('Enter gallons greater than 0');
       return;
     }
     if (!f.fuelDate) {
-      toast.error('Please select a date');
+      toast.error('Select the fill-up date');
       return;
     }
 
