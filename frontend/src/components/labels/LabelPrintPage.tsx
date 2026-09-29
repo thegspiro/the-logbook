@@ -192,7 +192,7 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
     const idsParam = searchParams.get('ids');
     const ids = (idsParam ?? '').split(',').filter(Boolean);
     if (ids.length === 0) {
-      setError('No records specified. Go back and select items to print.');
+      setError('Nothing selected to print. Go back and select the records you want labels for.');
       setLoading(false);
       return;
     }
@@ -209,7 +209,7 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
         }))
       );
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Failed to load records'));
+      setError(getErrorMessage(err, 'Could not load the records to print. Go back and try again.'));
     } finally {
       setLoading(false);
     }
@@ -368,7 +368,7 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
       setPrintResult(result);
       if (result.auto_populated > 0) {
         toast.success(
-          `${result.auto_populated} record${result.auto_populated !== 1 ? 's' : ''} had a barcode generated`
+          `Created a barcode for ${result.auto_populated} record${result.auto_populated !== 1 ? 's' : ''} that had none`
         );
       }
       toast.success(`Sent ${result.labels_sent} label${result.labels_sent !== 1 ? 's' : ''} to ${result.printer_name}`);
@@ -380,7 +380,7 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
         toast(`${result.printer_name}: ${result.printer_warnings.join(', ')}`, { duration: 6000 });
       }
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to send labels to the printer'));
+      toast.error(getErrorMessage(err, 'Could not send the labels to the printer. Try again.'));
     } finally {
       setSendingToPrinter(false);
     }
@@ -399,7 +399,7 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
         ...(isThermal ? {} : { start_position: startPosition }),
       });
       if (autoPopulated > 0) {
-        toast.success(`${autoPopulated} record${autoPopulated !== 1 ? 's' : ''} had a barcode generated`);
+        toast.success(`Created a barcode for ${autoPopulated} record${autoPopulated !== 1 ? 's' : ''} that had none`);
       }
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -409,7 +409,7 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
       setTimeout(() => URL.revokeObjectURL(url), 60000);
       toast.success(onlyFirst ? 'Test label downloaded' : 'PDF downloaded');
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to generate labels'));
+      toast.error(getErrorMessage(err, 'Could not create the label PDF. Try again.'));
     } finally {
       setDownloadingPdf(false);
     }
@@ -550,7 +550,7 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
                       id: Symbology.QR,
                       icon: QrCode,
                       name: 'QR code',
-                      hint: 'Fits a long id on a small square label; scans with a phone',
+                      hint: 'Fits a long ID on a small square label; scans with a phone',
                     },
                   ].map((option) => {
                     const Icon = option.icon;
@@ -602,7 +602,7 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
                 disabled={items.length === 0 || (isCustom && !customValid)}
                 className="touch-target-phone flex items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-800 disabled:opacity-50"
               >
-                <Printer className="h-4 w-4" /> Browser print dialog
+                <Printer className="h-4 w-4" /> Print in browser
               </button>
             </div>
           </div>
@@ -825,7 +825,7 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
                   className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary touch-target-phone flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50"
                 >
                   {downloadingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <TestTube2 className="h-4 w-4" />}{' '}
-                  Print Test Label
+                  Download test label
                 </button>
               )}
             </div>
