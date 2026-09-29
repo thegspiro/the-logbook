@@ -135,15 +135,24 @@ describe('ExternalTrainingPage — provider setup form', () => {
     await userEvent.click(await screen.findByRole('button', { name: label }));
   };
 
-  // Target Solutions runs on the Vector Solutions API, which cannot sync
-  // without a site id. The form hid that field for Target Solutions, so every
-  // provider created that way failed its first sync.
-  it('collects the AccessToken and Site ID for Target Solutions', async () => {
+  // Target Solutions' Training Records API authenticates with a key and a
+  // secret in the report URL. The form offered no secret field for it, so a
+  // provider created from it could never authenticate.
+  it('collects a required key and secret for Target Solutions, without a Site ID', async () => {
     await chooseProvider(/^Target Solutions/);
+
+    expect(await screen.findByLabelText(/^API Key/)).toBeRequired();
+    expect(screen.getByLabelText(/^API Secret/)).toBeRequired();
+    expect(screen.queryByLabelText(/^Site ID/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Authentication Type')).not.toBeInTheDocument();
+  });
+
+  it('keeps the AccessToken and Site ID fields for Vector Solutions', async () => {
+    await chooseProvider(/^Vector Solutions/);
 
     expect(await screen.findByLabelText(/^Site ID/)).toBeInTheDocument();
     expect(screen.getByLabelText(/^AccessToken/)).toBeInTheDocument();
-    expect(screen.queryByLabelText('Authentication Type')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^API Secret/)).not.toBeInTheDocument();
   });
 
   it('keeps the generic API key fields for other providers', async () => {

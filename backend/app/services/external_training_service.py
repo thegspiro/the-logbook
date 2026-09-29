@@ -5,6 +5,8 @@ Business logic for syncing training records from external providers
 like Vector Solutions, Target Solutions, Lexipol, etc.
 """
 
+import csv
+import io
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -14,6 +16,7 @@ from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.logging import install_httpx_url_redaction, redact_url_secrets
 from app.core.security import decrypt_data
 from app.models.training import (
     ExternalCategoryMapping,
@@ -30,6 +33,10 @@ from app.models.training import (
 )
 from app.models.user import User
 from app.utils.ssrf_transport import SSRFSafeAsyncTransport, join_endpoint
+
+# Target Solutions puts credentials in the request URL; make sure httpx's
+# request log is redacted even in a worker that never ran setup_logging().
+install_httpx_url_redaction()
 
 
 class ExternalTrainingSyncService:
@@ -69,12 +76,10 @@ class ExternalTrainingSyncService:
         """
         try:
             self._validate_provider_url(provider)
-            if provider.provider_type in (
-                ExternalProviderType.VECTOR_SOLUTIONS,
-                ExternalProviderType.TARGET_SOLUTIONS,
-            ):
-                # Vector Solutions acquired TargetSolutions; same API.
+            if provider.provider_type == ExternalProviderType.VECTOR_SOLUTIONS:
                 return await self._test_vector_solutions_connection(provider)
+            elif provider.provider_type == ExternalProviderType.TARGET_SOLUTIONS:
+                return await self._test_target_solutions_connection(provider)
             elif provider.provider_type == ExternalProviderType.LEXIPOL:
                 return await self._test_lexipol_connection(provider)
             elif provider.provider_type == ExternalProviderType.I_AM_RESPONDING:
@@ -86,10 +91,10 @@ class ExternalTrainingSyncService:
         except httpx.TimeoutException:
             return False, "Connection timed out"
         except httpx.ConnectError as e:
-            return False, f"Failed to connect: {str(e)}"
+            return False, f"Failed to connect: {redact_url_secrets(str(e))}"
         except Exception as e:
             logger.exception(f"Error testing connection for provider {provider.id}")
-            return False, f"Connection test failed: {str(e)}"
+            return False, f"Connection test failed: {redact_url_secrets(str(e))}"
 
     async def _test_vector_solutions_connection(
         self, provider: ExternalTrainingProvider
@@ -239,14 +244,10 @@ class ExternalTrainingSyncService:
         api_key = self._decrypt_field(provider.api_key)
         api_secret = self._decrypt_field(provider.api_secret)
 
-        # Vector Solutions / TargetSolutions uses a custom AccessToken header.
-        # Both provider types route to the same API in test/fetch, so both must
-        # send the same header — a TARGET_SOLUTIONS provider falling through to
-        # X-API-Key/Bearer is rejected with a 401.
-        if provider.provider_type in (
-            ExternalProviderType.VECTOR_SOLUTIONS,
-            ExternalProviderType.TARGET_SOLUTIONS,
-        ):
+        # Vector Solutions uses a custom AccessToken header. (TargetSolutions'
+        # Training Records API authenticates in the query string instead and
+        # does not use these headers — see _target_solutions_report.)
+        if provider.provider_type == ExternalProviderType.VECTOR_SOLUTIONS:
             if api_key:
                 headers["AccessToken"] = api_key
         elif provider.auth_type == "api_key":
@@ -376,7 +377,8 @@ class ExternalTrainingSyncService:
         except Exception as e:
             logger.exception(f"Sync failed for provider {provider.id}")
             sync_log.status = SyncStatus.FAILED
-            sync_log.error_message = str(e)
+            # Shown to officers; never let a credential-bearing URL through.
+            sync_log.error_message = redact_url_secrets(str(e))
             sync_log.completed_at = datetime.now(timezone.utc)
             await self.db.commit()
 
@@ -390,12 +392,12 @@ class ExternalTrainingSyncService:
     ) -> List[Dict[str, Any]]:
         """Fetch training records from external provider"""
         self._validate_provider_url(provider)
-        if provider.provider_type in (
-            ExternalProviderType.VECTOR_SOLUTIONS,
-            ExternalProviderType.TARGET_SOLUTIONS,
-        ):
-            # Vector Solutions acquired TargetSolutions; same API.
+        if provider.provider_type == ExternalProviderType.VECTOR_SOLUTIONS:
             return await self._fetch_vector_solutions_records(
+                provider, from_date, to_date
+            )
+        elif provider.provider_type == ExternalProviderType.TARGET_SOLUTIONS:
+            return await self._fetch_target_solutions_records(
                 provider, from_date, to_date
             )
         elif provider.provider_type == ExternalProviderType.LEXIPOL:
@@ -739,27 +741,180 @@ class ExternalTrainingSyncService:
             "raw_data": record,
         }
 
+    # ------------------------------------------
+    # TargetSolutions Training Records API
+    # ------------------------------------------
+    # Documented at support.vectorlmstargetsolutionsedition.com, article
+    # "Training-Records-API": a single GET returning a CSV of every course and
+    # activity completion for all active and offline users. Credentials are the
+    # ``key`` and ``secret`` query parameters — there is no header form — so
+    # app.core.logging redacts them from httpx logs and Sentry data. Dates are
+    # mm-dd-yyyy; without them the report covers the current day only.
+
+    TS_REPORT_ACTION = "reports.buildReport"
+    TS_REPORT_TYPE = "completionsall"
+    TS_REQUIRED_COLUMNS = ("Employee ID", "Email")
+
+    def _target_solutions_params(
+        self,
+        provider: ExternalTrainingProvider,
+        from_date: Optional[date] = None,
+        to_date: Optional[date] = None,
+    ) -> Dict[str, str]:
+        key = self._decrypt_field(provider.api_key)
+        secret = self._decrypt_field(provider.api_secret)
+        if not key or not secret:
+            raise ValueError("Target Solutions API key and secret are both required")
+        params = {
+            "action": self.TS_REPORT_ACTION,
+            "reportType": self.TS_REPORT_TYPE,
+            "key": key,
+            "secret": secret,
+        }
+        if from_date:
+            params["startDate"] = from_date.strftime("%m-%d-%Y")
+        if to_date:
+            params["endDate"] = to_date.strftime("%m-%d-%Y")
+        return params
+
+    async def _target_solutions_report(
+        self, provider: ExternalTrainingProvider, params: Dict[str, str]
+    ) -> List[Dict[str, str]]:
+        """Request the completions report and return its rows.
+
+        Error messages never include the URL or response body: the URL holds
+        the credentials, and the message is stored on the sync log and shown
+        to officers.
+        """
+        url = join_endpoint(provider.api_base_url, "/")
+        response = await self.http_client.get(
+            url, params=params, headers={"Accept": "text/csv"}
+        )
+        if response.status_code in (401, 403):
+            raise ValueError("Target Solutions rejected the API key or secret")
+        if response.status_code != 200:
+            raise ValueError(
+                f"Target Solutions report request failed (HTTP {response.status_code})"
+            )
+
+        body = response.content.decode("utf-8-sig", errors="replace")
+        if not body.strip():
+            return []
+
+        reader = csv.DictReader(io.StringIO(body))
+        columns = [(name or "").strip() for name in (reader.fieldnames or [])]
+        if not all(col in columns for col in self.TS_REQUIRED_COLUMNS):
+            # An invalid key comes back as a 200 with an error page rather
+            # than a CSV, so the header row is the only reliable signal.
+            raise ValueError(
+                "Target Solutions did not return a completions report. "
+                "Check the API base URL, key and secret."
+            )
+        reader.fieldnames = columns
+        return [
+            {k: (v or "").strip() for k, v in row.items() if k}
+            for row in reader
+            if any((v or "").strip() for v in row.values() if isinstance(v, str))
+        ]
+
+    async def _test_target_solutions_connection(
+        self, provider: ExternalTrainingProvider
+    ) -> Tuple[bool, str]:
+        """Request today's completions report, the cheapest call the API offers."""
+        if not provider.api_key or not provider.api_secret:
+            return False, "API key and secret are required"
+        try:
+            rows = await self._target_solutions_report(
+                provider, self._target_solutions_params(provider)
+            )
+        except ValueError as e:
+            return False, str(e)
+        return (
+            True,
+            f"Connection successful - completions report returned {len(rows)} "
+            "record(s) for today",
+        )
+
+    async def _fetch_target_solutions_records(
+        self,
+        provider: ExternalTrainingProvider,
+        from_date: date,
+        to_date: date,
+    ) -> List[Dict[str, Any]]:
+        rows = await self._target_solutions_report(
+            provider, self._target_solutions_params(provider, from_date, to_date)
+        )
+        records = []
+        for row in rows:
+            record = self._normalize_target_solutions_record(row)
+            if record is not None:
+                records.append(record)
+        return records
+
+    @staticmethod
+    def _parse_number(value: Any) -> Optional[float]:
+        if value is None:
+            return None
+        text = str(value).strip().rstrip("%").strip()
+        if not text:
+            return None
+        try:
+            return float(text)
+        except ValueError:
+            return None
+
     def _normalize_target_solutions_record(
-        self, record: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Normalize Target Solutions record to standard format"""
+        self, row: Dict[str, str]
+    ) -> Optional[Dict[str, Any]]:
+        """Map one Training Records API CSV row to the standard format.
+
+        Returns None for a row that names no assignment, which cannot become a
+        training record.
+        """
+        employee_id = row.get("Employee ID", "")
+        email = row.get("Email", "")
+        course_id = row.get("Course ID", "")
+        title = row.get("Assignment Name", "") or course_id
+        if not title:
+            return None
+
+        completion_date = row.get("Completion Date", "")
+        # Transcript ID identifies a completion, so a re-sync updates the same
+        # staging row. If it is ever blank, fall back to who + what + when.
+        record_id = (
+            row.get("Transcript ID", "")
+            or "|".join(
+                [
+                    employee_id or email.lower(),
+                    course_id or title,
+                    completion_date,
+                    row.get("Completion Time", ""),
+                ]
+            )[:255]
+        )
+
+        hours = self._parse_number(row.get("Duration (hours)"))
         return {
-            "external_record_id": str(record.get("id", "")),
-            "external_user_id": str(record.get("userId", record.get("employeeId", ""))),
-            "external_course_id": str(record.get("courseId", "")),
-            "external_category_id": str(record.get("categoryId", "")),
-            "course_title": record.get("courseName", record.get("courseTitle", "")),
-            "course_code": record.get("courseCode", ""),
-            "description": record.get("courseDescription", ""),
-            "duration_minutes": record.get("durationMinutes", 0),
-            "completion_date": record.get("completionDate", record.get("completedOn")),
-            "score": record.get("score", record.get("percentScore")),
-            "passed": record.get("passed", record.get("isPassed", True)),
-            "external_category_name": record.get("categoryName", ""),
-            "external_username": record.get("username", ""),
-            "external_email": record.get("email", record.get("userEmail", "")),
-            "external_name": record.get("userName", record.get("displayName", "")),
-            "raw_data": record,
+            "external_record_id": record_id,
+            "external_user_id": employee_id,
+            "external_course_id": course_id,
+            "external_category_id": "",
+            "course_title": title,
+            "course_code": course_id,
+            "description": "",
+            "training_type": row.get("Assignment Type", ""),
+            # The import endpoints derive hours from duration_minutes, so the
+            # reported hours must be carried there as well as in credit_hours.
+            "duration_minutes": round(hours * 60) if hours is not None else None,
+            "credit_hours": hours,
+            "completion_date": completion_date,
+            "score": self._parse_number(row.get("Test Score")),
+            "passed": True,
+            "external_category_name": "",
+            "external_username": "",
+            "external_email": email,
+            "external_name": "",
+            "raw_data": row,
         }
 
     async def _fetch_lexipol_records(
@@ -1095,6 +1250,7 @@ class ExternalTrainingSyncService:
                 "%Y-%m-%d %H:%M:%S",
                 "%Y-%m-%d",
                 "%m/%d/%Y",
+                "%m-%d-%Y",
             ]:
                 try:
                     return datetime.strptime(date_value, fmt)

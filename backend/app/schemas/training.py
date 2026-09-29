@@ -11,6 +11,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.core.logging import redact_url_secrets
 from app.models.training import RequirementFrequency as ModelRequirementFrequency
 from app.models.training import TrainingStatus as ModelTrainingStatus
 from app.models.training import TrainingType as ModelTrainingType
@@ -706,6 +707,23 @@ class ExternalProviderConfig(BaseModel):
         return value
 
 
+def _reject_credentials_in_url(value: Optional[str]) -> Optional[str]:
+    """Refuse a provider URL that carries a credential in its query string.
+
+    TargetSolutions issues its Training Records API as one URL with ``key=`` and
+    ``secret=`` in it, so pasting that whole URL is the natural mistake. The
+    base URL is stored in plain text and returned by the API, unlike the
+    encrypted api_key/api_secret fields the values belong in.
+    """
+    if value is not None and redact_url_secrets(value) != value:
+        raise ValueError(
+            "The API base URL must not contain a key, secret or token. Enter "
+            "the address without its query string and put each credential in "
+            "its own field."
+        )
+    return value
+
+
 class ExternalTrainingProviderBase(BaseModel):
     """Base external training provider schema"""
 
@@ -718,6 +736,11 @@ class ExternalTrainingProviderBase(BaseModel):
     auto_sync_enabled: bool = False
     sync_interval_hours: int = Field(24, ge=1, le=168)  # 1 hour to 1 week
     default_category_id: Optional[UUID] = None
+
+    @field_validator("api_base_url")
+    @classmethod
+    def validate_api_base_url(cls, value: Optional[str]) -> Optional[str]:
+        return _reject_credentials_in_url(value)
 
 
 class ExternalTrainingProviderCreate(ExternalTrainingProviderBase):
@@ -745,6 +768,11 @@ class ExternalTrainingProviderUpdate(BaseModel):
     sync_interval_hours: Optional[int] = Field(None, ge=1, le=168)
     default_category_id: Optional[UUID] = None
     active: Optional[bool] = None
+
+    @field_validator("api_base_url")
+    @classmethod
+    def validate_api_base_url(cls, value: Optional[str]) -> Optional[str]:
+        return _reject_credentials_in_url(value)
 
 
 class ExternalTrainingProviderResponse(ExternalTrainingProviderBase, UTCResponseBase):
