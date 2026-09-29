@@ -4,6 +4,7 @@ Training Pydantic Schemas
 Request and response schemas for training-related endpoints.
 """
 
+import re
 from datetime import date, datetime
 from enum import Enum
 from typing import List, Optional
@@ -664,6 +665,11 @@ class ImportStatus(str, Enum):
 # External Training Provider Schemas
 
 
+# Fixed-time auto-sync: 24-hour HH:MM, at most four runs a day.
+_SYNC_TIME_PATTERN = re.compile(r"([01]?\d|2[0-3]):([0-5]\d)")
+MAX_SYNC_TIMES = 4
+
+
 class ExternalProviderConfig(BaseModel):
     """Provider-specific configuration"""
 
@@ -696,6 +702,29 @@ class ExternalProviderConfig(BaseModel):
     )
     additional_headers: Optional[dict] = None
     date_format: Optional[str] = None  # Date format used by the API
+
+    # Auto-sync at fixed wall-clock times ("HH:MM", org timezone) instead of
+    # every sync_interval_hours. Read by compute_next_sync_at.
+    sync_times: Optional[List[str]] = None
+
+    @field_validator("sync_times")
+    @classmethod
+    def validate_sync_times(cls, value: Optional[List[str]]) -> Optional[List[str]]:
+        if value is None:
+            return None
+        normalized = set()
+        for entry in value:
+            match = _SYNC_TIME_PATTERN.fullmatch(str(entry).strip())
+            if not match:
+                raise ValueError(
+                    "Sync times must be 24-hour HH:MM values, e.g. 06:00 or 18:30"
+                )
+            normalized.add(f"{int(match.group(1)):02d}:{match.group(2)}")
+        if not 1 <= len(normalized) <= MAX_SYNC_TIMES:
+            raise ValueError(
+                f"Choose between 1 and {MAX_SYNC_TIMES} different sync times"
+            )
+        return sorted(normalized)
 
     @field_validator(
         "records_endpoint", "users_endpoint", "categories_endpoint", "test_endpoint"
