@@ -15,9 +15,12 @@ import { formatDateTime } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 import type { IPException } from '../types';
 
+const formatDays = (days: number) => `${days} ${days === 1 ? 'day' : 'days'}`;
+
 interface IPExceptionTableProps {
   exceptions: IPException[];
   showActions?: boolean;
+  emptyMessage?: string;
   onApprove?: (id: string) => void;
   onReject?: (id: string) => void;
   onRevoke?: (id: string) => void;
@@ -26,6 +29,7 @@ interface IPExceptionTableProps {
 export const IPExceptionTable: React.FC<IPExceptionTableProps> = ({
   exceptions,
   showActions = false,
+  emptyMessage = 'No IP exceptions found',
   onApprove,
   onReject,
   onRevoke,
@@ -35,7 +39,7 @@ export const IPExceptionTable: React.FC<IPExceptionTableProps> = ({
     return (
       <div className="text-theme-text-muted py-12 text-center">
         <Shield className="mx-auto mb-3 h-12 w-12 opacity-50" />
-        <p>No IP exceptions found</p>
+        <p>{emptyMessage}</p>
       </div>
     );
   }
@@ -88,7 +92,7 @@ export const IPExceptionTable: React.FC<IPExceptionTableProps> = ({
                 </span>
               </td>
               <td className="text-theme-text-secondary px-4 py-3">
-                {exc.approvedDurationDays ?? exc.requestedDurationDays} days
+                {formatDays(exc.approvedDurationDays ?? exc.requestedDurationDays)}
               </td>
               <td className="text-theme-text-secondary px-4 py-3">{exc.countryName ?? exc.countryCode ?? '—'}</td>
               <td className="text-theme-text-muted px-4 py-3">

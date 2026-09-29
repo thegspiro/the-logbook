@@ -20,7 +20,8 @@ export const BlockedCountriesTable: React.FC<BlockedCountriesTableProps> = ({ co
     return (
       <div className="text-theme-text-muted py-12 text-center">
         <Globe className="mx-auto mb-3 h-12 w-12 opacity-50" />
-        <p>No blocked countries configured</p>
+        <p>No countries have been blocked here.</p>
+        <p className="mt-1 text-sm">Countries blocked in the server's BLOCKED_COUNTRIES setting are not listed.</p>
       </div>
     );
   }
@@ -77,7 +78,7 @@ export const BlockedCountriesTable: React.FC<BlockedCountriesTableProps> = ({ co
                 <button
                   onClick={() => onRemove?.(c.countryCode)}
                   className="rounded-lg p-1.5 text-red-600 transition-colors hover:bg-red-500/10"
-                  title="Remove country block"
+                  title={`Unblock ${c.countryCode}`}
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
