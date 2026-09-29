@@ -97,6 +97,16 @@ function getCtaActions(notification: NotificationLogRecord): CtaAction[] {
     return actions;
   }
 
+  // An officer rejected, changed or sent back the member's own submission
+  if (category === 'training_submission_update') {
+    actions.push({
+      label: 'View My Submissions',
+      icon: <ExternalLink className="h-3.5 w-3.5" />,
+      url: actionUrl,
+    });
+    return actions;
+  }
+
   // Shift swap — offer "Review Swap"
   if (category === 'shift_swap' && subjectLower.includes('request')) {
     actions.push({

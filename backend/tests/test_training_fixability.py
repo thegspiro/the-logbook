@@ -22,10 +22,11 @@ from app.services.training_submission_service import TrainingSubmissionService
 
 @pytest.fixture(autouse=True)
 def _no_review_prompts(monkeypatch):
-    """The session fakes here model only what these tests exercise. Prompting
-    training officers is covered in test_training_submission_notifications.py
+    """The session fakes here model only what these tests exercise. The in-app
+    notifications are covered in test_training_submission_notifications.py
     against a real database."""
     monkeypatch.setattr(TrainingSubmissionService, "_notify_reviewers", AsyncMock())
+    monkeypatch.setattr(TrainingSubmissionService, "_notify_member", AsyncMock())
 
 
 def _one(obj):

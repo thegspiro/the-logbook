@@ -149,6 +149,28 @@ describe('NotificationCard', () => {
       expect(window.location.pathname).toBe('/training/admin');
       expect(window.location.search).toBe('?page=records&tab=submissions');
     });
+
+    it("sends a member from an officer's decision to their own submissions", async () => {
+      const user = userEvent.setup();
+      renderWithRouter(
+        <NotificationCard
+          notification={makeNotification({
+            category: 'training_submission_update',
+            subject: 'Training submission not approved — Hazmat Ops',
+            action_url: '/training/submit',
+          })}
+          onMarkRead={vi.fn()}
+          onTogglePin={vi.fn()}
+        />
+      );
+
+      await expand(user);
+      expect(screen.getByText('Training')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /View My Submissions/ }));
+
+      expect(window.location.pathname).toBe('/training/submit');
+    });
   });
 
   describe('read state', () => {

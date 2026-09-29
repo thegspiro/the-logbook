@@ -79,6 +79,7 @@ const STACK_NOUNS: Record<string, string> = {
   shift_swap: 'shift swap updates',
   action_items: 'action items',
   training_submission: 'training submissions awaiting approval',
+  training_submission_update: 'updates to your training submissions',
   training: 'training updates',
   events: 'event notifications',
   scheduling: 'scheduling notifications',

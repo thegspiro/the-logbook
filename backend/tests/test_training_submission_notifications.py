@@ -1,4 +1,4 @@
-"""In-app prompts for self-reported training awaiting approval.
+"""In-app notifications around self-reported training review.
 
 A submission sitting in ``pending_review`` used to reach officers only as a
 count on the review queue. Training officers now get one in-app prompt per
@@ -8,6 +8,10 @@ submission sent back for revision prompts again when the member resubmits.
 
 Recipients are the Training Officer position, by owner decision 2026-09-29 —
 the same people the training-session approval email goes to.
+
+The submitter is told when an officer's decision differs from what they sent:
+a rejection, an approval that changed their values, a revision request, or a
+reversed approval. A plain approval sends nothing (owner decision 2026-09-29).
 """
 
 import uuid
@@ -22,6 +26,8 @@ from app.models.training import SelfReportConfig, SubmissionStatus
 from app.models.user import Organization, Position, User, UserStatus, user_positions
 from app.services.notifications_service import NotificationsService
 from app.services.training_submission_service import (
+    MEMBER_NOTICE_CATEGORY,
+    MEMBER_SUBMISSIONS_URL,
     REVIEW_PROMPT_CATEGORY,
     REVIEW_QUEUE_URL,
     TrainingSubmissionService,
@@ -110,6 +116,13 @@ async def _active_prompts(db, org, user):
         org.id, user.id, include_expired=False
     )
     return [log for log in logs if log.category == REVIEW_PROMPT_CATEGORY]
+
+
+async def _member_notices(db, org, member):
+    logs, _, _ = await NotificationsService(db).get_user_notifications(
+        org.id, member.id, include_expired=False
+    )
+    return [log for log in logs if log.category == MEMBER_NOTICE_CATEGORY]
 
 
 async def _all_prompts(db, submission_id):
@@ -289,3 +302,149 @@ class TestPromptFailureNeverBlocksTheSubmission:
         )
         assert saved is not None
         assert await _all_prompts(db_session, submission.id) == []
+
+
+class TestMemberIsToldWhenTheOutcomeDiffers:
+    async def test_a_rejection_tells_the_member_why(self, db_session):
+        org, alice, _, _, member = await _department(db_session)
+        submission = await _submit(db_session, org, member)
+
+        await TrainingSubmissionService(db_session).review_submission(
+            submission.id,
+            alice.id,
+            org.id,
+            "reject",
+            reviewer_notes="This course is not on the approved list.",
+        )
+
+        notices = await _member_notices(db_session, org, member)
+        assert len(notices) == 1
+        notice = notices[0]
+        assert notice.subject == (
+            "Training submission not approved — Vehicle Extrication Refresher"
+        )
+        assert notice.message.startswith(
+            "Alice Tester did not approve your submission for "
+            "Vehicle Extrication Refresher (3.5h, completed Sep 20, 2026)."
+        )
+        assert "Reason: This course is not on the approved list." in notice.message
+        assert notice.action_url == MEMBER_SUBMISSIONS_URL
+        assert notice.notification_metadata == {
+            "submission_id": submission.id,
+            "decision": "rejected",
+        }
+        # Only the member: the officers' own inbox is untouched by it.
+        assert await _member_notices(db_session, org, alice) == []
+
+    async def test_an_approval_that_changes_values_lists_each_change(self, db_session):
+        org, alice, _, _, member = await _department(db_session)
+        submission = await _submit(db_session, org, member)
+
+        await TrainingSubmissionService(db_session).review_submission(
+            submission.id,
+            alice.id,
+            org.id,
+            "approve",
+            reviewer_notes="Class ran short.",
+            override_hours=3.0,
+            override_training_type="refresher",
+        )
+
+        notices = await _member_notices(db_session, org, member)
+        assert len(notices) == 1
+        message = notices[0].message
+        assert notices[0].subject == (
+            "Training submission approved with changes — "
+            "Vehicle Extrication Refresher"
+        )
+        assert "• Hours: 3.5 → 3" in message
+        assert "• Training type: Continuing education → Refresher" in message
+        assert "Credit hours" not in message
+        assert "Officer's notes: Class ran short." in message
+
+    async def test_a_plain_approval_sends_the_member_nothing(self, db_session):
+        org, alice, _, _, member = await _department(db_session)
+        submission = await _submit(db_session, org, member)
+
+        await TrainingSubmissionService(db_session).review_submission(
+            submission.id, alice.id, org.id, "approve"
+        )
+
+        assert await _member_notices(db_session, org, member) == []
+
+    async def test_an_override_equal_to_what_was_sent_is_not_a_change(self, db_session):
+        org, alice, _, _, member = await _department(db_session)
+        submission = await _submit(db_session, org, member)
+
+        await TrainingSubmissionService(db_session).review_submission(
+            submission.id,
+            alice.id,
+            org.id,
+            "approve",
+            override_hours=3.5,
+            override_training_type="continuing_education",
+        )
+
+        assert await _member_notices(db_session, org, member) == []
+
+    async def test_a_revision_request_is_cleared_once_the_member_resubmits(
+        self, db_session
+    ):
+        org, alice, _, _, member = await _department(db_session)
+        service = TrainingSubmissionService(db_session)
+        submission = await _submit(db_session, org, member)
+
+        await service.review_submission(
+            submission.id,
+            alice.id,
+            org.id,
+            "revision_requested",
+            reviewer_notes="Attach the course certificate.",
+        )
+        notices = await _member_notices(db_session, org, member)
+        assert len(notices) == 1
+        assert notices[0].subject == (
+            "Changes requested on your training submission — "
+            "Vehicle Extrication Refresher"
+        )
+        assert "Officer's notes: Attach the course certificate." in (notices[0].message)
+
+        await service.update_submission(
+            submission.id, member.id, org.id, hours_completed=4.0
+        )
+
+        assert await _member_notices(db_session, org, member) == []
+
+    async def test_a_reversed_approval_tells_the_member_its_hours_are_gone(
+        self, db_session
+    ):
+        org, alice, _, _, member = await _department(db_session)
+        service = TrainingSubmissionService(db_session)
+        submission = await _submit(db_session, org, member)
+        await service.review_submission(submission.id, alice.id, org.id, "approve")
+
+        await service.reverse_approval(
+            submission.id, alice.id, org.id, reason="Approved the wrong entry."
+        )
+
+        notices = await _member_notices(db_session, org, member)
+        assert len(notices) == 1
+        assert notices[0].subject == (
+            "Training approval reversed — Vehicle Extrication Refresher"
+        )
+        assert "no longer on your record" in notices[0].message
+        assert "Reason: Approved the wrong entry." in notices[0].message
+
+    async def test_an_officer_deciding_their_own_submission_is_not_told(
+        self, db_session
+    ):
+        # Rejecting one's own submission is allowed; a notice to oneself about
+        # it is noise.
+        org, alice, _, _, _ = await _department(db_session)
+        submission = await _submit(db_session, org, alice)
+
+        await TrainingSubmissionService(db_session).review_submission(
+            submission.id, alice.id, org.id, "reject"
+        )
+
+        assert await _member_notices(db_session, org, alice) == []

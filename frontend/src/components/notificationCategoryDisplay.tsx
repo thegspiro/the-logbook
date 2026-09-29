@@ -68,6 +68,7 @@ const CATEGORY_ALIASES: Record<string, string> = {
   meetings: 'general',
   suggestions: 'general',
   training_submission: 'training',
+  training_submission_update: 'training',
 };
 
 export function getCategoryDisplay(category: string | undefined): CategoryDisplay {
