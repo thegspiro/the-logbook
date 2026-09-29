@@ -295,7 +295,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
             <div className="card-secondary p-5">
               <h3 className="text-theme-text-primary text-base font-semibold">Overtime advisory</h3>
               <p className="text-theme-text-muted mt-1 text-sm">
-                Warn (without blocking) when assigning a member whose scheduled hours in a trailing window exceed a
+                Warn, without blocking, when you assign a member whose scheduled hours within the window exceed the
                 limit. Set the limit to 0 to turn this off.
               </p>
               <div className="mt-3 flex flex-wrap items-end gap-4">
@@ -406,9 +406,8 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                     Tip: require end-of-shift checks before finalizing
                   </p>
                   <p className="mt-0.5">
-                    It&apos;s off by default. Turning it on makes sure every apparatus is verified ready at the end of
-                    each shift, documents accountability, and keeps equipment-compliance records complete — officers can
-                    still override with a logged reason when needed.
+                    It&apos;s off by default. Turn it on so every apparatus is checked ready at the end of each shift
+                    and your equipment records stay complete.
                   </p>
                 </div>
               )}
@@ -448,9 +447,8 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
               <div className="border-theme-surface-border/60 border-t pt-4">
                 <p className="text-theme-text-primary text-sm font-medium">How calls are recorded</p>
                 <p className="text-theme-text-muted mt-0.5 text-sm">
-                  Decides what an officer is asked when closing a shift out, and whether the shift panel carries a call
-                  log at all. Switching between these never deletes anything: calls already recorded stay visible and
-                  can still be removed.
+                  Sets what officers are asked at close-out, and whether the shift panel has a call log. Switching never
+                  deletes anything: calls already recorded stay visible and can still be removed.
                 </p>
                 <div role="radiogroup" aria-label="How calls are recorded" className="mt-3 space-y-2">
                   {CALL_TRACKING_MODE_OPTIONS.map((option) => {
@@ -624,7 +622,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
             <h3 className="text-theme-text-primary mb-3 text-base font-semibold">Apparatus Inventory</h3>
             {normalizedApparatusList.length === 0 ? (
               <p className="text-theme-text-muted text-sm">
-                No apparatus configured. Shifts can be created without apparatus assignment.
+                No apparatus set up yet. You can still create shifts without one.
               </p>
             ) : (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -681,8 +679,8 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
               <div>
                 <h3 className="text-theme-text-primary text-base font-semibold">Signup window</h3>
                 <p className="text-theme-text-muted mt-0.5 text-sm">
-                  When a shift stops accepting people. A scheduling admin can always add someone, whatever these are set
-                  to, and any officer can reopen one shift on the night.
+                  When a shift stops taking signups. A scheduling admin can always add someone, whatever these are set
+                  to, and any officer can reopen signup on a single shift.
                 </p>
               </div>
 
@@ -694,7 +692,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                 <div>
                   <p className="text-theme-text-primary text-sm font-medium">Members can sign up until</p>
                   <p className="text-theme-text-muted mt-0.5 text-sm">
-                    Signing up after a shift has gone out puts somebody on a crew they were never part of.
+                    After this, members can no longer sign themselves up.
                   </p>
                 </div>
                 <select
@@ -719,8 +717,8 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                 <div>
                   <p className="text-theme-text-primary text-sm font-medium">Officers can add members until</p>
                   <p className="text-theme-text-muted mt-0.5 text-sm">
-                    How long past the start an officer can still seat somebody who turned up. Past this, a scheduling
-                    admin records it instead.
+                    How long after the start an officer can still add someone who turned up. After that, only a
+                    scheduling admin can.
                   </p>
                 </div>
                 <select

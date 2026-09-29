@@ -38,8 +38,8 @@ export const TemplatesOverviewCard: React.FC<TemplatesOverviewCardProps> = ({ te
             <div>
               <p className="text-sm font-medium text-yellow-700 dark:text-yellow-400">No templates configured</p>
               <p className="text-theme-text-muted mt-0.5 text-xs">
-                The system is using built-in defaults. Create custom templates to define your department's shift
-                structure with specific times, positions, and staffing requirements.
+                Built-in defaults are in use. Create templates to set your department's shift times, positions and
+                staffing.
               </p>
             </div>
           </div>
