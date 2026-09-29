@@ -67,7 +67,7 @@ export const EventsAdminHub: React.FC = () => {
 
   const actions: AdminHubAction[] = [
     { key: 'qr', label: 'QR code analytics', icon: QrCode, onClick: () => handleTabChange('analytics') },
-    { key: 'settings', label: 'Events settings', icon: Settings, onClick: () => handleTabChange('settings') },
+    { key: 'settings', label: 'Event settings', icon: Settings, onClick: () => handleTabChange('settings') },
   ];
 
   return (

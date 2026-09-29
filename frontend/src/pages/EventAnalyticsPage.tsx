@@ -193,7 +193,7 @@ export const EventAnalyticsPage: React.FC = () => {
       const resp = await eventService.getAnalyticsSummary(params);
       setData(mapSummary(resp));
     } catch {
-      setError('Failed to load analytics data. Please try again.');
+      setError('Failed to load analytics data.');
     } finally {
       setLoading(false);
     }
@@ -256,9 +256,7 @@ export const EventAnalyticsPage: React.FC = () => {
                 <BarChart3 className="h-7 w-7" />
                 Attendance Trends
               </h1>
-              <p className="text-theme-text-secondary mt-1 text-sm">
-                Event analytics, attendance rates, and check-in insights
-              </p>
+              <p className="text-theme-text-secondary mt-1 text-sm">Attendance and check-in rates across your events</p>
             </div>
           </div>
           <DateRangePicker
