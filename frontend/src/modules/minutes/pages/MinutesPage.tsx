@@ -134,7 +134,7 @@ const MinutesPage: React.FC = () => {
       setMeetings(asArray(meetingsRes.meetings));
       setSummary(summaryRes);
     } catch {
-      setError('Unable to load meetings. Please check your connection and try again.');
+      setError('Unable to load meetings. Check your connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -175,7 +175,7 @@ const MinutesPage: React.FC = () => {
       });
       await fetchData();
     } catch {
-      setCreateError('Unable to create meeting. Please check your connection and try again.');
+      setCreateError('Unable to create the meeting. Make sure it has a title and a date, then try again.');
     } finally {
       setCreating(false);
     }
@@ -185,7 +185,7 @@ const MinutesPage: React.FC = () => {
     if (
       !(await confirm({
         title: 'Delete meeting',
-        message: 'Delete this meeting and its minutes?',
+        message: 'Delete this meeting with its attendees and action items? Minutes already created from it are kept.',
         confirmLabel: 'Delete',
         cancelLabel: 'Keep it',
       }))
@@ -196,7 +196,7 @@ const MinutesPage: React.FC = () => {
       await meetingsService.deleteMeeting(meetingId);
       await fetchData();
     } catch {
-      setError('Unable to delete meeting. Please check your connection and try again.');
+      setError('Unable to delete the meeting. Check your connection and try again.');
     } finally {
       setDeletingId(null);
     }
@@ -225,7 +225,7 @@ const MinutesPage: React.FC = () => {
       const data = await meetingsService.getAttendanceWaivers(meetingId);
       setWaivers((prev) => ({ ...prev, [meetingId]: data }));
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to load waivers'));
+      toast.error(getErrorMessage(err, 'Failed to load attendance waivers'));
       setExpandedWaivers(null);
     } finally {
       setLoadingWaivers(null);
@@ -250,7 +250,7 @@ const MinutesPage: React.FC = () => {
             <div>
               <h1 className="text-theme-text-primary text-2xl font-bold">Meeting Minutes</h1>
               <p className="text-theme-text-muted text-sm">
-                Record meeting minutes, track action items, and maintain organizational history
+                Record meetings, write up their minutes, and track action items
               </p>
             </div>
           </div>
@@ -268,7 +268,7 @@ const MinutesPage: React.FC = () => {
         {/* Quick Stats */}
         <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-4">
           <div className="card p-4">
-            <p className="text-theme-text-muted text-xs font-medium uppercase">Total Minutes</p>
+            <p className="text-theme-text-muted text-xs font-medium uppercase">Total Meetings</p>
             <p className="text-theme-text-primary mt-1 text-2xl font-bold">{summary?.total_meetings ?? 0}</p>
           </div>
           <div className="card p-4">
@@ -302,8 +302,7 @@ const MinutesPage: React.FC = () => {
                 spellCheck={false}
                 id="minutes-search"
                 type="text"
-                aria-label="Search meeting minutes..."
-                placeholder="Search meeting minutes..."
+                placeholder="Search by title, agenda, or notes..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="form-input placeholder-theme-text-muted pr-4 pl-10"
@@ -336,7 +335,11 @@ const MinutesPage: React.FC = () => {
             <div className="flex items-center space-x-2">
               <AlertCircle className="h-5 w-5 shrink-0 text-red-700" />
               <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
-              <button onClick={() => setError(null)} className="ml-auto text-red-700 hover:text-red-600">
+              <button
+                onClick={() => setError(null)}
+                className="ml-auto text-red-700 hover:text-red-600"
+                aria-label="Dismiss error"
+              >
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -440,7 +443,7 @@ const MinutesPage: React.FC = () => {
                                 toast.success('Minutes created from meeting');
                                 void navigate(`/minutes/${minutes.id}`);
                               } catch {
-                                toast.error('Failed to create minutes from meeting');
+                                toast.error('Failed to create minutes from this meeting');
                               }
                             })();
                           }}
@@ -556,13 +559,13 @@ const MinutesPage: React.FC = () => {
                   <Archive className="mb-4 h-8 w-8 text-amber-700" />
                   <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">Archives & Search</h3>
                   <p className="text-theme-text-secondary mb-3 text-sm">
-                    Full-text search across all meeting minutes for compliance and quick reference.
+                    Search past meetings by title, agenda, or notes.
                   </p>
                   <div className="flex flex-wrap gap-1.5">
+                    <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs text-amber-700">Search</span>
                     <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs text-amber-700">
-                      Full-text Search
+                      Publish to Documents
                     </span>
-                    <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs text-amber-700">PDF Export</span>
                   </div>
                 </div>
               </div>
@@ -570,11 +573,9 @@ const MinutesPage: React.FC = () => {
 
             <div className="card p-12 text-center">
               <FileSearch className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
-              <h3 className="text-theme-text-primary mb-2 text-xl font-bold">No Meeting Minutes</h3>
+              <h3 className="text-theme-text-primary mb-2 text-xl font-bold">No Meetings Recorded</h3>
               {canManage && (
-                <p className="text-theme-text-secondary mb-6">
-                  Start recording meeting minutes to maintain your organization's history.
-                </p>
+                <p className="text-theme-text-secondary mb-6">Record your first meeting to start keeping minutes.</p>
               )}
               {canManage && (
                 <button
@@ -601,6 +602,7 @@ const MinutesPage: React.FC = () => {
                     <button
                       onClick={() => setShowCreateModal(false)}
                       className="text-theme-text-muted hover:text-theme-text-primary"
+                      aria-label="Close dialog"
                     >
                       <X className="h-5 w-5" />
                     </button>
@@ -678,7 +680,7 @@ const MinutesPage: React.FC = () => {
                           htmlFor="meeting-date"
                           className="text-theme-text-secondary mb-1 block text-sm font-medium"
                         >
-                          Meeting Date
+                          Meeting Date <span aria-hidden="true">*</span>
                         </label>
                         <input
                           id="meeting-date"
