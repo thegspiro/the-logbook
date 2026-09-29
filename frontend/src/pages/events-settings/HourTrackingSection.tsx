@@ -6,6 +6,17 @@ import { getEventTypeLabel } from '../../utils/eventHelpers';
 import { eventHourMappingService, adminHoursCategoryService } from '../../modules/admin-hours/services/api';
 import type { EventHourMapping, AdminHoursCategory } from '../../modules/admin-hours/types';
 import type { EventModuleSettings, EventCategoryConfig } from '../../types/event';
+import { getErrorMessage } from '../../utils/errorHandling';
+
+// Event types whose attendance never earns admin hours: a Training event's
+// attendance is credited to members' training records when it is finalized,
+// and crediting admin hours too counted the same hours twice. A copy of
+// backend/app/models/admin_hours.py EVENT_TYPES_WITHOUT_ADMIN_HOURS, which is
+// the authority (the backend refuses a new mapping for these types and reports
+// a stored one as not in effect) — keep the two in step (CLAUDE.md pitfall #19).
+const EVENT_TYPES_WITHOUT_ADMIN_HOURS: readonly EventType[] = [EventType.TRAINING];
+
+const NOT_IN_EFFECT_FALLBACK_REASON = "training events credit members' training records instead";
 
 interface HourTrackingSectionProps {
   settings: EventModuleSettings;
@@ -17,6 +28,8 @@ interface SourceGroup {
   isEventType: boolean;
   mappings: EventHourMapping[];
   totalPercentage: number;
+  /** False when the backend reports every mapping in the group as inert. */
+  inEffect: boolean;
 }
 
 const HourTrackingSection: React.FC<HourTrackingSectionProps> = ({ settings }) => {
@@ -57,6 +70,13 @@ const HourTrackingSection: React.FC<HourTrackingSectionProps> = ({ settings }) =
 
   const sourceGroups: SourceGroup[] = [];
 
+  // Whether a mapping is in effect is the backend's call (pitfall #29): an
+  // absent flag, from a server that predates it, means it is.
+  const anyInEffect = (group: EventHourMapping[]) => group.some((m) => m.inEffect !== false);
+
+  // Every event type is grouped, including those that earn no admin hours, so
+  // a mapping stored before that rule is still listed — labelled — and can be
+  // removed.
   for (const et of allEventTypes) {
     const group = mappings.filter((m) => m.eventType === et);
     sourceGroups.push({
@@ -65,6 +85,7 @@ const HourTrackingSection: React.FC<HourTrackingSectionProps> = ({ settings }) =
       isEventType: true,
       mappings: group,
       totalPercentage: group.reduce((sum, m) => sum + m.percentage, 0),
+      inEffect: anyInEffect(group),
     });
   }
 
@@ -76,12 +97,16 @@ const HourTrackingSection: React.FC<HourTrackingSectionProps> = ({ settings }) =
       isEventType: false,
       mappings: group,
       totalPercentage: group.reduce((sum, m) => sum + m.percentage, 0),
+      inEffect: anyInEffect(group),
     });
   }
 
-  // Sources available for the "add" dropdown (all event types + custom categories)
+  // Sources available for the "add" dropdown: the event types that can earn
+  // admin hours, plus custom categories
   const allSources = [
-    ...allEventTypes.map((et) => ({ type: 'event_type' as const, value: et, label: getEventTypeLabel(et) })),
+    ...allEventTypes
+      .filter((et) => !EVENT_TYPES_WITHOUT_ADMIN_HOURS.includes(et))
+      .map((et) => ({ type: 'event_type' as const, value: et, label: getEventTypeLabel(et) })),
     ...customCategories.map((cc) => ({ type: 'custom' as const, value: cc.value, label: cc.label })),
   ];
 
@@ -104,8 +129,10 @@ const HourTrackingSection: React.FC<HourTrackingSectionProps> = ({ settings }) =
       setNewPercentage(100);
       toast.success('Mapping created.');
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to create mapping.';
-      toast.error(msg);
+      // The backend's refusal (over-allocation, an event type that earns no
+      // admin hours) is in the response detail; an axios error's own message
+      // is only "Request failed with status code 400".
+      toast.error(getErrorMessage(err, 'Failed to create mapping.'));
     } finally {
       setSaving(false);
     }
@@ -135,7 +162,8 @@ const HourTrackingSection: React.FC<HourTrackingSectionProps> = ({ settings }) =
         <h3 className="text-theme-text-primary text-lg font-semibold">Event Hour Tracking</h3>
         <p className="text-theme-text-muted mt-1 text-sm">
           Map event types and custom categories to admin hours categories. When members attend events, their hours are
-          automatically credited to the mapped admin hours categories.
+          automatically credited to the mapped admin hours categories. Training events are not mapped here: their
+          attendance is credited to members&apos; training records instead of admin hours.
         </p>
       </div>
 
@@ -156,7 +184,12 @@ const HourTrackingSection: React.FC<HourTrackingSectionProps> = ({ settings }) =
         {sourceGroups
           .filter((g) => g.mappings.length > 0)
           .map((group) => (
-            <div key={group.sourceKey} className="border-theme-surface-border rounded-lg border p-4">
+            <div
+              key={group.sourceKey}
+              role="group"
+              aria-label={`${group.sourceLabel} mappings`}
+              className="border-theme-surface-border rounded-lg border p-4"
+            >
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Clock className="text-theme-text-muted h-4 w-4" />
@@ -164,11 +197,13 @@ const HourTrackingSection: React.FC<HourTrackingSectionProps> = ({ settings }) =
                 </div>
                 <span
                   className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                    group.totalPercentage > 100
-                      ? 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400'
-                      : group.totalPercentage === 100
-                        ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
-                        : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400'
+                    !group.inEffect
+                      ? 'border-theme-surface-border text-theme-text-secondary border'
+                      : group.totalPercentage > 100
+                        ? 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400'
+                        : group.totalPercentage === 100
+                          ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
+                          : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400'
                   }`}
                 >
                   {group.totalPercentage}% allocated
@@ -180,22 +215,31 @@ const HourTrackingSection: React.FC<HourTrackingSectionProps> = ({ settings }) =
                     key={mapping.id}
                     className="bg-theme-surface-hover flex items-center justify-between rounded-md px-3 py-2"
                   >
-                    <div className="flex items-center gap-2">
-                      {mapping.adminHoursCategoryColor && (
-                        <span
-                          className="h-3 w-3 shrink-0 rounded-full"
-                          style={{ backgroundColor: mapping.adminHoursCategoryColor }}
-                        />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        {mapping.adminHoursCategoryColor && (
+                          <span
+                            className="h-3 w-3 shrink-0 rounded-full"
+                            style={{ backgroundColor: mapping.adminHoursCategoryColor }}
+                          />
+                        )}
+                        <span className="text-theme-text-primary text-sm">
+                          {mapping.adminHoursCategoryName ?? 'Unknown Category'}
+                        </span>
+                        <span className="text-theme-text-muted text-xs">({mapping.percentage}%)</span>
+                      </div>
+                      {mapping.inEffect === false && (
+                        <p className="text-theme-text-secondary mt-1 text-xs">
+                          Not in effect — {mapping.notInEffectReason || NOT_IN_EFFECT_FALLBACK_REASON}
+                        </p>
                       )}
-                      <span className="text-theme-text-primary text-sm">
-                        {mapping.adminHoursCategoryName ?? 'Unknown Category'}
-                      </span>
-                      <span className="text-theme-text-muted text-xs">({mapping.percentage}%)</span>
                     </div>
                     <button
+                      type="button"
                       onClick={() => void handleDeleteMapping(mapping.id)}
-                      className="p-1 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                      className="btn-icon-sm shrink-0 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                       title="Remove mapping"
+                      aria-label={`Remove ${group.sourceLabel} mapping to ${mapping.adminHoursCategoryName ?? 'Unknown Category'}`}
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -219,6 +263,7 @@ const HourTrackingSection: React.FC<HourTrackingSectionProps> = ({ settings }) =
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {/* Source selector */}
             <select
+              aria-label="Event source"
               value={newSourceValue ? `${newSourceType}:${newSourceValue}` : ''}
               onChange={(e) => {
                 const val = e.target.value;
@@ -258,6 +303,7 @@ const HourTrackingSection: React.FC<HourTrackingSectionProps> = ({ settings }) =
 
             {/* Target admin hours category */}
             <select
+              aria-label="Admin hours category"
               value={newCategoryId}
               onChange={(e) => setNewCategoryId(e.target.value)}
               className="form-input focus:border-theme-accent-blue focus:ring-theme-accent-blue block px-3 text-sm focus:ring-1"
@@ -274,6 +320,7 @@ const HourTrackingSection: React.FC<HourTrackingSectionProps> = ({ settings }) =
             <div className="flex items-center gap-2">
               <input
                 type="number"
+                aria-label="Percentage of event hours"
                 min={1}
                 max={100}
                 value={newPercentage}
@@ -285,6 +332,7 @@ const HourTrackingSection: React.FC<HourTrackingSectionProps> = ({ settings }) =
 
             {/* Add button */}
             <button
+              type="button"
               onClick={() => void handleAddMapping()}
               disabled={saving || !newSourceValue || !newCategoryId}
               className="bg-theme-accent-blue hover:bg-theme-accent-blue/90 inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50 dark:text-slate-950"
