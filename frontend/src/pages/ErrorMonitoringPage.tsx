@@ -90,7 +90,7 @@ const ErrorMonitoringPage: React.FC = () => {
       setStats(errorStats);
       setLoadError(null);
     } catch {
-      setLoadError('Failed to load error monitoring data');
+      setLoadError('Could not load error data.');
     } finally {
       setLoading(false);
     }
@@ -121,7 +121,7 @@ const ErrorMonitoringPage: React.FC = () => {
       link.click();
       URL.revokeObjectURL(url);
     } catch {
-      toast.error('Failed to export error logs');
+      toast.error('Could not export errors');
     }
   };
 
@@ -139,7 +139,7 @@ const ErrorMonitoringPage: React.FC = () => {
         setErrors([]);
         setStats(null);
       } catch {
-        toast.error('Failed to clear error logs');
+        toast.error('Could not clear errors');
       }
     }
   };
@@ -168,7 +168,7 @@ const ErrorMonitoringPage: React.FC = () => {
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-theme-text-primary text-3xl font-bold">Error Monitoring</h1>
-        <p className="text-theme-text-secondary mt-1">Track and analyze errors across the platform</p>
+        <p className="text-theme-text-secondary mt-1">Errors members have run into, and how to resolve them</p>
       </div>
 
       {/* Statistics Cards */}
@@ -247,7 +247,7 @@ const ErrorMonitoringPage: React.FC = () => {
             </svg>
             <p className="text-lg font-medium">No errors found</p>
             <p className="mt-1 text-sm">
-              {filter === 'all' ? 'The system is running smoothly!' : `No errors of type "${filter}"`}
+              {filter === 'all' ? 'No errors have been recorded.' : `No errors of type "${filter}"`}
             </p>
           </div>
         ) : (
