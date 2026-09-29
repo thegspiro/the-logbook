@@ -402,7 +402,7 @@ const NotificationsPage: React.FC = () => {
         };
       });
     } catch (err: unknown) {
-      const message = getErrorMessage(err, 'Failed to toggle rule');
+      const message = getErrorMessage(err, 'Failed to turn the rule on or off');
       setError(message);
     } finally {
       setTogglingRuleId(null);
@@ -411,7 +411,7 @@ const NotificationsPage: React.FC = () => {
 
   const handleCreateRule = async () => {
     if (!createName.trim()) {
-      setCreateError('Rule name is required.');
+      setCreateError('Enter a rule name.');
       return;
     }
     setCreating(true);
@@ -558,7 +558,7 @@ const NotificationsPage: React.FC = () => {
       }
       setMyNotifications((prev) => prev.map((n) => (n.id === logId ? { ...n, pinned } : n)));
     } catch {
-      setError('Failed to update pin state');
+      setError('Failed to pin or unpin the notification');
     }
   };
 
@@ -612,7 +612,7 @@ const NotificationsPage: React.FC = () => {
               <h1 className="text-theme-text-primary text-2xl font-bold">Notifications</h1>
               <p className="text-theme-text-muted text-sm">
                 {activeTab === 'inbox'
-                  ? 'View and manage your notifications'
+                  ? 'Your in-app notifications. Pinned ones stay at the top.'
                   : activeTab === 'log'
                     ? 'Every notification sent to you, across all channels, with delivery status'
                     : 'Manage automated notification rules and email templates'}
@@ -785,7 +785,7 @@ const NotificationsPage: React.FC = () => {
                 <p className="text-theme-text-secondary">
                   {showRead
                     ? "You're all caught up. New notifications will appear here."
-                    : 'All notifications have been read.'}
+                    : 'You have read them all. Turn on Show read to see them again.'}
                 </p>
               </div>
             ) : (
@@ -863,7 +863,7 @@ const NotificationsPage: React.FC = () => {
                   spellCheck={false}
                   id="notif-search"
                   type="text"
-                  aria-label="Search notification rules..."
+                  aria-label="Search notification rules"
                   placeholder="Search notification rules..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -887,8 +887,8 @@ const NotificationsPage: React.FC = () => {
                   {(searchQuery || canManage) && (
                     <p className="text-theme-text-secondary mb-6">
                       {searchQuery
-                        ? 'No rules match your search query.'
-                        : 'Create your first notification rule to start sending automated notifications.'}
+                        ? 'No rules match your search.'
+                        : 'Automated notifications already go out with their default settings. Create a rule for a trigger to be able to switch that notification off.'}
                     </p>
                   )}
                   {canManage && !searchQuery && (
@@ -979,8 +979,7 @@ const NotificationsPage: React.FC = () => {
             <Mail className="text-theme-text-muted mx-auto mb-4 h-16 w-16" aria-hidden="true" />
             <h3 className="text-theme-text-primary mb-2 text-xl font-bold">Email Templates</h3>
             <p className="text-theme-text-secondary mb-6">
-              Customize email templates for different notification types. Templates support dynamic placeholders for
-              personalization.
+              Edit the emails sent for each notification type. Placeholders fill in details such as the member’s name.
             </p>
             <button
               onClick={() => void navigate('/communications/email-templates')}
@@ -1054,7 +1053,7 @@ const NotificationsPage: React.FC = () => {
                 <h3 className="text-theme-text-primary mb-2 text-xl font-bold">No Notifications Found</h3>
                 <p className="text-theme-text-secondary mb-6">
                   {logChannelFilter === 'all'
-                    ? 'Your send log will show every notification sent to you, with delivery status and timestamps.'
+                    ? 'Nothing has been sent to you yet. Each email and in-app notification you receive will be listed here with its delivery status.'
                     : `No ${logChannelFilter === 'email' ? 'email' : 'in-app'} notifications sent to you.`}
                 </p>
               </div>
@@ -1226,10 +1225,10 @@ const NotificationsPage: React.FC = () => {
                       <div className="flex items-start space-x-2">
                         <AlertCircle className="text-theme-text-muted mt-0.5 h-4 w-4 shrink-0" />
                         <p className="text-theme-text-muted text-sm">
-                          {TRIGGER_OPTIONS.find((opt) => opt.value === createTrigger)?.effect} It stops for the whole
-                          department once <strong className="text-theme-text-secondary">every</strong> rule for this
-                          trigger is switched off — one left active keeps it running. Individual members control their
-                          own email and text settings separately. Filed under{' '}
+                          {TRIGGER_OPTIONS.find((opt) => opt.value === createTrigger)?.effect} To stop it for the whole
+                          department, switch off <strong className="text-theme-text-secondary">every</strong> rule for
+                          this trigger — any one left on keeps it running. Members set their own email and text
+                          preferences separately. Filed under{' '}
                           <strong className="text-theme-text-secondary">
                             {formatCategory(TRIGGER_CATEGORY_MAP[createTrigger] || 'general')}
                           </strong>
