@@ -88,7 +88,7 @@ describe('RoomsSection nesting', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Add a room inside Volunteer Office' }));
     await user.type(screen.getByLabelText('Name *'), 'Gear Cage');
-    await user.click(screen.getByRole('button', { name: /Add$/ }));
+    await user.click(screen.getByRole('button', { name: 'Save Room' }));
 
     await waitFor(() => {
       expect(createRoom).toHaveBeenCalledWith({
@@ -122,7 +122,7 @@ describe('RoomsSection nesting', () => {
 
     await user.click(await screen.findByRole('button', { name: "Edit room Quartermaster's Storage" }));
     await user.selectOptions(screen.getByLabelText('Located Inside'), '');
-    await user.click(screen.getByRole('button', { name: /Update/ }));
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
 
     await waitFor(() => {
       expect(updateRoom).toHaveBeenCalledWith(
