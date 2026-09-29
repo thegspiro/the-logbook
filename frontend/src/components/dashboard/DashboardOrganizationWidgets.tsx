@@ -68,7 +68,9 @@ export default function DashboardOrganizationWidgets() {
           <h2 id="dashboard-widgets-title" className="text-theme-text-primary font-bold">
             Department pulse
           </h2>
-          <p className="text-theme-text-muted text-sm">Authorized operational summaries; select a reporting period.</p>
+          <p className="text-theme-text-muted text-sm">
+            Summaries for the areas you can access, over the period you choose.
+          </p>
         </div>
         <label className="text-theme-text-secondary text-sm">
           Period{' '}
@@ -76,7 +78,7 @@ export default function DashboardOrganizationWidgets() {
             value={period}
             onChange={(e) => setPeriod(e.target.value as WidgetPeriod)}
             className="form-input ml-2 min-h-11 w-auto"
-            aria-label="Dashboard widget period"
+            aria-label="Reporting period"
           >
             {periods.map((p) => (
               <option key={p.value} value={p.value}>

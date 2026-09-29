@@ -23,15 +23,15 @@ const AuthSettingsSection: React.FC<AuthSettingsSectionProps> = ({
     <div className="space-y-6">
       <div>
         <h3 className="text-theme-text-primary text-lg font-semibold">Authentication</h3>
-        <p className="text-theme-text-muted mt-1 text-sm">Configure how users sign in to the system.</p>
+        <p className="text-theme-text-muted mt-1 text-sm">Choose how members sign in.</p>
       </div>
 
       {/* Info banner */}
       <div className="border-theme-accent-blue/20 bg-theme-accent-blue-muted flex items-start gap-3 rounded-lg border p-4">
         <Info className="text-theme-accent-blue mt-0.5 h-5 w-5 shrink-0" />
         <p className="text-theme-text-secondary text-sm">
-          These settings were initially configured during onboarding. Changing the authentication provider will affect
-          how all users sign in. Ensure the new provider is configured before switching.
+          First set during onboarding. Changing the provider changes how every member signs in, so set up the new
+          provider before you switch.
         </p>
       </div>
 

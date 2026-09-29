@@ -41,7 +41,7 @@ const SetupPrerequisites: React.FC = () => {
             <h2 className="text-theme-text-primary text-3xl font-bold">What setup will ask for</h2>
             <p className="text-theme-text-secondary mx-auto mt-2 max-w-xl">
               Only the first two steps are required. Everything after them can be skipped now and set up later from
-              Settings, so you do not need to go looking for credentials before you start.
+              Settings, so you don't need any passwords or keys to start.
             </p>
           </div>
 
@@ -55,7 +55,7 @@ const SetupPrerequisites: React.FC = () => {
               Have these ready
             </h3>
             <p className="text-theme-text-muted mb-4 text-xs">
-              {requiredSteps.map((step) => step.name).join(' and ')} — the only steps setup cannot finish without.
+              {requiredSteps.map((step) => step.name).join(' and ')} — the only required steps.
             </p>
             <ul className="space-y-3">
               {REQUIRED_ITEMS.map((entry) => (
@@ -82,8 +82,7 @@ const SetupPrerequisites: React.FC = () => {
               Useful to have, but skippable
             </h3>
             <p className="text-theme-text-muted mb-4 text-xs">
-              Every one of these steps has a Skip. Skipping is a complete answer, not a deferral you will be nagged
-              about.
+              Each of these steps has a Skip button. You can set any of them up later.
             </p>
             <ul className="space-y-3">
               {OPTIONAL_ITEMS.map((entry) => (
@@ -125,7 +124,7 @@ const REQUIRED_ITEMS: Array<{ title: string; description: string }> = [
   },
   {
     title: 'A name, email address and password for the administrator account',
-    description: 'Yours. It is created early so the rest of setup belongs to a real account you can sign back in to.',
+    description: 'This is your own account. It is created early so you can sign back in and finish setup later.',
   },
 ];
 
@@ -136,7 +135,7 @@ const OPTIONAL_ITEMS: Array<{ title: string; description: string }> = [
   },
   {
     title: 'Your ranks, positions, stations and apparatus',
-    description: 'Rough is fine — all four are editable afterwards, and setup seeds sensible defaults.',
+    description: 'A rough list is fine. You can edit all four later.',
   },
   {
     title: 'Email sending credentials',

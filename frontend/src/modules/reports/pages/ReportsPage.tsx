@@ -129,7 +129,7 @@ const REPORT_CARDS: ReportCardDefinition[] = [
   {
     id: 'member-roster',
     title: 'Member Roster',
-    description: 'Complete list of all active members with contact information',
+    description: 'Every member, active and inactive, with email, rank, station, and roles',
     icon: 'Users',
     category: 'member',
     available: true,
@@ -137,7 +137,7 @@ const REPORT_CARDS: ReportCardDefinition[] = [
   {
     id: 'training-summary',
     title: 'Training Summary',
-    description: 'Training hours, certifications, and completion rates by member',
+    description: 'Training hours and completion rates by member, course, and requirement',
     icon: 'TrendingUp',
     category: 'training',
     available: true,
@@ -146,7 +146,7 @@ const REPORT_CARDS: ReportCardDefinition[] = [
   {
     id: 'event-attendance',
     title: 'Event Attendance',
-    description: 'Attendance records and RSVP statistics for all events',
+    description: 'RSVPs and attendance for each event in the reporting period',
     icon: 'CalendarIcon',
     category: 'event',
     available: true,
@@ -155,7 +155,7 @@ const REPORT_CARDS: ReportCardDefinition[] = [
   {
     id: 'training-progress',
     title: 'Training Progress',
-    description: 'Pipeline enrollment progress and requirement completion',
+    description: "Each member's progress through their training programs and requirements",
     icon: 'ClipboardList',
     category: 'training',
     available: true,
@@ -163,7 +163,7 @@ const REPORT_CARDS: ReportCardDefinition[] = [
   {
     id: 'annual-training',
     title: 'Annual Training Report',
-    description: 'Comprehensive annual breakdown of training hours, shift experience, and performance',
+    description: 'Training hours, shift experience, calls, and performance ratings for each active member',
     icon: 'BarChart3',
     category: 'training',
     available: true,
@@ -181,7 +181,7 @@ const REPORT_CARDS: ReportCardDefinition[] = [
   {
     id: 'department-overview',
     title: 'Department Overview',
-    description: 'Cross-module health report: members, training, events, and action items',
+    description: 'Department totals for members, training, events, and open action items',
     icon: 'Building',
     category: 'compliance',
     available: true,
@@ -190,7 +190,7 @@ const REPORT_CARDS: ReportCardDefinition[] = [
   {
     id: 'certification-expiration',
     title: 'Certification Expiration',
-    description: 'Track expiring and overdue certifications across all members',
+    description: "Every member's certifications and expiration dates, flagging expired and expiring ones",
     icon: 'Award',
     category: 'compliance',
     available: true,
@@ -198,7 +198,7 @@ const REPORT_CARDS: ReportCardDefinition[] = [
   {
     id: 'compliance-status',
     title: 'Compliance Status',
-    description: 'Member-by-member compliance against requirements with gap analysis',
+    description: "Each member's compliance with training requirements, with overdue items and upcoming deadlines",
     icon: 'Shield',
     category: 'compliance',
     available: true,
@@ -206,7 +206,7 @@ const REPORT_CARDS: ReportCardDefinition[] = [
   {
     id: 'apparatus-status',
     title: 'Fleet / Apparatus Status',
-    description: 'Vehicle status, maintenance due dates, mileage, and work orders',
+    description: 'Vehicle status, inspection due dates, mileage, and open work orders',
     icon: 'Truck',
     category: 'operations',
     available: true,
@@ -231,7 +231,7 @@ const REPORT_CARDS: ReportCardDefinition[] = [
   {
     id: 'pipeline-overview',
     title: 'Pipeline Overview',
-    description: 'Prospective member pipeline report with customizable stage grouping',
+    description: 'Applicants in the prospective member pipeline, by stage, year, and referral source',
     icon: 'UserPlus',
     category: 'member',
     available: true,
@@ -426,14 +426,12 @@ export const ReportsPage: React.FC = () => {
           <div className="flex items-start justify-between">
             <div>
               <h1 className="text-theme-text-primary mb-2 text-3xl font-bold">Reports</h1>
-              <p className="text-theme-text-secondary">
-                Generate, export, and compare departmental reports across all modules
-              </p>
+              <p className="text-theme-text-secondary">Run department reports and export them to CSV or PDF</p>
             </div>
             <HelpLink
               topic="reports"
               variant="icon"
-              tooltip="Click any report card to generate. Use category filters and date range presets to customize. Export to CSV or print to PDF."
+              tooltip="Select Generate Report on a card. Filter by category, set the reporting period for Date Range reports, then export to CSV or print to PDF."
               tooltipPosition="left"
             />
           </div>
@@ -464,7 +462,7 @@ export const ReportsPage: React.FC = () => {
           <div className="mb-3 flex items-center space-x-2">
             <CalendarIcon className="text-theme-text-muted h-4 w-4" aria-hidden="true" />
             <span className="text-theme-text-secondary text-sm font-medium">Reporting Period</span>
-            <span className="text-theme-text-muted text-xs">(applies to date-based reports)</span>
+            <span className="text-theme-text-muted text-xs">(applies to reports marked Date Range)</span>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -520,8 +518,9 @@ export const ReportsPage: React.FC = () => {
               <button
                 onClick={() => setError(null)}
                 className="text-theme-alert-danger-icon hover:text-theme-alert-danger-title"
+                aria-label="Dismiss error"
               >
-                <X className="h-4 w-4" />
+                <X className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
           </div>
@@ -596,11 +595,11 @@ export const ReportsPage: React.FC = () => {
           <div className="flex items-start space-x-3">
             <AlertCircle className="text-theme-alert-info-icon mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
             <div>
-              <h4 className="text-theme-alert-info-title mb-1 text-sm font-medium">Report Generation</h4>
+              <h4 className="text-theme-alert-info-title mb-1 text-sm font-medium">How Reports Work</h4>
               <p className="text-theme-alert-info-text text-sm">
-                Reports are generated in real-time. Use the date range presets or set a custom period for date-based
-                reports. All reports can be exported to CSV or printed to PDF. Use the Compare button in the report
-                modal to see period-over-period trends.
+                Reports use live data. Reports marked Date Range cover the reporting period above. Export any report to
+                CSV or print it to PDF, and use Compare in an open report to see the previous period of the same length
+                beside it.
               </p>
             </div>
           </div>
@@ -655,8 +654,9 @@ export const ReportsPage: React.FC = () => {
                         type="button"
                         onClick={closeModal}
                         className="text-theme-text-muted hover:text-theme-text-primary"
+                        aria-label="Close report"
                       >
-                        <X className="h-5 w-5" />
+                        <X className="h-5 w-5" aria-hidden="true" />
                       </button>
                     </div>
                   </div>

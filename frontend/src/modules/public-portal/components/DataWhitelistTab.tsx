@@ -143,6 +143,7 @@ const CategorySection: React.FC<CategorySectionProps> = ({ category, fields, onT
                   <input
                     type="checkbox"
                     checked={field.is_enabled}
+                    aria-label={`Enable ${field.field_name}`}
                     onChange={(e) => {
                       void onToggle(field.id, e.target.checked);
                     }}
@@ -219,7 +220,7 @@ export const DataWhitelistTab: React.FC = () => {
   if (error) {
     return (
       <div className="rounded-md border border-red-200 bg-red-50 p-4 dark:border-red-500/30 dark:bg-red-500/10">
-        <p className="text-red-800 dark:text-red-400">Error loading data whitelist: {error}</p>
+        <p className="text-red-800 dark:text-red-400">Couldn't load data fields: {error}</p>
       </div>
     );
   }
@@ -229,9 +230,7 @@ export const DataWhitelistTab: React.FC = () => {
       {/* Header */}
       <div>
         <h3 className="text-theme-text-primary text-lg font-semibold">Data Exposure Control</h3>
-        <p className="text-theme-text-secondary mt-1 text-sm">
-          Control which data fields are accessible via the public API
-        </p>
+        <p className="text-theme-text-secondary mt-1 text-sm">Choose which fields the public API returns</p>
       </div>
 
       {/* Security Warning */}
@@ -248,9 +247,8 @@ export const DataWhitelistTab: React.FC = () => {
           </div>
           <div className="ml-3">
             <p className="text-sm text-yellow-700 dark:text-yellow-400">
-              <strong>Privacy Notice:</strong> Only enable fields that are intended for public consumption. Fields
-              marked as PII contain personally identifiable information and should be carefully reviewed before
-              enabling.
+              <strong>Privacy:</strong> Only enable fields you are willing to publish. Fields marked PII hold personal
+              information, such as a member's phone number or home address — check them before enabling.
               {sensitiveEnabled > 0 && (
                 <span className="mt-1 block font-semibold">
                   ⚠️ You currently have {sensitiveEnabled} sensitive field{sensitiveEnabled !== 1 ? 's' : ''} enabled.
@@ -350,7 +348,7 @@ export const DataWhitelistTab: React.FC = () => {
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            aria-label="Search by field name, category, or description..."
+            aria-label="Search by field name, category, or description"
             placeholder="Search by field name, category, or description..."
             className="border-theme-surface-border focus:ring-theme-focus-ring w-full rounded-md border px-4 py-2 pl-10 focus:ring-2 focus:outline-hidden"
           />
@@ -419,10 +417,7 @@ export const DataWhitelistTab: React.FC = () => {
           <div className="ml-3">
             <h3 className="text-sm font-medium text-blue-700 dark:text-blue-300">How it works</h3>
             <div className="mt-2 text-sm text-blue-700 dark:text-blue-300">
-              <p>
-                Only fields that are enabled will be returned in public API responses. Use this to control exactly what
-                information is shared with external applications. Changes take effect immediately.
-              </p>
+              <p>The public API returns only enabled fields. Changes take effect immediately.</p>
             </div>
           </div>
         </div>

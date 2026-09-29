@@ -103,7 +103,7 @@ const FileStorageChoice: React.FC = () => {
         'Automatic backup and sync',
         'Integrated with Google Workspace',
       ],
-      setupInfo: "You'll need to authorize access to your Google Drive account using OAuth 2.0.",
+      setupInfo: "You'll need an OAuth client ID and secret from your Google Cloud project.",
       recommended: emailPlatform === 'gmail',
     },
     {
@@ -148,7 +148,7 @@ const FileStorageChoice: React.FC = () => {
         'Requires manual backups',
       ],
       setupInfo:
-        'Files will be stored in your configured upload directory. Make sure you have adequate storage space and a backup strategy.',
+        'Files are stored in the server’s upload folder. Make sure it has enough space and is included in your backups.',
       recommended: emailPlatform === 'selfhosted' || emailPlatform === 'other',
     },
     {
@@ -157,8 +157,8 @@ const FileStorageChoice: React.FC = () => {
       description: 'Skip for now',
       icon: <FolderOpen aria-hidden="true" className="text-theme-text-muted h-10 w-10" />,
       color: 'from-slate-700 to-slate-500',
-      features: ['Set up file storage later', 'Use local storage as default', 'Can be changed in settings'],
-      setupInfo: 'You can configure file storage later in the system settings.',
+      features: ['Set up file storage later', 'Uses local storage until then', 'Can be changed in Settings'],
+      setupInfo: 'You can set up file storage later in Settings.',
     },
   ];
 
@@ -196,7 +196,7 @@ const FileStorageChoice: React.FC = () => {
     );
 
     if (data) {
-      toast.success('File storage will be configured later');
+      toast.success('File storage skipped. You can set it up later in Settings.');
       void navigate(nextStepPath('file_storage'));
     }
   };
@@ -236,11 +236,10 @@ const FileStorageChoice: React.FC = () => {
               <div className="flex items-start space-x-3">
                 <CheckCircle aria-hidden="true" className="text-theme-alert-success-icon mt-0.5 h-5 w-5 shrink-0" />
                 <div>
-                  <p className="text-theme-alert-success-title mb-1 text-sm font-medium">Smart Recommendation</p>
+                  <p className="text-theme-alert-success-title mb-1 text-sm font-medium">Recommended for you</p>
                   <p className="text-theme-alert-success-text text-sm">
-                    Based on your {emailPlatform === 'gmail' ? 'Gmail' : 'Microsoft 365'} email selection, we've
-                    pre-selected {emailPlatform === 'gmail' ? 'Google Drive' : 'OneDrive'} for seamless integration with
-                    your existing platform.
+                    You chose {emailPlatform === 'gmail' ? 'Gmail' : 'Microsoft 365'} for email, so{' '}
+                    {emailPlatform === 'gmail' ? 'Google Drive' : 'OneDrive'} is recommended.
                   </p>
                 </div>
               </div>

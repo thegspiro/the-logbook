@@ -349,7 +349,7 @@ const OnboardingCheck: React.FC = () => {
       if (response.error || !response.data) {
         setError(
           response.error ||
-            'Failed to check onboarding status. The server is running but the status endpoint returned an error.'
+            'Could not check setup status. The server is running, but its status check returned an error.'
         );
         return;
       }
@@ -363,7 +363,7 @@ const OnboardingCheck: React.FC = () => {
       }
     } catch (err) {
       console.error('Error checking onboarding status:', err);
-      setError('Failed to check onboarding status. Please verify the backend is running and try again.');
+      setError('Could not check setup status. Make sure the backend is running, then try again.');
     }
   }, [navigate]);
 
@@ -404,9 +404,7 @@ const OnboardingCheck: React.FC = () => {
             void runCheck();
           }, CHECK_INTERVAL);
         } else {
-          setError(
-            'Services did not become ready in time. Please check that all containers are running and review logs.'
-          );
+          setError('Services did not start in time. Check that all containers are running, then review the logs.');
         }
 
         return newCount;
@@ -615,8 +613,8 @@ const OnboardingCheck: React.FC = () => {
                     database, and running migrations.
                   </p>
                   <p className="text-theme-text-muted text-xs">
-                    First startup can take 25-30 minutes while MySQL initializes and 38 database migrations create
-                    comprehensive tables for your fire department intranet.
+                    First startup can take 25-30 minutes while MySQL initializes and the database migrations create your
+                    tables.
                   </p>
                 </div>
               </div>
@@ -658,11 +656,11 @@ const OnboardingCheck: React.FC = () => {
                         {startupInfo.migrations.completed === 0 && startupInfo.migrations.total > 0 && (
                           <div className="text-theme-text-muted mb-2 space-y-1 text-xs">
                             <p className="text-theme-alert-warning-icon font-medium">
-                              Creating {startupInfo.migrations.total} database tables...
+                              Running {startupInfo.migrations.total} database migrations...
                             </p>
                             <p className="text-theme-text-muted">
                               Setting up tables for users, organizations, training records, events, elections,
-                              inventory, and audit logs. This process runs in the background and may take 1-2 minutes.
+                              inventory, and audit logs. This only happens on first startup.
                             </p>
                           </div>
                         )}
@@ -776,8 +774,8 @@ const OnboardingCheck: React.FC = () => {
               <div>
                 <h4 className="text-theme-text-secondary mb-1 font-semibold">🔧 Database Migrations</h4>
                 <p className="text-theme-text-muted text-xs">
-                  Creating 37 database tables for users, training, events, elections, inventory, and more. This only
-                  happens once during initial setup.
+                  Creating the database tables for users, training, events, elections, inventory, and more. This only
+                  happens on first startup.
                 </p>
               </div>
               <div>

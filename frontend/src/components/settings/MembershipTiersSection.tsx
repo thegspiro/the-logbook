@@ -180,9 +180,7 @@ const MembershipTiersSection: React.FC<MembershipTiersSectionProps> = ({
         </fieldset>
 
         {tiers.length === 0 ? (
-          <p className="text-theme-text-muted py-8 text-center text-sm">
-            No tiers configured. Add the first one below.
-          </p>
+          <p className="text-theme-text-muted py-8 text-center text-sm">No tiers yet. Add the first one below.</p>
         ) : (
           <div className="space-y-2">
             {tiers.map((tier, index) => {
@@ -263,7 +261,7 @@ const MembershipTiersSection: React.FC<MembershipTiersSectionProps> = ({
                         aria-expanded={isOpen}
                         className="text-theme-text-secondary hover:text-theme-text-primary touch-target-phone rounded-md px-2 py-1 text-xs font-medium"
                       >
-                        {isOpen ? 'Hide' : 'Rights'}
+                        {isOpen ? 'Hide rights' : 'Show rights'}
                       </button>
                       <button
                         type="button"

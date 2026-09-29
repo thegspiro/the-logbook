@@ -75,7 +75,7 @@ const SetupComplete: React.FC = () => {
     { label: 'Modules enabled', value: String(enabledModuleNames.length) },
     { label: 'Positions defined', value: String(positionCount) },
     { label: 'Sign-in method', value: AUTH_LABELS[authPlatform ?? ''] || 'Username & password' },
-    { label: 'Email platform', value: EMAIL_LABELS[emailPlatform ?? ''] || 'Not configured' },
+    { label: 'Email platform', value: EMAIL_LABELS[emailPlatform ?? ''] || 'Not set up yet' },
     { label: 'File storage', value: STORAGE_LABELS[fileStoragePlatform ?? ''] || 'Local storage' },
     { label: 'IT contacts', value: String(itContactCount) },
   ];
@@ -99,8 +99,8 @@ const SetupComplete: React.FC = () => {
               {departmentName ? `${departmentName} is set up` : 'Your department is set up'}
             </h2>
             <p className="text-theme-text-secondary mx-auto mt-2 max-w-xl">
-              The application is configured and your administrator account is active. A few things still need your
-              department&apos;s real data before members can use it.
+              Your administrator account is active. Before members start using The Logbook, add your department&apos;s
+              real data — the steps are listed below.
             </p>
           </div>
 
@@ -131,7 +131,7 @@ const SetupComplete: React.FC = () => {
               What&apos;s left
             </h3>
             <p className="text-theme-text-muted mb-4 text-xs">
-              Department Setup tracks these for you and marks each one done as the data lands.
+              Department Setup tracks these and checks each one off as you add the data.
             </p>
 
             {checklistState === 'loading' && (
