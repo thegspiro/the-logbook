@@ -23,17 +23,14 @@ const StorageSettingsSection: React.FC<StorageSettingsSectionProps> = ({
     <div className="space-y-6">
       <div>
         <h3 className="text-theme-text-primary text-lg font-semibold">File Storage</h3>
-        <p className="text-theme-text-muted mt-1 text-sm">
-          Configure where department files, documents, and images are stored.
-        </p>
+        <p className="text-theme-text-muted mt-1 text-sm">Where department files, documents, and images are stored.</p>
       </div>
 
       {/* Info banner */}
       <div className="border-theme-accent-blue/20 bg-theme-accent-blue-muted flex items-start gap-3 rounded-lg border p-4">
         <Info className="text-theme-accent-blue mt-0.5 h-5 w-5 shrink-0" />
         <p className="text-theme-text-secondary text-sm">
-          These settings were initially configured during onboarding. Changing the storage platform may require
-          migrating existing files.
+          First set during onboarding. Changing the storage platform may require migrating existing files.
         </p>
       </div>
 
