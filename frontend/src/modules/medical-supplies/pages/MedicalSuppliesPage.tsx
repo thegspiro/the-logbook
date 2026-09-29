@@ -478,7 +478,7 @@ const MedicalSuppliesPage: React.FC = () => {
               Medical Supplies
             </h1>
             <p className="text-theme-text-muted mt-1 text-sm">
-              EMS stock with lot numbers and expiration dates, run on the same catalog as gear and uniforms
+              Track EMS stock by lot number and expiration date. It shares one catalog with gear and uniforms
               {canManageGear && (
                 <>
                   {' '}
@@ -568,7 +568,7 @@ const MedicalSuppliesPage: React.FC = () => {
           />
           <StatTile
             icon={<CalendarClock className="h-4 w-4 text-amber-700 dark:text-amber-400" />}
-            label={`Expiring within ${summary.expiring_within_days}d`}
+            label={`Expiring within ${summary.expiring_within_days} days`}
             value={summary.expiring_soon}
             tone="bg-amber-500/10"
           />
@@ -580,7 +580,7 @@ const MedicalSuppliesPage: React.FC = () => {
           />
           <StatTile
             icon={<TrendingDown className="h-4 w-4 text-orange-700 dark:text-orange-400" />}
-            label="Below reorder point"
+            label="Low stock"
             value={summary.low_stock}
             tone="bg-orange-500/10"
           />
@@ -754,15 +754,23 @@ const MedicalSuppliesPage: React.FC = () => {
               <SkeletonCard />
             ) : null
           ) : loaded.items && items.length === 0 ? (
-            <EmptyState
-              icon={Stethoscope}
-              title="No medical supplies yet"
-              description={
-                canManage
-                  ? 'Add a category first, then the supplies that go in it.'
-                  : 'Nothing has been added to the medical catalog yet.'
-              }
-            />
+            debouncedSearch || categoryFilter ? (
+              <EmptyState
+                icon={Search}
+                title="No matching supplies"
+                description="Try a different search or category."
+              />
+            ) : (
+              <EmptyState
+                icon={Stethoscope}
+                title="No medical supplies yet"
+                description={
+                  canManage
+                    ? 'Add a category first, then the supplies that go in it.'
+                    : 'Nothing has been added to the medical catalog yet.'
+                }
+              />
+            )
           ) : (
             <div className="card overflow-x-auto p-0">
               <table className="rwd-table w-full text-sm">

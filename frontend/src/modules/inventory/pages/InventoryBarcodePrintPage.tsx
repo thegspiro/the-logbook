@@ -987,7 +987,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
 
   const handlePrint = () => {
     if (!barcodesReady) {
-      toast.error('Barcodes are still rendering. Please wait a moment.');
+      toast.error('Barcodes are still rendering. Try again in a moment.');
       return;
     }
     // On phones/tablets the hidden-iframe print pipeline is unreliable (mobile
@@ -1000,7 +1000,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
     }
     const container = document.querySelector('.barcode-labels-container');
     if (!container) {
-      toast.error('Label container not found.');
+      toast.error('Could not prepare the labels for printing. Reload the page and try again.');
       return;
     }
     const svgs = container.querySelectorAll('.barcode-label svg');
@@ -1025,7 +1025,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
     const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
     if (!iframeDoc) {
       document.body.removeChild(iframe);
-      toast.error('Could not create print frame.');
+      toast.error('Could not prepare the labels for printing. Reload the page and try again.');
       return;
     }
 
@@ -1153,7 +1153,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
         { symbology, ...(isThermal ? {} : { startPosition }) }
       );
       if (autoPopulated > 0) {
-        toast.success(`${autoPopulated} item${autoPopulated !== 1 ? 's' : ''} had barcode values auto-generated`);
+        toast.success(`Generated barcodes for ${autoPopulated} item${autoPopulated !== 1 ? 's' : ''}`);
       }
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');

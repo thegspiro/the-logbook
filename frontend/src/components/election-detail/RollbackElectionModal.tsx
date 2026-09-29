@@ -42,7 +42,7 @@ const RollbackElectionModal: React.FC<RollbackElectionModalProps> = ({
       <div ref={dialogRef} className="modal-panel modal-panel-scroll w-full max-w-lg">
         <div className="border-theme-surface-border border-b px-6 py-4">
           <h3 id="rollback-election-modal-title" className="text-theme-text-primary text-lg font-medium">
-            Rollback Election
+            Roll Back Election
           </h3>
         </div>
 
@@ -64,9 +64,7 @@ const RollbackElectionModal: React.FC<RollbackElectionModalProps> = ({
                 </svg>
               </div>
               <div className="ml-3">
-                <h3 className="text-sm font-medium text-orange-700 dark:text-orange-300">
-                  This action requires careful consideration
-                </h3>
+                <h3 className="text-sm font-medium text-orange-700 dark:text-orange-300">Before you roll back</h3>
                 <div className="mt-2 text-sm text-orange-700 dark:text-orange-300">
                   <p>Rolling back this election will:</p>
                   <ul className="mt-1 list-inside list-disc space-y-1">
@@ -76,7 +74,7 @@ const RollbackElectionModal: React.FC<RollbackElectionModalProps> = ({
                     </li>
                     <li>Send email notifications to all leadership members</li>
                     <li>Create an audit trail entry with your reason</li>
-                    {targetStatus.toLowerCase() === 'open' && <li>Allow voting to resume (for closed&rarr;open)</li>}
+                    {targetStatus.toLowerCase() === 'open' && <li>Reopen voting</li>}
                   </ul>
                 </div>
               </div>
@@ -114,7 +112,7 @@ const RollbackElectionModal: React.FC<RollbackElectionModalProps> = ({
                 value={rollbackReason}
                 onChange={(e) => setRollbackReason(e.target.value)}
                 rows={4}
-                placeholder="Example: Vote counting error discovered, need to recount all ballots..."
+                placeholder="e.g. Counting error found; all ballots need a recount"
                 className="form-input mt-1 shadow-xs"
                 required
                 aria-required="true"
@@ -140,7 +138,7 @@ const RollbackElectionModal: React.FC<RollbackElectionModalProps> = ({
               disabled={rolling || rollbackReason.trim().length < 10}
               className="rounded-md bg-orange-700 px-4 py-2 text-white hover:bg-orange-800 disabled:opacity-50"
             >
-              {rolling ? 'Rolling Back...' : 'Confirm Rollback'}
+              {rolling ? 'Rolling Back...' : 'Roll Back Election'}
             </button>
           </div>
         </div>

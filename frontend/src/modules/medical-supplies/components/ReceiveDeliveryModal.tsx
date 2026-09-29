@@ -76,7 +76,7 @@ export const ReceiveDeliveryModal: React.FC<ReceiveDeliveryModalProps> = ({ onCl
       return;
     }
     if (touched.some((l) => Number(l.quantity) < 1)) {
-      toast.error('A received line needs a quantity of 1 or more');
+      toast.error('Each line needs a quantity of 1 or more');
       return;
     }
 
@@ -94,7 +94,7 @@ export const ReceiveDeliveryModal: React.FC<ReceiveDeliveryModalProps> = ({ onCl
     setIsSaving(true);
     try {
       await medicalSuppliesService.receiveDelivery(entries);
-      toast.success(`Received ${entries.length} line(s)`);
+      toast.success(`Delivery recorded: ${entries.length} ${entries.length === 1 ? 'line' : 'lines'}`);
       onSaved();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to record the delivery'));
@@ -109,8 +109,7 @@ export const ReceiveDeliveryModal: React.FC<ReceiveDeliveryModalProps> = ({ onCl
         <div className="modal-body space-y-3">
           <>
             <p className="text-theme-text-muted text-sm">
-              One line per item. Stock booked here becomes the replacement a crew can swap onto a rig during an
-              equipment check.
+              Add one line per item. Crews can swap stock recorded here onto a rig during an equipment check.
             </p>
 
             <div className="space-y-2">

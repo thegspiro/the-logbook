@@ -53,7 +53,7 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
       setDeleteTarget(null);
       onRefresh();
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to delete record'));
+      toast.error(getErrorMessage(err, 'Failed to delete maintenance record'));
     }
   };
 
@@ -74,7 +74,9 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
             <div className="border-theme-text-primary mx-auto h-8 w-8 animate-spin rounded-full border-b-2"></div>
           </div>
         ) : maintenanceRecords.length === 0 ? (
-          <p className="text-theme-text-muted py-8 text-center">No maintenance records found.</p>
+          <p className="text-theme-text-muted py-8 text-center">
+            No maintenance records yet. Select Add Record to log service or schedule upcoming work.
+          </p>
         ) : (
           <div className="space-y-3">
             {maintenanceRecords.map((record) => (
@@ -146,8 +148,8 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
         onClose={() => setDeleteTarget(null)}
         onConfirm={() => void handleDelete()}
         title="Delete Maintenance Record"
-        message={`Are you sure you want to delete this ${deleteTarget?.maintenanceType?.name || 'maintenance'} record? This action cannot be undone.`}
-        confirmLabel="Delete"
+        message={`Delete this ${deleteTarget?.maintenanceType?.name || 'maintenance'} record? You can't undo this.`}
+        confirmLabel="Delete record"
         variant="danger"
       />
     </>

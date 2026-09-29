@@ -42,12 +42,13 @@ export const ApparatusDetailHeader: React.FC<ApparatusDetailHeaderProps> = ({
           <div className="flex items-center space-x-4">
             <button
               onClick={() => void navigate('/apparatus')}
+              aria-label="Back to apparatus"
               className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-2 transition-colors"
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
             <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-red-800 text-lg font-bold text-white">
-              {currentApparatus.unitNumber.substring(0, 2)}
+              {currentApparatus.unitNumber.replace(/[^A-Za-z0-9]/g, '').substring(0, 2)}
             </div>
             <div>
               <div className="flex items-center gap-3">

@@ -318,9 +318,7 @@ const TrainingRequirementsPage: React.FC = () => {
               <FileText className="text-theme-text-muted mx-auto mb-4 h-16 w-16" aria-hidden="true" />
               <h3 className="text-theme-text-primary mb-2 text-xl font-semibold">No Requirements Found</h3>
               <p className="text-theme-text-muted mb-6">
-                {searchTerm
-                  ? 'Try adjusting your search or filters'
-                  : 'Get started by creating your first training requirement'}
+                {searchTerm ? 'Try adjusting your search or filters' : 'Create a requirement, or start from a template'}
               </p>
               <button onClick={() => setShowCreateModal(true)} className="btn-success px-6 py-3 font-medium">
                 Create First Requirement

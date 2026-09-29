@@ -1193,7 +1193,7 @@ const ReviewSubmissionsPage: React.FC = () => {
               <div className="mb-4 flex items-start space-x-2 rounded-lg border border-blue-500/30 bg-blue-500/10 p-3">
                 <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-700 dark:text-blue-400" />
                 <p className="text-sm text-blue-700 dark:text-blue-300">
-                  Click on a submission to expand details and review. You can approve, reject, or request revisions.
+                  Open a submission to see its details, then approve it, reject it, or request a revision.
                 </p>
               </div>
             )}

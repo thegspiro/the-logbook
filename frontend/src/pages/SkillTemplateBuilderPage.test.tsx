@@ -105,7 +105,7 @@ describe('SkillTemplateBuilderPage', () => {
     it('should have back navigation link', () => {
       renderWithRouter(<SkillTemplateBuilderPage />);
 
-      expect(screen.getByText('Back to Skills Testing')).toBeInTheDocument();
+      expect(screen.getByText('Back to Templates')).toBeInTheDocument();
     });
   });
 

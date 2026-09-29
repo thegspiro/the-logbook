@@ -122,7 +122,7 @@ const InventoryMembersPage: React.FC = () => {
       );
       setMembers(data.members);
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Unable to load members inventory data.'));
+      setError(getErrorMessage(err, 'Could not load member equipment. Refresh to try again.'));
     } finally {
       setLoading(false);
     }
@@ -241,13 +241,13 @@ const InventoryMembersPage: React.FC = () => {
       <Link
         to="/inventory/admin"
         className="text-theme-text-muted hover:text-theme-text-secondary mb-4 flex items-center gap-1 text-sm"
-        title="Back to Inventory Admin"
+        title="Back to Inventory Administration"
       >
         <ArrowLeft className="h-4 w-4" /> Back to Admin
       </Link>
       <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-theme-text-primary text-2xl font-bold">Members Equipment</h1>
+          <h1 className="text-theme-text-primary text-2xl font-bold">Member Equipment</h1>
           <p className="text-theme-text-muted text-sm">View and manage equipment assigned to members</p>
         </div>
         <div className="flex items-center gap-2">

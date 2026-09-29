@@ -90,7 +90,7 @@ export const BallotVotingPage: React.FC = () => {
     if (token) {
       void loadBallot();
     } else {
-      setError('No voting token provided. Please use the link from your ballot email.');
+      setError('This link has no voting token. Open the ballot link from your email.');
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -111,7 +111,7 @@ export const BallotVotingPage: React.FC = () => {
       }
       setChoices(initialChoices);
     } catch (err: unknown) {
-      const detail = getErrorMessage(err, 'Unable to load ballot. The link may be expired or invalid.');
+      const detail = getErrorMessage(err, "Couldn't load your ballot. The link may have expired or be invalid.");
       if (detail === 'This ballot has already been fully submitted') {
         setError('This ballot has already been submitted. Each voting link can only be used once.');
       } else {
@@ -183,7 +183,7 @@ export const BallotVotingPage: React.FC = () => {
     for (const [itemId, itemChoice] of Object.entries(choices)) {
       if (itemChoice.choice === BallotChoice.WRITE_IN && !itemChoice.write_in_name.trim()) {
         const item = (election?.ballot_items || []).find((i) => i.id === itemId);
-        setError(`Please enter a name for your write-in on: ${item?.title || itemId}`);
+        setError(`Enter a name for your write-in on: ${item?.title || itemId}`);
         return;
       }
     }
@@ -219,7 +219,7 @@ export const BallotVotingPage: React.FC = () => {
       setSubmitted(true);
       setShowConfirmation(false);
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Failed to submit ballot. Please try again.'));
+      setError(getErrorMessage(err, 'Failed to submit ballot. Try again.'));
       setShowConfirmation(false);
     } finally {
       setSubmitting(false);
@@ -304,7 +304,7 @@ export const BallotVotingPage: React.FC = () => {
           <h1 className="text-theme-text-primary mb-2 text-xl font-bold">Unable to Load Ballot</h1>
           <p className="text-theme-text-secondary">{error}</p>
           <p className="text-theme-text-muted mt-4 text-sm">
-            If you believe this is an error, please contact your organization secretary.
+            If you think this is a mistake, contact your organization's secretary.
           </p>
         </div>
       </main>
@@ -332,7 +332,7 @@ export const BallotVotingPage: React.FC = () => {
           <h1 className="text-theme-text-primary mb-2 text-2xl font-bold">Ballot Submitted</h1>
           <p className="text-theme-text-secondary mb-4">{submitResult.message}</p>
           <div className="bg-theme-surface-secondary text-theme-text-muted rounded-lg p-4 text-sm">
-            <p>Your ballot has been recorded securely and anonymously.</p>
+            <p>Your ballot has been securely recorded.</p>
             {submitResult.receipt_hashes && submitResult.receipt_hashes.length > 0 && (
               <div className="border-theme-surface-border mt-3 border-t pt-3">
                 <p className="text-theme-text-secondary mb-1 font-medium">Vote Receipt</p>
@@ -380,8 +380,8 @@ export const BallotVotingPage: React.FC = () => {
 
         <div className="mb-6">
           <p className="text-theme-text-secondary text-sm">
-            Please review each item below and make your selection. You may vote for the presented option, write in an
-            alternative, or abstain from voting on any item.
+            Make a selection for each item below. You can vote for an option, write in your own choice where allowed, or
+            abstain on any item.
           </p>
         </div>
 
@@ -613,7 +613,7 @@ export const BallotVotingPage: React.FC = () => {
 
         {/* Security notice */}
         <div className="text-theme-text-muted mt-8 text-center text-xs">
-          <p>Your vote is anonymous and securely recorded.</p>
+          <p>Your vote is securely recorded.</p>
           <p>This voting link is unique to you. Do not share it with others.</p>
         </div>
       </main>
@@ -639,7 +639,7 @@ export const BallotVotingPage: React.FC = () => {
                 Confirm Your Ballot
               </h3>
               <p className="text-theme-text-muted mt-1 text-sm">
-                Please review your selections below. Once submitted, your ballot cannot be changed.
+                Check your selections. Once you cast your ballot, you cannot change it.
               </p>
             </div>
 
