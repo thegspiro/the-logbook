@@ -990,9 +990,9 @@ class TrainingSessionService:
         self,
         program_service,
         user_id: str,
-        training_session: TrainingSession,
+        training_session: Any,
         organization_id: UUID,
-        verified_by: UUID,
+        verified_by: Optional[UUID],
         source_type,
     ) -> None:
         """Reverse this session's credit on every requirement it fed for a member."""
@@ -1695,6 +1695,97 @@ class TrainingSessionService:
                     )
                 )
         return changed
+
+    async def void_event_credit(
+        self,
+        event: Event,
+        organization_id: Any,
+        *,
+        only_user_ids: Optional[Set[str]] = None,
+    ) -> Optional[Tuple[str, str]]:
+        """Take back the training credit an event's attendance gave.
+
+        For an event about to be deleted, cancelled or re-typed away from
+        Training (every attendee), or for one attendee being removed. Records
+        this event wrote are voided; for a session-backed event, records from
+        before the source link existed are reached by course name and date, for
+        the members its approvals rostered (or the named attendee).
+
+        Does not commit. Returns ``(session_id, program_id)`` when the event's
+        session fed a program, so the caller can reverse that pipeline credit
+        once it has committed (``reverse_event_pipeline_credit``) — the
+        reversal commits internally, and a deleted event takes its session row
+        with it, so the ids are captured here, before the delete.
+        """
+        org = str(organization_id)
+        training_session = await self.get_session_by_event(event.id, org)
+        legacy_ids: Set[str] = set(only_user_ids or ())
+        legacy_name = None
+        legacy_dates: List[date] = []
+        if training_session is not None:
+            legacy_name = training_session.course_name
+            if only_user_ids is None:
+                legacy_ids = await self._prior_credit_user_ids(
+                    training_session, event, org
+                )
+            if event.start_datetime is not None:
+                tz = await resolve_scheduling_timezone(self.db, org)
+                legacy_dates = local_and_utc_dates(event.start_datetime, tz)
+
+        await self.void_event_records(
+            event.id,
+            org,
+            event_title=event.title,
+            only_user_ids=only_user_ids,
+            legacy_course_name=legacy_name,
+            legacy_dates=legacy_dates,
+            legacy_user_ids=legacy_ids,
+        )
+        if training_session is not None and training_session.program_id:
+            return str(training_session.id), str(training_session.program_id)
+        return None
+
+    async def reverse_event_pipeline_credit(
+        self,
+        session_ref: Tuple[str, str],
+        organization_id: Any,
+        user_ids: Optional[Set[str]] = None,
+    ) -> None:
+        """Reverse the program credit a session gave, after the caller's commit.
+
+        ``user_ids`` None reverses everything the session credited (the event
+        is gone or no longer training); otherwise only those members'. Failures
+        are logged: the records are already voided and durable, and a pipeline
+        that could not be unwound is visible and correctable, where refusing
+        the whole removal would not be.
+        """
+        from app.models.training import ProgressCreditSource
+        from app.services.training_program_service import TrainingProgramService
+
+        session_id, program_id = session_ref
+        program_service = TrainingProgramService(self.db)
+        try:
+            if user_ids is None:
+                await program_service.reverse_credits_for_source(
+                    organization_id=organization_id,
+                    source_id=session_id,
+                    source_type=ProgressCreditSource.TRAINING_SESSION,
+                )
+                return
+            reference = SimpleNamespace(id=session_id, program_id=program_id)
+            for user_id in sorted(user_ids):
+                await self._revoke_pipeline_credit_for_user(
+                    program_service=program_service,
+                    user_id=user_id,
+                    training_session=reference,
+                    organization_id=organization_id,
+                    verified_by=None,
+                    source_type=ProgressCreditSource.TRAINING_SESSION,
+                )
+        except Exception:
+            logger.exception(
+                "Failed to reverse pipeline credit for training session {}", session_id
+            )
 
     async def reopen_for_event(
         self, event: Event, organization_id: UUID, now: datetime

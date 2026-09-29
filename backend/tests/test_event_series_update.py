@@ -96,6 +96,10 @@ class TestUpdateFutureEventsTiming:
                 rsvp_deadline=None,
                 attendance_finalized_at=None,
                 custom_fields=None,
+                # Every event has a type and a title; the series edit reads both
+                # to keep a Training occurrence's credit in step.
+                event_type=None,
+                title="Monday drill",
             )
             for s in starts
         ]

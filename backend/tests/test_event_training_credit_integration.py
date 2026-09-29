@@ -473,3 +473,85 @@ class TestTheUniqueKey:
 
         with pytest.raises(IntegrityError):
             await insert_a_duplicate()
+
+
+class TestTakingCreditBack:
+    """Credit a reopened event gave comes back off when its basis goes."""
+
+    async def _credited_and_reopened(self, db, dept):
+        org, officer, member = dept
+        event_id, start, end = await _training_event(db, org, officer)
+        await _add_with_edit_times(db, event_id, org, officer, member, start, end)
+        service = EventService(db)
+        await service.finalize_event_attendance_detailed(event_id, org, officer)
+        _, error = await service.reopen_event_attendance(event_id, org)
+        assert error is None
+        return event_id, service
+
+    async def test_removing_the_attendee_cancels_their_record(self, db_session, dept):
+        org, _officer, member = dept
+        event_id, service = await self._credited_and_reopened(db_session, dept)
+
+        error = await service.remove_attendee(event_id, member, org)
+
+        assert error is None
+        (record,) = await _records(db_session, member)
+        assert record["status"] == "cancelled"
+        assert record["hours_completed"] == 0.0
+        assert "was 4.00 h" in record["notes"]
+
+    async def test_deleting_the_event_voids_the_record(self, db_session, dept):
+        org, _officer, member = dept
+        event_id, service = await self._credited_and_reopened(db_session, dept)
+
+        assert await service.delete_event(event_id, org) is True
+
+        (record,) = await _records(db_session, member)
+        assert record["status"] == "cancelled"
+        assert record["source_event_id"] is None  # ON DELETE SET NULL
+
+    async def test_cancelling_the_event_voids_the_record(self, db_session, dept):
+        org, _officer, member = dept
+        event_id, service = await self._credited_and_reopened(db_session, dept)
+
+        await service.cancel_event(event_id, org, reason="Rained out")
+
+        (record,) = await _records(db_session, member)
+        assert record["status"] == "cancelled"
+
+    async def test_retyping_away_from_training_voids_the_record(self, db_session, dept):
+        org, officer, member = dept
+        event_id, service = await self._credited_and_reopened(db_session, dept)
+
+        await service.update_event(
+            event_id, org, EventUpdate(event_type="business_meeting"), officer
+        )
+
+        (record,) = await _records(db_session, member)
+        assert record["status"] == "cancelled"
+
+    async def test_finalizing_again_restores_a_voided_credit(self, db_session, dept):
+        """Removed by mistake, added back, finalized: the same row, live again."""
+        org, officer, member = dept
+        event_id, service = await self._credited_and_reopened(db_session, dept)
+        await service.remove_attendee(event_id, member, org)
+        start_row = await db_session.execute(
+            text("SELECT start_datetime, end_datetime FROM events WHERE id = :id"),
+            {"id": event_id},
+        )
+        start, end = start_row.one()
+        await _add_with_edit_times(
+            db_session,
+            event_id,
+            org,
+            officer,
+            member,
+            start.replace(tzinfo=timezone.utc),
+            end.replace(tzinfo=timezone.utc),
+        )
+
+        await service.finalize_event_attendance_detailed(event_id, org, officer)
+
+        (record,) = await _records(db_session, member)
+        assert record["status"] == "completed"
+        assert record["hours_completed"] == 4.0

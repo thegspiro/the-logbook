@@ -870,8 +870,14 @@ class EventService:
                     f"Conflicting event(s): {titles}"
                 )
 
+        was_training = self.event_credits_training(event)
+        old_title = event.title
         for field, value in update_data.items():
             setattr(event, field, value)
+
+        training_follow_up = await self._follow_training_changes(
+            event, was_training, old_title, organization_id
+        )
 
         if updated_by:
             event.updated_by = str(updated_by)
@@ -879,6 +885,10 @@ class EventService:
 
         await self.db.commit()
         await self.db.refresh(event)
+        if training_follow_up:
+            await self._reverse_pipeline_after_commit(
+                [training_follow_up], organization_id
+            )
 
         return event
 
@@ -1028,9 +1038,17 @@ class EventService:
         now = datetime.now(dt_timezone.utc)
         updated_count = 0
 
+        training_follow_ups = []
         for event in future_events:
+            was_training = self.event_credits_training(event)
+            old_title = event.title
             for field, value in update_data.items():
                 setattr(event, field, value)
+            follow_up = await self._follow_training_changes(
+                event, was_training, old_title, organization_id
+            )
+            if follow_up:
+                training_follow_ups.append(follow_up)
             if times_change:
                 start_wall = _wall_time(event.start_datetime, tz) + shift
                 event.start_datetime = _stored_time(start_wall, tz)
@@ -1050,6 +1068,9 @@ class EventService:
 
         if updated_count > 0:
             await self.db.commit()
+            await self._reverse_pipeline_after_commit(
+                training_follow_ups, organization_id
+            )
 
         return updated_count
 
@@ -1083,7 +1104,9 @@ class EventService:
 
         # Same reasoning as delete_event: a reopened event that is cancelled
         # rather than re-finalized would leave its credited hours standing.
-        await self._revoke_event_attendance_credit(event_id, organization_id)
+        pending_reversals = await self._revoke_event_attendance_credit(
+            event_id, organization_id, event=event
+        )
 
         event.is_cancelled = True
         event.cancellation_reason = reason
@@ -1095,6 +1118,7 @@ class EventService:
 
         await self.db.commit()
         await self.db.refresh(event)
+        await self._reverse_pipeline_after_commit(pending_reversals, organization_id)
 
         # Send cancellation notifications if requested
         if send_notifications and rsvps_to_notify:
@@ -1156,6 +1180,10 @@ class EventService:
                 )
             )
 
+        pending_reversals = await self._void_training_credit_before_removal(
+            list(events), organization_id
+        )
+
         now = datetime.now(dt_timezone.utc)
         cancelled_count = 0
         for event in events:
@@ -1167,6 +1195,9 @@ class EventService:
 
         if cancelled_count > 0:
             await self.db.commit()
+            await self._reverse_pipeline_after_commit(
+                pending_reversals, organization_id
+            )
 
         return cancelled_count
 
@@ -1273,7 +1304,9 @@ class EventService:
         # Reachable on a reopened event, where entries from the earlier
         # finalize are still on the ledger waiting to be resynced by a
         # re-finalize that is now never going to happen.
-        await self._revoke_event_attendance_credit(event_id, organization_id)
+        pending_reversals = await self._revoke_event_attendance_credit(
+            event_id, organization_id, event=event
+        )
 
         await self.db.delete(event)
         try:
@@ -1285,6 +1318,7 @@ class EventService:
                 "(e.g. meeting minutes). Remove or unlink them first."
             )
 
+        await self._reverse_pipeline_after_commit(pending_reversals, organization_id)
         return True
 
     async def delete_event_series(
@@ -1331,6 +1365,10 @@ class EventService:
                 )
             )
 
+        pending_reversals = await self._void_training_credit_before_removal(
+            list(events), organization_id
+        )
+
         for event in events:
             await self.db.delete(event)
 
@@ -1343,6 +1381,7 @@ class EventService:
                 "(e.g. meeting minutes). Remove or unlink them first."
             )
 
+        await self._reverse_pipeline_after_commit(pending_reversals, organization_id)
         return len(events)
 
     # RSVP Methods
@@ -2278,6 +2317,78 @@ class EventService:
 
         return rsvp, None
 
+    async def _follow_training_changes(
+        self,
+        event: Event,
+        was_training: bool,
+        old_title: Optional[str],
+        organization_id: UUID,
+    ) -> Optional[Tuple[Any, Tuple[str, str]]]:
+        """Keep an event's training credit in step with an edit to the event.
+
+        * Re-typed away from Training (possible only while attendance is
+          open): the credit its attendance gave is taken back, since the event
+          no longer credits training.
+        * Renamed, with a session that files under the title (no course, and
+          the session's name was the old title): the session follows the new
+          title, so the next finalize files the records under it too.
+
+        Does not commit. Returns the training service and the session to
+        reverse pipeline credit for after the caller commits, if any.
+        """
+        is_training = self.event_credits_training(event)
+        if not was_training and not is_training:
+            return None
+        # Local import: training_session_service imports this module.
+        from app.services.training_session_service import TrainingSessionService
+
+        training = TrainingSessionService(self.db)
+        if was_training and not is_training:
+            session_ref = await training.void_event_credit(event, organization_id)
+            return (training, session_ref) if session_ref else None
+        if old_title is not None and event.title != old_title:
+            session = await training.get_session_by_event(event.id, organization_id)
+            if (
+                session is not None
+                and session.course_id is None
+                and session.course_name == old_title
+            ):
+                session.course_name = event.title
+        return None
+
+    async def _void_training_credit_before_removal(
+        self, events: List[Event], organization_id: UUID
+    ) -> List[Tuple[Any, Tuple[str, str]]]:
+        """Void the training credit of events about to be deleted or cancelled.
+
+        Only an open event can reach here — a finalized one is refused before
+        it — but an open event can be a reopened one, whose earlier finalize
+        credited its attendees. Deleting it nulls ``source_event_id`` (SET
+        NULL), which would leave those records completed with no attendance
+        behind them. Returns the sessions whose program credit must be reversed
+        once the caller has committed.
+        """
+        training_events = [e for e in events if self.event_credits_training(e)]
+        if not training_events:
+            return []
+        # Local import: training_session_service imports this module.
+        from app.services.training_session_service import TrainingSessionService
+
+        training = TrainingSessionService(self.db)
+        pending = []
+        for event in training_events:
+            session_ref = await training.void_event_credit(event, organization_id)
+            if session_ref:
+                pending.append((training, session_ref))
+        return pending
+
+    @staticmethod
+    async def _reverse_pipeline_after_commit(
+        pending: List[Tuple[Any, Tuple[str, str]]], organization_id: UUID
+    ) -> None:
+        for training, session_ref in pending:
+            await training.reverse_event_pipeline_credit(session_ref, organization_id)
+
     async def remove_attendee(
         self, event_id: UUID, user_id: UUID, organization_id: UUID
     ) -> Optional[str]:
@@ -2322,8 +2433,26 @@ class EventService:
             str(rsvp.id), str(organization_id)
         )
 
+        # And the training credit, on a reopened Training event whose earlier
+        # finalize credited this member.
+        training = None
+        session_ref = None
+        if self.event_credits_training(event):
+            # Local import: training_session_service imports this module.
+            from app.services.training_session_service import TrainingSessionService
+
+            training = TrainingSessionService(self.db)
+            session_ref = await training.void_event_credit(
+                event, organization_id, only_user_ids={str(user_id)}
+            )
+
         await self.db.delete(rsvp)
         await self.db.commit()
+
+        if training is not None and session_ref:
+            await training.reverse_event_pipeline_credit(
+                session_ref, organization_id, user_ids={str(user_id)}
+            )
 
         # Auto-promote from waitlist if a "going" attendee was removed
         if was_going and event.max_attendees:
@@ -2841,8 +2970,11 @@ class EventService:
             )
 
     async def _revoke_event_attendance_credit(
-        self, event_id: UUID, organization_id: UUID
-    ) -> None:
+        self,
+        event_id: UUID,
+        organization_id: UUID,
+        event: Optional[Event] = None,
+    ) -> List[Tuple[Any, Tuple[str, str]]]:
         """Drop the admin-hours entries derived from this event's attendance.
 
         Reopening leaves the entries in place on the assumption that
@@ -2865,6 +2997,12 @@ class EventService:
             await admin_hours.delete_event_attendance_entries(
                 str(rsvp_id), str(organization_id)
             )
+        # The same holds for the training credit a reopened Training event's
+        # earlier finalize wrote. The caller reverses the program credit once
+        # it has committed.
+        if event is None:
+            return []
+        return await self._void_training_credit_before_removal([event], organization_id)
 
     @staticmethod
     def _stamp_attendance_finalized(
