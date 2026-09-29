@@ -74,7 +74,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W33 | Sign up for a shift, swap it, request time off                     | member, member2 → officer   | `/scheduling`                                               | ✅     |
 | W34 | Check in to a shift by apparatus QR, and close the shift out       | member → scheduling_officer | `/scheduling/checkin`, `/scheduling/admin/closeout`         | ✅     |
 | W35 | Platoons and the position qualification roster                     | scheduling_officer          | `/scheduling/admin/platoons`, `/scheduling/admin/positions` | ✅     |
-| W36 | Every scheduling settings section                                  | scheduling_officer          | `/scheduling/admin/settings/*`                              | ⬜     |
+| W36 | Every scheduling settings section                                  | scheduling_officer          | `/scheduling/admin/settings/*`                              | ✅     |
 | W37 | Scheduling reports and the printed check-in sheet and shift report | scheduling_officer          | `/scheduling/admin/reports`                                 | ⬜     |
 
 ## Tier 6 — Inventory and equipment
@@ -179,6 +179,20 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W36 — Every scheduling settings section — 2026-09-29
+
+Driven as: `scheduling_officer` at 1280×900, with `member` refused; all seven
+sections checked for names and state, and a value saved and reloaded in
+General and Outside Apparatus. Held: saves persist across reload; double saves
+and a double add acted once; the Save footer appears only on the sections it
+writes; members get Access Denied and 403. Fixed: W36-2 (LOW — Eligibility's
+chips showed their state by colour only), W36-3 (LOW — the custom position
+field had no name). Labelled and flagged: W36-1 (MED — the six Scheduling
+Notifications switches store `schedule_change` rules no sender reads; the panel
+now says they are not in effect, CLAUDE.md pitfall 19). Open: W36-4 (NIT — the
+Platoons route falls back to General unexplained while platoons are off).
+Gate: typecheck, lint and the scheduling suites clean. Next: W37.
 
 ### W35 — Platoons and the position qualification roster — 2026-09-29
 

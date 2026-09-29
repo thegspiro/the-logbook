@@ -98,17 +98,21 @@ export const EligibilitySettingsCard: React.FC = () => {
 
       {/* Excluded Membership Types */}
       <div>
-        <h4 className="text-theme-text-primary mb-2 text-sm font-medium">Excluded from Self-Signup</h4>
+        <h4 id="eligibility-excluded-types" className="text-theme-text-primary mb-2 text-sm font-medium">
+          Excluded from Self-Signup
+        </h4>
         <p className="text-theme-text-muted mb-3 text-xs">
           Members with these membership types cannot sign themselves up for shifts. Admins can still assign them
           manually.
         </p>
-        <div className="flex flex-wrap gap-2">
+        <div role="group" aria-labelledby="eligibility-excluded-types" className="flex flex-wrap gap-2">
           {ALL_MEMBERSHIP_TYPES.map((type) => {
             const isExcluded = excludedTypes.includes(type);
             return (
               <button
                 key={type}
+                type="button"
+                aria-pressed={isExcluded}
                 onClick={() => toggleExcludedType(type)}
                 className={`mobile-touch-target rounded-lg border px-3 text-sm transition-colors ${
                   isExcluded
@@ -125,16 +129,20 @@ export const EligibilitySettingsCard: React.FC = () => {
 
       {/* Open Positions */}
       <div>
-        <h4 className="text-theme-text-primary mb-2 text-sm font-medium">Open Positions</h4>
+        <h4 id="eligibility-open-positions" className="text-theme-text-primary mb-2 text-sm font-medium">
+          Open Positions
+        </h4>
         <p className="text-theme-text-muted mb-3 text-xs">
           Any eligible member can sign up for the positions you select here, whatever their rank or training.
         </p>
-        <div className="flex flex-wrap gap-2">
+        <div role="group" aria-labelledby="eligibility-open-positions" className="flex flex-wrap gap-2">
           {POSITION_KEYS.map((pos) => {
             const isOpen = openPositions.includes(pos);
             return (
               <button
                 key={pos}
+                type="button"
+                aria-pressed={isOpen}
                 onClick={() => toggleOpenPosition(pos)}
                 className={`mobile-touch-target rounded-lg border px-3 text-sm transition-colors ${
                   isOpen
