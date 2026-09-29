@@ -849,20 +849,43 @@ Both actions require `training.manage` and are recorded in the audit log.
 
 ## Finalizing a Training Session
 
-**Required Permission:** `training.manage`
+**Required Permission:** `events.manage` to finalize; `training.manage` to approve
 
-When you finalize a training session, what happens next depends on the **Require instructor confirmation** checkbox set when the session was created. It is on the third step of the create form, headed **Settings**, under _Attendance & Completion Settings_ — the form is a tab of **Training Admin > Records > Sessions**, and `/training/sessions/new` redirects there:
+A training session is finalized from its **event page**, with **Finalize
+Attendance** (or **End Event**, or by recording the event's actual end time) —
+the same step that closes any event's attendance _(2026-09-29)_. Every
+checked-in member is credited the time they attended: the times set with
+**Edit Times**, otherwise their real check-out, otherwise from check-in to the
+event's end. A member with no time to credit gets no record and is named in the
+finalize message.
 
-- **Unchecked (default)** — Finalizing the session **immediately completes** every attendee's training record. No separate approval step and no confirmation email are sent.
-- **Checked** — The session stays **pending** after you finalize it. The records are not completed until an officer confirms via the approval notification that is emailed to the department's training officers.
+What happens next depends on the **Require instructor confirmation** checkbox
+set when the session was created. It is on the third step of the create form,
+headed **Settings**, under _Attendance & Completion Settings_ — the form is a
+tab of **Training Admin > Records > Sessions**, and `/training/sessions/new`
+redirects there:
 
-1. Open the training session and click **Finalize**.
-2. If **Require instructor confirmation** was off, the attendees' records are marked complete right away.
-3. If it was on, the session remains pending until an officer opens the emailed confirmation and approves it.
+- **Unchecked (default)** — Finalizing **immediately completes** every
+  attendee's training record. No separate approval step and no confirmation
+  email are sent.
+- **Checked** — The attendance goes to the department's training officers for
+  approval. Members see the class as **In Progress** until an officer approves
+  it on the **approval page**, reached from the emailed link or from **Review
+  and approve** on the event's Requirements & Programs card. The page lists
+  each member's credited time and lets the officer set the approved minutes (0
+  gives that member no credit) before recording it. Approving needs
+  `training.manage`.
 
 ![Step 3 of the Create Session form — the settings, with Require instructor confirmation among them](./images/02-91-session-confirmation-toggle.png)
 
 > **Hint:** Leave **Require instructor confirmation** off for routine drills you want completed the moment you finalize them. Turn it on only when a second officer must sign off before records count.
+
+**Correcting a finalized session.** Somebody with `events.reopen_attendance`
+(the chief ranks) reopens the event's attendance; correct the times or the
+links; finalize again. Each member's record is updated in place, and a member
+taken off the roster has theirs marked **Cancelled** with the hours it had
+noted. Reopening expires an approval link that was still pending — finalizing
+again issues a new one.
 
 ### Linking a Session to What It Counts Toward
 
@@ -894,9 +917,11 @@ Phase**). All are optional.
 
 The same pickers appear on the event page as **Requirements & Programs** — that
 is where a session created before a requirement existed, or linked to the wrong
-pipeline, gets corrected. Changing them steers how future attendance is
-credited; members already signed off for the session keep the credit they were
-given. Once the session is finalized the links are locked.
+pipeline, gets corrected. The card also lets you **add training details** to a
+Training event made from Events → Create Event. Changes apply the next time the
+event's attendance is finalized, which rewrites the members' records under the
+new links. While attendance is finalized the links are locked; reopen it to
+change them.
 
 ---
 
