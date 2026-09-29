@@ -135,25 +135,37 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
       require_checkout: requireCheckout,
     };
 
-    // Only include optional fields when they have actual values (exactOptionalPropertyTypes)
+    // A create omits blank optional fields; an edit sends them as null, because
+    // an omitted key means "leave alone" on the update path and a cleared field
+    // came back unchanged after Save (workflow review W21, CLAUDE.md pitfall 1).
+    const isEdit = initialData !== undefined;
     const trimmedDescription = description.trim();
     if (trimmedDescription) data.description = trimmedDescription;
+    else if (isEdit) data.description = null;
     const trimmedDefaultTitle = defaultTitle.trim();
     if (trimmedDefaultTitle) data.default_title = trimmedDefaultTitle;
+    else if (isEdit) data.default_title = null;
     const trimmedDefaultDescription = defaultDescription.trim();
     if (trimmedDefaultDescription) data.default_description = trimmedDefaultDescription;
+    else if (isEdit) data.default_description = null;
     const trimmedDefaultLocation = defaultLocation.trim();
     if (trimmedDefaultLocation) data.default_location = trimmedDefaultLocation;
+    else if (isEdit) data.default_location = null;
     const parsedDuration = parseInt(defaultDurationMinutes, 10);
     if (parsedDuration > 0) data.default_duration_minutes = parsedDuration;
+    else if (isEdit) data.default_duration_minutes = null;
     const parsedMaxAttendees = parseInt(maxAttendees, 10);
     if (parsedMaxAttendees > 0) data.max_attendees = parsedMaxAttendees;
+    else if (isEdit) data.max_attendees = null;
     if (parsedReminders.length > 0) data.reminder_schedule = parsedReminders;
     if (checkInWindowType) data.check_in_window_type = checkInWindowType as 'flexible' | 'strict' | 'window';
+    else if (isEdit) data.check_in_window_type = null;
     const parsedMinsBefore = parseInt(checkInMinutesBefore, 10);
     if (checkInMinutesBefore.trim() && parsedMinsBefore >= 0) data.check_in_minutes_before = parsedMinsBefore;
+    else if (isEdit) data.check_in_minutes_before = null;
     const parsedMinsAfter = parseInt(checkInMinutesAfter, 10);
     if (checkInMinutesAfter.trim() && parsedMinsAfter >= 0) data.check_in_minutes_after = parsedMinsAfter;
+    else if (isEdit) data.check_in_minutes_after = null;
 
     void onSubmit(data);
   };

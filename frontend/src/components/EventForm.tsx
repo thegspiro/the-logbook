@@ -422,10 +422,19 @@ export const EventForm: React.FC<EventFormProps> = ({
 
   const handleStartDateChange = (startDate: string) => {
     const changes: Partial<EventCreate> = { start_datetime: startDate };
-    // Auto-set end date to 2 hours later if not already set
     if (!formData.end_datetime && startDate) {
+      // Auto-set end date to 2 hours later if not already set
       const startUtc = localToUTC(startDate, tz);
       const end = new Date(new Date(startUtc).getTime() + 2 * 60 * 60 * 1000);
+      changes.end_datetime = formatForDateTimeInput(end, tz);
+    } else if (formData.start_datetime && formData.end_datetime && startDate) {
+      // Moving the start carries the end with it, keeping the event's length.
+      // Left behind, the end stayed on the old day — before a start moved
+      // later, which a template's pre-filled times made the usual case
+      // (workflow review W21).
+      const shiftMs =
+        new Date(localToUTC(startDate, tz)).getTime() - new Date(localToUTC(formData.start_datetime, tz)).getTime();
+      const end = new Date(new Date(localToUTC(formData.end_datetime, tz)).getTime() + shiftMs);
       changes.end_datetime = formatForDateTimeInput(end, tz);
     }
     update(changes);

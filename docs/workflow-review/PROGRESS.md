@@ -49,7 +49,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W18 | Create, edit and cancel an event, including a recurring one               | secretary             | `/events`, `/events/:id/edit`                   | ✅     |
 | W19 | RSVP, change it, and see it on the event                                  | member, member2       | `/events/:id`                                   | ✅     |
 | W20 | Check-in: QR self check-in, live monitoring, an officer's manual check-in | member, secretary     | `/events/:id/qr-code`, `/events/:id/monitoring` | ✅     |
-| W21 | Event templates, the events admin hub, and event analytics                | secretary             | `/events/admin`, `/events/templates`            | ⬜     |
+| W21 | Event templates, the events admin hub, and event analytics                | secretary             | `/events/admin`, `/events/templates`            | ✅     |
 | W22 | A public event request and its status link                                | anonymous → secretary | `/event-request/status/:token`                  | ⬜     |
 | W23 | Locations, the kiosk display and guest check-in                           | admin, anonymous      | `/locations`, `/display/:code`                  | ⬜     |
 
@@ -176,6 +176,21 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W21 — Event templates, the admin hub, analytics — 2026-09-29
+
+Driven as: `secretary` at 1280×900 and 390×844, with `member` refused on
+three pages and two APIs. Held: templates are created once and listed; the
+hub's counts and analytics' totals match the data; creating from a template
+fills title, type and location; deactivating hides it from the picker.
+Fixed: W21-1 (MED — moving an event's start left its end behind, before the
+new start, which every template start made the usual case), W21-2 (LOW —
+clearing a template's fields did not save, pitfall 1), W21-3 (NIT — the
+template picker was unnamed), W21-4 (NIT — a template's default start came
+from the browser's clock). Flagged: W21-5 (LOW — Delete only deactivates,
+while the dialog says it cannot be undone), W21-6 (LOW — the attendance
+rate counts upcoming events as no-shows). Gate: typecheck, lint and the
+touched suites clean. Next: W22.
 
 ### W20 — Check-in: QR, monitoring, manual — 2026-09-29
 
