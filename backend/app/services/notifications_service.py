@@ -350,6 +350,63 @@ class NotificationsService:
         )
         return result.scalar() or 0
 
+    def _stackable_unread_filters(self, organization_id: UUID, user_id: UUID):
+        """Rows the inbox folds into a per-category stack.
+
+        Pinned rows are excluded on purpose: a pin is the member asking for one
+        notification to stay in front of them, so it renders on its own and a
+        stack's "mark all read" must not clear it. Uncategorized rows have
+        nothing to stack on. Both the count and the write use this one
+        definition so a stack's badge and its button cannot disagree.
+        """
+        now = datetime.now(timezone.utc)
+        return (
+            NotificationLog.organization_id == str(organization_id),
+            NotificationLog.recipient_id == str(user_id),
+            NotificationLog.channel == NotificationChannel.IN_APP,
+            NotificationLog.read.is_(False),
+            NotificationLog.category.is_not(None),
+            or_(NotificationLog.pinned.is_(False), NotificationLog.pinned.is_(None)),
+            or_(
+                NotificationLog.expires_at.is_(None),
+                NotificationLog.expires_at > now,
+            ),
+        )
+
+    async def get_user_unread_counts_by_category(
+        self, organization_id: UUID, user_id: UUID
+    ) -> Dict[str, int]:
+        """Count a user's unread, unpinned, non-expired in-app rows per category.
+
+        The inbox loads one page at a time, so a stack counted from the loaded
+        rows alone would under-report whenever the rest of a category sits on
+        a later page.
+        """
+        result = await self.db.execute(
+            select(NotificationLog.category, func.count(NotificationLog.id))
+            .where(*self._stackable_unread_filters(organization_id, user_id))
+            .group_by(NotificationLog.category)
+        )
+        return {category: count for category, count in result.all() if category}
+
+    async def mark_user_category_read(
+        self, organization_id: UUID, user_id: UUID, category: str
+    ) -> int:
+        """Mark a user's stackable unread rows in one category as read.
+
+        Returns the number of rows marked, which the client subtracts from its
+        unread badge — including rows on inbox pages it has not loaded yet.
+        """
+        result = await self.db.execute(
+            update(NotificationLog)
+            .where(*self._stackable_unread_filters(organization_id, user_id))
+            .where(NotificationLog.category == category)
+            .values(read=True, read_at=datetime.now(timezone.utc))
+            .execution_options(synchronize_session=False)
+        )
+        await self.db.commit()
+        return result.rowcount or 0
+
     async def archive_related_notifications(
         self,
         organization_id: UUID | str,

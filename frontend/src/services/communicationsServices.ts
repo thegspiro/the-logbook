@@ -129,6 +129,20 @@ export const notificationsService = {
     return response.data;
   },
 
+  // Unread, unpinned counts per category — what the inbox's stacks show, since
+  // the inbox itself only holds the pages loaded so far.
+  async getMyUnreadCountsByCategory(): Promise<{ categories: Record<string, number> }> {
+    const response = await api.get<{ categories: Record<string, number> }>('/notifications/my/unread-by-category');
+    return response.data;
+  },
+
+  async markMyCategoryRead(category: string): Promise<{ marked_read: number }> {
+    const response = await api.post<{ marked_read: number }>('/notifications/my/read-category', null, {
+      params: { category },
+    });
+    return response.data;
+  },
+
   async markAllMyNotificationsRead(): Promise<{ marked_read: number }> {
     const response = await api.post<{ marked_read: number }>('/notifications/my/read-all');
     return response.data;

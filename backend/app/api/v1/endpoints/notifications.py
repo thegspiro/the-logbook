@@ -358,6 +358,46 @@ async def get_my_unread_count(
     return {"unread_count": count}
 
 
+@router.get("/my/unread-by-category")
+async def get_my_unread_counts_by_category(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Count the current user's unread, unpinned in-app notifications per category.
+
+    Feeds the inbox's stacked view. Authentication required; always scoped to
+    the caller.
+    """
+    service = NotificationsService(db)
+    counts = await service.get_user_unread_counts_by_category(
+        organization_id=current_user.organization_id,
+        user_id=current_user.id,
+    )
+    return {"categories": counts}
+
+
+@router.post("/my/read-category")
+async def mark_my_category_read(
+    category: str = Query(
+        ..., min_length=1, max_length=50, description="Notification category"
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Mark every unread, unpinned in-app notification in one category as read.
+
+    Clears one stack in the inbox. Authentication required; always scoped to
+    the caller.
+    """
+    service = NotificationsService(db)
+    count = await service.mark_user_category_read(
+        organization_id=current_user.organization_id,
+        user_id=current_user.id,
+        category=category,
+    )
+    return {"marked_read": count}
+
+
 @router.post("/my/read-all")
 async def mark_all_my_notifications_read(
     db: AsyncSession = Depends(get_db),

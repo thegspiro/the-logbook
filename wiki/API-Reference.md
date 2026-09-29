@@ -136,6 +136,8 @@ POST   /api/v1/notifications/logs/read-all               # Mark send log read; s
 POST   /api/v1/notifications/logs/{id}/read              # Mark log as read
 GET    /api/v1/notifications/my                          # User's in-app notifications; ?cursor
 GET    /api/v1/notifications/my/unread-count             # User's unread count
+GET    /api/v1/notifications/my/unread-by-category       # Unread, unpinned counts per category (inbox stacks)
+POST   /api/v1/notifications/my/read-category            # Mark one category read; ?category (skips pinned)
 POST   /api/v1/notifications/my/read-all                 # Bulk mark all as read
 POST   /api/v1/notifications/my/{log_id}/read            # Mark own notification as read
 GET    /api/v1/notifications/summary                     # Rule and send statistics
