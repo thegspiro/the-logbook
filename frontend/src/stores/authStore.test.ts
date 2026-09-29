@@ -208,7 +208,7 @@ describe('authStore', () => {
       });
 
       expect(mockLogin).toHaveBeenCalledTimes(5); // NOT called again
-      expect(getState().error).toMatch(/wait/i);
+      expect(getState().error).toMatch(/too many failed attempts\. try again in \d+ seconds?\./i);
     });
 
     it("waits as long as the server's Retry-After says, not the client backoff", async () => {

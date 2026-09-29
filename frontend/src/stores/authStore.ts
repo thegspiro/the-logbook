@@ -260,7 +260,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (lockedUntil && Date.now() < lockedUntil) {
       const remainingSec = Math.ceil((lockedUntil - Date.now()) / 1_000);
       set({
-        error: `Too many failed attempts. Please wait ${remainingSec} seconds before trying again.`,
+        error: `Too many failed attempts. Try again in ${remainingSec} second${remainingSec === 1 ? '' : 's'}.`,
       });
       return;
     }
@@ -362,7 +362,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isLoading: false,
         loginAttempts: attempts,
         lockedUntil: newLockedUntil,
-        error: getErrorMessage(err, 'Login failed. Please try again.'),
+        error: getErrorMessage(err, 'Sign-in failed. Try again.'),
       });
       throw Object.assign(new Error(appError.message), appError);
     }
@@ -371,7 +371,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   completeMfaLogin: async (code?: string, recoveryCode?: string) => {
     const { mfaToken } = get();
     if (!mfaToken) {
-      set({ error: 'Your sign-in session expired. Please log in again.', mfaRequired: false });
+      set({ error: 'Your sign-in expired. Sign in again.', mfaRequired: false });
       return;
     }
     set({ isLoading: true, error: null });
@@ -405,7 +405,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ isLoading: false, mfaRequired: false, mfaToken: null });
     } catch (err: unknown) {
       const appError = toAppError(err);
-      set({ isLoading: false, error: getErrorMessage(err, 'Verification failed. Please try again.') });
+      set({ isLoading: false, error: getErrorMessage(err, 'Verification failed. Try again.') });
       throw Object.assign(new Error(appError.message), appError);
     }
   },
