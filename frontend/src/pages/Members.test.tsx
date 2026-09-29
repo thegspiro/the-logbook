@@ -270,7 +270,7 @@ describe('Members roster — regular member (no members.manage)', () => {
     // unfiltered empty roster gets nothing rather than a prompt they cannot act on.
     await waitFor(() => expect(mockGetUsers).toHaveBeenCalled());
     await waitFor(() => expect(screen.queryByText('No Members Found')).not.toBeInTheDocument());
-    expect(screen.queryByText(/Get started by adding your first member/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Add your first member, or import members/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Add Member/i })).not.toBeInTheDocument();
   });
 
@@ -283,7 +283,7 @@ describe('Members roster — regular member (no members.manage)', () => {
     // Feedback on the filter they chose, without the create prompt.
     expect(await screen.findByText('No Members Found')).toBeInTheDocument();
     expect(screen.getByText('Try adjusting your search or filters')).toBeInTheDocument();
-    expect(screen.queryByText(/Get started by adding your first member/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Add your first member, or import members/i)).not.toBeInTheDocument();
   });
 });
 
@@ -310,7 +310,7 @@ describe('Members roster — captain (members.manage without users.create)', () 
     // The heading still answers the question they came with; it is the
     // invitation that is withheld.
     expect(await screen.findByText('No Members Found')).toBeInTheDocument();
-    expect(screen.queryByText('Get started by adding your first member or importing from CSV')).not.toBeInTheDocument();
+    expect(screen.queryByText('Add your first member, or import members from a CSV file.')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Add Member/i })).not.toBeInTheDocument();
   });
 
@@ -331,7 +331,7 @@ describe('Members roster — membership coordinator (members.manage)', () => {
     renderWithRouter(<Members />);
 
     expect(await screen.findByText('No Members Found')).toBeInTheDocument();
-    expect(screen.getByText('Get started by adding your first member or importing from CSV')).toBeInTheDocument();
+    expect(screen.getByText('Add your first member, or import members from a CSV file.')).toBeInTheDocument();
     // Two: the toolbar's, which a manager always has, plus the card's own action.
     expect(screen.getAllByRole('button', { name: /Add Member/i })).toHaveLength(2);
   });

@@ -205,7 +205,7 @@ describe('ImportMembers', () => {
     await uploadCsv('firstName,lastName,email\nJohn,Doe,john@example.com');
 
     await waitFor(() => {
-      expect(mockToastSuccess).toHaveBeenCalledWith('File validated successfully! Found 1 members to import.');
+      expect(mockToastSuccess).toHaveBeenCalledWith('File checked: 1 member ready to import.');
     });
   });
 
@@ -336,7 +336,7 @@ describe('ImportMembers', () => {
     await uploadCsv('First Name,LAST_NAME,E-Mail,Membership Number\nJohn,Doe,john@example.com,FF-001');
 
     await waitFor(() => {
-      expect(mockToastSuccess).toHaveBeenCalledWith('File validated successfully! Found 1 members to import.');
+      expect(mockToastSuccess).toHaveBeenCalledWith('File checked: 1 member ready to import.');
     });
     expect(mockToastError).not.toHaveBeenCalled();
     expect(screen.getByText('FF-001')).toBeInTheDocument();
@@ -385,7 +385,7 @@ describe('ImportMembers', () => {
     await uploadCsv('firstName,lastName,email\nJohn,Doe,john@example.com\n\n');
 
     await waitFor(() => {
-      expect(mockToastSuccess).toHaveBeenCalledWith('File validated successfully! Found 1 members to import.');
+      expect(mockToastSuccess).toHaveBeenCalledWith('File checked: 1 member ready to import.');
     });
   });
 
@@ -444,7 +444,7 @@ describe('ImportMembers', () => {
     await uploadCsv('First Name,LAST_NAME,E-Mail,Membership Number\nJohn,Doe,john@example.com,FF-001');
 
     await waitFor(() => {
-      expect(mockToastSuccess).toHaveBeenCalledWith('File validated successfully! Found 1 members to import.');
+      expect(mockToastSuccess).toHaveBeenCalledWith('File checked: 1 member ready to import.');
     });
     expect(mockToast).not.toHaveBeenCalledWith(expect.stringContaining('unrecognized column'), expect.anything());
   });
@@ -483,7 +483,7 @@ describe('ImportMembers', () => {
     await uploadCsv('firstName,lastName,email,role\nJohn,Doe,john@example.com,member');
 
     await waitFor(() => {
-      expect(mockToastSuccess).toHaveBeenCalledWith('File validated successfully! Found 1 members to import.');
+      expect(mockToastSuccess).toHaveBeenCalledWith('File checked: 1 member ready to import.');
     });
     expect(mockToastError).not.toHaveBeenCalled();
   });
@@ -597,7 +597,7 @@ describe('ImportMembers', () => {
     await waitFor(() => {
       expect(mockCreateMember).toHaveBeenCalledTimes(2);
     });
-    expect(await screen.findByText('Import Complete!')).toBeInTheDocument();
+    expect(await screen.findByText('Import Complete')).toBeInTheDocument();
     expect(screen.getByText('Imported 2 members')).toBeInTheDocument();
   });
 
@@ -806,7 +806,7 @@ describe('ImportMembers', () => {
       await userEvent.setup().click(await screen.findByText('Stop importing'));
       releaseFirstRow();
 
-      await screen.findByText('Import Complete!');
+      await screen.findByText('Import Complete');
 
       expect(mockCreateMember).toHaveBeenCalledTimes(1);
 
@@ -829,7 +829,7 @@ describe('ImportMembers', () => {
       await clickImport();
       // Every row failed, so the result must not read as a success (W09).
       await screen.findByText('Nothing Was Imported');
-      expect(screen.queryByText('Import Complete!')).not.toBeInTheDocument();
+      expect(screen.queryByText('Import Complete')).not.toBeInTheDocument();
 
       const report = await captureDownload(async () => {
         await userEvent.setup().click(screen.getByText('Download Error Report'));
