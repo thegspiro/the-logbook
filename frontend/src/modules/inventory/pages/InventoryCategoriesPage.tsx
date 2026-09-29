@@ -457,7 +457,8 @@ const InventoryCategoriesPage: React.FC = () => {
               placeholder="e.g. 5"
             />
             <p className="text-theme-text-muted mt-1 text-xs">
-              Receive alerts when item count falls below this number. Leave empty to disable.
+              Flag the category as low on stock when its total quantity drops to this number or lower. Leave empty to
+              turn off.
             </p>
           </div>
         </form>

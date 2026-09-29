@@ -85,7 +85,7 @@ export const InventoryNfcTagPage: React.FC = () => {
       <div className="alert-danger flex items-start gap-2" role="alert">
         <AlertTriangle className="text-theme-alert-danger-icon mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
         <div>
-          <p className="text-theme-alert-danger-text text-sm font-medium">This NFC tag did not find an item</p>
+          <p className="text-theme-alert-danger-text text-sm font-medium">No item found for this NFC tag</p>
           <p className="text-theme-alert-danger-text mt-1 text-sm">{error}</p>
         </div>
       </div>
