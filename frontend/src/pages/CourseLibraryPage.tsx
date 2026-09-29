@@ -125,10 +125,10 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
       let saved: TrainingCourse;
       if (isEdit && course) {
         saved = await trainingService.updateCourse(course.id, payload as TrainingCourseUpdate);
-        toast.success('Course updated successfully');
+        toast.success('Course updated');
       } else {
         saved = await trainingService.createCourse(payload as TrainingCourseCreate);
-        toast.success('Course created successfully');
+        toast.success('Course created');
       }
       onSuccess(saved);
       onClose();
