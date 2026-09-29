@@ -1136,15 +1136,21 @@ class TrainingSessionService:
         if datetime.now(timezone.utc) > token_exp:
             return None, "This approval link has expired"
 
-        # Get event and training session details
+        # Get event and training session details. Org-scoped although the ids
+        # come from an approval already scoped to the caller's org, so the rule
+        # holds by inspection (pitfall #14a).
         event_result = await self.db.execute(
-            select(Event).where(Event.id == approval.event_id)
+            select(Event).where(
+                Event.id == approval.event_id,
+                Event.organization_id == str(organization_id),
+            )
         )
         event = event_result.scalar_one_or_none()
 
         session_result = await self.db.execute(
             select(TrainingSession).where(
-                TrainingSession.id == approval.training_session_id
+                TrainingSession.id == approval.training_session_id,
+                TrainingSession.organization_id == str(organization_id),
             )
         )
         training_session = session_result.scalar_one_or_none()
@@ -1227,12 +1233,34 @@ class TrainingSessionService:
         if datetime.now(timezone.utc) > token_exp:
             return False, "This approval link has expired"
 
+        # The roster is the one this approval was issued for. The request body
+        # names attendees by user id, and without this check an approver could
+        # write a completed training record — and an attendance override — for
+        # any member of the organization by adding them to the payload (XC-1).
+        roster_ids = {
+            str(entry.get("user_id"))
+            for entry in (approval.attendee_data or [])
+            if entry.get("user_id")
+        }
+        if any(str(a.user_id) not in roster_ids for a in attendees):
+            return False, "Attendee is not part of this approval"
+        # Checked here rather than on the schema: AttendeeApprovalData also
+        # parses the stored snapshot, where a bound would reject old rows.
+        if any(
+            a.override_duration_minutes is not None and a.override_duration_minutes < 0
+            for a in attendees
+        ):
+            return False, "Approved minutes cannot be negative"
+
         # Update approval record
         approval.status = ApprovalStatus.APPROVED
-        approval.approved_by = approved_by
+        approval.approved_by = str(approved_by)
         approval.approved_at = datetime.now(timezone.utc)
         approval.approval_notes = approval_notes
-        approval.attendee_data = [a.model_dump(mode="python") for a in attendees]
+        # mode="json": attendee_data is a JSON column and the engine has no
+        # custom serializer, so the UUIDs and datetimes a python-mode dump
+        # carries made every real submission fail with a TypeError at flush.
+        approval.attendee_data = [a.model_dump(mode="json") for a in attendees]
 
         # Update RSVP records with overrides.
         #
@@ -1248,19 +1276,30 @@ class TrainingSessionService:
             rsvp_result = await self.db.execute(
                 select(EventRSVP)
                 .where(EventRSVP.event_id == approval.event_id)
-                .where(EventRSVP.user_id == attendee.user_id)
+                .where(EventRSVP.user_id == str(attendee.user_id))
+                .where(EventRSVP.organization_id == str(organization_id))
             )
             rsvp = rsvp_result.scalar_one_or_none()
 
             if rsvp:
-                if attendee.override_check_in_at:
+                if attendee.override_check_in_at is not None:
                     rsvp.override_check_in_at = attendee.override_check_in_at
-                if attendee.override_check_out_at:
+                if attendee.override_check_out_at is not None:
                     rsvp.override_check_out_at = attendee.override_check_out_at
-                if attendee.override_duration_minutes:
+                if attendee.override_duration_minutes is not None:
                     rsvp.override_duration_minutes = attendee.override_duration_minutes
+                elif (
+                    attendee.override_check_in_at is not None
+                    and attendee.override_check_out_at is not None
+                ):
+                    # Times without minutes: derive the duration from them, as
+                    # Edit Times does, so the RSVP and the record it feeds agree.
+                    span = (
+                        attendee.override_check_out_at - attendee.override_check_in_at
+                    ).total_seconds() / 60
+                    rsvp.override_duration_minutes = max(0, int(span))
 
-                rsvp.overridden_by = approved_by
+                rsvp.overridden_by = str(approved_by)
                 rsvp.overridden_at = datetime.now(timezone.utc)
                 corrected_rsvps.append(rsvp)
 
