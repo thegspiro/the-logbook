@@ -685,13 +685,11 @@ describe('EventDetailPage', () => {
 
       // Modal should be open
       await waitFor(() => {
-        expect(
-          screen.getByText('This action cannot be undone. The event will be marked as cancelled.')
-        ).toBeInTheDocument();
+        expect(screen.getByText("The event will be marked Cancelled. You can't undo this.")).toBeInTheDocument();
       });
 
       // Fill in reason
-      const reasonInput = screen.getByPlaceholderText(/please provide a reason/i);
+      const reasonInput = screen.getByPlaceholderText(/why is this event being cancelled/i);
       await user.type(reasonInput, 'The venue is no longer available for this date');
 
       // Submit via the modal's submit button (type="submit")
@@ -732,11 +730,11 @@ describe('EventDetailPage', () => {
       await user.click(firstCancelBtn);
 
       // Check the notifications checkbox
-      const notifyCheckbox = screen.getByLabelText(/send cancellation notifications/i);
+      const notifyCheckbox = screen.getByLabelText(/notify members who rsvp'd going or maybe/i);
       await user.click(notifyCheckbox);
 
       // Fill in reason and submit
-      const reasonInput = screen.getByPlaceholderText(/please provide a reason/i);
+      const reasonInput = screen.getByPlaceholderText(/why is this event being cancelled/i);
       await user.type(reasonInput, 'Weather emergency - event postponed');
 
       const submitButtons2 = screen.getAllByRole('button', { name: /cancel event/i });
@@ -783,7 +781,9 @@ describe('EventDetailPage', () => {
 
       await waitFor(() => {
         expect(screen.getByText('Delete Event')).toBeInTheDocument();
-        expect(screen.getByText(/are you sure you want to permanently delete/i)).toBeInTheDocument();
+        expect(
+          screen.getByText(/permanently delete .*its rsvps and attendance records are deleted too/i)
+        ).toBeInTheDocument();
       });
     });
 
@@ -817,7 +817,7 @@ describe('EventDetailPage', () => {
       });
     });
 
-    it('should close delete modal on Go Back', async () => {
+    it('should close delete modal on Keep Event', async () => {
       vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
       vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
       vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
@@ -834,10 +834,10 @@ describe('EventDetailPage', () => {
       const deleteButton = screen.getByRole('button', { name: /delete event/i });
       await user.click(deleteButton);
 
-      // Click Go Back
+      // Click Keep Event
       await waitFor(async () => {
-        const goBackButton = screen.getByRole('button', { name: /go back/i });
-        await user.click(goBackButton);
+        const keepButton = screen.getByRole('button', { name: /keep event/i });
+        await user.click(keepButton);
       });
 
       await waitFor(() => {
