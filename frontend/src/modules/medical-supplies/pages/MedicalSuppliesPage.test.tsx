@@ -95,7 +95,7 @@ const item = (overrides: Record<string, unknown> = {}) => ({
 });
 
 function assertOrganizationLowStockCount(count: number): void {
-  expect(screen.getByText('Below reorder point')).toBeInTheDocument();
+  expect(screen.getByText('Low stock')).toBeInTheDocument();
   expect(screen.getByText(String(count))).toBeInTheDocument();
   expect(screen.queryByText(/item\(s\) at or below their reorder point/i)).not.toBeInTheDocument();
 }
@@ -186,7 +186,7 @@ describe('MedicalSuppliesPage', () => {
     renderWithRouter(<MedicalSuppliesPage />);
     await screen.findByRole('heading', { name: /Medical Supplies/i });
 
-    expect(screen.getByText(/run on the same catalog as gear and uniforms/i)).toBeInTheDocument();
+    expect(screen.getByText(/It shares one catalog with gear and uniforms/i)).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Inventory/i })).not.toBeInTheDocument();
   });
 
@@ -443,7 +443,7 @@ describe('MedicalSuppliesPage', () => {
     renderWithRouter(<MedicalSuppliesPage />);
     await waitFor(() => expect(mockGetExpiringLots).toHaveBeenCalledWith(30, undefined));
 
-    expect(await screen.findByText(/Expiring within 30d/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Expiring within 30 days/i)).toBeInTheDocument();
   });
 
   it('presents the organization-wide low-stock summary for an unfiltered catalog', async () => {
@@ -593,6 +593,19 @@ describe('MedicalSuppliesPage', () => {
 
     // And once the server has actually said the catalogue is empty, it says so.
     expect(await screen.findByText('No medical supplies yet')).toBeInTheDocument();
+  });
+
+  it('says a search matched nothing rather than that the catalogue is empty', async () => {
+    mockGetItems.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 200 });
+
+    renderWithRouter(<MedicalSuppliesPage />);
+    await userEvent.click(await screen.findByRole('button', { name: 'All supplies' }));
+    fireEvent.change(screen.getByRole('searchbox', { name: /Search medical supplies/i }), {
+      target: { value: 'tourniquet' },
+    });
+
+    expect(await screen.findByText('No matching supplies')).toBeInTheDocument();
+    expect(screen.queryByText('No medical supplies yet')).not.toBeInTheDocument();
   });
 
   it('reports a failed category load on the stock tab, where it costs the category names', async () => {
@@ -781,7 +794,7 @@ describe('MedicalSuppliesPage', () => {
 
       // Expiring stock has landed while the summary has not.
       expect(await screen.findByText('4x4 Gauze')).toBeInTheDocument();
-      expect(screen.queryByText('Below reorder point')).not.toBeInTheDocument();
+      expect(screen.queryByText('Low stock')).not.toBeInTheDocument();
       expect(screen.getByLabelText('Loading the overview')).toBeInTheDocument();
     });
 

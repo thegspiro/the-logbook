@@ -28,7 +28,7 @@ const AnalyticsDashboardPage: React.FC = () => {
       setMetrics(data);
       setError(null);
     } catch {
-      setError('Failed to load analytics data');
+      setError('Could not load analytics.');
     } finally {
       setLoading(false);
     }
@@ -106,7 +106,7 @@ const AnalyticsDashboardPage: React.FC = () => {
         <div>
           <h1 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">QR Code Analytics</h1>
           <p className="text-theme-text-secondary mt-1">
-            {eventId ? 'Event-specific metrics' : 'Platform-wide metrics'}
+            {eventId ? 'Check-in scans for this event' : 'Check-in scans across all events'}
           </p>
         </div>
         <button
@@ -189,7 +189,7 @@ const AnalyticsDashboardPage: React.FC = () => {
                   d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-              <p>No errors reported!</p>
+              <p>No scan errors recorded</p>
             </div>
           ) : (
             <div className="space-y-2">

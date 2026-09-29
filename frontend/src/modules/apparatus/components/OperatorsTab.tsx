@@ -73,7 +73,9 @@ export const OperatorsTab: React.FC<OperatorsTabProps> = ({
             <div className="border-theme-text-primary mx-auto h-8 w-8 animate-spin rounded-full border-b-2"></div>
           </div>
         ) : operators.length === 0 ? (
-          <p className="text-theme-text-muted py-8 text-center">No operators assigned.</p>
+          <p className="text-theme-text-muted py-8 text-center">
+            No operators yet. Select Add Operator to record who drives this apparatus.
+          </p>
         ) : (
           <div className="space-y-3">
             {operators.map((op) => (
@@ -150,8 +152,8 @@ export const OperatorsTab: React.FC<OperatorsTabProps> = ({
         onClose={() => setDeleteTarget(null)}
         onConfirm={() => void handleDelete()}
         title="Remove Operator"
-        message="Are you sure you want to remove this operator from this apparatus? This action cannot be undone."
-        confirmLabel="Remove"
+        message={`Remove ${deleteTarget?.userName || 'this member'} as an operator of this apparatus? You can't undo this.`}
+        confirmLabel="Remove operator"
         variant="danger"
       />
     </>

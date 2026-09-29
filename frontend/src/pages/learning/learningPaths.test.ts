@@ -82,9 +82,8 @@ describe('learning path content', () => {
       ['getting-started.notifications', 'My Notifications', 'pages/NotificationsPage.tsx'],
       ['mobile.push', 'Push Notifications on This Device', 'pages/UserSettingsPage.tsx'],
       ['scheduling.my-shifts', 'Confirm', 'pages/scheduling/MyShiftsTab.tsx'],
-      ['scheduling.open-shifts', 'Confirm Sign Up', 'pages/scheduling/OpenShiftsTab.tsx'],
+      ['scheduling.open-shifts', 'Sign Up', 'pages/scheduling/OpenShiftsTab.tsx'],
       ['gear.sizes', 'My Sizes', 'modules/inventory/pages/MyEquipmentPage.tsx'],
-      ['gear.sizes', 'Save Sizes', 'modules/inventory/components/SizePreferencesModal.tsx'],
       ['gear.request', 'Request Equipment', 'modules/inventory/pages/MyEquipmentPage.tsx'],
       ['gear.request', 'My Requests', 'modules/inventory/pages/MyEquipmentPage.tsx'],
     ];

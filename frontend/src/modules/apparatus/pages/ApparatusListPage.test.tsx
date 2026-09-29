@@ -62,7 +62,7 @@ describe('ApparatusListPage permissions', () => {
     expect(screen.queryByRole('button', { name: 'Add Apparatus' })).not.toBeInTheDocument();
     expect(screen.queryByText('Total Fleet')).not.toBeInTheDocument();
     expect(screen.queryByText('Show Archived')).not.toBeInTheDocument();
-    expect(screen.getByText('No apparatus are currently available')).toBeInTheDocument();
+    expect(screen.getByText('No apparatus have been added yet.')).toBeInTheDocument();
     await waitFor(() => expect(mockFetchFleetSummary).not.toHaveBeenCalled());
   });
 

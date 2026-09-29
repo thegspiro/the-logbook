@@ -186,7 +186,7 @@ export const ApparatusListPage: React.FC = () => {
               </p>
             </div>
             <div className="card p-4">
-              <p className="text-theme-text-muted text-xs font-medium uppercase">Maint. Due</p>
+              <p className="text-theme-text-muted text-xs font-medium uppercase">Maintenance Due</p>
               <p className="mt-1 text-2xl font-bold text-orange-700 dark:text-orange-400">
                 {isLoadingSummary
                   ? '...'
@@ -207,7 +207,7 @@ export const ApparatusListPage: React.FC = () => {
                 autoCorrect="off"
                 spellCheck={false}
                 type="text"
-                aria-label="Search by unit number, name, or VIN..."
+                aria-label="Search by unit number, name, or VIN"
                 placeholder="Search by unit number, name, or VIN..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -324,10 +324,10 @@ export const ApparatusListPage: React.FC = () => {
             <h3 className="text-theme-text-primary mb-2 text-xl font-bold">No Apparatus Found</h3>
             <p className="text-theme-text-secondary mb-6">
               {searchQuery || filterType || filterStatus
-                ? 'Try adjusting your search or filters'
+                ? 'No apparatus match your search or filters. Change or clear them to see more.'
                 : canCreate
-                  ? 'Get started by adding your first piece of apparatus'
-                  : 'No apparatus are currently available'}
+                  ? 'Add your first apparatus to start tracking it.'
+                  : 'No apparatus have been added yet.'}
             </p>
             {canCreate && !searchQuery && !filterType && !filterStatus && (
               <button
@@ -526,12 +526,13 @@ export const ApparatusListPage: React.FC = () => {
             {totalPages > 1 && (
               <div className="mt-6 flex flex-col items-center justify-between gap-3 sm:flex-row">
                 <p className="text-theme-text-muted text-sm">
-                  Showing page {currentPage} of {totalPages} ({totalApparatus} total)
+                  Page {currentPage} of {totalPages} · {totalApparatus} apparatus
                 </p>
                 <div className="flex items-center space-x-1 sm:space-x-2">
                   <button
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 1}
+                    aria-label="Previous page"
                     className="bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <ChevronLeft className="h-5 w-5" />
@@ -564,6 +565,7 @@ export const ApparatusListPage: React.FC = () => {
                   <button
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage === totalPages}
+                    aria-label="Next page"
                     className="bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <ChevronRight className="h-5 w-5" />

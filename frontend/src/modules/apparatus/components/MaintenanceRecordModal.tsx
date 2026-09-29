@@ -116,7 +116,7 @@ export const MaintenanceRecordModal: React.FC<MaintenanceRecordModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!f.maintenanceTypeId) {
-      toast.error('Please select a maintenance type');
+      toast.error('Select a maintenance type');
       return;
     }
 
@@ -149,7 +149,7 @@ export const MaintenanceRecordModal: React.FC<MaintenanceRecordModalProps> = ({
         toast.success('Maintenance record updated');
       } else {
         await apparatusMaintenanceService.createMaintenanceRecord(payload);
-        toast.success('Maintenance record created');
+        toast.success('Maintenance record added');
       }
       onSaved();
       onClose();
@@ -381,7 +381,7 @@ export const MaintenanceRecordModal: React.FC<MaintenanceRecordModalProps> = ({
             Cancel
           </button>
           <button type="submit" disabled={saving} className="btn-primary px-6 py-2">
-            {saving ? 'Saving...' : editRecord ? 'Update Record' : 'Create Record'}
+            {saving ? 'Saving...' : editRecord ? 'Save Changes' : 'Add Record'}
           </button>
         </div>
       </form>

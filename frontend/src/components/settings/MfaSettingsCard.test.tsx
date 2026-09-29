@@ -135,8 +135,11 @@ describe('MfaSettingsCard', () => {
 
     render(<MfaSettingsCard />);
     await user.click(await screen.findByRole('button', { name: /^disable$/i }));
-    await user.type(await screen.findByLabelText(/current authenticator code to disable/i), '111222');
-    await user.click(screen.getByRole('button', { name: /confirm disable/i }));
+    await user.type(
+      await screen.findByLabelText(/current authenticator code to disable two-factor authentication/i),
+      '111222'
+    );
+    await user.click(screen.getByRole('button', { name: /disable two-factor authentication/i }));
 
     await waitFor(() => expect(mockDisable).toHaveBeenCalledWith('111222'));
   });

@@ -138,7 +138,7 @@ const AuditLogPage: React.FC = () => {
             Audit Log
           </h1>
           <p className="text-theme-text-secondary mt-1 text-sm">
-            Tamper-proof record of every administrative and security event in your organization.
+            A tamper-evident record of administrative and security events in your organization.
           </p>
         </div>
         <button

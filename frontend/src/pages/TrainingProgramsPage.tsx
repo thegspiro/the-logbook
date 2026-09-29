@@ -232,7 +232,11 @@ const TrainingProgramsPage: React.FC = () => {
               <GraduationCap className="h-8 w-8 shrink-0 text-red-700 dark:text-red-500" aria-hidden="true" />
               <span>Training Programs</span>
             </h1>
-            <p className="text-theme-text-muted mt-2">Manage training programs, requirements, and member progress</p>
+            <p className="text-theme-text-muted mt-2">
+              {canManage
+                ? 'Build programs, import requirements, and track member progress'
+                : "Your department's training programs and what each one covers"}
+            </p>
           </div>
 
           {/* Every action in this header creates a program or a requirement,

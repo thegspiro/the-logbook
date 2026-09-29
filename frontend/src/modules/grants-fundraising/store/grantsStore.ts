@@ -103,7 +103,7 @@ export const useGrantsStore = create<GrantsState>((set) => ({
       set({ opportunities, isLoading: false });
     } catch (error) {
       set({
-        error: handleStoreError(error, 'Failed to fetch grant opportunities'),
+        error: handleStoreError(error, 'Failed to load grant opportunities'),
         isLoading: false,
       });
     }
@@ -125,7 +125,7 @@ export const useGrantsStore = create<GrantsState>((set) => ({
       // request, disagreeing with what the (now-changed) filter UI shows.
       set({
         applications: [],
-        error: handleStoreError(error, 'Failed to fetch grant applications'),
+        error: handleStoreError(error, 'Failed to load grant applications'),
         isLoading: false,
       });
     }
@@ -143,7 +143,7 @@ export const useGrantsStore = create<GrantsState>((set) => ({
       });
     } catch (error) {
       set({
-        error: handleStoreError(error, 'Failed to fetch grant application'),
+        error: handleStoreError(error, 'Failed to load grant application'),
         isLoading: false,
       });
     }
@@ -157,7 +157,7 @@ export const useGrantsStore = create<GrantsState>((set) => ({
       set({ campaigns, isLoading: false });
     } catch (error) {
       set({
-        error: handleStoreError(error, 'Failed to fetch fundraising campaigns'),
+        error: handleStoreError(error, 'Failed to load fundraising campaigns'),
         isLoading: false,
       });
     }
@@ -171,7 +171,7 @@ export const useGrantsStore = create<GrantsState>((set) => ({
       set({ donors, isLoading: false });
     } catch (error) {
       set({
-        error: handleStoreError(error, 'Failed to fetch donors'),
+        error: handleStoreError(error, 'Failed to load donors'),
         isLoading: false,
       });
     }
@@ -185,7 +185,7 @@ export const useGrantsStore = create<GrantsState>((set) => ({
       set({ donations, isLoading: false });
     } catch (error) {
       set({
-        error: handleStoreError(error, 'Failed to fetch donations'),
+        error: handleStoreError(error, 'Failed to load donations'),
         isLoading: false,
       });
     }
@@ -199,7 +199,7 @@ export const useGrantsStore = create<GrantsState>((set) => ({
       set({ pledges, isLoading: false });
     } catch (error) {
       set({
-        error: handleStoreError(error, 'Failed to fetch pledges'),
+        error: handleStoreError(error, 'Failed to load pledges'),
         isLoading: false,
       });
     }
@@ -213,7 +213,7 @@ export const useGrantsStore = create<GrantsState>((set) => ({
       set({ dashboard, isLoading: false });
     } catch (error) {
       set({
-        error: handleStoreError(error, 'Failed to fetch grants dashboard'),
+        error: handleStoreError(error, 'Failed to load grants dashboard'),
         isLoading: false,
       });
     }

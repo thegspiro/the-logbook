@@ -1313,7 +1313,7 @@ const PipelineDetailPage: React.FC = () => {
     setIsDuplicating(true);
     try {
       const newProgram = await trainingProgramService.duplicateProgram(programId, `${program.name} (Copy)`);
-      toast.success('Pipeline duplicated successfully');
+      toast.success('Pipeline duplicated');
       void navigate(`/training/programs/${newProgram.id}`);
     } catch (err: unknown) {
       const msg = getErrorDetail(err) || 'Failed to duplicate pipeline';
@@ -1960,7 +1960,7 @@ const PipelineDetailPage: React.FC = () => {
                 {canManage && (
                   <>
                     <p className="text-theme-text-muted mb-4 text-sm">
-                      Use the Enroll button to add members to this pipeline
+                      Enroll members to start tracking their progress.
                     </p>
                     <button onClick={() => setShowEnrollModal(true)} className="btn-primary text-sm">
                       Enroll Members

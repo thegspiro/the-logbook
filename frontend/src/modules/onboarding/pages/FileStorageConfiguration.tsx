@@ -197,9 +197,13 @@ const FileStorageConfiguration: React.FC = () => {
     // step: an admin who skips still gets their platform saved, and the
     // Settings page shows exactly what is missing.
     if (!(await save({}))) return;
-    toast('Saved without credentials — finish in Settings before uploading files.', {
-      icon: '⚠️',
-    });
+    if (platform === 'local') {
+      toast.success('Using the server’s default storage folder');
+    } else {
+      toast('Saved without credentials — finish in Settings before uploading files.', {
+        icon: '⚠️',
+      });
+    }
     void navigate(nextStepPath('file_storage'));
   };
 
@@ -221,7 +225,9 @@ const FileStorageConfiguration: React.FC = () => {
             </div>
             <h2 className="text-theme-text-primary text-2xl font-bold">Configure {spec.title}</h2>
             <p className="text-theme-text-secondary mx-auto mt-2 max-w-lg text-sm">
-              These credentials let the app store documents, photos, and attachments in your {spec.title} account.
+              {platform === 'local'
+                ? 'Choose where on the server documents, photos, and attachments are kept.'
+                : `The Logbook uses these to store documents, photos, and attachments in your ${spec.title} account.`}
             </p>
           </div>
 
@@ -280,7 +286,7 @@ const FileStorageConfiguration: React.FC = () => {
               disabled={isLoading}
               className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover mobile-touch-target flex-1 rounded-lg border px-4 py-3 transition-colors disabled:opacity-50"
             >
-              I&apos;ll add these later
+              {platform === 'local' ? 'Use the default folder' : 'I’ll add these later'}
             </button>
           </div>
 

@@ -193,15 +193,15 @@ export const ManualShiftReportPage: React.FC = () => {
 
   const handleSubmit = async (asDraft: boolean) => {
     if (config?.manual_entry_require_apparatus && !apparatusId) {
-      toast.error('Please select an apparatus');
+      toast.error('Select an apparatus');
       return;
     }
     if (!shiftDate) {
-      toast.error('Please enter a shift date');
+      toast.error('Enter a shift date');
       return;
     }
     if (!startTime || !endTime) {
-      toast.error('Please enter start and end times');
+      toast.error('Enter start and end times');
       return;
     }
     if (calculatedHours <= 0) {
@@ -209,7 +209,7 @@ export const ManualShiftReportPage: React.FC = () => {
       return;
     }
     if (selectedIds.size === 0) {
-      toast.error('Please select at least one crew member');
+      toast.error('Select at least one crew member');
       return;
     }
 

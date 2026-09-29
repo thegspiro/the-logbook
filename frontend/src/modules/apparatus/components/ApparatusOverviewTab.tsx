@@ -2,7 +2,7 @@
  * Apparatus Overview Tab Component
  *
  * Displays the overview tab with Vehicle Details, Specifications,
- * Financial Info, Quick Stats, Important Dates, NFPA Compliance, and Notes cards.
+ * Financial Info, Quick Stats, Expiration Dates, NFPA Compliance, and Notes cards.
  */
 
 import React from 'react';
@@ -207,7 +207,7 @@ export const ApparatusOverviewTab: React.FC<ApparatusOverviewTabProps> = ({
         <div className="card p-6">
           <h2 className="text-theme-text-primary mb-4 flex items-center gap-2 font-bold">
             <Calendar className="h-5 w-5" />
-            Important Dates
+            Expiration Dates
           </h2>
           <div className="space-y-3">
             <div className="flex items-center justify-between">

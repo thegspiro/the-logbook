@@ -175,7 +175,7 @@ export const SkillsTestingPage: React.FC = () => {
             <ClipboardCheck className="h-7 w-7 text-red-700 sm:h-8 sm:w-8" />
             <span>Skills Testing</span>
           </h1>
-          <p className="text-theme-text-muted mt-1">Practice and review your skill evaluations</p>
+          <p className="text-theme-text-muted mt-1">Start a skills test or review your results</p>
         </div>
 
         {/* Tab Navigation */}
@@ -248,7 +248,11 @@ export const SkillsTestingPage: React.FC = () => {
                 <p className="text-theme-text-muted">
                   {searchQuery ? 'No tests match your search' : 'No tests are available yet'}
                 </p>
-                <p className="text-theme-text-muted mt-1 text-sm">Check back later for published skill evaluations.</p>
+                <p className="text-theme-text-muted mt-1 text-sm">
+                  {searchQuery
+                    ? 'Try a different name or category.'
+                    : 'Tests appear here once a training officer publishes them.'}
+                </p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -285,7 +289,9 @@ export const SkillsTestingPage: React.FC = () => {
                 <p className="text-theme-text-muted">
                   {searchQuery ? 'No results match your search' : "You haven't taken any tests yet"}
                 </p>
-                <p className="text-theme-text-muted mt-1 text-sm">Browse the Available Tests tab to get started.</p>
+                <p className="text-theme-text-muted mt-1 text-sm">
+                  {searchQuery ? 'Try a different test name.' : 'Start one from the Available Tests tab.'}
+                </p>
               </div>
             ) : (
               <div className="space-y-3">

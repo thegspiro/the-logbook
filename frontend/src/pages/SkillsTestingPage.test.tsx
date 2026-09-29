@@ -107,7 +107,7 @@ describe('SkillsTestingPage', () => {
     it('should display the page description', () => {
       renderWithRouter(<SkillsTestingPage />);
 
-      expect(screen.getByText('Practice and review your skill evaluations')).toBeInTheDocument();
+      expect(screen.getByText('Start a skills test or review your results')).toBeInTheDocument();
     });
 
     it('should display tab navigation', () => {

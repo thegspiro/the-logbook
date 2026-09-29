@@ -127,8 +127,8 @@ const PublicPortalAdmin: React.FC = () => {
                   <AlertTriangle className="h-5 w-5 shrink-0 text-yellow-600" />
                   <div className="ml-3">
                     <p className="text-sm text-yellow-800 dark:text-yellow-400">
-                      The public portal is currently disabled. External websites will not be able to access your data
-                      until you enable it and configure API keys.
+                      The portal is disabled. External websites can't read any of your data until you enable it, create
+                      an API key, and turn on the fields to share under Data Control.
                     </p>
                   </div>
                 </div>

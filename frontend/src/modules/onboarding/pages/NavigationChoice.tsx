@@ -85,7 +85,9 @@ const NavigationChoice: React.FC = () => {
         const response = await apiClient.completeOnboarding();
 
         if (response.error) {
-          throw new Error('Setup could not be finalized. Please contact support.');
+          throw new Error(
+            'Setup could not be finished. Try again. If it keeps failing, ask whoever installed The Logbook to check the server logs.'
+          );
         }
 
         // Load the authenticated user before navigating — the completion
@@ -103,7 +105,7 @@ const NavigationChoice: React.FC = () => {
     setIsSaving(false);
 
     if (completed) {
-      toast.success('Setup complete!');
+      toast.success('Setup complete');
       void navigate(nextStepPath('navigation'));
     } else if (error) {
       toast.error(error);
@@ -134,7 +136,7 @@ const NavigationChoice: React.FC = () => {
             <h2 className="text-theme-text-primary mb-3 text-4xl font-bold md:text-5xl">
               Choose Your Navigation Style
             </h2>
-            <p className="text-theme-text-secondary text-xl">How would you like to navigate your intranet?</p>
+            <p className="text-theme-text-secondary text-xl">Where should the main menu go?</p>
           </div>
 
           {/* Navigation Options */}
@@ -309,15 +311,12 @@ const NavigationChoice: React.FC = () => {
                   ? 'transform bg-linear-to-r from-red-700 to-orange-700 text-white shadow-lg hover:scale-105 hover:from-red-800 hover:to-orange-800 hover:shadow-xl'
                   : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
               }`}
-              aria-label="Continue to next step"
             >
-              {isSaving ? 'Saving...' : 'Continue'}
+              {isSaving ? 'Saving...' : 'Finish setup'}
             </button>
 
             {/* Help Text */}
-            <p className="text-theme-text-muted mt-4 text-center text-sm">
-              Don't worry, you can change this later in settings
-            </p>
+            <p className="text-theme-text-muted mt-4 text-center text-sm">You can change this later in Settings.</p>
           </div>
 
           {/* Progress Indicator */}

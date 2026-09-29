@@ -1078,8 +1078,8 @@ const SubmitTrainingPage: React.FC = () => {
     } catch (_error) {
       // A failed background refresh must not replace a form the member is
       // still filling in — or a receipt they are still reading.
-      if (!options.silent) setLoadError('Failed to load submission form. Please try again.');
-      toast.error('Failed to load submission form');
+      if (!options.silent) setLoadError('Failed to load the submission form. Try again.');
+      toast.error('Failed to load the submission form');
     } finally {
       if (!options.silent) setLoading(false);
     }

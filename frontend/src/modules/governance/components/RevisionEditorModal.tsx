@@ -59,7 +59,7 @@ export const RevisionEditorModal: React.FC<RevisionEditorModalProps> = ({
       return;
     }
     if (!values.changeNote.trim()) {
-      setValidationError('Say what this revision changes and why — it is the part a later reader needs.');
+      setValidationError('Say what this revision changes and why.');
       return;
     }
     setValidationError(null);
@@ -89,8 +89,8 @@ export const RevisionEditorModal: React.FC<RevisionEditorModalProps> = ({
     >
       <div className="space-y-4">
         <p className="alert-info text-sm">
-          Saving stores this as a draft. Nothing on {LEGAL_DOCUMENT_LABEL[documentType]} changes for members until
-          someone with publishing rights publishes it.
+          Saving stores this as a draft. The public {LEGAL_DOCUMENT_LABEL[documentType]} does not change until someone
+          with publishing rights publishes it.
         </p>
 
         <div>
@@ -98,8 +98,8 @@ export const RevisionEditorModal: React.FC<RevisionEditorModalProps> = ({
             Document text
           </label>
           <p className="text-theme-text-muted mb-2 text-xs">
-            Plain text. Leave a blank line between paragraphs — that is how the public page splits them. Formatting
-            marks are not interpreted, so they would appear literally.
+            Plain text. Leave a blank line between paragraphs. Formatting marks such as * or # are not applied &mdash;
+            they appear exactly as typed.
           </p>
           <textarea
             id="revision-body"

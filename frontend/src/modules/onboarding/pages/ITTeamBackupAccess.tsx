@@ -126,12 +126,12 @@ const ITTeamBackupAccess: React.FC = () => {
       if (!primaryContact.email.trim()) {
         newErrors.primaryEmail = 'Primary contact email is required';
       } else if (!isValidEmail(primaryContact.email)) {
-        newErrors.primaryEmail = 'Invalid email address';
+        newErrors.primaryEmail = 'Enter a valid email address';
       }
       if (!primaryContact.phone.trim()) {
         newErrors.primaryPhone = 'Primary contact phone is required';
       } else if (!isValidPhoneNumber(primaryContact.phone)) {
-        newErrors.primaryPhone = 'Invalid phone number format';
+        newErrors.primaryPhone = 'Enter a valid phone number';
       }
     }
 
@@ -139,19 +139,19 @@ const ITTeamBackupAccess: React.FC = () => {
     if (!backupEmail.trim()) {
       newErrors.backupEmail = 'Backup recovery email is required';
     } else if (!isValidEmail(backupEmail)) {
-      newErrors.backupEmail = 'Invalid email address';
+      newErrors.backupEmail = 'Enter a valid email address';
     }
 
     // Validate backup phone
     if (!backupPhone.trim()) {
       newErrors.backupPhone = 'Backup phone number is required';
     } else if (!isValidPhoneNumber(backupPhone)) {
-      newErrors.backupPhone = 'Invalid phone number format';
+      newErrors.backupPhone = 'Enter a valid phone number';
     }
 
     // Validate secondary admin email (optional but must be valid if provided)
     if (secondaryAdminEmail && !isValidEmail(secondaryAdminEmail)) {
-      newErrors.secondaryAdminEmail = 'Invalid email address';
+      newErrors.secondaryAdminEmail = 'Enter a valid email address';
     }
 
     // Validate additional IT members
@@ -164,12 +164,12 @@ const ITTeamBackupAccess: React.FC = () => {
         if (!member.email.trim()) {
           newErrors[`member${index + 1}Email`] = 'Email is required';
         } else if (!isValidEmail(member.email)) {
-          newErrors[`member${index + 1}Email`] = 'Invalid email address';
+          newErrors[`member${index + 1}Email`] = 'Enter a valid email address';
         }
         if (!member.phone.trim()) {
           newErrors[`member${index + 1}Phone`] = 'Phone is required';
         } else if (!isValidPhoneNumber(member.phone)) {
-          newErrors[`member${index + 1}Phone`] = 'Invalid phone number format';
+          newErrors[`member${index + 1}Phone`] = 'Enter a valid phone number';
         }
       }
     });
@@ -214,7 +214,7 @@ const ITTeamBackupAccess: React.FC = () => {
           throw new Error(response.error);
         }
 
-        toast.success('IT team and backup access information saved securely');
+        toast.success('IT contacts saved');
         void navigate(nextStepPath('it_team'));
         return response;
       },
@@ -277,11 +277,13 @@ const ITTeamBackupAccess: React.FC = () => {
             <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-cyan-600">
               <Users aria-hidden="true" className="h-8 w-8 text-white" />
             </div>
-            <h2 className="text-theme-text-primary mb-3 text-4xl font-bold md:text-5xl">IT Team & Backup Access</h2>
+            <h2 className="text-theme-text-primary mb-3 text-4xl font-bold md:text-5xl">IT & Backup Contacts</h2>
             <p className="text-theme-text-secondary mb-2 text-xl">
-              Configure system administration and recovery options
+              Who to contact when something goes wrong with The Logbook
             </p>
-            <p className="text-theme-text-muted text-sm">Essential for system maintenance and emergency access</p>
+            <p className="text-theme-text-muted text-sm">
+              Optional. Choose Skip for now if your department has no IT contact.
+            </p>
           </div>
 
           <form
@@ -308,7 +310,8 @@ const ITTeamBackupAccess: React.FC = () => {
               </div>
 
               <p className="text-theme-text-muted mb-6 text-sm">
-                Add contact information for your IT support team. The first person listed will be the primary contact.
+                The first person listed is the primary contact. Anyone without an account gets one when setup finishes,
+                and every contact is emailed whenever a member asks to reset their password.
               </p>
 
               {itTeam.map((member, index) => (
@@ -394,8 +397,8 @@ const ITTeamBackupAccess: React.FC = () => {
                             The rank list could not be loaded.
                           </p>
                           <p className="text-theme-text-muted mt-1 text-sm">
-                            Your ranks are not shown, not missing. Leave this and set it after setup from Members →
-                            Settings → Operational Ranks, or try again.
+                            Nothing has changed — your ranks just could not be shown. Try again, or leave this and set
+                            it after setup under Members → Settings → Operational Ranks.
                           </p>
                           <button
                             type="button"
@@ -499,12 +502,11 @@ const ITTeamBackupAccess: React.FC = () => {
                 <div className="flex items-start space-x-3">
                   <AlertCircle className="text-theme-alert-warning-icon mt-0.5 h-5 w-5 shrink-0" />
                   <div>
-                    <p className="text-theme-alert-warning-title mb-1 text-sm font-medium">
-                      Critical for Account Recovery
-                    </p>
+                    <p className="text-theme-alert-warning-title mb-1 text-sm font-medium">Recovery contacts</p>
                     <p className="text-theme-alert-warning-text text-sm">
-                      These backup methods will be used to recover access if the primary admin account is locked or
-                      credentials are lost. Keep this information current.
+                      Saved with your organization settings so someone can be reached if the administrator account is
+                      locked or its password is lost. The Logbook does not contact these automatically. Keep them
+                      current.
                     </p>
                   </div>
                 </div>
@@ -556,7 +558,7 @@ const ITTeamBackupAccess: React.FC = () => {
                     />
                   </div>
                   {errors.backupPhone && <p className="text-theme-accent-red mt-1 text-sm">{errors.backupPhone}</p>}
-                  <p className="text-theme-text-muted mt-1 text-xs">For SMS verification and account recovery</p>
+                  <p className="text-theme-text-muted mt-1 text-xs">A number to reach you if you are locked out</p>
                 </div>
 
                 {/* Secondary Admin Email (Optional) */}
@@ -585,7 +587,7 @@ const ITTeamBackupAccess: React.FC = () => {
                     <p className="text-theme-accent-red mt-1 text-sm">{errors.secondaryAdminEmail}</p>
                   )}
                   <p className="text-theme-text-muted mt-1 text-xs">
-                    An additional admin who can help with account recovery
+                    Another person who can help if you are locked out
                   </p>
                 </div>
               </div>
@@ -619,7 +621,7 @@ const ITTeamBackupAccess: React.FC = () => {
                     : 'transform bg-linear-to-r from-red-700 to-orange-700 text-white shadow-lg hover:scale-105 hover:from-red-800 hover:to-orange-800 hover:shadow-xl'
                 }`}
               >
-                {isSaving ? 'Saving Securely...' : `Continue to ${nextStepName('it_team')}`}
+                {isSaving ? 'Saving...' : `Continue to ${nextStepName('it_team')}`}
               </button>
               <button
                 type="button"

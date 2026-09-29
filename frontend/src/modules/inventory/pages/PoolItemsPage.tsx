@@ -557,7 +557,7 @@ const PoolItemsPage: React.FC = () => {
         <EmptyState
           icon={Package}
           title="No pool items found"
-          description="Adjust your filters or add pool-tracked items in the inventory admin."
+          description="Clear your filters, or add items with the Pool tracking type from All Items."
         />
       ) : (
         (() => {

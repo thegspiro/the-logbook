@@ -78,7 +78,7 @@ const renderStep = () =>
  */
 const openPermissions = async (user: ReturnType<typeof userEvent.setup>) => {
   await user.click(screen.getByRole('button', { name: /^Chief - click to expand permissions$/ }));
-  await screen.findByText('Click to toggle permissions for each module:');
+  await screen.findByText('Turn View and Manage on or off for each module:');
 };
 
 beforeEach(() => {

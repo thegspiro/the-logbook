@@ -534,7 +534,7 @@ describe('SubmitTrainingPage', () => {
     mockGetConfig.mockRejectedValue(new Error('Failed'));
     renderWithRouter(<SubmitTrainingPage />);
     await waitFor(() => {
-      expect(screen.getByText('Failed to load submission form. Please try again.')).toBeInTheDocument();
+      expect(screen.getByText('Failed to load the submission form. Try again.')).toBeInTheDocument();
     });
   });
 });

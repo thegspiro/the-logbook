@@ -59,6 +59,9 @@ screen", but several did not.
 `:269`, `:280`, `:326`, `:337`.
 **Fix:** each instruction now quotes the control as rendered.
 
+- Dashboard and notifications carry this run's wording.
+- The push, scheduling and gear steps were corrected independently on `main` while this run was open, so the merge keeps `main`'s wording there.
+
 Covered by a new case in `learningPaths.test.ts`. It ties each quoted label
 to the source file that renders it, so renaming either side fails, and it
 fails against the old text. Re-driven: the gear lesson reads "Press My Sizes,

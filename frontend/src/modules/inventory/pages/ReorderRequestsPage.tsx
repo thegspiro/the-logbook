@@ -40,6 +40,15 @@ import { Breadcrumbs } from '../../../components/ux';
 const STATUS_OPTIONS = ['pending', 'approved', 'ordered', 'partially_received', 'received', 'cancelled'] as const;
 const URGENCY_OPTIONS = ['low', 'normal', 'high', 'critical'] as const;
 
+const STATUS_LABELS: Record<string, string> = {
+  pending: 'Pending',
+  approved: 'Approved',
+  ordered: 'Ordered',
+  partially_received: 'Partially received',
+  received: 'Received',
+  cancelled: 'Cancelled',
+};
+
 const STATUS_COLORS: Record<string, string> = {
   pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
   approved: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
@@ -440,7 +449,7 @@ const WorkflowActionModal: React.FC<{
       if (action === 'receive') {
         const qty = Number(quantity);
         if (qty <= 0 || !location.trim() || Number(unitCost) < 0 || unitCost === '') {
-          toast.error('Positive quantity, storage location, and unit cost are required');
+          toast.error('Enter a quantity above 0, a storage location, and a unit cost');
           return;
         }
         await inventoryService.receiveReorderStock(request.id, {
@@ -735,7 +744,7 @@ export const ReorderRequestsPage: React.FC = () => {
             <option value="">All Statuses</option>
             {STATUS_OPTIONS.map((s) => (
               <option key={s} value={s}>
-                {s.charAt(0).toUpperCase() + s.slice(1)}
+                {STATUS_LABELS[s] ?? s}
               </option>
             ))}
           </select>
@@ -825,7 +834,7 @@ export const ReorderRequestsPage: React.FC = () => {
                         className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[req.status] ?? ''}`}
                       >
                         {STATUS_ICONS[req.status]}
-                        {req.status}
+                        {STATUS_LABELS[req.status] ?? req.status}
                       </span>
                     </td>
                     <td data-label="Urgency" className="px-4 py-3">

@@ -937,7 +937,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
             className="text-theme-text-muted hover:text-theme-text-primary mb-4 flex items-center transition-colors"
           >
             <ArrowLeft className="mr-2 h-5 w-5" />
-            Back to Skills Testing
+            Back to Templates
           </Link>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h1 className="text-theme-text-primary flex items-center space-x-3 text-2xl font-bold sm:text-3xl">
@@ -973,7 +973,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
             <div className="flex items-start gap-2">
               <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
               <div>
-                <p className="font-medium text-red-700 dark:text-red-300">Please fix the following errors:</p>
+                <p className="font-medium text-red-700 dark:text-red-300">Fix these before saving:</p>
                 <ul className="mt-1 list-inside list-disc text-sm text-red-700 dark:text-red-300">
                   {validationErrors.map((err, i) => (
                     <li key={i}>{err}</li>

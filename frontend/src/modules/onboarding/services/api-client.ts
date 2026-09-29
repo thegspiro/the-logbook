@@ -213,13 +213,13 @@ class SecureApiClient {
 
     if (error instanceof TypeError && error.message?.includes('Failed to fetch')) {
       return {
-        error: 'Unable to reach the server. Please verify the backend is running and check your network connection.',
+        error: 'Cannot reach the server. Make sure the backend is running and check your network connection.',
         statusCode: 0,
       };
     }
 
     return {
-      error: 'Network error. Please check your connection and try again.',
+      error: 'Network error. Check your connection and try again.',
       statusCode: 0,
     };
   }
@@ -233,7 +233,7 @@ class SecureApiClient {
     switch (status) {
       case 429: {
         return {
-          error: 'Too many requests. Please wait a moment before trying again.',
+          error: 'Too many requests. Wait a moment, then try again.',
           statusCode: 429,
         };
       }
@@ -243,7 +243,7 @@ class SecureApiClient {
         // Owner", which it never will. Both ship a usable detail from the
         // server, so prefer it over the blanket refresh advice.
         return {
-          error: detail || 'Security validation failed. Please refresh the page and try again.',
+          error: detail || 'Security check failed. Refresh the page and try again.',
           statusCode: 403,
         };
       case 422: {
@@ -255,28 +255,28 @@ class SecureApiClient {
           };
         }
         return {
-          error: detail || 'Invalid data submitted. Please check your input and try again.',
+          error: detail || 'Some of the information was not accepted. Check your input and try again.',
           statusCode: 422,
         };
       }
       case 409:
         return {
-          error: detail || 'This record already exists. Please check for duplicates.',
+          error: detail || 'This record already exists. Check for a duplicate.',
           statusCode: 409,
         };
       case 500:
         return {
-          error: 'A server error occurred. Please try again or check the server logs.',
+          error: 'The server hit an error. Try again. If it keeps happening, check the server logs.',
           statusCode: 500,
         };
       case 503:
         return {
-          error: 'The server is temporarily unavailable. It may still be starting up — please try again shortly.',
+          error: 'The server is temporarily unavailable. It may still be starting up — try again shortly.',
           statusCode: 503,
         };
       default:
         return {
-          error: detail || 'An unexpected error occurred. Please try again.',
+          error: detail || 'An unexpected error occurred. Try again.',
           statusCode: status,
         };
     }

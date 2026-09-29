@@ -157,7 +157,7 @@ export const DonorsPage: React.FC = () => {
     e.preventDefault();
 
     if (!form.firstName.trim() || !form.lastName.trim()) {
-      toast.error('First name and last name are required');
+      toast.error("Enter the donor's first and last name");
       return;
     }
 
@@ -175,11 +175,11 @@ export const DonorsPage: React.FC = () => {
         state: form.state.trim() || null,
         postalCode: form.postalCode.trim() || null,
       });
-      toast.success('Donor created successfully');
+      toast.success('Donor added');
       resetForm();
       void loadDonors();
     } catch {
-      toast.error('Failed to create donor');
+      toast.error('Failed to add donor');
     } finally {
       setIsSubmitting(false);
     }
@@ -197,7 +197,7 @@ export const DonorsPage: React.FC = () => {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-theme-text-primary text-2xl font-bold">Donors</h1>
-          <p className="text-theme-text-secondary mt-1 text-sm">Manage your donor directory and relationships</p>
+          <p className="text-theme-text-secondary mt-1 text-sm">Look up donors and what each has given</p>
         </div>
         {canManage && (
           <button
@@ -394,7 +394,7 @@ export const DonorsPage: React.FC = () => {
             autoCorrect="off"
             spellCheck={false}
             type="text"
-            aria-label="Search by name or email..."
+            aria-label="Search donors by name or email"
             placeholder="Search by name or email..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -427,8 +427,10 @@ export const DonorsPage: React.FC = () => {
             <Users className="text-theme-text-secondary mb-3 h-12 w-12 opacity-40" />
             <p className="text-theme-text-secondary">
               {search || typeFilter
-                ? 'No donors match your search criteria'
-                : 'No donors found. Add your first donor to get started.'}
+                ? 'No donors match your search or filter.'
+                : canManage
+                  ? 'No donors yet. Select Add Donor to add one.'
+                  : 'No donors yet.'}
             </p>
           </div>
         ) : (

@@ -129,9 +129,11 @@ export const ApparatusDetailPage: React.FC = () => {
         <div className="text-center">
           <Truck className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
           <h2 className="text-theme-text-primary mb-2 text-xl font-bold">Apparatus Not Found</h2>
-          <p className="text-theme-text-muted mb-6">The apparatus you&#39;re looking for doesn&#39;t exist.</p>
+          <p className="text-theme-text-muted mb-6">
+            This apparatus couldn&#39;t be loaded. It may have been deleted, or the link may be wrong.
+          </p>
           <button onClick={() => void navigate('/apparatus')} className="btn-primary px-6 py-3">
-            Back to Fleet
+            Back to Apparatus
           </button>
         </div>
       </div>

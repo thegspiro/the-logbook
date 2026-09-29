@@ -716,7 +716,7 @@ const InventoryMaintenancePage: React.FC = () => {
       <Modal
         isOpen={completedItem !== null}
         onClose={() => setCompletedItem(null)}
-        title="Work completed successfully"
+        title="Work completed"
         footer={
           <>
             <button className="btn-secondary btn-md" onClick={() => setCompletedItem(null)}>
