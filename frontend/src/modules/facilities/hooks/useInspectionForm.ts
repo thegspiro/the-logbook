@@ -144,7 +144,7 @@ export function useInspectionForm({ facilityId }: UseInspectionFormOptions = {})
 
   const handleSave = async () => {
     if (!facilityId && !formData.facility_id) {
-      toast.error('Please select a facility');
+      toast.error('Select a facility');
       return;
     }
     if (!formData.title.trim()) {
