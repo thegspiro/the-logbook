@@ -69,13 +69,18 @@ class TestProspectBuilder:
             status_token=kw.get("status_token", "TOK12345"),
         )
 
-    async def test_maps_name_and_status_token(self):
-        p = self._prospect()
+    async def test_maps_name_and_short_id_never_the_status_token(self):
+        """The status token is the applicant's credential for their public
+        status page (it withdraws the application); printing it put it in the
+        hands of anyone who previewed or held a label (workflow review W17-3).
+        """
+        p = self._prospect(status_token="SecretStatusToken123")
         preview = await _service_returning(p).preview(
             uuid4(), "prospective_members", [p.id]
         )
         assert preview[0]["name"] == "Jane Applicant"
-        assert preview[0]["barcode_value"] == "TOK12345"
+        assert preview[0]["barcode_value"] == p.id.replace("-", "")[:12].upper()
+        assert "SecretStatusToken123" not in str(preview)
 
     async def test_renders_pdf(self):
         p = self._prospect()

@@ -114,9 +114,13 @@ async def _build_prospect_specs(db, org_id, ids, extra_lines):
     specs = []
     for p in rows.all():
         name = " ".join(filter(None, [p.first_name, p.last_name])) or "Applicant"
-        # The status token is a stable, scannable badge id (used for public
-        # status checks); fall back to a short id.
-        barcode = getattr(p, "status_token", None) or _short_id(p.id)
+        # Never the status token. It is the applicant's only credential for
+        # their public status page — it reads the application and withdraws
+        # it as the applicant — and staff are otherwise never shown it. A
+        # label hands it to whoever previews, holds or photographs it, and
+        # nothing scans a prospect label back, so the short id loses nothing
+        # (workflow review W17-3).
+        barcode = _short_id(p.id)
         specs.append(LabelSpec(name=name, barcode_value=barcode))
     return specs, 0
 

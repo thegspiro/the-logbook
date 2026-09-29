@@ -255,6 +255,17 @@ class TestRsvpCapacity:
         assert rsvp is None
         assert "cannot be accommodated" in err
 
+    async def test_a_one_seat_event_says_person_not_people(self):
+        """Workflow review W19: the refusal read "holds 1 people"."""
+        ev = _event(max_attendees=1)
+        db = _db([_one(ev), _one(None), _scalar(0)])
+        _, err = await self._svc(db).create_or_update_rsvp(
+            "e1", "u1", RSVPCreate(status="going", guest_count=1), "org-1"
+        )
+        assert err == (
+            "This event holds 1 person, so a party of 2 cannot be accommodated."
+        )
+
     async def test_a_party_exactly_the_size_of_the_event_is_allowed(self):
         """Boundary: 3 seats on a cap of 3 fits, and must not be rejected."""
         ev = _event(max_attendees=3)

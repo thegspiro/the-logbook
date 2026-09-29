@@ -564,7 +564,7 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
             ? 'Puts this on the supply officer\u2019s worklist without changing the count \u2014 use the minus button for units actually used.'
             : "This puts the item on the supply officer's worklist right away. A note helps whoever restocks it."
         }
-        label="Note (optional)"
+        label="Note"
         placeholder="e.g. used two on a call"
         confirmLabel={usedTarget?.targetQuantity != null ? 'Flag it' : 'Report used'}
         multiline

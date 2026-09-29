@@ -123,7 +123,7 @@ from app.services.email_service import _redact_email
 from app.services.shift_eligibility_service import ShiftEligibilityService
 from app.utils.email_providers import stored_email_section
 from app.utils.hours import hours_from_minutes
-from app.utils.org_timezone import org_today
+from app.utils.org_timezone import org_today, resolve_scheduling_timezone
 from app.utils.positions import position_label
 from app.utils.sql_search import LIKE_ESCAPE_CHAR
 
@@ -5282,6 +5282,9 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
     needs_refresh = False
 
     service = EventService(db)
+    # The series is stepped in the department's wall-clock time (W18-1);
+    # resolved once per organization rather than once per series.
+    org_zones: Dict[str, Any] = {}
 
     for parent in parents:
         # Fallback in case even the refresh/id-read below fails; never
@@ -5339,7 +5342,11 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
                 continue
 
             # Calculate next occurrence after the latest one
+            org_key = str(parent.organization_id)
+            if org_key not in org_zones:
+                org_zones[org_key] = await resolve_scheduling_timezone(db, org_key)
             new_occurrences = service._generate_recurrence_dates(
+                timezone_=org_zones[org_key],
                 start_datetime=latest_start,
                 end_datetime=latest_end,
                 pattern=pattern,

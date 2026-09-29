@@ -56,6 +56,17 @@ from app.utils.org_timezone import (
 
 DEFAULT_ALLOWED_RSVP_STATUSES = ["going", "not_going"]
 
+
+def _wall_time(value: datetime, tz: ZoneInfo) -> datetime:
+    """A stored time as naive wall-clock time in ``tz``, for calendar arithmetic."""
+    return to_local(value, tz).replace(tzinfo=None)
+
+
+def _stored_time(wall: datetime, tz: ZoneInfo) -> datetime:
+    """A naive wall-clock time in ``tz`` back as the UTC instant to store."""
+    return wall.replace(tzinfo=tz).astimezone(dt_timezone.utc)
+
+
 BULK_ADD_MAX_SIZE = 200
 
 # Ceiling on how many waitlisted parties one seat release may promote. Freeing
@@ -884,6 +895,47 @@ class EventService:
 
         update_data = event_data.model_dump(exclude_unset=True)
 
+        # The times are the anchor's, not the series'. Written verbatim, as the
+        # other fields are, they stamped the anchor's date onto every later
+        # occurrence: changing a description from the edit form, which always
+        # sends the times, moved a weekly series onto one day (workflow
+        # review W18-2). Each occurrence instead moves by the anchor's own
+        # shift in the department's wall-clock time, takes its new length, and
+        # keeps an RSVP deadline the same lead ahead of its own start.
+        timing = {
+            key: update_data.pop(key)
+            for key in ("start_datetime", "end_datetime", "rsvp_deadline")
+            if key in update_data
+        }
+        if ("start_datetime" in timing and timing["start_datetime"] is None) or (
+            "end_datetime" in timing and timing["end_datetime"] is None
+        ):
+            raise ValueError("An event's start and end cannot be cleared")
+        times_change = False
+        shift = length = timedelta(0)
+        deadline_lead: Optional[timedelta] = None
+        if timing:
+            # Resolved only when times were sent: a series edit that changes
+            # no time needs no timezone and touches no occurrence's times.
+            tz = await resolve_scheduling_timezone(self.db, organization_id)
+            new_start = _wall_time(
+                timing.get("start_datetime") or anchor.start_datetime, tz
+            )
+            new_end = _wall_time(timing.get("end_datetime") or anchor.end_datetime, tz)
+            if new_end <= new_start:
+                raise ValueError("End date/time must be after start date/time")
+            shift = new_start - _wall_time(anchor.start_datetime, tz)
+            length = new_end - new_start
+            times_change = shift != timedelta(0) or length != (
+                _wall_time(anchor.end_datetime, tz)
+                - _wall_time(anchor.start_datetime, tz)
+            )
+            if timing.get("rsvp_deadline") is not None:
+                deadline_lead = _wall_time(timing["rsvp_deadline"], tz) - new_start
+        changed_fields = set(update_data)
+        if times_change:
+            changed_fields |= {"start_datetime", "end_datetime"}
+
         # EV-17 / XC-1: this path writes the same client-supplied attachment
         # dictionaries as update_event, across every future occurrence.
         if "attachments" in update_data:
@@ -892,7 +944,7 @@ class EventService:
         # A series-wide edit reaches finalized occurrences too. Descriptive
         # fields stay allowed here exactly as they do on the single-event path;
         # only the ones the credited durations were derived from are refused.
-        sensitive = ATTENDANCE_SENSITIVE_UPDATE_FIELDS & set(update_data)
+        sensitive = ATTENDANCE_SENSITIVE_UPDATE_FIELDS & changed_fields
         if sensitive:
             locked = [e for e in future_events if attendance_is_finalized(e)]
             if locked:
@@ -922,6 +974,18 @@ class EventService:
         for event in future_events:
             for field, value in update_data.items():
                 setattr(event, field, value)
+            if times_change:
+                start_wall = _wall_time(event.start_datetime, tz) + shift
+                event.start_datetime = _stored_time(start_wall, tz)
+                event.end_datetime = _stored_time(start_wall + length, tz)
+            if "rsvp_deadline" in timing:
+                event.rsvp_deadline = (
+                    None
+                    if deadline_lead is None
+                    else _stored_time(
+                        _wall_time(event.start_datetime, tz) + deadline_lead, tz
+                    )
+                )
             if updated_by:
                 event.updated_by = str(updated_by)
             event.updated_at = now
@@ -1428,9 +1492,14 @@ class EventService:
         if event.max_attendees and rsvp_data.status == RSVPStatus.GOING.value:
             party_size = 1 + effective_guest_count
             if party_size > event.max_attendees:
+                seats = (
+                    "1 person"
+                    if event.max_attendees == 1
+                    else f"{event.max_attendees} people"
+                )
                 return (
                     None,
-                    f"This event holds {event.max_attendees} people, so a party "
+                    f"This event holds {seats}, so a party "
                     f"of {party_size} cannot be accommodated.",
                 )
 
@@ -3729,12 +3798,47 @@ class EventService:
         week_ordinal: Optional[int] = None,
         month: Optional[int] = None,
         exceptions: Optional[List[str]] = None,
+        timezone_: Optional[ZoneInfo] = None,
     ) -> List[Tuple[datetime, datetime]]:
         """
         Generate all occurrence dates for a recurring event.
 
         Returns list of (start, end) datetime tuples.
+
+        With ``timezone_`` (the department's zone) the series is stepped in
+        wall-clock time there and each occurrence converted back to UTC, in
+        the same naive-or-aware form the start came in (naive is read as
+        UTC). Stepping the stored UTC instant instead moved a weekly 7pm drill
+        to 6pm when daylight saving ended, and — because a US evening is
+        already the next day in UTC — matched custom weekdays, the Nth
+        weekday of a month and the skipped dates against the wrong day
+        (workflow review W18-1). The client sends all three as the
+        department's calendar.
         """
+        naive_in = start_datetime.tzinfo is None
+        if timezone_ is not None:
+
+            def _local(value: datetime) -> datetime:
+                aware = value if value.tzinfo else value.replace(tzinfo=dt_timezone.utc)
+                return aware.astimezone(timezone_).replace(tzinfo=None)
+
+            def _utc(value: datetime) -> datetime:
+                out = value.replace(tzinfo=timezone_).astimezone(dt_timezone.utc)
+                return out.replace(tzinfo=None) if naive_in else out
+
+            local_occurrences = self._generate_recurrence_dates(
+                start_datetime=_local(start_datetime),
+                end_datetime=_local(end_datetime),
+                pattern=pattern,
+                recurrence_end_date=_local(recurrence_end_date),
+                custom_days=custom_days,
+                weekday=weekday,
+                week_ordinal=week_ordinal,
+                month=month,
+                exceptions=exceptions,
+            )
+            return [(_utc(s), _utc(e)) for s, e in local_occurrences]
+
         duration = end_datetime - start_datetime
         occurrences = []
         current = start_datetime
@@ -3899,6 +4003,7 @@ class EventService:
 
         # Generate occurrence dates
         occurrences = self._generate_recurrence_dates(
+            timezone_=await resolve_scheduling_timezone(self.db, organization_id),
             start_datetime=event_data["start_datetime"],
             end_datetime=event_data["end_datetime"],
             pattern=recurrence_pattern,

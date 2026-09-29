@@ -40,14 +40,14 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W14 | Check-in station, badge scan, member labels and ID cards                  | admin                  | `/members/check-in-station`, `/members/scan` | ✅     |
 | W15 | A member leaves: departure clearance, property return, archive, reinstate | admin                  | `/members/admin`                             | ✅     |
 | W16 | Prospective member from application to converted member                   | membership_coordinator | `/prospective-members`                       | ✅     |
-| W17 | An applicant checks their status by link                                  | anonymous              | `/application-status/:token`                 | ⬜     |
+| W17 | An applicant checks their status by link                                  | anonymous              | `/application-status/:token`                 | ✅     |
 
 ## Tier 3 — Events
 
 | #   | Activity                                                                  | Acts as               | Starts at                                       | Status |
 | --- | ------------------------------------------------------------------------- | --------------------- | ----------------------------------------------- | ------ |
-| W18 | Create, edit and cancel an event, including a recurring one               | secretary             | `/events`, `/events/:id/edit`                   | ⬜     |
-| W19 | RSVP, change it, and see it on the event                                  | member, member2       | `/events/:id`                                   | ⬜     |
+| W18 | Create, edit and cancel an event, including a recurring one               | secretary             | `/events`, `/events/:id/edit`                   | ✅     |
+| W19 | RSVP, change it, and see it on the event                                  | member, member2       | `/events/:id`                                   | ✅     |
 | W20 | Check-in: QR self check-in, live monitoring, an officer's manual check-in | member, secretary     | `/events/:id/qr-code`, `/events/:id/monitoring` | ⬜     |
 | W21 | Event templates, the events admin hub, and event analytics                | secretary             | `/events/admin`, `/events/templates`            | ⬜     |
 | W22 | A public event request and its status link                                | anonymous → secretary | `/event-request/status/:token`                  | ⬜     |
@@ -173,6 +173,57 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W19 — RSVP, change it, and see it on the event — 2026-09-28
+
+Driven as: `member` and `member2` at 1280×900 and 390×844, with `secretary`
+reading the result, on a one-seat meeting. Held: an impossible party is
+refused in the dialog; Going, Not Going and Maybe hold after reload; a full
+event waitlists, and declining promotes the next member automatically; the
+officer sees every response and note; a double submit writes once. Fixed:
+W19-2 (LOW — RSVP Activity printed raw values), W19-4 (NIT — "holds 1
+people"), W19-5 (NIT — 20px answer choices on phones). Flagged: W19-1 (MED —
+a waitlist promotion is in-app only, no email, against pitfall 18), W19-3
+(LOW — the promotion is missing from RSVP Activity; needs a schema marker).
+Gate: typecheck, lint and the touched suites clean. Next: W20.
+
+### W18 — Create, edit and cancel an event, including a recurring one — 2026-09-28
+
+Driven as: `secretary` at 1280×900 and 390×844, with `member` refused on both
+pages and three APIs. Held: required fields and the 10-character cancel
+reason are enforced; editing one occurrence changes only it; cancelling one
+occurrence and the whole series both read back after reload. Fixed: W18-1
+(HIGH — series were stepped in UTC, so a 7pm drill became 6pm when daylight
+saving ended, and evening custom weekdays, Nth-weekday patterns and skip
+dates matched the UTC day), W18-2 (HIGH — "This and all future events"
+stamped the anchor's date onto every later occurrence, so a description
+edit collapsed the series onto one day), W18-4 (LOW — unnamed and
+identically named schedule controls), W18-5 (LOW — "Occurrence of 6" on a
+cancelled occurrence), W18-6 (NIT — tap targets). Flagged: W18-3 (MED —
+series already stored wrong are not repaired; a data migration). Gate: see
+`W18-events-and-recurring.md`. Next: W19.
+
+### W17 — An applicant checks their status by link — 2026-09-28
+
+Driven as: anonymous at 1280×900 and 390×844 (token read from the review
+database for setup, since email is off and staff never see it), with
+`membership_coordinator` and `chief` reading the result. Held: the page
+shows status, progress and a dated timeline; unknown and malformed links
+are refused plainly; withdrawal works end to end, once, and reaches the
+coordinator's Withdrawn tab and drawer with the reason; the Chief's
+sign-offs drop the withdrawn applicant. Fixed: W17-1 (NIT — "Reason
+(optional) (optional)", and the same on Apparatus Inventory's note), W17-2
+(LOW — an outage read "Application not found"). Flagged: W17-3 (MED — the
+label preview hands anyone with `prospective_members.view` every
+applicant's status token, which opens and withdraws the application; the
+printed barcode carries it too). Gate: typecheck and lint clean; the two
+touched suites pass (no Python changed).
+
+**W17-3 resolved** at the owner's direction ("print the short id on
+labels"), and W17-4 (LOW — the coordinator was refused the label page their
+pipeline links to; the route now takes view or manage, as the API does)
+fixed while re-driving it. Labels printed earlier still carry tokens; see
+`docs/KNOWN_LIMITATIONS.md`. The rotation restarted; next: W18.
 
 ### W16 — Prospective member to converted member — 2026-09-28
 

@@ -22,6 +22,12 @@ interface DateTimeQuarterHourProps {
    * midnight for anyone not in the department's own timezone.
    */
   timezone?: string | undefined;
+  /**
+   * Names the time selects ("Start time" → "Start time hour", …). Without it
+   * every picker on a form announces "Time hour", so a start and an end are
+   * indistinguishable to a screen reader.
+   */
+  timeLabel?: string | undefined;
 }
 
 function snapToQuarter(time: string): string {
@@ -39,6 +45,7 @@ const DateTimeQuarterHour: React.FC<DateTimeQuarterHourProps> = ({
   id,
   required,
   timezone,
+  timeLabel,
 }) => {
   const { datePart, timePart } = useMemo(() => {
     if (!value) return { datePart: '', timePart: '' };
@@ -72,6 +79,7 @@ const DateTimeQuarterHour: React.FC<DateTimeQuarterHourProps> = ({
         value={timePart}
         onChange={(e) => handleTimeChange(e.target.value)}
         {...(className ? { className } : {})}
+        {...(timeLabel ? { 'aria-label': timeLabel } : {})}
       />
     </div>
   );

@@ -14,6 +14,7 @@ in this file. DB mocked; no MySQL.
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -77,7 +78,15 @@ class TestRollingRecurrenceExtendIsolation:
             return [(latest_start + timedelta(days=7), latest_end + timedelta(days=7))]
 
         service = SimpleNamespace(_generate_recurrence_dates=_generate)
-        with patch("app.services.event_service.EventService", return_value=service):
+        # The runner resolves each department's timezone (W18-1); that lookup
+        # is not what these tests are about, and would consume a db.execute
+        # result each test has queued for something else.
+        with patch(
+            "app.services.event_service.EventService", return_value=service
+        ), patch(
+            "app.services.scheduled_tasks.resolve_scheduling_timezone",
+            AsyncMock(return_value=ZoneInfo("UTC")),
+        ):
             result = await scheduled_tasks.run_rolling_recurrence_extend(db)
 
         # A and C extended despite B failing.
@@ -141,7 +150,15 @@ class TestRollingRecurrenceExtendIsolation:
                 (latest_start + timedelta(days=7), latest_end + timedelta(days=7))
             ]
         )
-        with patch("app.services.event_service.EventService", return_value=service):
+        # The runner resolves each department's timezone (W18-1); that lookup
+        # is not what these tests are about, and would consume a db.execute
+        # result each test has queued for something else.
+        with patch(
+            "app.services.event_service.EventService", return_value=service
+        ), patch(
+            "app.services.scheduled_tasks.resolve_scheduling_timezone",
+            AsyncMock(return_value=ZoneInfo("UTC")),
+        ):
             result = await scheduled_tasks.run_rolling_recurrence_extend(db)
 
         # A and C extended and counted; B's commit failed, so neither of its

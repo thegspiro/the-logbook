@@ -236,7 +236,9 @@ describe('ApparatusInventoryPage', () => {
     await selectApparatus(user);
 
     await user.click(screen.getByRole('button', { name: /Used/ }));
-    await user.type(await screen.findByLabelText(/Note/), 'used two on a call');
+    // Exact: the dialog appends "(optional)" itself, and the label once
+    // carried its own, so it read "Note (optional) (optional)".
+    await user.type(await screen.findByLabelText('Note (optional)'), 'used two on a call');
     await user.click(screen.getByRole('button', { name: 'Report used' }));
 
     await waitFor(() => {

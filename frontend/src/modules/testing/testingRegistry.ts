@@ -282,7 +282,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       {
         path: '/prospective-members/print-labels',
         label: 'Print prospect labels',
-        permission: 'prospective_members.view',
+        anyPermission: ['prospective_members.view', 'prospective_members.manage'],
         module: 'prospective_members',
       },
     ],
