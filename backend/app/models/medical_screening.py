@@ -109,10 +109,18 @@ class ScreeningRequirement(Base):
     )
 
     # Relationships
+    # A screening record is a member's medical history and must outlive the
+    # requirement it was filed against: ScreeningRecord.requirement_id is
+    # ondelete="SET NULL", and deleting a requirement only unlinks its
+    # records. No "delete" / "delete-orphan" here -- either would have the ORM
+    # delete the records before the database's SET NULL ever applied.
+    # passive_deletes=True leaves unloaded records to that SET NULL instead
+    # of loading the whole collection just to null it; any already loaded
+    # are nulled by the ORM, the same outcome.
     records = relationship(
         "ScreeningRecord",
         back_populates="requirement",
-        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
 
     __table_args__ = (

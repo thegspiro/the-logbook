@@ -392,7 +392,11 @@ export const MedicalScreeningPage: React.FC = () => {
       <ConfirmDialog
         isOpen={!!deleteTarget}
         title={`Delete ${deleteTarget?.type === 'requirement' ? 'Requirement' : 'Record'}`}
-        message={`Are you sure you want to delete "${deleteTarget?.name ?? ''}"? This action cannot be undone.`}
+        message={`Are you sure you want to delete "${deleteTarget?.name ?? ''}"? ${
+          deleteTarget?.type === 'requirement'
+            ? 'Screening records filed under it are kept, but will no longer be linked to a requirement. '
+            : ''
+        }This action cannot be undone.`}
         confirmLabel="Delete"
         variant="danger"
         onConfirm={() => void handleDelete()}
