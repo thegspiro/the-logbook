@@ -157,7 +157,7 @@ const AddMember: React.FC = () => {
     if (!formData.primaryPhone.trim()) newErrors.primaryPhone = 'Primary phone is required';
     if (!formData.email.trim()) newErrors.email = 'Email is required';
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'Invalid email format';
+      newErrors.email = 'Enter a valid email address';
     }
 
     // Emergency Contact 1 (required)
@@ -192,7 +192,7 @@ const AddMember: React.FC = () => {
       // refuse is caught here, at the field, rather than in a toast after the
       // whole form has been sent (workflow review W08).
       if (!initialPassword) {
-        newErrors.password = 'Password is required when setting a custom password';
+        newErrors.password = 'Enter a password';
       } else if (!validatePasswordStrength(initialPassword).isValid) {
         newErrors.password = 'Password does not meet every rule listed below';
       }
@@ -209,7 +209,7 @@ const AddMember: React.FC = () => {
     e.preventDefault();
 
     if (!validateForm()) {
-      toast.error('Please fill in all required fields');
+      toast.error('Fill in the required fields marked below.');
       return;
     }
 
@@ -300,10 +300,10 @@ const AddMember: React.FC = () => {
         }
       }
 
-      toast.success('Member added successfully!');
+      toast.success('Member added');
       void navigate('/members');
     } catch (error: unknown) {
-      const errorMessage = getErrorMessage(error, 'Failed to add member. Please try again.');
+      const errorMessage = getErrorMessage(error, 'Unable to add member. Try again.');
       toast.error(errorMessage);
 
       // Highlight the specific field if it's a duplicate membership number error
@@ -344,7 +344,7 @@ const AddMember: React.FC = () => {
               </div>
               <div>
                 <h1 className="text-theme-text-primary text-xl font-bold">Add New Member</h1>
-                <p className="text-theme-text-muted text-sm">Enter member information</p>
+                <p className="text-theme-text-muted text-sm">Add someone to the roster</p>
               </div>
             </div>
             <button
@@ -469,8 +469,8 @@ const AddMember: React.FC = () => {
                   </span>
                 </div>
                 <p className="text-theme-text-muted mt-1 text-xs">
-                  Leave blank to auto-assign the next ID. Enter a value to manually assign (e.g., for returning former
-                  members).
+                  Leave blank to assign the next ID automatically, or enter one yourself (for example, for a returning
+                  member).
                 </p>
               </div>
             )}
@@ -638,7 +638,7 @@ const AddMember: React.FC = () => {
                   <p className="text-theme-text-muted text-xs">
                     {welcomeEmailAvailable === false
                       ? "Required: email isn't set up for this department, so a temporary password can't be sent. Set one here and give it to the member."
-                      : 'If unchecked, a temporary password will be generated and emailed to the member.'}
+                      : 'Leave unchecked to email the member a temporary password.'}
                   </p>
                 </div>
               </label>
@@ -728,7 +728,7 @@ const AddMember: React.FC = () => {
               )}
 
               <p className="text-theme-text-muted text-xs">
-                The member will be required to change their password on first login regardless of how it is set.
+                Either way, the member must change this password at first sign-in.
               </p>
             </div>
           </div>

@@ -96,7 +96,7 @@ const MembershipIdSection: React.FC<Props> = ({ save, saveDebounced }) => {
         />
         <div className="alert-warning flex flex-wrap items-center gap-2 text-sm" role="alert">
           <span className="min-w-0 flex-1">
-            These settings did not load, so nothing below reflects what your department has chosen.
+            These settings did not load. Retry to see what your department has chosen.
           </span>
           <button
             type="button"
