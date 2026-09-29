@@ -929,3 +929,17 @@ export const SUGGESTION_ANONYMITY_LABELS: Record<string, string> = {
   required: 'Always anonymous',
   disabled: 'Always named',
 };
+
+/** Which year a membership number's {YYYY} and yearly restart follow. */
+export const MembershipYearBasis = {
+  CALENDAR: 'calendar',
+  FISCAL: 'fiscal',
+} as const;
+export type MembershipYearBasis = (typeof MembershipYearBasis)[keyof typeof MembershipYearBasis];
+
+/** Which calendar year names a fiscal year that spans two of them. */
+export const FiscalYearLabel = {
+  END: 'end',
+  START: 'start',
+} as const;
+export type FiscalYearLabel = (typeof FiscalYearLabel)[keyof typeof FiscalYearLabel];

@@ -21,6 +21,7 @@ from pydantic import (
 
 from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
 from app.schemas.base import UTCResponseBase
+from app.utils import membership_numbers
 
 
 class OrganizationTypeEnum(str, Enum):
@@ -771,8 +772,33 @@ class MembershipTierSettings(BaseModel):
     )
 
 
+class MembershipYearBasis(str, Enum):
+    """Which year a membership number's ``{YYYY}`` and yearly reset follow"""
+
+    CALENDAR = "calendar"
+    FISCAL = "fiscal"
+
+
+class FiscalYearLabel(str, Enum):
+    """Which calendar year names a fiscal year that spans two of them"""
+
+    END = "end"
+    START = "start"
+
+
 class MembershipIdSettings(BaseModel):
-    """Settings for membership ID number display and generation"""
+    """Settings for membership ID number display and generation
+
+    Every field added after ``next_number`` has a default that reproduces the
+    format generated before patterns existed -- prefix, then the counter padded
+    to four digits -- so an organization whose stored settings predate them
+    keeps issuing exactly the numbers it did.
+
+    The period a yearly counter last issued in is kept beside these fields in
+    the stored JSON as ``counter_year``. It is not part of this schema: the
+    generator owns it, and a client saving the settings screen must not be able
+    to write it back stale.
+    """
 
     enabled: bool = Field(
         default=False,
@@ -785,13 +811,80 @@ class MembershipIdSettings(BaseModel):
     prefix: str = Field(
         default="",
         max_length=10,
-        description="Optional prefix for generated IDs (e.g. 'FD-')",
+        description="Text substituted for {PREFIX} in the pattern (e.g. 'FD-')",
     )
     next_number: int = Field(
         default=1,
         ge=1,
         description="Next number to use when auto-generating IDs",
     )
+    pattern: str = Field(
+        default=membership_numbers.DEFAULT_PATTERN,
+        max_length=membership_numbers.MAX_PATTERN_LENGTH,
+        description=(
+            "How a number is built: literal text plus {SEQ} (required), "
+            "{PREFIX}, {YYYY} and {YY}"
+        ),
+    )
+    padding: int = Field(
+        default=4,
+        ge=1,
+        le=10,
+        description="Minimum digits for {SEQ}, zero-filled (1 means no padding)",
+    )
+    start_number: int = Field(
+        default=1,
+        ge=1,
+        description="The number a yearly counter restarts at each new year",
+    )
+    reset_yearly: bool = Field(
+        default=False,
+        description=(
+            "Restart the counter at start_number when the year changes. "
+            "Requires {YYYY} or {YY} in the pattern"
+        ),
+    )
+    year_basis: MembershipYearBasis = Field(
+        default=MembershipYearBasis.CALENDAR,
+        description="Whether the year follows the calendar or a fiscal year",
+    )
+    fiscal_year_start_month: int = Field(
+        default=1,
+        ge=1,
+        le=12,
+        description="Month (1-12) the fiscal year starts in",
+    )
+    fiscal_year_label: FiscalYearLabel = Field(
+        default=FiscalYearLabel.END,
+        description=(
+            "Whether a fiscal year is named by the calendar year it ends in "
+            "or the one it starts in"
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _pattern_is_usable(self) -> "MembershipIdSettings":
+        membership_numbers.validate_pattern(self.pattern)
+        # Without a year in the number, a counter that restarts every January
+        # re-issues last year's numbers -- which the generator would refuse as
+        # taken, so the "reset" would silently never happen.
+        if self.reset_yearly and not membership_numbers.uses_year(self.pattern):
+            raise ValueError(
+                "Restarting the count each year needs {YYYY} or {YY} in the "
+                "pattern, or every new year would repeat last year's numbers"
+            )
+        longest = membership_numbers.longest_membership_number(
+            self.pattern,
+            prefix=self.prefix,
+            padding=self.padding,
+            number=max(self.next_number, self.start_number),
+        )
+        if longest > membership_numbers.MAX_MEMBERSHIP_NUMBER_LENGTH:
+            raise ValueError(
+                f"Numbers built from this pattern would be {longest} characters; "
+                f"the limit is {membership_numbers.MAX_MEMBERSHIP_NUMBER_LENGTH}"
+            )
+        return self
 
 
 class DepartmentEmailFormat(str, Enum):

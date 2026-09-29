@@ -15,9 +15,11 @@ import { screen, waitFor } from '@testing-library/react';
 import { renderWithRouter } from '../../../../test/utils';
 
 const mockGetSettings = vi.fn();
+const mockPreview = vi.fn();
 vi.mock('../../../../services/userServices', () => ({
   organizationService: {
     getSettings: (...args: unknown[]) => mockGetSettings(...args) as unknown,
+    previewNextMembershipId: (...args: unknown[]) => mockPreview(...args) as unknown,
     updateContactInfoSettings: vi.fn(),
     updateMembershipIdSettings: vi.fn(),
   },
@@ -60,6 +62,8 @@ describe('MembersSettingsPage', () => {
       contact_info_visibility: { enabled: true, show_email: true, show_phone: false, show_mobile: false },
       membership_id: { enabled: true, auto_generate: true, prefix: 'FD-', next_number: 7 },
     });
+    mockPreview.mockReset();
+    mockPreview.mockResolvedValue({ enabled: true, next_id: 'FD-0007' });
     mockGetRanks.mockResolvedValue([]);
     mockValidateRanks.mockResolvedValue({ issues: [], total: 0 });
     granted.current = ['members.manage', 'settings.manage', 'settings.edit'];
@@ -151,13 +155,14 @@ describe('MembersSettingsPage', () => {
     expect(screen.queryByText('Contact Information Visibility')).not.toBeInTheDocument();
   });
 
-  // Add Member previews the server's ID ("FD-0007"); this screen printed the
-  // bare number ("FD-7"), so the two disagreed about what would be issued.
-  it('shows the next membership ID in the format the server issues', async () => {
+  // Add Member previews the server's ID ("FD-0007"); this screen once printed
+  // its own rendering ("FD-7"), so the two disagreed about what would be
+  // issued. It now shows the server's preview, the one formatter there is.
+  it('shows the next membership ID the server will issue', async () => {
     renderWithRouter(<MembersSettingsPage section="ids" />);
 
     expect(await screen.findByText('Next: FD-0007')).toBeInTheDocument();
-    expect(screen.getByText(/produces FD-0001/)).toBeInTheDocument();
+    expect(mockPreview).toHaveBeenCalled();
   });
 
   it('says the settings did not load rather than showing defaults as the answer', async () => {

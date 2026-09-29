@@ -5,12 +5,13 @@ Business logic for organization-related operations.
 """
 
 import copy
+from datetime import date
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from loguru import logger
 from pydantic import EmailStr, TypeAdapter
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.onboarding import OnboardingStatus
@@ -30,6 +31,7 @@ from app.schemas.organization import (
     decrypt_settings_secrets,
     encrypt_settings_secrets,
 )
+from app.utils import membership_numbers
 from app.utils.email_providers import (
     EMAIL_SECRET_FIELDS,
     REDACTED_SECRET,
@@ -39,6 +41,7 @@ from app.utils.email_providers import (
     normalize_stored_platform,
     required_field_message,
 )
+from app.utils.org_timezone import org_today
 
 _EMAIL_ADAPTER = TypeAdapter(EmailStr)
 
@@ -84,6 +87,28 @@ def _deep_merge_settings(
         else:
             result[key] = value
     return result
+
+
+def _membership_id_settings_from(stored: Any) -> MembershipIdSettings:
+    """Stored ``membership_id`` JSON as settings, ignoring keys it does not own.
+
+    The stored block also carries the generator's ``counter_year``, which the
+    schema deliberately leaves out.
+    """
+    if not isinstance(stored, dict):
+        return MembershipIdSettings()
+    return MembershipIdSettings(
+        **{k: v for k, v in stored.items() if k in MembershipIdSettings.model_fields}
+    )
+
+
+def _membership_period_year(settings: MembershipIdSettings, today: date) -> int:
+    return membership_numbers.period_year(
+        today,
+        year_basis=settings.year_basis.value,
+        fiscal_year_start_month=settings.fiscal_year_start_month,
+        fiscal_year_label=settings.fiscal_year_label.value,
+    )
 
 
 class OrganizationService:
@@ -308,12 +333,8 @@ class OrganizationService:
         module_settings = await self._resolve_module_settings(settings_dict, org=org)
 
         # Parse membership ID settings
-        membership_id = settings_dict.get("membership_id", {})
-        membership_id_settings = MembershipIdSettings(
-            enabled=membership_id.get("enabled", False),
-            auto_generate=membership_id.get("auto_generate", False),
-            prefix=membership_id.get("prefix", ""),
-            next_number=membership_id.get("next_number", 1),
+        membership_id_settings = _membership_id_settings_from(
+            settings_dict.get("membership_id")
         )
 
         # Parse department email settings
@@ -639,10 +660,82 @@ class OrganizationService:
         result = await self.db.execute(query)
         return (result.scalar() or 0) > 0
 
+    async def membership_number_reserved(
+        self,
+        organization_id: UUID | str,
+        membership_number: str,
+        exclude_user_id: Optional[str] = None,
+    ) -> bool:
+        """Whether a former member's number is being held for their return.
+
+        A soft-deleted member's number moves to ``previous_membership_number``
+        so the unique index is free, and reactivation gives it back. A member
+        may return many years later, so the department's rule is that the
+        number stays theirs: it is never issued automatically and cannot be
+        typed in for anybody else. ``exclude_user_id`` is the member being
+        edited, who may be given their own old number back.
+        """
+        query = (
+            select(func.count())
+            .select_from(User)
+            .where(
+                User.organization_id == str(organization_id),
+                User.previous_membership_number == membership_number,
+            )
+        )
+        if exclude_user_id is not None:
+            query = query.where(User.id != str(exclude_user_id))
+        result = await self.db.execute(query)
+        return (result.scalar() or 0) > 0
+
+    async def ensure_membership_number_available(
+        self,
+        organization_id: UUID | str,
+        membership_number: str,
+        exclude_user_id: Optional[str] = None,
+    ) -> None:
+        """Refuse a typed-in number that another member holds or once held.
+
+        Raises ``ValueError`` with a message fit for the officer who typed it.
+        """
+        if await self.membership_number_in_use(
+            organization_id, membership_number, exclude_user_id
+        ):
+            raise ValueError("A member with this membership number already exists")
+        if await self.membership_number_reserved(
+            organization_id, membership_number, exclude_user_id
+        ):
+            raise ValueError(
+                "This membership number belonged to a former member and is kept "
+                "for them in case they return. Reactivate that member to give it "
+                "back, or choose another number"
+            )
+
+    async def _membership_number_ever_held(
+        self, organization_id: UUID | str, membership_number: str
+    ) -> bool:
+        """Whether any member, current or former, holds or held this number."""
+        result = await self.db.execute(
+            select(func.count())
+            .select_from(User)
+            .where(
+                User.organization_id == str(organization_id),
+                or_(
+                    User.membership_number == membership_number,
+                    User.previous_membership_number == membership_number,
+                ),
+            )
+        )
+        return (result.scalar() or 0) > 0
+
     async def _first_free_membership_id(
-        self, organization_id: UUID | str, prefix: str, start: int
+        self,
+        organization_id: UUID | str,
+        settings: MembershipIdSettings,
+        start: int,
+        year: int,
     ) -> tuple[str, int]:
-        """The first unused ID at or after ``start``, and the number it uses.
+        """The first never-held ID at or after ``start``, and the number it uses.
 
         Shared by the generator and the preview so the preview shows the ID
         that will actually be issued rather than one already taken. The search
@@ -651,13 +744,44 @@ class OrganizationService:
         max_attempts = 100_000
         number = start
         for _ in range(max_attempts):
-            candidate = f"{prefix}{str(number).zfill(4)}"
-            if not await self.membership_number_in_use(organization_id, candidate):
+            candidate = membership_numbers.format_membership_number(
+                settings.pattern,
+                prefix=settings.prefix,
+                padding=settings.padding,
+                number=number,
+                year=year,
+            )
+            if len(candidate) > membership_numbers.MAX_MEMBERSHIP_NUMBER_LENGTH:
+                raise ValueError(
+                    f"The next membership number, {candidate}, is longer than "
+                    f"{membership_numbers.MAX_MEMBERSHIP_NUMBER_LENGTH} characters. "
+                    "Shorten the number pattern in Members settings"
+                )
+            if not await self._membership_number_ever_held(organization_id, candidate):
                 return candidate, number
             number += 1
         raise ValueError(
             f"Unable to generate a unique membership ID after {max_attempts} attempts"
         )
+
+    @staticmethod
+    def _counter_start(
+        settings: MembershipIdSettings, counter_year: Any, year: int
+    ) -> int:
+        """Where the counter stands for ``year``, before skipping taken numbers.
+
+        A yearly counter restarts at ``start_number`` once the period moves on.
+        No recorded period means the counter has not issued since yearly reset
+        was switched on, and ``next_number`` is whatever the officer set it to
+        -- restarting it then would discard that choice.
+
+        Otherwise the counter never issues below ``start_number``: that is the
+        number a department says its members start at, and raising it should
+        take effect without the officer also having to move the counter.
+        """
+        if settings.reset_yearly and counter_year is not None and counter_year != year:
+            return settings.start_number
+        return max(settings.next_number, settings.start_number)
 
     async def preview_next_membership_id(self, organization_id: UUID) -> Optional[str]:
         """The ID the next auto-generated member would receive, or None.
@@ -666,11 +790,19 @@ class OrganizationService:
         automatically, so there is nothing to preview. Read-only — the counter
         is not advanced.
         """
-        mid = (await self.get_organization_settings(organization_id)).membership_id
+        org = await self.get_organization(organization_id)
+        if not org:
+            return None
+        raw = (org.settings or {}).get("membership_id") or {}
+        mid = _membership_id_settings_from(raw)
         if not mid.enabled or not mid.auto_generate:
             return None
+        year = _membership_period_year(mid, org_today(org))
         membership_id, _ = await self._first_free_membership_id(
-            organization_id, mid.prefix, mid.next_number
+            organization_id,
+            mid,
+            self._counter_start(mid, raw.get("counter_year"), year),
+            year,
         )
         return membership_id
 
@@ -678,9 +810,10 @@ class OrganizationService:
         """
         Generate the next membership ID for a new member.
 
-        Reads the org's membership_id settings (prefix + next_number),
-        formats the ID, then atomically increments next_number.
-        Returns None if auto-generation is disabled.
+        Builds the ID from the org's number pattern and counter, then
+        atomically advances the counter. Never issues a number any member,
+        current or former, has held. Returns None if auto-generation is
+        disabled.
         """
         # Lock the org row FOR UPDATE so two concurrent member creations can't
         # both read the same next_number and mint duplicate membership IDs
@@ -695,18 +828,23 @@ class OrganizationService:
             return None
 
         settings_dict = copy.deepcopy(org.settings or {})
-        mid = settings_dict.get("membership_id", {})
+        raw = settings_dict.get("membership_id") or {}
+        mid = _membership_id_settings_from(raw)
 
-        if not mid.get("enabled") or not mid.get("auto_generate"):
+        if not mid.enabled or not mid.auto_generate:
             return None
 
-        membership_id, next_number = await self._first_free_membership_id(
-            organization_id, mid.get("prefix", ""), mid.get("next_number", 1)
+        year = _membership_period_year(mid, org_today(org))
+        membership_id, number = await self._first_free_membership_id(
+            organization_id,
+            mid,
+            self._counter_start(mid, raw.get("counter_year"), year),
+            year,
         )
 
-        # Increment next_number in org settings for the next call
-        mid["next_number"] = next_number + 1
-        settings_dict["membership_id"] = mid
+        raw["next_number"] = number + 1
+        raw["counter_year"] = year
+        settings_dict["membership_id"] = raw
         org.settings = settings_dict
         await self.db.flush()
 

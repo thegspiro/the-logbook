@@ -3998,13 +3998,18 @@ class MembershipPipelineService:
             if (existing.scalar() or 0) > 0:
                 raise ValueError(f"Username '{username}' is already taken")
 
-        # Auto-assign membership ID if not manually provided
-        if not membership_id:
-            from app.services.organization_service import OrganizationService
+        # Auto-assign membership ID if not manually provided; a typed one gets
+        # the same checks Add Member applies, or a duplicate fails the insert.
+        from app.services.organization_service import OrganizationService
 
-            org_service = OrganizationService(self.db)
+        org_service = OrganizationService(self.db)
+        if not membership_id:
             membership_id = await org_service.generate_next_membership_id(
                 prospect.organization_id
+            )
+        else:
+            await org_service.ensure_membership_number_available(
+                prospect.organization_id, membership_id
             )
 
         # Generate a temporary password so the new member can log in.

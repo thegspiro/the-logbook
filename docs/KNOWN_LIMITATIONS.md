@@ -485,6 +485,28 @@ deployment with no Redis at all, is corrected within that window. Until then, an
 email sent by one of those workers still uses the previous address. Links already
 sent keep whatever address they were sent with.
 
+## Membership Numbers — What "Never Reissued" Can See (2026-09-29)
+
+Automatic numbering never issues a number any member holds or once held: a
+current member's `membership_number`, an archived or anonymized member's (both
+keep theirs), and a soft-deleted member's `previous_membership_number`. A typed
+number held for a former member is refused unless it is being given back to
+that member. The department's rule is that a member may return many years
+later and should get their number back.
+
+**Accepted: a permanently deleted member leaves nothing to reserve.** Permanent
+deletion removes the row, so the number it held is free to issue again. Keeping
+it would mean retaining a record of a person the department chose to erase,
+which is the opposite of what permanent deletion is for; archive or soft-delete
+a member who might return.
+
+**Accepted: numbers issued before reservations existed are not reshuffled.**
+The generator could previously reissue a soft-deleted member's number. Where
+that already happened, the current holder keeps it and can still save their
+profile; only a _change_ to a member's number is checked. If the former member
+is reactivated, their old number is not restored because someone holds it, and
+it stays recorded in `previous_membership_number`.
+
 ## Email Design — What the Solid-Tab Shell Does Not Reach (2026-09-27)
 
 Every email the platform sends renders into the solid-tab shell in

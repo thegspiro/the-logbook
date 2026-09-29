@@ -20,12 +20,17 @@ export interface MemberNumberingAnswer {
   start: string;
 }
 
-/** The shape `MembershipIdSettings` stores. */
+/**
+ * The part of `MembershipIdSettings` step 1 answers. The number pattern and
+ * yearly restart are not asked here; the server's defaults give prefix-then-four-
+ * digits, and a department changes them in Members → Settings.
+ */
 export interface MembershipIdPayload {
   enabled: boolean;
   auto_generate: boolean;
   prefix: string;
   next_number: number;
+  start_number: number;
 }
 
 /**
@@ -43,6 +48,7 @@ export const membershipIdPayload = (answer: MemberNumberingAnswer): MembershipId
   // hold '', '0' or 'abc'. Settling it here rather than letting it 422 keeps an
   // optional answer from failing the whole of step 1.
   const parsed = parseInt(answer.start, 10);
+  const start = Number.isFinite(parsed) && parsed >= 1 ? parsed : 1;
   return {
     enabled: true,
     // Auto-generation is the whole point of asking during setup: the answer
@@ -50,6 +56,9 @@ export const membershipIdPayload = (answer: MemberNumberingAnswer): MembershipId
     // types its numbers in by hand turns this off in Members → Settings.
     auto_generate: true,
     prefix: answer.prefix.trim(),
-    next_number: Number.isFinite(parsed) && parsed >= 1 ? parsed : 1,
+    next_number: start,
+    // Also the floor: the server never issues below it, so a department that
+    // starts at 100 and later turns on a yearly restart restarts at 100, not 1.
+    start_number: start,
   };
 };
