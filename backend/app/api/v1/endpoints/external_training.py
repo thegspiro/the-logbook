@@ -48,15 +48,10 @@ from app.schemas.training import (
 )
 from app.schemas.training import SyncStatus as SyncStatusEnum
 from app.schemas.training import TestConnectionResponse
-from app.services.external_training_service import (
-    ExternalTrainingSyncService,
-    compute_next_sync_at,
-    parse_sync_times,
-)
+from app.services.external_training_service import ExternalTrainingSyncService
 from app.utils.email_providers import REDACTED_SECRET
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import is_in_org
-from app.utils.org_timezone import resolve_scheduling_timezone
 from app.utils.url_validator import validate_integration_url
 
 router = APIRouter()
@@ -82,25 +77,6 @@ async def _verify_user_in_org(
 # ============================================
 # External Training Providers
 # ============================================
-
-
-async def _schedule_fixed_time_sync(
-    db: AsyncSession, provider: ExternalTrainingProvider
-) -> None:
-    """Point next_sync_at at the next set time when a fixed schedule is saved.
-
-    Without this a newly enabled schedule would run on the scheduler's next
-    30-minute tick instead of at the time the department chose. Interval
-    schedules keep their existing behaviour (next_sync_at untouched).
-    """
-    if not provider.auto_sync_enabled:
-        return
-    if not parse_sync_times((provider.config or {}).get("sync_times")):
-        return
-    tz = await resolve_scheduling_timezone(db, provider.organization_id)
-    provider.next_sync_at = compute_next_sync_at(
-        provider, tz, datetime.now(timezone.utc)
-    )
 
 
 @router.get("/providers", response_model=list[ExternalTrainingProviderResponse])
@@ -192,7 +168,6 @@ async def create_provider(
         ),
     )
 
-    await _schedule_fixed_time_sync(db, new_provider)
     db.add(new_provider)
     await db.commit()
     await db.refresh(new_provider)
@@ -357,11 +332,6 @@ async def update_provider(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
-
-    if any(
-        k in update_data for k in ("auto_sync_enabled", "sync_interval_hours", "config")
-    ):
-        await _schedule_fixed_time_sync(db, provider)
 
     # Reset connection verification if credentials changed
     if any(

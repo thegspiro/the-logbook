@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import ExternalTrainingPage from './ExternalTrainingPage';
@@ -168,7 +168,7 @@ describe('ExternalTrainingPage — provider setup form', () => {
   });
 });
 
-describe('ExternalTrainingPage — fixed-time sync schedule', () => {
+describe('ExternalTrainingPage — hourly pulls with a daily review', () => {
   beforeEach(() => {
     mockCreateProvider.mockReset();
     mockCreateProvider.mockResolvedValue({ ...provider, id: 'prov-new' });
@@ -176,7 +176,7 @@ describe('ExternalTrainingPage — fixed-time sync schedule', () => {
     mockUpdateProvider.mockResolvedValue(provider);
   });
 
-  it('creates a provider that syncs at the chosen times of day', async () => {
+  it('defaults Target Solutions to hourly pulls and a 02:00 review', async () => {
     renderWithRouter(<ExternalTrainingPage />);
     await userEvent.click(await screen.findByRole('button', { name: /add provider/i }));
     await userEvent.click(await screen.findByRole('button', { name: /^Target Solutions/ }));
@@ -185,49 +185,70 @@ describe('ExternalTrainingPage — fixed-time sync schedule', () => {
     await userEvent.type(screen.getByLabelText(/^API Key/), 'k');
     await userEvent.type(screen.getByLabelText(/^API Secret/), 's');
     await userEvent.click(screen.getByRole('switch', { name: 'Enable auto-sync' }));
-    await userEvent.selectOptions(screen.getByLabelText('Sync Schedule'), 'At set times of day');
 
-    expect(screen.getByLabelText('Sync time 1')).toHaveValue('06:00');
-    expect(screen.getByLabelText('Sync time 2')).toHaveValue('18:00');
+    expect(screen.getByLabelText('Pull new completions')).toHaveValue('1');
+    expect(screen.getByLabelText('Daily 30-day review at')).toHaveValue('02:00');
 
     await userEvent.click(screen.getByRole('button', { name: 'Create Provider' }));
 
     await waitFor(() => expect(mockCreateProvider).toHaveBeenCalledTimes(1));
-    const payload = mockCreateProvider.mock.calls[0]?.[0] as { config?: { sync_times?: string[] | null } };
-    expect(payload.config?.sync_times).toEqual(['06:00', '18:00']);
+    const payload = mockCreateProvider.mock.calls[0]?.[0] as {
+      sync_interval_hours?: number;
+      config?: { review_time?: string | null };
+    };
+    expect(payload.sync_interval_hours).toBe(1);
+    expect(payload.config?.review_time).toBe('02:00');
   });
 
-  // The update endpoint replaces the stored config, so switching the schedule
-  // must carry the provider's existing settings (Site ID) along with it.
-  it('keeps the existing config when an edit switches to set times', async () => {
+  it('offers no review time for other providers', async () => {
+    renderWithRouter(<ExternalTrainingPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /add provider/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /^Vector Solutions/ }));
+    await userEvent.click(screen.getByRole('switch', { name: 'Enable auto-sync' }));
+
+    expect(screen.getByLabelText('Sync Interval')).toHaveValue('24');
+    expect(screen.queryByLabelText('Daily 30-day review at')).not.toBeInTheDocument();
+  });
+
+  // The update endpoint replaces the stored config, so changing the review
+  // time must carry the provider's existing settings along with it.
+  it('keeps the existing config when an edit changes the review time', async () => {
     mockGetProviders.mockResolvedValue([
       {
         ...provider,
-        api_base_url: 'https://app.targetsolutions.com/v1',
+        provider_type: 'target_solutions',
+        api_base_url: 'https://app.targetsolutions.com/tsapp/api/',
         auto_sync_enabled: true,
-        sync_interval_hours: 12,
-        config: { site_id: '42' },
+        sync_interval_hours: 1,
+        config: { date_format: 'mm-dd-yyyy' },
       },
     ]);
     renderWithRouter(<ExternalTrainingPage />);
     await userEvent.click(await screen.findByRole('button', { name: 'Edit provider' }));
 
-    await userEvent.selectOptions(await screen.findByLabelText('Sync Schedule'), 'At set times of day');
+    // jsdom's time input does not take typed keystrokes like a browser does.
+    fireEvent.change(await screen.findByLabelText('Daily 30-day review at'), { target: { value: '03:30' } });
     await userEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
 
     await waitFor(() => expect(mockUpdateProvider).toHaveBeenCalledTimes(1));
     expect(mockUpdateProvider).toHaveBeenCalledWith(
       'prov-1',
-      expect.objectContaining({ config: { site_id: '42', sync_times: ['06:00', '18:00'] } })
+      expect.objectContaining({ config: { date_format: 'mm-dd-yyyy', review_time: '03:30' } })
     );
   });
 
-  it('labels a fixed schedule with its times', async () => {
+  it('labels the schedule with its review time', async () => {
     mockGetProviders.mockResolvedValue([
-      { ...provider, auto_sync_enabled: true, config: { sync_times: ['06:00', '18:00'] } },
+      {
+        ...provider,
+        provider_type: 'target_solutions',
+        auto_sync_enabled: true,
+        sync_interval_hours: 1,
+        config: { review_time: '02:00' },
+      },
     ]);
     renderWithRouter(<ExternalTrainingPage />);
 
-    expect(await screen.findByText('Daily at 06:00, 18:00')).toBeInTheDocument();
+    expect(await screen.findByText('Every 1h · review daily at 02:00')).toBeInTheDocument();
   });
 });

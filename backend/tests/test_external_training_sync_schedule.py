@@ -1,77 +1,59 @@
 """
-External training auto-sync at fixed times of day, and the Target Solutions
-lookback window.
+Scheduled external training sync: frequent short pulls plus a daily review.
 
-Auto-sync used to run every ``sync_interval_hours`` after the previous sync,
-so "twice a day" drifted with whenever the first sync happened. A provider can
-now store ``config.sync_times`` — wall-clock times in the department's
-timezone — and ``next_sync_at`` is set to the next of those.
+A department wants a finished class to show up under Imports within the hour,
+without re-downloading a month of completions every hour. So a scheduled run
+is one of two sizes:
 
-Target Solutions also lets a completion be recorded for a past date, which an
-incremental sync starting at the last sync date would never ask for, so its
-scheduled syncs re-check the last 30 days.
+- a quick pull, every ``sync_interval_hours``, asking only for completions
+  since the last sync (and at least since yesterday);
+- once a day, at the provider's ``config.review_time`` in the department's
+  timezone, a review that re-checks the last 30 days — Target Solutions lets
+  a completion be recorded for a past date, which a forward-only pull never
+  sees.
+
+Whether a review is owed is read from the sync log (a successful ``review``
+run since the most recent review time), so a provider that has never been
+reviewed starts with the 30-day backfill.
 """
 
 import uuid
 from datetime import date, datetime, time, timedelta, timezone
 from unittest.mock import AsyncMock, patch
-from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
 
-from app.api.v1.endpoints.external_training import update_provider
-from app.models.training import ExternalProviderType, ExternalTrainingProvider
-from app.models.user import Organization, User, UserStatus
-from app.schemas.training import ExternalProviderConfig, ExternalTrainingProviderUpdate
+from app.models.training import (
+    ExternalProviderType,
+    ExternalTrainingProvider,
+    ExternalTrainingSyncLog,
+    SyncStatus,
+)
+from app.models.user import Organization
+from app.schemas.training import ExternalProviderConfig
 from app.services.external_training_service import (
-    TS_INCREMENTAL_LOOKBACK_DAYS,
+    DEFAULT_TS_REVIEW_TIME,
+    REVIEW_LOOKBACK_DAYS,
+    REVIEW_SYNC_TYPE,
     ExternalTrainingSyncService,
     compute_next_sync_at,
-    next_scheduled_sync,
+    latest_review_slot,
+    next_review_slot,
+    review_time_for,
 )
 
 NEW_YORK = ZoneInfo("America/New_York")
-TWICE_DAILY = [time(6, 0), time(18, 0)]
+TWO_AM = time(2, 0)
+TS_EMPTY_REPORT = "Employee ID,Email,Assignment Name,Transcript ID\n"
 
 
 def _utc(*args):
     return datetime(*args, tzinfo=timezone.utc)
 
 
-@pytest.mark.unit
-class TestNextScheduledSync:
-    def test_later_the_same_day(self):
-        # 06:00 EDT exactly: the 06:00 slot has arrived, so the next is 18:00.
-        assert next_scheduled_sync(
-            TWICE_DAILY, NEW_YORK, _utc(2026, 9, 29, 10, 0)
-        ) == _utc(2026, 9, 29, 22, 0)
-
-    def test_before_the_first_slot(self):
-        assert next_scheduled_sync(
-            TWICE_DAILY, NEW_YORK, _utc(2026, 9, 29, 9, 0)
-        ) == _utc(2026, 9, 29, 10, 0)
-
-    def test_wraps_to_tomorrow(self):
-        assert next_scheduled_sync(
-            TWICE_DAILY, NEW_YORK, _utc(2026, 9, 29, 23, 0)
-        ) == _utc(2026, 9, 30, 10, 0)
-
-    def test_keeps_local_time_across_spring_forward(self):
-        # US DST begins 2026-03-08: 06:00 local is 11:00Z before, 10:00Z after.
-        assert next_scheduled_sync(
-            [time(6, 0)], NEW_YORK, _utc(2026, 3, 7, 23, 30)
-        ) == _utc(2026, 3, 8, 10, 0)
-
-    def test_keeps_local_time_across_fall_back(self):
-        # US DST ends 2026-11-01: 06:00 local becomes 11:00Z.
-        assert next_scheduled_sync(
-            [time(6, 0)], NEW_YORK, _utc(2026, 10, 31, 23, 0)
-        ) == _utc(2026, 11, 1, 11, 0)
-
-
-def _provider(config=None, interval=12, provider_type=None):
+def _provider(config=None, interval=1, provider_type=None):
     return ExternalTrainingProvider(
         id="prov-1",
         organization_id="org-1",
@@ -85,56 +67,96 @@ def _provider(config=None, interval=12, provider_type=None):
     )
 
 
+def _vector(config=None, interval=24):
+    return _provider(
+        config={"site_id": "42", **(config or {})},
+        interval=interval,
+        provider_type=ExternalProviderType.VECTOR_SOLUTIONS,
+    )
+
+
+@pytest.mark.unit
+class TestReviewSlots:
+    def test_next_slot_later_today(self):
+        # 01:00 EDT -> 02:00 EDT the same morning.
+        assert next_review_slot(TWO_AM, NEW_YORK, _utc(2026, 9, 29, 5, 0)) == _utc(
+            2026, 9, 29, 6, 0
+        )
+
+    def test_next_slot_wraps_to_tomorrow(self):
+        # 02:00 EDT exactly: this slot has arrived, the next is tomorrow's.
+        assert next_review_slot(TWO_AM, NEW_YORK, _utc(2026, 9, 29, 6, 0)) == _utc(
+            2026, 9, 30, 6, 0
+        )
+
+    def test_latest_slot_is_this_morning_after_it_passes(self):
+        assert latest_review_slot(TWO_AM, NEW_YORK, _utc(2026, 9, 29, 14, 0)) == _utc(
+            2026, 9, 29, 6, 0
+        )
+
+    def test_latest_slot_is_yesterday_before_it_arrives(self):
+        assert latest_review_slot(TWO_AM, NEW_YORK, _utc(2026, 9, 29, 5, 0)) == _utc(
+            2026, 9, 28, 6, 0
+        )
+
+    def test_keeps_local_time_across_dst(self):
+        # 06:00 local, either side of US DST start (2026-03-08) and end (11-01).
+        six = time(6, 0)
+        assert next_review_slot(six, NEW_YORK, _utc(2026, 3, 7, 23, 30)) == _utc(
+            2026, 3, 8, 10, 0
+        )
+        assert next_review_slot(six, NEW_YORK, _utc(2026, 10, 31, 23, 0)) == _utc(
+            2026, 11, 1, 11, 0
+        )
+
+
+@pytest.mark.unit
+class TestReviewTimeFor:
+    def test_target_solutions_defaults_to_two_am(self):
+        assert review_time_for(_provider()) == DEFAULT_TS_REVIEW_TIME == TWO_AM
+
+    def test_configured_time_wins(self):
+        assert review_time_for(_provider({"review_time": "03:30"})) == time(3, 30)
+
+    @pytest.mark.parametrize("bad", ["25:00", "3pm", 330, ["02:00"], ""])
+    def test_malformed_time_falls_back_rather_than_raising(self, bad):
+        assert review_time_for(_provider({"review_time": bad})) == TWO_AM
+        assert review_time_for(_vector({"review_time": bad})) is None
+
+    def test_other_providers_have_no_review_unless_configured(self):
+        assert review_time_for(_vector()) is None
+        assert review_time_for(_vector({"review_time": "04:00"})) == time(4, 0)
+
+
 @pytest.mark.unit
 class TestComputeNextSyncAt:
-    NOW = _utc(2026, 9, 29, 12, 0)  # 08:00 EDT
-
-    def test_uses_the_set_times(self):
-        provider = _provider({"sync_times": ["06:00", "18:00"]})
-        assert compute_next_sync_at(provider, NEW_YORK, self.NOW) == _utc(
-            2026, 9, 29, 22, 0
+    def test_hourly_pull_when_the_review_is_hours_away(self):
+        now = _utc(2026, 9, 29, 14, 0)  # 10:00 EDT
+        assert compute_next_sync_at(_provider(), NEW_YORK, now) == now + timedelta(
+            hours=1
         )
 
-    @pytest.mark.parametrize(
-        "config",
-        [
-            None,
-            {},
-            {"sync_times": None},
-            {"sync_times": []},
-            {"sync_times": "06:00"},
-            {"sync_times": ["25:99"]},
-            {"sync_times": ["six"]},
-        ],
-    )
-    def test_anything_unusable_falls_back_to_the_interval(self, config):
-        provider = _provider(config, interval=12)
-        assert compute_next_sync_at(provider, NEW_YORK, self.NOW) == (
-            self.NOW + timedelta(hours=12)
+    def test_review_when_it_comes_before_the_next_pull(self):
+        provider = _provider(interval=6)
+        now = _utc(2026, 9, 29, 5, 30)  # 01:30 EDT, review at 02:00
+        assert compute_next_sync_at(provider, NEW_YORK, now) == _utc(2026, 9, 29, 6, 0)
+
+    def test_providers_without_a_review_keep_the_interval(self):
+        now = _utc(2026, 9, 29, 5, 30)
+        assert compute_next_sync_at(_vector(), NEW_YORK, now) == now + timedelta(
+            hours=24
         )
 
 
 @pytest.mark.unit
-class TestSyncTimesValidation:
-    def test_normalizes_and_sorts(self):
-        config = ExternalProviderConfig(sync_times=["18:00", "6:00", "06:00"])
-        assert config.sync_times == ["06:00", "18:00"]
+class TestReviewTimeValidation:
+    def test_normalizes(self):
+        assert ExternalProviderConfig(review_time="2:00").review_time == "02:00"
 
-    @pytest.mark.parametrize(
-        "sync_times",
-        [["24:00"], ["06:60"], ["6"], ["noon"]],
-    )
-    def test_rejects_a_malformed_time(self, sync_times):
+    @pytest.mark.parametrize("bad", ["24:00", "02:60", "2", "two"])
+    def test_rejects_malformed(self, bad):
         with pytest.raises(ValueError, match="24-hour HH:MM"):
-            ExternalProviderConfig(sync_times=sync_times)
-
-    @pytest.mark.parametrize(
-        "sync_times",
-        [[], ["01:00", "02:00", "03:00", "04:00", "05:00"]],
-    )
-    def test_rejects_too_few_or_too_many(self, sync_times):
-        with pytest.raises(ValueError, match="between 1 and 4"):
-            ExternalProviderConfig(sync_times=sync_times)
+            ExternalProviderConfig(review_time=bad)
 
 
 class _Db:
@@ -148,42 +170,60 @@ class _Db:
         pass
 
 
-def _recording_service(body: str):
+def _recording_service(body: str, db=None):
     requests: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
         return httpx.Response(200, content=body.encode())
 
-    service = ExternalTrainingSyncService(_Db())
+    service = ExternalTrainingSyncService(db or _Db())
     service.http_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     return service, requests
 
 
-TS_EMPTY_REPORT = "Employee ID,Email,Assignment Name,Transcript ID\n"
+def _ts_start(request: httpx.Request) -> date:
+    return datetime.strptime(request.url.params["startDate"], "%m-%d-%Y").date()
 
 
 @pytest.mark.unit
-class TestIncrementalLookback:
-    async def test_target_solutions_rechecks_the_last_30_days(self):
+class TestSyncWindows:
+    async def test_quick_pull_covers_since_the_last_sync(self):
         provider = _provider()
-        provider.last_sync_at = datetime.now(timezone.utc) - timedelta(days=1)
+        last_sync = datetime.now(timezone.utc) - timedelta(days=3)
+        provider.last_sync_at = last_sync
         service, requests = _recording_service(TS_EMPTY_REPORT)
         try:
             await service.sync_training_records(provider, "incremental")
         finally:
             await service.close()
+        assert _ts_start(requests[0]) == last_sync.date()
 
-        start = datetime.strptime(
-            requests[0].url.params["startDate"], "%m-%d-%Y"
-        ).date()
-        assert start <= date.today() - timedelta(days=TS_INCREMENTAL_LOOKBACK_DAYS)
+    async def test_quick_pull_reaches_back_to_yesterday_at_least(self):
+        provider = _provider()
+        provider.last_sync_at = datetime.now(timezone.utc) - timedelta(minutes=10)
+        service, requests = _recording_service(TS_EMPTY_REPORT)
+        try:
+            await service.sync_training_records(provider, "incremental")
+        finally:
+            await service.close()
+        assert _ts_start(requests[0]) <= date.today() - timedelta(days=1)
+        assert _ts_start(requests[0]) >= date.today() - timedelta(days=2)
 
-    async def test_other_providers_still_start_at_the_last_sync(self):
-        provider = _provider(
-            config={"site_id": "42"},
-            provider_type=ExternalProviderType.VECTOR_SOLUTIONS,
+    async def test_review_rechecks_the_last_30_days(self):
+        provider = _provider()
+        provider.last_sync_at = datetime.now(timezone.utc) - timedelta(minutes=10)
+        service, requests = _recording_service(TS_EMPTY_REPORT)
+        try:
+            await service.sync_training_records(provider, REVIEW_SYNC_TYPE)
+        finally:
+            await service.close()
+        assert _ts_start(requests[0]) == date.today() - timedelta(
+            days=REVIEW_LOOKBACK_DAYS
         )
+
+    async def test_vector_solutions_incremental_is_unchanged(self):
+        provider = _vector()
         last_sync = datetime.now(timezone.utc) - timedelta(days=1)
         provider.last_sync_at = last_sync
         service, requests = _recording_service("[]")
@@ -191,28 +231,56 @@ class TestIncrementalLookback:
             await service.sync_training_records(provider, "incremental")
         finally:
             await service.close()
-
         assert requests[0].url.params["startDate"] == last_sync.date().isoformat()
-
-    async def test_explicit_range_is_left_alone(self):
-        provider = _provider()
-        provider.last_sync_at = datetime.now(timezone.utc) - timedelta(days=1)
-        service, requests = _recording_service(TS_EMPTY_REPORT)
-        yesterday = date.today() - timedelta(days=1)
-        try:
-            await service.sync_training_records(
-                provider, "incremental", from_date=yesterday
-            )
-        finally:
-            await service.close()
-
-        assert requests[0].url.params["startDate"] == yesterday.strftime("%m-%d-%Y")
 
 
 @pytest.mark.unit
-class TestSyncSchedulesTheNextSlot:
-    async def test_successful_sync_points_next_sync_at_at_a_set_time(self):
-        provider = _provider({"sync_times": ["06:00", "18:00"]})
+class TestScheduledRunChoosesItsSize:
+    async def _run(self, provider, last_review):
+        service = ExternalTrainingSyncService(_Db())
+        sync = AsyncMock()
+        try:
+            with patch(
+                "app.services.external_training_service.resolve_scheduling_timezone",
+                AsyncMock(return_value=NEW_YORK),
+            ), patch.object(
+                service,
+                "_last_successful_review_at",
+                AsyncMock(return_value=last_review),
+            ) as lookup, patch.object(
+                service, "sync_training_records", sync
+            ):
+                await service.run_scheduled_sync(provider)
+        finally:
+            await service.close()
+        return sync.await_args.kwargs["sync_type"], lookup
+
+    async def test_never_reviewed_starts_with_a_review(self):
+        sync_type, _ = await self._run(_provider(), None)
+        assert sync_type == REVIEW_SYNC_TYPE
+
+    async def test_reviewed_since_the_last_slot_is_a_quick_pull(self):
+        sync_type, _ = await self._run(
+            _provider(), datetime.now(timezone.utc) - timedelta(minutes=5)
+        )
+        assert sync_type == "incremental"
+
+    async def test_last_review_before_the_last_slot_is_owed_again(self):
+        sync_type, _ = await self._run(
+            _provider(), datetime.now(timezone.utc) - timedelta(days=2)
+        )
+        assert sync_type == REVIEW_SYNC_TYPE
+
+    async def test_providers_without_a_review_only_pull(self):
+        sync_type, lookup = await self._run(_vector(), None)
+        assert sync_type == "incremental"
+        lookup.assert_not_awaited()
+
+
+@pytest.mark.unit
+class TestSyncSchedulesTheNextRun:
+    async def test_next_sync_at_is_the_next_pull_or_review(self):
+        provider = _provider()
         provider.auto_sync_enabled = True
         service, _ = _recording_service(TS_EMPTY_REPORT)
         try:
@@ -223,97 +291,79 @@ class TestSyncSchedulesTheNextSlot:
                 await service.sync_training_records(provider, "incremental")
         finally:
             await service.close()
-
-        local = provider.next_sync_at.astimezone(NEW_YORK)
-        assert (local.hour, local.minute) in {(6, 0), (18, 0)}
-        assert provider.next_sync_at > provider.last_sync_at
-        assert provider.next_sync_at - provider.last_sync_at <= timedelta(hours=12)
+        assert provider.next_sync_at == compute_next_sync_at(
+            provider, NEW_YORK, provider.last_sync_at
+        )
+        assert provider.next_sync_at - provider.last_sync_at <= timedelta(hours=1)
 
 
 @pytest.mark.integration
-class TestSavingAScheduleSetsTheNextSlot:
-    async def test_update_points_next_sync_at_at_the_next_set_time(self, db_session):
+class TestReviewLedger:
+    async def _setup(self, db_session):
         org = Organization(
             id=str(uuid.uuid4()),
-            name="Schedule Test Department",
-            slug=f"schedule-{uuid.uuid4().hex[:8]}",
+            name="Review Test Department",
+            slug=f"review-{uuid.uuid4().hex[:8]}",
             timezone="America/Chicago",
         )
         db_session.add(org)
         await db_session.flush()
-        officer = User(
-            id=str(uuid.uuid4()),
-            organization_id=org.id,
-            username=f"u{uuid.uuid4().hex[:10]}",
-            email="officer@schedule.test",
-            first_name="Training",
-            last_name="Officer",
-            password_hash="x",
-            status=UserStatus.ACTIVE,
-        )
         provider = ExternalTrainingProvider(
             id=str(uuid.uuid4()),
             organization_id=org.id,
             name="Target Solutions",
             provider_type=ExternalProviderType.TARGET_SOLUTIONS,
             api_base_url="https://app.targetsolutions.com/tsapp/api/",
+            api_key="k",
+            api_secret="s",
+            sync_interval_hours=1,
+            auto_sync_enabled=True,
         )
-        db_session.add_all([officer, provider])
+        db_session.add(provider)
+        await db_session.flush()
+        return provider
+
+    async def _log(self, db_session, provider, sync_type, status):
+        db_session.add(
+            ExternalTrainingSyncLog(
+                id=str(uuid.uuid4()),
+                provider_id=provider.id,
+                organization_id=provider.organization_id,
+                sync_type=sync_type,
+                status=status,
+                started_at=datetime.now(timezone.utc),
+            )
+        )
         await db_session.flush()
 
-        before = datetime.now(timezone.utc)
-        await update_provider(
-            UUID(provider.id),
-            ExternalTrainingProviderUpdate(
-                auto_sync_enabled=True,
-                config=ExternalProviderConfig(sync_times=["06:00", "18:00"]),
-            ),
-            db_session,
-            officer,
-        )
+    async def test_only_a_successful_review_counts(self, db_session):
+        provider = await self._setup(db_session)
+        await self._log(db_session, provider, REVIEW_SYNC_TYPE, SyncStatus.FAILED)
+        await self._log(db_session, provider, "incremental", SyncStatus.COMPLETED)
 
-        next_sync = provider.next_sync_at
-        if next_sync.tzinfo is None:
-            next_sync = next_sync.replace(tzinfo=timezone.utc)
-        local = next_sync.astimezone(ZoneInfo("America/Chicago"))
-        assert (local.hour, local.minute) in {(6, 0), (18, 0)}
-        assert before < next_sync <= before + timedelta(hours=12)
+        service = ExternalTrainingSyncService(db_session)
+        try:
+            assert await service._last_successful_review_at(provider) is None
+            await self._log(db_session, provider, REVIEW_SYNC_TYPE, SyncStatus.PARTIAL)
+            assert await service._last_successful_review_at(provider) is not None
+        finally:
+            await service.close()
 
-    async def test_interval_schedule_leaves_next_sync_at_alone(self, db_session):
-        org = Organization(
-            id=str(uuid.uuid4()),
-            name="Interval Test Department",
-            slug=f"interval-{uuid.uuid4().hex[:8]}",
-        )
-        db_session.add(org)
-        await db_session.flush()
-        officer = User(
-            id=str(uuid.uuid4()),
-            organization_id=org.id,
-            username=f"u{uuid.uuid4().hex[:10]}",
-            email="officer@interval.test",
-            first_name="Training",
-            last_name="Officer",
-            password_hash="x",
-            status=UserStatus.ACTIVE,
-        )
-        provider = ExternalTrainingProvider(
-            id=str(uuid.uuid4()),
-            organization_id=org.id,
-            name="Target Solutions",
-            provider_type=ExternalProviderType.TARGET_SOLUTIONS,
-            api_base_url="https://app.targetsolutions.com/tsapp/api/",
-        )
-        db_session.add_all([officer, provider])
-        await db_session.flush()
+    async def test_first_run_reviews_then_the_next_pulls(self, db_session):
+        provider = await self._setup(db_session)
+        service, requests = _recording_service(TS_EMPTY_REPORT, db=db_session)
+        try:
+            first = await service.run_scheduled_sync(provider)
+            second = await service.run_scheduled_sync(provider)
+        finally:
+            await service.close()
 
-        await update_provider(
-            UUID(provider.id),
-            ExternalTrainingProviderUpdate(
-                auto_sync_enabled=True, sync_interval_hours=12
-            ),
-            db_session,
-            officer,
+        assert first.sync_type == REVIEW_SYNC_TYPE
+        assert _ts_start(requests[0]) == date.today() - timedelta(
+            days=REVIEW_LOOKBACK_DAYS
         )
-
-        assert provider.next_sync_at is None
+        assert second.sync_type == "incremental"
+        assert _ts_start(requests[1]) >= date.today() - timedelta(days=2)
+        assert provider.next_sync_at == compute_next_sync_at(
+            provider, ZoneInfo("America/Chicago"), provider.last_sync_at
+        )

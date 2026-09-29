@@ -660,22 +660,33 @@ to import them, as for every provider.
 
 ### Syncing on a schedule
 
-Turn on **Auto-Sync** and choose a **Sync Schedule**. Either pick an interval,
-or choose **At set times of day** and enter up to four times. The default is
-06:00 and 18:00, which syncs twice a day. The times are in the department's
-timezone and keep their local time across daylight-saving changes. The
-scheduler checks every 30 minutes, so each sync starts within 30 minutes after
-its time.
+Turn on **Auto-Sync**. A Target Solutions provider then runs two kinds of sync:
 
-Auto-sync only runs for an active provider whose last **Test Connection**
-passed. Run a connection test after saving the provider.
+| Run                     | When                                                      | Asks Target Solutions for                                 |
+| ----------------------- | --------------------------------------------------------- | --------------------------------------------------------- |
+| **Pull**                | every hour by default (**Pull new completions**)          | completions since the last sync, at least since yesterday |
+| **Daily 30-day review** | once a day, 02:00 by default (**Daily 30-day review at**) | every completion from the last 30 days                    |
 
-Each scheduled Target Solutions sync re-checks the **last 30 days** of
-completions. Target Solutions allows a completion to be recorded for a past
-date, and a sync that only asked for records since the last run would miss it.
-Records already synced are updated in place, matched by Transcript ID, so the
-overlap never creates duplicates. A completion **deleted** in Target Solutions
-is not removed here, because the report only lists completions that still exist.
+Frequent pulls stay small, so a class someone finishes shows up under
+**Imports** within about an hour. The review exists because Target Solutions
+lets a completion be recorded for a past date, and a pull that only looks
+forward from the last sync would never ask for it. Records already synced are
+updated in place, matched by Transcript ID, so the overlap never creates
+duplicates.
+
+Details:
+
+- The review time is in the department's timezone and keeps its local time
+  across daylight-saving changes.
+- The scheduler checks every 30 minutes, so each run starts within 30 minutes
+  of its time.
+- A newly enabled provider starts with a review, so its first sync brings in
+  the last 30 days.
+- A review that fails is retried on the next run until one succeeds.
+- Auto-sync only runs for an active provider whose last **Test Connection**
+  passed. Run a connection test after saving the provider.
+- A completion **deleted** in Target Solutions is not removed here, because the
+  report only lists completions that still exist.
 
 ---
 
