@@ -296,7 +296,9 @@ async def reactivate_member(
     member.status_change_reason = reason or "Reactivated by leadership"
 
     # Restore membership number from before soft-delete/archival if it
-    # was cleared and the number is still available.
+    # was cleared and the number is still available. Deleted rows count as
+    # holding it: the unique index covers them, and an anonymized member keeps
+    # its number, so restoring one of those would fail at commit.
     if not member.membership_number and member.previous_membership_number:
         conflict = await db.execute(
             select(func.count())
@@ -304,7 +306,6 @@ async def reactivate_member(
             .where(
                 User.organization_id == organization_id,
                 User.membership_number == member.previous_membership_number,
-                User.deleted_at.is_(None),
                 User.id != user_id,
             )
         )

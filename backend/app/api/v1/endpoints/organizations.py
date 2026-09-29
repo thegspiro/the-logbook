@@ -851,19 +851,20 @@ async def preview_next_membership_id(
     """
     Preview the next membership ID that would be assigned without incrementing.
 
+    ``next_id`` is null unless auto-generation is on, since otherwise nothing
+    is assigned automatically; Add Member reads it to decide whether the
+    Membership Number field may be left blank.
+
     **Authentication required**
     """
     org_service = OrganizationService(db)
-    org_settings = await org_service.get_organization_settings(
+    membership_id_settings = await org_service.get_membership_id_settings(
         current_user.organization_id
     )
-    membership_id_settings = org_settings.membership_id
-
     if not membership_id_settings.enabled:
         return {"enabled": False, "next_id": None}
 
-    number_str = str(membership_id_settings.next_number).zfill(4)
-    next_id = f"{membership_id_settings.prefix}{number_str}"
+    next_id = await org_service.preview_next_membership_id(current_user.organization_id)
     return {"enabled": True, "next_id": next_id}
 
 
