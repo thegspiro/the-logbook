@@ -78,11 +78,11 @@ export const EventEditPage: React.FC = () => {
         toast.success(`Updated ${result.updated_count} event(s) in the series`);
       } else {
         await eventService.updateEvent(eventId, data);
-        toast.success('Event updated successfully');
+        toast.success('Event updated');
       }
       void navigate(`/events/${eventId}`);
     } catch (err: unknown) {
-      setError(getErrorDetail(err) || 'Failed to update event. Please try again.');
+      setError(getErrorDetail(err) || 'Failed to update event. Try again.');
       setIsSubmitting(false);
       throw err;
     }

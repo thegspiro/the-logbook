@@ -67,7 +67,7 @@ const SECTIONS: SettingsSection<SectionKey>[] = [
   { key: 'attendance', label: 'Attendance', icon: Users, description: "Who can see who's going" },
   { key: 'outreach', label: 'Outreach Types', icon: FileText, description: 'Public outreach event types' },
   { key: 'hour_tracking', label: 'Hour Tracking', icon: Clock, description: 'Map events to admin hours' },
-  { key: 'pipeline', label: 'Pipeline', icon: ClipboardList, description: 'Request processing config' },
+  { key: 'pipeline', label: 'Pipeline', icon: ClipboardList, description: 'How requests are handled' },
   { key: 'email', label: 'Email', icon: Mail, description: 'Triggers and email templates' },
   { key: 'form', label: 'Public Form', icon: ExternalLink, description: 'Public event request form' },
   { key: 'metrics', label: 'Headline Metrics', icon: LayoutGrid, description: 'The four cards above this page' },
@@ -481,7 +481,7 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
     try {
       setGeneratingForm(true);
       const result = await eventRequestService.generateForm();
-      toast.success('Event request form created!');
+      toast.success('Event request form created.');
       toast(`Public URL: ${window.location.origin}${result.public_url}`, { duration: 8000 });
       void fetchEventRequestForms();
     } catch {

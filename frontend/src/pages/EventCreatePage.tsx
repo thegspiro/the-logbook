@@ -107,7 +107,7 @@ export const EventCreatePage: React.FC = () => {
       const event = await eventService.createEvent(data);
       void navigate(`/events/${event.id}`);
     } catch (err: unknown) {
-      setError(getErrorDetail(err) || 'Failed to create event. Please try again.');
+      setError(getErrorDetail(err) || 'Failed to create event. Try again.');
       setIsSubmitting(false);
       throw err; // Re-throw so EventForm knows submission failed
     }
@@ -122,7 +122,7 @@ export const EventCreatePage: React.FC = () => {
       toast.success(`Created ${count} recurring event${count !== 1 ? 's' : ''}`);
       void navigate('/events');
     } catch (err: unknown) {
-      setError(getErrorDetail(err) || 'Failed to create recurring events. Please try again.');
+      setError(getErrorDetail(err) || 'Failed to create recurring events. Try again.');
       setIsSubmitting(false);
       throw err;
     }
@@ -185,7 +185,7 @@ export const EventCreatePage: React.FC = () => {
               <h2 className="text-theme-text-primary text-lg font-semibold">Start from a Template</h2>
             </div>
             <p className="text-theme-text-muted mb-3 text-sm">
-              Optionally select a template to pre-fill common event settings.
+              Pick a template to pre-fill common settings, or start blank.
             </p>
             <select
               value={selectedTemplateId}
