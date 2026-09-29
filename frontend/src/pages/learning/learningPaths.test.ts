@@ -72,6 +72,30 @@ describe('learning path content', () => {
     }
   });
 
+  // The lessons promise to name controls "exactly as they appear on screen",
+  // and a renamed button leaves a member hunting for something that is not
+  // there. Each pair ties a label a lesson quotes to the source that renders
+  // it, so renaming either side without the other fails here.
+  it('quotes controls by the names their screens actually render', () => {
+    const quoted: [step: string, label: string, source: string][] = [
+      ['getting-started.dashboard', 'Next 30 Days', 'pages/Dashboard.tsx'],
+      ['getting-started.notifications', 'My Notifications', 'pages/NotificationsPage.tsx'],
+      ['mobile.push', 'Push Notifications on This Device', 'pages/UserSettingsPage.tsx'],
+      ['scheduling.my-shifts', 'Confirm', 'pages/scheduling/MyShiftsTab.tsx'],
+      ['scheduling.open-shifts', 'Confirm Sign Up', 'pages/scheduling/OpenShiftsTab.tsx'],
+      ['gear.sizes', 'My Sizes', 'modules/inventory/pages/MyEquipmentPage.tsx'],
+      ['gear.sizes', 'Save Sizes', 'modules/inventory/components/SizePreferencesModal.tsx'],
+      ['gear.request', 'Request Equipment', 'modules/inventory/pages/MyEquipmentPage.tsx'],
+      ['gear.request', 'My Requests', 'modules/inventory/pages/MyEquipmentPage.tsx'],
+    ];
+    for (const [key, label, source] of quoted) {
+      const [pathId = '', stepId = ''] = key.split('.');
+      const step = findLearningPath(pathId)?.steps.find((candidate) => candidate.id === stepId);
+      expect(step?.how.join(' '), `${key} names ${label}`).toContain(label);
+      expect(fs.readFileSync(path.join(SRC, source), 'utf8'), `${source} renders ${label}`).toContain(label);
+    }
+  });
+
   it('always offers at least one path, whatever modules are off', () => {
     // Getting Started and the phone lesson carry no module key. If that ever
     // changes, an org with every optional module disabled gets an empty

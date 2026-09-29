@@ -64,7 +64,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W28 | Skills testing: build a sheet, run a test, the member sees the result | training_officer → member | `/training/skills-testing`                         | ✅     |
 | W29 | Compliance: configure requirements, read the matrix, print it         | training_officer          | `/training/compliance-config`, `/training/officer` | ✅     |
 | W30 | Log a shift and file a shift report                                   | training_officer → member | `/training/log-shift`                              | ✅     |
-| W31 | The learning center orientation                                       | member                    | `/learning`                                        | ⬜     |
+| W31 | The learning center orientation                                       | member                    | `/learning`                                        | ✅     |
 
 ## Tier 5 — Scheduling
 
@@ -179,6 +179,20 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W31 — The learning center orientation — 2026-09-29
+
+Driven as: `member` at 1280×900 and 390×844, with `member2` for isolation.
+Every lesson step's instructions were read against the screen it links to.
+Held: progress survives a reload and is kept per member (`member2` starts at
+0); the dashboard's orientation prompt opens the first lesson; every lesson
+link resolves; the lesson pages fit 390px. Fixed: W31-1 (LOW — seven lesson
+steps named controls the screens do not have, e.g. "Next 7 days" for "Next
+30 Days", "Inbox" for "My Notifications", "Claim" for "Sign Up"), W31-2 (LOW
+— Reset progress discarded every tick without asking), W31-3 (LOW — the My
+Sizes dialog's fields had no names). Open: W31-4 (NIT — an expected 404 on a
+first My Sizes visit). No flags. Gate: typecheck, lint and the touched suites
+clean. Next: W32.
 
 ### W30 — Log a shift and file a shift report — 2026-09-29
 

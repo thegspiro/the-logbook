@@ -1,11 +1,26 @@
 import { BookOpenCheck, CheckCircle2, Circle, RotateCcw } from 'lucide-react';
 import { Link } from 'react-router';
 
+import { useConfirm } from '../../contexts/ConfirmContext';
 import { useLearningProgress } from '../../hooks/useLearningProgress';
 import { stepKey } from './learningPaths';
 
 export default function LearningCenterPage() {
   const { visiblePaths, completed, completedCount, totalCount, percent, reset } = useLearningProgress();
+  const { confirm } = useConfirm();
+
+  // Progress lives only in this browser, so a reset has no copy anywhere to
+  // restore from — ask before discarding every tick at once.
+  const handleReset = async () => {
+    const ok = await confirm({
+      title: 'Reset your progress?',
+      message: `This clears the ${completedCount} ${completedCount === 1 ? 'task' : 'tasks'} you have completed, in every lesson. It cannot be undone.`,
+      confirmLabel: 'Reset progress',
+      cancelLabel: 'Keep my progress',
+      variant: 'warning',
+    });
+    if (ok) reset();
+  };
 
   return (
     <div data-page-main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
@@ -22,7 +37,7 @@ export default function LearningCenterPage() {
         </div>
         <button
           type="button"
-          onClick={reset}
+          onClick={() => void handleReset()}
           disabled={completedCount === 0}
           className="border-theme-surface-border text-theme-text-muted hover:bg-theme-surface-hover focus:ring-theme-focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
         >

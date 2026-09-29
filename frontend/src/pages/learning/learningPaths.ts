@@ -65,7 +65,7 @@ export const learningPaths: LearningPath[] = [
         path: '/dashboard',
         why: 'The dashboard is the one screen that answers "what do I need to do next" without you going looking for it. On a normal day most members need nothing else.',
         how: [
-          'Read the Next 7 days list — your shifts, open slots you could pick up, and events all appear together there.',
+          'Read the Next 30 Days list — your shifts, open slots you could pick up, and events all appear together there.',
           'Open My Updates in the right-hand column to see anything addressed to you personally.',
           'Note the training progress and issued gear panels. They are summaries; the full screens live behind them.',
         ],
@@ -89,7 +89,7 @@ export const learningPaths: LearningPath[] = [
         path: '/notifications?tab=inbox',
         why: 'Department announcements are the channel of record: they are emailed to you whether or not you switch email off, because you cannot opt out of being told. Reminders are different — event, training, and certification reminders follow your Email Notifications preference, so turning it off really does stop them.',
         how: [
-          'Read anything already waiting in your Inbox — it carries the same notices, inside the app.',
+          'Read anything already waiting under My Notifications — it carries the same notices, inside the app.',
           'Open Account → Notifications and set how you want to be reached.',
           'Leave Email Notifications on unless you are certain: it is the switch that silences reminder emails, and the in-app entry is then the only copy you get.',
         ],
@@ -148,7 +148,7 @@ export const learningPaths: LearningPath[] = [
         path: '/account?tab=notifications',
         why: 'A notice you read three days late is the same as one you never got. Push puts the urgent ones on your lock screen while leaving the routine ones in email where they belong.',
         how: [
-          'Enable push notifications and accept the browser prompt when it appears.',
+          'Turn on Push Notifications on This Device and accept the browser prompt. No such switch means your department has not set up push, and email still reaches you.',
           'Review which categories you want; turning one off mutes the alert, not the email.',
           'Send yourself a test if your department has enabled one.',
         ],
@@ -266,9 +266,9 @@ export const learningPaths: LearningPath[] = [
         how: [
           'Open the My Shifts tab and find your next assignment.',
           'Note the date, times, station, and seat you are filling.',
-          'Check whether it is confirmed or still tentative.',
+          'A shift marked Assigned is waiting on you: press Confirm so the officers know you have seen it.',
         ],
-        success: 'You know when you are next on, and whether it is locked in.',
+        success: 'You know when you are next on, and that shift reads Confirmed.',
       },
       {
         id: 'open-shifts',
@@ -277,8 +277,8 @@ export const learningPaths: LearningPath[] = [
         why: 'Open shifts are unfilled seats, and eligibility is real — a seat can require a certification or qualification you do not hold yet. Seeing which ones you can take shows you what is worth training toward.',
         how: [
           'Open the Open Shifts tab and read what each shift still needs.',
-          'Notice that a shift you cannot claim will say why.',
-          'Claim one if it genuinely works for you, or note one to aim for.',
+          'Press Sign Up on one: the dialog shows the seats you can take, or says you are not eligible.',
+          'Confirm Sign Up if it genuinely works for you, or note one to aim for. A scheduling officer then reviews your signup.',
         ],
         success: 'You can tell an open shift you can take from one you are not yet qualified for.',
       },
@@ -323,7 +323,7 @@ export const learningPaths: LearningPath[] = [
         path: '/inventory/my-equipment',
         why: 'Turnout gear and uniforms get ordered in bulk on a schedule. Sizes recorded after the order goes out mean waiting for the next cycle.',
         how: [
-          'Enter your sizes where the screen asks for them.',
+          'Press My Sizes, enter what you know, and Save Sizes.',
           'Be accurate rather than optimistic — gear that does not fit is a safety problem, not a comfort one.',
         ],
         success: 'Your sizes are saved so the next order can include you.',
@@ -334,9 +334,9 @@ export const learningPaths: LearningPath[] = [
         path: '/inventory/my-equipment',
         why: 'A verbal ask in the bay gets forgotten. A request here is tracked, and you can see where it got to.',
         how: [
-          'Open My Requests and submit a request for anything you need.',
+          'Press Request Equipment and ask for anything you need.',
           'Say what you need and why in the request itself.',
-          'Check back for the status rather than asking again in person.',
+          'Check My Requests for the status rather than asking again in person.',
         ],
         success: 'Your request is listed with a status you can check without chasing anyone.',
       },
