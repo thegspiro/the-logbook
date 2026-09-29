@@ -45,8 +45,8 @@ describe('CategoriesTab approval labels', () => {
   it('scopes auto-approval to clocked sessions and says manual entries are reviewed', () => {
     renderWithRouter(<CategoriesTab onDataReload={vi.fn()} />);
 
-    expect(screen.getByText('Approval: Auto-approve clocked sessions')).toBeInTheDocument();
-    expect(screen.getByText('Manual entries: reviewed')).toBeInTheDocument();
+    expect(screen.getByText('Approval: Not required')).toBeInTheDocument();
+    expect(screen.getByText('Manual entries: always reviewed')).toBeInTheDocument();
   });
 
   it('shows the under-hours threshold only where approval is otherwise required', () => {
@@ -56,7 +56,7 @@ describe('CategoriesTab approval labels', () => {
     ];
     renderWithRouter(<CategoriesTab onDataReload={vi.fn()} />);
 
-    expect(screen.getByText('Auto-approve clocked sessions under 4h')).toBeInTheDocument();
+    expect(screen.getByText('Auto-approved under 4h')).toBeInTheDocument();
     // With approval off every clocked session is approved, so a threshold is noise.
     expect(screen.queryByText(/under 2h/)).not.toBeInTheDocument();
   });
