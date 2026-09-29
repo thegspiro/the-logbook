@@ -63,7 +63,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W27 | A course cohort: schedule classes, roster, attendance                 | training_officer          | `/training/cohorts`                                | ✅     |
 | W28 | Skills testing: build a sheet, run a test, the member sees the result | training_officer → member | `/training/skills-testing`                         | ✅     |
 | W29 | Compliance: configure requirements, read the matrix, print it         | training_officer          | `/training/compliance-config`, `/training/officer` | ✅     |
-| W30 | Log a shift and file a shift report                                   | member                    | `/training/log-shift`                              | ⬜     |
+| W30 | Log a shift and file a shift report                                   | training_officer → member | `/training/log-shift`                              | ✅     |
 | W31 | The learning center orientation                                       | member                    | `/learning`                                        | ⬜     |
 
 ## Tier 5 — Scheduling
@@ -168,6 +168,9 @@ and not yet confirmed or fixed. The run for each activity starts from these.
 - **Any run touching the app shell, or an accessibility activity** — every
   page carries two "Skip to main content" links, one in `index.html` and one
   in `AppLayout` (W20).
+- **W48** — the basic apparatus form (`/apparatus-basic` → Add Apparatus)
+  names none of its fields: unit number, name, type, crew size and every
+  position select are placeholders or nothing (W30).
 - **W79** — tap targets under 44px on the onboarding Modules, Ranks &
   Positions and Apparatus steps at 390px wide (W01-13), and the sign-in
   screen's "Forgot your password?", Privacy and Terms links (W02-5), and
@@ -176,6 +179,19 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W30 — Log a shift and file a shift report — 2026-09-29
+
+Driven as: `training_officer` → `member` (the tracker's `member` was wrong —
+filing needs `training.manage`; the member reads and acknowledges), at
+1280×900 and 390×844, with `member` and `member2` refused. Held: a
+double-clicked Submit filed one approved report; the member saw it on My
+Training and in Scheduling → Shift Reports and acknowledged it once; filing
+refused the member, and another member got 404. Needed an apparatus first
+(added through `/apparatus-basic`). Fixed: W30-1 (LOW — the shift report form's
+fields, crew checkbox and call-type toggles had no names or state), W30-2 (NIT —
+the acknowledgment comment box). New lead for W48 (the basic apparatus form).
+No flags. Gate: typecheck, lint and the touched suites clean. Next: W31.
 
 ### W29 — Compliance: configure requirements, read the matrix, print it — 2026-09-29
 
