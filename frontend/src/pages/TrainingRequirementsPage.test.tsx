@@ -143,6 +143,28 @@ describe('TrainingRequirementsPage', () => {
     expect(screen.queryByText('2026')).not.toBeInTheDocument();
   });
 
+  it('names each requirement action after its requirement', async () => {
+    mockGetRequirements.mockResolvedValue([
+      {
+        id: 'req-3',
+        name: 'Annual Hazmat Hours',
+        requirement_type: 'hours',
+        source: 'department',
+        required_hours: 8,
+        frequency: 'annual',
+        applies_to_all: true,
+        active: true,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    ]);
+    renderWithRouter(<TrainingRequirementsPage />);
+
+    expect(await screen.findByRole('button', { name: 'Edit Annual Hazmat Hours' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete Annual Hazmat Hours' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Deactivate Annual Hazmat Hours' })).toBeInTheDocument();
+  });
+
   it('hides cycle and year controls when a one-time template is selected', async () => {
     const user = userEvent.setup();
     renderWithRouter(<TrainingRequirementsPage />);

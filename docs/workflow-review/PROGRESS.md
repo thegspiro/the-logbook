@@ -58,7 +58,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | #   | Activity                                                              | Acts as                   | Starts at                                          | Status |
 | --- | --------------------------------------------------------------------- | ------------------------- | -------------------------------------------------- | ------ |
 | W24 | Submit a training record, and the officer approves or returns it      | member → training_officer | `/training/submit`, `/training/submissions`        | ✅     |
-| W25 | Courses and requirements                                              | training_officer          | `/training/courses`, `/training/requirements`      | ⬜     |
+| W25 | Courses and requirements                                              | training_officer          | `/training/courses`, `/training/requirements`      | ✅     |
 | W26 | A training program: build it, enroll a member, the member's progress  | training_officer → member | `/training/programs`                               | ⬜     |
 | W27 | A course cohort: schedule classes, roster, attendance                 | training_officer          | `/training/cohorts`                                | ⬜     |
 | W28 | Skills testing: build a sheet, run a test, the member sees the result | training_officer → member | `/training/skills-testing`                         | ⬜     |
@@ -176,6 +176,19 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W25 — Courses and requirements — 2026-09-29
+
+Driven as: `training_officer` at 1280×900, with `member` refused. Held: a
+double-clicked course made one; empty names and hours were refused; a
+requirement's cleared description saved; Deactivate kept a requirement
+restorable; `member` was refused every write, saw a read-only library and got
+Access Denied on requirements. Fixed: W25-1 (MED — a double-clicked Create
+Requirement made two), W25-2 (LOW — clearing a course's optional fields did not
+save), W25-3 (LOW — the course form's fields had no accessible names), W25-5
+(NIT — action buttons named the wrong action or no row). Flagged: W25-4 (LOW —
+a deactivated course cannot be brought back). Gate: typecheck, lint and the
+touched suites clean. Next: W26.
 
 ### W24 — Submit a training record, and the officer approves or returns it — 2026-09-29
 

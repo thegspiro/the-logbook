@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useDialog } from '../../hooks/useDialog';
 import { AlertCircle, CheckCircle, X } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -40,7 +40,7 @@ export interface RequirementModalProps {
   template?: TrainingRequirementCreate | null;
   categories: TrainingCategory[];
   onClose: () => void;
-  onSave: (data: TrainingRequirementCreate | TrainingRequirementUpdate, isEdit: boolean, id?: string) => void;
+  onSave: (data: TrainingRequirementCreate | TrainingRequirementUpdate, isEdit: boolean, id?: string) => Promise<void>;
 }
 
 export const RequirementModal: React.FC<RequirementModalProps> = ({
@@ -94,6 +94,9 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
   const { courses, loading: coursesLoading, error: coursesError } = useCourseLibrary();
 
   const [saving, setSaving] = useState(false);
+  // The button's disabled state lags a double-click by a render, and saving
+  // used to clear before the request returned, so both clicks created a row.
+  const savingRef = useRef(false);
 
   // A one-time requirement never recurs, so every cycle-related control (due
   // date type, calendar period, year) is hidden rather than shown with values
@@ -101,8 +104,9 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
   // as annual.
   const isOneTime = formData.frequency === 'one_time';
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (savingRef.current) return;
     if (!formData.name.trim()) {
       toast.error('Name is required');
       return;
@@ -141,6 +145,7 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
       return;
     }
 
+    savingRef.current = true;
     setSaving(true);
     try {
       // One-time requirements have no cycle to configure — the calendar period
@@ -196,8 +201,9 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
         ...(!requirement && template?.registry_code ? { registry_code: template.registry_code } : {}),
       };
 
-      onSave(data, !!requirement, requirement?.id);
+      await onSave(data, !!requirement, requirement?.id);
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -235,7 +241,12 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form
+          onSubmit={(e) => {
+            void handleSubmit(e);
+          }}
+          className="space-y-6"
+        >
           {/* Basic Info */}
           <div className="space-y-4">
             <h4 className="text-theme-text-primary border-theme-surface-border border-b pb-2 font-semibold">

@@ -678,9 +678,7 @@ const TrainingProgramsPage: React.FC = () => {
             setShowRequirementModal(false);
             setEditingRequirement(null);
           }}
-          onSave={(...args) => {
-            void handleSaveRequirement(...args);
-          }}
+          onSave={handleSaveRequirement}
         />
       )}
     </div>

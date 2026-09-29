@@ -14,6 +14,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import type { TrainingCourse } from '../types/training';
 
@@ -89,7 +90,7 @@ describe('CourseLibraryPage management controls', () => {
     it('hides the per-course edit, delete and manage-classes actions', async () => {
       await renderPage();
       expect(screen.queryByRole('button', { name: 'Edit Fire Officer I' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Delete Fire Officer I' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Deactivate Fire Officer I' })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Manage classes for Fire Officer I' })).not.toBeInTheDocument();
     });
 
@@ -118,7 +119,7 @@ describe('CourseLibraryPage management controls', () => {
       await renderPage();
       expect(screen.getByRole('button', { name: /add course/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Edit Fire Officer I' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Delete Fire Officer I' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Deactivate Fire Officer I' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Manage classes for Fire Officer I' })).toBeInTheDocument();
     });
 
@@ -127,5 +128,56 @@ describe('CourseLibraryPage management controls', () => {
       renderWithRouter(<CourseLibraryPage />);
       expect(await screen.findByRole('button', { name: /add your first course/i })).toBeInTheDocument();
     });
+  });
+});
+
+describe('CourseLibraryPage course form', () => {
+  beforeEach(() => {
+    mockGetCourses.mockReset();
+    mockGetCourses.mockResolvedValue([
+      { ...course, instructor: 'Capt. Lee', expiration_months: 24, category_ids: ['cat-1'] },
+    ]);
+    mockGetCategories.mockReset();
+    mockGetCategories.mockResolvedValue([]);
+    mockUpdateCourse.mockReset();
+    mockUpdateCourse.mockResolvedValue(course);
+    hasManagePermission = true;
+  });
+
+  it('names every field by its label', async () => {
+    const user = userEvent.setup();
+    await renderPage();
+    await user.click(screen.getByRole('button', { name: 'Edit Fire Officer I' }));
+
+    for (const label of [
+      /^Course Name/,
+      /^Course Code$/,
+      /^Description$/,
+      /^Training Type \*$/,
+      /^Duration \(hours\)$/,
+      /^Credit Hours$/,
+      /^Instructor$/,
+      /^Max Participants$/,
+      /^Expires After \(months\)$/,
+      /^Materials Required/,
+    ]) {
+      expect(screen.getByLabelText(label)).toBeInTheDocument();
+    }
+  });
+
+  it('sends a cleared field as null on an edit, so the clear is saved', async () => {
+    const user = userEvent.setup();
+    await renderPage();
+    await user.click(screen.getByRole('button', { name: 'Edit Fire Officer I' }));
+
+    await user.clear(screen.getByLabelText('Instructor'));
+    await user.clear(screen.getByLabelText('Expires After (months)'));
+    await user.click(screen.getByRole('button', { name: 'Update Course' }));
+
+    await waitFor(() => expect(mockUpdateCourse).toHaveBeenCalled());
+    expect(mockUpdateCourse).toHaveBeenCalledWith(
+      'course-1',
+      expect.objectContaining({ instructor: null, expiration_months: null, code: 'FO-1', category_ids: ['cat-1'] })
+    );
   });
 });
