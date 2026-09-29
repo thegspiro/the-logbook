@@ -92,7 +92,7 @@ describe('NfcTagWriteButton', () => {
 
     await user.click(screen.getByRole('button', { name: /write nfc tag/i }));
 
-    expect(await screen.findByText(/hold to tag/i)).toBeInTheDocument();
+    expect(await screen.findByText(/hold phone to tag/i)).toBeInTheDocument();
     await waitFor(() => expect(pending).toHaveLength(1));
     expect(pending[0]?.message).toEqual({ records: [{ recordType: 'url', data: APPARATUS_URL }] });
 
@@ -125,7 +125,7 @@ describe('NfcTagWriteButton', () => {
     await user.click(screen.getByRole('button', { name: /write nfc tag/i }));
     await waitFor(() => expect(pending).toHaveLength(1));
 
-    await user.click(screen.getByRole('button', { name: /hold to tag/i }));
+    await user.click(screen.getByRole('button', { name: /hold phone to tag/i }));
 
     expect(await screen.findByText(/write nfc tag/i)).toBeInTheDocument();
     expect(mockToastSuccess).not.toHaveBeenCalled();

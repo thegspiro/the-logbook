@@ -68,23 +68,23 @@ interface EmailConfig {
  * to sign in.
  */
 const smtpCredentialProblem = (config: EmailConfig): string | null => {
-  if (!config.smtpHost?.trim()) return 'Please enter the SMTP server address';
-  if (!config.smtpPort?.trim()) return 'Please enter the SMTP port';
-  if (!isValidPort(parseInt(config.smtpPort, 10))) return 'Please enter a valid port number (1-65535)';
+  if (!config.smtpHost?.trim()) return 'Enter the SMTP server address';
+  if (!config.smtpPort?.trim()) return 'Enter the SMTP port';
+  if (!isValidPort(parseInt(config.smtpPort, 10))) return 'Enter a valid port number (1-65535)';
   if (config.smtpUsername?.trim() && !config.smtpPassword) {
-    return 'Please enter the password for this username, or clear the username if the server needs no sign-in';
+    return 'Enter the password for this username, or clear the username if the server needs no sign-in';
   }
   return null;
 };
 
 const microsoftCredentialProblem = (config: EmailConfig, method: MicrosoftAuthMethod): string | null => {
   if (method === MicrosoftAuthMethod.OAUTH) {
-    if (!config.microsoftTenantId?.trim()) return 'Please enter your Microsoft 365 directory (tenant) ID';
-    if (!config.microsoftClientId?.trim()) return 'Please enter your Microsoft 365 application (client) ID';
-    if (!config.microsoftClientSecret?.trim()) return 'Please enter your Microsoft 365 client secret';
+    if (!config.microsoftTenantId?.trim()) return 'Enter your Microsoft 365 directory (tenant) ID';
+    if (!config.microsoftClientId?.trim()) return 'Enter your Microsoft 365 application (client) ID';
+    if (!config.microsoftClientSecret?.trim()) return 'Enter your Microsoft 365 client secret';
     return null;
   }
-  return config.microsoftAppPassword?.trim() ? null : 'Please enter your Microsoft 365 App Password';
+  return config.microsoftAppPassword?.trim() ? null : 'Enter your Microsoft 365 App Password';
 };
 
 const EmailConfiguration: React.FC = () => {
@@ -152,12 +152,12 @@ const EmailConfiguration: React.FC = () => {
   const handleTestConnection = async () => {
     // Validate required fields before testing
     if (!config.fromEmail) {
-      toast.error('Please enter a from email address');
+      toast.error('Enter the From email address');
       return;
     }
 
     if (!isValidEmail(config.fromEmail)) {
-      toast.error('Please enter a valid email address');
+      toast.error('Enter a valid email address');
       return;
     }
 
@@ -180,7 +180,7 @@ const EmailConfiguration: React.FC = () => {
     }
 
     if (emailPlatform === 'gmail' && !config.googleAppPassword?.trim()) {
-      toast.error('Please enter your Google App Password');
+      toast.error('Enter your Google App Password');
       return;
     }
 
@@ -211,13 +211,13 @@ const EmailConfiguration: React.FC = () => {
 
       if (response.data?.success) {
         setConnectionTested(true);
-        toast.success(response.data.message || 'Email connection test successful!');
+        toast.success(response.data.message || 'Connection test passed');
       } else {
         toast.error(response.data?.message || 'Connection test failed');
       }
     } catch (err: unknown) {
       setTestingConnection(false);
-      const errorMessage = getErrorMessage(err, 'Failed to test email connection');
+      const errorMessage = getErrorMessage(err, 'Could not test the email connection');
       toast.error(errorMessage);
     }
   };
@@ -225,12 +225,12 @@ const EmailConfiguration: React.FC = () => {
   const handleContinue = async () => {
     // Validate required fields
     if (!config.fromEmail) {
-      toast.error('Please enter a from email address');
+      toast.error('Enter the From email address');
       return;
     }
 
     if (!isValidEmail(config.fromEmail)) {
-      toast.error('Please enter a valid email address');
+      toast.error('Enter a valid email address');
       return;
     }
 
@@ -253,7 +253,7 @@ const EmailConfiguration: React.FC = () => {
     }
 
     if (emailPlatform === 'gmail' && !config.googleAppPassword?.trim()) {
-      toast.error('Please enter your Google App Password');
+      toast.error('Enter your Google App Password');
       return;
     }
 
@@ -294,7 +294,7 @@ const EmailConfiguration: React.FC = () => {
         smtpPort: '587',
       });
 
-      toast.success('Email configuration saved securely');
+      toast.success('Email settings saved');
 
       // Navigate to next step (file storage selection)
       void navigate(nextStepPath('email'));
@@ -302,7 +302,7 @@ const EmailConfiguration: React.FC = () => {
   };
 
   const handleSkip = () => {
-    toast.success('Email configuration skipped. You can set this up later.');
+    toast.success('Email skipped. You can set it up later in Settings.');
     void navigate(nextStepPath('email'));
   };
 
@@ -720,7 +720,7 @@ const EmailConfiguration: React.FC = () => {
             <div className="bg-theme-surface-secondary text-theme-text-secondary mt-4 rounded-lg p-4 text-sm">
               <p className="text-theme-text-primary mb-2 font-medium">How to get Cloudflare credentials:</p>
               <ol className="list-inside list-decimal space-y-1">
-                <li>Log into the Cloudflare dashboard</li>
+                <li>Sign in to the Cloudflare dashboard</li>
                 <li>Copy your Account ID from the Overview page sidebar</li>
                 <li>Go to My Profile → API Tokens → Create Token</li>
                 <li>Create a token with the Email Sending permission</li>
@@ -785,7 +785,7 @@ const EmailConfiguration: React.FC = () => {
                 placeholder="notifications@yourdomain.com"
                 className="form-input placeholder-theme-text-muted py-3"
               />
-              <p className="text-theme-text-muted mt-1 text-xs">Email address that notifications will be sent from</p>
+              <p className="text-theme-text-muted mt-1 text-xs">The address notifications are sent from</p>
             </div>
 
             <div>
@@ -798,7 +798,7 @@ const EmailConfiguration: React.FC = () => {
                 className="form-input placeholder-theme-text-muted py-3"
               />
               <p className="text-theme-text-muted mt-1 text-xs">
-                Display name for outgoing emails (defaults to department name)
+                The name members see on outgoing emails. Defaults to your department name.
               </p>
             </div>
 
@@ -833,7 +833,7 @@ const EmailConfiguration: React.FC = () => {
                 )}
               </button>
               <p className="text-theme-text-muted mt-2 text-center text-sm">
-                We'll send a test email to verify your configuration
+                Checks that The Logbook can connect and sign in. No email is sent.
               </p>
             </div>
           </div>
@@ -866,7 +866,7 @@ const EmailConfiguration: React.FC = () => {
               disabled={isSaving}
               className="flex-1 transform rounded-lg bg-linear-to-r from-red-700 to-orange-700 px-6 py-3 font-semibold text-white shadow-lg transition-all duration-300 hover:scale-105 hover:from-red-800 hover:to-orange-800 hover:shadow-xl disabled:transform-none disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isSaving ? 'Saving Securely...' : 'Continue'}
+              {isSaving ? 'Saving...' : 'Continue'}
             </button>
           </div>
 

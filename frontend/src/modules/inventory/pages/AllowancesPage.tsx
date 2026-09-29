@@ -90,7 +90,7 @@ const AllowancesPage: React.FC = () => {
       return;
     }
     if (!Number.isInteger(qty) || qty < 0) {
-      toast.error('Max quantity must be a non-negative whole number');
+      toast.error('Enter a whole number of 0 or more for max quantity');
       return;
     }
     setSaving(true);

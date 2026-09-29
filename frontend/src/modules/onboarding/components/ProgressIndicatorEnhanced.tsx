@@ -60,8 +60,8 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({ step, className =
       <p className="text-theme-text-muted mb-4 text-xs">
         {currentStepInfo?.optional
           ? requiredRemaining === 0
-            ? 'This step is optional — Skip is a complete answer, and setup can be finished from here.'
-            : 'This step is optional — Skip is a complete answer.'
+            ? 'This step is optional. You can skip it — every required step is done.'
+            : 'This step is optional. You can skip it.'
           : 'This step is required to finish setup.'}
       </p>
 

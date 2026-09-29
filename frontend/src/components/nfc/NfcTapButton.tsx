@@ -80,7 +80,7 @@ export const NfcTapButton: React.FC = () => {
         type="button"
         onClick={handleOpen}
         className="btn-secondary btn-auto inline-flex items-center justify-center gap-2"
-        title="Tap an NFC tag to check in"
+        title="Tap an NFC tag to check in or clock in"
       >
         <Nfc className="h-4 w-4" aria-hidden="true" />
         <span className="hidden sm:inline">Tap Tag</span>
@@ -99,7 +99,7 @@ export const NfcTapButton: React.FC = () => {
             <div className="alert-warning flex w-full items-start gap-3 text-left">
               <AlertTriangle className="text-theme-alert-warning-icon mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
               <p className="text-theme-alert-warning-text text-sm">
-                That tag is not a check-in tag for this site. Try a different tag.
+                That tag does not open anything in this app. Try a different tag.
               </p>
             </div>
           )}

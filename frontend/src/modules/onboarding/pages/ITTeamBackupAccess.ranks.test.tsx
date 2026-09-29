@@ -60,11 +60,11 @@ describe('the rank selector on the IT team step', () => {
   });
 
   it('distinguishes a failed read from a department with no ranks', () => {
-    // The wording is the whole point: "not shown, not missing".
+    // The wording is the whole point: the ranks "just could not be shown".
     useRanks.mockReturnValue(ranks({ failed: true, rankOptions: [] }));
     renderStep();
 
-    expect(screen.getAllByText(/not shown, not missing/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/your ranks just could not be shown/i).length).toBeGreaterThan(0);
   });
 
   it('offers a retry', () => {

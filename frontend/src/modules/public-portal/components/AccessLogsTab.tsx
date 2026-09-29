@@ -97,7 +97,7 @@ export const AccessLogsTab: React.FC = () => {
   if (error) {
     return (
       <div className="rounded-md border border-red-200 bg-red-50 p-4 dark:border-red-500/30 dark:bg-red-500/10">
-        <p className="text-red-800 dark:text-red-400">Error loading access logs: {error}</p>
+        <p className="text-red-800 dark:text-red-400">Couldn't load access logs: {error}</p>
       </div>
     );
   }
@@ -108,7 +108,7 @@ export const AccessLogsTab: React.FC = () => {
       <div>
         <h3 className="text-theme-text-primary text-lg font-semibold">Access Logs</h3>
         <p className="text-theme-text-muted mt-1 text-sm">
-          View all public portal access attempts with detailed request information
+          Every request to the public API, including rejected ones. Newest first.
         </p>
       </div>
 
@@ -217,7 +217,7 @@ export const AccessLogsTab: React.FC = () => {
           </svg>
           <h3 className="text-theme-text-primary mt-2 text-sm font-medium">No access logs found</h3>
           <p className="text-theme-text-muted mt-1 text-sm">
-            {hasActiveFilters ? 'Try adjusting your filters' : 'Access logs will appear here once requests are made'}
+            {hasActiveFilters ? 'Try adjusting your filters' : 'Requests to the public API will appear here'}
           </p>
         </div>
       ) : (
@@ -260,7 +260,7 @@ export const AccessLogsTab: React.FC = () => {
                     scope="col"
                     className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
                   >
-                    Time
+                    Response Time
                   </th>
                   <th
                     scope="col"

@@ -546,7 +546,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
       if (is404) {
         setLookupError(`No item found for "${trimmed}"`);
       } else {
-        setLookupError('Failed to look up item. Please check your connection and try again.');
+        setLookupError('Could not look up the item. Check your connection and try again.');
       }
       setTimeout(() => setLookupError(null), 3000);
     } finally {
@@ -582,7 +582,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
       signalScanSuccess();
       addItemFromResult(match);
     } catch (err: unknown) {
-      setLookupError(getErrorMessage(err, 'Failed to look up the tag. Please check your connection and try again.'));
+      setLookupError(getErrorMessage(err, 'Could not look up the tag. Check your connection and try again.'));
       setTimeout(() => setLookupError(null), 3000);
     } finally {
       setLookupLoading(false);
@@ -700,7 +700,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
         onComplete?.(response);
       }
     } catch {
-      setLookupError('Failed to process batch. Please try again.');
+      setLookupError('Could not process the batch. Try again.');
     } finally {
       setSubmitting(false);
     }

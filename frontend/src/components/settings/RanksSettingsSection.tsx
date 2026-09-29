@@ -243,7 +243,7 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
         </div>
       ) : ranks.length === 0 ? (
         <p className="text-theme-text-muted py-8 text-center text-sm">
-          No ranks configured. Click &quot;Add Rank&quot; to get started.
+          No ranks yet. Use Add Rank to create the first one.
         </p>
       ) : (
         <div className="space-y-1">
@@ -333,7 +333,7 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
                         onClick={() => onSetEditingPositionsRankId(rank.id)}
                         className="text-theme-text-muted hover:text-theme-accent-blue touch-target-phone text-[11px] transition-colors"
                       >
-                        + Configure eligible positions
+                        + Choose shift positions this rank can fill
                       </button>
                     )}
                   </div>
@@ -343,7 +343,7 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
                   <div className="bg-theme-surface-secondary/60 border-theme-surface-border mt-1.5 rounded-md border p-2">
                     <div className="mb-1.5 flex items-center justify-between">
                       <p className="text-theme-text-secondary text-[11px] font-medium">
-                        Click to toggle eligible positions:
+                        Select the shift positions this rank can fill:
                       </p>
                       <button
                         type="button"
@@ -420,11 +420,11 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-amber-600 dark:text-amber-400">
                 {rankValidationIssues.length} active member{rankValidationIssues.length !== 1 ? 's' : ''} with
-                unrecognised rank{rankValidationIssues.length !== 1 ? 's' : ''}
+                unrecognized rank{rankValidationIssues.length !== 1 ? 's' : ''}
               </p>
               <p className="text-theme-text-muted mt-1 text-xs">
-                The following members have a rank assigned that no longer matches any configured rank. Update their
-                profile or re-add the missing rank to resolve.
+                These members hold a rank that is no longer on the ladder. Update each member’s profile, or add the rank
+                back.
               </p>
               <ul className="mt-3 space-y-1.5">
                 {rankValidationIssues.map((issue) => (

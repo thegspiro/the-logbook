@@ -46,7 +46,7 @@ export const usePortalConfig = () => {
     try {
       const data = await api.updateConfig(updates);
       setConfig(data);
-      toast.success('Configuration updated successfully');
+      toast.success('Configuration saved');
       return data;
     } catch (err: unknown) {
       const message = getErrorMessage(err, 'Failed to update configuration');
@@ -105,7 +105,7 @@ export const useAPIKeys = (includeInactive = false) => {
       try {
         const newKey = await api.createAPIKey(data);
         await fetchAPIKeys(); // Refresh list
-        toast.success('API key created successfully');
+        toast.success('API key created');
         return newKey;
       } catch (err: unknown) {
         const message = getErrorMessage(err, 'Failed to create API key');
@@ -121,7 +121,7 @@ export const useAPIKeys = (includeInactive = false) => {
       try {
         await api.revokeAPIKey(keyId);
         await fetchAPIKeys(); // Refresh list
-        toast.success('API key revoked successfully');
+        toast.success('API key revoked');
       } catch (err: unknown) {
         const message = getErrorMessage(err, 'Failed to revoke API key');
         toast.error(message);
@@ -244,7 +244,7 @@ export const useDataWhitelist = (category?: string) => {
       const data = await api.getWhitelist(category);
       setWhitelist(data);
     } catch (err: unknown) {
-      const message = getErrorMessage(err, 'Failed to load whitelist');
+      const message = getErrorMessage(err, 'Failed to load data fields');
       setError(message);
       toast.error(message);
     } finally {
@@ -257,9 +257,9 @@ export const useDataWhitelist = (category?: string) => {
       try {
         await api.updateWhitelistEntry(entryId, isEnabled);
         await fetchWhitelist(); // Refresh list
-        toast.success(`Field ${isEnabled ? 'enabled' : 'disabled'} successfully`);
+        toast.success(`Field ${isEnabled ? 'enabled' : 'disabled'}`);
       } catch (err: unknown) {
-        const message = getErrorMessage(err, 'Failed to update whitelist');
+        const message = getErrorMessage(err, 'Failed to update field');
         toast.error(message);
         throw err;
       }
@@ -274,7 +274,7 @@ export const useDataWhitelist = (category?: string) => {
         await fetchWhitelist(); // Refresh list
         toast.success(result.message);
       } catch (err: unknown) {
-        const message = getErrorMessage(err, 'Failed to bulk update whitelist');
+        const message = getErrorMessage(err, 'Failed to update fields');
         toast.error(message);
         throw err;
       }

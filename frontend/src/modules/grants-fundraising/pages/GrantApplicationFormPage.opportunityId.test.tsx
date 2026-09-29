@@ -82,7 +82,7 @@ describe('GrantApplicationFormPage — opportunityId from the URL', () => {
       </MemoryRouter>
     );
 
-    const select = await screen.findByLabelText<HTMLSelectElement>(/opportunity id/i);
+    const select = await screen.findByLabelText<HTMLSelectElement>(/grant opportunity/i);
     expect(select.value).toBe('opp-123');
   });
 
@@ -93,7 +93,7 @@ describe('GrantApplicationFormPage — opportunityId from the URL', () => {
       </MemoryRouter>
     );
 
-    const select = await screen.findByLabelText<HTMLSelectElement>(/opportunity id/i);
+    const select = await screen.findByLabelText<HTMLSelectElement>(/grant opportunity/i);
     expect(select.value).toBe('');
   });
 
@@ -108,7 +108,7 @@ describe('GrantApplicationFormPage — opportunityId from the URL', () => {
       </MemoryRouter>
     );
 
-    const select = await screen.findByLabelText<HTMLSelectElement>(/opportunity id/i);
+    const select = await screen.findByLabelText<HTMLSelectElement>(/grant opportunity/i);
     expect(mockGetOpportunity).toHaveBeenCalledWith('opp-123');
     expect(select.value).toBe('opp-123');
   });
@@ -146,7 +146,9 @@ describe('GrantApplicationFormPage — opportunityId from the URL', () => {
     );
     await waitFor(() => expect(mockGetOpportunity).toHaveBeenCalledWith('opp-123'));
     await waitFor(() =>
-      expect(mockToastError).toHaveBeenCalledWith('Could not load the linked funding opportunity — please reselect it.')
+      expect(mockToastError).toHaveBeenCalledWith(
+        'Could not load the linked grant opportunity. Select it again from the Grant Opportunity list.'
+      )
     );
 
     await fillRequiredFieldsAndSubmit();

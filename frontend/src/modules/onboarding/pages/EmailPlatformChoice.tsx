@@ -103,7 +103,7 @@ const EmailPlatformChoice: React.FC = () => {
       description: 'Set email up later',
       icon: <Mail aria-hidden="true" className="h-10 w-10" />,
       color: 'from-slate-500 to-slate-600',
-      features: ['No email is sent until this is configured', 'Set up later in settings'],
+      features: ['No email is sent until this is configured', 'Set up later in Settings'],
       setupInfo: 'You can configure email settings after setup is complete.',
     },
   ];
@@ -158,7 +158,9 @@ const EmailPlatformChoice: React.FC = () => {
             </div>
             <h2 className="text-theme-text-primary mb-3 text-4xl font-bold md:text-5xl">Email Platform</h2>
             <p className="text-theme-text-secondary mb-2 text-xl">Which email service does your department use?</p>
-            <p className="text-theme-text-muted text-sm">This helps us send notifications and alerts to your team</p>
+            <p className="text-theme-text-muted text-sm">
+              The Logbook uses it to send notifications and alerts to your members
+            </p>
           </div>
 
           {/* Email Platform Options */}
@@ -234,8 +236,8 @@ const EmailPlatformChoice: React.FC = () => {
                 <div>
                   <p className="text-theme-alert-info-title mb-1 text-sm font-medium">Next Step</p>
                   <p className="text-theme-alert-info-text text-sm">
-                    After clicking Continue, you'll enter your {selectedPlatformData.name} connection details. Don't
-                    worry, we'll guide you through the process step by step.
+                    Next, you'll enter your {selectedPlatformData.name} connection details. The next screen explains
+                    each field.
                   </p>
                 </div>
               </div>
@@ -270,7 +272,7 @@ const EmailPlatformChoice: React.FC = () => {
             {/* Help Text */}
             <p className="text-theme-text-muted mt-4 text-center text-sm">
               {emailPlatform === 'other'
-                ? 'You can configure email settings later in the admin panel'
+                ? 'You can set up email later in Settings'
                 : 'Your email credentials are encrypted and stored securely'}
             </p>
           </div>

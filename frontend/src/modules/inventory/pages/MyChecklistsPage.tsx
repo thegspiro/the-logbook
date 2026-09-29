@@ -251,7 +251,7 @@ export const MyChecklistsPage: React.FC = () => {
     setActiveShiftId(null);
     setActiveCheckId(null);
     setActiveShiftContext(undefined);
-    toast.success('Equipment check submitted successfully');
+    toast.success('Equipment check submitted');
     void fetchActiveChecklists();
     if (showHistory) {
       void fetchHistory();

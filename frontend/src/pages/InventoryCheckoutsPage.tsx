@@ -87,7 +87,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
     setSubmitting(true);
     try {
       await inventoryService.checkInTemporaryLoan(checkInModal.checkoutId, returnCondition, damageNotes || undefined);
-      toast.success(`${checkInModal.itemName} checked in successfully`);
+      toast.success(`${checkInModal.itemName} checked in`);
       setCheckInModal({ open: false, checkoutId: '', itemName: '' });
       setReturnCondition('good');
       setDamageNotes('');

@@ -124,7 +124,7 @@ export const InventoryKioskPage: React.FC = () => {
     try {
       await work();
     } catch (err: unknown) {
-      setMessage({ kind: 'error', text: getErrorMessage(err, 'That did not work. Please try again.') });
+      setMessage({ kind: 'error', text: getErrorMessage(err, 'That did not work. Try again.') });
     } finally {
       busyRef.current = false;
       setBusy(false);
