@@ -73,7 +73,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W32 | Shift templates and patterns, then generate a month of shifts      | scheduling_officer          | `/scheduling/admin/planning/*`                              | ✅     |
 | W33 | Sign up for a shift, swap it, request time off                     | member, member2 → officer   | `/scheduling`                                               | ✅     |
 | W34 | Check in to a shift by apparatus QR, and close the shift out       | member → scheduling_officer | `/scheduling/checkin`, `/scheduling/admin/closeout`         | ✅     |
-| W35 | Platoons and the position qualification roster                     | scheduling_officer          | `/scheduling/admin/platoons`, `/scheduling/admin/positions` | ⬜     |
+| W35 | Platoons and the position qualification roster                     | scheduling_officer          | `/scheduling/admin/platoons`, `/scheduling/admin/positions` | ✅     |
 | W36 | Every scheduling settings section                                  | scheduling_officer          | `/scheduling/admin/settings/*`                              | ⬜     |
 | W37 | Scheduling reports and the printed check-in sheet and shift report | scheduling_officer          | `/scheduling/admin/reports`                                 | ⬜     |
 
@@ -179,6 +179,17 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W35 — Platoons and the position qualification roster — 2026-09-29
+
+Driven as: `scheduling_officer` at 1280×900 and 390×844, with `member`
+refused. Held: a double-clicked bulk assign moved two members to Platoon B
+once and survived a reload; clearing a platoon worked; the page says platoon
+scheduling is off rather than hiding the roster; the roster flags the six
+drivers cleared by rank with no EVOC on file; members got 403/404 and Access
+Denied. Fixed: W35-1 (LOW — the roster's "why" badges were told apart only by
+icon and colour), W35-2 (LOW — the platoon picker had no name). No flags.
+Gate: typecheck, lint and the scheduling suites clean. Next: W36.
 
 ### W34 — Check in to a shift by apparatus QR, and close the shift out — 2026-09-29
 

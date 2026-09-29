@@ -69,12 +69,27 @@ type TabId = (typeof TABS)[number]['id'];
 // here falls back to the rank styling, which is how a held-position source
 // spent its life masquerading as a second rank badge -- and how a
 // qualification joined it when that source was added.
-const SOURCE_STYLES: Record<string, { icon: React.ElementType; className: string }> = {
-  rank: { icon: Shield, className: 'bg-violet-500/15 text-violet-700 dark:text-violet-400' },
-  position: { icon: Briefcase, className: 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-400' },
-  qualification: { icon: BadgeCheck, className: 'bg-teal-500/15 text-teal-700 dark:text-teal-400' },
-  training: { icon: GraduationCap, className: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' },
-  open: { icon: Unlock, className: 'bg-sky-500/15 text-sky-700 dark:text-sky-400' },
+// `reason` is read out in place of the icon and colour, which are all a sighted
+// reader has to tell the source apart; without it a rank badge beside the rank
+// itself announced as "Engineer, Engineer" on a page whose job is saying why.
+const SOURCE_STYLES: Record<string, { icon: React.ElementType; className: string; reason: string }> = {
+  rank: { icon: Shield, className: 'bg-violet-500/15 text-violet-700 dark:text-violet-400', reason: 'By rank' },
+  position: {
+    icon: Briefcase,
+    className: 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-400',
+    reason: 'By held position',
+  },
+  qualification: {
+    icon: BadgeCheck,
+    className: 'bg-teal-500/15 text-teal-700 dark:text-teal-400',
+    reason: 'By qualification',
+  },
+  training: {
+    icon: GraduationCap,
+    className: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
+    reason: 'By completed training',
+  },
+  open: { icon: Unlock, className: 'bg-sky-500/15 text-sky-700 dark:text-sky-400', reason: 'Open to everyone' },
 };
 
 const PositionRosterPage: React.FC = () => {
@@ -149,6 +164,7 @@ const PositionRosterPage: React.FC = () => {
             title={source.expires_on ? `Expires ${formatCalendarDate(source.expires_on)}` : undefined}
           >
             <Icon className="h-3 w-3" aria-hidden="true" />
+            <span className="sr-only">{style?.reason ?? 'By rank'}: </span>
             {source.label}
             {source.expires_on && (
               <span className="font-normal opacity-80">· exp {formatCalendarDate(source.expires_on)}</span>
