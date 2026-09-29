@@ -393,6 +393,18 @@ class TrainingRecord(Base):
         String(255), nullable=True
     )  # Provider's unique ID for this record
 
+    # The event whose attendance finalize wrote (or adopted) this record. Set by
+    # the server only, never from a request body. It is the record's identity
+    # for that credit: with the unique (source_event_id, user_id) index below,
+    # re-finalizing a reopened event updates this row in place instead of
+    # adding a second one, however the event's title or date was edited in
+    # between. NULL for manual, self-reported and imported records.
+    source_event_id = Column(
+        String(36),
+        ForeignKey("events.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     # Additional Information
     notes = Column(Text)
     attachments = Column(JSON)  # List of file URLs or references
@@ -430,6 +442,15 @@ class TrainingRecord(Base):
         Index("idx_record_location", "location_id"),
         Index("idx_record_category", "category_id"),
         Index("idx_record_external", "external_provider_id", "external_record_id"),
+        # One credit per member per event. Any number of NULL sources coexist
+        # under a unique index on MySQL and MariaDB, so records that did not
+        # come from event attendance are unconstrained.
+        Index(
+            "uq_training_record_event_user",
+            "source_event_id",
+            "user_id",
+            unique=True,
+        ),
     )
 
     def __repr__(self):

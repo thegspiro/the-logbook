@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**285 tables · 4686 columns · 922 foreign keys**
+**285 tables · 4687 columns · 923 foreign keys**
 
 ---
 
@@ -627,7 +627,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`training_effectiveness_evaluations`](#training_effectiveness_evaluations) | `TrainingEffectivenessEvaluation` | 20 | Training Effectiveness Evaluation model |
 | [`training_module_configs`](#training_module_configs) | `TrainingModuleConfig` | 45 | Training Module Configuration model |
 | [`training_programs`](#training_programs) | `TrainingProgram` | 23 | Training Program model |
-| [`training_records`](#training_records) | `TrainingRecord` | 38 | Training Record model |
+| [`training_records`](#training_records) | `TrainingRecord` | 39 | Training Record model |
 | [`training_requirements`](#training_requirements) | `TrainingRequirement` | 42 | Training Requirement model |
 | [`training_sessions`](#training_sessions) | `TrainingSession` | 30 | Training Session model |
 | [`training_submissions`](#training_submissions) | `TrainingSubmission` | 25 | Training Submission model |
@@ -9353,6 +9353,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `station_at_completion` | VARCHAR(100) | yes |  |  |  |
 | `external_provider_id` | VARCHAR(36) | yes | FK, IDX |  | → `external_training_providers.id` ON DELETE SET NULL |
 | `external_record_id` | VARCHAR(255) | yes |  |  |  |
+| `source_event_id` | VARCHAR(36) | yes | FK, UQ-IDX |  | → `events.id` ON DELETE SET NULL |
 | `notes` | TEXT | yes |  |  |  |
 | `attachments` | JSON | yes |  |  |  |
 | `alert_90_sent_at` | DATETIME | yes |  |  |  |
@@ -9376,6 +9377,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_training_records_course_id` (`course_id`)
 - `ix_training_records_organization_id` (`organization_id`)
 - `ix_training_records_status` (`status`)
+- UNIQUE `uq_training_record_event_user` (`source_event_id`, `user_id`)
 
 ### `training_requirements`
 
@@ -10564,7 +10566,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `locations` | `facility_id` | SET NULL | yes |
 | `purchase_requests` | `facility_id` | SET NULL | yes |
 
-### → `events` (14 references)
+### → `events` (15 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10581,6 +10583,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `prospect_event_links` | `event_id` | CASCADE | no |
 | `rsvp_history` | `event_id` | CASCADE | no |
 | `training_approvals` | `event_id` | CASCADE | no |
+| `training_records` | `source_event_id` | SET NULL | yes |
 | `training_sessions` | `event_id` | CASCADE | no |
 
 ### → `locations` (13 references)

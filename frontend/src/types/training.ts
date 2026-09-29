@@ -539,6 +539,8 @@ export interface TrainingRecord {
   apparatus_id?: string;
   external_provider_id?: string;
   external_record_id?: string;
+  /** Set by the server when attendance finalize wrote this record. */
+  source_event_id?: string | null;
   notes?: string;
   attachments?: string[];
   rank_at_completion?: string;
