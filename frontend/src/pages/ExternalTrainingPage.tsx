@@ -56,6 +56,13 @@ const PROVIDER_TYPES: { value: ExternalProviderType; label: string; description:
   { value: 'custom_api', label: 'Custom API', description: 'Connect to any training platform with a compatible API' },
 ];
 
+// Vector Solutions acquired TargetSolutions and both run on the same API: an
+// AccessToken header plus a site id. The backend routes both types there, so
+// the form must collect the same fields for either — hiding Site ID for Target
+// Solutions left every sync failing with "site_id is required".
+const isAccessTokenProvider = (type: ExternalProviderType): boolean =>
+  type === 'vector_solutions' || type === 'target_solutions';
+
 interface CreateProviderModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -77,6 +84,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const usesAccessToken = isAccessTokenProvider(formData.provider_type);
 
   const handleTypeSelect = (type: ExternalProviderType) => {
     setFormData((prev) => ({
@@ -204,14 +212,14 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                 onChange={(e) => setFormData((prev) => ({ ...prev, api_base_url: e.target.value }))}
                 className="form-input"
                 placeholder={
-                  formData.provider_type === 'vector_solutions'
+                  usesAccessToken
                     ? 'https://app.targetsolutions.com/tsapp/dashboard/pl/api/v1'
                     : 'https://api.example.com'
                 }
                 required
                 aria-required="true"
               />
-              {formData.provider_type === 'vector_solutions' && (
+              {usesAccessToken && (
                 <p className="text-theme-text-muted mt-1 text-xs">
                   For Vector Solutions / TargetSolutions, use your organization&apos;s API base URL (e.g.,
                   https://app.targetsolutions.com/tsapp/dashboard/pl/api/v1)
@@ -219,7 +227,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
               )}
             </div>
 
-            {formData.provider_type !== 'vector_solutions' && (
+            {!usesAccessToken && (
               <div>
                 <label
                   htmlFor="provider-auth-type"
@@ -244,8 +252,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
 
             <div>
               <label htmlFor="provider-api-key" className="text-theme-text-secondary mb-2 block text-sm font-medium">
-                {formData.provider_type === 'vector_solutions' ? 'AccessToken' : 'API Key'}{' '}
-                <span aria-hidden="true">*</span>
+                {usesAccessToken ? 'AccessToken' : 'API Key'} <span aria-hidden="true">*</span>
               </label>
               <input
                 id="provider-api-key"
@@ -253,15 +260,11 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                 value={formData.api_key}
                 onChange={(e) => setFormData((prev) => ({ ...prev, api_key: e.target.value }))}
                 className="form-input"
-                placeholder={
-                  formData.provider_type === 'vector_solutions'
-                    ? 'Enter your TargetSolutions AccessToken'
-                    : 'Enter your API key'
-                }
+                placeholder={usesAccessToken ? 'Enter your TargetSolutions AccessToken' : 'Enter your API key'}
                 required
                 aria-required="true"
               />
-              {formData.provider_type === 'vector_solutions' && (
+              {usesAccessToken && (
                 <p className="text-theme-text-muted mt-1 text-xs">
                   Your AccessToken is provided by your Vector Solutions account manager. Each token has specific access
                   levels.
@@ -269,7 +272,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
               )}
             </div>
 
-            {formData.provider_type === 'vector_solutions' && (
+            {usesAccessToken && (
               <div>
                 <label htmlFor="provider-site-id" className="text-theme-text-secondary mb-2 block text-sm font-medium">
                   Site ID

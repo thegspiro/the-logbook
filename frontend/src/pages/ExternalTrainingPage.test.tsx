@@ -127,3 +127,30 @@ describe('ExternalTrainingPage — modal behavior', () => {
     expect(document.body.style.overflow).toBe('hidden');
   });
 });
+
+describe('ExternalTrainingPage — provider setup form', () => {
+  const chooseProvider = async (label: RegExp) => {
+    renderWithRouter(<ExternalTrainingPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /add provider/i }));
+    await userEvent.click(await screen.findByRole('button', { name: label }));
+  };
+
+  // Target Solutions runs on the Vector Solutions API, which cannot sync
+  // without a site id. The form hid that field for Target Solutions, so every
+  // provider created that way failed its first sync.
+  it('collects the AccessToken and Site ID for Target Solutions', async () => {
+    await chooseProvider(/^Target Solutions/);
+
+    expect(await screen.findByLabelText(/^Site ID/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^AccessToken/)).toBeInTheDocument();
+    expect(screen.queryByLabelText('Authentication Type')).not.toBeInTheDocument();
+  });
+
+  it('keeps the generic API key fields for other providers', async () => {
+    await chooseProvider(/^Lexipol/);
+
+    expect(await screen.findByLabelText('Authentication Type')).toBeInTheDocument();
+    expect(screen.getByLabelText(/^API Key/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Site ID/)).not.toBeInTheDocument();
+  });
+});

@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import httpx
 from cryptography.fernet import InvalidToken
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import decrypt_data
@@ -239,8 +239,14 @@ class ExternalTrainingSyncService:
         api_key = self._decrypt_field(provider.api_key)
         api_secret = self._decrypt_field(provider.api_secret)
 
-        # Vector Solutions / TargetSolutions uses a custom AccessToken header
-        if provider.provider_type == ExternalProviderType.VECTOR_SOLUTIONS:
+        # Vector Solutions / TargetSolutions uses a custom AccessToken header.
+        # Both provider types route to the same API in test/fetch, so both must
+        # send the same header — a TARGET_SOLUTIONS provider falling through to
+        # X-API-Key/Bearer is rejected with a 401.
+        if provider.provider_type in (
+            ExternalProviderType.VECTOR_SOLUTIONS,
+            ExternalProviderType.TARGET_SOLUTIONS,
+        ):
             if api_key:
                 headers["AccessToken"] = api_key
         elif provider.auth_type == "api_key":
@@ -636,6 +642,19 @@ class ExternalTrainingSyncService:
 
         return all_records
 
+    @staticmethod
+    def _first_present(record: Dict[str, Any], *keys: str) -> str:
+        """First non-empty value among ``keys`` as a string, else "".
+
+        ``str(record.get(k))`` turns a key present with a JSON null into the
+        literal "None", which then keys every such member into one mapping.
+        """
+        for key in keys:
+            value = record.get(key)
+            if value is not None and str(value).strip():
+                return str(value).strip()
+        return ""
+
     def _normalize_vector_solutions_record(
         self, record: Dict[str, Any]
     ) -> Dict[str, Any]:
@@ -658,10 +677,8 @@ class ExternalTrainingSyncService:
                     "id", record.get("credentialId", record.get("completionId", ""))
                 )
             ),
-            "external_user_id": str(
-                record.get(
-                    "userId", record.get("employeeId", record.get("user_id", ""))
-                )
+            "external_user_id": self._first_present(
+                record, "userId", "employeeId", "user_id"
             ),
             "external_course_id": str(
                 record.get("courseId", record.get("course_id", ""))
@@ -927,6 +944,14 @@ class ExternalTrainingSyncService:
 
         Returns: "imported", "updated", or "skipped"
         """
+        # A record that carries an email but no provider user id still belongs
+        # to someone: key the member by that email so it can be mapped (and
+        # later bulk-imported, which looks mappings up by external_user_id).
+        if not record_data.get("external_user_id"):
+            email_key = self._normalize_email(record_data.get("external_email"))
+            if email_key:
+                record_data["external_user_id"] = email_key
+
         # Check if record already exists
         existing = await self.db.execute(
             select(ExternalTrainingImport)
@@ -941,10 +966,31 @@ class ExternalTrainingSyncService:
         if existing_import:
             # Update existing record
             for key, value in record_data.items():
-                if key != "raw_data" and hasattr(existing_import, key):
+                if key in ("raw_data", "completion_date"):
+                    continue
+                if hasattr(existing_import, key):
                     setattr(existing_import, key, value)
+            # The provider sends dates as strings; the column is a DateTime, so
+            # the value must go through the same parser the insert path uses.
+            existing_import.completion_date = self._parse_date(
+                record_data.get("completion_date")
+            )
             existing_import.raw_data = record_data.get("raw_data")
             existing_import.sync_log_id = sync_log_id
+
+            # A member who could not be matched on an earlier sync (email not yet
+            # on file in the Logbook) is attached once the mapping resolves.
+            # Records already imported keep the member they were imported to.
+            if (
+                not existing_import.user_id
+                and existing_import.import_status != "imported"
+                and record_data.get("external_user_id")
+            ):
+                user_mapping = await self._find_or_create_user_mapping(
+                    provider, record_data
+                )
+                if user_mapping and user_mapping.internal_user_id:
+                    existing_import.user_id = user_mapping.internal_user_id
             return "updated"
 
         # Create new import record
@@ -1073,8 +1119,28 @@ class ExternalTrainingSyncService:
             .where(ExternalUserMapping.external_user_id == external_user_id)
         )
         mapping = result.scalar_one_or_none()
+        email = self._normalize_email(record_data.get("external_email"))
 
         if mapping:
+            if email:
+                mapping.external_email = email
+            if record_data.get("external_username"):
+                mapping.external_username = record_data["external_username"]
+            if record_data.get("external_name"):
+                mapping.external_name = record_data["external_name"]
+
+            # Retry the email match on every sync until it lands, so a member
+            # whose email is added or corrected in the Logbook after the first
+            # sync is picked up. A mapping an officer has touched (mapped_by is
+            # set, including a deliberate un-map) is never overridden.
+            if not mapping.internal_user_id and not mapping.mapped_by and email:
+                user_id = await self._match_member_by_email(
+                    provider.organization_id, email
+                )
+                if user_id:
+                    mapping.internal_user_id = user_id
+                    mapping.is_mapped = True
+                    mapping.auto_mapped = True
             return mapping
 
         # Create new mapping
@@ -1083,27 +1149,49 @@ class ExternalTrainingSyncService:
             organization_id=provider.organization_id,
             external_user_id=external_user_id,
             external_username=record_data.get("external_username"),
-            external_email=record_data.get("external_email"),
+            external_email=email or None,
             external_name=record_data.get("external_name"),
             is_mapped=False,
             auto_mapped=False,
         )
 
-        # Try to auto-map by email
-        if record_data.get("external_email"):
-            user_result = await self.db.execute(
-                select(User)
-                .where(User.organization_id == provider.organization_id)
-                .where(User.email == record_data["external_email"])
-            )
-            user = user_result.scalar_one_or_none()
-            if user:
-                mapping.internal_user_id = user.id
+        if email:
+            user_id = await self._match_member_by_email(provider.organization_id, email)
+            if user_id:
+                mapping.internal_user_id = user_id
                 mapping.is_mapped = True
                 mapping.auto_mapped = True
 
         self.db.add(mapping)
         return mapping
+
+    @staticmethod
+    def _normalize_email(value: Any) -> str:
+        """Trim and lowercase an email so provider and Logbook spellings compare."""
+        if not isinstance(value, str):
+            return ""
+        return value.strip().lower()
+
+    async def _match_member_by_email(
+        self, organization_id: str, email: str
+    ) -> Optional[str]:
+        """Return the id of the one live member in the org with this email.
+
+        Case-insensitive, and deleted members are excluded so a completion is
+        never attached to a removed account. Two candidates means the match is
+        ambiguous, so nothing is mapped and the officer decides.
+        """
+        result = await self.db.execute(
+            select(User.id)
+            .where(User.organization_id == organization_id)
+            .where(func.lower(func.trim(User.email)) == email)
+            .where(User.deleted_at.is_(None))
+            .limit(2)
+        )
+        ids = list(result.scalars().all())
+        if len(ids) != 1:
+            return None
+        return ids[0]
 
     async def _find_or_create_category_mapping(
         self,
