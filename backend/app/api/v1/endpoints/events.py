@@ -10,7 +10,7 @@ import os
 import uuid as uuid_lib
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
-from typing import Dict, Optional, Set
+from typing import Any, Dict, Optional, Set
 from uuid import UUID
 
 from fastapi import (
@@ -97,6 +97,7 @@ from app.services.event_service import (
     DEFAULT_ALLOWED_RSVP_STATUSES,
     PHASE_GATE_PREFIX,
     EventService,
+    FinalizeOutcome,
     resolve_attendee_visibility,
 )
 from app.services.guest_check_in_service import GuestCheckInService
@@ -128,6 +129,21 @@ def _event_error(
             detail=error[len(ATTENDANCE_LOCKED_PREFIX) :],
         )
     return HTTPException(status_code=default_status, detail=error)
+
+
+def _training_credit_fields(outcome: Optional[FinalizeOutcome]) -> Dict[str, Any]:
+    """The training-credit report of a finalize, as response fields."""
+    if outcome is None:
+        return {}
+    return {
+        "training_credit": outcome.training_credit,
+        "training_records_completed": outcome.training_records_completed,
+        "training_approval_pending": outcome.training_approval_pending,
+        "training_attendees_pending": outcome.training_attendees_pending,
+        "training_attendees_uncredited": outcome.training_attendees_uncredited,
+        "training_uncredited_names": outcome.training_uncredited_names,
+        "admin_hours_entries_removed": outcome.admin_hours_entries_removed,
+    }
 
 
 async def _assert_attendance_open(
@@ -2232,6 +2248,12 @@ async def record_actual_times(
         actual_start_time=times_data.actual_start_time,
         actual_end_time=times_data.actual_end_time,
         finalized_by=current_user.id,
+        # Only an end time finalizes, and only a finalize feeds the training
+        # pipeline that needs to know.
+        can_manage_training=(
+            times_data.actual_end_time is not None
+            and user_has_permission(current_user, "training.manage")
+        ),
     )
 
     if error:
@@ -2256,25 +2278,30 @@ async def finalize_attendance(
     calculates duration using the event's actual_end_time (or end_datetime)
     minus each member's check-in time.
 
-    Also updates any linked training records that have hours_completed == 0.
+    On a Training event it also credits every checked-in member's training
+    record — completed, or waiting for a training officer's approval when the
+    event's training session requires it — and reports what it credited.
 
     **Authentication required**
     **Requires permission: events.manage**
     """
     service = EventService(db)
-    updated_count, error = await service.finalize_event_attendance(
+    outcome = await service.finalize_event_attendance_detailed(
         event_id=event_id,
         organization_id=current_user.organization_id,
         finalized_by=current_user.id,
+        can_manage_training=user_has_permission(current_user, "training.manage"),
     )
 
-    if error:
-        raise _event_error(error)
+    if outcome.error:
+        raise _event_error(outcome.error)
 
     # finalize_event_attendance archives the related validation prompt itself,
     # so every finalize path (end_event, auto-finalize, this endpoint) clears it.
 
-    return FinalizeAttendanceResponse(updated_count=updated_count)
+    return FinalizeAttendanceResponse(
+        updated_count=outcome.updated_count, **_training_credit_fields(outcome)
+    )
 
 
 @router.post("/{event_id}/reopen-attendance", response_model=EventResponse)
@@ -2345,6 +2372,7 @@ async def end_event(
         event_id=event_id,
         organization_id=current_user.organization_id,
         ended_by=current_user.id,
+        can_manage_training=user_has_permission(current_user, "training.manage"),
     )
 
     if error:
@@ -2366,6 +2394,7 @@ async def end_event(
     return EndEventResponse(
         checked_out_count=checked_out_count,
         actual_end_time=event.actual_end_time.isoformat() if event else None,
+        **_training_credit_fields(service.last_finalize_outcome),
     )
 
 

@@ -18,14 +18,18 @@ DB is mocked; no MySQL.
 """
 
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
+from app.models.event import EventType
 from app.models.training import TrainingSession, TrainingType
 from app.schemas.training_session import (
+    TrainingSessionAttach,
     TrainingSessionCreate,
     TrainingSessionLinkageUpdate,
 )
+from app.services.event_service import ATTENDANCE_LOCKED_PREFIX, EventService
 from app.services.training_session_service import TrainingSessionService
 
 ORG = uuid4()
@@ -34,6 +38,18 @@ ACTOR = uuid4()
 
 def _one(obj):
     return MagicMock(scalar_one_or_none=MagicMock(return_value=obj))
+
+
+def _open_event(**kw):
+    """The session's event, as update_session_linkage locks it: still open."""
+    fields = dict(
+        id=str(uuid4()),
+        title="Hose Operations",
+        attendance_finalized_at=None,
+        custom_fields={},
+    )
+    fields.update(kw)
+    return SimpleNamespace(**fields)
 
 
 class RecordingSession:
@@ -197,7 +213,9 @@ class TestUpdateLinkage:
     async def test_sets_a_link(self):
         requirement_id = uuid4()
         session = _session()
-        db = RecordingSession([_one(session), _one(str(requirement_id))])
+        db = RecordingSession(
+            [_one(session), _one(_open_event()), _one(str(requirement_id))]
+        )
         svc = TrainingSessionService(db)
 
         updated, error = await svc.update_session_linkage(
@@ -214,7 +232,7 @@ class TestUpdateLinkage:
         # The bug this guards: skipping None would 200 the request and leave
         # the old requirement attached.
         session = _session(requirement_id=str(uuid4()))
-        db = RecordingSession([_one(session)])
+        db = RecordingSession([_one(session), _one(_open_event())])
         svc = TrainingSessionService(db)
 
         updated, error = await svc.update_session_linkage(
@@ -229,7 +247,7 @@ class TestUpdateLinkage:
     async def test_omitted_field_is_left_alone(self):
         existing = str(uuid4())
         session = _session(requirement_id=existing, category_id=str(uuid4()))
-        db = RecordingSession([_one(session)])
+        db = RecordingSession([_one(session), _one(_open_event())])
         svc = TrainingSessionService(db)
 
         # Only category_id is in the payload; requirement_id was never sent
@@ -270,7 +288,7 @@ class TestUpdateLinkage:
 
     async def test_a_foreign_link_is_rejected_on_update_too(self):
         session = _session()
-        db = RecordingSession([_one(session), _one(None)])
+        db = RecordingSession([_one(session), _one(_open_event()), _one(None)])
         svc = TrainingSessionService(db)
 
         updated, error = await svc.update_session_linkage(
@@ -288,7 +306,9 @@ class TestUpdateLinkage:
         # mismatch that made the course lookup match nothing.
         category_id = uuid4()
         session = _session()
-        db = RecordingSession([_one(session), _one(str(category_id))])
+        db = RecordingSession(
+            [_one(session), _one(_open_event()), _one(str(category_id))]
+        )
         svc = TrainingSessionService(db)
 
         updated, _ = await svc.update_session_linkage(
@@ -296,6 +316,70 @@ class TestUpdateLinkage:
         )
 
         assert isinstance(updated.category_id, str)
+
+    async def test_refused_while_attendance_is_finalized(self):
+        """A change would sit unapplied beside records it disagrees with until
+        a reopen, so the closed event refuses it (a 409 at the endpoint)."""
+        session = _session()
+        locked = _open_event(attendance_finalized_at=datetime.now(timezone.utc))
+        db = RecordingSession([_one(session), _one(locked)])
+        svc = TrainingSessionService(db)
+
+        updated, error = await svc.update_session_linkage(
+            session.id, TrainingSessionLinkageUpdate(category_id=None), ORG
+        )
+
+        assert updated is None
+        assert error.startswith(ATTENDANCE_LOCKED_PREFIX)
+        assert db.commit.await_count == 0
+
+    async def test_setting_a_course_refiles_the_session_under_it(self):
+        session = _session(course_id=None, course_name="Hose Operations")
+        course = SimpleNamespace(id=str(uuid4()), name="Pump Ops I", code="PO1")
+        db = RecordingSession([_one(session), _one(_open_event()), _one(course)])
+        svc = TrainingSessionService(db)
+
+        updated, error = await svc.update_session_linkage(
+            session.id, TrainingSessionLinkageUpdate(course_id=course.id), ORG
+        )
+
+        assert error is None
+        assert updated.course_id == course.id
+        assert updated.course_name == "Pump Ops I"
+        assert updated.course_code == "PO1"
+
+    async def test_clearing_the_course_files_under_the_event_title(self):
+        session = _session(course_id=str(uuid4()), course_name="Pump Ops I")
+        event = _open_event(title="Saturday Pump Drill")
+        db = RecordingSession([_one(session), _one(event)])
+        svc = TrainingSessionService(db)
+
+        updated, error = await svc.update_session_linkage(
+            session.id, TrainingSessionLinkageUpdate(course_id=None), ORG
+        )
+
+        assert error is None
+        assert updated.course_id is None
+        assert updated.course_name == "Saturday Pump Drill"
+        assert updated.course_code is None
+
+    async def test_training_type_can_change_but_not_clear(self):
+        session = _session()
+        db = RecordingSession([_one(session), _one(_open_event())])
+        svc = TrainingSessionService(db)
+        updated, error = await svc.update_session_linkage(
+            session.id, TrainingSessionLinkageUpdate(training_type="refresher"), ORG
+        )
+        assert error is None
+        assert updated.training_type == TrainingType.REFRESHER
+
+        db = RecordingSession([_one(_session()), _one(_open_event())])
+        svc = TrainingSessionService(db)
+        updated, error = await svc.update_session_linkage(
+            session.id, TrainingSessionLinkageUpdate(training_type=None), ORG
+        )
+        assert updated is None
+        assert error == "Training type is required"
 
 
 class TestGetSessionByEvent:
@@ -311,3 +395,119 @@ class TestGetSessionByEvent:
         svc = TrainingSessionService(db)
 
         assert await svc.get_session_by_event(uuid4(), ORG) is None
+
+
+class TestAttachingDetailsStaysInOrg:
+    """XC-1 on the paths that attach training details to an existing or new
+    Training event: every id they store must be the caller's organization's."""
+
+    async def test_a_foreign_course_is_refused(self):
+        statements = []
+
+        class Capturing(RecordingSession):
+            async def execute(self, statement, *args, **kwargs):
+                statements.append(statement)
+                return _one(None)
+
+        svc = TrainingSessionService(Capturing())
+
+        course, error = await svc.resolve_attach_details(
+            TrainingSessionAttach(course_id=uuid4()), ORG
+        )
+
+        assert (course, error) == (None, "Training course not found")
+        compiled = str(statements[0].compile(compile_kwargs={"literal_binds": True}))
+        assert f"training_courses.organization_id = '{ORG}'" in compiled
+
+    async def test_another_org_s_event_is_not_found(self):
+        db = RecordingSession([_one(None)])
+
+        session, error = await TrainingSessionService(db).attach_session_to_event(
+            uuid4(), TrainingSessionAttach(), ORG, ACTOR
+        )
+
+        assert (session, error) == (None, "Event not found")
+        assert db.added == []
+        assert db.commit.await_count == 0
+
+    async def test_attach_with_a_foreign_course_adds_nothing(self):
+        start = datetime(2026, 9, 15, 9, 0, tzinfo=timezone.utc)
+        event = _open_event(
+            event_type=EventType.TRAINING,
+            is_cancelled=False,
+            start_datetime=start,
+            end_datetime=start + timedelta(hours=3),
+        )
+        # The event, its (absent) session, then the course lookup.
+        db = RecordingSession([_one(event), _one(None), _one(None)])
+
+        session, error = await TrainingSessionService(db).attach_session_to_event(
+            event.id, TrainingSessionAttach(course_id=uuid4()), ORG, ACTOR
+        )
+
+        assert (session, error) == (None, "Training course not found")
+        assert db.added == []
+        assert db.commit.await_count == 0
+
+    async def test_a_foreign_course_is_refused_on_update(self):
+        session = _session()
+        db = RecordingSession([_one(session), _one(_open_event()), _one(None)])
+
+        updated, error = await TrainingSessionService(db).update_session_linkage(
+            session.id, TrainingSessionLinkageUpdate(course_id=uuid4()), ORG
+        )
+
+        assert (updated, error) == (None, "Training course not found")
+        assert db.commit.await_count == 0
+
+
+class TestRecurringTrainingDetails:
+    """A recurring Training series from Events gets one session per
+    occurrence; the refusals come before anything is added."""
+
+    def _data(self, **overrides):
+        start = datetime(2026, 9, 15, 9, 0, tzinfo=timezone.utc)
+        data = {
+            "title": "Hose Operations",
+            "event_type": "training",
+            "start_datetime": start,
+            "end_datetime": start + timedelta(hours=3),
+            "recurrence_pattern": "weekly",
+            "recurrence_end_date": start + timedelta(days=21),
+            "training_details": {"category_id": str(uuid4())},
+        }
+        data.update(overrides)
+        return data
+
+    async def test_details_on_another_type_are_refused(self):
+        db = RecordingSession()
+        events, error = await EventService(db).create_recurring_event(
+            self._data(event_type="business_meeting"), ORG, ACTOR
+        )
+        assert (events, error) == (
+            [],
+            "Training details can only be added to a Training event",
+        )
+        assert db.added == []
+
+    async def test_a_rolling_series_is_refused(self):
+        """The job that extends a rolling series copies events, not sessions.
+        The schema refuses it first; the service holds the line for any other
+        caller."""
+        db = RecordingSession()
+        events, error = await EventService(db).create_recurring_event(
+            self._data(rolling_recurrence=True, recurrence_end_date=None), ORG, ACTOR
+        )
+        assert (events, error) == (
+            [],
+            "Training details can't be added to a rolling series",
+        )
+        assert db.added == []
+
+    async def test_a_foreign_category_is_refused(self):
+        db = RecordingSession([_one(None)])
+        events, error = await EventService(db).create_recurring_event(
+            self._data(), ORG, ACTOR
+        )
+        assert (events, error) == ([], "Invalid training category")
+        assert db.added == []

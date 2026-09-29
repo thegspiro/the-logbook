@@ -1624,9 +1624,16 @@ all by-ID mutations so it can't be forgotten in an endpoint:
 - `TrainingSubmissionService.get_submission(submission_id, organization_id)` filters by org; every mutation path (review/update/delete) funnels through it. Do not add an unscoped variant.
 - Training approval requires an org-matched token lookup — the token is not a
   standalone authorization boundary. `GET /training/sessions/approve/{token}`
-  additionally requires `training.manage` because it returns attendee PII;
-  `POST /training/sessions/approve/{token}` requires `events.manage`, matching
-  the `create`/`finalize` session lifecycle.
+  and `POST /training/sessions/approve/{token}` both require `training.manage`:
+  the roster carries attendee PII, and approving writes members' training
+  credit, which is the training officer's call rather than part of the
+  `events.manage` grant that finalized the event (2026-09-29). The submit must
+  cover the approval's whole roster exactly once, and is refused once the
+  event has been reopened, cancelled or re-typed.
+- A Training event's credit is written by Finalize Attendance on the event,
+  under the event's row lock. `POST /training/sessions/{id}/finalize` and
+  `/reopen` finalize and reopen that event's attendance rather than the
+  session alone.
 - External-import and enrollment paths validate the target `user_id` against the caller's organization before writing (`_verify_user_in_org`, `enroll_member`).
 - xAPI actor-email lookup is org-scoped.
 

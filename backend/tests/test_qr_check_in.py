@@ -213,9 +213,15 @@ class TestQRCheckInTimeValidation:
 
 
 class TestQRCheckInRecordsTraining:
-    """W20-1: the check-in page said "Training Record Created" for every
-    training-type event. A record is written only when a linked session
-    creates records automatically, and the QR data now says which."""
+    """What the check-in page tells a member about their training record.
+
+    W20-1 found it claiming "Training Record Created" for training events that
+    wrote no record. Every Training event's attendance now becomes a training
+    record when attendance is finalized, session or not, so ``records_training``
+    follows the event type — the same test finalize applies (pitfall #29). The
+    session only decides whether an officer approves the credit first, which
+    ``training_requires_approval`` reports.
+    """
 
     def _db(self, event, org, session_flag):
         mock_db = _mock_db_returning(event, org)
@@ -242,19 +248,30 @@ class TestQRCheckInRecordsTraining:
         return data, calls["n"]
 
     @pytest.mark.asyncio
-    async def test_training_event_whose_session_records_attendance(self):
+    async def test_training_event_whose_session_requires_approval(self):
         data, _ = await self._qr(EventType.TRAINING, True)
         assert data["records_training"] is True
+        assert data["training_requires_approval"] is True
 
     @pytest.mark.asyncio
-    async def test_training_event_with_no_recording_session(self):
+    async def test_training_event_with_no_session_still_records(self):
+        """An Events-created Training event has no session and is credited
+        all the same, straight to a completed record."""
         data, _ = await self._qr(EventType.TRAINING, None)
-        assert data["records_training"] is False
+        assert data["records_training"] is True
+        assert data["training_requires_approval"] is False
+
+    @pytest.mark.asyncio
+    async def test_session_without_confirmation_completes_directly(self):
+        data, _ = await self._qr(EventType.TRAINING, False)
+        assert data["records_training"] is True
+        assert data["training_requires_approval"] is False
 
     @pytest.mark.asyncio
     async def test_other_events_never_record_training_and_do_not_look(self):
         data, queries = await self._qr(EventType.BUSINESS_MEETING, True)
         assert data["records_training"] is False
+        assert data["training_requires_approval"] is False
         assert queries == 2
 
 

@@ -345,6 +345,10 @@ class TrainingRecordResponse(TrainingRecordBase, UTCResponseBase):
     apparatus_id: Optional[UUID] = None
     external_provider_id: Optional[UUID] = None
     external_record_id: Optional[str] = None
+    # Response only: the source is stamped by attendance finalize and is not
+    # accepted on create or update, where a client could point a record at an
+    # event it did not come from.
+    source_event_id: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
     created_by: Optional[UUID] = None

@@ -32,7 +32,7 @@ def make_event(**overrides) -> Event:
         "id": "22222222-2222-2222-2222-222222222222",
         "organization_id": ORG_ID,
         "title": "Ladder Company Drill",
-        "event_type": "training",
+        "event_type": "business_meeting",
         "custom_category": None,
         "start_datetime": start,
         "end_datetime": start + timedelta(hours=2),
@@ -58,13 +58,13 @@ class TestResolveCreditedHours:
         assert label is None
 
     def test_full_mapping_credits_the_scheduled_duration(self):
-        mappings = {("event_type", "training"): [(100, "Drill")]}
+        mappings = {("event_type", "business_meeting"): [(100, "Drill")]}
         hours, label = EventService._resolve_credited_hours(make_event(), mappings)
         assert hours == 2.0
         assert label == "Drill"
 
     def test_partial_mapping_credits_its_share(self):
-        mappings = {("event_type", "training"): [(50, "Drill")]}
+        mappings = {("event_type", "business_meeting"): [(50, "Drill")]}
         hours, label = EventService._resolve_credited_hours(make_event(), mappings)
         assert hours == 1.0
         assert label == "Drill"
@@ -72,7 +72,9 @@ class TestResolveCreditedHours:
     def test_split_mapping_sums_but_names_no_category(self):
         # 70/30 across two categories has no single honest label, so the total
         # is shown without naming one of them.
-        mappings = {("event_type", "training"): [(70, "Drill"), (30, "Prof Dev")]}
+        mappings = {
+            ("event_type", "business_meeting"): [(70, "Drill"), (30, "Prof Dev")]
+        }
         hours, label = EventService._resolve_credited_hours(make_event(), mappings)
         assert hours == 2.0
         assert label is None
@@ -82,12 +84,20 @@ class TestResolveCreditedHours:
         # a type, its custom_category mapping is not consulted. Displaying the
         # custom-category credit here would promise hours nothing awards.
         mappings = {
-            ("event_type", "training"): [(100, "Drill")],
+            ("event_type", "business_meeting"): [(100, "Drill")],
             ("custom_category", "hazmat"): [(100, "Hazmat")],
         }
         event = make_event(custom_category="hazmat")
         hours, label = EventService._resolve_credited_hours(event, mappings)
         assert label == "Drill"
+
+    def test_a_training_event_promises_no_admin_hours_even_when_mapped(self):
+        """Training events credit training records instead; a mapping left
+        over from before that rule must not put hours on the card that
+        credit_event_attendance will never award."""
+        mappings = {("event_type", "training"): [(100, "Drill")]}
+        event = make_event(event_type="training")
+        assert EventService._resolve_credited_hours(event, mappings) == (None, None)
 
     def test_custom_category_applies_when_the_event_has_no_type(self):
         mappings = {("custom_category", "hazmat"): [(100, "Hazmat")]}
@@ -99,7 +109,7 @@ class TestResolveCreditedHours:
     def test_zero_length_event_credits_nothing(self):
         start = datetime(2026, 9, 1, 19, 0, tzinfo=dt_timezone.utc)
         event = make_event(start_datetime=start, end_datetime=start)
-        mappings = {("event_type", "training"): [(100, "Drill")]}
+        mappings = {("event_type", "business_meeting"): [(100, "Drill")]}
         hours, label = EventService._resolve_credited_hours(event, mappings)
         assert hours is None
         assert label is None
@@ -109,7 +119,7 @@ class TestResolveCreditedHours:
         event = make_event(
             start_datetime=start, end_datetime=start + timedelta(minutes=100)
         )
-        mappings = {("event_type", "training"): [(100, "Drill")]}
+        mappings = {("event_type", "business_meeting"): [(100, "Drill")]}
         hours, _ = EventService._resolve_credited_hours(event, mappings)
         assert hours == 1.7
 
@@ -145,7 +155,7 @@ class TestAnnotateListItems:
             "app.services.event_service.AdminHoursService",
             lambda db: AsyncMock(
                 get_active_mappings_by_source=AsyncMock(
-                    return_value={("event_type", "training"): [(100, "Drill")]}
+                    return_value={("event_type", "business_meeting"): [(100, "Drill")]}
                 )
             ),
         )

@@ -47,7 +47,7 @@ from app.schemas.admin_hours import (
     EventHourMappingResponse,
     EventHourMappingUpdate,
 )
-from app.services.admin_hours_service import AdminHoursService
+from app.services.admin_hours_service import AdminHoursService, mapping_effect
 from app.utils.org_timezone import resolve_org_today
 
 router = APIRouter()
@@ -1037,6 +1037,7 @@ async def create_event_hour_mapping(
             "percentage": mapping.percentage,
             "is_active": mapping.is_active,
             "created_at": mapping.created_at,
+            **mapping_effect(mapping.event_type),
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -1077,6 +1078,7 @@ async def update_event_hour_mapping(
             "percentage": mapping.percentage,
             "is_active": mapping.is_active,
             "created_at": mapping.created_at,
+            **mapping_effect(mapping.event_type),
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))

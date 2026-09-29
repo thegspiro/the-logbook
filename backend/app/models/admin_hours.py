@@ -199,6 +199,22 @@ class AdminHoursEntry(Base):
     )
 
 
+# Event types whose attendance is never credited to admin hours, whatever
+# mapping a department has configured. A Training event's attendance is
+# credited to the members' training records when its attendance is finalized;
+# crediting admin hours as well counted the same hours twice wherever the two
+# are added together (the dashboard's My Hours, the annual compliance report's
+# total contributed). This is the authority: the crediting path, the event
+# card's estimate and the mapping settings all read it, and the settings
+# screen hides these types (frontend HourTrackingSection keeps a copy in step).
+EVENT_TYPES_WITHOUT_ADMIN_HOURS = frozenset({"training"})
+
+EVENT_TYPE_WITHOUT_ADMIN_HOURS_REASON = (
+    "Training events are credited to members' training records instead of "
+    "admin hours"
+)
+
+
 class EventHourMapping(Base):
     """Maps event types/custom categories to admin hours categories.
 

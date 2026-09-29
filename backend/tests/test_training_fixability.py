@@ -88,6 +88,30 @@ class TestReverseCreditsForSource:
         assert count == 0
         svc.revoke_requirement_credit.assert_not_awaited()
 
+    async def test_one_member_s_credit_in_any_program(self):
+        """A session credits a whole roster; removing one attendee takes back
+        only theirs — found by the source, in whichever program it landed."""
+        statements = []
+
+        class Capturing(RecordingSession):
+            async def execute(self, statement, *args, **kwargs):
+                statements.append(statement)
+                return _rows([])
+
+        svc = TrainingProgramService(Capturing())
+
+        await svc.reverse_credits_for_source(
+            organization_id="org-1", source_id="session-1", user_id="user-1"
+        )
+
+        compiled = str(statements[0].compile(compile_kwargs={"literal_binds": True}))
+        assert "program_enrollments.user_id = 'user-1'" in compiled
+        assert "requirement_progress_credits.source_id = 'session-1'" in compiled
+        assert "training_programs.organization_id = 'org-1'" in compiled
+        # Not narrowed to a program: a session re-linked during a reopen still
+        # has its old credit in the old program.
+        assert "training_programs.id =" not in compiled
+
 
 class TestReverseApproval:
     async def test_rejects_non_approved_submission(self, monkeypatch):

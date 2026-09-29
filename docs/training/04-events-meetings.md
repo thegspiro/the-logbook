@@ -174,7 +174,7 @@ Officers can view real-time check-in activity from the event's **Monitoring** vi
 
 ![Event check-in monitoring page with the live attendee list](./images/04-06-check-in-monitoring.png)
 
-> **Hint:** Officers can also manually check in members or override check-in/check-out times from the monitoring view, useful for members who forgot to scan.
+> **Hint:** The monitoring view is read-only. To check in a member who forgot to scan, or to correct their times, use **Check In** and **Edit Times** on the event's attendance list.
 
 #### Members who check in early _(2026-08-23)_
 
@@ -194,6 +194,13 @@ arithmetic is already right. The panel is there for the other case: somebody
 who genuinely **was** working before the event, setting up or on another task.
 Use **Edit Times** on the attendance list to set their check-in time, and that
 value is credited exactly as entered.
+
+**Edit Times shows the exact minutes it will save** _(2026-09-29)_. The time
+pickers used to round a recorded time down to the quarter hour for display
+while saving the real minute, so a member who tapped in at 9:07 showed as 9:00
+and "9:00 to 1:00" saved 233 minutes. A time that is not on a quarter hour now
+shows as it is — pick the quarter you mean and the duration beneath the
+pickers will read what gets credited.
 
 ---
 
@@ -334,12 +341,35 @@ Events support configurable reminders that are sent via the notification system:
 
 After an event ends, the event organizer receives an automatic notification prompting them to review and finalize the attendance records. This ensures attendance data is complete and accurate for compliance tracking.
 
-**Finalizing closes the event.** The roster is fixed, hours are credited to
-everyone who was checked in, and the linked training record is written.
-Reopening it afterwards needs `events.reopen_attendance` — deliberately *not*
-part of `events.manage`, so that the organizer who closed an event cannot
-quietly reopen it and change numbers already fed into admin hours, training
-records and compliance. It is held by the three chief ranks and the president.
+**Finalizing closes the event.** The roster is fixed and hours are credited to
+everyone who was checked in. Reopening it afterwards needs
+`events.reopen_attendance` — deliberately *not* part of `events.manage`, so
+that the organizer who closed an event cannot quietly reopen it and change
+numbers already fed into admin hours, training records and compliance. It is
+held by the three chief ranks and the president.
+
+**On a Training event, finalizing writes each member's training record**
+_(2026-09-29)_. Every checked-in member gets a **Completed** record for the
+time they are credited with:
+
+1. the times you set with **Edit Times**, if any;
+2. otherwise their real check-out (or **End Event**'s);
+3. otherwise from when they checked in to the event's end.
+
+A member with no time to credit — added after the event with no times set, say
+— gets no record, and the finalize message names them so you can set their
+times. Reopen, correct and finalize again: their record is updated in place,
+never duplicated. A Training event can only be finalized once it has ended.
+
+If the event's training session requires a training officer's confirmation,
+finalizing sends the attendance to training officers instead: members see the
+class as **In Progress** until an officer approves it on the approval page
+(linked from their email and from the event's Requirements & Programs card).
+
+**Training events do not credit Admin Hours.** Their attendance goes to the
+training records, and crediting admin hours as well counted the same hours
+twice. Finalizing a Training event removes any admin-hours entries that event
+wrote before this change, and the finalize message says how many.
 
 **Finalizing also moves prospective members on** _(2026-09-16)_. If your
 department runs a membership pipeline, an applicant sitting on a **Meeting**
@@ -370,14 +400,24 @@ for the coordinator's side.
 > record already restated under the old behaviour, so re-check anyone you
 > corrected that way.
 
-### Training Sessions from Events
+### Training Credit from Events _(2026-09-29)_
 
-Training-type events can be linked to a **Training Session** for automatic record-keeping:
+Any event with type **Training** credits its attendees' training records when
+its attendance is finalized — however the event was created.
 
-1. Create an event with type **Training**.
-2. After the event, navigate to **Training Admin > Create Session** and link it to the event.
-3. Finalize the session to trigger the approval workflow.
-4. Attendees automatically receive training records once approved.
+1. Create the event with type **Training** (Events → Create Event, or Training
+   → Create Training Session for sign-off, certification or an assigned
+   instructor).
+2. Optionally pick **Training details** on the form — course, category,
+   training type, program and requirement — so the credit counts toward the
+   right requirements. You can also add or change them later on the event's
+   **Requirements & Programs** card while attendance is open. Without details
+   the record is filed under the event's title as Continuing Education, which
+   counts toward total hours but not toward a category-based requirement.
+3. Check members in (or use **Add Attendee** and **Edit Times**), then
+   **Finalize Attendance** after the event ends.
+4. To correct a finalized event, somebody who can reopen attendance (a chief)
+   reopens it; change the details or times; finalize again.
 
 **The reverse also works, in bulk.** If the training is a multi-class course — a recruit school, a five-night refresher — generate a **course cohort** instead and the platform creates the events _and_ their linked training sessions for you, one per class, with the roster already RSVP'd to each. See [Multi-Class Courses & Cohorts](02-training.md#multi-class-courses--cohorts) in the training guide.
 
@@ -1221,7 +1261,7 @@ Events support three check-in window modes that control when QR and manual check
 | QR code not scanning                                       | Ensure good lighting and that the code is displayed at a readable size. Try the manual check-in option.                                                                                                                                                                                                                                   |
 | "Already checked in" error                                 | The member has already checked in. Use the monitoring view to verify or override times.                                                                                                                                                                                                                                                   |
 | Cannot RSVP to an event                                    | Check that the event is still open for RSVPs and that you are logged in. Past events cannot be RSVP'd to.                                                                                                                                                                                                                                 |
-| Training records not created from event                    | The event must have a linked Training Session that has been finalized and approved.                                                                                                                                                                                                                                                       |
+| Training records not created from event | Records are written when a **Training** event's attendance is **finalized** (not at check-in, and not for other event types). A member with no time to credit is named in the finalize message instead. If the event's session requires officer confirmation, records complete when a training officer approves. Before 29 Sep 2026 an event made from Events → Create Event wrote no records at all: have a chief reopen it and finalize again. |
 | Reopened an event on 24 Aug 2026, saw an error              | The reopen **worked** — it committed, then failed while building the response, for any event with a location. Check whether the event is actually open and finalize or correct it deliberately. Fixed 25 Aug 2026                                                                                                                          |
 | Corrected hours, but compliance still shows the old figure  | Before 25 Aug 2026, re-finalizing a reopened event refreshed the training record without restating the certification and phase totals behind it. Fixed going forward; records already restated under the old behaviour are not repaired retroactively, so re-check the member                                                              |
 | Minutes not showing attendees                              | If creating minutes from an event, attendees are imported from check-in records, not RSVPs. Ensure members checked in.                                                                                                                                                                                                                    |
@@ -1446,6 +1486,13 @@ When members attend events with configured mappings, their attendance hours are 
 ![Event hour-tracking settings mapping event types to admin hour categories](./images/04-37-hour-tracking-mapping.png)
 
 > **Edge case:** If no mapping is configured for an event type, attendance is not credited to admin hours. The mapping must be explicitly set up in Events Settings.
+
+> **Training events are not offered here** _(2026-09-29)_. Their attendance is
+> credited to members' training records when attendance is finalized, and
+> crediting admin hours too counted the same hours twice on the dashboard and
+> the annual compliance report. A training mapping created before this change
+> stays listed, labelled **Not in effect**, and credits nothing; delete it when
+> convenient.
 
 ---
 

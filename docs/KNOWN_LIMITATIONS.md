@@ -5180,6 +5180,69 @@ flagged final stage: today the button appears on the highest-`sort_order` stage
 and the manual `/transfer` it calls works regardless of the flag, so reading the
 flag alone would remove the button from those pipelines entirely.
 
+## Training — Credit From Event Attendance (2026-09-29)
+
+Finalizing a Training event's attendance now writes every checked-in member's
+training record (see `docs/training/04-events-meetings.md` → _Training Credit
+from Events_). Before this, an event made from Events → Create Event wrote no
+records at all, and the members an officer corrected with Edit Times were the
+ones skipped.
+
+**Decisions the owner made, and what they cost:**
+
+- **No backfill.** Events finalized before this change keep whatever they
+  wrote — for Events-created Training events, nothing. The fix is per event:
+  somebody with `events.reopen_attendance` reopens it (optionally adding
+  training details on the Requirements & Programs card) and it is finalized
+  again. Training officers do not hold that permission by default, so a chief
+  has to do the reopen.
+- **Training events no longer credit admin hours**, even where a department
+  mapped them. Finalizing a Training event removes the admin-hours entries
+  _that event_ wrote earlier, including approved ones. Entries for Training
+  events that are never finalized again stay in the ledger, and still add to
+  the dashboard's My Hours and the annual compliance total alongside the
+  training records.
+- **A credited member removed from the roster** has the record marked
+  Cancelled with its hours zeroed and a note of what it held, rather than
+  deleted, so their history shows the credit given and taken back.
+
+**Known risks and gaps, not fixed here:**
+
+- **Records from a Training event with no details carry no category or
+  course.** They count toward total hours; category-scoped HOURS requirements
+  and COURSES requirements ignore them until details are attached and the event
+  is re-finalized.
+- **The two HOURS evaluators still disagree** — `training_service.py` filters by
+  course and ignores category, `training_compliance.py` the reverse — so the
+  new records can read "met" on My Training and "not met" on a compliance card.
+  Pre-existing; more records now make it visible.
+- **A CERTIFICATION requirement can be met by name.**
+  `certification_record_matches` accepts the requirement's name as a substring
+  of the record's course name, so an event titled "CPR Refresher" can satisfy a
+  "CPR" certification requirement.
+- **Duplicates of a self-reported or hand-entered record are not detected.** A
+  member who submitted the same class, or an officer who entered it by hand as a
+  workaround, gets a second record from finalize; void the manual one.
+- **A session-backed event still adopts a same-named record from its day.**
+  Finalizing looks for a record written before the source link existed by the
+  session's course name and the event's day, as it always has, so a record an
+  officer scheduled for that class that day is completed by it rather than
+  duplicated. Taking credit back is narrower: removing, cancelling or
+  re-typing only reaches the member's own check-in placeholder and completed
+  records for members the session credited — never a record somebody else
+  scheduled or started.
+- **The NFPA completeness report flags a missing instructor** on records from
+  events without a course.
+- **A rolling recurring series cannot carry training details** — the nightly
+  job that extends it copies events, not sessions. Its occurrences are still
+  credited, as their titles.
+- **Pending-approval records are hidden by My Training's default date range**
+  (it filters on completion date, which a pending record does not have yet).
+- **Edit Times pre-fills an early tap verbatim.** Saving the dialog unchanged
+  turns an early check-in into an override, which is not clamped to the
+  scheduled start. Fixing it needs the backend to report the credited check-in
+  on the RSVP (pitfall #29) rather than the dialog re-deriving it.
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area
