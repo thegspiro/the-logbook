@@ -421,7 +421,7 @@ const IntegrationsPage: React.FC = () => {
       const data = await integrationsService.getIntegrations();
       setIntegrations(data);
     } catch {
-      toast.error('Failed to load integrations');
+      toast.error('Could not load integrations. Refresh the page to try again.');
     } finally {
       setLoading(false);
     }
@@ -460,7 +460,7 @@ const IntegrationsPage: React.FC = () => {
     const connected = params.get('salesforce');
     const sfError = params.get('salesforce_error');
     if (connected === 'connected') {
-      toast.success('Salesforce connected successfully!');
+      toast.success('Salesforce connected');
       setShowConnectModal(null);
       void loadIntegrations();
       void navigate('/integrations', { replace: true });
@@ -606,9 +606,7 @@ const IntegrationsPage: React.FC = () => {
       setShowConnectModal(null);
       resetFormState();
       toast.success(
-        isActivation(integration.integration_type)
-          ? `${integration.name} activated`
-          : 'Integration connected successfully!'
+        isActivation(integration.integration_type) ? `${integration.name} activated` : `${integration.name} connected`
       );
     } catch (err: unknown) {
       toast.error(
@@ -633,7 +631,7 @@ const IntegrationsPage: React.FC = () => {
       setIntegrations((prev) =>
         prev.map((i) => (i.id === integrationId ? { ...i, status: 'available' as const, enabled: false } : i))
       );
-      toast.success(activation ? `${integration?.name ?? 'Integration'} deactivated` : 'Integration disconnected');
+      toast.success(`${integration?.name ?? 'Integration'} ${activation ? 'deactivated' : 'disconnected'}`);
     } catch (err: unknown) {
       toast.error(
         getErrorMessage(err, activation ? 'Failed to deactivate integration' : 'Failed to disconnect integration')
@@ -689,7 +687,7 @@ const IntegrationsPage: React.FC = () => {
         const result = await integrationsService.salesforcePullContacts();
         if (!result.inbound_enabled) {
           toast.success(
-            `Pulled ${result.count} contacts for review. Set sync direction to Pull or Bidirectional to apply them.`
+            `Pulled ${result.count} contacts but did not apply them. Set sync direction to Pull or Bidirectional to update members.`
           );
         } else {
           toast.success(
@@ -759,7 +757,13 @@ const IntegrationsPage: React.FC = () => {
               type="url"
               value={webhookUrl}
               onChange={(e) => setWebhookUrl(e.target.value)}
-              placeholder="https://hooks.slack.com/services/..."
+              placeholder={
+                itype === 'discord'
+                  ? 'https://discord.com/api/webhooks/...'
+                  : itype === 'microsoft-teams'
+                    ? 'https://yourorg.webhook.office.com/...'
+                    : 'https://hooks.slack.com/services/...'
+              }
               className={inputClass}
             />
             <p className="text-theme-text-muted mt-1 text-xs">
@@ -898,7 +902,7 @@ const IntegrationsPage: React.FC = () => {
                 className={inputClass}
               />
               <p className="text-theme-text-muted mt-1 text-xs">
-                Used for HMAC-SHA256 signature in X-Webhook-Signature header.
+                If set, each request is signed with HMAC-SHA256 in the X-Webhook-Signature header.
               </p>
             </div>
           </div>
@@ -1059,8 +1063,8 @@ const IntegrationsPage: React.FC = () => {
                 className={inputClass}
               />
               <p className="text-theme-text-muted mt-1 text-xs">
-                Only needed for manual connection. Leave blank if using &quot;Connect with Salesforce&quot; above. Then
-                click Connect below.
+                Only for a manual connection: paste the token, then click Connect below. Leave blank if you use
+                &quot;Connect with Salesforce&quot; above.
               </p>
             </div>
             <div>
@@ -1099,8 +1103,7 @@ const IntegrationsPage: React.FC = () => {
                 className="mt-0.5"
               />
               <label htmlFor="sf-auto-sync" className="text-theme-text-secondary text-xs">
-                Automatically sync every 30 minutes (per the sync direction above), in addition to the manual sync
-                buttons.
+                Sync automatically every 30 minutes in the direction set above. The manual sync buttons still work.
               </label>
             </div>
             <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-3">
@@ -1462,7 +1465,7 @@ const IntegrationsPage: React.FC = () => {
                 spellCheck={false}
                 id="integrations-search"
                 type="text"
-                aria-label="Search integrations..."
+                aria-label="Search integrations"
                 placeholder="Search integrations..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -1672,6 +1675,7 @@ const IntegrationsPage: React.FC = () => {
                 <button
                   onClick={() => setShowBookingsPanel(false)}
                   className="text-theme-text-muted hover:text-theme-text-primary"
+                  aria-label="Close"
                 >
                   <X className="h-5 w-5" />
                 </button>
@@ -1730,6 +1734,7 @@ const IntegrationsPage: React.FC = () => {
                 <button
                   onClick={() => setShowSyncPanel(false)}
                   className="text-theme-text-muted hover:text-theme-text-primary"
+                  aria-label="Close"
                 >
                   <X className="h-5 w-5" />
                 </button>
@@ -1809,8 +1814,8 @@ const IntegrationsPage: React.FC = () => {
                   <div className="mt-2 rounded-lg border border-blue-500/30 bg-blue-500/10 p-3">
                     <p className="text-xs text-blue-700 dark:text-blue-400">
                       Matches contacts to existing members (by ID, then email) and updates their contact details.
-                      Members are never created or deleted. Requires sync direction Pull or Bidirectional. Real-time
-                      updates also arrive via the Salesforce webhook.
+                      Members are never created or deleted. Changes apply only when sync direction is Pull or
+                      Bidirectional. Real-time updates also arrive via the Salesforce webhook.
                     </p>
                   </div>
                 </div>
@@ -1930,8 +1935,8 @@ const IntegrationsPage: React.FC = () => {
                 )}
 
                 <p className="text-theme-text-muted text-xs">
-                  Events and training are also pushed automatically when sync direction is set to &quot;Push&quot; or
-                  &quot;Both&quot;.
+                  With automatic sync on, members, training and events are also pushed every 30 minutes when sync
+                  direction is &quot;Push&quot; or &quot;Bidirectional&quot;.
                 </p>
               </div>
             </div>
@@ -2000,6 +2005,7 @@ const IntegrationsPage: React.FC = () => {
                             resetFormState();
                           }}
                           className="text-theme-text-muted hover:text-theme-text-primary"
+                          aria-label="Close"
                         >
                           <X className="h-5 w-5" />
                         </button>
@@ -2031,7 +2037,7 @@ const IntegrationsPage: React.FC = () => {
                           <p className="text-sm text-indigo-700">
                             {activation
                               ? 'Activating turns this feature on for your organization. You can deactivate it at any time.'
-                              : 'Clicking Connect will enable this integration for your organization. You can disconnect it at any time.'}
+                              : 'Connecting turns this integration on for your organization. You can disconnect it at any time.'}
                           </p>
                         </div>
                       </div>
