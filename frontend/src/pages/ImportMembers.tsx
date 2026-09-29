@@ -683,7 +683,7 @@ const ImportMembers: React.FC = () => {
     if (!selectedFile) return;
 
     if (!selectedFile.name.endsWith('.csv')) {
-      toast.error('Please select a CSV file');
+      toast.error('Choose a CSV file.');
       return;
     }
 
@@ -798,7 +798,7 @@ const ImportMembers: React.FC = () => {
       setPreflight(report);
 
       if (report.invalid.length === 0) {
-        toast.success(`File validated successfully! Found ${report.total} members to import.`);
+        toast.success(`File checked: ${report.total} ${report.total === 1 ? 'member' : 'members'} ready to import.`);
       } else if (report.valid.length === 0) {
         toast.error(
           `No rows can be imported — all ${report.total} have problems. Download the error report for the reason on each row.`,
@@ -811,7 +811,7 @@ const ImportMembers: React.FC = () => {
         );
       }
     } catch (_error) {
-      toast.error('Failed to parse CSV file. Please check the format.');
+      toast.error('Unable to read the CSV file. Check that it matches the template.');
     }
     setValidating(false);
   };
@@ -919,7 +919,7 @@ const ImportMembers: React.FC = () => {
     setProgress(null);
 
     if (success > 0) {
-      toast.success(`Successfully imported ${success} members!`);
+      toast.success(`Imported ${success} ${success === 1 ? 'member' : 'members'}`);
     }
     if (issues.length > 0) {
       toast.error(`${issues.length} row(s) were not imported. Download the error report for details.`);
@@ -930,7 +930,7 @@ const ImportMembers: React.FC = () => {
   const downloadErrorReport = (issues: RowIssue[]) => {
     if (!preflight) return;
     downloadCsv(buildErrorReport(preflight.headerRow, issues), 'member-import-errors.csv');
-    toast.success('Error report downloaded!');
+    toast.success('Error report downloaded');
   };
 
   const downloadTemplate = async () => {
@@ -945,7 +945,7 @@ const ImportMembers: React.FC = () => {
       const exampleRow = TEMPLATE_HEADERS.map((h) => example[h]);
 
       downloadCsv(buildCsv([TEMPLATE_HEADERS, exampleRow]), 'member-import-template.csv');
-      toast.success('Template downloaded!');
+      toast.success('Template downloaded');
     } catch (_error) {
       toast.error('Could not load the regular-member role name, so the template was not created.');
     }
@@ -978,7 +978,7 @@ const ImportMembers: React.FC = () => {
               </div>
               <div>
                 <h1 className="text-theme-text-primary text-xl font-bold">Import Members from CSV</h1>
-                <p className="text-theme-text-muted text-sm">Bulk import member records</p>
+                <p className="text-theme-text-muted text-sm">Add many members at once from a spreadsheet</p>
               </div>
             </div>
             <button
@@ -1052,7 +1052,7 @@ const ImportMembers: React.FC = () => {
               </>
             ) : (
               <>
-                <p className="text-theme-text-primary mb-1 font-medium">Click to upload CSV file</p>
+                <p className="text-theme-text-primary mb-1 font-medium">Choose a CSV file to upload</p>
                 <p className="text-theme-text-muted text-sm">or drag and drop</p>
               </>
             )}
@@ -1070,7 +1070,7 @@ const ImportMembers: React.FC = () => {
           {validating && (
             <div className="mt-4 flex items-center justify-center space-x-2 text-blue-700 dark:text-blue-400">
               <div className="h-5 w-5 animate-spin rounded-full border-b-2 border-blue-700 dark:border-blue-400"></div>
-              <span>Validating file...</span>
+              <span>Checking file...</span>
             </div>
           )}
         </div>
@@ -1242,7 +1242,7 @@ const ImportMembers: React.FC = () => {
                 <AlertTriangle className="text-theme-alert-danger-icon mx-auto mb-4 h-16 w-16" />
               )}
               <h2 className="text-theme-text-primary mb-2 text-2xl font-bold">
-                {importResult.success > 0 ? 'Import Complete!' : 'Nothing Was Imported'}
+                {importResult.success > 0 ? 'Import Complete' : 'Nothing Was Imported'}
               </h2>
               <p className="text-theme-text-secondary">
                 {importResult.success > 0

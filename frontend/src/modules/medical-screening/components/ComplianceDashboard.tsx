@@ -24,7 +24,7 @@ export const ComplianceDashboard: React.FC = () => {
         {expiringScreenings.length === 0 ? (
           <div className="border-theme-surface-border rounded-lg border border-dashed py-8 text-center">
             <CheckCircle className="mx-auto mb-2 h-6 w-6 text-green-500" />
-            <p className="text-theme-text-muted text-sm">No screenings expiring soon.</p>
+            <p className="text-theme-text-muted text-sm">No screenings expire in the next 60 days.</p>
           </div>
         ) : (
           <div className="space-y-2">

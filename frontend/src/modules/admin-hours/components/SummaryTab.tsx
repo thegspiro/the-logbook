@@ -77,8 +77,8 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
           <div>
             <h2 className="text-theme-text-primary text-xl font-semibold">Hours summary</h2>
             <p className="text-theme-text-secondary mt-1 max-w-2xl text-sm">
-              Organization-wide completed sessions, grouped by each entry&apos;s current category (including any
-              recategorization made during review).
+              Completed entries across the department, grouped by each entry&apos;s current category (including any
+              category change made during review).
             </p>
           </div>
           <div className="flex items-center gap-2 rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
@@ -268,8 +268,8 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
               <p className="font-semibold">How this summary is calculated</p>
               <p className="mt-1">
                 Totals use each completed entry’s recorded duration and clock-in date. Active sessions, rejected
-                entries, and deleted entries are excluded. “Counted hours” includes both approved hours and hours still
-                awaiting review, so use the approved total for finalized reporting.
+                entries, and withdrawn entries are excluded. “Counted hours” includes both approved hours and hours
+                still awaiting review, so use the approved total for finalized reporting.
               </p>
             </div>
           </aside>

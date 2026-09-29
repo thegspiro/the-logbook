@@ -38,6 +38,13 @@ const STATUS_BADGES: Record<string, string> = {
   rejected: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
 };
 
+const STATUS_LABELS: Record<string, string> = {
+  draft: 'Draft',
+  submitted: 'Submitted',
+  approved: 'Approved',
+  rejected: 'Rejected',
+};
+
 const MOTION_STATUS_BADGES: Record<string, string> = {
   passed: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
   failed: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
@@ -185,7 +192,7 @@ export const MinutesDetailPage: React.FC = () => {
       setEditingSection(null);
       toast.success('Section saved');
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to save'));
+      toast.error(getErrorMessage(err, 'Failed to save section'));
     } finally {
       setSaving(false);
     }
@@ -207,7 +214,7 @@ export const MinutesDetailPage: React.FC = () => {
       const updated = await minutesService.updateMinutes(minutesId, { sections: renumbered });
       setMinutes(updated);
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to reorder'));
+      toast.error(getErrorMessage(err, 'Failed to move section'));
     } finally {
       setSaving(false);
     }
@@ -260,7 +267,7 @@ export const MinutesDetailPage: React.FC = () => {
       setSaving(true);
       const updated = await minutesService.updateMinutes(minutesId, { sections: filtered });
       setMinutes(updated);
-      toast.success('Section removed');
+      toast.success('Section deleted');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to delete section'));
     } finally {
@@ -278,7 +285,7 @@ export const MinutesDetailPage: React.FC = () => {
       await fetchMinutes();
       toast.success('Minutes published to Documents');
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to publish'));
+      toast.error(getErrorMessage(err, 'Failed to publish minutes'));
     } finally {
       setPublishing(false);
     }
@@ -294,7 +301,7 @@ export const MinutesDetailPage: React.FC = () => {
         setMinutes(updated);
         toast.success('Minutes submitted for approval');
       } catch (err: unknown) {
-        toast.error(getErrorMessage(err, 'Failed to submit'));
+        toast.error(getErrorMessage(err, 'Failed to submit minutes'));
       }
     });
 
@@ -305,7 +312,7 @@ export const MinutesDetailPage: React.FC = () => {
       setMinutes(updated);
       toast.success('Minutes approved');
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to approve'));
+      toast.error(getErrorMessage(err, 'Failed to approve minutes'));
     }
   };
 
@@ -318,7 +325,7 @@ export const MinutesDetailPage: React.FC = () => {
       setRejectReason('');
       toast.success('Minutes rejected');
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to reject'));
+      toast.error(getErrorMessage(err, 'Failed to reject minutes'));
     }
   };
 
@@ -391,7 +398,7 @@ export const MinutesDetailPage: React.FC = () => {
       await minutesService.updateActionItem(minutesId, itemId, { status: newStatus });
       void fetchMinutes();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to update'));
+      toast.error(getErrorMessage(err, 'Failed to update action item status'));
     }
   };
 
@@ -411,7 +418,7 @@ export const MinutesDetailPage: React.FC = () => {
       void fetchMinutes();
       toast.success('Action item deleted');
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to delete'));
+      toast.error(getErrorMessage(err, 'Failed to delete action item'));
     }
   };
 
@@ -477,7 +484,7 @@ export const MinutesDetailPage: React.FC = () => {
       toast.success('Minutes deleted');
       void navigate('/minutes');
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to delete'));
+      toast.error(getErrorMessage(err, 'Failed to delete minutes'));
     }
   };
 
@@ -523,7 +530,7 @@ export const MinutesDetailPage: React.FC = () => {
               </p>
             </div>
             <span className={`rounded-full px-3 py-1 text-sm font-semibold ${STATUS_BADGES[minutes.status]}`}>
-              {minutes.status}
+              {STATUS_LABELS[minutes.status] ?? minutes.status}
             </span>
           </div>
 
@@ -582,7 +589,7 @@ export const MinutesDetailPage: React.FC = () => {
               canManage &&
               isEditable && (
                 <p className="text-theme-text-muted mt-1 text-xs italic">
-                  No event linked. Link to a scheduled meeting to connect attendance and event data.
+                  No event linked. Link the business meeting event these minutes record.
                 </p>
               )
             )}
@@ -792,7 +799,7 @@ export const MinutesDetailPage: React.FC = () => {
 
           {minutes.sections.length === 0 ? (
             <div className="bg-theme-surface rounded-lg p-8 text-center shadow-sm backdrop-blur-xs">
-              <p className="text-theme-text-muted">No sections defined for these minutes.</p>
+              <p className="text-theme-text-muted">These minutes have no sections yet.</p>
               {canManage && isEditable && (
                 <button
                   onClick={() => setShowAddSection(true)}
@@ -1285,7 +1292,9 @@ export const MinutesDetailPage: React.FC = () => {
                 {loadingEvents ? (
                   <p className="text-theme-text-muted text-sm">Loading events...</p>
                 ) : availableEvents.length === 0 ? (
-                  <p className="text-theme-text-muted text-sm">No business meeting events found.</p>
+                  <p className="text-theme-text-muted text-sm">
+                    No business meeting events to link. Create one in Events first.
+                  </p>
                 ) : (
                   <div className="space-y-2">
                     {availableEvents.map((ev) => (
@@ -1343,7 +1352,7 @@ export const MinutesDetailPage: React.FC = () => {
               <div className="px-6 py-4">
                 <label htmlFor="reject-reason" className="text-theme-text-secondary mb-1 block text-sm font-medium">
                   Reason for Rejection <span aria-hidden="true">*</span>{' '}
-                  <span className="text-theme-text-muted text-xs">(min 10 characters)</span>
+                  <span className="text-theme-text-muted text-xs">(at least 10 characters)</span>
                 </label>
                 <textarea
                   id="reject-reason"

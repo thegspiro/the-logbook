@@ -284,7 +284,7 @@ describe('ShiftDetailPanel crew board signup gating', () => {
 
     renderWithRouter(<ShiftDetailPanel shift={crewShift as never} onClose={vi.fn()} />);
 
-    expect(await screen.findByText(/None of the open seats on this shift match/)).toBeInTheDocument();
+    expect(await screen.findByText(/None of the open seats match your rank/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Sign myself up/ })).not.toBeInTheDocument();
   });
 
@@ -296,7 +296,7 @@ describe('ShiftDetailPanel crew board signup gating', () => {
     renderWithRouter(<ShiftDetailPanel shift={crewShift as never} onClose={vi.fn()} />);
 
     expect(await screen.findAllByRole('button', { name: /Sign myself up/ })).toHaveLength(2);
-    expect(screen.queryByText(/None of the open seats on this shift match/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/None of the open seats match your rank/)).not.toBeInTheDocument();
   });
 
   it('withholds a seat the member is cleared for but somebody already holds', async () => {

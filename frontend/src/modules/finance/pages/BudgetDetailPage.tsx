@@ -78,7 +78,7 @@ const BudgetInfoCard: React.FC<BudgetInfoProps> = ({ budget, categoryName }) => 
       {/* Progress bar */}
       <div>
         <div className="mb-1 flex items-center justify-between text-sm">
-          <span className="text-theme-text-secondary">{pctUsed.toFixed(1)}% utilized</span>
+          <span className="text-theme-text-secondary">{pctUsed.toFixed(1)}% used</span>
           {pctUsed > 90 && (
             <span className="font-medium text-red-600">{pctUsed > 100 ? 'Over budget' : 'Near limit'}</span>
           )}
@@ -100,7 +100,7 @@ const BudgetInfoCard: React.FC<BudgetInfoProps> = ({ budget, categoryName }) => 
           </span>
           <span className="flex items-center gap-1.5">
             <span className="inline-block h-2 w-2 rounded-full bg-gray-200 dark:bg-gray-600" />
-            Available
+            Remaining
           </span>
         </div>
       </div>
@@ -231,8 +231,8 @@ const BudgetDetailPage: React.FC = () => {
         <EmptyState
           headingLevel={4}
           icon={FileText}
-          title="No transactions yet"
-          description="Transactions linked to this budget will appear here as purchase requests and expense reports are processed."
+          title="Not available yet"
+          description="Individual transactions for this budget aren't listed here yet."
         />
       </div>
     </div>

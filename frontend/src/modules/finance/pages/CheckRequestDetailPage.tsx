@@ -201,7 +201,7 @@ const CheckRequestDetailPage: React.FC = () => {
                 className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Send className="h-3.5 w-3.5" />
-                Submit
+                Submit for Approval
               </button>
             )}
             {canIssue && (
@@ -221,7 +221,7 @@ const CheckRequestDetailPage: React.FC = () => {
                 className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50"
               >
                 <XCircle className="h-3.5 w-3.5" />
-                Void
+                Void Request
               </button>
             )}
           </div>
@@ -349,9 +349,9 @@ const CheckRequestDetailPage: React.FC = () => {
         title="Issue check"
         message={
           <>
-            Records {formatCurrency(cr.amount)} to{' '}
-            <span className="text-theme-text-primary font-medium">{cr.payeeName}</span> as paid, against{' '}
-            {cr.requestNumber}.
+            Enter the number of the check paying {formatCurrency(cr.amount)} to{' '}
+            <span className="text-theme-text-primary font-medium">{cr.payeeName}</span>. {cr.requestNumber} will be
+            marked as issued.
           </>
         }
         label="Check number"

@@ -185,7 +185,7 @@ describe('PipelineBuilder', () => {
     await user.click(screen.getByRole('button', { name: 'Update Stage' }));
 
     await waitFor(() => {
-      expect(mockToastError).toHaveBeenCalledWith('Please select a form');
+      expect(mockToastError).toHaveBeenCalledWith('Select a form');
     });
     expect(mockUpdateStage).not.toHaveBeenCalled();
     // The dialog stays open on the field that needs attention.

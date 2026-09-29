@@ -170,7 +170,7 @@ const SuggestionsPage: React.FC = () => {
         )}
         {active === 'review' && summaryFailed && (
           <p role="alert" className="alert-danger text-sm">
-            Unable to load the boxes you review. Please reload the page to try again.
+            Unable to load the boxes you review. Reload the page to try again.
           </p>
         )}
       </div>

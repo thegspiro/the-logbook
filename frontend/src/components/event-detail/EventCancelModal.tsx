@@ -44,7 +44,7 @@ const EventCancelModal: React.FC<EventCancelModalProps> = ({ submitting, submitE
             onClick={onClose}
             className="btn-secondary text-theme-text-secondary mt-3 inline-flex w-full justify-center text-base font-medium shadow-xs focus:ring-offset-2 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
           >
-            Go Back
+            Keep Event
           </button>
         </>
       }
@@ -54,7 +54,7 @@ const EventCancelModal: React.FC<EventCancelModalProps> = ({ submitting, submitE
         className="mb-4 rounded-lg border border-yellow-200 bg-yellow-50 p-3 dark:border-yellow-500/30 dark:bg-yellow-500/10"
       >
         <p className="text-sm text-yellow-800 dark:text-yellow-400">
-          This action cannot be undone. The event will be marked as cancelled.
+          The event will be marked Cancelled. You can&apos;t undo this.
         </p>
       </div>
 
@@ -78,7 +78,7 @@ const EventCancelModal: React.FC<EventCancelModalProps> = ({ submitting, submitE
           value={cancelReason}
           onChange={(e) => setCancelReason(e.target.value)}
           className="form-input mt-1 shadow-xs sm:text-sm"
-          placeholder="Please provide a reason for cancelling this event..."
+          placeholder="Why is this event being cancelled?"
         />
         <p className="text-theme-text-muted mt-1 text-xs">{cancelReason.length}/500 characters (minimum 10)</p>
       </div>
@@ -91,7 +91,7 @@ const EventCancelModal: React.FC<EventCancelModalProps> = ({ submitting, submitE
             onChange={(e) => setSendCancelNotifications(e.target.checked)}
             className="form-checkbox border-theme-surface-border"
           />
-          <span className="text-theme-text-secondary ml-2 text-sm">Send cancellation notifications to all RSVPs</span>
+          <span className="text-theme-text-secondary ml-2 text-sm">Notify members who RSVP&apos;d Going or Maybe</span>
         </label>
       </div>
     </Modal>

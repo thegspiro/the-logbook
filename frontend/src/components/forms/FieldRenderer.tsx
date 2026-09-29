@@ -557,6 +557,7 @@ const FieldRenderer = ({
                   type="button"
                   onClick={() => onChange(field.id, '')}
                   className="text-theme-text-muted ml-2 shrink-0 hover:text-red-700 dark:hover:text-red-400"
+                  aria-label={`Remove ${fileInfo.name}`}
                 >
                   <X className="h-4 w-4" />
                 </button>

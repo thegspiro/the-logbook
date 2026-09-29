@@ -363,9 +363,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
         </div>
 
         {stats.recent_check_ins.length === 0 ? (
-          <div className="text-theme-text-muted py-8 text-center">
-            No check-ins yet. Waiting for members to arrive...
-          </div>
+          <div className="text-theme-text-muted py-8 text-center">No one has checked in yet.</div>
         ) : (
           <div>
             <table className="rwd-table divide-theme-surface-border min-w-full divide-y">

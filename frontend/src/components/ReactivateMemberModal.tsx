@@ -60,7 +60,7 @@ export const ReactivateMemberModal: React.FC<ReactivateMemberModalProps> = ({
       await onReactivated();
       onClose();
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Unable to reactivate the member. Please try again.'));
+      setError(getErrorMessage(err, 'Unable to reactivate the member. Try again.'));
     } finally {
       setSubmitting(false);
     }

@@ -524,7 +524,7 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
                 </div>
                 <div>
                   <label htmlFor="template-checkin-after" className={labelClass}>
-                    Minutes After Start
+                    Minutes After End
                   </label>
                   <input
                     id="template-checkin-after"

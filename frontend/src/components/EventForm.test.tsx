@@ -151,7 +151,9 @@ describe('EventForm', () => {
       await user.selectOptions(typeSelect, 'training');
 
       await waitFor(() => {
-        expect(screen.getByText(/for training events with course tracking/i)).toBeInTheDocument();
+        expect(
+          screen.getByText(/to track course hours and certifications, use create training session/i)
+        ).toBeInTheDocument();
       });
     });
   });

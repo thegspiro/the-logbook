@@ -99,7 +99,7 @@ export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> =
       <div ref={dialogRef} className="modal-panel modal-body w-full max-w-lg">
         <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
           <h2 id="screening-requirement-dialog-title" className="text-theme-text-primary text-lg font-bold">
-            {requirement ? 'Edit Requirement' : 'Add Screening Requirement'}
+            {requirement ? 'Edit Screening Requirement' : 'Add Screening Requirement'}
           </h2>
           <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary" aria-label="Close">
             <X className="h-5 w-5" />
@@ -201,10 +201,9 @@ export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> =
               placeholder="e.g., firefighter, emt, officer"
               className={inputClass}
             />
-            <p className="text-theme-text-muted mt-1 text-xs">Leave blank to apply to all members.</p>
             <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-500">
-              Not enforced yet — every active member and prospect is evaluated against this requirement regardless of
-              role, so listing roles here does not narrow who it applies to.
+              Not enforced yet — this requirement applies to every active member and prospect, whatever roles you list
+              here.
             </p>
           </div>
 
@@ -258,7 +257,7 @@ export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> =
               disabled={isSaving}
               className="rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:opacity-50"
             >
-              {isSaving ? 'Saving...' : requirement ? 'Update' : 'Create'}
+              {isSaving ? 'Saving...' : requirement ? 'Save Changes' : 'Add Requirement'}
             </button>
           </div>
         </form>

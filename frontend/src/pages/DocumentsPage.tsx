@@ -116,7 +116,7 @@ const DocumentsPage: React.FC = () => {
       return true;
     } catch {
       if (generation === levelGeneration.current) {
-        setFoldersError('Unable to load folders. Please check your connection and try again.');
+        setFoldersError('Unable to load folders. Check your connection and try again.');
       }
       return false;
     } finally {
@@ -156,7 +156,7 @@ const DocumentsPage: React.FC = () => {
     } catch {
       if (generation === requestGeneration.current) {
         if (!append) setDocuments([]);
-        setDocumentsError('Unable to load documents. Please check your connection and try again.');
+        setDocumentsError('Unable to load documents. Check your connection and try again.');
       }
     } finally {
       if (generation === requestGeneration.current) {
@@ -177,7 +177,7 @@ const DocumentsPage: React.FC = () => {
       const succeeded = await fetchFolders(currentFolder?.id, generation, folderSkip);
       if (!succeeded && generation === levelGeneration.current && currentFolder) {
         setError(
-          `The folder “${currentFolder.name}” is no longer accessible. Returned to the nearest accessible location.`
+          `Unable to open “${currentFolder.name}”. It may have been deleted, or you no longer have access. You're back in the folder above it.`
         );
         setFolderPath((path) => path.slice(0, -1));
         setFolderSkip(0);
@@ -228,7 +228,7 @@ const DocumentsPage: React.FC = () => {
       await fetchFolders(currentFolder?.id, ++levelGeneration.current, folderSkip);
       await fetchSummary();
     } catch {
-      setError('Unable to create folder. Please check your connection and try again.');
+      setError('Unable to create folder. Check your connection and try again.');
     } finally {
       setActionLoading(false);
     }
@@ -264,7 +264,7 @@ const DocumentsPage: React.FC = () => {
         await fetchDocuments(selectedFolder, debouncedSearch);
       }
     } catch {
-      setError('Unable to upload document. Please check your connection and try again.');
+      setError('Unable to upload document. Check your connection and try again.');
     } finally {
       setActionLoading(false);
     }
@@ -293,7 +293,7 @@ const DocumentsPage: React.FC = () => {
           await fetchDocuments(selectedFolder, debouncedSearch);
         }
       } catch {
-        setError('Unable to delete document. Please check your connection and try again.');
+        setError('Unable to delete document. Check your connection and try again.');
       } finally {
         setActionLoading(false);
       }
@@ -323,7 +323,7 @@ const DocumentsPage: React.FC = () => {
       a.remove();
       URL.revokeObjectURL(url);
     } catch {
-      setError('Unable to download document. Please check your connection and try again.');
+      setError('Unable to download document. Check your connection and try again.');
     }
   }, []);
 
@@ -420,7 +420,7 @@ const DocumentsPage: React.FC = () => {
             <div>
               <h1 className="text-theme-text-primary text-2xl font-bold">Documents & Files</h1>
               <p className="text-theme-text-secondary text-sm">
-                Centralized document storage for SOPs, policies, forms, and department files
+                SOPs, policies, forms, and other department files in one place
               </p>
             </div>
           </div>
@@ -453,9 +453,10 @@ const DocumentsPage: React.FC = () => {
             </div>
             <button
               onClick={() => setError(null)}
+              aria-label="Dismiss error"
               className="text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
             >
-              <X className="h-4 w-4" />
+              <X className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
         )}
@@ -466,7 +467,7 @@ const DocumentsPage: React.FC = () => {
             className="mb-8 flex items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3"
             role="status"
           >
-            <p className="text-theme-text-secondary text-sm">Document statistics could not be loaded.</p>
+            <p className="text-theme-text-secondary text-sm">Unable to load document totals.</p>
             <button
               type="button"
               onClick={() => void fetchSummary()}
@@ -493,7 +494,7 @@ const DocumentsPage: React.FC = () => {
               </p>
             </div>
             <div className="card p-4">
-              <p className="text-theme-text-muted text-xs font-medium uppercase">This Month</p>
+              <p className="text-theme-text-muted text-xs font-medium uppercase">Added This Month</p>
               <p className="mt-1 text-2xl font-bold text-green-700 dark:text-green-400">
                 {summary.documents_this_month}
               </p>
@@ -523,7 +524,7 @@ const DocumentsPage: React.FC = () => {
                     ? 'Search all documents...'
                     : currentFolder
                       ? 'Search documents in this folder...'
-                      : 'Select a folder to browse documents...'
+                      : 'Open a folder to search its documents...'
                 }
                 value={searchQuery}
                 onChange={(e) => {
@@ -627,7 +628,7 @@ const DocumentsPage: React.FC = () => {
             ) : (
               <div className="card p-8 text-center">
                 <FolderOpen className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
-                <p className="text-theme-text-secondary">No folders in this location.</p>
+                <p className="text-theme-text-secondary">{currentFolder ? 'No subfolders.' : 'No folders yet.'}</p>
               </div>
             )}
             {!foldersLoading && !foldersError && folderTotal > FOLDER_PAGE_SIZE && (
@@ -814,12 +815,25 @@ const DocumentsPage: React.FC = () => {
             ) : (
               <div className="card p-12 text-center">
                 <FolderOpen className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
-                <h3 className="text-theme-text-primary mb-2 text-xl font-bold">No Documents in This Folder</h3>
+                {/* One empty state serves a folder, All Documents and a search
+                    with no hits, so the heading says which of those it is. */}
+                <h3 className="text-theme-text-primary mb-2 text-xl font-bold">
+                  {debouncedSearch
+                    ? 'No Matching Documents'
+                    : showAllDocuments
+                      ? 'No Documents Yet'
+                      : 'No Documents in This Folder'}
+                </h3>
+                {debouncedSearch && <p className="text-theme-text-secondary mb-6">Try a different search.</p>}
                 {/* The member opened this folder deliberately, so it still
                     reports back as empty — only the instruction to upload,
                     which they cannot follow, is withheld. */}
-                {canManage && (
-                  <p className="text-theme-text-secondary mb-6">Upload documents to this folder to get started.</p>
+                {canManage && !debouncedSearch && (
+                  <p className="text-theme-text-secondary mb-6">
+                    {showAllDocuments
+                      ? 'Upload a document to add it here.'
+                      : 'Upload a document to add it to this folder.'}
+                  </p>
                 )}
                 {canManage && (
                   <button
@@ -827,7 +841,7 @@ const DocumentsPage: React.FC = () => {
                     className="inline-flex items-center space-x-2 rounded-lg bg-amber-700 px-6 py-3 text-white transition-colors hover:bg-amber-800"
                   >
                     <Upload className="h-5 w-5" />
-                    <span>Upload First Document</span>
+                    <span>Upload a Document</span>
                   </button>
                 )}
               </div>
@@ -865,9 +879,13 @@ const DocumentsPage: React.FC = () => {
           folders.length === 0 && (
             <div className="card p-12 text-center">
               <FolderOpen className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
-              <h3 className="text-theme-text-primary mb-2 text-xl font-bold">No Documents Yet</h3>
+              {/* Shown whenever the root has no folders, which is not the same
+                  as having no documents: an upload with no folder is listed
+                  under All Documents. So this invites setup rather than
+                  claiming the library is empty. */}
+              <h3 className="text-theme-text-primary mb-2 text-xl font-bold">Start Your Document Library</h3>
               <p className="text-theme-text-secondary mb-6">
-                Start building your document library by uploading SOPs, policies, and department files.
+                Upload SOPs, policies, and department files. Create folders to keep them organized.
               </p>
               {canManage && (
                 <button
@@ -875,7 +893,7 @@ const DocumentsPage: React.FC = () => {
                   className="inline-flex items-center space-x-2 rounded-lg bg-amber-700 px-6 py-3 text-white transition-colors hover:bg-amber-800"
                 >
                   <Upload className="h-5 w-5" />
-                  <span>Upload First Document</span>
+                  <span>Upload a Document</span>
                 </button>
               )}
             </div>
@@ -893,16 +911,18 @@ const DocumentsPage: React.FC = () => {
                     <button
                       onClick={() => setShowUploadModal(false)}
                       className="text-theme-text-muted hover:text-theme-text-primary"
+                      aria-label="Close dialog"
                     >
-                      <X className="h-5 w-5" />
+                      <X className="h-5 w-5" aria-hidden="true" />
                     </button>
                   </div>
 
                   <div className="space-y-4">
                     <div className="border-theme-surface-border rounded-lg border-2 border-dashed p-8 text-center transition-colors hover:border-amber-500/50">
                       <Upload className="text-theme-text-muted mx-auto mb-3 h-10 w-10" />
-                      <p className="text-theme-text-primary mb-1 font-medium">Drag and drop your file here</p>
-                      <p className="text-theme-text-muted mb-3 text-sm">or click to browse</p>
+                      {/* No drop handler is wired to this box, so the copy
+                          does not offer drag and drop. */}
+                      <p className="text-theme-text-primary mb-3 font-medium">Choose the file to upload</p>
                       <input
                         type="file"
                         className="hidden"
@@ -930,7 +950,7 @@ const DocumentsPage: React.FC = () => {
                         value={uploadForm.name}
                         onChange={(e) => setUploadForm({ ...uploadForm, name: e.target.value })}
                         className="form-input focus:ring-amber-500"
-                        placeholder="Optional - defaults to file name"
+                        placeholder="Optional — uses the file name if left blank"
                       />
                     </div>
 
@@ -947,7 +967,7 @@ const DocumentsPage: React.FC = () => {
                         value={uploadForm.description}
                         onChange={(e) => setUploadForm({ ...uploadForm, description: e.target.value })}
                         className="form-input focus:ring-amber-500"
-                        placeholder="Optional description"
+                        placeholder="Optional"
                       />
                     </div>
 
@@ -1031,7 +1051,7 @@ const DocumentsPage: React.FC = () => {
                   </div>
                   <div className="space-y-4">
                     <p className="text-theme-text-secondary text-sm">
-                      Parent:{' '}
+                      Location:{' '}
                       <span className="text-theme-text-primary font-medium">{currentFolder?.name ?? 'Root'}</span>
                       {showAllDocuments && ' (folders created from All Documents are placed at the root)'}
                     </p>
@@ -1107,7 +1127,7 @@ const DocumentsPage: React.FC = () => {
                     <div>
                       <h3 className="text-theme-text-primary text-lg font-medium">Delete Document</h3>
                       <p className="text-theme-text-muted mt-1 text-sm">
-                        Are you sure you want to delete this document? This action cannot be undone.
+                        This permanently deletes the document and its file. You can&apos;t undo this.
                       </p>
                     </div>
                   </div>
@@ -1127,7 +1147,7 @@ const DocumentsPage: React.FC = () => {
                     className="btn-primary inline-flex items-center space-x-2"
                   >
                     {actionLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-                    <span>Delete</span>
+                    <span>Delete Document</span>
                   </button>
                 </div>
               </DialogPanel>

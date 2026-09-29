@@ -80,13 +80,13 @@ use the per-row names.
   - No officer queue receives it.
   - My Shifts showed the member a Confirm button.
 
-**Where:** `frontend/src/pages/scheduling/OpenShiftsTab.tsx:26` and the intro.
+**Where:** `frontend/src/pages/scheduling/OpenShiftsTab.tsx`, the sign-up toast and the intro.
 **Fix:**
 
-- The toast reads "Signed up. The shift is on My Shifts, where you can confirm it."
-- The intro says the signup goes straight onto the schedule.
+- This run changed the toast and the intro so neither promises an officer review.
+- `main` corrected both independently while this run was open (the scheduling module review, #2780), so the merge keeps `main`'s wording: "Signed up for shift", and "Sign up for one and it goes straight onto your schedule".
 
-Covered by the new `OpenShiftsTab.test.tsx` case. Re-driven: the new toast.
+Covered by the new `OpenShiftsTab.test.tsx` case, which now asserts `main`'s toast. Re-driven before the merge.
 
 ### W33-3 — LOW — A double-clicked Approve reviewed twice and showed an error — ✅ FIXED
 

@@ -20,11 +20,6 @@ import { useEligiblePositions } from '../../hooks/useEligiblePositions';
 import { signupClosedReason } from '../../modules/scheduling/utils/shiftBoard';
 import { useSignupWindow } from '../../modules/scheduling/hooks/useSignupWindow';
 
-// A member's signup lands on the roster at once, as an assignment they answer
-// on My Shifts; nothing routes it to an officer for approval, so the message
-// must not promise one.
-const SIGNED_UP_MESSAGE = 'Signed up. The shift is on My Shifts, where you can confirm it.';
-
 interface OpenShiftsTabProps {
   onViewShift?: (shift: ShiftRecord) => void;
 }
@@ -140,7 +135,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
         position: signupPosition,
         ...(isOutreachSignup ? { outreach_role: signupRole } : {}),
       });
-      toast.success(SIGNED_UP_MESSAGE);
+      toast.success('Signed up for shift');
       surfaceWarnings(res);
       closeSignupModal();
       void loadShifts();
@@ -153,7 +148,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
             position: signupPosition,
             outreach_role: isOutreachSignup ? signupRole : undefined,
           });
-          toast.success(SIGNED_UP_MESSAGE);
+          toast.success('Signed up for shift');
           surfaceWarnings(res);
           closeSignupModal();
           void loadShifts();
@@ -211,10 +206,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
       <div className="flex items-start gap-3 rounded-xl border border-violet-500/20 bg-violet-500/5 p-4">
         <UserPlus className="mt-0.5 h-5 w-5 shrink-0 text-violet-600 dark:text-violet-400" />
         <div className="text-theme-text-secondary text-sm">
-          <p>
-            Browse available shifts and sign up for an open seat you are cleared for. Your signup goes straight onto the
-            schedule, under My Shifts.
-          </p>
+          <p>Shifts with open seats. Sign up for one and it goes straight onto your schedule.</p>
         </div>
       </div>
 
@@ -241,7 +233,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
         <div className="border-theme-surface-border rounded-xl border border-dashed py-16 text-center">
           <CalendarDays className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
           <h3 className="text-theme-text-primary mb-1 text-lg font-medium">No open shifts available</h3>
-          <p className="text-theme-text-muted text-sm">Check back later or adjust your date filter for more results.</p>
+          <p className="text-theme-text-muted text-sm">Check back later, or change the From date.</p>
         </div>
       ) : (
         <div className="space-y-6">
@@ -377,7 +369,8 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                   ) : isExcluded || eligiblePositions.length === 0 ? (
                     <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
                       <p className="text-sm text-amber-600 dark:text-amber-400">
-                        You are not eligible to sign up for this shift. Contact a scheduling admin for assistance.
+                        You are not eligible to sign up for this shift. Ask a scheduling admin if you think that is
+                        wrong.
                       </p>
                     </div>
                   ) : seatsAllTaken && !isOutreachSignup ? (

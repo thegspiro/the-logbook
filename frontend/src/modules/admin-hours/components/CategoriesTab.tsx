@@ -144,7 +144,7 @@ const CategoriesTab: React.FC<CategoriesTabProps> = ({ onDataReload }) => {
     try {
       const result = await adminHoursEntryService.closeStaleSessions();
       if (result.closedCount > 0) {
-        toast.success(`${result.closedCount} stale sessions closed`);
+        toast.success(`Closed ${result.closedCount} stale ${result.closedCount === 1 ? 'session' : 'sessions'}`);
         onDataReload();
       } else {
         toast.success('No stale sessions found');
@@ -164,7 +164,7 @@ const CategoriesTab: React.FC<CategoriesTabProps> = ({ onDataReload }) => {
               void handleCloseStaleSessions();
             }}
             className="btn-secondary text-theme-text-secondary flex items-center gap-2 px-3 text-sm transition"
-            title="Auto-close any sessions that exceeded their max hours limit"
+            title="Close sessions that have run past their category's max hours. Closed sessions go to pending review."
           >
             <AlertTriangle className="h-4 w-4" />
             Close Stale Sessions
@@ -238,11 +238,11 @@ const CategoriesTab: React.FC<CategoriesTabProps> = ({ onDataReload }) => {
                   <p className="text-theme-text-secondary mt-0.5 truncate text-sm">{cat.description}</p>
                 )}
                 <div className="text-theme-text-muted mt-1 flex gap-4 text-xs">
-                  <span>Approval: {cat.requireApproval ? 'Required' : 'Auto-approve clocked sessions'}</span>
+                  <span>Approval: {cat.requireApproval ? 'Required' : 'Not required'}</span>
                   {cat.requireApproval && cat.autoApproveUnderHours ? (
-                    <span>Auto-approve clocked sessions under {cat.autoApproveUnderHours}h</span>
+                    <span>Auto-approved under {cat.autoApproveUnderHours}h</span>
                   ) : null}
-                  <span>Manual entries: reviewed</span>
+                  <span>Manual entries: always reviewed</span>
                   {cat.maxHoursPerSession && <span>Max {cat.maxHoursPerSession}h/session</span>}
                 </div>
               </div>

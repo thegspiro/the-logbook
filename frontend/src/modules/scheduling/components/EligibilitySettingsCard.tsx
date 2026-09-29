@@ -92,7 +92,7 @@ export const EligibilitySettingsCard: React.FC = () => {
           <Shield className="h-4 w-4" /> Position Eligibility
         </h3>
         <p className="text-theme-text-muted mt-1 text-sm">
-          Control which membership types can self-signup for shifts and which positions are available to all members.
+          Choose which membership types can sign themselves up for shifts, and which positions any member can fill.
         </p>
       </div>
 
@@ -127,8 +127,7 @@ export const EligibilitySettingsCard: React.FC = () => {
       <div>
         <h4 className="text-theme-text-primary mb-2 text-sm font-medium">Open Positions</h4>
         <p className="text-theme-text-muted mb-3 text-xs">
-          These positions are available to all eligible members regardless of rank or training. Select positions that
-          anyone can sign up for.
+          Any eligible member can sign up for the positions you select here, whatever their rank or training.
         </p>
         <div className="flex flex-wrap gap-2">
           {POSITION_KEYS.map((pos) => {

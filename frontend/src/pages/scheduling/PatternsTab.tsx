@@ -240,7 +240,7 @@ export const PatternsTab: React.FC = () => {
 
     // Template is required for generation
     if (!createForm.template_id && !createForm.day_template_id) {
-      toast.error('A shift template is required — select one in the Templates tab first');
+      toast.error('Choose a shift template for this pattern');
       return;
     }
 

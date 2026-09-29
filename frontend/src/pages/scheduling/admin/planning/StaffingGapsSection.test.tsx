@@ -168,7 +168,7 @@ describe('StaffingGapsSection', () => {
     await user.clear(screen.getByLabelText('From'));
     await user.type(screen.getByLabelText('From'), '2099-12-31');
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/earlier than/);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/is before the/);
     expect(screen.queryByText(/has the crew it asks for/)).not.toBeInTheDocument();
     expect(mockGetShifts).not.toHaveBeenCalledWith(expect.objectContaining({ start_date: '2099-12-31' }));
   });

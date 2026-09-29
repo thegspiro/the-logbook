@@ -36,7 +36,7 @@ const MessagesInboxPage: React.FC = () => {
       setMessages(data);
       setHasMore(data.length === pageSize);
     } catch {
-      setError('Unable to load your messages. Please try again.');
+      setError('Unable to load your messages. Try again.');
     } finally {
       setIsLoading(false);
     }
@@ -54,7 +54,7 @@ const MessagesInboxPage: React.FC = () => {
       setMessages((current) => [...current, ...data]);
       setHasMore(data.length === pageSize);
     } catch {
-      setError('Unable to load more messages. Please try again.');
+      setError('Unable to load more messages. Try again.');
     } finally {
       setIsLoadingMore(false);
     }
@@ -100,8 +100,8 @@ const MessagesInboxPage: React.FC = () => {
       {messages.length === 0 ? (
         <EmptyState
           icon={Megaphone}
-          title="No messages"
-          description="Department announcements targeted to you will appear here."
+          title={includeRead ? 'No messages' : 'No unread messages'}
+          description="Department announcements sent to you appear here."
         />
       ) : (
         <ul className="space-y-3">

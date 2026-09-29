@@ -71,7 +71,7 @@ const ShiftCheckInPage: React.FC = () => {
         const checklists = await equipmentCheckService.getShiftChecklists(sid).catch(() => []);
         setHasStartChecklist(checklists.some((c) => c.checkTiming === 'start_of_shift' && !c.isCompleted));
       } catch {
-        toast.error('Unable to load shift');
+        toast.error('Could not load this shift');
       } finally {
         setLoading(false);
       }
@@ -112,7 +112,7 @@ const ShiftCheckInPage: React.FC = () => {
     try {
       const result = await schedulingService.checkIn(resolvedShiftId);
       setAttendance(result);
-      toast.success('Checked in successfully');
+      toast.success('Checked in');
     } catch (err: unknown) {
       // Show what the server said. A bare "Failed to check in" threw away the
       // one sentence that explains it — "This shift ended too long ago to check
@@ -159,7 +159,7 @@ const ShiftCheckInPage: React.FC = () => {
           <Clock className="mx-auto mb-3 h-12 w-12 text-amber-500" />
           <h1 className="text-theme-text-primary mb-1 text-xl font-bold">No Active Shift</h1>
           <p className="text-theme-text-muted mb-4 text-sm">
-            There is no active or upcoming shift for this apparatus right now. Check back closer to your shift start
+            This apparatus has no shift running or coming up right now. Try again closer to your shift&apos;s start
             time.
           </p>
           <button
@@ -190,7 +190,7 @@ const ShiftCheckInPage: React.FC = () => {
           <p className="text-theme-text-muted mb-4 text-sm">
             {askedForAShift
               ? 'The shift may have been deleted, or you may not be assigned to it. If you are working it, ask an officer to record your attendance.'
-              : 'This page checks you in to one particular shift. Scan the code on the apparatus, or open the shift from My Shifts and check in from there.'}
+              : 'Scan the QR code on the apparatus, or open the shift from My Shifts and check in there.'}
           </p>
           <button
             onClick={() => void navigate('/scheduling?tab=my-shifts')}
@@ -306,7 +306,7 @@ const ShiftCheckInPage: React.FC = () => {
 
         {shift.is_finalized && (
           <p className="text-center text-xs text-amber-600 dark:text-amber-400">
-            This shift has been finalized. Check-in/out is closed.
+            This shift is finalized, so check-in and check-out are closed.
           </p>
         )}
 

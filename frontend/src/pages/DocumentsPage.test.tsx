@@ -94,7 +94,7 @@ describe('DocumentsPage', () => {
 
     renderWithRouter(<DocumentsPage />);
 
-    expect(await screen.findByText('Document statistics could not be loaded.')).toBeInTheDocument();
+    expect(await screen.findByText('Unable to load document totals.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /sops/i })).toBeEnabled();
 
     await user.click(screen.getByRole('button', { name: 'Retry' }));
@@ -104,7 +104,7 @@ describe('DocumentsPage', () => {
     });
     expect(await screen.findByText('7')).toBeInTheDocument();
     expect(screen.getByText('2.0 KB')).toBeInTheDocument();
-    expect(screen.queryByText('Document statistics could not be loaded.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Unable to load document totals.')).not.toBeInTheDocument();
   });
 
   it('lists a folderless document under "All Documents" (DOC-22)', async () => {
@@ -238,6 +238,23 @@ describe('DocumentsPage', () => {
     );
     expect(await screen.findByText('Incident report')).toBeInTheDocument();
     expect(screen.getByText('Showing 1–1 of 1')).toBeInTheDocument();
+  });
+
+  it('says a search found nothing rather than calling the folder empty', async () => {
+    const user = userEvent.setup();
+    mockGetDocuments
+      .mockResolvedValueOnce({ documents: [makeDocument({ name: 'SOP' })], total: 1, skip: 0, limit: 50 })
+      .mockResolvedValueOnce({ documents: [], total: 0, skip: 0, limit: 50 });
+
+    renderWithRouter(<DocumentsPage />);
+    await user.click(await screen.findByRole('button', { name: /sops/i }));
+    await screen.findByText('SOP');
+    await user.type(screen.getByRole('textbox', { name: 'Search documents' }), 'nothing');
+
+    expect(await screen.findByText('No Matching Documents', {}, { timeout: 1500 })).toBeInTheDocument();
+    expect(screen.getByText('Try a different search.')).toBeInTheDocument();
+    expect(screen.queryByText('No Documents in This Folder')).not.toBeInTheDocument();
+    expect(screen.queryByText('Upload a document to add it to this folder.')).not.toBeInTheDocument();
   });
 
   it('resets to the first page when the selected folder changes', async () => {
@@ -386,8 +403,8 @@ describe('DocumentsPage', () => {
       // The card's copy and its action are both invitations to start
       // uploading, so a member gets neither.
       await waitFor(() => expect(mockGetFolders).toHaveBeenCalled());
-      await waitFor(() => expect(screen.queryByText('No Documents Yet')).not.toBeInTheDocument());
-      expect(screen.queryByText(/Start building your document library/i)).not.toBeInTheDocument();
+      await waitFor(() => expect(screen.queryByText('Start Your Document Library')).not.toBeInTheDocument());
+      expect(screen.queryByText(/Upload SOPs, policies, and department files/i)).not.toBeInTheDocument();
     });
 
     it('still reports an empty folder, without telling them to upload', async () => {
@@ -400,7 +417,7 @@ describe('DocumentsPage', () => {
       // They opened the folder deliberately, so the emptiness is reported;
       // only the upload instruction is withheld.
       expect(await screen.findByText('No Documents in This Folder')).toBeInTheDocument();
-      expect(screen.queryByText('Upload documents to this folder to get started.')).not.toBeInTheDocument();
+      expect(screen.queryByText('Upload a document to add it to this folder.')).not.toBeInTheDocument();
     });
   });
 
@@ -408,8 +425,8 @@ describe('DocumentsPage', () => {
     mockGetFolders.mockResolvedValue({ folders: [], total: 0, skip: 0, limit: 12 });
     renderWithRouter(<DocumentsPage />);
 
-    expect(await screen.findByText('No Documents Yet')).toBeInTheDocument();
-    expect(screen.getByText(/Start building your document library/i)).toBeInTheDocument();
+    expect(await screen.findByText('Start Your Document Library')).toBeInTheDocument();
+    expect(screen.getByText(/Upload SOPs, policies, and department files/i)).toBeInTheDocument();
   });
 
   describe('folder pagination', () => {

@@ -171,7 +171,7 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
           <div className="flex h-[600px] items-center justify-center">
             <div className="text-center">
               <Eye className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
-              <p className="text-theme-text-muted text-sm">Click "Refresh" to generate a preview with sample data</p>
+              <p className="text-theme-text-muted text-sm">Press Refresh to preview this template with sample data.</p>
             </div>
           </div>
         )}

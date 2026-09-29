@@ -78,7 +78,7 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
 
   const handleSendTest = async () => {
     if (!testEmail.trim()) {
-      toast.error('Please enter a recipient email address');
+      toast.error('Enter the email address to send the test to');
       return;
     }
     setIsSendingTest(true);
@@ -131,9 +131,7 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
       {showTestForm && (
         <div className="space-y-3 rounded-xl border border-blue-500/30 bg-blue-500/5 p-4">
           <h3 className="text-theme-text-primary text-sm font-semibold">Send Test Email</h3>
-          <p className="text-theme-text-muted text-xs">
-            Send a test email to verify your email configuration is working correctly.
-          </p>
+          <p className="text-theme-text-muted text-xs">Send a test email to check that email delivery works.</p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Recipient Email *</label>
@@ -190,7 +188,7 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            aria-label="Search by subject or recipient..."
+            aria-label="Search by subject or recipient"
             placeholder="Search by subject or recipient..."
             className={inputClass + ' pl-9'}
           />

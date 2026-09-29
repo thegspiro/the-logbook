@@ -309,7 +309,7 @@ export const EligibilityRoster: React.FC<EligibilityRosterProps> = ({ electionId
                 </div>
                 <div className="rounded-lg bg-blue-500/10 p-3 text-center">
                   <div className="text-2xl font-bold text-blue-700 dark:text-blue-400">{roster.total_overrides}</div>
-                  <div className="text-xs font-medium text-blue-600 dark:text-blue-500">Secretary Overrides</div>
+                  <div className="text-xs font-medium text-blue-600 dark:text-blue-500">Voter Overrides</div>
                 </div>
                 <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
                   <div className="text-theme-text-primary text-2xl font-bold">{roster.total_voted}</div>
@@ -323,8 +323,8 @@ export const EligibilityRoster: React.FC<EligibilityRosterProps> = ({ electionId
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
                   <p className="text-xs text-amber-700 dark:text-amber-300">
                     <span className="font-semibold">{roster.total_ineligible} member(s)</span> will not receive a
-                    ballot. Use <span className="font-semibold">Voter Overrides</span> below to grant exceptions, or
-                    expand each row to see per-item reasons.
+                    ballot. Expand a row to see why, or add a voter override on the{' '}
+                    <span className="font-semibold">Overrides</span> tab to let a member vote.
                   </p>
                 </div>
               )}

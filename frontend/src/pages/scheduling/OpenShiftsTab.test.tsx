@@ -97,7 +97,7 @@ describe('OpenShiftsTab', () => {
   it('should render the filter bar and info section', () => {
     renderWithRouter(<OpenShiftsTab onViewShift={mockOnViewShift} />);
     expect(screen.getByText('Refresh')).toBeInTheDocument();
-    expect(screen.getByText(/Browse available shifts/)).toBeInTheDocument();
+    expect(screen.getByText(/Shifts with open seats/)).toBeInTheDocument();
   });
 
   it('should render shifts after loading', async () => {
@@ -202,9 +202,7 @@ describe('OpenShiftsTab', () => {
     await user.click(await screen.findByRole('button', { name: 'Confirm Sign Up' }));
 
     await waitFor(() => {
-      expect(vi.mocked(toast.success)).toHaveBeenCalledWith(
-        'Signed up. The shift is on My Shifts, where you can confirm it.'
-      );
+      expect(vi.mocked(toast.success)).toHaveBeenCalledWith('Signed up for shift');
     });
   });
 

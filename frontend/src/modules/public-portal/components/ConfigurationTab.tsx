@@ -1,59 +1,36 @@
 /**
  * Configuration Tab Component
  *
- * Allows admins to configure portal settings including CORS origins,
- * rate limits, and cache TTL.
+ * Allows admins to configure the portal's default rate limit.
+ *
+ * `allowed_origins` and `cache_ttl_seconds` are stored on the config but
+ * nothing reads them — browser access is governed by the server-wide
+ * ALLOWED_ORIGINS and the public API does not cache — so there are no
+ * controls for them (CLAUDE.md pitfall #19). The save sends only the rate
+ * limit; the update endpoint writes only the fields it is sent, which keeps
+ * the stored values intact.
  */
 
 import React, { useState, useEffect } from 'react';
-import toast from 'react-hot-toast';
-import { Save, Plus, X, AlertCircle } from 'lucide-react';
+import { Save, AlertCircle } from 'lucide-react';
 import { usePortalConfig } from '../hooks/usePublicPortal';
 
 const ConfigurationTab: React.FC = () => {
   const { config, loading, updateConfig } = usePortalConfig();
 
-  const [allowedOrigins, setAllowedOrigins] = useState<string[]>([]);
-  const [newOrigin, setNewOrigin] = useState('');
   const [defaultRateLimit, setDefaultRateLimit] = useState(1000);
-  const [cacheTTL, setCacheTTL] = useState(300);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (config) {
-      setAllowedOrigins(config.allowed_origins || []);
       setDefaultRateLimit(config.default_rate_limit);
-      setCacheTTL(config.cache_ttl_seconds);
     }
   }, [config]);
-
-  const handleAddOrigin = () => {
-    if (!newOrigin.trim()) return;
-
-    // Validate URL format
-    try {
-      new URL(newOrigin);
-      if (!allowedOrigins.includes(newOrigin)) {
-        setAllowedOrigins([...allowedOrigins, newOrigin]);
-        setNewOrigin('');
-      }
-    } catch {
-      toast.error('Enter a full URL, such as https://example.com');
-    }
-  };
-
-  const handleRemoveOrigin = (origin: string) => {
-    setAllowedOrigins(allowedOrigins.filter((o) => o !== origin));
-  };
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await updateConfig({
-        allowed_origins: allowedOrigins,
-        default_rate_limit: defaultRateLimit,
-        cache_ttl_seconds: cacheTTL,
-      });
+      await updateConfig({ default_rate_limit: defaultRateLimit });
     } finally {
       setSaving(false);
     }
@@ -65,55 +42,6 @@ const ConfigurationTab: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* CORS Origins */}
-      <div className="bg-theme-surface rounded-lg p-6 shadow-sm">
-        <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Allowed Origins (CORS)</h3>
-        <p className="text-theme-text-secondary mb-4 text-sm">
-          Not in effect yet: the public API doesn't read this list. Which websites can call it from a browser is set by
-          the server's ALLOWED_ORIGINS setting.
-        </p>
-
-        <div className="space-y-3">
-          {/* Origin List */}
-          {allowedOrigins.length > 0 && (
-            <div className="space-y-2">
-              {allowedOrigins.map((origin) => (
-                <div
-                  key={origin}
-                  className="bg-theme-surface-secondary flex items-center justify-between rounded-lg px-4 py-2"
-                >
-                  <span className="text-theme-text-secondary font-mono text-sm">{origin}</span>
-                  <button
-                    onClick={() => handleRemoveOrigin(origin)}
-                    aria-label={`Remove ${origin}`}
-                    className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Add Origin */}
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <input
-              type="url"
-              value={newOrigin}
-              onChange={(e) => setNewOrigin(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleAddOrigin()}
-              placeholder="https://example.com"
-              aria-label="Allowed origin URL"
-              className="form-input flex-1"
-            />
-            <button onClick={handleAddOrigin} className="btn-info flex shrink-0 items-center justify-center gap-2">
-              <Plus className="h-4 w-4" />
-              <span>Add</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
       {/* Rate Limiting */}
       <div className="bg-theme-surface rounded-lg p-6 shadow-sm">
         <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Rate Limiting</h3>
@@ -140,29 +68,6 @@ const ConfigurationTab: React.FC = () => {
           <p className="text-theme-text-muted mt-1 text-xs">
             Recommended: 1000 for public websites, 10000 for high-traffic sites
           </p>
-        </div>
-      </div>
-
-      {/* Caching */}
-      <div className="bg-theme-surface rounded-lg p-6 shadow-sm">
-        <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Caching</h3>
-        <p className="text-theme-text-secondary mb-4 text-sm">
-          Not in effect yet: the public API doesn't cache responses, so this value changes nothing.
-        </p>
-
-        <div>
-          <label htmlFor="portal-cache-ttl" className="text-theme-text-secondary mb-2 block text-sm font-medium">
-            Cache TTL (seconds)
-          </label>
-          <input
-            id="portal-cache-ttl"
-            type="number"
-            value={cacheTTL}
-            onChange={(e) => setCacheTTL(parseInt(e.target.value, 10))}
-            min={0}
-            max={3600}
-            className="form-input"
-          />
         </div>
       </div>
 

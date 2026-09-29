@@ -34,7 +34,7 @@ describe('EventTemplateForm reminder audience', () => {
     await user.click(screen.getByRole('button', { name: /check-in settings/i }));
     await user.selectOptions(screen.getByLabelText(/check-in window type/i), 'window');
     await user.type(screen.getByLabelText(/minutes before start/i), '0');
-    await user.type(screen.getByLabelText(/minutes after start/i), '0');
+    await user.type(screen.getByLabelText(/minutes after end/i), '0');
     await user.click(screen.getByRole('button', { name: 'Save Template' }));
 
     expect(onSubmit).toHaveBeenCalledWith(
