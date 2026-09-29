@@ -398,7 +398,7 @@ export const MedicalScreeningPage: React.FC = () => {
         title={`Delete ${deleteTarget?.type === 'requirement' ? 'Requirement' : 'Record'}`}
         message={
           deleteTarget?.type === 'requirement'
-            ? `Delete "${deleteTarget.name}"? You can't undo this.`
+            ? `Delete "${deleteTarget.name}"? Screening records filed under it are kept, but will no longer be linked to a requirement. You can't undo this.`
             : `Delete this ${deleteTarget?.name ?? ''} record? You can't undo this.`
         }
         confirmLabel={deleteTarget?.type === 'requirement' ? 'Delete Requirement' : 'Delete Record'}
