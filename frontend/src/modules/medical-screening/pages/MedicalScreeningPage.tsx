@@ -396,13 +396,9 @@ export const MedicalScreeningPage: React.FC = () => {
       <ConfirmDialog
         isOpen={!!deleteTarget}
         title={`Delete ${deleteTarget?.type === 'requirement' ? 'Requirement' : 'Record'}`}
-        // Deleting a requirement takes its linked records with it: the ORM
-        // relationship is cascade="all, delete-orphan", which runs before the
-        // column's ondelete="SET NULL" can apply. Say so before the officer
-        // confirms, since those records are medical history.
         message={
           deleteTarget?.type === 'requirement'
-            ? `Delete "${deleteTarget.name}"? This also deletes every screening record linked to it. You can't undo this.`
+            ? `Delete "${deleteTarget.name}"? You can't undo this.`
             : `Delete this ${deleteTarget?.name ?? ''} record? You can't undo this.`
         }
         confirmLabel={deleteTarget?.type === 'requirement' ? 'Delete Requirement' : 'Delete Record'}
