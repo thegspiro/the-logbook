@@ -117,7 +117,7 @@ export const MembersAdminPage: React.FC = () => {
       setUsers(usersData);
       setRoles(rolesData);
     } catch (_err) {
-      setError('Unable to load members and roles. Please check your connection and refresh the page.');
+      setError('Unable to load members and roles. Check your connection and refresh the page.');
     } finally {
       setLoading(false);
     }
@@ -174,7 +174,7 @@ export const MembersAdminPage: React.FC = () => {
       if (status === 403) {
         setError('You do not have permission to update member information. Contact an administrator.');
       } else {
-        setError(detail || 'Unable to update member information. Please try again.');
+        setError(detail || 'Unable to update member information. Try again.');
       }
     } finally {
       setSavingProfile(false);
@@ -204,7 +204,7 @@ export const MembersAdminPage: React.FC = () => {
       if (status === 403) {
         setError(detail || 'You do not have permission to assign roles. Contact an administrator.');
       } else {
-        setError(detail || 'Unable to save role assignments. Please try again.');
+        setError(detail || 'Unable to save role assignments. Try again.');
       }
     } finally {
       setSaving(false);
@@ -274,7 +274,7 @@ export const MembersAdminPage: React.FC = () => {
       if (status === 403) {
         setError(detail || 'You do not have permission to assign roles. Contact an administrator.');
       } else {
-        setError(detail || 'Unable to update member assignments. Please try again.');
+        setError(detail || 'Unable to update member assignments. Try again.');
       }
     } finally {
       setSaving(false);
@@ -311,7 +311,7 @@ export const MembersAdminPage: React.FC = () => {
       // The server refuses on purpose — the last administrator, the grant
       // ceiling — and its reason is the useful part; "check your connection"
       // sent the officer looking for a network fault.
-      setError(getErrorDetail(err) || 'Unable to remove the role. Please check your connection and try again.');
+      setError(getErrorDetail(err) || 'Unable to remove the role. Check your connection and try again.');
     }
   };
 
@@ -337,7 +337,7 @@ export const MembersAdminPage: React.FC = () => {
       await fetchData();
     } catch (err: unknown) {
       setError(
-        getErrorDetail(err) || 'Unable to remove the user from this role. Please check your connection and try again.'
+        getErrorDetail(err) || 'Unable to remove the member from this role. Check your connection and try again.'
       );
     }
   };
@@ -352,7 +352,7 @@ export const MembersAdminPage: React.FC = () => {
       await fetchData();
     } catch (err: unknown) {
       const detail = getErrorDetail(err);
-      setError(detail || 'Unable to reset MFA. Please try again.');
+      setError(detail || 'Unable to reset MFA. Try again.');
     } finally {
       setSavingMfaReset(false);
     }
@@ -369,7 +369,7 @@ export const MembersAdminPage: React.FC = () => {
       setDeleteModalUser(null);
       await fetchData();
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Unable to deactivate the member. Please try again.'));
+      setError(getErrorMessage(err, 'Unable to deactivate the member. Try again.'));
     }
   };
 
@@ -380,7 +380,7 @@ export const MembersAdminPage: React.FC = () => {
       setDeleteModalUser(null);
       await fetchData();
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Unable to permanently delete the member. Please try again.'));
+      setError(getErrorMessage(err, 'Unable to permanently delete the member. Try again.'));
     }
   };
 
@@ -413,7 +413,7 @@ export const MembersAdminPage: React.FC = () => {
       setResetForceChange(true);
     } catch (err: unknown) {
       const detail = getErrorDetail(err);
-      setError(detail || 'Unable to reset password. Please try again.');
+      setError(detail || 'Unable to reset password. Try again.');
     } finally {
       setSavingReset(false);
     }
@@ -454,10 +454,8 @@ export const MembersAdminPage: React.FC = () => {
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h2 className="text-theme-text-primary text-2xl font-bold">Members Administration</h2>
-            <p className="text-theme-text-muted mt-1 text-sm">
-              Manage member roles, permissions, and contact information
-            </p>
+            <h2 className="text-theme-text-primary text-2xl font-bold">Member Management</h2>
+            <p className="text-theme-text-muted mt-1 text-sm">Edit member details, assign roles, and reset passwords</p>
           </div>
           {canCreateMembers && (
             // This page is the admin hub's "manage" tab, so Add Member selects
@@ -697,7 +695,8 @@ export const MembersAdminPage: React.FC = () => {
                         </div>
                         {role.description && <p className="text-theme-text-muted mt-1 text-sm">{role.description}</p>}
                         <p className="text-theme-text-muted mt-1 text-xs">
-                          {role.permissions.length} permissions • {usersWithRole.length} members
+                          {role.permissions.length} permission{role.permissions.length === 1 ? '' : 's'} •{' '}
+                          {usersWithRole.length} member{usersWithRole.length === 1 ? '' : 's'}
                         </p>
                       </div>
                       <button
@@ -997,7 +996,9 @@ export const MembersAdminPage: React.FC = () => {
                 className="form-checkbox border-theme-surface-border"
                 disabled={savingReset}
               />
-              <span className="text-theme-text-secondary text-sm">Require user to change password on next login</span>
+              <span className="text-theme-text-secondary text-sm">
+                Require the member to change this password at next sign-in
+              </span>
             </label>
 
             {error && (
@@ -1047,7 +1048,7 @@ export const MembersAdminPage: React.FC = () => {
             </p>
             <p className="text-theme-text-secondary text-sm">
               They'll be signed out of active sessions and can re-enroll from their own Security settings. If your
-              department requires MFA, they'll be prompted to set it up again on next login.
+              department requires MFA, they'll be prompted to set it up again at next sign-in.
             </p>
             {error && <div className="text-sm text-red-700 dark:text-red-400">{error}</div>}
           </div>

@@ -193,10 +193,10 @@ describe('LegalDocumentsPage', () => {
     );
     renderWithRouter(<LegalDocumentsPage />);
     await screen.findByText('Dana Reyes proposed this');
-    await user.click(screen.getByRole('button', { name: /Publish to members/ }));
+    await user.click(screen.getByRole('button', { name: 'Publish' }));
 
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByText(/replaces what every visitor/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Everyone who visits \/privacy sees this text immediately/i)).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Publish it' }));
 
     await waitFor(() => expect(mockPublishRevision).toHaveBeenCalledWith('rev-1'));
@@ -213,7 +213,7 @@ describe('LegalDocumentsPage', () => {
     );
     renderWithRouter(<LegalDocumentsPage />);
     await screen.findByText('Dana Reyes proposed this');
-    expect(screen.queryByRole('button', { name: /Publish to members/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Publish' })).not.toBeInTheDocument();
     // A proposer still owns their own draft.
     expect(screen.getByRole('button', { name: /Edit/ })).toBeInTheDocument();
   });

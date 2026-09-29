@@ -258,9 +258,9 @@ export const UserSettingsPage: React.FC = () => {
       const { membership_number: _mn, rank: _r, station: _s, ...editableFields } = profileForm;
       const updated = await userService.updateUserProfile(user.id, editableFields);
       setProfile(updated);
-      toast.success('Profile updated successfully!');
+      toast.success('Profile saved');
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to update profile. Please try again.'));
+      toast.error(getErrorMessage(err, 'Could not save your profile. Try again.'));
     } finally {
       setSavingProfile(false);
     }
@@ -283,7 +283,7 @@ export const UserSettingsPage: React.FC = () => {
 
     // Validate password strength
     if (!passwordValidation.isValid) {
-      toast.error('Please ensure your password meets all the requirements');
+      toast.error('Your new password does not meet all the requirements yet');
       return;
     }
 
@@ -311,7 +311,7 @@ export const UserSettingsPage: React.FC = () => {
       await endSessionLocally();
       void navigate('/login', { replace: true, state: { reason: 'password_changed' } });
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to change password. Please check your current password and try again.'));
+      toast.error(getErrorMessage(err, 'Could not change your password. Check your current password and try again.'));
     } finally {
       setChangingPassword(false);
     }
@@ -328,9 +328,9 @@ export const UserSettingsPage: React.FC = () => {
         email_kinds: Object.fromEntries(emailChoices.map((choice) => [choice.key, choice.enabled])),
       });
 
-      toast.success('Preferences saved successfully!');
+      toast.success('Notification preferences saved');
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to save preferences. Please try again.'));
+      toast.error(getErrorMessage(err, 'Could not save your preferences. Try again.'));
     } finally {
       setSavingPreferences(false);
     }
@@ -568,9 +568,9 @@ export const UserSettingsPage: React.FC = () => {
       setContactsForm(
         updated.emergency_contacts?.length ? updated.emergency_contacts.map((ec: EmergencyContact) => ({ ...ec })) : []
       );
-      toast.success('Emergency contacts updated successfully!');
+      toast.success('Emergency contacts saved');
     } catch (err: unknown) {
-      setContactsError(getErrorMessage(err, 'Unable to update emergency contacts.'));
+      setContactsError(getErrorMessage(err, 'Could not save your emergency contacts. Try again.'));
     } finally {
       setSavingContacts(false);
     }
@@ -609,8 +609,8 @@ export const UserSettingsPage: React.FC = () => {
         sections={SECTIONS}
         activeSection={activeTab}
         onSectionChange={selectTab}
-        navLabel="User settings sections"
-        title="User Settings"
+        navLabel="Account sections"
+        title="My Account"
       >
         <>
           {/* Account Tab */}
@@ -875,8 +875,8 @@ export const UserSettingsPage: React.FC = () => {
                   <div>
                     <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300">Password change required</p>
                     <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-400">
-                      Your administrator has required you to change your password before continuing. Please set a new
-                      password below.
+                      An administrator requires you to change your password before you continue. Set a new password
+                      below.
                     </p>
                   </div>
                 </div>
@@ -1187,7 +1187,7 @@ export const UserSettingsPage: React.FC = () => {
               <div>
                 <h2 className="text-theme-text-primary mb-4 text-xl font-semibold">Emergency Contacts</h2>
                 <p className="text-theme-text-secondary mb-6 text-sm">
-                  Add emergency contacts so your department can reach someone on your behalf if needed
+                  Who the department should contact on your behalf in an emergency
                 </p>
               </div>
 

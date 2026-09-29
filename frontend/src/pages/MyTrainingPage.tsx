@@ -1206,7 +1206,7 @@ const MyTrainingPage: React.FC = () => {
             !data.certifications?.length && (
               <div className="card-secondary py-8 text-center">
                 <p className="text-theme-text-muted mb-4">
-                  No detailed training records yet. Submit external training to get started.
+                  No training on your record yet. Trained outside the department? Submit it to add it here.
                 </p>
                 <button onClick={() => void navigate('/training/submit')} className="btn-primary text-sm font-medium">
                   Submit External Training

@@ -49,7 +49,7 @@ export const ApparatusStatusRenderer: React.FC<Props> = ({ data }) => {
     { key: 'next_inspection_due', header: 'Next Inspection' },
     {
       key: 'days_until_inspection',
-      header: 'Days Until',
+      header: 'Days Left',
       align: 'right' as const,
       render: (v: unknown) => {
         if (v == null) return '-';
@@ -63,7 +63,7 @@ export const ApparatusStatusRenderer: React.FC<Props> = ({ data }) => {
         return <span className={color}>{days}</span>;
       },
     },
-    { key: 'open_work_orders', header: 'Open WOs', align: 'right' as const },
+    { key: 'open_work_orders', header: 'Open Work Orders', align: 'right' as const },
   ];
 
   return (

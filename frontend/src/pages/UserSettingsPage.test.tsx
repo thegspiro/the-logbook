@@ -275,7 +275,7 @@ describe('UserSettingsPage', () => {
   it('should render the page title', () => {
     renderWithRouter(<UserSettingsPage />);
 
-    expect(screen.getByText('User Settings')).toBeInTheDocument();
+    expect(screen.getByText('My Account')).toBeInTheDocument();
   });
 
   it('should render all tabs including Emergency Contacts', () => {
@@ -674,7 +674,9 @@ describe('UserSettingsPage', () => {
       await user.click(emergencyTab);
 
       await waitFor(() => {
-        expect(screen.getByText(/Add emergency contacts so your department can reach someone/)).toBeInTheDocument();
+        expect(
+          screen.getByText(/Who the department should contact on your behalf in an emergency/)
+        ).toBeInTheDocument();
       });
     });
   });

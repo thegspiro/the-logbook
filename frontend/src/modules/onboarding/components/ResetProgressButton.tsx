@@ -76,7 +76,7 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({ classN
       setShowModal(false);
       window.location.href = '/onboarding/start';
     } catch (_err) {
-      setError('Failed to reset onboarding. Please try again.');
+      setError('Could not reset setup. Try again.');
       setIsResetting(false);
     }
   };
@@ -134,7 +134,7 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({ classN
 
             {/* Title */}
             <h3 id="reset-progress-title" className="text-theme-text-primary mb-2 text-center text-xl font-bold">
-              Reset Onboarding Progress?
+              Start setup over?
             </h3>
 
             {/* Warning Message */}
@@ -145,11 +145,11 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({ classN
               <ul className="mt-2 space-y-1 text-sm text-red-700 dark:text-red-200">
                 <li className="flex items-start">
                   <span className="mr-2">•</span>
-                  Delete all onboarding progress
+                  Discard every step you have completed
                 </li>
                 <li className="flex items-start">
                   <span className="mr-2">•</span>
-                  Clear all database records created during setup
+                  Delete the records setup has saved
                 </li>
                 <li className="flex items-start">
                   <span className="mr-2">•</span>
@@ -175,7 +175,7 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({ classN
                 disabled={isResetting}
                 className="bg-theme-surface-hover hover:bg-theme-surface-hover text-theme-text-primary flex-1 rounded-lg px-4 py-3 font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Cancel
+                Keep my progress
               </button>
               <button
                 onClick={() => {
@@ -203,7 +203,7 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({ classN
                     Resetting...
                   </>
                 ) : (
-                  'Yes, Reset Everything'
+                  'Yes, start over'
                 )}
               </button>
             </div>

@@ -240,8 +240,8 @@ describe('onboarding API client transport', () => {
   describe('HTTP error mapping', () => {
     it.each([
       [429, /too many requests/i],
-      [403, /security validation failed/i],
-      [500, /server error occurred/i],
+      [403, /security check failed/i],
+      [500, /the server hit an error/i],
       [503, /temporarily unavailable/i],
     ])('turns %i into a message an operator can act on', async (status, expected) => {
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({}, { status })));
@@ -298,7 +298,7 @@ describe('onboarding API client transport', () => {
     it('survives an error response whose body is not JSON', async () => {
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('<html>502</html>', { status: 500 })));
 
-      expect((await (await freshClient()).getStatus()).error).toMatch(/server error occurred/i);
+      expect((await (await freshClient()).getStatus()).error).toMatch(/the server hit an error/i);
     });
   });
 
@@ -308,7 +308,7 @@ describe('onboarding API client transport', () => {
 
       const result = await (await freshClient()).getStatus();
 
-      expect(result.error).toMatch(/unable to reach the server/i);
+      expect(result.error).toMatch(/cannot reach the server/i);
       expect(result.statusCode).toBe(0);
     });
 

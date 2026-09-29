@@ -154,6 +154,7 @@ const Modal: React.FC<ModalProps> = ({ open, onClose, title, children }) => {
           <button
             type="button"
             onClick={onClose}
+            aria-label="Close"
             className="text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary rounded-lg p-1"
           >
             <X className="h-5 w-5" />
@@ -372,7 +373,7 @@ export const GrantDetailPage: React.FC = () => {
         status: ComplianceTaskStatusEnum.COMPLETED,
         completedDate: new Date().toISOString(),
       });
-      toast.success('Task marked as complete');
+      toast.success('Task marked complete');
     } catch {
       toast.error('Failed to update task');
     }
@@ -427,7 +428,7 @@ export const GrantDetailPage: React.FC = () => {
           <FileText className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
           <h2 className="text-theme-text-primary mb-2 text-xl font-bold">Application Not Found</h2>
           <p className="text-theme-text-muted mb-6">
-            The grant application you&apos;re looking for doesn&apos;t exist.
+            This grant application doesn&apos;t exist or couldn&apos;t be loaded.
           </p>
           <button
             type="button"
@@ -540,7 +541,7 @@ export const GrantDetailPage: React.FC = () => {
             <div className="border-theme-surface-border bg-theme-surface-secondary rounded-lg border p-4">
               <div className="text-theme-text-secondary flex items-center gap-2 text-sm">
                 <Target className="h-4 w-4" />
-                Match Required
+                Match Amount
               </div>
               <p className="text-theme-text-primary mt-1 text-xl font-bold">
                 {formatCurrencyWhole(application.matchAmount)}
@@ -717,7 +718,7 @@ export const GrantDetailPage: React.FC = () => {
                   className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
                 >
                   <Plus className="h-4 w-4" />
-                  Add Item
+                  Add Budget Item
                 </button>
               </div>
             )}
@@ -1107,7 +1108,7 @@ export const GrantDetailPage: React.FC = () => {
                   rows={3}
                   value={newNoteContent}
                   onChange={(e) => setNewNoteContent(e.target.value)}
-                  placeholder="Type your note here..."
+                  placeholder="Add an update or a call summary..."
                   className={`${inputClass} resize-none`}
                 />
                 <div className="mt-3 flex justify-end">
@@ -1208,7 +1209,7 @@ export const GrantDetailPage: React.FC = () => {
               onClick={() => void handleAddBudgetItem()}
               className="rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Add Item
+              Add Budget Item
             </button>
           </div>
         </div>
@@ -1268,33 +1269,33 @@ export const GrantDetailPage: React.FC = () => {
           </div>
           <div>
             <label htmlFor="exp-vendor" className={labelClass}>
-              Vendor
+              Vendor (optional)
             </label>
             <input
               id="exp-vendor"
               type="text"
               value={expenditureVendor}
               onChange={(e) => setExpenditureVendor(e.target.value)}
-              placeholder="Vendor name"
+              placeholder="e.g., Acme Fire Equipment"
               className={inputClass}
             />
           </div>
           <div>
             <label htmlFor="exp-invoice" className={labelClass}>
-              Invoice / PO Number
+              Invoice / PO Number (optional)
             </label>
             <input
               id="exp-invoice"
               type="text"
               value={expenditureInvoice}
               onChange={(e) => setExpenditureInvoice(e.target.value)}
-              placeholder="Optional"
+              placeholder="e.g., INV-1042"
               className={inputClass}
             />
           </div>
           <div>
             <label htmlFor="exp-budget-item" className={labelClass}>
-              Budget Category
+              Budget Item (optional)
             </label>
             <select
               id="exp-budget-item"
@@ -1302,7 +1303,7 @@ export const GrantDetailPage: React.FC = () => {
               onChange={(e) => setExpenditureBudgetItemId(e.target.value)}
               className={selectClass}
             >
-              <option value="">Select budget item...</option>
+              <option value="">None</option>
               {budgetItems.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.category} - {item.description}
@@ -1375,7 +1376,7 @@ export const GrantDetailPage: React.FC = () => {
           </div>
           <div>
             <label htmlFor="comp-description" className={labelClass}>
-              Description
+              Description (optional)
             </label>
             <textarea
               id="comp-description"
@@ -1419,14 +1420,14 @@ export const GrantDetailPage: React.FC = () => {
           </div>
           <div>
             <label htmlFor="comp-template" className={labelClass}>
-              Report Template
+              Report Template (optional)
             </label>
             <input
               id="comp-template"
               type="text"
               value={complianceReportTemplate}
               onChange={(e) => setComplianceReportTemplate(e.target.value)}
-              placeholder="Template name or URL (optional)"
+              placeholder="Template name or URL"
               className={inputClass}
             />
           </div>

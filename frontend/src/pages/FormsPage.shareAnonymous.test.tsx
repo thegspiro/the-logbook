@@ -54,7 +54,7 @@ async function openShareDialog(form: FormDef) {
   mockGetForms.mockResolvedValue({ forms: [form], total: 1 });
   renderWithRouter(<FormsPage />);
   await userEvent.click(await screen.findByRole('button', { name: /^Share$/ }));
-  return screen.getByRole('dialog', { name: /Public Sharing Settings/ });
+  return screen.getByRole('dialog', { name: /Share Form/ });
 }
 
 describe('FormsPage share dialog: submissions without signing in', () => {

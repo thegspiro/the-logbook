@@ -401,7 +401,7 @@ describe('TestingChecklistPage', () => {
       renderWithRouter(<TestingChecklistPage />);
 
       await user.click(await screen.findByRole('button', { name: /Start a new run/ }));
-      expect(screen.getByText(/Everyone's board goes back to nothing/)).toBeInTheDocument();
+      expect(screen.getByText(/Every tester starts again from a blank checklist/)).toBeInTheDocument();
 
       await user.click(screen.getByRole('button', { name: 'Start the run' }));
 

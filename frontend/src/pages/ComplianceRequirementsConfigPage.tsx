@@ -388,7 +388,7 @@ export default function ComplianceRequirementsConfigPage() {
       };
 
       await complianceConfigService.generateReport(data);
-      toast.success('Report generated successfully');
+      toast.success('Report generated');
       await loadReports();
     } catch {
       toast.error('Failed to generate report');

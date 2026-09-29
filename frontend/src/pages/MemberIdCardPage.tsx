@@ -68,7 +68,7 @@ export const MemberIdCardPage: React.FC = () => {
       setMember(userData);
       setOrg(orgData);
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Failed to load member ID card'));
+      setError(getErrorMessage(err, 'Unable to load the ID card.'));
     } finally {
       setLoading(false);
     }

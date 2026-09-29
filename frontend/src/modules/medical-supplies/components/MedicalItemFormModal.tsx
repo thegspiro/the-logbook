@@ -83,7 +83,7 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
       return;
     }
     if (!form.category_id) {
-      toast.error('Pick a category — it is what files this as a medical supply');
+      toast.error('Choose a category — it is what makes this a medical supply');
       return;
     }
 
@@ -145,17 +145,18 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
            */}
           {categoriesError && categories.length === 0 ? (
             <div className="alert-danger">
-              The category list could not be loaded, so there is nothing to file this supply under: {categoriesError}{' '}
-              Close this and retry the list from the All supplies tab.
+              The category list could not be loaded: {categoriesError} Close this and select Retry on the All supplies
+              tab.
             </div>
           ) : categoriesError ? (
             <div className="alert-warning">
-              Showing previously loaded categories — the list could not be refreshed: {categoriesError} One added since
-              may be missing, and one removed since may still be listed.
+              Showing previously loaded categories — the list could not be refreshed: {categoriesError} New categories
+              may be missing, and removed ones may still be listed.
             </div>
           ) : categories.length === 0 ? (
             <div className="alert-warning">
-              No medical supply categories exist yet. Create one first — a supply is filed as medical by its category.
+              No medical supply categories exist yet. Add one on the Medical Supply Categories page first — a
+              supply&apos;s category is what makes it medical.
             </div>
           ) : null}
 
@@ -247,7 +248,7 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
                 className="form-input w-full"
                 value={form.reorder_point}
                 onChange={(e) => set('reorder_point', e.target.value)}
-                placeholder="Alert below this"
+                placeholder="Flag as low at or below this"
               />
             </div>
           </div>

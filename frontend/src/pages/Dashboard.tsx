@@ -1858,7 +1858,7 @@ const Dashboard: React.FC = () => {
                   </span>
                   <span className="min-w-0">
                     <span className="block text-base font-bold">Log Training</span>
-                    <span className="mt-0.5 block truncate text-[13px] text-red-100">Course, hours, done</span>
+                    <span className="mt-0.5 block truncate text-[13px] text-red-100">Record a course or hours</span>
                   </span>
                 </button>
 

@@ -90,7 +90,7 @@ describe('MembersSettingsPage', () => {
     // looking at.
     await waitFor(() => expect(window.location.pathname).toBe('/members/admin/settings/ranks'));
     expect(screen.queryByText('Contact Information Visibility')).not.toBeInTheDocument();
-    expect(screen.queryByText(/does not hold that grant/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/cannot change any of these settings/)).not.toBeInTheDocument();
   });
 
   // EVOC is the one section gated on another module entirely: the levels are
@@ -113,7 +113,7 @@ describe('MembersSettingsPage', () => {
 
     renderWithRouter(<MembersSettingsPage section="visibility" />);
 
-    expect(await screen.findByText(/does not hold that grant/)).toBeInTheDocument();
+    expect(await screen.findByText(/cannot change any of these settings/)).toBeInTheDocument();
     expect(screen.queryByText('Show Contact Information')).not.toBeInTheDocument();
   });
 

@@ -109,9 +109,7 @@ const Members: React.FC = () => {
       };
       setStats(calculatedStats);
     } catch (err: unknown) {
-      setError(
-        getErrorMessage(err, 'Unable to load the member list. Please check your connection and refresh the page.')
-      );
+      setError(getErrorMessage(err, 'Unable to load the member list. Check your connection and try again.'));
     } finally {
       setLoading(false);
     }
@@ -139,7 +137,7 @@ const Members: React.FC = () => {
       setDeleteModalMember(null);
       await loadMembers();
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Unable to deactivate the member. Please try again.'));
+      setError(getErrorMessage(err, 'Unable to deactivate the member. Try again.'));
     }
   };
 
@@ -150,7 +148,7 @@ const Members: React.FC = () => {
       setDeleteModalMember(null);
       await loadMembers();
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Unable to permanently delete the member. Please try again.'));
+      setError(getErrorMessage(err, 'Unable to permanently delete the member. Try again.'));
     }
   };
 
@@ -394,7 +392,7 @@ const Members: React.FC = () => {
                 onChange={(e) => setFilterStatus(e.target.value)}
                 className="form-input"
               >
-                <option value="all">All Status</option>
+                <option value="all">All Statuses</option>
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
                 <option value="leave">On Leave</option>
@@ -431,8 +429,8 @@ const Members: React.FC = () => {
         {contactInfoEnabled.enabled && (
           <div className="mb-6 rounded-lg border border-blue-500/30 bg-blue-500/10 p-4">
             <p className="text-sm text-blue-700 dark:text-blue-300">
-              <strong>Privacy Notice:</strong> Contact information is displayed for department purposes only. This
-              information should not be used for commercial purposes or shared outside the organization.
+              <strong>Privacy Notice:</strong> Use this contact information for department business only. Do not use it
+              commercially or share it outside the department.
             </p>
           </div>
         )}
@@ -452,7 +450,7 @@ const Members: React.FC = () => {
                     : // An instruction to add or import, so only for someone who
                       // can do either.
                       canCreateMembers
-                      ? 'Get started by adding your first member or importing from CSV'
+                      ? 'Add your first member, or import members from a CSV file.'
                       : undefined
                 }
                 actions={

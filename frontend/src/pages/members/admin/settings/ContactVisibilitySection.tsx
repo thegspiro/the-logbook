@@ -86,11 +86,11 @@ const ContactVisibilitySection: React.FC<Props> = ({ save }) => {
       <div>
         <SettingsPanelHead
           title="Contact Information Visibility"
-          description="Control what appears on the member list page."
+          description="Choose which contact details members see in the directory and on profiles."
         />
         <div className="alert-warning flex flex-wrap items-center gap-2 text-sm" role="alert">
           <span className="min-w-0 flex-1">
-            These settings did not load, so nothing below reflects what your department has chosen.
+            These settings did not load. Retry to see what your department has chosen.
           </span>
           <button
             type="button"
@@ -108,13 +108,13 @@ const ContactVisibilitySection: React.FC<Props> = ({ save }) => {
     <div>
       <SettingsPanelHead
         title="Contact Information Visibility"
-        description="Control what appears on the member list page."
+        description="Choose which contact details members see in the directory and on profiles."
       />
       <div className="space-y-3" aria-busy={loading}>
         <div className="border-theme-surface-border flex items-center justify-between border-b py-3">
           <div>
             <p className="text-theme-text-primary text-sm font-medium">Show Contact Information</p>
-            <p className="text-theme-text-muted text-xs">Enable display of contact info for all members</p>
+            <p className="text-theme-text-muted text-xs">Show contact details to every member</p>
           </div>
           <Toggle
             label="Show Contact Information"

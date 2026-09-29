@@ -160,7 +160,7 @@ export const GrantOpportunitiesPage: React.FC = () => {
         const data = await grantsService.listOpportunities(params);
         if (!cancelled) setOpportunities(data);
       } catch {
-        if (!cancelled) setError('Failed to load grant opportunities.');
+        if (!cancelled) setError('Failed to load grant opportunities. Refresh the page to try again.');
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -201,7 +201,7 @@ export const GrantOpportunitiesPage: React.FC = () => {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-theme-text-primary text-2xl font-bold">Grant Opportunities</h1>
-          <p className="text-theme-text-secondary mt-1 text-sm">Browse and apply to available grant programs</p>
+          <p className="text-theme-text-secondary mt-1 text-sm">Browse grant programs and start an application</p>
         </div>
         <button
           onClick={() => void navigate('/grants/opportunities/new')}
@@ -221,7 +221,7 @@ export const GrantOpportunitiesPage: React.FC = () => {
             autoCorrect="off"
             spellCheck={false}
             type="text"
-            aria-label="Search by name or agency..."
+            aria-label="Search opportunities by name or agency"
             placeholder="Search by name or agency..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -352,7 +352,7 @@ export const GrantOpportunitiesPage: React.FC = () => {
                       className="inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-900"
                     >
                       <ExternalLink className="h-3.5 w-3.5" />
-                      Apply
+                      Start Application
                     </Link>
                     <button
                       onClick={() => toggleExpand(opp.id)}

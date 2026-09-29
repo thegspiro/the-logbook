@@ -517,7 +517,7 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                   className="form-input"
                 >
                   <option value="annual">Annual</option>
-                  <option value="biannual">Biannual (Every 2 Years)</option>
+                  <option value="biannual">Every 2 Years</option>
                   <option value="quarterly">Quarterly</option>
                   <option value="monthly">Monthly</option>
                   <option value="one_time">One Time</option>

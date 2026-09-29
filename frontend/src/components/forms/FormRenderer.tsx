@@ -196,7 +196,7 @@ const FormRenderer = ({
       if (val && field.field_type === FieldType.NUMBER) {
         const num = Number(val);
         if (isNaN(num)) {
-          return 'Must be a number';
+          return 'Enter a number';
         }
         if (field.min_value !== undefined && field.min_value !== null && num < field.min_value) {
           return `Minimum value is ${field.min_value}`;
@@ -206,13 +206,13 @@ const FormRenderer = ({
         }
       }
       if (val && field.field_type === FieldType.EMAIL && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
-        return 'Invalid email address';
+        return 'Enter a valid email address';
       }
       if (val && field.validation_pattern) {
         try {
           const regex = new RegExp(field.validation_pattern);
           if (!regex.test(val)) {
-            return 'Invalid format';
+            return "Doesn't match the required format";
           }
         } catch {
           // Skip invalid regex patterns
@@ -267,7 +267,7 @@ const FormRenderer = ({
     if (readOnly || submitting) return;
 
     if (!validate()) {
-      setError('Please fix the errors highlighted below.');
+      setError('Fix the errors below.');
       // Focus the error summary for screen readers
       errorSummaryRef.current?.focus();
       return;
@@ -299,7 +299,7 @@ const FormRenderer = ({
         onSubmitSuccess?.(submission);
       }
     } catch (err: unknown) {
-      const msg = getErrorMessage(err, 'Submission failed. Please try again.');
+      const msg = getErrorMessage(err, "Your response wasn't sent. Try again.");
       setError(msg);
     } finally {
       setSubmitting(false);
@@ -330,8 +330,8 @@ const FormRenderer = ({
     return (
       <div className="card-secondary p-8 text-center">
         <CheckCircle className="mx-auto mb-3 h-10 w-10 text-green-700 dark:text-green-400" />
-        <h3 className="text-theme-text-primary mb-1 text-lg font-semibold">Submitted Successfully</h3>
-        <p className="text-theme-text-muted text-sm">Your response has been recorded.</p>
+        <h3 className="text-theme-text-primary mb-1 text-lg font-semibold">Response Submitted</h3>
+        <p className="text-theme-text-muted text-sm">Your response was saved.</p>
         {allowResubmit && (
           <button onClick={handleReset} className="btn-primary mt-4">
             Submit Another Response
@@ -392,7 +392,7 @@ const FormRenderer = ({
           <div className="mb-2 flex items-center gap-2">
             <AlertCircle className="h-4 w-4 shrink-0 text-red-700 dark:text-red-400" />
             <p className="text-sm font-medium text-red-700 dark:text-red-300">
-              {error || `Please fix ${errorEntries.length} ${errorEntries.length === 1 ? 'error' : 'errors'} below.`}
+              {error || `Fix ${errorEntries.length} ${errorEntries.length === 1 ? 'error' : 'errors'} below.`}
             </p>
           </div>
           <ul className="list-inside list-disc space-y-0.5">

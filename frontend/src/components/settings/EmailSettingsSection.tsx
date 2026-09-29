@@ -99,7 +99,7 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
       <div>
         <h3 className="text-theme-text-primary text-lg font-semibold">Email Configuration</h3>
         <p className="text-theme-text-muted mt-1 text-sm">
-          Configure your email platform for sending notifications and alerts to your team.
+          Choose the email service the department sends notifications and alerts through.
         </p>
       </div>
 
@@ -107,8 +107,7 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
       <div className="border-theme-accent-blue/20 bg-theme-accent-blue-muted flex items-start gap-3 rounded-lg border p-4">
         <Info className="text-theme-accent-blue mt-0.5 h-5 w-5 shrink-0" />
         <p className="text-theme-text-secondary text-sm">
-          These settings were initially configured during onboarding. Changes here will affect how the system sends
-          email notifications, reminders, and alerts.
+          First set during onboarding. Changes here affect every notification, reminder, and alert the system emails.
         </p>
       </div>
 

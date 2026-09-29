@@ -49,6 +49,14 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
 // Pipeline Status Labels
 // =============================================================================
 
+const COMPLIANCE_STATUS_LABELS: Record<string, string> = {
+  pending: 'Pending',
+  in_progress: 'In Progress',
+  completed: 'Completed',
+  overdue: 'Overdue',
+  waived: 'Waived',
+};
+
 const PIPELINE_STATUS_LABELS: Record<string, string> = {
   researching: 'Researching',
   preparing: 'Preparing',
@@ -354,7 +362,7 @@ const ComplianceTasksDue: React.FC<ComplianceTasksProps> = ({ tasks, timezone })
                   <p className="text-theme-text-primary truncate text-sm font-medium">{task.title}</p>
                   <div className="mt-1 flex items-center gap-2">
                     <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusColor}`}>
-                      {task.status.replace('_', ' ')}
+                      {COMPLIANCE_STATUS_LABELS[task.status] ?? task.status}
                     </span>
                     <Link
                       to={`/grants/applications/${task.applicationId}`}

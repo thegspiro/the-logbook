@@ -47,7 +47,7 @@ export const PublishResultsPanel: React.FC<PublishResultsPanelProps> = ({ electi
     try {
       setSendingReport(true);
       await electionService.sendReport(electionId);
-      toast.success('Results report sent successfully');
+      toast.success('Results report sent');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to send results report'));
     } finally {

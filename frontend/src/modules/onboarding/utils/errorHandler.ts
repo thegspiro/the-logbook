@@ -91,17 +91,17 @@ export function handleApiError(error: unknown, context?: string): string {
 
   // Network errors (no response from server)
   if (message === 'Failed to fetch' || name === 'NetworkError') {
-    return 'Cannot connect to server. Please check your internet connection and try again.';
+    return 'Cannot connect to server. Check your internet connection and try again.';
   }
 
   // Timeout errors
   if (name === 'TimeoutError' || message.includes('timeout')) {
-    return 'Request timed out. The server is taking too long to respond. Please try again.';
+    return 'Request timed out. The server took too long to respond. Try again.';
   }
 
   // CORS errors
   if (message.includes('CORS')) {
-    return 'Connection blocked by security policy. Please contact your administrator.';
+    return 'Connection blocked by security policy. Ask whoever installed The Logbook to check its allowed origins.';
   }
 
   // Parse HTTP status codes (supports both Axios errors and Axios-like structures)
@@ -113,9 +113,9 @@ export function handleApiError(error: unknown, context?: string): string {
 
     switch (status) {
       case 400:
-        return detail ?? msg ?? 'Invalid request. Please check your input and try again.';
+        return detail ?? msg ?? 'Invalid request. Check your input and try again.';
       case 401:
-        return 'Session expired. Please log in again.';
+        return 'Your session expired. Sign in again.';
       case 403:
         return "Access denied. You don't have permission to perform this action.";
       case 404:
@@ -123,21 +123,21 @@ export function handleApiError(error: unknown, context?: string): string {
           ? `${context} not found. It may have been deleted or moved.`
           : 'The requested resource was not found.';
       case 409:
-        return detail ?? 'This item already exists. Please use a different value.';
+        return detail ?? 'This item already exists. Use a different value.';
       case 422:
-        return detail ?? 'Validation failed. Please check your input.';
+        return detail ?? 'Some fields are invalid. Check them and try again.';
       case 429:
-        return 'Too many requests. Please wait a moment and try again.';
+        return 'Too many requests. Wait a moment and try again.';
       case 500:
-        return 'Server error occurred. Please try again later or contact support if the problem persists.';
+        return 'The server hit an error. Try again. If it keeps happening, check the server logs.';
       case 502:
       case 503:
       case 504:
-        return 'Server is temporarily unavailable. Please try again in a few moments.';
+        return 'The server is temporarily unavailable. Try again in a few moments.';
       default:
         if (detail) return detail;
         if (msg) return msg;
-        return `Request failed with status ${String(status)}. Please try again.`;
+        return `Request failed with status ${String(status)}. Try again.`;
     }
   }
 
@@ -151,9 +151,9 @@ export function handleApiError(error: unknown, context?: string): string {
 
     switch (status) {
       case 400:
-        return detail ?? msg ?? 'Invalid request. Please check your input and try again.';
+        return detail ?? msg ?? 'Invalid request. Check your input and try again.';
       case 401:
-        return 'Session expired. Please log in again.';
+        return 'Your session expired. Sign in again.';
       case 403:
         return "Access denied. You don't have permission to perform this action.";
       case 404:
@@ -161,21 +161,21 @@ export function handleApiError(error: unknown, context?: string): string {
           ? `${context} not found. It may have been deleted or moved.`
           : 'The requested resource was not found.';
       case 409:
-        return detail ?? 'This item already exists. Please use a different value.';
+        return detail ?? 'This item already exists. Use a different value.';
       case 422:
-        return detail ?? 'Validation failed. Please check your input.';
+        return detail ?? 'Some fields are invalid. Check them and try again.';
       case 429:
-        return 'Too many requests. Please wait a moment and try again.';
+        return 'Too many requests. Wait a moment and try again.';
       case 500:
-        return 'Server error occurred. Please try again later or contact support if the problem persists.';
+        return 'The server hit an error. Try again. If it keeps happening, check the server logs.';
       case 502:
       case 503:
       case 504:
-        return 'Server is temporarily unavailable. Please try again in a few moments.';
+        return 'The server is temporarily unavailable. Try again in a few moments.';
       default:
         if (detail) return detail;
         if (msg) return msg;
-        return `Request failed with status ${String(status)}. Please try again.`;
+        return `Request failed with status ${String(status)}. Try again.`;
     }
   }
 
@@ -187,12 +187,12 @@ export function handleApiError(error: unknown, context?: string): string {
   if (message) {
     // Database connection errors
     if (message.includes('database') || message.includes('connection pool')) {
-      return 'Database connection error. Please try again in a moment.';
+      return 'Database connection error. Try again in a moment.';
     }
 
     // Generic errors - try to make them more friendly
     if (message.toLowerCase().includes('internal server error')) {
-      return 'An unexpected error occurred. Please try again or contact support.';
+      return 'An unexpected error occurred. Try again.';
     }
 
     // Return the original message if it seems user-friendly
@@ -204,10 +204,10 @@ export function handleApiError(error: unknown, context?: string): string {
 
   // Fallback with context if available
   if (context) {
-    return `Failed to ${context}. Please try again.`;
+    return `Could not ${context}. Try again.`;
   }
 
-  return 'An unexpected error occurred. Please try again.';
+  return 'An unexpected error occurred. Try again.';
 }
 
 /**
@@ -266,13 +266,13 @@ function validationErrorField(error: ValidationErrorEntry): string {
  */
 export function formatValidationErrors(validationErrors: ValidationErrorEntry[]): string {
   if (!validationErrors || validationErrors.length === 0) {
-    return 'Validation failed. Please check your input.';
+    return 'Some fields are invalid. Check them and try again.';
   }
 
   if (validationErrors.length === 1) {
     const error = validationErrors[0];
     if (!error) {
-      return 'Validation failed. Please check your input.';
+      return 'Some fields are invalid. Check them and try again.';
     }
     return `${capitalizeFirst(validationErrorField(error))}: ${error.message || error.msg || 'Invalid value'}`;
   }
@@ -284,7 +284,7 @@ export function formatValidationErrors(validationErrors: ValidationErrorEntry[])
       (error) => `• ${capitalizeFirst(validationErrorField(error))}: ${error.message || error.msg || 'Invalid value'}`
     );
 
-  return `Please fix the following errors:\n${errorMessages.join('\n')}`;
+  return `Fix these errors:\n${errorMessages.join('\n')}`;
 }
 
 /**
