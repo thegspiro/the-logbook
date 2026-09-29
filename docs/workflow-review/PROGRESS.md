@@ -60,7 +60,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W24 | Submit a training record, and the officer approves or returns it      | member → training_officer | `/training/submit`, `/training/submissions`        | ✅     |
 | W25 | Courses and requirements                                              | training_officer          | `/training/courses`, `/training/requirements`      | ✅     |
 | W26 | A training program: build it, enroll a member, the member's progress  | training_officer → member | `/training/programs`                               | ✅     |
-| W27 | A course cohort: schedule classes, roster, attendance                 | training_officer          | `/training/cohorts`                                | ⬜     |
+| W27 | A course cohort: schedule classes, roster, attendance                 | training_officer          | `/training/cohorts`                                | ✅     |
 | W28 | Skills testing: build a sheet, run a test, the member sees the result | training_officer → member | `/training/skills-testing`                         | ⬜     |
 | W29 | Compliance: configure requirements, read the matrix, print it         | training_officer          | `/training/compliance-config`, `/training/officer` | ⬜     |
 | W30 | Log a shift and file a shift report                                   | member                    | `/training/log-shift`                              | ⬜     |
@@ -176,6 +176,20 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W27 — A course cohort: schedule classes, roster, attendance — 2026-09-29
+
+Driven as: `training_officer` at 1280×900 and `member` at 390×844, with
+`quartermaster` refused. Held: a double-clicked Generate made one cohort with
+two events and both members signed up; Remove withdrew a member from the
+classes to come; a double-clicked Shift moved the schedule once; a roster
+member sees the schedule without peers, a non-member gets 404. Fixed: W27-1
+(HIGH — "Create a new course" opened beneath the syllabus dialog and took no
+clicks, blocking every department's first syllabus), W27-2 (MED — a course
+created from the syllabus was not listed, so it could not be picked). Flagged:
+W27-3 (MED — no way to add a member to a generated cohort). Open: W27-4 (NIT).
+Attendance not driven — the classes are in October. Gate: typecheck, lint and
+the touched suites clean. Next: W28.
 
 ### W26 — A training program: build it, enroll a member, the member's progress — 2026-09-29
 

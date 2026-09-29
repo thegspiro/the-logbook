@@ -42,6 +42,10 @@ vi.mock('../services/api', () => ({
   },
 }));
 
+vi.mock('../services/trainingServices', () => ({
+  courseSyllabusService: { getClasses: () => Promise.resolve([]) },
+}));
+
 import CourseLibraryPage from './CourseLibraryPage';
 
 const course: TrainingCourse = {
@@ -179,5 +183,28 @@ describe('CourseLibraryPage course form', () => {
       'course-1',
       expect.objectContaining({ instructor: null, expiration_months: null, code: 'FO-1', category_ids: ['cat-1'] })
     );
+  });
+});
+
+describe('CourseLibraryPage syllabus builder', () => {
+  beforeEach(() => {
+    mockGetCourses.mockReset();
+    mockGetCourses.mockResolvedValue([course]);
+    mockGetCategories.mockReset();
+    mockGetCategories.mockResolvedValue([]);
+    hasManagePermission = true;
+  });
+
+  it('opens "Create a new course" above the syllabus, where it can be used', async () => {
+    const user = userEvent.setup();
+    await renderPage();
+    await user.click(screen.getByRole('button', { name: 'Manage classes for Fire Officer I' }));
+    await user.click(await screen.findByRole('button', { name: 'Add class' }));
+    await user.click(await screen.findByRole('button', { name: 'Create a new course' }));
+
+    // Both overlays share one z-index, so the one later in the document is
+    // the one on top and the one that receives clicks.
+    const dialogs = await screen.findAllByRole('dialog');
+    expect(dialogs[dialogs.length - 1]).toHaveTextContent('Add New Course');
   });
 });

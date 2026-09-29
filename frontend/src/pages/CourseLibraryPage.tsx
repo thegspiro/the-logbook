@@ -829,24 +829,6 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
 
       {canManage && (
         <>
-          <CourseFormModal
-            isOpen={showModal}
-            course={editCourse}
-            categories={categories}
-            onClose={() => {
-              setShowModal(false);
-              setEditCourse(null);
-              // A dismissed modal must still settle the builder's promise.
-              pendingCourseResolver?.(null);
-              setPendingCourseResolver(null);
-            }}
-            onSuccess={(saved) => {
-              void loadData();
-              if (saved) pendingCourseResolver?.(saved);
-              setPendingCourseResolver(null);
-            }}
-          />
-
           {syllabusCourse && (
             <div
               className="modal-overlay z-50 flex items-center justify-center p-4"
@@ -880,6 +862,28 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
               </DialogPanel>
             </div>
           )}
+
+          {/* After the syllabus dialog on purpose: the builder's "Create a new
+              course" opens this form over it, and at the same z-index the later
+              element paints on top. Placed first, the form sat beneath the
+              syllabus and took no clicks. */}
+          <CourseFormModal
+            isOpen={showModal}
+            course={editCourse}
+            categories={categories}
+            onClose={() => {
+              setShowModal(false);
+              setEditCourse(null);
+              // A dismissed modal must still settle the builder's promise.
+              pendingCourseResolver?.(null);
+              setPendingCourseResolver(null);
+            }}
+            onSuccess={(saved) => {
+              void loadData();
+              if (saved) pendingCourseResolver?.(saved);
+              setPendingCourseResolver(null);
+            }}
+          />
         </>
       )}
     </div>
