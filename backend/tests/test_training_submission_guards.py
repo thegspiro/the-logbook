@@ -18,6 +18,15 @@ from app.schemas.training_submission import TrainingSubmissionCreate
 from app.services.training_submission_service import TrainingSubmissionService
 
 
+@pytest.fixture(autouse=True)
+def _no_in_app_notices(monkeypatch):
+    """The session fakes here model only what these tests exercise. The in-app
+    notifications are covered in test_training_submission_notifications.py
+    against a real database."""
+    monkeypatch.setattr(TrainingSubmissionService, "_notify_reviewers", AsyncMock())
+    monkeypatch.setattr(TrainingSubmissionService, "_notify_member", AsyncMock())
+
+
 def _submission(submitted_by):
     return SimpleNamespace(
         id=str(uuid4()),
