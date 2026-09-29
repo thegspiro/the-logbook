@@ -143,6 +143,21 @@ describe('VariantGroupsPage', () => {
     expect(await screen.findByText(/Stock Matrix/)).toBeInTheDocument();
   });
 
+  // It told the quartermaster to "assign them to this group", which no form
+  // in the app can do.
+  it('does not send an empty group to a step that does not exist', async () => {
+    mockGetVariantGroups.mockResolvedValue([makeGroup()]);
+    mockGetVariantGroup.mockResolvedValue(makeGroup({ items: [] }));
+    const user = userEvent.setup();
+    renderWithRouter(<VariantGroupsPage />);
+    await screen.findByText('Class A Uniform');
+
+    await user.click(screen.getByRole('button', { name: 'View Class A Uniform' }));
+
+    expect(await screen.findByText(/can't be added to an existing group from the app yet/)).toBeInTheDocument();
+    expect(screen.queryByText(/assign them to this group/)).not.toBeInTheDocument();
+  });
+
   it('orders stock matrix rows by size, not by the order items arrive in', async () => {
     // The API returns variants in no particular order; the rows are built from
     // a Set, so without an explicit sort the grid reads S, L, XL, M.

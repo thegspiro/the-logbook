@@ -74,6 +74,7 @@ interface PoolCardProps {
   categoryName: string;
   onIssue: (item: InventoryItem) => void;
   onReturn: (issuance: ItemIssuance) => void;
+  memberName: (userId: string) => string;
   issuances: ItemIssuance[];
   loadingIssuances: boolean;
   expanded: boolean;
@@ -86,6 +87,7 @@ const PoolCard: React.FC<PoolCardProps> = ({
   categoryName,
   onIssue,
   onReturn,
+  memberName,
   issuances,
   loadingIssuances,
   expanded,
@@ -99,6 +101,7 @@ const PoolCard: React.FC<PoolCardProps> = ({
   // unit twice and showed a fully-issued item at a negative on-hand.
   const onHand = onHandQuantity(item);
   const total = onHand + item.quantity_issued;
+  const displayName = getDisplayName(item);
 
   const handleToggle = () => {
     if (!expanded) void onLoadIssuances();
@@ -110,7 +113,7 @@ const PoolCard: React.FC<PoolCardProps> = ({
       {/* Header */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <h3 className="text-theme-text-primary line-clamp-2 font-semibold">{getDisplayName(item)}</h3>
+          <h3 className="text-theme-text-primary line-clamp-2 font-semibold">{displayName}</h3>
           <p className="text-theme-text-muted text-xs">{categoryName}</p>
         </div>
         {onHand <= 0 && (
@@ -152,10 +155,17 @@ const PoolCard: React.FC<PoolCardProps> = ({
           className="btn-info btn-sm flex items-center gap-1 disabled:opacity-50"
           disabled={onHand <= 0}
           onClick={() => onIssue(item)}
+          aria-label={`Issue ${displayName}`}
         >
           <ArrowDownToLine size={14} /> Issue
         </button>
-        <button type="button" className="btn-secondary btn-sm flex items-center gap-1" onClick={handleToggle}>
+        <button
+          type="button"
+          className="btn-secondary btn-sm flex items-center gap-1"
+          onClick={handleToggle}
+          aria-expanded={expanded}
+          aria-label={`Issuances of ${displayName}`}
+        >
           {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           Issuances
         </button>
@@ -180,11 +190,17 @@ const PoolCard: React.FC<PoolCardProps> = ({
                     className="bg-theme-surface flex items-center justify-between rounded px-3 py-3 text-sm"
                   >
                     <div className="min-w-0">
-                      <span className="text-theme-text-primary">{iss.user_id.slice(0, 8)}...</span>
-                      <span className="text-theme-text-muted ml-2">qty {iss.quantity_issued}</span>
-                      <span className="text-theme-text-muted ml-2">{formatDate(iss.issued_at, tz)}</span>
+                      <span className="text-theme-text-primary">{memberName(iss.user_id)}</span>{' '}
+                      <span className="text-theme-text-muted ml-2">
+                        {iss.quantity_issued} · issued {formatDate(iss.issued_at, tz)}
+                      </span>
                     </div>
-                    <button type="button" className="btn-info shrink-0 px-3 py-2 text-xs" onClick={() => onReturn(iss)}>
+                    <button
+                      type="button"
+                      className="btn-info shrink-0 px-3 py-2 text-xs"
+                      onClick={() => onReturn(iss)}
+                      aria-label={`Return ${iss.quantity_issued} from ${memberName(iss.user_id)}`}
+                    >
                       Return
                     </button>
                   </li>
@@ -356,6 +372,14 @@ const PoolItemsPage: React.FC = () => {
     }
   };
 
+  // Issuances carry only a user id. The summary covers active members, so a
+  // holder who has since left falls back to a label rather than a raw id.
+  const memberName = (userId: string): string => {
+    const m = members.find((x) => x.user_id === userId);
+    if (!m) return 'Former member';
+    return m.full_name ?? `${m.first_name ?? ''} ${m.last_name ?? ''}`.trim();
+  };
+
   const filteredMembers = members.filter((m) => {
     if (!memberSearch) return true;
     const q = memberSearch.toLowerCase();
@@ -449,6 +473,18 @@ const PoolItemsPage: React.FC = () => {
   const issueExceedsAllowance =
     allowanceCheck !== null && allowanceCheck.max_quantity !== -1 && issueQty > allowanceCheck.remaining;
 
+  // A quantity above what is on hand is reported, not quietly lowered to the
+  // maximum: lowering it turned a mistyped 25 into issuing the whole shelf.
+  const issueQtyError =
+    issueQty < 1
+      ? 'Enter a quantity of at least 1.'
+      : issueQty > issueItemOnHand
+        ? `Only ${issueItemOnHand} on hand.`
+        : null;
+  const returnMax = returnIssuance?.quantity_issued ?? 0;
+  const returnQtyError =
+    returnQty < 1 ? 'Enter a quantity of at least 1.' : returnQty > returnMax ? `Only ${returnMax} issued.` : null;
+
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <Breadcrumbs />
@@ -529,7 +565,12 @@ const PoolItemsPage: React.FC = () => {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        <select className="form-input" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+        <select
+          className="form-input"
+          aria-label="Filter by category"
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+        >
           <option value="">All Categories</option>
           {categories.map((c) => (
             <option key={c.id} value={c.id}>
@@ -572,6 +613,7 @@ const PoolItemsPage: React.FC = () => {
                     categoryName={catLookup[item.category_id ?? ''] ?? 'Uncategorized'}
                     onIssue={openIssueModal}
                     onReturn={openReturnModal}
+                    memberName={memberName}
                     issuances={issuancesMap[item.id] ?? []}
                     loadingIssuances={loadingIssuancesFor === item.id}
                     expanded={expandedCard === item.id}
@@ -611,14 +653,16 @@ const PoolItemsPage: React.FC = () => {
         <div className="space-y-4">
           {/* Member search */}
           <div>
-            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Member</label>
+            <label htmlFor="pool-issue-member" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              Member
+            </label>
             <input
+              id="pool-issue-member"
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
               type="text"
               className="form-input w-full"
-              aria-label="Search members..."
               placeholder="Search members..."
               value={memberSearch}
               onChange={(e) => setMemberSearch(e.target.value)}
@@ -652,6 +696,7 @@ const PoolItemsPage: React.FC = () => {
                 </span>
                 <button
                   type="button"
+                  aria-label="Choose a different member"
                   onClick={() => {
                     setIssueUserId('');
                     setAllowanceCheck(null);
@@ -670,8 +715,16 @@ const PoolItemsPage: React.FC = () => {
             <div
               className={`rounded-lg px-3 py-2 text-sm ${issueExceedsAllowance ? 'bg-red-500/10 text-red-700 dark:text-red-400' : 'bg-blue-500/10 text-blue-700 dark:text-blue-400'}`}
             >
-              Allowance: {allowanceCheck.issued_this_period}/{allowanceCheck.max_quantity} used (
-              {allowanceCheck.period_type}). {allowanceCheck.remaining} remaining.
+              {/* max_quantity -1 is the backend's "no allowance configured"; its
+                  period and remaining are placeholders, not figures to show. */}
+              {allowanceCheck.max_quantity === -1 ? (
+                <>No issuance allowance is set for this category.</>
+              ) : (
+                <>
+                  Allowance: {allowanceCheck.issued_this_period} of {allowanceCheck.max_quantity} used (
+                  {allowanceCheck.period_type}). {allowanceCheck.remaining} remaining.
+                </>
+              )}
               {issueExceedsAllowance && (
                 <>
                   {' '}
@@ -695,23 +748,34 @@ const PoolItemsPage: React.FC = () => {
 
           {/* Quantity */}
           <div>
-            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
+            <label htmlFor="pool-issue-qty" className="text-theme-text-secondary mb-1 block text-sm font-medium">
               Quantity (max {issueItemOnHand})
             </label>
             <input
+              id="pool-issue-qty"
               type="number"
               min={1}
               max={issueItemOnHand}
               className="form-input w-full"
               value={issueQty}
-              onChange={(e) => setIssueQty(Math.max(1, Math.min(issueItemOnHand, Number(e.target.value) || 1)))}
+              onChange={(e) => setIssueQty(Number(e.target.value) || 0)}
+              aria-invalid={issueQtyError !== null}
+              aria-describedby={issueQtyError ? 'pool-issue-qty-error' : undefined}
             />
+            {issueQtyError && (
+              <p id="pool-issue-qty-error" role="alert" className="mt-1 text-sm text-red-700 dark:text-red-400">
+                {issueQtyError}
+              </p>
+            )}
           </div>
 
           {/* Reason */}
           <div>
-            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Reason (optional)</label>
+            <label htmlFor="pool-issue-reason" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              Reason (optional)
+            </label>
             <input
+              id="pool-issue-reason"
               type="text"
               className="form-input w-full"
               placeholder="e.g. Annual uniform issue"
@@ -728,7 +792,7 @@ const PoolItemsPage: React.FC = () => {
             <button
               type="button"
               className="btn-info btn-md flex items-center justify-center gap-1 disabled:opacity-50"
-              disabled={!issueUserId || issueQty < 1 || issueSubmitting}
+              disabled={!issueUserId || issueQtyError !== null || issueSubmitting}
               onClick={() => void handleIssue()}
             >
               {issueSubmitting && <Loader2 size={14} className="animate-spin" />}
@@ -741,24 +805,39 @@ const PoolItemsPage: React.FC = () => {
       {/* Return Modal */}
       <Modal isOpen={returnModalOpen} onClose={() => setReturnModalOpen(false)} title="Return to Pool" size="sm">
         <div className="space-y-4">
+          {returnIssuance && (
+            <p className="text-theme-text-secondary text-sm">
+              Returning from{' '}
+              <span className="text-theme-text-primary font-medium">{memberName(returnIssuance.user_id)}</span>
+            </p>
+          )}
           <div>
-            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
-              Quantity to return (max {returnIssuance?.quantity_issued ?? 0})
+            <label htmlFor="pool-return-qty" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              Quantity to return (max {returnMax})
             </label>
             <input
+              id="pool-return-qty"
               type="number"
               min={1}
-              max={returnIssuance?.quantity_issued ?? 1}
+              max={returnMax}
               className="form-input w-full"
               value={returnQty}
-              onChange={(e) =>
-                setReturnQty(Math.max(1, Math.min(returnIssuance?.quantity_issued ?? 1, Number(e.target.value) || 1)))
-              }
+              onChange={(e) => setReturnQty(Number(e.target.value) || 0)}
+              aria-invalid={returnQtyError !== null}
+              aria-describedby={returnQtyError ? 'pool-return-qty-error' : undefined}
             />
+            {returnQtyError && (
+              <p id="pool-return-qty-error" role="alert" className="mt-1 text-sm text-red-700 dark:text-red-400">
+                {returnQtyError}
+              </p>
+            )}
           </div>
           <div>
-            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Condition</label>
+            <label htmlFor="pool-return-condition" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              Condition
+            </label>
             <select
+              id="pool-return-condition"
               className="form-input w-full"
               value={returnCondition}
               onChange={(e) => setReturnCondition(e.target.value)}
@@ -771,8 +850,11 @@ const PoolItemsPage: React.FC = () => {
             </select>
           </div>
           <div>
-            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Notes (optional)</label>
+            <label htmlFor="pool-return-notes" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              Notes (optional)
+            </label>
             <input
+              id="pool-return-notes"
               type="text"
               className="form-input w-full"
               value={returnNotes}
@@ -786,7 +868,7 @@ const PoolItemsPage: React.FC = () => {
             <button
               type="button"
               className="btn-info btn-md flex items-center justify-center gap-1 disabled:opacity-50"
-              disabled={returnSubmitting}
+              disabled={returnQtyError !== null || returnSubmitting}
               onClick={() => void handleReturn()}
             >
               {returnSubmitting && <Loader2 size={14} className="animate-spin" />}
@@ -801,8 +883,15 @@ const PoolItemsPage: React.FC = () => {
         <div className="space-y-4">
           {/* Item select */}
           <div>
-            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Pool Item</label>
-            <select className="form-input w-full" value={bulkItemId} onChange={(e) => setBulkItemId(e.target.value)}>
+            <label htmlFor="pool-bulk-item" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              Pool Item
+            </label>
+            <select
+              id="pool-bulk-item"
+              className="form-input w-full"
+              value={bulkItemId}
+              onChange={(e) => setBulkItemId(e.target.value)}
+            >
               <option value="">Select an item...</option>
               {items
                 .filter((i) => onHandQuantity(i) > 0)
@@ -822,6 +911,7 @@ const PoolItemsPage: React.FC = () => {
                 <div key={idx} className="flex items-center gap-2">
                   <select
                     className="form-input flex-1"
+                    aria-label={`Recipient ${idx + 1}`}
                     value={row.userId}
                     onChange={(e) => updateBulkRow(idx, 'userId', e.target.value)}
                   >
@@ -836,6 +926,7 @@ const PoolItemsPage: React.FC = () => {
                     type="number"
                     min={1}
                     className="form-input w-20"
+                    aria-label={`Quantity for recipient ${idx + 1}`}
                     value={row.qty}
                     onChange={(e) => updateBulkRow(idx, 'qty', Math.max(1, Number(e.target.value) || 1))}
                   />
@@ -843,6 +934,7 @@ const PoolItemsPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => removeBulkRow(idx)}
+                      aria-label={`Remove recipient ${idx + 1}`}
                       className="text-theme-text-muted hover:text-red-500"
                     >
                       <X size={16} />

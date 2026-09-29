@@ -35,7 +35,7 @@ import type {
 import { EQUIPMENT_REQUEST_STATUS_LABELS, getConditionColor, REQUEST_STATUS_BADGES, sizeLabel } from '../types';
 import { useAuthStore } from '../../../stores/authStore';
 import { useTimezone } from '../../../hooks/useTimezone';
-import { formatDate } from '../../../utils/dateFormatting';
+import { formatDate, localToUTC } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { RETURN_CONDITION_OPTIONS } from '../../../constants/enums';
 import { Modal } from '../../../components/Modal';
@@ -220,7 +220,8 @@ const MyEquipmentPage: React.FC = () => {
     }
     setSubmitting(true);
     try {
-      await inventoryService.extendCheckout(extendModal.checkoutId, new Date(extendDate).toISOString());
+      // End of the picked day in the department's zone; see InventoryCheckoutsPage.
+      await inventoryService.extendCheckout(extendModal.checkoutId, localToUTC(`${extendDate}T23:59`, tz));
       toast.success('Temporary loan extended');
       setExtendModal({ open: false, checkoutId: '' });
       setExtendDate('');

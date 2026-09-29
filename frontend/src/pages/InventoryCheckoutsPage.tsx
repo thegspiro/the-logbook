@@ -15,7 +15,7 @@ import { RETURN_CONDITION_OPTIONS } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { useDeepLinkedRecord } from '../hooks/useDeepLinkedRecord';
-import { formatDateCustom, getTodayLocalDate } from '../utils/dateFormatting';
+import { formatDateCustom, getTodayLocalDate, localToUTC } from '../utils/dateFormatting';
 import { Breadcrumbs } from '../components/ux';
 
 type TabView = 'active' | 'overdue';
@@ -109,7 +109,10 @@ export const InventoryCheckoutsPage: React.FC = () => {
     if (!extendModal.checkoutId || !extendDate) return;
     setSubmitting(true);
     try {
-      await inventoryService.extendTemporaryLoan(extendModal.checkoutId, new Date(extendDate).toISOString());
+      // A picked date means "back by the end of that day" in the department's
+      // zone. new Date('2026-10-05') is UTC midnight, which in any US zone is
+      // the evening before, so the loan showed as due a day early.
+      await inventoryService.extendTemporaryLoan(extendModal.checkoutId, localToUTC(`${extendDate}T23:59`, tz));
       toast.success('Return date extended');
       setExtendModal({ open: false, checkoutId: '', itemName: '', currentDue: '' });
       setExtendDate('');

@@ -23,6 +23,7 @@ import { Modal } from '../../../components/Modal';
 import toast from 'react-hot-toast';
 import { formCoercions } from '../../../utils/formValues';
 import { Breadcrumbs } from '../../../components/ux';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 
 interface LineItemFormData {
   item_id: string;
@@ -60,6 +61,7 @@ const labelClass = 'form-label';
 const EquipmentKitsPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('inventory.manage');
+  const { confirm } = useConfirm();
   const [kits, setKits] = useState<EquipmentKit[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showInactive, setShowInactive] = useState(false);
@@ -240,10 +242,20 @@ const EquipmentKitsPage: React.FC = () => {
     }
   };
 
-  const handleIssueKit = async (userId: string) => {
+  const handleIssueKit = async (userId: string, memberName: string) => {
     if (!issueKit) return;
     const kit = issueKit;
     setIssueKit(null);
+    // Picking a name in the member list is the whole gesture, so a slip on the
+    // row above or below issued every item in the kit with nothing to stop it.
+    const count = kit.line_items?.length ?? kit.item_count ?? 0;
+    const confirmed = await confirm({
+      title: `Issue ${kit.name}?`,
+      message: `Issue ${count} item${count !== 1 ? 's' : ''} from "${kit.name}" to ${memberName}.`,
+      confirmLabel: `Issue to ${memberName}`,
+      cancelLabel: "Don't issue",
+    });
+    if (!confirmed) return;
     try {
       const res = await inventoryService.issueKitToMember(kit.id, userId);
       toast.success(`Issued ${res.items_issued} item${res.items_issued !== 1 ? 's' : ''} from "${kit.name}"`);
@@ -455,8 +467,11 @@ const EquipmentKitsPage: React.FC = () => {
                 <GripVertical className="text-theme-text-muted mt-2.5 h-4 w-4 shrink-0" />
                 <div className="grid flex-1 grid-cols-1 gap-2 sm:grid-cols-12">
                   <div className="sm:col-span-5">
-                    <label className="text-theme-text-muted mb-0.5 block text-xs">Item</label>
+                    <label htmlFor={`kit-line-${idx}-item`} className="text-theme-text-muted mb-0.5 block text-xs">
+                      Item
+                    </label>
                     <select
+                      id={`kit-line-${idx}-item`}
                       value={li.item_id}
                       onChange={(e) => updateLineItem(idx, 'item_id', e.target.value)}
                       className={inputClass + ' text-sm'}
@@ -479,8 +494,11 @@ const EquipmentKitsPage: React.FC = () => {
                     )}
                   </div>
                   <div className="sm:col-span-3">
-                    <label className="text-theme-text-muted mb-0.5 block text-xs">Category</label>
+                    <label htmlFor={`kit-line-${idx}-category`} className="text-theme-text-muted mb-0.5 block text-xs">
+                      Category
+                    </label>
                     <select
+                      id={`kit-line-${idx}-category`}
                       value={li.category_id}
                       onChange={(e) => updateLineItem(idx, 'category_id', e.target.value)}
                       className={inputClass + ' text-sm'}
@@ -494,8 +512,11 @@ const EquipmentKitsPage: React.FC = () => {
                     </select>
                   </div>
                   <div className="sm:col-span-2">
-                    <label className="text-theme-text-muted mb-0.5 block text-xs">Qty</label>
+                    <label htmlFor={`kit-line-${idx}-qty`} className="text-theme-text-muted mb-0.5 block text-xs">
+                      Qty
+                    </label>
                     <input
+                      id={`kit-line-${idx}-qty`}
                       type="number"
                       min="1"
                       value={li.quantity}
@@ -609,7 +630,7 @@ const EquipmentKitsPage: React.FC = () => {
         onClose={() => setIssueKit(null)}
         title={issueKit ? `Issue "${issueKit.name}" — Select a Member` : 'Issue Kit'}
         onSelect={(member) => {
-          void handleIssueKit(member.userId);
+          void handleIssueKit(member.userId, member.memberName);
         }}
       />
     </div>

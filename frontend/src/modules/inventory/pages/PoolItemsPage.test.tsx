@@ -147,8 +147,8 @@ describe('PoolItemsPage', () => {
     renderWithRouter(<PoolItemsPage />);
     await screen.findByText('Dept Polo');
 
-    await user.click(screen.getByRole('button', { name: 'Issue' }));
-    await user.type(await screen.findByPlaceholderText('Search members...'), 'Jane');
+    await user.click(screen.getByRole('button', { name: 'Issue Dept Polo' }));
+    await user.type(await screen.findByRole('textbox', { name: 'Member' }), 'Jane');
     await user.click(await screen.findByRole('button', { name: /Jane Doe/ }));
     await waitFor(() => expect(mockCheckAllowance).toHaveBeenCalledWith('u-1', 'c-1'));
 
@@ -156,6 +156,116 @@ describe('PoolItemsPage', () => {
     await waitFor(() => expect(mockIssueFromPool).toHaveBeenCalledTimes(1));
     expect(mockIssueFromPool.mock.calls[0]?.slice(0, 3)).toEqual(['p-1', 'u-1', 1]);
     expect(mockToastSuccess).toHaveBeenCalledWith('Issued 1 Dept Polo');
+  });
+
+  const openIssueFor = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(screen.getByRole('button', { name: 'Issue Dept Polo' }));
+    await user.type(await screen.findByRole('textbox', { name: 'Member' }), 'Jane');
+    await user.click(await screen.findByRole('button', { name: /Jane Doe/ }));
+    await waitFor(() => expect(mockCheckAllowance).toHaveBeenCalledWith('u-1', 'c-1'));
+  };
+
+  // Typing more than was on hand was quietly lowered to the maximum, so a
+  // mistyped 25 against 19 on the shelf issued all 19 to one member.
+  it('refuses a quantity above what is on hand instead of lowering it', async () => {
+    mockGetItems.mockResolvedValue({ items: [poolItem()], total: 1 });
+    const user = userEvent.setup();
+    renderWithRouter(<PoolItemsPage />);
+    await screen.findByText('Dept Polo');
+    await openIssueFor(user);
+
+    const qty = screen.getByRole('spinbutton', { name: 'Quantity (max 10)' });
+    await user.clear(qty);
+    await user.type(qty, '25');
+
+    expect(qty).toHaveValue(25);
+    expect(screen.getByRole('alert')).toHaveTextContent('Only 10 on hand.');
+    expect(lastButton('Issue')).toBeDisabled();
+    expect(mockIssueFromPool).not.toHaveBeenCalled();
+  });
+
+  it('says plainly when a category has no allowance', async () => {
+    mockGetItems.mockResolvedValue({ items: [poolItem()], total: 1 });
+    mockCheckAllowance.mockReset();
+    mockCheckAllowance.mockResolvedValue({
+      category_id: 'c-1',
+      max_quantity: -1,
+      issued_this_period: 0,
+      remaining: -1,
+      period_type: 'none',
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<PoolItemsPage />);
+    await screen.findByText('Dept Polo');
+    await openIssueFor(user);
+
+    expect(await screen.findByText('No issuance allowance is set for this category.')).toBeInTheDocument();
+    expect(screen.queryByText(/-1/)).not.toBeInTheDocument();
+  });
+
+  // The log showed the first eight characters of each holder's user id, with
+  // the quantity run into the date: "4e6fcf03...qty 199/29/2026".
+  it('names who holds each issuance, and returns from them by name', async () => {
+    mockGetItems.mockResolvedValue({ items: [poolItem()], total: 1 });
+    mockGetItemIssuances.mockResolvedValue([
+      {
+        id: 'iss-1',
+        organization_id: 'org-1',
+        item_id: 'p-1',
+        user_id: 'u-1',
+        quantity_issued: 3,
+        issued_at: '2026-09-29T19:46:04Z',
+        is_returned: false,
+        created_at: '2026-09-29T19:46:04Z',
+        updated_at: '2026-09-29T19:46:04Z',
+      },
+      {
+        id: 'iss-2',
+        organization_id: 'org-1',
+        item_id: 'p-1',
+        user_id: 'u-gone',
+        quantity_issued: 1,
+        issued_at: '2026-09-28T19:46:04Z',
+        is_returned: false,
+        created_at: '2026-09-28T19:46:04Z',
+        updated_at: '2026-09-28T19:46:04Z',
+      },
+    ]);
+    const user = userEvent.setup();
+    renderWithRouter(<PoolItemsPage />);
+    await screen.findByText('Dept Polo');
+
+    await user.click(screen.getByRole('button', { name: 'Issuances of Dept Polo' }));
+
+    expect(await screen.findByText('Jane Doe')).toBeInTheDocument();
+    expect(screen.getByText('Former member')).toBeInTheDocument();
+    expect(screen.queryByText(/u-gone/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Return 3 from Jane Doe' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Return to Pool' });
+    expect(within(dialog).getByText('Jane Doe')).toBeInTheDocument();
+    const qty = within(dialog).getByRole('spinbutton', { name: 'Quantity to return (max 3)' });
+    await user.clear(qty);
+    await user.type(qty, '5');
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Only 3 issued.');
+    expect(within(dialog).getByRole('button', { name: 'Return' })).toBeDisabled();
+  });
+
+  it('names the category filter and each bulk recipient row', async () => {
+    mockGetItems.mockResolvedValue({ items: [poolItem()], total: 1 });
+    const user = userEvent.setup();
+    renderWithRouter(<PoolItemsPage />);
+    await screen.findByText('Dept Polo');
+
+    expect(screen.getByRole('combobox', { name: 'Filter by category' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Bulk Issue/ }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /Add recipient/ }));
+
+    expect(within(dialog).getByRole('combobox', { name: 'Pool Item' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('combobox', { name: 'Recipient 2' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('spinbutton', { name: 'Quantity for recipient 2' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Remove recipient 2' })).toBeInTheDocument();
   });
 
   it('counts lot-stocked items by their lots, not the dead quantity column', async () => {

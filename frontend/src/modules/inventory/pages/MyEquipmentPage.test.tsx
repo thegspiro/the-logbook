@@ -281,6 +281,22 @@ describe('MyEquipmentPage', () => {
     await waitFor(() => expect(tile).toHaveTextContent(/^1Pending$/));
   });
 
+  // The picked date was sent as UTC midnight, which west of Greenwich is the
+  // day before; it now means the end of that day in the department's zone.
+  it('extends a temporary loan to the end of the chosen day', async () => {
+    mockGetUserInventory.mockResolvedValue(fullInv);
+    const user = userEvent.setup();
+    renderWithRouter(<MyEquipmentPage />);
+    await screen.findByText('Thermal Camera');
+
+    await user.click(screen.getByRole('button', { name: /Extend/ }));
+    const dialog = await screen.findByRole('dialog', { name: 'Extend Temporary Loan' });
+    await user.type(within(dialog).getByLabelText('New Return Date'), '2026-10-05');
+    await user.click(within(dialog).getByRole('button', { name: 'Extend' }));
+
+    await waitFor(() => expect(mockExtendCheckout).toHaveBeenCalledWith('co-1', '2026-10-05T23:59:00.000Z'));
+  });
+
   it('loads my requests when the panel is opened', async () => {
     const user = userEvent.setup();
     renderWithRouter(<MyEquipmentPage />);

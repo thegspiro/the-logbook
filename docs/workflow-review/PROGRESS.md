@@ -83,7 +83,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | --- | ---------------------------------------------------------------------------- | ---------------------- | ---------------------------------------------------------- | ------ |
 | W38 | Set up inventory: categories, then add items of each tracking kind           | quartermaster          | `/inventory/admin/setup`, `/inventory/admin/items`         | ✅     |
 | W39 | Issue equipment to a member, the member sees it, return it                   | quartermaster → member | `/inventory/admin/members`, `/inventory/my-equipment`      | ✅     |
-| W40 | Pool items, checkouts, kits and variant groups                               | quartermaster          | `/inventory/admin/pool`, `/inventory/checkouts`            | ⬜     |
+| W40 | Pool items, checkouts, kits and variant groups                               | quartermaster          | `/inventory/admin/pool`, `/inventory/checkouts`            | ✅     |
 | W41 | A member's request, return, write-off and reorder, and the approvals         | member → quartermaster | `/inventory/admin/requests`, `/inventory/admin/returns`    | ⬜     |
 | W42 | Maintenance records, vendors, charges and issuance allowances                | quartermaster          | `/inventory/admin/maintenance`, `/inventory/admin/charges` | ⬜     |
 | W43 | Storage areas, barcode labels and CSV import                                 | quartermaster          | `/inventory/storage-areas`, `/inventory/import`            | ⬜     |
@@ -188,6 +188,22 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W40 — Pool items, checkouts, kits and variant groups — 2026-09-29
+
+Driven as: `quartermaster` at 1280×900 and 390×844, with `member` refused.
+Held: issuing, returning and bulk issuing moved the counts exactly; five
+double-clicks acted once; a past loan extension was refused; a kit issued the
+coat as an assignment and the gloves as a pool issuance; the member got 403 on
+every write and Access Denied on all four pages. Fixed: W40-1 (MED — a quantity
+above what was on hand was silently lowered to the maximum and issued, emptying
+the shelf), W40-2 (LOW — "0/-1 used … -1 remaining"), W40-3 (LOW — the
+issuance list showed user-id prefixes, not names), W40-4 (LOW — unnamed
+controls across the pool page and kit form), W40-5 (LOW — an extended loan
+came back due a day early), W40-6 (LOW — one tap on a name issued a whole kit).
+Flagged: W40-7 (MED — a variant group made on its page can never be filled).
+Open: W40-8, W40-9 (NIT). Gate: typecheck, lint and the inventory suites clean.
+Next: W41.
 
 ### W39 — Issue equipment to a member, the member sees it, return it — 2026-09-29
 
