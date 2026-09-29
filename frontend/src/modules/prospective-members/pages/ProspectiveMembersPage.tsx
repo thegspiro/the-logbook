@@ -405,7 +405,7 @@ export const ProspectiveMembersPage: React.FC = () => {
       return;
     }
     if (!isValidEmail(newApplicant.email.trim())) {
-      toast.error('Please enter a valid email address');
+      toast.error('Enter a valid email address');
       return;
     }
     setIsCreating(true);
@@ -572,7 +572,7 @@ export const ProspectiveMembersPage: React.FC = () => {
             <Info className="text-theme-text-muted h-3 w-3 shrink-0" />
             <p className="text-theme-text-muted text-xs">
               Conversion rate is converted applicants divided by decided applications (converted plus rejected). Active,
-              on-hold, inactive, and voluntarily withdrawn applications are excluded from that rate.
+              on-hold, inactive and withdrawn applications are left out.
             </p>
           </div>
         </>
@@ -653,6 +653,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                   const pipeline = pipelines.find((p) => p.id === e.target.value);
                   if (pipeline) void fetchPipeline(pipeline.id);
                 }}
+                aria-label="Pipeline"
                 className="form-input px-3 text-sm"
               >
                 {pipelines.map((p) => (
@@ -670,7 +671,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                aria-label="Search applicants..."
+                aria-label="Search applicants"
                 placeholder="Search applicants..."
                 className="form-input placeholder-theme-text-muted pr-4 pl-10 text-sm"
               />
@@ -712,6 +713,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                       e.stopPropagation();
                       setStatusFilter('');
                     }}
+                    aria-label="Clear status filter"
                     className="ml-1"
                   >
                     <X className="h-3 w-3" />
@@ -852,7 +854,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                         ) : (
                           <CheckCircle2 className="h-3.5 w-3.5" />
                         )}
-                        Advance All
+                        Advance Selected
                       </button>
                       <button
                         onClick={() => {
@@ -866,7 +868,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                         ) : (
                           <Pause className="h-3.5 w-3.5" />
                         )}
-                        Hold All
+                        Hold Selected
                       </button>
                       {showBulkRejectConfirm ? (
                         <div className="flex items-center gap-2">
@@ -900,7 +902,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                             ) : (
                               <XCircle className="h-3.5 w-3.5" />
                             )}
-                            Confirm Reject
+                            Confirm Rejection
                           </button>
                         </div>
                       ) : (
@@ -909,7 +911,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                           className="flex items-center gap-1.5 rounded-lg border border-red-500/30 px-3 py-1.5 text-sm text-red-700 transition-colors hover:bg-red-500/10 dark:text-red-400"
                         >
                           <XCircle className="h-3.5 w-3.5" />
-                          Reject All
+                          Reject Selected
                         </button>
                       )}
                       <button
@@ -996,7 +998,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                 <CheckCircle2 className="mx-auto mb-4 h-12 w-12 text-emerald-600" />
                 <h3 className="text-theme-text-primary mb-2 text-lg font-medium">No inactive applications</h3>
                 <p className="text-theme-text-muted text-sm">
-                  All applications are currently active or have been resolved.
+                  Applications with no activity past the inactivity timeout appear here.
                 </p>
               </div>
             ) : (
@@ -1008,6 +1010,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                         <input
                           type="checkbox"
                           checked={selectedInactive.size === inactiveApplicants.length && inactiveApplicants.length > 0}
+                          aria-label="Select all inactive applications on this page"
                           onChange={(e) => {
                             if (e.target.checked) {
                               setSelectedInactive(new Set(inactiveApplicants.map((a) => a.id)));
@@ -1061,6 +1064,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                           <input
                             type="checkbox"
                             checked={selectedInactive.has(applicant.id)}
+                            aria-label={`Select ${applicant.first_name} ${applicant.last_name}`}
                             onChange={(e) => {
                               const next = new Set(selectedInactive);
                               if (e.target.checked) {
@@ -1149,8 +1153,8 @@ export const ProspectiveMembersPage: React.FC = () => {
               <div className="card bg-theme-input-bg mt-4 flex items-start gap-2 p-3">
                 <Info className="text-theme-text-muted mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <p className="text-theme-text-muted text-xs">
-                  Inactive applications are excluded from pipeline statistics. Purging permanently deletes applicant
-                  data and cannot be undone. Consider reactivating applications before purging if you are unsure.
+                  Inactive applications don't count toward pipeline statistics. Purging permanently deletes the
+                  applicant's data and can't be undone — if you're unsure, reactivate instead.
                 </p>
               </div>
             )}
@@ -1330,7 +1334,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                 <Archive className="text-theme-text-muted mx-auto mb-4 h-12 w-12" />
                 <h3 className="text-theme-text-primary mb-2 text-lg font-medium">No withdrawn applications</h3>
                 <p className="text-theme-text-muted text-sm">
-                  Applicants who voluntarily withdraw from the pipeline will appear here.
+                  Applications withdrawn by the applicant or by a coordinator appear here.
                 </p>
               </div>
             ) : (
@@ -1470,8 +1474,8 @@ export const ProspectiveMembersPage: React.FC = () => {
               <div className="card bg-theme-input-bg mt-4 flex items-start gap-2 p-3">
                 <Info className="text-theme-text-muted mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <p className="text-theme-text-muted text-xs">
-                  Withdrawn applications are from prospective members who voluntarily left the pipeline process. You can
-                  reactivate them to place them back into the active pipeline at their previous stage.
+                  These applications were withdrawn by the applicant or by a coordinator. Reactivating returns an
+                  applicant to the stage they were on.
                 </p>
               </div>
             )}
@@ -1633,15 +1637,13 @@ export const ProspectiveMembersPage: React.FC = () => {
                     <AlertTriangle className="h-5 w-5 text-red-700 dark:text-red-400" />
                   </div>
                   <div>
-                    <h2 className="text-theme-text-primary text-lg font-bold">Confirm Purge</h2>
-                    <p className="text-theme-text-muted text-sm">This action cannot be undone</p>
+                    <h2 className="text-theme-text-primary text-lg font-bold">Purge Applications</h2>
+                    <p className="text-theme-text-muted text-sm">This can't be undone</p>
                   </div>
                 </div>
                 <p className="text-theme-text-secondary mb-4 text-sm">
-                  You are about to permanently delete{' '}
-                  <strong className="text-theme-text-primary">{selectedInactive.size}</strong> inactive application(s)
-                  and all associated personal data. This protects your organization from holding unnecessary private
-                  information.
+                  This permanently deletes <strong className="text-theme-text-primary">{selectedInactive.size}</strong>{' '}
+                  inactive application(s) and all of the personal data in them.
                 </p>
               </div>
               <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">

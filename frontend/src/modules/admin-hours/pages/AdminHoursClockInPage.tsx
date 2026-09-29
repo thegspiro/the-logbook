@@ -124,7 +124,7 @@ const AdminHoursClockInPage: React.FC = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </div>
-            <h2 className="text-theme-text-primary mb-2 text-2xl font-bold">Unable to Load</h2>
+            <h2 className="text-theme-text-primary mb-2 text-2xl font-bold">Couldn&apos;t Load This Category</h2>
             <p className="text-theme-text-secondary mb-6">{error}</p>
             <Link to="/admin-hours" className="btn-info inline-block px-6 transition">
               View My Hours
@@ -154,7 +154,7 @@ const AdminHoursClockInPage: React.FC = () => {
 
             <h2 className="text-theme-text-primary mb-2 text-3xl font-bold">Already Clocked In</h2>
             <p className="text-theme-text-secondary mb-8 text-xl">
-              You&apos;re currently logged in to {activeSession.categoryName}
+              You&apos;re clocked in to {activeSession.categoryName}
             </p>
 
             <div className="mb-8 rounded-lg border border-blue-200 bg-blue-50 p-6 text-left dark:border-blue-500/30 dark:bg-blue-500/10">

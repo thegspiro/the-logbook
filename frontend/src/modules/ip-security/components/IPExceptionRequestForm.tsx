@@ -75,7 +75,7 @@ export const IPExceptionRequestForm: React.FC<IPExceptionRequestFormProps> = ({ 
             className={inputClass}
             required
           >
-            <option value="">Select use case...</option>
+            <option value="">Select a use case</option>
             {Object.values(IPExceptionUseCase).map((uc) => (
               <option key={uc} value={uc}>
                 {IP_EXCEPTION_USE_CASE_LABELS[uc] ?? uc}
@@ -86,7 +86,7 @@ export const IPExceptionRequestForm: React.FC<IPExceptionRequestFormProps> = ({ 
 
         <div>
           <label htmlFor="duration" className={labelClass}>
-            Duration (days)
+            Duration (days, 1–90)
           </label>
           <input
             id="duration"
@@ -124,7 +124,7 @@ export const IPExceptionRequestForm: React.FC<IPExceptionRequestFormProps> = ({ 
           id="description"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="Any additional context..."
+          placeholder="Anything else the reviewer should know"
           className={inputClass}
           rows={2}
         />

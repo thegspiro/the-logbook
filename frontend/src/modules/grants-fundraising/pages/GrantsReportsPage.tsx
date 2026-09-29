@@ -2,8 +2,8 @@
  * Grants Reports Page
  *
  * Two-tab reports dashboard with date range filtering.
- * - "Grant Reports" tab: KPI cards, compliance summary, spending by category
- * - "Fundraising Reports" tab: KPI cards, donations by payment method, monthly totals
+ * - "Grants" tab: KPI cards, compliance summary, spending by category
+ * - "Fundraising" tab: KPI cards, donations by payment method, monthly totals
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
@@ -204,12 +204,12 @@ const GrantsReportsPage: React.FC = () => {
   const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
     {
       id: 'grants',
-      label: 'Grant Reports',
+      label: 'Grants',
       icon: <FileText className="h-4 w-4" />,
     },
     {
       id: 'fundraising',
-      label: 'Fundraising Reports',
+      label: 'Fundraising',
       icon: <DollarSign className="h-4 w-4" />,
     },
   ];
@@ -219,7 +219,9 @@ const GrantsReportsPage: React.FC = () => {
       {/* Header */}
       <div>
         <h1 className="text-theme-text-primary text-2xl font-bold">Grants &amp; Fundraising Reports</h1>
-        <p className="text-theme-text-secondary mt-1 text-sm">Grant performance metrics and fundraising analytics</p>
+        <p className="text-theme-text-secondary mt-1 text-sm">
+          Grant results and fundraising totals for the dates you choose
+        </p>
       </div>
 
       {/* Date Range Filter */}
@@ -389,7 +391,7 @@ const GrantsReportsPage: React.FC = () => {
               {/* KPI Cards */}
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <KpiCard
-                  label="Total Donations"
+                  label="Total Raised"
                   value={formatCurrencyWhole(fundraisingReport.totalDonations)}
                   icon={<DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />}
                   color="bg-green-100 dark:bg-green-900/30"

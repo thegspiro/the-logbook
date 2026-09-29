@@ -55,7 +55,8 @@ const renderRulesTab = () =>
     </MemoryRouter>
   );
 
-const INVITATION = 'Create your first notification rule to start sending automated notifications.';
+const INVITATION =
+  'Automated notifications already go out with their default settings. Create a rule for a trigger to be able to switch that notification off.';
 
 beforeEach(() => {
   held = [];
@@ -113,9 +114,9 @@ describe('NotificationRules empty state', () => {
 
     renderRulesTab();
 
-    await userEvent.type(await screen.findByLabelText('Search notification rules...'), 'zzz');
+    await userEvent.type(await screen.findByLabelText('Search notification rules'), 'zzz');
 
-    expect(await screen.findByText('No rules match your search query.')).toBeInTheDocument();
+    expect(await screen.findByText('No rules match your search.')).toBeInTheDocument();
   });
 
   it('closes an open Add Rule dialog if the manage permission is revoked', async () => {

@@ -39,8 +39,8 @@ describe('ImportInventory', () => {
   it('renders the file upload area', () => {
     renderWithRouter(<ImportInventory />);
 
-    expect(screen.getByText('Click to upload CSV file')).toBeInTheDocument();
-    expect(screen.getByText('or drag and drop')).toBeInTheDocument();
+    expect(screen.getByText('Choose a CSV file')).toBeInTheDocument();
+    expect(screen.getByText('Only .csv files are accepted')).toBeInTheDocument();
   });
 
   it('renders back to inventory link', () => {
@@ -55,7 +55,7 @@ describe('ImportInventory', () => {
 
     expect(screen.getByText('Download the CSV template below')).toBeInTheDocument();
     expect(screen.getByText(/Categories are matched by name/)).toBeInTheDocument();
-    expect(screen.getByText(/Barcodes are auto-generated/)).toBeInTheDocument();
+    expect(screen.getByText(/Leave out barcodes — each item gets one automatically/)).toBeInTheDocument();
   });
 
   it('renders file input with csv accept', () => {
@@ -122,7 +122,7 @@ describe('ImportInventory', () => {
     await user.click(screen.getByText('Remove file'));
 
     await vi.waitFor(() => {
-      expect(screen.getByText('Click to upload CSV file')).toBeInTheDocument();
+      expect(screen.getByText('Choose a CSV file')).toBeInTheDocument();
     });
   });
 });

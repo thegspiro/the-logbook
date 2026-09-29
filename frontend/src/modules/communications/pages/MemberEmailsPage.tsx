@@ -54,7 +54,7 @@ const EmailKindCard: React.FC<EmailKindCardProps> = ({ kind, onRequiredChange, s
     <p className="text-theme-text-muted mt-2 text-xs">{kind.rationale}</p>
     {onRequiredChange && (
       <div className="border-theme-surface-border mt-3 flex items-center justify-between gap-3 border-t pt-3">
-        <p className="text-theme-text-secondary text-sm">Required for our department</p>
+        <p className="text-theme-text-secondary text-sm">Require for every member</p>
         <SettingsToggle
           checked={kind.department_required}
           onChange={onRequiredChange}

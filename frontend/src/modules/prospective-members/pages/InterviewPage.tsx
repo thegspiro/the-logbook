@@ -473,7 +473,7 @@ const InterviewCard: React.FC<InterviewCardProps> = ({ interview, applicantId, i
                 type="button"
                 onClick={() => setIsEditing(true)}
                 className="text-theme-text-muted hover:bg-theme-surface-secondary hover:text-theme-text-secondary ml-2 rounded p-1"
-                title="Edit"
+                title="Edit interview"
               >
                 <Pencil className="h-3.5 w-3.5" />
               </button>
@@ -482,7 +482,7 @@ const InterviewCard: React.FC<InterviewCardProps> = ({ interview, applicantId, i
                 onClick={() => void handleDelete()}
                 disabled={isDeleting}
                 className="text-theme-text-muted rounded p-1 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
-                title="Delete"
+                title="Delete interview"
               >
                 {isDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
               </button>
@@ -582,6 +582,7 @@ export const InterviewPage: React.FC = () => {
           <button
             type="button"
             onClick={() => void navigate('/prospective-members')}
+            aria-label="Back to prospective members"
             className="text-theme-text-secondary hover:bg-theme-surface-secondary rounded-lg p-2"
           >
             <ArrowLeft className="h-5 w-5" />

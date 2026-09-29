@@ -129,7 +129,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({ electionId, elec
       if (votingMethod === VM.RANKED_CHOICE) {
         const ranked = rankings[position] || [];
         if (ranked.length === 0) {
-          setError('Please rank at least one candidate');
+          setError('Rank at least one candidate');
           return;
         }
 
@@ -146,7 +146,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({ electionId, elec
       } else if (votingMethod === VM.APPROVAL) {
         const approved = approvals[position];
         if (!approved || approved.size === 0) {
-          setError('Please approve at least one candidate');
+          setError('Approve at least one candidate');
           return;
         }
 
@@ -162,7 +162,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({ electionId, elec
         // Simple majority or supermajority
         const candidateId = selectedCandidates[position];
         if (!candidateId) {
-          setError('Please select a candidate');
+          setError('Select a candidate');
           return;
         }
 
@@ -174,9 +174,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({ electionId, elec
         await electionService.castVote(electionId, voteData);
       }
 
-      toast.success(
-        actualPosition ? `Vote for ${actualPosition} submitted successfully` : 'Vote submitted successfully'
-      );
+      toast.success(actualPosition ? `Vote for ${actualPosition} submitted` : 'Vote submitted');
 
       // Refresh eligibility
       const updatedEligibility = await electionService.checkEligibility(electionId);
@@ -237,7 +235,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({ electionId, elec
   const getMethodLabel = () => {
     switch (votingMethod) {
       case VM.RANKED_CHOICE:
-        return 'Rank candidates in order of preference (click to add ranking)';
+        return 'Rank candidates in order of preference. Select a candidate to rank them next.';
       case VM.APPROVAL:
         return 'Select all candidates you approve of';
       case VM.SUPERMAJORITY:

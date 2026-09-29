@@ -34,7 +34,7 @@ const ImportInventory: React.FC = () => {
     if (!selectedFile) return;
 
     if (!selectedFile.name.endsWith('.csv')) {
-      toast.error('Please select a CSV file');
+      toast.error('Choose a .csv file');
       return;
     }
 
@@ -61,13 +61,13 @@ const ImportInventory: React.FC = () => {
       }
 
       if (!headers.includes('name')) {
-        toast.error('Missing required "Name" column. Download the template for the correct format.');
+        toast.error('The file has no "Name" column. Download the template to see the expected columns.');
         setValidating(false);
         return;
       }
 
       if (rows.length === 0) {
-        toast.error('No data rows found in the file.');
+        toast.error('The file has a header row but no items.');
         setValidating(false);
         return;
       }
@@ -86,9 +86,9 @@ const ImportInventory: React.FC = () => {
       const dataRowCount = rows.length;
       setTotalRows(dataRowCount);
       setPreviewData(preview);
-      toast.success(`File validated! Found ${dataRowCount} item${dataRowCount === 1 ? '' : 's'} to import.`);
+      toast.success(`Found ${dataRowCount} item${dataRowCount === 1 ? '' : 's'} to import`);
     } catch {
-      toast.error('Failed to parse CSV file. Please check the format.');
+      toast.error('Could not read the CSV file. Check that it matches the template.');
     }
     setValidating(false);
   };
@@ -102,7 +102,7 @@ const ImportInventory: React.FC = () => {
       setImportResult(result);
 
       if (result.imported > 0) {
-        toast.success(`Successfully imported ${result.imported} item${result.imported === 1 ? '' : 's'}!`);
+        toast.success(`Imported ${result.imported} item${result.imported === 1 ? '' : 's'}`);
       }
       if (result.failed > 0) {
         toast.error(
@@ -126,7 +126,7 @@ const ImportInventory: React.FC = () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      toast.success('Template downloaded!');
+      toast.success('Template downloaded');
     } catch {
       toast.error('Failed to download template');
     }
@@ -146,7 +146,7 @@ const ImportInventory: React.FC = () => {
               </div>
               <div>
                 <h1 className="text-theme-text-primary text-xl font-bold">Import Inventory from CSV</h1>
-                <p className="text-theme-text-muted text-sm">Bulk import inventory items</p>
+                <p className="text-theme-text-muted text-sm">Add many items at once from a spreadsheet</p>
               </div>
             </div>
             <button
@@ -172,7 +172,7 @@ const ImportInventory: React.FC = () => {
               Fill in your inventory items (only <strong>Name</strong> is required)
             </li>
             <li>Categories are matched by name &mdash; create them first if needed</li>
-            <li>Barcodes are auto-generated and should not be included</li>
+            <li>Leave out barcodes — each item gets one automatically</li>
             <li>Upload the completed CSV and review the preview</li>
           </ol>
 
@@ -218,8 +218,8 @@ const ImportInventory: React.FC = () => {
                 </>
               ) : (
                 <>
-                  <p className="text-theme-text-primary mb-1 font-medium">Click to upload CSV file</p>
-                  <p className="text-theme-text-muted text-sm">or drag and drop</p>
+                  <p className="text-theme-text-primary mb-1 font-medium">Choose a CSV file</p>
+                  <p className="text-theme-text-muted text-sm">Only .csv files are accepted</p>
                 </>
               )}
             </div>
@@ -324,7 +324,7 @@ const ImportInventory: React.FC = () => {
           <div className="card p-8">
             <div className="mb-6 text-center">
               <CheckCircle className="mx-auto mb-4 h-16 w-16 text-green-700 dark:text-green-400" />
-              <h2 className="text-theme-text-primary mb-2 text-2xl font-bold">Import Complete!</h2>
+              <h2 className="text-theme-text-primary mb-2 text-2xl font-bold">Import Complete</h2>
               <p className="text-theme-text-secondary">
                 Processed {importResult.total_rows} row{importResult.total_rows === 1 ? '' : 's'} from the CSV file
               </p>
@@ -333,7 +333,7 @@ const ImportInventory: React.FC = () => {
             <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-4 text-center">
                 <p className="text-2xl font-bold text-green-700 dark:text-green-400">{importResult.imported}</p>
-                <p className="text-sm text-green-700 dark:text-green-300">Successfully Imported</p>
+                <p className="text-sm text-green-700 dark:text-green-300">Imported</p>
               </div>
               <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-center">
                 <p className="text-2xl font-bold text-red-700 dark:text-red-400">{importResult.failed}</p>

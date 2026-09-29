@@ -37,7 +37,7 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
       const data = await userService.getDeletionImpact(userId);
       setImpact(data);
     } catch {
-      setImpactError('Failed to load deletion impact. Please try again.');
+      setImpactError('Unable to load what this would affect. Try again.');
     } finally {
       setLoadingImpact(false);
     }
@@ -134,7 +134,7 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
       {loadingImpact && (
         <div className="flex items-center justify-center py-8" role="status" aria-live="polite">
           <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
-          <span className="text-theme-text-muted ml-2 text-sm">Loading impact assessment...</span>
+          <span className="text-theme-text-muted ml-2 text-sm">Checking what this affects...</span>
         </div>
       )}
 

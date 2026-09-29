@@ -101,7 +101,7 @@ const PlanningSettingsSummary: React.FC = () => {
         <h3 className="text-theme-text-primary text-sm font-semibold">What a planned shift starts from</h3>
       </div>
       <p className="text-theme-text-muted mt-1 text-xs">
-        Shown here, changed in Scheduling settings — one editing home, so two screens cannot overwrite each other.
+        Change these in Scheduling settings. Select a value to go there.
       </p>
       {failed && (
         <div className="alert-warning mt-3 flex flex-wrap items-center gap-2 text-sm" role="alert">

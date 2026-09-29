@@ -53,7 +53,7 @@ export const AnonymizeMemberModal: React.FC<AnonymizeMemberModalProps> = ({
       onClose();
       await onAnonymized();
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Unable to anonymize the member. Please try again.'));
+      setError(getErrorMessage(err, 'Unable to anonymize the member. Try again.'));
     } finally {
       setSubmitting(false);
     }

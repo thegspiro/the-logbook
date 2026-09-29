@@ -157,7 +157,7 @@ const IPSecurityAdminPage: React.FC = () => {
     if (
       !(await confirm({
         title: 'Unblock country',
-        message: `Remove ${code} from the blocked countries list? Sign-ins from ${code} will be allowed again.`,
+        message: `Unblock ${code}? Requests from ${code} will be allowed again, for every organization on this server.`,
         confirmLabel: 'Unblock',
         cancelLabel: 'Keep blocked',
       }))
@@ -189,7 +189,7 @@ const IPSecurityAdminPage: React.FC = () => {
             </div>
             <div>
               <h1 className="text-theme-text-primary text-xl font-bold">IP Security</h1>
-              <p className="text-theme-text-muted text-sm">Manage IP exceptions, geo-blocking, and access controls</p>
+              <p className="text-theme-text-muted text-sm">Review IP exception requests and manage blocked countries</p>
             </div>
           </div>
           {/* Icon-only, so it needs a name of its own: it rendered 42x34 with
@@ -238,6 +238,7 @@ const IPSecurityAdminPage: React.FC = () => {
             <IPExceptionTable
               exceptions={pendingExceptions}
               showActions
+              emptyMessage="No requests are waiting for review."
               onApprove={(id) => setApproveModal({ open: true, id })}
               onReject={(id) => setRejectModal({ open: true, id })}
             />
@@ -266,6 +267,7 @@ const IPSecurityAdminPage: React.FC = () => {
               <IPExceptionTable
                 exceptions={allExceptions}
                 showActions
+                emptyMessage={statusFilter ? `No ${statusFilter} IP exceptions.` : 'No IP exceptions yet.'}
                 onApprove={(id) => setApproveModal({ open: true, id })}
                 onReject={(id) => setRejectModal({ open: true, id })}
                 onRevoke={(id) => setRevokeModal({ open: true, id })}
@@ -305,7 +307,7 @@ const IPSecurityAdminPage: React.FC = () => {
           <div className="space-y-4">
             <div>
               <label htmlFor="approved-days" className={labelClass}>
-                Approved Duration (days, optional override)
+                Duration in days, 1–90 (optional)
               </label>
               <input
                 id="approved-days"
@@ -433,10 +435,13 @@ const IPSecurityAdminPage: React.FC = () => {
         {/* Add Country Modal */}
         <Modal isOpen={countryModal} onClose={() => setCountryModal(false)} title="Add Blocked Country">
           <div className="space-y-4">
+            <p className="text-theme-text-muted text-sm">
+              Blocks every request from this country, for every organization on this server.
+            </p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label htmlFor="country-code" className={labelClass}>
-                  Country Code
+                  Country Code (2 letters)
                 </label>
                 <input
                   id="country-code"

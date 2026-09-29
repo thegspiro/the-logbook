@@ -126,8 +126,9 @@ const ScheduledEmailList: React.FC = () => {
         onClose={() => setCancelTarget(null)}
         onConfirm={() => void handleCancel()}
         title="Cancel Scheduled Email"
-        message="This scheduled email will be permanently cancelled and cannot be restored. Are you sure?"
+        message="This email will not be sent. You cannot undo this."
         confirmLabel="Cancel Email"
+        cancelLabel="Keep it"
         variant="danger"
         loading={isSaving}
       />

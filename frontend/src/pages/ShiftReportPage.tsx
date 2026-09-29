@@ -242,8 +242,8 @@ const ShiftReportPage: React.FC = () => {
             {schedulingEnabled ? (
               <>
                 <p className="text-theme-text-secondary mx-auto max-w-md text-sm">
-                  Shift reports are now filed from the Shift Scheduling section. Select a shift, validate hours and
-                  calls for the entire crew, and evaluate trainees — all in one streamlined form.
+                  File shift reports from Scheduling: pick a shift, confirm hours and calls for the crew, and evaluate
+                  trainees in one form.
                 </p>
                 <button
                   onClick={() => void navigate('/scheduling?tab=shift-reports&view=create')}

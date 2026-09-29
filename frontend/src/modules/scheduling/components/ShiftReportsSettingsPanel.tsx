@@ -67,7 +67,7 @@ const SECTIONS: {
     key: 'feature-toggles',
     label: "What's turned on",
     icon: SlidersHorizontal,
-    description: 'Enable/disable shift reports and training',
+    description: 'Shift reports and training evaluations',
   },
   {
     key: 'post-shift',
@@ -91,7 +91,7 @@ const SECTIONS: {
     key: 'form-sections',
     label: 'Form Sections',
     icon: SlidersHorizontal,
-    description: 'Show/hide report form fields',
+    description: 'Which fields the report form shows',
   },
   {
     key: 'review-workflow',
@@ -379,7 +379,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
         return (
           <div>
             <p className="text-theme-text-muted mb-4 text-sm">
-              Control whether shift reports are available for your department and which features are included.
+              Turn shift reports on or off, and choose what they include.
             </p>
             {loadingTraining ? (
               <div className="flex items-center justify-center py-6" role="status" aria-live="polite">
@@ -413,8 +413,8 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                   <div>
                     <span className="text-theme-text-primary text-sm font-medium">Enable Shift Reports</span>
                     <p className="text-theme-text-muted text-xs">
-                      When enabled, officers can file end-of-shift reports for crew members. All crew members receive
-                      hours and call credit. Disabling hides the Shift Reports tab from the scheduling section.
+                      Officers can file end-of-shift reports for crew members, and every crew member gets hours and call
+                      credit. Turning this off hides the Shift Reports tab.
                     </p>
                   </div>
                 </label>
@@ -443,9 +443,8 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                   <div>
                     <span className="text-theme-text-primary text-sm font-medium">Include Training Evaluations</span>
                     <p className="text-theme-text-muted text-xs">
-                      When enabled, trainees enrolled in a training program will have an expanded evaluation section
-                      (performance rating, skills, tasks, strengths/improvements). Requires the Training module to be
-                      active.
+                      Trainees enrolled in a training program get a fuller evaluation section (performance rating,
+                      skills, tasks, strengths and improvements). Requires the Training module.
                     </p>
                   </div>
                 </label>
@@ -541,8 +540,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
               </div>
             ) : !trainingConfig ? (
               <p className="text-theme-text-muted text-sm italic">
-                Training module configuration is not available. Enable the training module to configure shift report
-                defaults.
+                Training settings aren&apos;t available. Turn on the Training module to set shift report defaults.
               </p>
             ) : (
               <div className="space-y-5">

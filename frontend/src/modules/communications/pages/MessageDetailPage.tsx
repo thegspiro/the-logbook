@@ -51,7 +51,7 @@ const MessageDetailPage: React.FC = () => {
         }
       }
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Unable to load this message. Please try again.'));
+      setError(getErrorMessage(err, 'Unable to load this message. Try again.'));
     } finally {
       setIsLoading(false);
     }
@@ -69,7 +69,7 @@ const MessageDetailPage: React.FC = () => {
       setMessage((prev) => (prev ? { ...prev, is_acknowledged: true, is_read: true } : prev));
       toast.success('Acknowledged');
     } catch {
-      toast.error('Unable to acknowledge this message. Please try again.');
+      toast.error('Unable to acknowledge this message. Try again.');
     } finally {
       setIsAcknowledging(false);
     }
@@ -149,7 +149,7 @@ const MessageDetailPage: React.FC = () => {
             ) : (
               <>
                 <p className="text-theme-text-secondary mb-3 text-sm">
-                  This message needs your acknowledgement before it clears from your inbox.
+                  This message needs your acknowledgment before it clears from your inbox.
                 </p>
                 <button
                   type="button"

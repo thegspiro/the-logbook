@@ -154,7 +154,7 @@ const BudgetsPage: React.FC = () => {
         <Breadcrumbs />
         <div>
           <h1 className="text-theme-text-primary text-2xl font-bold">Budgets</h1>
-          <p className="text-theme-text-secondary mt-1 text-sm">Budget allocations and utilization by fiscal year</p>
+          <p className="text-theme-text-secondary mt-1 text-sm">Budgeted, spent, and encumbered amounts by category</p>
         </div>
         <SkeletonPage rows={6} />
       </div>
@@ -169,7 +169,7 @@ const BudgetsPage: React.FC = () => {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-theme-text-primary text-2xl font-bold">Budgets</h1>
-          <p className="text-theme-text-secondary mt-1 text-sm">Budget allocations and utilization by fiscal year</p>
+          <p className="text-theme-text-secondary mt-1 text-sm">Budgeted, spent, and encumbered amounts by category</p>
         </div>
         <select
           value={selectedFiscalYear}
@@ -209,7 +209,7 @@ const BudgetsPage: React.FC = () => {
           </span>
           <span className="flex items-center gap-1.5">
             <span className="inline-block h-2.5 w-2.5 rounded-full bg-gray-200 dark:bg-gray-600" />
-            Available
+            Remaining
           </span>
         </div>
       )}
@@ -221,8 +221,10 @@ const BudgetsPage: React.FC = () => {
           title="No budgets found"
           description={
             selectedFiscalYear
-              ? 'No budgets have been created for the selected fiscal year.'
-              : 'Select a fiscal year to view budgets.'
+              ? 'This fiscal year has no budgets yet.'
+              : fiscalYears.length > 0
+                ? 'Select a fiscal year to see its budgets.'
+                : 'Create a fiscal year in Finance Settings first.'
           }
         />
       ) : (

@@ -37,7 +37,7 @@ export const EventTemplatesPage: React.FC = () => {
       const data = await eventService.getTemplates(true);
       setTemplates(data);
     } catch {
-      setError('Failed to load templates. Please try again later.');
+      setError('Failed to load templates.');
     } finally {
       setLoading(false);
     }
@@ -62,10 +62,10 @@ export const EventTemplatesPage: React.FC = () => {
     try {
       if (editingTemplate) {
         await eventService.updateTemplate(editingTemplate.id, data);
-        toast.success('Template updated successfully');
+        toast.success('Template updated');
       } else {
         await eventService.createTemplate(data);
-        toast.success('Template created successfully');
+        toast.success('Template created');
       }
       setShowForm(false);
       setEditingTemplate(null);
@@ -175,7 +175,7 @@ export const EventTemplatesPage: React.FC = () => {
                 Event Templates
               </h1>
               <p className="text-theme-text-secondary mt-1 text-sm">
-                Create and manage reusable event templates to streamline event creation.
+                Save common event settings to reuse when you create an event.
               </p>
             </div>
             <button onClick={handleCreate} className="btn-primary inline-flex items-center gap-2">
@@ -190,7 +190,7 @@ export const EventTemplatesPage: React.FC = () => {
           <EmptyState
             icon={FileText}
             title="No templates yet"
-            description="Create your first event template to pre-fill common settings when creating events."
+            description="Create a template to pre-fill common settings on new events."
             actions={[
               {
                 label: 'Create Template',
@@ -317,8 +317,8 @@ export const EventTemplatesPage: React.FC = () => {
       <ConfirmDialog
         isOpen={!!deleteTarget}
         title="Delete Template"
-        message={`Are you sure you want to delete "${deleteTarget?.name ?? ''}"? This action cannot be undone.`}
-        confirmLabel="Delete"
+        message={`Delete "${deleteTarget?.name ?? ''}"? You can't undo this.`}
+        confirmLabel="Delete Template"
         variant="danger"
         loading={isDeleting}
         onConfirm={() => {

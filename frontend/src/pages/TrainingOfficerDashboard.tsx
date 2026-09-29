@@ -45,7 +45,7 @@ const TrainingOfficerDashboard: React.FC = () => {
     try {
       setData(await trainingService.getDashboardSummary(90));
     } catch {
-      setError('Unable to load training dashboard data. Please check your connection and refresh the page.');
+      setError('Failed to load the dashboard. Check your connection and refresh the page.');
     } finally {
       setLoading(false);
     }
@@ -68,7 +68,9 @@ const TrainingOfficerDashboard: React.FC = () => {
             <GraduationCap className="h-8 w-8 text-red-700" />
             Training Officer Dashboard
           </h1>
-          <p className="text-theme-text-muted">Aggregated compliance, training, validation, and capacity signals</p>
+          <p className="text-theme-text-muted">
+            Compliance, expiring certifications, hours, and what needs your attention
+          </p>
         </div>
         <div className="flex gap-2">
           <button title="Refresh Data" onClick={() => void fetchData()} className="bg-theme-input-bg rounded-lg p-2">

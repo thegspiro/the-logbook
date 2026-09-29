@@ -61,7 +61,7 @@ const EventRequestStatusPage: React.FC = () => {
         const result = await eventRequestService.checkPublicStatus(token);
         setData(result);
       } catch {
-        setError('Request not found. Please check your status link and try again.');
+        setError('Check that you opened the full status link, then try again.');
       } finally {
         setLoading(false);
       }
@@ -100,7 +100,7 @@ const EventRequestStatusPage: React.FC = () => {
       setShowCancelConfirm(false);
       setCancelReason('');
     } catch {
-      setError('Failed to cancel request. Please try again.');
+      setError('Failed to cancel request. Try again.');
     } finally {
       setCancelling(false);
     }
@@ -350,7 +350,7 @@ const EventRequestStatusPage: React.FC = () => {
                       }}
                       className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 text-sm font-medium transition-colors"
                     >
-                      Never mind
+                      Keep Request
                     </button>
                   </div>
                 </div>

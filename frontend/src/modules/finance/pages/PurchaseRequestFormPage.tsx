@@ -30,7 +30,7 @@ const purchaseRequestSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200),
   description: z.string().max(2000).optional(),
   vendor: z.string().max(200).optional(),
-  estimatedAmount: z.number({ message: 'Amount is required' }).positive('Amount must be positive'),
+  estimatedAmount: z.number({ message: 'Amount is required' }).positive('Amount must be greater than zero'),
   priority: z.string().min(1, 'Priority is required'),
   budgetId: z.string().optional(),
   fiscalYearId: z.string().min(1, 'Fiscal year is required'),
@@ -250,8 +250,8 @@ const PurchaseRequestFormPage: React.FC = () => {
         </h1>
         <p className="text-theme-text-secondary mt-1 text-sm">
           {isEdit
-            ? 'Update the details for this purchase request.'
-            : 'Fill in the details to create a new purchase request.'}
+            ? 'You can edit a request until you submit it.'
+            : 'Saved as a draft. Submit it for approval from the next page.'}
         </p>
       </div>
 
@@ -276,7 +276,7 @@ const PurchaseRequestFormPage: React.FC = () => {
             <textarea
               className={inputClass}
               rows={3}
-              placeholder="Detailed description of what is being purchased and why"
+              placeholder="What you're buying and why"
               {...register('description')}
             />
             {errors.description && <p className={errorClass}>{errors.description.message}</p>}
@@ -332,7 +332,7 @@ const PurchaseRequestFormPage: React.FC = () => {
 
           {/* Budget Category */}
           <div className="sm:col-span-2">
-            <label className={labelClass}>Budget Category</label>
+            <label className={labelClass}>Budget</label>
             <select className={selectClass} {...register('budgetId')}>
               <option value="">No budget linked</option>
               {budgets.map((b) => (
@@ -361,7 +361,7 @@ const PurchaseRequestFormPage: React.FC = () => {
             className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900 disabled:opacity-50"
           >
             <Save className="h-4 w-4" />
-            {isSubmitting ? 'Saving...' : isEdit ? 'Update Request' : 'Create Request'}
+            {isSubmitting ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Request'}
           </button>
         </div>
       </form>

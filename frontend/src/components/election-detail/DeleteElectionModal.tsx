@@ -48,7 +48,7 @@ const DeleteElectionModal: React.FC<DeleteElectionModalProps> = ({
             id="delete-election-modal-title"
             className={`text-lg font-medium ${isDraft ? 'text-theme-text-primary' : 'text-red-700 dark:text-red-300'}`}
           >
-            {isDraft ? 'Delete Draft Election' : 'DELETE ACTIVE ELECTION'}
+            {isDraft ? 'Delete Draft Election' : 'Delete Election'}
           </h3>
         </div>
 
@@ -66,25 +66,23 @@ const DeleteElectionModal: React.FC<DeleteElectionModalProps> = ({
                   </svg>
                 </div>
                 <div className="ml-3">
-                  <h3 className="text-sm font-bold text-red-700 dark:text-red-300">
-                    CRITICAL: This is a destructive, irreversible action
-                  </h3>
+                  <h3 className="text-sm font-bold text-red-700 dark:text-red-300">This cannot be undone</h3>
                   <div className="mt-2 text-sm text-red-700 dark:text-red-300">
                     <p>Deleting this {election.status.toUpperCase()} election will:</p>
                     <ul className="mt-1 list-inside list-disc space-y-1">
                       <li>
-                        <strong>Permanently destroy</strong> the election and all associated data
+                        <strong>Permanently delete</strong> the election and all its data
                       </li>
                       <li>
-                        Send <strong>CRITICAL alert emails</strong> to all leadership members (Chief, President, Vice
+                        Send a <strong>critical alert email</strong> to all leadership members (Chief, President, Vice
                         President, Secretary)
                       </li>
                       <li>
-                        Create a <strong>CRITICAL severity</strong> audit trail entry
+                        Record a <strong>critical-severity</strong> entry in the audit trail
                       </li>
                       {election.total_votes && election.total_votes > 0 && (
                         <li>
-                          Destroy <strong>{election.total_votes} votes</strong> that have already been cast
+                          Delete the <strong>{election.total_votes} votes</strong> already cast
                         </li>
                       )}
                     </ul>
@@ -95,9 +93,7 @@ const DeleteElectionModal: React.FC<DeleteElectionModalProps> = ({
           )}
 
           {isDraft && (
-            <p className="text-theme-text-secondary mb-4 text-sm">
-              Are you sure you want to delete this draft election? This action cannot be undone.
-            </p>
+            <p className="text-theme-text-secondary mb-4 text-sm">Delete this draft election? This cannot be undone.</p>
           )}
 
           {error && (
@@ -129,13 +125,13 @@ const DeleteElectionModal: React.FC<DeleteElectionModalProps> = ({
                   value={deleteReason}
                   onChange={(e) => setDeleteReason(e.target.value)}
                   rows={4}
-                  placeholder="Provide a detailed reason why this active election must be deleted..."
+                  placeholder="Explain why this election must be deleted"
                   className="form-input mt-1 shadow-xs"
                   required
                   aria-required="true"
                 />
                 <p className="mt-1 text-xs text-red-700 dark:text-red-400">
-                  This reason will be emailed to ALL leadership members and permanently logged in the audit trail.
+                  This reason is emailed to all leadership members and kept in the audit trail.
                 </p>
               </div>
             </div>

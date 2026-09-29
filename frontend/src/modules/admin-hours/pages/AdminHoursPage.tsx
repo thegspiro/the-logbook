@@ -245,7 +245,7 @@ const AdminHoursPage: React.FC = () => {
     setClockingOut(true);
     try {
       await clockOut(activeSession.id);
-      toast.success('Clocked out successfully');
+      toast.success('Clocked out');
       // The store's clockOut refetches without params. Re-request the list the
       // member is actually looking at, or a filtered view silently reverts to
       // every entry they have ever logged.
@@ -430,7 +430,7 @@ const AdminHoursPage: React.FC = () => {
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-theme-text-primary text-3xl font-bold">My Admin Hours</h1>
-          <p className="text-theme-text-secondary mt-1">Track and view your administrative hours</p>
+          <p className="text-theme-text-secondary mt-1">Log your administrative hours and see what has been approved</p>
         </div>
         <NfcTapButton />
       </div>
@@ -487,7 +487,8 @@ const AdminHoursPage: React.FC = () => {
                 {isSessionNearLimit && (
                   <p className="mt-2 flex items-center gap-1.5 text-sm text-orange-700 dark:text-orange-300">
                     <AlertTriangle className="h-4 w-4 shrink-0" />
-                    Approaching session limit &mdash; please clock out soon
+                    Near the session limit &mdash; clock out soon, or the session closes at the limit and goes to an
+                    officer for review
                   </p>
                 )}
               </div>
@@ -830,7 +831,7 @@ const AdminHoursPage: React.FC = () => {
                 disabled={!manualFormValid || isSubmitting}
                 className="btn-info transition disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {isSubmitting ? 'Submitting...' : 'Submit'}
+                {isSubmitting ? 'Submitting...' : 'Submit for review'}
               </button>
               <button
                 type="button"

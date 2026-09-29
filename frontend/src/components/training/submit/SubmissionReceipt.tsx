@@ -34,7 +34,7 @@ export const SubmissionReceipt: React.FC<{
       <p className="text-theme-alert-info-text text-sm">
         {receipt.approved
           ? 'These hours count toward your requirements now. An officer can still review the entry later.'
-          : 'Most submissions are reviewed within a week. You can edit or delete it until an officer approves it. The hours count toward your requirements once approved.'}
+          : 'You can edit or delete it until an officer approves it. The hours count toward your requirements once approved.'}
       </p>
     </div>
 

@@ -93,6 +93,21 @@ export const ExpenseType = {
 } as const;
 export type ExpenseType = (typeof ExpenseType)[keyof typeof ExpenseType];
 
+export const EXPENSE_TYPE_LABELS: Record<string, string> = {
+  [ExpenseType.GENERAL]: 'General',
+  [ExpenseType.UNIFORM_REIMBURSEMENT]: 'Uniform Reimbursement',
+  [ExpenseType.PPE_REPLACEMENT]: 'PPE Replacement',
+  [ExpenseType.BOOT_ALLOWANCE]: 'Boot Allowance',
+  [ExpenseType.TRAINING_REIMBURSEMENT]: 'Training Reimbursement',
+  [ExpenseType.CERTIFICATION_FEE]: 'Certification Fee',
+  [ExpenseType.CONFERENCE]: 'Conference',
+  [ExpenseType.TRAVEL]: 'Travel',
+  [ExpenseType.MEALS]: 'Meals',
+  [ExpenseType.MILEAGE]: 'Mileage',
+  [ExpenseType.EQUIPMENT_PURCHASE]: 'Equipment Purchase',
+  [ExpenseType.OTHER]: 'Other',
+};
+
 export const ApprovalStepType = {
   APPROVAL: 'approval',
   NOTIFICATION: 'notification',

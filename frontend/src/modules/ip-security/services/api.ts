@@ -2,6 +2,10 @@
  * IP Security API Service
  *
  * Uses the global shared axios instance (withCredentials + CSRF already configured).
+ *
+ * The request schemas in backend/app/schemas/ip_security.py are snake_case with
+ * no alias generator (only the responses are camelCase), so every request body
+ * is mapped to snake_case here. Posting the camelCase types as-is 422s.
  */
 
 import api from '../../../services/apiClient';
@@ -24,7 +28,13 @@ const BASE = '/ip-security';
 export const ipSecurityService = {
   // User: request an IP exception
   async requestException(data: IPExceptionRequestCreate): Promise<IPException> {
-    const res = await api.post<IPException>(`${BASE}/exceptions`, data);
+    const res = await api.post<IPException>(`${BASE}/exceptions`, {
+      ip_address: data.ipAddress,
+      reason: data.reason,
+      requested_duration_days: data.requestedDurationDays,
+      use_case: data.useCase,
+      ...(data.description !== undefined ? { description: data.description } : {}),
+    });
     return res.data;
   },
 
@@ -54,19 +64,26 @@ export const ipSecurityService = {
 
   // Admin: approve exception
   async approveException(id: string, data: IPExceptionApprove): Promise<IPException> {
-    const res = await api.post<IPException>(`${BASE}/exceptions/${id}/approve`, data);
+    const res = await api.post<IPException>(`${BASE}/exceptions/${id}/approve`, {
+      ...(data.approvedDurationDays !== undefined ? { approved_duration_days: data.approvedDurationDays } : {}),
+      ...(data.approvalNotes !== undefined ? { approval_notes: data.approvalNotes } : {}),
+    });
     return res.data;
   },
 
   // Admin: reject exception
   async rejectException(id: string, data: IPExceptionReject): Promise<IPException> {
-    const res = await api.post<IPException>(`${BASE}/exceptions/${id}/reject`, data);
+    const res = await api.post<IPException>(`${BASE}/exceptions/${id}/reject`, {
+      rejection_reason: data.rejectionReason,
+    });
     return res.data;
   },
 
   // Admin: revoke exception
   async revokeException(id: string, data: IPExceptionRevoke): Promise<IPException> {
-    const res = await api.post<IPException>(`${BASE}/exceptions/${id}/revoke`, data);
+    const res = await api.post<IPException>(`${BASE}/exceptions/${id}/revoke`, {
+      revoke_reason: data.revokeReason,
+    });
     return res.data;
   },
 
@@ -92,7 +109,12 @@ export const ipSecurityService = {
 
   // Admin: add blocked country
   async addBlockedCountry(data: CountryBlockRuleCreate): Promise<CountryBlockRule> {
-    const res = await api.post<CountryBlockRule>(`${BASE}/blocked-countries`, data);
+    const res = await api.post<CountryBlockRule>(`${BASE}/blocked-countries`, {
+      country_code: data.countryCode,
+      reason: data.reason,
+      risk_level: data.riskLevel,
+      ...(data.countryName !== undefined ? { country_name: data.countryName } : {}),
+    });
     return res.data;
   },
 

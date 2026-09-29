@@ -48,24 +48,21 @@ Forensics tab.]**
 
 ---
 
-## CHAPTER 2: Organization Defaults — Election Settings (2:00 – 3:30)
+## CHAPTER 2: Organization Settings — Election Settings (2:00 – 3:30)
 
 **[SCREEN: Navigate to Elections > Settings (ElectionsSettingsPage)]**
 
 > "Before your first election, take two minutes in Elections Settings. These
-> are organization-wide defaults — every new election starts from them, and you
-> can override per election."
+> apply to every election in the department."
 
-**[SCREEN: Walk down the settings list, toggling a few]**
+**[SCREEN: Walk through Proxy Voting and Features]**
 
-> "Default voting method and victory condition — most departments run simple
-> majority. Anonymous voting on by default — recommended, and I'll explain the
-> anonymity model later because it's genuinely well done. Write-ins, immediate
-> results visibility, runoffs. And proxy voting — off by default. If your
-> bylaws allow a member to vote on behalf of an absent member, enable it here
-> and set the maximum number of members one person can represent."
-
-**[CALLOUT: "Settings are defaults, not limits — each election can override"]**
+> "Proxy voting — off by default. If your bylaws allow a member to vote on
+> behalf of an absent member, enable it here and set the maximum number of
+> members one person can represent. Under Features you can turn off the
+> nomination phase, paper-ballot entry, reminders or scheduled opening if your
+> department doesn't use them. Voting method, victory condition, quorum and
+> anonymity aren't set here — you choose them on each election's own form."
 
 > "One note for your IT manager: the settings page — like everything else in
 > this video — is gated behind the `elections.manage` permission. Members
@@ -852,7 +849,7 @@ signature lines]**
 
 | Clip                             | Timecode    | Standalone Title                                         |
 | -------------------------------- | ----------- | -------------------------------------------------------- |
-| Election Settings                | 2:00–3:30   | "Election Defaults Every Department Should Set"          |
+| Election Settings                | 2:00–3:30   | "Election Settings Every Department Should Check"        |
 | Voting Methods Explained         | 4:30–5:45   | "Simple Majority vs Ranked Choice vs Approval Voting"    |
 | Quorum & Victory Conditions      | 5:45–7:30   | "Quorum, Supermajorities & Victory Conditions"           |
 | Ballot Builder                   | 7:30–11:00  | "Building a Department Ballot"                           |

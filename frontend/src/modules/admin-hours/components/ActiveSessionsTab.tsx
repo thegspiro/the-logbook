@@ -35,7 +35,7 @@ const ActiveSessionsTab: React.FC = () => {
       return;
     try {
       await forceClockOut(entryId);
-      toast.success(`${userName}'s session has been ended`);
+      toast.success(`Ended ${userName}'s session`);
     } catch {
       // error handled by store
     }

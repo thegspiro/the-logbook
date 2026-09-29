@@ -59,7 +59,7 @@ const AdminHoursQRCodePage: React.FC = () => {
           <p className="text-red-700 dark:text-red-400">{error}</p>
         </div>
         <Link to="/admin-hours/manage" className="text-blue-600 hover:text-blue-800 dark:hover:text-blue-400">
-          &larr; Back to Admin Hours
+          &larr; Back to Admin Hours Management
         </Link>
       </div>
     );

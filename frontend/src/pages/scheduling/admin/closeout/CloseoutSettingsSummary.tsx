@@ -119,7 +119,7 @@ const CloseoutSettingsSummary: React.FC = () => {
       label: 'End-of-shift equipment checks',
       value: feature ? (feature.require_end_of_shift_checks ? 'Block close-out' : 'Noted, do not block') : '—',
       href: GENERAL,
-      hint: 'Whether an outstanding checklist stops the shift being closed',
+      hint: 'Whether an unfinished checklist blocks close-out',
     },
     {
       label: 'Call volume',
@@ -131,7 +131,7 @@ const CloseoutSettingsSummary: React.FC = () => {
       label: 'Open-ended shift cushion',
       value: feature?.open_ended_shift_cushion_hours ? `${feature.open_ended_shift_cushion_hours} hours` : '—',
       href: canOpenChecklistTiming ? CHECKLIST_TIMING : null,
-      hint: 'Derived from Inventory · Checklist Timing — how long past its start a shift with no recorded end still counts as running',
+      hint: 'Set in Inventory · Checklist Timing: how long after its start a shift with no end time still counts as running',
     },
     // Only count-only close-out asks for a breakdown: `ShiftDetailPanel` renders
     // the wizard for that mode alone, so telling a detailed or off department
@@ -161,9 +161,7 @@ const CloseoutSettingsSummary: React.FC = () => {
         <Settings2 className="text-theme-text-muted h-4 w-4" aria-hidden="true" />
         <h3 className="text-theme-text-primary text-sm font-semibold">What close-out asks for</h3>
       </div>
-      <p className="text-theme-text-muted mt-1 text-xs">
-        Shown here, changed in Scheduling settings — one editing home, so two screens cannot overwrite each other.
-      </p>
+      <p className="text-theme-text-muted mt-1 text-xs">Read-only here. Select a value to change it where it is set.</p>
       {failed && (
         <div className="alert-warning mt-3 flex items-center gap-2 text-sm" role="alert">
           <span className="flex-1">

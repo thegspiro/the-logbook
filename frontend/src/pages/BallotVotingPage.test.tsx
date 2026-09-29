@@ -91,7 +91,7 @@ describe('BallotVotingPage', () => {
     it('shows an error when no token is present', async () => {
       render(<BallotVotingPage />);
 
-      expect(await screen.findByText(/No voting token provided/)).toBeInTheDocument();
+      expect(await screen.findByText(/This link has no voting token/)).toBeInTheDocument();
       expect(mockLookupBallot).not.toHaveBeenCalled();
     });
   });

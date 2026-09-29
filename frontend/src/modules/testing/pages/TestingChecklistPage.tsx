@@ -173,7 +173,7 @@ export const TestingChecklistPage: React.FC = () => {
     const ordered = [...ALL_TEST_PAGES.slice(start), ...ALL_TEST_PAGES.slice(0, start)];
     const next = ordered.find((page) => (results[page.path]?.status ?? 'untested') === 'untested');
     if (!next) {
-      toast.success('Every page carries a mark');
+      toast.success('Every page has a mark');
       return;
     }
     setExpanded((previous) => (previous.includes(next.groupId) ? previous : [...previous, next.groupId]));
@@ -213,7 +213,7 @@ export const TestingChecklistPage: React.FC = () => {
       await navigator.clipboard.writeText(markdown());
       toast.success('Run copied as Markdown');
     } catch {
-      toast.error('Could not reach the clipboard — use Download instead');
+      toast.error('Could not copy to the clipboard — use Download Markdown instead');
     }
   };
 
@@ -249,8 +249,8 @@ export const TestingChecklistPage: React.FC = () => {
 
   const handleClear = async () => {
     const confirmed = await confirm({
-      title: 'Clear your testing run?',
-      message: `${summary.pass + summary.fail + summary.blocked} of your marks, and their notes, will be deleted for everyone. Other testers' marks are left alone. Copy the Markdown first if you need the record.`,
+      title: 'Clear your marks?',
+      message: `This deletes your ${summary.pass + summary.fail + summary.blocked} marks and their notes from the run. Other testers' marks stay. Copy the Markdown first if you need a record.`,
       confirmLabel: 'Delete my marks',
       cancelLabel: 'Keep them',
       variant: 'danger',
@@ -261,7 +261,7 @@ export const TestingChecklistPage: React.FC = () => {
   const handleClearEveryone = async () => {
     const confirmed = await confirm({
       title: "Clear every tester's run?",
-      message: `All ${testerCount} tester${testerCount === 1 ? "'s" : "s'"} marks and notes will be deleted for the whole department. This cannot be undone, and it is recorded in the audit log.`,
+      message: `This deletes every mark and note from ${testerCount} tester${testerCount === 1 ? '' : 's'} for the whole department. This cannot be undone, and it is recorded in the audit log.`,
       confirmLabel: 'Delete every mark',
       cancelLabel: 'Keep them',
       variant: 'danger',
@@ -284,10 +284,10 @@ export const TestingChecklistPage: React.FC = () => {
           <div>
             <h1 className="text-theme-text-primary text-2xl font-bold">Testing home</h1>
             <p className="text-theme-text-secondary mt-1 text-sm">
-              Every page in the application, in one place. Open a box to test the page, then mark what you found — the
-              run is saved for the department, so testing from another account, another machine or another day continues
-              the same list. The steps for each area are in <span className="font-mono">TESTING_CHECKLIST.md</span>;
-              this tracks which screens have been walked.
+              Every page in the app, one box each. Open a box to test the page, then mark what you found. The run is
+              saved for the department, so you can pick it up from another account, device or day.{' '}
+              <span className="font-mono">TESTING_CHECKLIST.md</span> has the steps for each area; this page tracks
+              which screens have been checked.
             </p>
           </div>
         </div>
@@ -449,8 +449,8 @@ export const TestingChecklistPage: React.FC = () => {
                 {enabledModules === null && ' · module settings not loaded, so no page is shown as switched off'}
               </p>
               <p className="text-theme-text-secondary mt-1 text-xs">
-                To check the gates, sign in as each position in turn: a box marked in red should refuse with Access
-                Denied, and one marked green should open. Your marks are filed under this account —{' '}
+                To check the gates, sign in as each position in turn. A red permission badge means the page should
+                refuse with Access Denied; a green one means it should open. Your marks are saved under this account —{' '}
                 {canSeeAllTesters
                   ? 'and every tester’s appear on the boxes below.'
                   : 'an administrator sees them alongside every other tester’s.'}
@@ -579,7 +579,7 @@ export const TestingChecklistPage: React.FC = () => {
           className="btn-secondary btn-sm inline-flex items-center gap-1.5"
         >
           <Printer className="h-4 w-4" aria-hidden="true" />
-          Report
+          Print report
         </a>
 
         <button
@@ -588,7 +588,7 @@ export const TestingChecklistPage: React.FC = () => {
           onClick={handleExportCsv}
         >
           <Download className="h-4 w-4" aria-hidden="true" />
-          CSV
+          Download CSV
         </button>
         {canSeeAllTesters && testerCount > 1 && (
           <button
@@ -615,7 +615,7 @@ export const TestingChecklistPage: React.FC = () => {
           onClick={handleDownload}
         >
           <FileText className="h-4 w-4" aria-hidden="true" />
-          Markdown
+          Download Markdown
         </button>
         <button
           type="button"
@@ -651,7 +651,7 @@ export const TestingChecklistPage: React.FC = () => {
           void startRun(label);
         }}
         title="Start a new testing run"
-        message="Everyone's board goes back to nothing. The run on screen now keeps every mark and stays readable from the picker."
+        message="Every tester starts again from a blank checklist. The current run keeps its marks, and you can still open it from the run picker."
         label="What is this run for?"
         placeholder="Pre-launch, build 1.4"
         defaultValue={suggestedRunLabel}

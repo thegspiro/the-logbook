@@ -166,11 +166,11 @@ export const StartSkillTestPage: React.FC = () => {
 
   const handleStart = async () => {
     if (!selectedTemplateId) {
-      toast.error('Please select a template');
+      toast.error('Choose a template');
       return;
     }
     if (candidates.length === 0) {
-      toast.error('Please select a candidate');
+      toast.error('Choose a candidate');
       return;
     }
     if (selfOfficialBlocked) {
