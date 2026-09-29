@@ -40,7 +40,9 @@ export const FuelLogsTab: React.FC<FuelLogsTabProps> = ({ fuelLogs, loadingTab, 
             <div className="border-theme-text-primary mx-auto h-8 w-8 animate-spin rounded-full border-b-2"></div>
           </div>
         ) : fuelLogs.length === 0 ? (
-          <p className="text-theme-text-muted py-8 text-center">No fuel logs found.</p>
+          <p className="text-theme-text-muted py-8 text-center">
+            No fuel logged yet. Select Add Fuel Log to record a fill-up.
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
