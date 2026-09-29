@@ -17,6 +17,7 @@ BASE_TIME = datetime(2026, 8, 22, 12, 0)
 
 def _service(actual_start=None, actual_end=None):
     event = SimpleNamespace(
+        is_cancelled=False,
         actual_start_time=actual_start,
         actual_end_time=actual_end,
         updated_at=None,
@@ -141,3 +142,69 @@ async def test_record_times_api_returns_bad_request_for_invalid_effective_pair()
     assert exc_info.value.status_code == 400
     assert exc_info.value.detail == "Actual end time must be after actual start time"
     db.commit.assert_not_awaited()
+
+
+async def test_a_cancelled_event_is_refused():
+    """As End Event: the auto-finalize would re-credit what cancelling voided."""
+    service, db, event = _service()
+    event.is_cancelled = True
+
+    recorded, error = await _record(service, end=BASE_TIME)
+
+    assert recorded is None
+    assert error == "Cannot record actual times for a cancelled event"
+    assert event.actual_end_time is None
+    db.commit.assert_not_awaited()
+    service.finalize_event_attendance.assert_not_awaited()
+
+
+async def test_correcting_the_end_undoes_end_event_s_bulk_check_out():
+    """End Event stamped its own instant as every open attendee's check-out.
+    Left, that measured duration outranks the corrected end, so the officer's
+    correction would change nobody's credit."""
+    ended_late = BASE_TIME + timedelta(hours=3)
+    event = SimpleNamespace(
+        id="event-1",
+        organization_id="org-1",
+        is_cancelled=False,
+        actual_start_time=BASE_TIME,
+        actual_end_time=ended_late,
+        updated_at=None,
+    )
+    bulk = SimpleNamespace(checked_out_at=ended_late, attendance_duration_minutes=180)
+    own = SimpleNamespace(
+        checked_out_at=BASE_TIME + timedelta(hours=1),
+        attendance_duration_minutes=60,
+    )
+
+    def _one(value):
+        result = Mock()
+        result.scalar_one_or_none.return_value = value
+        return result
+
+    rsvps = Mock()
+    rsvps.scalars.return_value.all.return_value = [bulk, own]
+    db = SimpleNamespace(
+        # The event lock, End Event's check-outs, then the re-read after the
+        # auto-finalize.
+        execute=AsyncMock(side_effect=[_one(event), rsvps, _one(event)]),
+        commit=AsyncMock(),
+        refresh=AsyncMock(),
+    )
+    service = EventService(db)
+    service.finalize_event_attendance = AsyncMock(return_value=(1, None))
+
+    recorded, error = await _record(service, end=BASE_TIME + timedelta(hours=1))
+
+    assert error is None
+    assert recorded is event
+    assert (bulk.checked_out_at, bulk.attendance_duration_minutes) == (None, None)
+    assert own.attendance_duration_minutes == 60
+    service.finalize_event_attendance.assert_awaited_once()
+    # Finalize resets the event's relationships (populate_existing); the
+    # endpoint serializes location_obj, so the re-read has to load it.
+    reread = db.execute.await_args_list[2].args[0]
+    loaded = {
+        str(element) for option in reread._with_options for element in option.path
+    }
+    assert "Event.location_obj" in loaded

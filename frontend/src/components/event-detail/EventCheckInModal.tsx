@@ -128,7 +128,6 @@ const EventCheckInModal: React.FC<EventCheckInModalProps> = ({
           id="member-search"
           value={memberSearch}
           onChange={(e) => onMemberSearchChange(e.target.value)}
-          aria-label="Search by name or email..."
           placeholder="Search by name or email..."
           className="form-input shadow-xs sm:text-sm"
         />
@@ -176,6 +175,8 @@ const EventCheckInModal: React.FC<EventCheckInModalProps> = ({
                     onClick={() => {
                       onCheckIn(member.id);
                     }}
+                    // Every row's button reads "Check In"; the name says whose.
+                    aria-label={`Check in ${member.first_name} ${member.last_name}`}
                     className="btn-primary inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium"
                   >
                     Check In

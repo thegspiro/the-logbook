@@ -23,6 +23,7 @@ import {
   Wrench,
   CheckCheck,
   Lightbulb,
+  PackageCheck,
 } from 'lucide-react';
 import { Breadcrumbs, SkeletonPage } from '../components/ux';
 import { useAuthStore } from '../stores/authStore';
@@ -34,6 +35,8 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { useNotificationCountStore } from '../hooks/useNotificationCount';
 import { NotificationLogScope } from '../constants/enums';
 import NotificationCard from '../components/NotificationCard';
+import NotificationStack from '../components/NotificationStack';
+import { groupNotificationsIntoStacks, isStackable, stackUnreadCount } from '../utils/notificationStacks';
 
 // Maps trigger enum values to display-friendly icons and colors
 const TRIGGER_DISPLAY: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
@@ -72,6 +75,11 @@ const TRIGGER_DISPLAY: Record<string, { icon: React.ReactNode; color: string; la
     color: 'text-amber-700 dark:text-amber-400',
     label: 'Suggestion Submitted',
   },
+  equipment_request_update: {
+    icon: <PackageCheck className="h-5 w-5" />,
+    color: 'text-amber-700 dark:text-amber-400',
+    label: 'Equipment Request Update',
+  },
 };
 
 // Dropdown options for the create modal.
@@ -96,6 +104,12 @@ const TRIGGER_OPTIONS = [
     effect:
       'Tells a suggestion box’s reviewers, and anyone the box notifies, that a submission arrived. Disabling it stops those notices; replies and status updates still go out.',
   },
+  {
+    label: 'Equipment Request Update',
+    value: 'equipment_request_update',
+    effect:
+      'Tells a member when the quartermaster approves, declines or issues their equipment request, with any note left for them. Disabling it stops the notice; the request’s status still shows on My Equipment.',
+  },
 ];
 
 // Category mapping from trigger to category
@@ -107,6 +121,7 @@ const TRIGGER_CATEGORY_MAP: Record<string, string> = {
   maintenance_due: 'maintenance',
   form_submitted: 'general',
   suggestion_submitted: 'general',
+  equipment_request_update: 'general',
 };
 
 function getTriggerDisplay(trigger: string) {
@@ -147,6 +162,7 @@ const NotificationsPage: React.FC = () => {
   // Shared notification count store
   const myUnreadCount = useNotificationCountStore((s) => s.unreadCount);
   const decrementGlobalUnread = useNotificationCountStore((s) => s.decrement);
+  const decrementGlobalUnreadBy = useNotificationCountStore((s) => s.decrementBy);
   const clearGlobalUnread = useNotificationCountStore((s) => s.clear);
 
   // Data states
@@ -155,6 +171,10 @@ const NotificationsPage: React.FC = () => {
   const [summary, setSummary] = useState<NotificationsSummary | null>(null);
   const [myNotifications, setMyNotifications] = useState<NotificationLogRecord[]>([]);
   const [inboxNextCursor, setInboxNextCursor] = useState<string | null>(null);
+  // Unread, unpinned rows per category across the whole inbox, not just the
+  // loaded pages — what each stack's badge reports. Kept in step locally as
+  // rows are read or pinned, and re-fetched after the bulk writes.
+  const [categoryUnreadCounts, setCategoryUnreadCounts] = useState<Record<string, number>>({});
   const markingReadIds = useRef(new Set<string>());
   // Only the newest send-log request may commit its result. A channel change
   // or a mark-all can leave an earlier fetch in flight, and letting it land
@@ -242,6 +262,21 @@ const NotificationsPage: React.FC = () => {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
+  const loadCategoryUnreadCounts = useCallback(async () => {
+    try {
+      const data = await notificationsService.getMyUnreadCountsByCategory();
+      setCategoryUnreadCounts(data.categories || {});
+    } catch {
+      // Stacks fall back to counting the loaded rows.
+      setCategoryUnreadCounts({});
+    }
+  }, []);
+
+  const adjustCategoryUnread = (category: string | undefined, delta: number) => {
+    if (!category) return;
+    setCategoryUnreadCounts((prev) => ({ ...prev, [category]: Math.max(0, (prev[category] ?? 0) + delta) }));
+  };
+
   // Fetch user inbox on mount and when showRead filter changes
   useEffect(() => {
     const fetchInbox = async () => {
@@ -260,7 +295,8 @@ const NotificationsPage: React.FC = () => {
       }
     };
     void fetchInbox();
-  }, [showRead]);
+    void loadCategoryUnreadCounts();
+  }, [showRead, loadCategoryUnreadCounts]);
 
   // Fetch the send log on mount. Scoped to the caller, so it needs no
   // permission — but kept separate from the rules/summary fetch below, which
@@ -366,7 +402,7 @@ const NotificationsPage: React.FC = () => {
         };
       });
     } catch (err: unknown) {
-      const message = getErrorMessage(err, 'Failed to toggle rule');
+      const message = getErrorMessage(err, 'Failed to turn the rule on or off');
       setError(message);
     } finally {
       setTogglingRuleId(null);
@@ -375,7 +411,7 @@ const NotificationsPage: React.FC = () => {
 
   const handleCreateRule = async () => {
     if (!createName.trim()) {
-      setCreateError('Rule name is required.');
+      setCreateError('Enter a rule name.');
       return;
     }
     setCreating(true);
@@ -445,6 +481,7 @@ const NotificationsPage: React.FC = () => {
       setMyNotifications([]);
       setInboxNextCursor(null);
     }
+    setCategoryUnreadCounts({});
     clearGlobalUnread();
   };
 
@@ -477,6 +514,7 @@ const NotificationsPage: React.FC = () => {
       await notificationsService.markMyNotificationRead(logId);
       setMyNotifications((prev) => prev.map((n) => (n.id === logId ? { ...n, read: true } : n)));
       decrementGlobalUnread();
+      if (isStackable(notification)) adjustCategoryUnread(notification.category, -1);
     } catch {
       setError('Failed to mark notification as read');
     } finally {
@@ -494,12 +532,33 @@ const NotificationsPage: React.FC = () => {
     }
   };
 
+  // Clears one stack. The write covers the category's rows on pages not yet
+  // loaded too, so the badge moves by what the server marked rather than by
+  // what the page holds. Rows stay in place as read, as a single mark does.
+  const handleMarkStackRead = async (category: string) => {
+    try {
+      const { marked_read: marked } = await notificationsService.markMyCategoryRead(category);
+      setMyNotifications((prev) =>
+        prev.map((n) => (n.category === category && isStackable(n) ? { ...n, read: true } : n))
+      );
+      setCategoryUnreadCounts((prev) => ({ ...prev, [category]: 0 }));
+      decrementGlobalUnreadBy(marked);
+    } catch {
+      setError('Failed to mark notifications as read');
+    }
+  };
+
   const handleTogglePin = async (logId: string, pinned: boolean) => {
     try {
       await notificationsService.toggleMyNotificationPin(logId, pinned);
+      // A pinned row leaves its stack, and with it the stack's unread count.
+      const notification = myNotifications.find((n) => n.id === logId);
+      if (notification && !notification.read && notification.pinned !== pinned) {
+        adjustCategoryUnread(notification.category, pinned ? -1 : 1);
+      }
       setMyNotifications((prev) => prev.map((n) => (n.id === logId ? { ...n, pinned } : n)));
     } catch {
-      setError('Failed to update pin state');
+      setError('Failed to pin or unpin the notification');
     }
   };
 
@@ -553,7 +612,7 @@ const NotificationsPage: React.FC = () => {
               <h1 className="text-theme-text-primary text-2xl font-bold">Notifications</h1>
               <p className="text-theme-text-muted text-sm">
                 {activeTab === 'inbox'
-                  ? 'View and manage your notifications'
+                  ? 'Your in-app notifications. Pinned ones stay at the top.'
                   : activeTab === 'log'
                     ? 'Every notification sent to you, across all channels, with delivery status'
                     : 'Manage automated notification rules and email templates'}
@@ -726,27 +785,41 @@ const NotificationsPage: React.FC = () => {
                 <p className="text-theme-text-secondary">
                   {showRead
                     ? "You're all caught up. New notifications will appear here."
-                    : 'All notifications have been read.'}
+                    : 'You have read them all. Turn on Show read to see them again.'}
                 </p>
               </div>
             ) : (
               <div className="space-y-2">
-                {[...myNotifications]
-                  .sort((a, b) => {
+                {groupNotificationsIntoStacks(
+                  [...myNotifications].sort((a, b) => {
                     if (a.pinned && !b.pinned) return -1;
                     if (!a.pinned && b.pinned) return 1;
                     return 0;
                   })
-                  .map((notification) => (
+                ).map((entry) =>
+                  entry.kind === 'stack' ? (
+                    <NotificationStack
+                      key={`stack-${entry.category}`}
+                      category={entry.category}
+                      notifications={entry.notifications}
+                      unreadCount={stackUnreadCount(entry.notifications, categoryUnreadCounts[entry.category])}
+                      onMarkRead={handleMarkInboxNotificationRead}
+                      onTogglePin={(id, pinned) => {
+                        void handleTogglePin(id, pinned);
+                      }}
+                      onMarkStackRead={handleMarkStackRead}
+                    />
+                  ) : (
                     <NotificationCard
-                      key={notification.id}
-                      notification={notification}
+                      key={entry.notification.id}
+                      notification={entry.notification}
                       onMarkRead={handleMarkInboxNotificationRead}
                       onTogglePin={(id, pinned) => {
                         void handleTogglePin(id, pinned);
                       }}
                     />
-                  ))}
+                  )
+                )}
                 {inboxNextCursor !== null && (
                   <div className="pt-2 text-center">
                     <button
@@ -790,7 +863,7 @@ const NotificationsPage: React.FC = () => {
                   spellCheck={false}
                   id="notif-search"
                   type="text"
-                  aria-label="Search notification rules..."
+                  aria-label="Search notification rules"
                   placeholder="Search notification rules..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -814,8 +887,8 @@ const NotificationsPage: React.FC = () => {
                   {(searchQuery || canManage) && (
                     <p className="text-theme-text-secondary mb-6">
                       {searchQuery
-                        ? 'No rules match your search query.'
-                        : 'Create your first notification rule to start sending automated notifications.'}
+                        ? 'No rules match your search.'
+                        : 'Automated notifications already go out with their default settings. Create a rule for a trigger to be able to switch that notification off.'}
                     </p>
                   )}
                   {canManage && !searchQuery && (
@@ -906,8 +979,7 @@ const NotificationsPage: React.FC = () => {
             <Mail className="text-theme-text-muted mx-auto mb-4 h-16 w-16" aria-hidden="true" />
             <h3 className="text-theme-text-primary mb-2 text-xl font-bold">Email Templates</h3>
             <p className="text-theme-text-secondary mb-6">
-              Customize email templates for different notification types. Templates support dynamic placeholders for
-              personalization.
+              Edit the emails sent for each notification type. Placeholders fill in details such as the member’s name.
             </p>
             <button
               onClick={() => void navigate('/communications/email-templates')}
@@ -981,7 +1053,7 @@ const NotificationsPage: React.FC = () => {
                 <h3 className="text-theme-text-primary mb-2 text-xl font-bold">No Notifications Found</h3>
                 <p className="text-theme-text-secondary mb-6">
                   {logChannelFilter === 'all'
-                    ? 'Your send log will show every notification sent to you, with delivery status and timestamps.'
+                    ? 'Nothing has been sent to you yet. Each email and in-app notification you receive will be listed here with its delivery status.'
                     : `No ${logChannelFilter === 'email' ? 'email' : 'in-app'} notifications sent to you.`}
                 </p>
               </div>
@@ -1153,10 +1225,10 @@ const NotificationsPage: React.FC = () => {
                       <div className="flex items-start space-x-2">
                         <AlertCircle className="text-theme-text-muted mt-0.5 h-4 w-4 shrink-0" />
                         <p className="text-theme-text-muted text-sm">
-                          {TRIGGER_OPTIONS.find((opt) => opt.value === createTrigger)?.effect} It stops for the whole
-                          department once <strong className="text-theme-text-secondary">every</strong> rule for this
-                          trigger is switched off — one left active keeps it running. Individual members control their
-                          own email and text settings separately. Filed under{' '}
+                          {TRIGGER_OPTIONS.find((opt) => opt.value === createTrigger)?.effect} To stop it for the whole
+                          department, switch off <strong className="text-theme-text-secondary">every</strong> rule for
+                          this trigger — any one left on keeps it running. Members set their own email and text
+                          preferences separately. Filed under{' '}
                           <strong className="text-theme-text-secondary">
                             {formatCategory(TRIGGER_CATEGORY_MAP[createTrigger] || 'general')}
                           </strong>

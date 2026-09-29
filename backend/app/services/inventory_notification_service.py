@@ -29,6 +29,11 @@ from app.models.inventory import (
     InventoryNotificationQueue,
 )
 from app.models.user import Organization, User
+from app.services.email_policy import (
+    EmailKind,
+    department_required_kinds,
+    member_receives_email,
+)
 from app.services.email_service import EmailService
 from app.services.email_template_service import EmailTemplateService
 from app.utils.org_timezone import format_in_org_timezone
@@ -177,10 +182,20 @@ class InventoryNotificationService:
                 user = await self._get_user(member_id)
                 org = await self._get_organization(org_id)
 
-                if not user or not user.email:
-                    logger.warning(
-                        f"No email for user {member_id}, skipping inventory notification"
-                    )
+                # A member who turned these emails off is treated like one with
+                # no address: the queued rows are consumed, so the digest does
+                # not wait for them to change their mind.
+                wants_email = bool(user and user.email) and member_receives_email(
+                    user.notification_preferences,
+                    EmailKind.INVENTORY_UPDATES,
+                    department_required_kinds(org),
+                )
+                if not wants_email:
+                    if not user or not user.email:
+                        logger.warning(
+                            f"No email for user {member_id}, "
+                            "skipping inventory notification"
+                        )
                     for rec in member_records:
                         rec.processed = True
                         rec.processed_at = datetime.now(timezone.utc)

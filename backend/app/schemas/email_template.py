@@ -464,3 +464,44 @@ class SendTestEmailRequest(BaseModel):
     template_id: Optional[str] = Field(
         None, description="Optional template ID to use for the test"
     )
+
+
+class MemberEmailKindResponse(BaseModel):
+    """One kind of member email, as classified in services/email_policy."""
+
+    key: str
+    label: str
+    required: bool
+    default_on: bool
+    audience: str
+    includes: List[str]
+    rationale: str
+    # The older per-topic setting still honoured for this kind, if any.
+    legacy_preference: Optional[str] = None
+    # An optional kind this department's leadership has made required.
+    department_required: bool = False
+
+
+class MemberTextAlertResponse(BaseModel):
+    """One alert permitted to escalate to a text (notification_channels)."""
+
+    key: str
+    label: str
+    description: str
+    email_kind: str
+
+
+class MemberEmailPolicyResponse(BaseModel):
+    """Every member email and text, and whether members can opt out."""
+
+    emails: List[MemberEmailKindResponse]
+    texts: List[MemberTextAlertResponse]
+    text_conditions: List[str]
+    # Whether the caller may change which optional kinds are required.
+    can_edit: bool = False
+
+
+class MemberEmailPolicyUpdate(BaseModel):
+    """The optional kinds this department makes required, replacing the list."""
+
+    required_kinds: List[str] = Field(default_factory=list, max_length=50)

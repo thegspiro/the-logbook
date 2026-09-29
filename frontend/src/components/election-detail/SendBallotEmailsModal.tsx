@@ -90,8 +90,7 @@ const SendBallotEmailsModal: React.FC<SendBallotEmailsModalProps> = ({
               {election.eligible_voters && election.eligible_voters.length > 0
                 ? `This will send ballot emails to the ${election.eligible_voters.length} member(s) on the eligible voters list.`
                 : 'This will send ballot emails to all active members in the organization.'}{' '}
-              Members whose roles or attendance do not match any ballot item requirements will be skipped, with reasons
-              shown after sending.
+              Members who are not eligible are skipped; you will see who and why after sending.
             </p>
 
             <div>

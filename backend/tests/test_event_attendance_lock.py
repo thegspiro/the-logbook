@@ -233,10 +233,38 @@ class TestUpdateSplitsDescriptiveFromAttendanceSensitive:
 
 
 class TestReopen:
+    async def test_reopen_undoes_end_event_s_bulk_check_out(self):
+        """End Event stamps its own instant as every open attendee's check-out
+        and measures a duration to it. Left in place, that measured duration
+        outranks a corrected end time, so an event ended two hours late could
+        never be credited correctly again. A member's own check-out stays."""
+        event = _event()
+        # MySQL hands DATETIME back naive; the comparison must still match.
+        bulk_end = event.actual_end_time.replace(tzinfo=None)
+        bulk = SimpleNamespace(checked_out_at=bulk_end, attendance_duration_minutes=240)
+        own = SimpleNamespace(
+            checked_out_at=event.actual_end_time - timedelta(minutes=30),
+            attendance_duration_minutes=90,
+        )
+        db = _mock_db(_one(event), _all([]), _all([bulk, own]), _one(event))
+        svc = EventService(db)
+
+        _, err = await svc.reopen_event_attendance("event-1", "org-1")
+
+        assert err is None
+        assert (bulk.checked_out_at, bulk.attendance_duration_minutes) == (None, None)
+        assert own.attendance_duration_minutes == 90
+        assert own.checked_out_at is not None
+        bulk_query = db.execute.await_args_list[2].args[0]
+        compiled = str(bulk_query.compile(compile_kwargs={"literal_binds": True}))
+        # A manual override is the manager's number, never a bulk stamp.
+        assert "event_rsvps.override_duration_minutes IS NULL" in compiled
+        assert "event_rsvps.organization_id = 'org-1'" in compiled
+
     async def test_reopen_clears_the_lock_and_the_derived_durations(self):
         event = _event()
         derived = SimpleNamespace(attendance_duration_minutes=120)
-        db = _mock_db(_one(event), _all([derived]), _one(event))
+        db = _mock_db(_one(event), _all([derived]), _all([]), _one(event))
         svc = EventService(db)
 
         result, err = await svc.reopen_event_attendance("event-1", "org-1")
@@ -261,7 +289,7 @@ class TestReopen:
                 "room_setup": "hall",
             }
         )
-        db = _mock_db(_one(event), _all([]), _one(event))
+        db = _mock_db(_one(event), _all([]), _all([]), _one(event))
         svc = EventService(db)
 
         await svc.reopen_event_attendance("event-1", "org-1")
@@ -275,7 +303,7 @@ class TestReopen:
         committed state, and the write can be a silent no-op."""
         committed = {"attendance_finalized": True, "registration": {"limit": 5}}
         event = _event(custom_fields=committed)
-        db = _mock_db(_one(event), _all([]), _one(event))
+        db = _mock_db(_one(event), _all([]), _all([]), _one(event))
 
         await EventService(db).reopen_event_attendance("event-1", "org-1")
 
@@ -293,7 +321,7 @@ class TestReopen:
         The eager load sits on the post-commit re-read, not on the locked
         fetch: FOR UPDATE is meant for the event row alone."""
         reopened = _event()
-        db = _mock_db(_one(_event()), _all([]), _one(reopened))
+        db = _mock_db(_one(_event()), _all([]), _all([]), _one(reopened))
 
         result, err = await EventService(db).reopen_event_attendance("event-1", "org-1")
 
@@ -310,7 +338,7 @@ class TestReopen:
     async def test_an_event_deleted_mid_reopen_reports_not_found(self):
         """The reopen itself has committed; there is simply no row left to
         serialize, and a 404 says that better than a lazy-load crash."""
-        db = _mock_db(_one(_event()), _all([]), _one(None))
+        db = _mock_db(_one(_event()), _all([]), _all([]), _one(None))
 
         result, err = await EventService(db).reopen_event_attendance("event-1", "org-1")
 
@@ -365,7 +393,8 @@ class TestAdminHoursResync:
             check_in_at=now - timedelta(minutes=duration),
             check_out_at=now,
             duration_minutes=duration,
-            event_type="training",
+            # Not training: training events no longer credit admin hours.
+            event_type="business_meeting",
             custom_category=None,
             resync=resync,
         )
@@ -480,11 +509,13 @@ class TestEveryAttendeeReachesTheLedger:
             checked_out_at=event.end_datetime,
             override_duration_minutes=None,
             override_check_in_at=None,
+            override_check_out_at=None,
             attendance_duration_minutes=90,
             early_check_in_minutes=None,
         )
-        # derivable is empty (it has a check-out); attended still holds it.
-        db = _mock_db(_one(event), _all([]), _all([checked_out]))
+        # One roster read: it has a check-out, so nothing is derived for it,
+        # but it is on the roster that reaches the ledger.
+        db = _mock_db(_one(event), _all([checked_out]))
         svc = EventService(db)
 
         with patch("app.services.event_service.AdminHoursService") as ahs_cls, patch(
@@ -499,6 +530,29 @@ class TestEveryAttendeeReachesTheLedger:
         assert credit.await_args.kwargs["rsvp_id"] == "rsvp-1"
         assert credit.await_args.kwargs["duration_minutes"] == 90
 
+    async def test_the_roster_is_a_current_locking_read(self):
+        """Pitfall #27. The event lock serializes the attendance writers, but a
+        plain SELECT under REPEATABLE READ answers from the snapshot this
+        request took before it waited for that lock — so an Edit Times save or
+        a check-in it queued behind would be credited from the stale row."""
+        event = _event(finalized=False, event_type=None)
+        db = _mock_db(_one(event), _all([]))
+        svc = EventService(db)
+
+        with patch("app.services.event_service.NotificationsService") as notif_cls:
+            notif_cls.return_value.archive_related_notifications = AsyncMock()
+            svc._advance_prospects_after_finalize = AsyncMock()
+            await svc.finalize_event_attendance("event-1", "org-1")
+
+        event_read, roster_read = (c.args[0] for c in db.execute.await_args_list[:2])
+        for statement in (event_read, roster_read):
+            assert statement._for_update_arg is not None
+            # Sessions keep objects across a commit; without this the lock is
+            # taken but End Event's already-loaded rows are handed back as-is.
+            assert statement.get_execution_options().get("populate_existing")
+        compiled = str(roster_read.compile(compile_kwargs={"literal_binds": True}))
+        assert "event_rsvps.organization_id = 'org-1'" in compiled
+
     async def test_end_event_records_a_duration_on_bulk_checkout(self):
         """Otherwise the rows it just checked out have no duration for the
         finalize that immediately follows to credit."""
@@ -512,6 +566,7 @@ class TestEveryAttendeeReachesTheLedger:
             attendance_duration_minutes=None,
             override_duration_minutes=None,
             override_check_in_at=None,
+            override_check_out_at=None,
             early_check_in_minutes=None,
             status=None,
         )
@@ -526,6 +581,11 @@ class TestEveryAttendeeReachesTheLedger:
         assert rsvp.checked_out_at is not None
         assert rsvp.attendance_duration_minutes is not None
         assert rsvp.attendance_duration_minutes > 0
+        # Whole seconds: MySQL DATETIME(0) rounds a fraction up, which stored
+        # an end a second in the future and made the finalize that follows
+        # refuse a Training event as "not ended yet".
+        assert event.actual_end_time.microsecond == 0
+        assert rsvp.checked_out_at == event.actual_end_time
 
 
 class TestSeriesPathsHonourTheLock:
@@ -680,10 +740,11 @@ class TestCreditRunsInsideTheLock:
             checked_out_at=event.end_datetime,
             override_duration_minutes=None,
             override_check_in_at=None,
+            override_check_out_at=None,
             attendance_duration_minutes=60,
             early_check_in_minutes=None,
         )
-        db = _mock_db(_one(event), _all([]), _all([rsvp]))
+        db = _mock_db(_one(event), _all([rsvp]))
         svc = EventService(db)
 
         commits_when_credited = []

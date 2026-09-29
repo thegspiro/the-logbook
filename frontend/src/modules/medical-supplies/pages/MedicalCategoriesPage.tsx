@@ -123,8 +123,8 @@ const MedicalCategoriesPage: React.FC = () => {
             Medical Supply Categories
           </h1>
           <p className="text-theme-text-muted mt-1 text-sm">
-            How EMS stock is grouped — airway, trauma, medications. Filing a supply under one of these is what makes it
-            medical.
+            Group EMS stock by type, such as airway, trauma or medications. Only supplies in these categories appear
+            under Medical Supplies.
           </p>
         </div>
 
@@ -149,7 +149,7 @@ const MedicalCategoriesPage: React.FC = () => {
           title="No medical supply categories yet"
           description={
             canManage
-              ? 'Create one — airway, trauma, medications, whatever matches how your stock is organized.'
+              ? 'Add categories that match how your stock is organized, such as airway, trauma or medications.'
               : 'No categories have been set up for medical supplies.'
           }
         />
@@ -161,7 +161,9 @@ const MedicalCategoriesPage: React.FC = () => {
                 <p className="text-theme-text-primary font-medium">{category.name}</p>
                 {category.description && <p className="text-theme-text-muted mt-1 text-sm">{category.description}</p>}
                 {category.low_stock_threshold !== undefined && (
-                  <p className="text-theme-text-muted mt-1 text-xs">Low below {category.low_stock_threshold}</p>
+                  <p className="text-theme-text-muted mt-1 text-xs">
+                    Low stock at {category.low_stock_threshold} or below
+                  </p>
                 )}
               </div>
               {canManage && (

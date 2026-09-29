@@ -2,7 +2,12 @@
  * DateTimeQuarterHour — Date + quarter-hour time picker
  *
  * Combines a native date picker with the TimeQuarterHour component
- * (separate hour/minute/AM-PM selects limited to 15-minute increments).
+ * (separate hour/minute/AM-PM selects offering 15-minute increments).
+ *
+ * A value already carrying an off-quarter minute (a recorded check-in at 9:07)
+ * is shown as it is rather than floored. Flooring changed only what was on
+ * screen: the parent kept, and submitted, 9:07 — Edit Times showed 9:00–1:00
+ * and saved 233 minutes.
  */
 
 import React, { useMemo } from 'react';
@@ -22,14 +27,12 @@ interface DateTimeQuarterHourProps {
    * midnight for anyone not in the department's own timezone.
    */
   timezone?: string | undefined;
-}
-
-function snapToQuarter(time: string): string {
-  const parts = time.split(':');
-  const h = parts[0] ?? '00';
-  const rawM = parseInt(parts[1] ?? '0', 10);
-  const snapped = Math.floor(rawM / 15) * 15;
-  return `${h}:${String(snapped).padStart(2, '0')}`;
+  /**
+   * Names the time selects ("Start time" → "Start time hour", …). Without it
+   * every picker on a form announces "Time hour", so a start and an end are
+   * indistinguishable to a screen reader.
+   */
+  timeLabel?: string | undefined;
 }
 
 const DateTimeQuarterHour: React.FC<DateTimeQuarterHourProps> = ({
@@ -39,12 +42,13 @@ const DateTimeQuarterHour: React.FC<DateTimeQuarterHourProps> = ({
   id,
   required,
   timezone,
+  timeLabel,
 }) => {
   const { datePart, timePart } = useMemo(() => {
     if (!value) return { datePart: '', timePart: '' };
     const sep = value.includes('T') ? 'T' : ' ';
     const [d, t] = value.split(sep);
-    return { datePart: d ?? '', timePart: snapToQuarter(t ?? '09:00') };
+    return { datePart: d ?? '', timePart: (t ?? '09:00').slice(0, 5) };
   }, [value]);
 
   const handleDateChange = (newDate: string) => {
@@ -71,7 +75,9 @@ const DateTimeQuarterHour: React.FC<DateTimeQuarterHourProps> = ({
       <TimeQuarterHour
         value={timePart}
         onChange={(e) => handleTimeChange(e.target.value)}
+        preserveOffQuarterMinute
         {...(className ? { className } : {})}
+        {...(timeLabel ? { 'aria-label': timeLabel } : {})}
       />
     </div>
   );

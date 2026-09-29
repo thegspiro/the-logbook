@@ -308,7 +308,7 @@ const CloseoutQueueSection: React.FC = () => {
 
       {failed && (
         <div className="alert-warning flex items-center gap-2 text-sm" role="alert">
-          <span className="flex-1">The close-out queue did not load, so nothing below is a complete answer.</span>
+          <span className="flex-1">The close-out queue did not load, so this list may be incomplete.</span>
           <button
             type="button"
             className="mobile-touch-target px-2 font-semibold underline"
@@ -327,8 +327,8 @@ const CloseoutQueueSection: React.FC = () => {
       {settingsFailed && (
         <div className="alert-warning flex items-center gap-2 text-sm" role="alert">
           <span className="flex-1">
-            The department&rsquo;s scheduling settings did not load, so a shift with no recorded end cannot be judged
-            against its cushion. Nothing is listed below.
+            Your department&rsquo;s scheduling settings did not load, so the queue can&rsquo;t be checked and nothing is
+            shown below. Retry to load them.
           </span>
           <button
             type="button"
@@ -368,7 +368,7 @@ const CloseoutQueueSection: React.FC = () => {
         <EmptyState
           icon={CheckCircle2}
           title="Every shift is closed out"
-          description="A shift still running is not counted — one with no recorded end is judged against the department's open-ended cushion, the same number the roster lock uses."
+          description="Shifts still running aren't listed. A shift with no end time counts as running until its open-ended shift cushion has passed."
         />
       )}
 
@@ -381,6 +381,9 @@ const CloseoutQueueSection: React.FC = () => {
           // navigates away, so there is nothing on this page to protect.
           const blockedByOpenRow = openRow !== null && !isOpen && callTrackingMode === 'count_only';
           const pending = outstandingChecks(shift.id);
+          // One close-out button per row, so its name carries the shift: a
+          // queue of several otherwise reads as the same button over and over.
+          const rowName = `${formatCalendarDate(shift.shift_date, { weekday: 'short', month: 'short', day: 'numeric' })}, ${formatTime(shift.start_time, timezone)}, ${unitLabel(shift)}`;
           return (
             <div key={shift.id} className="card space-y-3 p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -470,6 +473,11 @@ const CloseoutQueueSection: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => void openCloseout(entry)}
+                  aria-label={
+                    callTrackingMode === 'count_only'
+                      ? `Close out ${rowName}`
+                      : `Open the shift to close it: ${rowName}`
+                  }
                   disabled={preparing === shift.id || blockedByOpenRow}
                   title={blockedByOpenRow ? 'Close the open row first — it has unsaved close-out entries.' : undefined}
                   className="btn-primary mobile-touch-target inline-flex items-center gap-2 px-4 text-sm font-semibold disabled:opacity-50"

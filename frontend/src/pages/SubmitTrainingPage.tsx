@@ -596,6 +596,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
               onChange={(e) => setCourseName(e.target.value)}
               placeholder="Start typing — suggestions appear"
               className={`form-input ${invalidClass('course_name')}`}
+              aria-invalid={missingNow.includes('course_name')}
               autoComplete="off"
             />
             <datalist id="dept-requirement-suggestions">
@@ -635,6 +636,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                   value={categoryId}
                   onChange={(e) => setCategoryId(e.target.value)}
                   className={`form-input ${invalidClass('category_id')}`}
+                  aria-invalid={missingNow.includes('category_id')}
                 >
                   <option value="">Select...</option>
                   {parentCategories.map((category) => (
@@ -663,6 +665,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                 max={getTodayLocalDate(timezone)}
                 onChange={(e) => setCompletionDate(e.target.value)}
                 className={`form-input font-mono ${invalidClass('completion_date')}`}
+                aria-invalid={missingNow.includes('completion_date')}
               />
             </div>
             <div>
@@ -677,6 +680,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
                 className={`form-input font-mono ${invalidClass('start_time')}`}
+                aria-invalid={missingNow.includes('start_time')}
               />
             </div>
           </div>
@@ -726,6 +730,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                   onChange={(e) => setInstructor(e.target.value)}
                   placeholder="Name or agency"
                   className={`form-input ${invalidClass('instructor')}`}
+                  aria-invalid={missingNow.includes('instructor')}
                 />
               </div>
             )}
@@ -747,6 +752,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                   onChange={(e) => setLocation(e.target.value)}
                   placeholder="Facility or address"
                   className={`form-input ${invalidClass('location')}`}
+                  aria-invalid={missingNow.includes('location')}
                 />
               </div>
             )}
@@ -765,6 +771,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="A sentence or two is enough."
                 className={`form-input resize-y ${invalidClass('description')}`}
+                aria-invalid={missingNow.includes('description')}
               />
             </div>
           )}
@@ -796,6 +803,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                     value={certificationNumber}
                     onChange={(e) => setCertificationNumber(e.target.value)}
                     className={`form-input font-mono ${invalidClass('certification_number')}`}
+                    aria-invalid={missingNow.includes('certification_number')}
                   />
                 </div>
               )}
@@ -816,6 +824,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                     onChange={(e) => setIssuingAgency(e.target.value)}
                     placeholder="VDFP, NREMT..."
                     className={`form-input ${invalidClass('issuing_agency')}`}
+                    aria-invalid={missingNow.includes('issuing_agency')}
                   />
                 </div>
               )}
@@ -836,6 +845,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                     disabled={certificationNeverExpires}
                     onChange={(e) => setExpirationDate(e.target.value)}
                     className={`form-input font-mono disabled:opacity-50 ${invalidClass('expiration_date')}`}
+                    aria-invalid={missingNow.includes('expiration_date')}
                   />
                   {/* Whether an expiry is required follows the certification,
                       not a blanket rule: a department can ask for the date and
@@ -1068,8 +1078,8 @@ const SubmitTrainingPage: React.FC = () => {
     } catch (_error) {
       // A failed background refresh must not replace a form the member is
       // still filling in — or a receipt they are still reading.
-      if (!options.silent) setLoadError('Failed to load submission form. Please try again.');
-      toast.error('Failed to load submission form');
+      if (!options.silent) setLoadError('Failed to load the submission form. Try again.');
+      toast.error('Failed to load the submission form');
     } finally {
       if (!options.silent) setLoading(false);
     }

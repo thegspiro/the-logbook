@@ -122,7 +122,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({ electi
       setFormData(emptyCandidateForm);
       setMemberSearch('');
       setShowAddForm(false);
-      toast.success('Candidate added successfully');
+      toast.success('Candidate added');
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to add candidate'));
     } finally {
@@ -405,7 +405,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({ electi
       {candidates.length === 0 ? (
         <div className="text-theme-text-muted py-8 text-center">
           <p>No candidates yet.</p>
-          {!isClosed && <p className="mt-1 text-sm">Click "Add Candidate" to get started.</p>}
+          {!isClosed && <p className="mt-1 text-sm">Select Add Candidate to add one.</p>}
         </div>
       ) : (
         <div className="space-y-6">

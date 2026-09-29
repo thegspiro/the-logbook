@@ -51,6 +51,7 @@ import type {
   StaffingRoleNeed,
 } from '../types/event';
 import { useTimezone } from '../hooks/useTimezone';
+import { useRanks } from '../hooks/useRanks';
 import { formatShortDateTime, localToUTC } from '../utils/dateFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
 import { positionLabel } from '../modules/scheduling/utils/positionLabels';
@@ -168,6 +169,8 @@ const EventRequestsTab: React.FC = () => {
   const [volunteerCallMessage, setVolunteerCallMessage] = useState('');
 
   const tz = useTimezone();
+  // Inactive ranks too, so a member holding a retired rank still reads by its name.
+  const { formatRank } = useRanks(false);
 
   const fetchRequests = useCallback(async () => {
     try {
@@ -400,7 +403,7 @@ const EventRequestsTab: React.FC = () => {
 
   const handleSchedule = async (requestId: string) => {
     if (!scheduleDate) {
-      toast.error('Please select a date.');
+      toast.error('Pick a start date.');
       return;
     }
     setActionLoading(true);
@@ -768,7 +771,7 @@ const EventRequestsTab: React.FC = () => {
                                 {members.map((m) => (
                                   <option key={m.id} value={m.id}>
                                     {m.first_name} {m.last_name}
-                                    {m.rank ? ` — ${m.rank}` : ''}
+                                    {m.rank ? ` — ${formatRank(m.rank)}` : ''}
                                   </option>
                                 ))}
                               </select>
@@ -857,6 +860,8 @@ const EventRequestsTab: React.FC = () => {
                                     <button
                                       key={task.id}
                                       onClick={() => void handleTaskToggle(expandedDetail.id, task.id, isCompleted)}
+                                      // Done or not was shown only by the icon and a strikethrough.
+                                      aria-pressed={isCompleted}
                                       disabled={actionLoading}
                                       className="hover:bg-theme-surface flex w-full items-center gap-3 rounded-lg p-2.5 text-left transition-colors disabled:opacity-50"
                                     >
@@ -888,7 +893,7 @@ const EventRequestsTab: React.FC = () => {
                               <div className="flex items-center justify-between">
                                 <p className="text-xs text-blue-700 dark:text-blue-300">
                                   <Eye className="mr-1 inline h-3 w-3" />
-                                  Public status link available
+                                  The requester can track progress with a status link
                                 </p>
                                 <button
                                   type="button"
@@ -1169,7 +1174,7 @@ const EventRequestsTab: React.FC = () => {
                                     Say what help you need and members can claim a role from{' '}
                                     <span className="font-medium">Scheduling → Open Shifts</span>. These are outreach
                                     roles, not riding positions — nobody is taking a seat on an engine at a school
-                                    visit. Edit the list in Events settings.
+                                    visit. Edit the list in Event settings.
                                   </p>
                                   <div className="space-y-2">
                                     {roleNeeds.map((need, idx) => (

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 import type { InventoryVendor, ReorderRequest } from '../../../services/eventServices';
@@ -320,6 +320,15 @@ describe('ReorderRequestsPage — opened from the attention queue', () => {
     window.history.pushState({}, '', '/');
   });
 
+  it('names the refresh button and both filters', async () => {
+    renderWithRouter(<ReorderRequestsPage />);
+    await screen.findByText('SCBA Cylinders');
+
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Filter by status' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Filter by urgency' })).toBeInTheDocument();
+  });
+
   it('opens the named delivery straight on Receive stock', async () => {
     // The queue row's action reads "Receive"; landing on a generic dialog, or
     // on the unfiltered list, would make the reader choose again.
@@ -329,6 +338,33 @@ describe('ReorderRequestsPage — opened from the attention queue', () => {
     // Scoped to the dialog: an ordered row carries a "Receive stock" button
     // of its own, so a bare text query would pass without a dialog at all.
     expect(await screen.findByRole('dialog', { name: 'Receive stock' })).toBeInTheDocument();
+  });
+
+  // Nothing on this page links a request to an inventory item, and the server
+  // refuses a receipt without one, so the form could only ever be refused
+  // after the quartermaster had filled in the location and the cost.
+  it('says an unlinked request cannot be received here', async () => {
+    window.history.pushState({}, '', '/inventory/admin/reorder?request=ro-7');
+    renderWithRouter(<ReorderRequestsPage />);
+
+    const dialog = await screen.findByRole('dialog', { name: 'Receive stock' });
+    expect(within(dialog).getByRole('alert')).toHaveTextContent(/isn.t linked to an inventory item/);
+    expect(within(dialog).queryByRole('textbox', { name: /Storage location/ })).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Receive stock' })).toBeDisabled();
+  });
+
+  it('names and marks the fields a linked request needs to receive', async () => {
+    mockGetReorderRequests.mockResolvedValue([
+      makeReq({ id: 'ro-7', item_name: 'SCBA Cylinders', status: 'ordered', item_id: 'it-1' }),
+    ]);
+    window.history.pushState({}, '', '/inventory/admin/reorder?request=ro-7');
+    renderWithRouter(<ReorderRequestsPage />);
+
+    const dialog = await screen.findByRole('dialog', { name: 'Receive stock' });
+    expect(within(dialog).getByRole('spinbutton', { name: 'Quantity received *' })).toHaveValue(4);
+    expect(within(dialog).getByRole('textbox', { name: 'Storage location *' })).toBeRequired();
+    expect(within(dialog).getByRole('spinbutton', { name: 'Unit cost ($) *' })).toBeRequired();
+    expect(within(dialog).getByRole('button', { name: 'Receive stock' })).toBeEnabled();
   });
 
   it('does nothing for a request that is no longer listed', async () => {

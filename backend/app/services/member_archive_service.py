@@ -30,6 +30,11 @@ from app.models.inventory import (
 )
 from app.models.user import Organization, User, UserStatus
 from app.schemas.organization import RejoinServiceCredit
+from app.services.email_policy import (
+    EmailKind,
+    department_required_kinds,
+    member_receives_email,
+)
 from app.services.member_service_history_service import MemberServiceHistoryService
 from app.utils.org_timezone import resolve_org_today
 
@@ -185,7 +190,11 @@ async def check_and_auto_archive(
         for u in admins:
             role_slugs = [r.slug for r in (u.roles or [])]
             if any(r in role_slugs for r in ADMIN_NOTIFY_ROLE_SLUGS):
-                if u.email:
+                if u.email and member_receives_email(
+                    u.notification_preferences,
+                    EmailKind.MEMBERSHIP_ADMIN,
+                    department_required_kinds(org),
+                ):
                     admin_emails.append(u.email)
 
         if admin_emails:
@@ -287,7 +296,9 @@ async def reactivate_member(
     member.status_change_reason = reason or "Reactivated by leadership"
 
     # Restore membership number from before soft-delete/archival if it
-    # was cleared and the number is still available.
+    # was cleared and the number is still available. Deleted rows count as
+    # holding it: the unique index covers them, and an anonymized member keeps
+    # its number, so restoring one of those would fail at commit.
     if not member.membership_number and member.previous_membership_number:
         conflict = await db.execute(
             select(func.count())
@@ -295,7 +306,6 @@ async def reactivate_member(
             .where(
                 User.organization_id == organization_id,
                 User.membership_number == member.previous_membership_number,
-                User.deleted_at.is_(None),
                 User.id != user_id,
             )
         )

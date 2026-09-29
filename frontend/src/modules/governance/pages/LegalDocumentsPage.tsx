@@ -72,7 +72,7 @@ const RevisionCard: React.FC<{
       ) : null}
       {canPublish ? (
         <button type="button" className="btn-primary flex items-center gap-2 text-sm" onClick={onPublish}>
-          <Send className="h-4 w-4" aria-hidden="true" /> Publish to members
+          <Send className="h-4 w-4" aria-hidden="true" /> Publish
         </button>
       ) : null}
     </div>
@@ -179,7 +179,7 @@ const LegalDocumentsPage: React.FC = () => {
     const label = LEGAL_DOCUMENT_LABEL[revision.documentType];
     const confirmed = await confirm({
       title: `Publish the ${label}?`,
-      message: `This replaces what every visitor to ${documents.get(revision.documentType)?.publicPath ?? ''} reads, immediately. The version published now will be archived, not deleted.`,
+      message: `Everyone who visits ${documents.get(revision.documentType)?.publicPath ?? ''} sees this text immediately. The version published now is archived, not deleted.`,
       confirmLabel: 'Publish it',
       cancelLabel: 'Not yet',
       variant: 'warning',
@@ -235,9 +235,9 @@ const LegalDocumentsPage: React.FC = () => {
       <header>
         <h1 className="text-theme-text-primary text-2xl font-bold">Legal Documents</h1>
         <p className="text-theme-text-secondary mt-2 max-w-3xl text-sm leading-6">
-          The privacy notice and terms of service published at {orgName}&rsquo;s public sign-in pages. Read what members
-          see now, and propose wording that matches your bylaws, SOPs, and local law. A proposal is a draft — it changes
-          nothing until it is published.
+          The privacy policy and terms of service on {orgName}&rsquo;s public pages. Read what is published now, and
+          propose wording that matches your bylaws, SOPs, and local law. A proposal is a draft — it changes nothing
+          until it is published.
         </p>
       </header>
 
@@ -284,9 +284,9 @@ const LegalDocumentsPage: React.FC = () => {
 
             {active.usingPlatformDefault ? (
               <p className="alert-info text-sm">
-                The built-in {LEGAL_DOCUMENT_LABEL[active.documentType].toLowerCase()} is live. It is written for a
-                fire-service deployment and already states that the department controls the system and that access
-                follows a member&rsquo;s status. Proposing a revision starts you from that text.
+                The built-in {LEGAL_DOCUMENT_LABEL[active.documentType].toLowerCase()} is live. It is written for fire
+                departments and already says that the department controls the system and that access depends on a
+                member&rsquo;s status. A new proposal starts from this text.
               </p>
             ) : (
               <>
@@ -310,9 +310,9 @@ const LegalDocumentsPage: React.FC = () => {
             )}
 
             <p className="text-theme-text-muted text-xs">
-              Published text replaces the built-in document entirely — the two are never merged, so anything you still
-              want said (including the department-control and status-based-access language) has to be in your version.
-              Have counsel review what you publish.
+              Your published text replaces the built-in document entirely — the two are never merged. Anything you want
+              to keep, including the department-control and status-based-access language, must be in your version. Have
+              counsel review it before you publish.
             </p>
 
             <div className="flex flex-wrap gap-2 pt-1">
@@ -367,7 +367,7 @@ const LegalDocumentsPage: React.FC = () => {
             <section className="space-y-3">
               <h2 className="text-theme-text-primary text-lg font-semibold">Published history</h2>
               <p className="text-theme-text-secondary text-sm">
-                What this page said before. Kept so the department can answer what a member was shown on a given date.
+                Every version published here, kept so the department can show what members saw on a given date.
               </p>
               <ul className="space-y-3">
                 {active.history.map((revision) => (

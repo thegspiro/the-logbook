@@ -135,7 +135,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
         position: signupPosition,
         ...(isOutreachSignup ? { outreach_role: signupRole } : {}),
       });
-      toast.success('Signed up for shift — an officer will confirm your assignment');
+      toast.success('Signed up for shift');
       surfaceWarnings(res);
       closeSignupModal();
       void loadShifts();
@@ -148,7 +148,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
             position: signupPosition,
             outreach_role: isOutreachSignup ? signupRole : undefined,
           });
-          toast.success('Signed up for shift — an officer will confirm your assignment');
+          toast.success('Signed up for shift');
           surfaceWarnings(res);
           closeSignupModal();
           void loadShifts();
@@ -206,10 +206,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
       <div className="flex items-start gap-3 rounded-xl border border-violet-500/20 bg-violet-500/5 p-4">
         <UserPlus className="mt-0.5 h-5 w-5 shrink-0 text-violet-600 dark:text-violet-400" />
         <div className="text-theme-text-secondary text-sm">
-          <p>
-            Browse available shifts and sign up for open positions. A scheduling officer will review and confirm your
-            signup.
-          </p>
+          <p>Shifts with open seats. Sign up for one and it goes straight onto your schedule.</p>
         </div>
       </div>
 
@@ -236,7 +233,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
         <div className="border-theme-surface-border rounded-xl border border-dashed py-16 text-center">
           <CalendarDays className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
           <h3 className="text-theme-text-primary mb-1 text-lg font-medium">No open shifts available</h3>
-          <p className="text-theme-text-muted text-sm">Check back later or adjust your date filter for more results.</p>
+          <p className="text-theme-text-muted text-sm">Check back later, or change the From date.</p>
         </div>
       ) : (
         <div className="space-y-6">
@@ -252,6 +249,9 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                 <div className="space-y-3">
                   {dayShifts?.map((shift) => {
                     const signupClosed = signupClosedReason(shift, signupWindow, signupViewer);
+                    // Named per shift: a day can carry several, and every row's
+                    // buttons otherwise read alike to a screen reader.
+                    const when = `${formatDateCustom(dateObj, { weekday: 'short', month: 'short', day: 'numeric' }, tz)}, ${formatTime(shift.start_time, tz)}${shift.apparatus_unit_number ? ` (${shift.apparatus_unit_number})` : ''}`;
                     return (
                       <div key={shift.id} className="card p-4 hover:border-violet-500/30 sm:p-5">
                         <div className="flex items-start justify-between gap-3 sm:items-center">
@@ -305,7 +305,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                                   setSignupShiftId(shift.id);
                                 }}
                                 className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-violet-700 sm:text-sm"
-                                aria-label="Sign up for this shift"
+                                aria-label={`Sign up for shift on ${when}`}
                               >
                                 <UserPlus className="h-4 w-4" /> <span className="hidden sm:inline">Sign Up</span>
                                 <span className="sm:hidden">Join</span>
@@ -315,7 +315,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                               <button
                                 onClick={() => onViewShift(shift)}
                                 className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover hidden rounded-lg border px-3 py-2 text-sm transition-colors sm:block"
-                                aria-label="View shift details"
+                                aria-label={`Details for shift on ${when}`}
                               >
                                 Details
                               </button>
@@ -369,7 +369,8 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                   ) : isExcluded || eligiblePositions.length === 0 ? (
                     <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
                       <p className="text-sm text-amber-600 dark:text-amber-400">
-                        You are not eligible to sign up for this shift. Contact a scheduling admin for assistance.
+                        You are not eligible to sign up for this shift. Ask a scheduling admin if you think that is
+                        wrong.
                       </p>
                     </div>
                   ) : seatsAllTaken && !isOutreachSignup ? (

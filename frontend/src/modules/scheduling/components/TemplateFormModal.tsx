@@ -351,8 +351,10 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
 
             {/* Category */}
             <div>
-              <label className="form-label mb-1.5">Category</label>
-              <div className="grid grid-cols-3 gap-2">
+              <p id="template-category" className="form-label mb-1.5">
+                Category
+              </p>
+              <div role="group" aria-labelledby="template-category" className="grid grid-cols-3 gap-2">
                 {TEMPLATE_CATEGORIES.map((cat) => {
                   const CatIcon = cat.icon;
                   const isSelected = formData.category === cat.value;
@@ -360,6 +362,7 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
                     <button
                       key={cat.value}
                       type="button"
+                      aria-pressed={isSelected}
                       onClick={() => {
                         setFormData((prev) => ({
                           ...prev,
@@ -741,6 +744,7 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
                   </label>
                   <TimeQuarterHour
                     id="template-start"
+                    aria-label="Starts at"
                     value={formData.start_time_of_day}
                     onChange={(e) => setFormData((prev) => ({ ...prev, start_time_of_day: e.target.value }))}
                     className="form-input"
@@ -753,6 +757,7 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
                   </label>
                   <TimeQuarterHour
                     id="template-end"
+                    aria-label="Ends at"
                     value={formData.end_time_of_day}
                     onChange={(e) => setFormData((prev) => ({ ...prev, end_time_of_day: e.target.value }))}
                     className="form-input"
@@ -887,6 +892,7 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
                     {formData.positions.map((entry, i) => (
                       <div key={i} className="flex items-center gap-2">
                         <select
+                          aria-label={`Position ${String(i + 1)}`}
                           value={entry.position}
                           onChange={(e) => {
                             const updated = [...formData.positions];
@@ -929,6 +935,7 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
                               setFormData((prev) => ({ ...prev, positions: updated }));
                             }}
                             className="border-theme-input-border rounded-sm"
+                            aria-label={`Administrative access, position ${String(i + 1)}`}
                           />
                           Administrative access
                         </label>

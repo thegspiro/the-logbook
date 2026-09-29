@@ -16,7 +16,8 @@ from loguru import logger
 from sqlalchemy.exc import DataError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import require_permission
+from app.api.dependencies import require_permission, user_has_permission
+from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.email_template import (
@@ -26,7 +27,7 @@ from app.models.email_template import (
     ScheduledEmail,
     ScheduledEmailStatus,
 )
-from app.models.user import User
+from app.models.user import Organization, User
 from app.schemas.email_template import (
     EmailAttachmentResponse,
     EmailFooterContactDetails,
@@ -37,16 +38,29 @@ from app.schemas.email_template import (
     EmailTemplatePreviewResponse,
     EmailTemplateResponse,
     EmailTemplateUpdate,
+    MemberEmailKindResponse,
+    MemberEmailPolicyResponse,
+    MemberEmailPolicyUpdate,
+    MemberTextAlertResponse,
     ScheduledEmailCreate,
     ScheduledEmailResponse,
     ScheduledEmailUpdate,
 )
 from app.services import email_footers
+from app.services.email_policy import (
+    EMAIL_POLICIES,
+    OPTIONAL_KINDS,
+    ORG_REQUIRED_KEY,
+    ORG_SETTINGS_KEY,
+    department_required_kinds,
+)
 from app.services.email_template_service import (
     GLOBAL_VARIABLES,
     EmailTemplateService,
     live_sample_context,
 )
+from app.services.email_test_records import real_record_context
+from app.services.notification_channels import SMS_ALERT_DETAILS, SMS_CONDITIONS
 from app.services.officer_service import OfficerService
 from app.utils.mime_validation import detect_mime_type
 from app.utils.org_scoping import assert_in_org
@@ -63,8 +77,6 @@ async def _footer_library_response(
     guess — the screen can say "3 templates use this" before it goes.
     """
     from sqlalchemy import func, select
-
-    from app.models.user import Organization
 
     org_result = await db.execute(
         select(Organization).where(Organization.id == str(organization_id))
@@ -110,6 +122,112 @@ def _footer_contact_details(organization) -> EmailFooterContactDetails:
         website=str(ctx.get("organization_website") or ""),
         mailing_address=str(ctx.get("organization_mailing_address") or ""),
     )
+
+
+_EDIT_EMAIL_POLICY = ("settings.manage", "organization.update_settings")
+
+
+async def _member_email_policy_response(
+    db: AsyncSession, current_user: User
+) -> MemberEmailPolicyResponse:
+    org = await db.get(Organization, str(current_user.organization_id))
+    department_required = department_required_kinds(org)
+    return MemberEmailPolicyResponse(
+        emails=[
+            MemberEmailKindResponse(
+                key=kind.value,
+                label=policy.label,
+                required=policy.required,
+                default_on=policy.default_on,
+                audience=policy.audience.value,
+                includes=list(policy.includes),
+                rationale=policy.rationale,
+                legacy_preference=policy.legacy_preference,
+                department_required=kind in department_required,
+            )
+            for kind, policy in EMAIL_POLICIES.items()
+        ],
+        texts=[
+            MemberTextAlertResponse(
+                key=alert.value,
+                label=info.label,
+                description=info.description,
+                email_kind=info.email_kind,
+            )
+            for alert, info in SMS_ALERT_DETAILS.items()
+        ],
+        text_conditions=list(SMS_CONDITIONS),
+        can_edit=any(user_has_permission(current_user, p) for p in _EDIT_EMAIL_POLICY),
+    )
+
+
+@router.get("/member-email-policy", response_model=MemberEmailPolicyResponse)
+async def get_member_email_policy(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission(
+            "settings.manage", "organization.update_settings", "notifications.manage"
+        )
+    ),
+):
+    """
+    Every member email and text message, whether members can opt out, and
+    which optional emails this department has made required.
+
+    Requires: settings.manage, organization.update_settings or
+    notifications.manage permission.
+    """
+    return await _member_email_policy_response(db, current_user)
+
+
+@router.put("/member-email-policy", response_model=MemberEmailPolicyResponse)
+async def update_member_email_policy(
+    payload: MemberEmailPolicyUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(*_EDIT_EMAIL_POLICY)),
+):
+    """
+    Set which optional member emails this department makes required.
+
+    Only optional kinds can be named: a kind the system already requires is
+    required everywhere and is refused here, as is an unknown one, rather
+    than silently dropped.
+
+    Requires: settings.manage or organization.update_settings permission.
+    """
+    optional = {kind.value for kind in OPTIONAL_KINDS}
+    rejected = sorted(set(payload.required_kinds) - optional)
+    if rejected:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Not an optional email: {', '.join(rejected)}",
+        )
+    org = await db.get(Organization, str(current_user.organization_id))
+    if org is None:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    before = sorted(kind.value for kind in department_required_kinds(org))
+    after = sorted(set(payload.required_kinds))
+    # Deep copy: Organization.settings only tracks top-level key changes, and
+    # this writes a nested one (CLAUDE.md pitfall #12).
+    settings = copy.deepcopy(org.settings or {})
+    section = settings.get(ORG_SETTINGS_KEY)
+    section = dict(section) if isinstance(section, dict) else {}
+    section[ORG_REQUIRED_KEY] = after
+    settings[ORG_SETTINGS_KEY] = section
+    org.settings = settings
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="member_email_policy_updated",
+        event_category="settings",
+        severity="info",
+        event_data={"required_kinds_before": before, "required_kinds_after": after},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return await _member_email_policy_response(db, current_user)
 
 
 @router.get("/footers", response_model=EmailFooterLibraryResponse)
@@ -470,6 +588,8 @@ async def preview_email_template(
     # in the admin's inbox agree.
     context = {
         **live_sample_context(template_type_key, organization, recipient=current_user),
+        # The department's own next event or shift, when it has one.
+        **await real_record_context(db, template_type_key, organization),
         **preview_data.context,
     }
     if organization:

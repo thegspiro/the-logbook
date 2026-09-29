@@ -65,9 +65,9 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({ pipeline, onPi
       const updated = stages.filter((s) => s.id !== stageId);
       setStages(updated);
       onPipelineUpdated({ ...pipeline, stages: updated });
-      toast.success('Stage removed');
+      toast.success('Stage deleted');
     } catch (err: unknown) {
-      const message = getErrorMessage(err, 'Failed to remove stage');
+      const message = getErrorMessage(err, 'Failed to delete stage');
       toast.error(message);
     }
   };
@@ -136,7 +136,7 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({ pipeline, onPi
         {stages.length === 0 ? (
           <div className="card bg-theme-input-bg border-dashed py-12 text-center">
             <p className="text-theme-text-muted mb-2">No stages configured yet.</p>
-            <p className="text-theme-text-muted text-sm">Add stages to define the prospective member journey.</p>
+            <p className="text-theme-text-muted text-sm">Add a stage for each step applicants go through, in order.</p>
           </div>
         ) : (
           stages.map((stage, index) => {
@@ -262,7 +262,7 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({ pipeline, onPi
                     <button
                       onClick={() => setDeleteConfirmId(stage.id)}
                       className="text-theme-text-muted p-1.5 transition-colors hover:text-red-700 dark:hover:text-red-400"
-                      title="Remove stage"
+                      title="Delete stage"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>

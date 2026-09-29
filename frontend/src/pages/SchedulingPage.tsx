@@ -355,7 +355,7 @@ const SchedulingPage: React.FC = () => {
     try {
       const template = effectiveTemplates.find((t) => t.id === shiftForm.shiftTemplate) || defaultTemplate;
       if (!template) {
-        setCreateError('No shift template available. Please create a template first.');
+        setCreateError('No shift template is available. Create a template first.');
         setCreating(false);
         return;
       }
@@ -458,7 +458,7 @@ const SchedulingPage: React.FC = () => {
         {deepLinkFailed && (
           <div className="alert-warning mb-4 flex flex-wrap items-center gap-2 text-sm" role="alert">
             <span className="min-w-0 flex-1">
-              That shift could not be opened. The board below shows the schedule, not the shift you followed a link to.
+              That shift could not be opened. The full schedule is shown below instead.
             </span>
             <button
               type="button"

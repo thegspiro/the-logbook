@@ -99,7 +99,7 @@ export const MemberAuditHistoryPage: React.FC = () => {
         // If fewer than 50 results returned, there are no more pages
         setHasMore(data.length >= 50);
       } catch (_err) {
-        setError('Unable to load audit history. Please check your connection and try again.');
+        setError('Unable to load audit history. Check your connection and try again.');
       } finally {
         setLoading(false);
         setLoadingMore(false);
@@ -259,7 +259,7 @@ export const MemberAuditHistoryPage: React.FC = () => {
               <p className="text-theme-text-primary mb-2 text-lg font-semibold">No audit history found</p>
               <p className="text-theme-text-muted text-sm">
                 {eventTypeFilter !== 'all'
-                  ? 'No events match the selected filter. Try selecting "All Events" to see the full history.'
+                  ? 'No events match this filter. Clear the filter to see the full history.'
                   : 'There are no recorded changes for this member yet.'}
               </p>
               {eventTypeFilter !== 'all' && (

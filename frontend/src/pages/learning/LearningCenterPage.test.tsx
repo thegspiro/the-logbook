@@ -1,7 +1,8 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ConfirmProvider } from '../../contexts/ConfirmContext';
 import { useLearningProgressStore } from '../../stores/learningProgressStore';
 import LearningCenterPage from './LearningCenterPage';
 
@@ -20,7 +21,9 @@ vi.mock('../../stores/authStore', () => ({
 const renderPage = () =>
   render(
     <MemoryRouter>
-      <LearningCenterPage />
+      <ConfirmProvider>
+        <LearningCenterPage />
+      </ConfirmProvider>
     </MemoryRouter>
   );
 
@@ -56,7 +59,7 @@ describe('LearningCenterPage', () => {
     expect(screen.getByText('0 of 13 tasks')).toBeInTheDocument();
   });
 
-  it('reflects stored progress and can reset it', () => {
+  it('reflects stored progress and resets it once the member confirms', async () => {
     useLearningProgressStore.getState().loadFor('member-a');
     useLearningProgressStore.getState().setStepComplete('getting-started', 'dashboard', true);
 
@@ -65,9 +68,25 @@ describe('LearningCenterPage', () => {
     expect(screen.getByRole('link', { name: /Continue lesson: Getting Started/ })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Reset progress' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Reset progress' }));
 
-    expect(screen.getByText('0 of 19 tasks')).toBeInTheDocument();
+    expect(await screen.findByText('0 of 19 tasks')).toBeInTheDocument();
     expect(localStorage.getItem('logbook.learning-progress.v2.member-a')).toBeNull();
+  });
+
+  it('keeps progress when the member backs out of the reset', async () => {
+    useLearningProgressStore.getState().loadFor('member-a');
+    useLearningProgressStore.getState().setStepComplete('getting-started', 'dashboard', true);
+
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Reset progress' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('clears the 1 task you have completed');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Keep my progress' }));
+
+    expect(await screen.findByText('1 of 19 tasks')).toBeInTheDocument();
+    expect(localStorage.getItem('logbook.learning-progress.v2.member-a')).not.toBeNull();
   });
 
   it('reports the completed count to assistive technology', () => {

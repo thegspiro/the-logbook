@@ -93,7 +93,7 @@ export const SCHEDULING_HUB_CARDS: SchedulingHubCard[] = [
   {
     id: 'templates',
     label: 'Shift Templates',
-    description: 'The shapes a shift comes in — hours, crew seats and vehicle',
+    description: 'Reusable shift setups — hours, crew seats and vehicle',
     path: '/scheduling/admin/planning/templates',
     icon: ClipboardList,
     section: 'Before the shift',
@@ -104,7 +104,7 @@ export const SCHEDULING_HUB_CARDS: SchedulingHubCard[] = [
   {
     id: 'patterns',
     label: 'Shift Patterns',
-    description: 'Repeating rotations, and generating a stretch of calendar from them',
+    description: 'Repeating rotations, and generating shifts from them',
     path: '/scheduling/admin/planning/patterns',
     icon: Repeat,
     section: 'Before the shift',
@@ -163,7 +163,7 @@ export const SCHEDULING_HUB_CARDS: SchedulingHubCard[] = [
   {
     id: 'positions',
     label: 'Who Can Fill What',
-    description: 'Every member against the positions they are cleared for, and why',
+    description: 'Which positions each member is cleared for, and why',
     path: '/scheduling/admin/positions',
     icon: ShieldCheck,
     section: 'People & eligibility',

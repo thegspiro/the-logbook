@@ -40,6 +40,7 @@ import type {
   EmergencyContact,
   ConsentItem,
   ContactInfoSettings,
+  MemberEmailChoice,
   ProfileVisibilityField,
 } from '../types/user';
 import { PROFILE_VISIBILITY_FIELDS } from '../types/user';
@@ -53,6 +54,7 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { useRanks } from '../hooks/useRanks';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 import { SettingsLayout, type SettingsSection } from '../components/settings/SettingsLayout';
+import { SettingsToggle } from '../components/settings/SettingsToggle';
 
 type TabType = 'account' | 'password' | 'security' | 'privacy' | 'emergency' | 'appearance' | 'notifications' | 'app';
 
@@ -167,8 +169,11 @@ export const UserSettingsPage: React.FC = () => {
   // because a subscription belongs to this browser, not to the user record.
   const push = usePushNotifications();
   const [smsNotifications, setSmsNotifications] = useState(true);
-  const [eventReminders, setEventReminders] = useState(true);
-  const [trainingReminders, setTrainingReminders] = useState(true);
+  // Which optional emails the member receives. The list comes from the
+  // backend so a kind the department has made required is never offered
+  // here as a choice — it is listed under alwaysSent instead.
+  const [emailChoices, setEmailChoices] = useState<MemberEmailChoice[]>([]);
+  const [alwaysSent, setAlwaysSent] = useState<string[]>([]);
   const [savingPreferences, setSavingPreferences] = useState(false);
   const [_loadingPreferences, setLoadingPreferences] = useState(false);
 
@@ -228,10 +233,16 @@ export const UserSettingsPage: React.FC = () => {
         const prefs = await userService.getNotificationPreferences(user.id);
         setEmailNotifications(prefs.email_notifications ?? true);
         setSmsNotifications(prefs.sms_notifications ?? true);
-        setEventReminders(prefs.event_reminders ?? true);
-        setTrainingReminders(prefs.training_reminders ?? true);
       } catch {
         // Use defaults if fetch fails
+      }
+      try {
+        const choices = await userService.getMyEmailChoices();
+        setEmailChoices(choices.choices);
+        setAlwaysSent(choices.always_sent);
+      } catch {
+        // Without the list there is nothing to choose; the master switch
+        // above still works on its own.
       } finally {
         setLoadingPreferences(false);
       }
@@ -247,9 +258,9 @@ export const UserSettingsPage: React.FC = () => {
       const { membership_number: _mn, rank: _r, station: _s, ...editableFields } = profileForm;
       const updated = await userService.updateUserProfile(user.id, editableFields);
       setProfile(updated);
-      toast.success('Profile updated successfully!');
+      toast.success('Profile saved');
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to update profile. Please try again.'));
+      toast.error(getErrorMessage(err, 'Could not save your profile. Try again.'));
     } finally {
       setSavingProfile(false);
     }
@@ -272,7 +283,7 @@ export const UserSettingsPage: React.FC = () => {
 
     // Validate password strength
     if (!passwordValidation.isValid) {
-      toast.error('Please ensure your password meets all the requirements');
+      toast.error('Your new password does not meet all the requirements yet');
       return;
     }
 
@@ -300,7 +311,7 @@ export const UserSettingsPage: React.FC = () => {
       await endSessionLocally();
       void navigate('/login', { replace: true, state: { reason: 'password_changed' } });
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to change password. Please check your current password and try again.'));
+      toast.error(getErrorMessage(err, 'Could not change your password. Check your current password and try again.'));
     } finally {
       setChangingPassword(false);
     }
@@ -314,13 +325,12 @@ export const UserSettingsPage: React.FC = () => {
       await userService.updateNotificationPreferences(user.id, {
         email_notifications: emailNotifications,
         sms_notifications: smsNotifications,
-        event_reminders: eventReminders,
-        training_reminders: trainingReminders,
+        email_kinds: Object.fromEntries(emailChoices.map((choice) => [choice.key, choice.enabled])),
       });
 
-      toast.success('Preferences saved successfully!');
+      toast.success('Notification preferences saved');
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to save preferences. Please try again.'));
+      toast.error(getErrorMessage(err, 'Could not save your preferences. Try again.'));
     } finally {
       setSavingPreferences(false);
     }
@@ -558,9 +568,9 @@ export const UserSettingsPage: React.FC = () => {
       setContactsForm(
         updated.emergency_contacts?.length ? updated.emergency_contacts.map((ec: EmergencyContact) => ({ ...ec })) : []
       );
-      toast.success('Emergency contacts updated successfully!');
+      toast.success('Emergency contacts saved');
     } catch (err: unknown) {
-      setContactsError(getErrorMessage(err, 'Unable to update emergency contacts.'));
+      setContactsError(getErrorMessage(err, 'Could not save your emergency contacts. Try again.'));
     } finally {
       setSavingContacts(false);
     }
@@ -599,8 +609,8 @@ export const UserSettingsPage: React.FC = () => {
         sections={SECTIONS}
         activeSection={activeTab}
         onSectionChange={selectTab}
-        navLabel="User settings sections"
-        title="User Settings"
+        navLabel="Account sections"
+        title="My Account"
       >
         <>
           {/* Account Tab */}
@@ -865,8 +875,8 @@ export const UserSettingsPage: React.FC = () => {
                   <div>
                     <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300">Password change required</p>
                     <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-400">
-                      Your administrator has required you to change your password before continuing. Please set a new
-                      password below.
+                      An administrator requires you to change your password before you continue. Set a new password
+                      below.
                     </p>
                   </div>
                 </div>
@@ -1177,7 +1187,7 @@ export const UserSettingsPage: React.FC = () => {
               <div>
                 <h2 className="text-theme-text-primary mb-4 text-xl font-semibold">Emergency Contacts</h2>
                 <p className="text-theme-text-secondary mb-6 text-sm">
-                  Add emergency contacts so your department can reach someone on your behalf if needed
+                  Who the department should contact on your behalf in an emergency
                 </p>
               </div>
 
@@ -1442,7 +1452,8 @@ export const UserSettingsPage: React.FC = () => {
                       Email Notifications
                     </label>
                     <p className="text-theme-text-secondary text-sm">
-                      Receive email for reminders and alerts. Department announcements are always emailed to you.
+                      Reminders, alerts and updates. Turning this off stops every email you can choose below; the ones
+                      listed as always emailed still arrive.
                     </p>
                   </div>
                   <button
@@ -1499,51 +1510,57 @@ export const UserSettingsPage: React.FC = () => {
                   </button>
                 </div>
 
-                {/* Event Reminders Toggle */}
-                <div className="border-theme-surface-border flex items-center justify-between border-b py-4">
-                  <div>
-                    <label htmlFor="eventReminders" className="text-theme-text-primary text-sm font-medium">
-                      Event Reminders
-                    </label>
-                    <p className="text-theme-text-secondary text-sm">Get reminders before scheduled events</p>
-                  </div>
-                  <button
-                    type="button"
-                    id="eventReminders"
-                    onClick={() => setEventReminders(!eventReminders)}
-                    className={`${
-                      eventReminders ? 'bg-red-800' : 'bg-theme-surface-border'
-                    } focus:ring-theme-focus-ring focus:ring-offset-theme-bg toggle-track-md`}
-                    role="switch"
-                    aria-checked={eventReminders}
-                  >
-                    <span className={`${eventReminders ? 'translate-x-5' : 'translate-x-0'} toggle-knob-md`} />
-                  </button>
-                </div>
-
-                {/* Training Reminders Toggle */}
-                <div className="border-theme-surface-border flex items-center justify-between border-b py-4">
-                  <div>
-                    <label htmlFor="trainingReminders" className="text-theme-text-primary text-sm font-medium">
-                      Training Reminders
-                    </label>
-                    <p className="text-theme-text-secondary text-sm">
-                      Notifications for training deadlines and requirements
+                {emailChoices.length > 0 && (
+                  <section aria-labelledby="email-choices-heading" className="py-2">
+                    <h3 id="email-choices-heading" className="text-theme-text-primary text-sm font-medium">
+                      Emails you can turn off
+                    </h3>
+                    <p className="text-theme-text-secondary mb-2 text-sm">
+                      {emailNotifications
+                        ? 'Choose which of these reach your inbox. The notice still appears in your bell either way.'
+                        : 'Email Notifications is off, so none of these are emailed to you. Turn it on to choose one by one.'}
                     </p>
-                  </div>
-                  <button
-                    type="button"
-                    id="trainingReminders"
-                    onClick={() => setTrainingReminders(!trainingReminders)}
-                    className={`${
-                      trainingReminders ? 'bg-red-800' : 'bg-theme-surface-border'
-                    } focus:ring-theme-focus-ring focus:ring-offset-theme-bg toggle-track-md`}
-                    role="switch"
-                    aria-checked={trainingReminders}
-                  >
-                    <span className={`${trainingReminders ? 'translate-x-5' : 'translate-x-0'} toggle-knob-md`} />
-                  </button>
-                </div>
+                    <ul>
+                      {emailChoices.map((choice) => (
+                        <li
+                          key={choice.key}
+                          className="border-theme-surface-border flex items-center justify-between gap-4 border-b py-3"
+                        >
+                          <div>
+                            <span className="text-theme-text-primary text-sm">{choice.label}</span>
+                            <p className="text-theme-text-secondary text-xs">{choice.includes.join(' · ')}</p>
+                          </div>
+                          <SettingsToggle
+                            checked={emailNotifications && choice.enabled}
+                            disabled={!emailNotifications}
+                            label={choice.label}
+                            onChange={(next) =>
+                              setEmailChoices((current) =>
+                                current.map((c) => (c.key === choice.key ? { ...c, enabled: next } : c))
+                              )
+                            }
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
+
+                {alwaysSent.length > 0 && (
+                  <section aria-labelledby="always-sent-heading" className="py-2">
+                    <h3 id="always-sent-heading" className="text-theme-text-primary text-sm font-medium">
+                      Always emailed to you
+                    </h3>
+                    <p className="text-theme-text-secondary mb-2 text-sm">
+                      Your department needs to be able to show you were told, so these arrive whatever you choose above.
+                    </p>
+                    <ul className="text-theme-text-secondary list-disc space-y-0.5 pl-5 text-sm">
+                      {alwaysSent.map((label) => (
+                        <li key={label}>{label}</li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
               </div>
 
               <div className="pt-4">

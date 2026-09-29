@@ -16,6 +16,13 @@ interface TimeQuarterHourProps {
   required?: boolean;
   placeholder?: string;
   'aria-label'?: string;
+  /**
+   * Show a value's real minute when it is not on a quarter hour (09:07 reads
+   * as 9:07, offered as an extra option) instead of flooring it for display.
+   * For a caller whose value can carry any minute — a recorded check-in — so
+   * the picker never shows a different time from the one that will be saved.
+   */
+  preserveOffQuarterMinute?: boolean;
 }
 
 const HOURS_12 = Array.from({ length: 12 }, (_, i) => {
@@ -25,12 +32,12 @@ const HOURS_12 = Array.from({ length: 12 }, (_, i) => {
 
 const MINUTE_OPTIONS = ['00', '15', '30', '45'] as const;
 
-function parse24(time: string): { hour24: number; minute: number } | null {
+function parse24(time: string, preserveMinute: boolean): { hour24: number; minute: number } | null {
   const parts = time.split(':');
   const h = parseInt(parts[0] ?? '', 10);
   const m = parseInt(parts[1] ?? '', 10);
   if (isNaN(h) || isNaN(m)) return null;
-  return { hour24: h, minute: Math.floor(m / 15) * 15 };
+  return { hour24: h, minute: preserveMinute ? m : Math.floor(m / 15) * 15 };
 }
 
 function to24(hour12Index: number, period: 'AM' | 'PM'): number {
@@ -47,12 +54,23 @@ const TimeQuarterHour: React.FC<TimeQuarterHourProps> = ({
   required,
   placeholder,
   'aria-label': ariaLabel,
+  preserveOffQuarterMinute = false,
 }) => {
-  const parsed = useMemo(() => (value ? parse24(value) : null), [value]);
+  const parsed = useMemo(
+    () => (value ? parse24(value, preserveOffQuarterMinute) : null),
+    [value, preserveOffQuarterMinute]
+  );
 
   const hour12Index = parsed ? parsed.hour24 % 12 : null;
   const minute = parsed ? parsed.minute : null;
   const period: 'AM' | 'PM' = parsed ? (parsed.hour24 < 12 ? 'AM' : 'PM') : 'AM';
+
+  const minuteOptions = useMemo(() => {
+    const quarters: string[] = [...MINUTE_OPTIONS];
+    if (minute === null || minute % 15 === 0) return quarters;
+    const actual = String(minute).padStart(2, '0');
+    return [...quarters, actual].sort();
+  }, [minute]);
 
   const emit = (h12: number, m: number, p: 'AM' | 'PM') => {
     const h24 = to24(h12, p);
@@ -107,7 +125,7 @@ const TimeQuarterHour: React.FC<TimeQuarterHourProps> = ({
         aria-label={`${label} minute`}
       >
         {minute === null && <option value="">--</option>}
-        {MINUTE_OPTIONS.map((m) => (
+        {minuteOptions.map((m) => (
           <option key={m} value={m}>
             {m}
           </option>

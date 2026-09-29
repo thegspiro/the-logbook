@@ -5,7 +5,7 @@ Request and response schemas for user-related endpoints.
 """
 
 from datetime import date, datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
@@ -407,6 +407,27 @@ class UserWithRolesResponse(UserResponse):
     model_config = _response_config
 
 
+class MemberEmailChoice(BaseModel):
+    """One optional kind of email and the calling member's setting for it."""
+
+    key: str
+    label: str
+    audience: str
+    includes: List[str]
+    # The member's own choice for this kind, ignoring the Email notifications
+    # switch, so switching that back on restores each choice as it was.
+    enabled: bool
+
+
+class MemberEmailChoicesResponse(BaseModel):
+    """The optional emails the calling member can turn off, and the always-sent
+    ones, by label only, so the settings screen can say what cannot be."""
+
+    email_notifications: bool
+    choices: List[MemberEmailChoice]
+    always_sent: List[str]
+
+
 class NotificationPreferences(BaseModel):
     """Notification preferences schema.
 
@@ -426,6 +447,11 @@ class NotificationPreferences(BaseModel):
     sms_notifications: bool = True
     event_reminders: bool = True
     training_reminders: bool = True
+    # Per-kind email choices, {"shift_notices": false}, keyed by
+    # app.services.email_policy.EmailKind. The update endpoint drops unknown
+    # and required kinds and merges the rest into what is stored, so sending
+    # one kind leaves the member's other choices alone.
+    email_kinds: Optional[Dict[str, bool]] = None
 
     model_config = _response_config
 

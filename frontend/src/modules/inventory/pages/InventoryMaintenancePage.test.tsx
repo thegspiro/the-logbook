@@ -41,7 +41,8 @@ vi.mock('../../../stores/authStore', () => ({
   },
 }));
 
-vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
+const mockTimezone = vi.fn(() => 'UTC');
+vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => mockTimezone() }));
 
 const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
@@ -173,6 +174,50 @@ describe('InventoryMaintenancePage', () => {
     expect(mockToastError).toHaveBeenCalledWith('Select a pass/fail result');
     await user.click(screen.getByLabelText(/fail/i));
     expect(screen.getByText('This will mark the item out of service.')).toBeInTheDocument();
+  });
+
+  // A pass said the item "will remain out of service", which was untrue for an
+  // assigned coat that stayed assigned; the choice buttons showed no state.
+  it('says a passed inspection leaves the status alone, and shows which action is chosen', async () => {
+    mockGetMaintenanceDueItems.mockResolvedValue([makeItem()]);
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryMaintenancePage />);
+    await screen.findAllByText('Helmet');
+    await user.click(firstButton('Log Maintenance'));
+    const inspection = screen.getByRole('button', { name: 'Record inspection' });
+    await user.click(inspection);
+
+    expect(inspection).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Schedule maintenance' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByText(/Choose pass or fail/)).toBeInTheDocument();
+    await user.click(screen.getByLabelText(/pass/i));
+    expect(screen.getByText("This records the inspection without changing the item's status.")).toBeInTheDocument();
+    expect(screen.queryByText(/will remain out of service/)).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Task Description *' })).toBeInTheDocument();
+  });
+
+  // The date was the UTC one, which from 7 PM Central is already tomorrow.
+  describe('at 9 PM Central, when UTC is already the next day', () => {
+    beforeEach(() => {
+      mockTimezone.mockReturnValue('America/Chicago');
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-09-30T02:00:00Z'));
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+      mockTimezone.mockReturnValue('UTC');
+    });
+
+    it("dates an inspection today in the department's zone", async () => {
+      mockGetMaintenanceDueItems.mockResolvedValue([makeItem()]);
+      const user = userEvent.setup();
+      renderWithRouter(<InventoryMaintenancePage />);
+      await screen.findAllByText('Helmet');
+      await user.click(firstButton('Log Maintenance'));
+      await user.click(screen.getByRole('button', { name: 'Record inspection' }));
+
+      expect(screen.getByLabelText('Completion Date *')).toHaveValue('2026-09-29');
+    });
   });
 
   it('loads maintenance history for a selected item', async () => {

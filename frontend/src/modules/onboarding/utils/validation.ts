@@ -54,14 +54,14 @@ export const isValidImageFile = (file: File): { valid: boolean; error?: string; 
   if (!validTypes.includes(file.type)) {
     return {
       valid: false,
-      error: 'Please upload a valid image file (PNG, JPG, or WebP only)',
+      error: 'Upload a PNG, JPG, or WebP image',
     };
   }
 
   if (file.size > maxSize) {
     return {
       valid: false,
-      error: 'Logo file size must be less than 5MB',
+      error: 'The logo must be smaller than 5MB',
     };
   }
 
@@ -72,7 +72,7 @@ export const isValidImageFile = (file: File): { valid: boolean; error?: string; 
   if (!extension || !validExtensions.includes(extension)) {
     return {
       valid: false,
-      error: 'Invalid file extension',
+      error: 'The file name must end in .png, .jpg, .jpeg, or .webp',
     };
   }
 
@@ -80,7 +80,7 @@ export const isValidImageFile = (file: File): { valid: boolean; error?: string; 
   if (file.size > recommendedMaxSize) {
     return {
       valid: true,
-      warning: 'File size is large. Consider using a smaller image for better performance.',
+      warning: 'This image is large. A smaller one will load faster.',
     };
   }
 

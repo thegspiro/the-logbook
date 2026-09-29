@@ -13,6 +13,8 @@ const EmailTemplatesPage = lazyWithRetry(() => import('./pages/EmailTemplatesPag
 
 const MessagesAdminPage = lazyWithRetry(() => import('./pages/MessagesAdminPage'));
 
+const MemberEmailsPage = lazyWithRetry(() => import('./pages/MemberEmailsPage'));
+
 const MessagesInboxPage = lazyWithRetry(() => import('./pages/MessagesInboxPage'));
 
 const MessageDetailPage = lazyWithRetry(() => import('./pages/MessageDetailPage'));
@@ -32,6 +34,18 @@ export const getCommunicationsRoutes = () => {
           <ProtectedRoute requiredPermission="settings.manage">
             <Suspense fallback={null}>
               <EmailTemplatesPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/communications/member-emails"
+        element={
+          <ProtectedRoute
+            requiredAnyPermission={['settings.manage', 'organization.update_settings', 'notifications.manage']}
+          >
+            <Suspense fallback={null}>
+              <MemberEmailsPage />
             </Suspense>
           </ProtectedRoute>
         }

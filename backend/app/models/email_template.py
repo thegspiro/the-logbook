@@ -62,6 +62,7 @@ class EmailTemplateType(str, enum.Enum):
     STOREFRONT_VENDOR_ORDER_PLACED = "storefront_vendor_order_placed"
     APPLICATION_WITHDRAWN = "application_withdrawn"
     SUGGESTION_SUBMITTED = "suggestion_submitted"
+    EQUIPMENT_REQUEST_UPDATE = "equipment_request_update"
     CUSTOM = "custom"
 
 

@@ -13,14 +13,122 @@ Configures Loguru as the single logging backend for the entire application:
 import json as _json
 import logging
 import os
+import re
 import sys
 import uuid
 from contextvars import ContextVar
+from typing import Any, Dict, Optional
 
 from loguru import logger
 
 # Context variable for per-request ID, accessible from any async task
 request_id_ctx: ContextVar[str] = ContextVar("request_id", default="-")
+
+# Some provider APIs authenticate with credentials in the query string — the
+# TargetSolutions Training Records API takes ``key`` and ``secret`` as URL
+# parameters and offers no header alternative. httpx logs every request URL at
+# INFO, and Sentry's httpx integration records the raw query on breadcrumbs and
+# spans, so without this both would carry a live credential.
+_SENSITIVE_QUERY_PARAM = re.compile(
+    r"(?:^|(?<=[?&]))"
+    r"(key|secret|api_key|apikey|access_token|token|password)"
+    r"=[^&#\s\"']*",
+    re.IGNORECASE,
+)
+REDACTED_QUERY_VALUE = "[REDACTED]"
+
+
+def redact_url_secrets(text: str) -> str:
+    """Replace credential-bearing query parameter values in a URL or query."""
+    return _SENSITIVE_QUERY_PARAM.sub(
+        lambda m: f"{m.group(1)}={REDACTED_QUERY_VALUE}", text
+    )
+
+
+class _RedactUrlSecretsFilter(logging.Filter):
+    """Redact query-string credentials from a stdlib log record's message."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        message = record.getMessage()
+        redacted = redact_url_secrets(message)
+        if redacted != message:
+            record.msg = redacted
+            record.args = None
+        return True
+
+
+def install_httpx_url_redaction() -> None:
+    """Attach the redaction filter to httpx's request logger (idempotent).
+
+    Called from logging setup and again by the modules that put credentials in
+    a URL, because a worker process may never run ``setup_logging``.
+    """
+    httpx_logger = logging.getLogger("httpx")
+    if not any(isinstance(f, _RedactUrlSecretsFilter) for f in httpx_logger.filters):
+        httpx_logger.addFilter(_RedactUrlSecretsFilter())
+
+
+def _redact_http_query(data: Optional[Dict[str, Any]]) -> None:
+    if data and isinstance(data.get("http.query"), str):
+        data["http.query"] = redact_url_secrets(data["http.query"])
+
+
+def _sentry_before_breadcrumb(
+    crumb: Dict[str, Any], hint: Dict[str, Any]
+) -> Dict[str, Any]:
+    _redact_http_query(crumb.get("data"))
+    if isinstance(crumb.get("message"), str):
+        crumb["message"] = redact_url_secrets(crumb["message"])
+    return crumb
+
+
+# Sentry attaches each stack frame's local variables to an error event. In a
+# failed provider request those include the query-parameter dict and httpx's
+# request object, so a credential would leave the building with the traceback.
+# Sentry's own scrubber covers names like "api_key" but not a bare "key".
+_SENSITIVE_VARIABLE_NAMES = frozenset(
+    {
+        "key",
+        "secret",
+        "api_key",
+        "apikey",
+        "api_secret",
+        "client_secret",
+        "access_token",
+        "accesstoken",
+        "token",
+        "password",
+    }
+)
+
+
+def _scrub_credentials(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            k: (
+                REDACTED_QUERY_VALUE
+                if isinstance(k, str) and k.lower() in _SENSITIVE_VARIABLE_NAMES
+                else _scrub_credentials(v)
+            )
+            for k, v in value.items()
+        }
+    if isinstance(value, list):
+        return [_scrub_credentials(v) for v in value]
+    if isinstance(value, str):
+        return redact_url_secrets(value)
+    return value
+
+
+def _sentry_before_send(event: Dict[str, Any], hint: Dict[str, Any]) -> Dict[str, Any]:
+    return _scrub_credentials(event)
+
+
+def _sentry_before_send_transaction(
+    event: Dict[str, Any], hint: Dict[str, Any]
+) -> Dict[str, Any]:
+    for span in event.get("spans") or []:
+        _redact_http_query(span.get("data"))
+    return event
 
 
 def setup_logging(
@@ -157,6 +265,8 @@ def _intercept_stdlib_logging() -> None:
         lib_logger.handlers = [_InterceptHandler()]
         lib_logger.propagate = False
 
+    install_httpx_url_redaction()
+
 
 # ------------------------------------------------------------------
 # Sentry integration
@@ -222,6 +332,9 @@ def setup_sentry(
                 _SafeLoguruIntegration(),
             ],
             send_default_pii=False,
+            before_send=_sentry_before_send,
+            before_breadcrumb=_sentry_before_breadcrumb,
+            before_send_transaction=_sentry_before_send_transaction,
         )
         logger.info("Sentry SDK initialized")
     except Exception as e:

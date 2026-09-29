@@ -129,6 +129,20 @@ export const notificationsService = {
     return response.data;
   },
 
+  // Unread, unpinned counts per category — what the inbox's stacks show, since
+  // the inbox itself only holds the pages loaded so far.
+  async getMyUnreadCountsByCategory(): Promise<{ categories: Record<string, number> }> {
+    const response = await api.get<{ categories: Record<string, number> }>('/notifications/my/unread-by-category');
+    return response.data;
+  },
+
+  async markMyCategoryRead(category: string): Promise<{ marked_read: number }> {
+    const response = await api.post<{ marked_read: number }>('/notifications/my/read-category', null, {
+      params: { category },
+    });
+    return response.data;
+  },
+
   async markAllMyNotificationsRead(): Promise<{ marked_read: number }> {
     const response = await api.post<{ marked_read: number }>('/notifications/my/read-all');
     return response.data;
@@ -303,7 +317,58 @@ export interface ExpiringCertification {
   status: string;
 }
 
+/** One kind of member email, as classified by the backend's email policy. */
+export interface MemberEmailKind {
+  key: string;
+  label: string;
+  required: boolean;
+  default_on: boolean;
+  audience: 'members' | 'officers';
+  includes: string[];
+  rationale: string;
+  legacy_preference: string | null;
+  /** An optional email this department's leadership has made required. */
+  department_required: boolean;
+}
+
+/** One alert the backend permits to escalate to a text message. */
+export interface MemberTextAlert {
+  key: string;
+  label: string;
+  description: string;
+  email_kind: string;
+}
+
+export interface MemberEmailPolicy {
+  emails: MemberEmailKind[];
+  texts: MemberTextAlert[];
+  text_conditions: string[];
+  /** Whether the caller may change which optional emails are required. */
+  can_edit: boolean;
+}
+
+const normalizeMemberEmailPolicy = (data: MemberEmailPolicy): MemberEmailPolicy => ({
+  emails: asArray(data.emails),
+  texts: asArray(data.texts),
+  text_conditions: asArray(data.text_conditions),
+  can_edit: Boolean(data.can_edit),
+});
+
 export const emailTemplatesService = {
+  /** Every member email and text, and whether members can opt out. Read-only. */
+  async getMemberEmailPolicy(): Promise<MemberEmailPolicy> {
+    const response = await api.get<MemberEmailPolicy>('/email-templates/member-email-policy');
+    return normalizeMemberEmailPolicy(response.data);
+  },
+
+  /** Replace the list of optional emails this department makes required. */
+  async updateMemberEmailPolicy(requiredKinds: string[]): Promise<MemberEmailPolicy> {
+    const response = await api.put<MemberEmailPolicy>('/email-templates/member-email-policy', {
+      required_kinds: requiredKinds,
+    });
+    return normalizeMemberEmailPolicy(response.data);
+  },
+
   async getTemplates(): Promise<EmailTemplate[]> {
     const response = await api.get<EmailTemplate[]>('/email-templates');
     return asArray(response.data);

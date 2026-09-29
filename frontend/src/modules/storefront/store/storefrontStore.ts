@@ -71,7 +71,7 @@ export const useStorefrontStore = create<StorefrontState>((set, get) => ({
     } catch (err: unknown) {
       set({
         isLoading: false,
-        error: getErrorMessage(err, 'Failed to load the store'),
+        error: getErrorMessage(err, 'Could not load the store'),
       });
     }
   },
@@ -84,7 +84,7 @@ export const useStorefrontStore = create<StorefrontState>((set, get) => ({
     } catch (err: unknown) {
       set({
         isLoading: false,
-        error: getErrorMessage(err, 'Failed to load your orders'),
+        error: getErrorMessage(err, 'Could not load your orders'),
       });
     }
   },
@@ -164,7 +164,7 @@ export const useStorefrontStore = create<StorefrontState>((set, get) => ({
       set({ isSubmitting: false, cart: [] });
       return order;
     } catch (err: unknown) {
-      const message = getErrorMessage(err, 'Failed to place your order');
+      const message = getErrorMessage(err, 'Could not place your order');
       set({ isSubmitting: false, error: message });
       throw new Error(message, { cause: err });
     }

@@ -60,6 +60,15 @@ def _load(pattern: str):
 
 MIGRATION = _load("*_15c5bc7700aa_*.py")
 
+# Template types introduced after 15c5bc7700aa froze the defaults. No stored
+# row can hold one of these from before that revision, so there is nothing for
+# the reset to carry and it rightly does not freeze them. Each entry names the
+# revision that widened the enum to admit it; a type missing here and from the
+# freeze is a default that shipped without a migration.
+_ADDED_AFTER_THE_FREEZE = {
+    EmailTemplateType.EQUIPMENT_REQUEST_UPDATE.value: "fb7da5b05833",
+}
+
 
 def _contrast(fg: str, bg: str) -> float:
     """WCAG 2.1 relative-contrast ratio between two hex colours."""
@@ -432,7 +441,7 @@ class TestTheMigrationsFrozenDefaults:
         # ba5c348d7045 carries the event reminder's body on (it gained the
         # date tile); its own test pins that the pair lines up.
         date_tile = _load("*_ba5c348d7045_*.py")
-        assert set(MIGRATION.DEFAULTS) == set(_DEFAULTS)
+        assert set(MIGRATION.DEFAULTS) == set(_DEFAULTS) - set(_ADDED_AFTER_THE_FREEZE)
         for template_type, frozen in MIGRATION.DEFAULTS.items():
             shipped = _DEFAULTS[template_type]
             assert frozen["subject"] == shipped["subject"], template_type
@@ -446,6 +455,16 @@ class TestTheMigrationsFrozenDefaults:
             assert frozen["header_accent"] == shipped["accent"], template_type
             assert frozen["status_chip"] == shipped["chip"], template_type
             assert frozen["layout"] == shipped["layout"], template_type
+
+    @pytest.mark.parametrize(
+        ("template_type", "revision"), sorted(_ADDED_AFTER_THE_FREEZE.items())
+    )
+    def test_a_type_added_after_the_freeze_is_admitted_by_its_migration(
+        self, template_type, revision
+    ):
+        widening = _load(f"*_{revision}_*.py")
+        assert template_type in widening.ALL_TYPES
+        assert template_type not in MIGRATION.DEFAULTS
 
     def test_the_backup_table_matches_the_model(self):
         from app.models.email_template import EmailTemplateBackup

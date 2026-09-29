@@ -192,7 +192,7 @@ const FieldEditor = ({
     if (needsOptions) {
       const validOptions = options.filter((o) => o.label.trim() && o.value.trim());
       if (validOptions.length === 0) {
-        errs.options = 'At least one option is required';
+        errs.options = 'Add at least one option';
       }
     }
 
@@ -200,7 +200,7 @@ const FieldEditor = ({
       try {
         new RegExp(validationPattern);
       } catch {
-        errs.validation = 'Invalid regular expression pattern';
+        errs.validation = "This isn't a valid regular expression";
       }
     }
 
@@ -484,7 +484,7 @@ const FieldEditor = ({
                           <p className="mt-1 text-xs text-red-700 dark:text-red-400">{errors.validation}</p>
                         )}
                         <p className="text-theme-text-muted mt-1 text-[10px]">
-                          JavaScript regex pattern. Value must match the entire input.
+                          A JavaScript regular expression. Start it with ^ and end it with $ to match the whole answer.
                         </p>
                       </div>
                     )}

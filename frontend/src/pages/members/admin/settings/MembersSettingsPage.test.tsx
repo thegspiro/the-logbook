@@ -15,9 +15,11 @@ import { screen, waitFor } from '@testing-library/react';
 import { renderWithRouter } from '../../../../test/utils';
 
 const mockGetSettings = vi.fn();
+const mockPreview = vi.fn();
 vi.mock('../../../../services/userServices', () => ({
   organizationService: {
     getSettings: (...args: unknown[]) => mockGetSettings(...args) as unknown,
+    previewNextMembershipId: (...args: unknown[]) => mockPreview(...args) as unknown,
     updateContactInfoSettings: vi.fn(),
     updateMembershipIdSettings: vi.fn(),
   },
@@ -60,6 +62,8 @@ describe('MembersSettingsPage', () => {
       contact_info_visibility: { enabled: true, show_email: true, show_phone: false, show_mobile: false },
       membership_id: { enabled: true, auto_generate: true, prefix: 'FD-', next_number: 7 },
     });
+    mockPreview.mockReset();
+    mockPreview.mockResolvedValue({ enabled: true, next_id: 'FD-0007' });
     mockGetRanks.mockResolvedValue([]);
     mockValidateRanks.mockResolvedValue({ issues: [], total: 0 });
     granted.current = ['members.manage', 'settings.manage', 'settings.edit'];
@@ -90,7 +94,7 @@ describe('MembersSettingsPage', () => {
     // looking at.
     await waitFor(() => expect(window.location.pathname).toBe('/members/admin/settings/ranks'));
     expect(screen.queryByText('Contact Information Visibility')).not.toBeInTheDocument();
-    expect(screen.queryByText(/does not hold that grant/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/cannot change any of these settings/)).not.toBeInTheDocument();
   });
 
   // EVOC is the one section gated on another module entirely: the levels are
@@ -113,7 +117,7 @@ describe('MembersSettingsPage', () => {
 
     renderWithRouter(<MembersSettingsPage section="visibility" />);
 
-    expect(await screen.findByText(/does not hold that grant/)).toBeInTheDocument();
+    expect(await screen.findByText(/cannot change any of these settings/)).toBeInTheDocument();
     expect(screen.queryByText('Show Contact Information')).not.toBeInTheDocument();
   });
 
@@ -149,6 +153,16 @@ describe('MembersSettingsPage', () => {
 
     await waitFor(() => expect(window.location.pathname).toBe('/members/admin/settings/ids'));
     expect(screen.queryByText('Contact Information Visibility')).not.toBeInTheDocument();
+  });
+
+  // Add Member previews the server's ID ("FD-0007"); this screen once printed
+  // its own rendering ("FD-7"), so the two disagreed about what would be
+  // issued. It now shows the server's preview, the one formatter there is.
+  it('shows the next membership ID the server will issue', async () => {
+    renderWithRouter(<MembersSettingsPage section="ids" />);
+
+    expect(await screen.findByText('Next: FD-0007')).toBeInTheDocument();
+    expect(mockPreview).toHaveBeenCalled();
   });
 
   it('says the settings did not load rather than showing defaults as the answer', async () => {

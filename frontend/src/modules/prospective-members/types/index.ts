@@ -687,6 +687,39 @@ export interface ConvertApplicantResponse {
   welcome_email_sent: boolean;
 }
 
+/** An approver role a Multi-Signer Approval stage asks for. */
+export interface SignOffRole {
+  role: string;
+  label: string;
+}
+
+export interface RequiredSignOffRole extends SignOffRole {
+  signed: boolean;
+}
+
+/**
+ * A stage waiting on the signed-in member's signature. Carries the
+ * applicant's name and stage only: a signer is authorized by the role they
+ * hold, not by access to the applicant's file.
+ */
+export interface PendingSignOff {
+  prospect_id: string;
+  first_name: string;
+  last_name: string;
+  pipeline_name: string | null;
+  step_id: string;
+  step_name: string;
+  step_description: string | null;
+  roles_to_sign: SignOffRole[];
+  required_roles: RequiredSignOffRole[];
+}
+
+export interface SignOffResult {
+  prospect_id: string;
+  step_id: string;
+  step_completed: boolean;
+}
+
 // Public application status
 /**
  * An action the applicant can take on their current stage, surfaced on the

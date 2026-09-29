@@ -627,10 +627,66 @@ Training provider integrations are configured from **Training Admin > Integratio
 Available training providers:
 
 - **Vector Solutions** — Category catalog fetch, credit hours, auto-sync
-- **Target Solutions** — Training record import
+- **Target Solutions** — Course and activity completions from the Training Records API (see below)
 - **Lexipol** — Policy training sync
 - **iAmResponding** — Response tracking
 - **Custom API** — Generic webhook-based provider
+
+### Setting up Target Solutions
+
+Target Solutions provides a **Training Records API** URL that looks like
+`https://app.targetsolutions.com/tsapp/api/?action=reports.buildReport&reportType=completionsall&key=…&secret=…`.
+Split it into three fields rather than pasting it whole:
+
+| Field        | Enter                                        |
+| ------------ | -------------------------------------------- |
+| API Base URL | `https://app.targetsolutions.com/tsapp/api/` |
+| API Key      | the value after `key=`                       |
+| API Secret   | the value after `secret=`                    |
+
+The key and secret are stored encrypted and are never returned by the API or
+shown again. A base URL that still contains a key, secret or token is
+rejected, because the base URL is stored in plain text. The credentials are
+also redacted from application logs, Sentry events, and any error message an
+officer sees.
+
+Each sync downloads the completions report for its date range. Members are
+matched by the report's **Email** column against their Logbook email (ignoring
+case and spaces; deleted members are skipped). A member who cannot be matched
+yet is listed under **User Mappings**, and is matched automatically on a later
+sync once their email is on file — unless an officer has already set or cleared
+that mapping by hand. Synced completions wait under **Imports** for an officer
+to import them, as for every provider.
+
+### Syncing on a schedule
+
+Turn on **Auto-Sync**. A Target Solutions provider then runs two kinds of sync:
+
+| Run                     | When                                                      | Asks Target Solutions for                                 |
+| ----------------------- | --------------------------------------------------------- | --------------------------------------------------------- |
+| **Pull**                | every hour by default (**Pull new completions**)          | completions since the last sync, at least since yesterday |
+| **Daily 30-day review** | once a day, 02:00 by default (**Daily 30-day review at**) | every completion from the last 30 days                    |
+
+Frequent pulls stay small, so a class someone finishes shows up under
+**Imports** within about an hour. The review exists because Target Solutions
+lets a completion be recorded for a past date, and a pull that only looks
+forward from the last sync would never ask for it. Records already synced are
+updated in place, matched by Transcript ID, so the overlap never creates
+duplicates.
+
+Details:
+
+- The review time is in the department's timezone and keeps its local time
+  across daylight-saving changes.
+- The scheduler checks every 30 minutes, so each run starts within 30 minutes
+  of its time.
+- A newly enabled provider starts with a review, so its first sync brings in
+  the last 30 days.
+- A review that fails is retried on the next run until one succeeds.
+- Auto-sync only runs for an active provider whose last **Test Connection**
+  passed. Run a connection test after saving the provider.
+- A completion **deleted** in Target Solutions is not removed here, because the
+  report only lists completions that still exist.
 
 ---
 

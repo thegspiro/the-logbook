@@ -20,6 +20,7 @@ const ApplicationStatusPage = lazyWithRetry(() =>
 );
 const InterviewPage = lazyWithRetry(() => import('./pages/InterviewPage'));
 const ProspectLabelPrintPage = lazyWithRetry(() => import('./pages/ProspectLabelPrintPage'));
+const SignOffsPage = lazyWithRetry(() => import('./pages/SignOffsPage'));
 
 export const getProspectiveMembersRoutes = () => {
   return (
@@ -28,10 +29,13 @@ export const getProspectiveMembersRoutes = () => {
         path="/prospective-members/print-labels"
         element={
           <Suspense fallback={null}>
+            {/* View or manage, as the label API accepts: a coordinator holds
+                manage alone, and the pipeline's own Print Labels button sent
+                them to an Access Denied page. */}
             <ProtectedRoute
               requiredModule="prospective_members"
               moduleLabel="Prospective Members"
-              requiredPermission="prospective_members.view"
+              requiredAnyPermission={['prospective_members.view', 'prospective_members.manage']}
             >
               <ProspectLabelPrintPage />
             </ProtectedRoute>
@@ -65,6 +69,21 @@ export const getProspectiveMembersRoutes = () => {
           >
             <Suspense fallback={null}>
               <PipelineSettingsPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Sign-offs: no permission beyond the module. The officers a
+          Multi-Signer Approval stage names rarely hold prospective_members
+          access, and the server lists only stages asking for a role the
+          caller holds. */}
+      <Route
+        path="/prospective-members/sign-offs"
+        element={
+          <ProtectedRoute requiredModule="prospective_members" moduleLabel="Prospective Members">
+            <Suspense fallback={null}>
+              <SignOffsPage />
             </Suspense>
           </ProtectedRoute>
         }

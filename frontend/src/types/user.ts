@@ -5,6 +5,8 @@
 import type {
   ConsentStatus,
   EmailLinkDomainSource,
+  FiscalYearLabel,
+  MembershipYearBasis,
   MicrosoftAuthMethod,
   RejoinServiceCredit,
   SeparationStatus,
@@ -82,11 +84,29 @@ export const DEFAULT_PROFILE_VISIBILITY: ProfileVisibility = {
   address: false,
 };
 
+/**
+ * How member numbers are built. The server is the only formatter: read the
+ * number a pattern produces from `previewNextMembershipId`, never rebuild it
+ * here (CLAUDE.md pitfall #29).
+ */
 export interface MembershipIdSettings {
   enabled: boolean;
   auto_generate: boolean;
+  /** Text substituted for {PREFIX}. */
   prefix: string;
+  /** The counter: the next number to issue, never below `start_number`. */
   next_number: number;
+  /** Literal text plus {SEQ} (required), {PREFIX}, {YYYY} and {YY}. */
+  pattern: string;
+  /** Minimum digits for {SEQ}; 1 means no padding. */
+  padding: number;
+  /** Where numbering begins, and where a yearly count restarts. */
+  start_number: number;
+  reset_yearly: boolean;
+  year_basis: MembershipYearBasis;
+  /** 1-12. */
+  fiscal_year_start_month: number;
+  fiscal_year_label: FiscalYearLabel;
 }
 
 export const DepartmentEmailFormat = {
@@ -122,6 +142,8 @@ export interface EmailLinkDomain {
   override_url?: string | null;
   source: EmailLinkDomainSource;
   is_loopback: boolean;
+  /** Only resolves inside a local network: links fail for anyone away from the station. */
+  is_private_network: boolean;
   is_https: boolean;
   email_enabled: boolean;
   /** Hosts an override may use: the ones this server accepts traffic on. */
@@ -213,6 +235,29 @@ export interface NotificationPreferences {
   sms_notifications: boolean;
   event_reminders: boolean;
   training_reminders: boolean;
+  /**
+   * Per-email choices keyed by the backend's EmailKind, e.g.
+   * `{ shift_notices: false }`. The backend merges these into what is
+   * stored, so sending one kind leaves the member's other choices alone.
+   */
+  email_kinds?: Record<string, boolean> | undefined;
+}
+
+/** One optional email a member may turn off, as `/users/me/email-choices` lists it. */
+export interface MemberEmailChoice {
+  key: string;
+  label: string;
+  audience: 'members' | 'officers';
+  includes: string[];
+  enabled: boolean;
+}
+
+export interface MemberEmailChoices {
+  email_notifications: boolean;
+  /** Optional emails the member decides on. Excludes any the department made required. */
+  choices: MemberEmailChoice[];
+  /** Labels of the emails this member receives whatever they choose. */
+  always_sent: string[];
 }
 
 export interface ContactInfoUpdate {

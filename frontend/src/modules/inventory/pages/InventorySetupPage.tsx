@@ -43,6 +43,7 @@ import {
 } from 'lucide-react';
 import { inventoryService, locationsService } from '../../../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { useAuthStore } from '../../../stores/authStore';
 import { ProgressSteps } from '../../../components/ux';
 import { ItemFormModal } from '../components/ItemFormModal';
 import type { CategoryPreset, InventoryCategory, InventorySetupStatus, Location, StorageAreaResponse } from '../types';
@@ -139,6 +140,12 @@ const InventorySetupPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   // Step 1 — room form
+  // This page is gated on inventory.manage, but a room is a location and
+  // POST /locations wants locations.create or locations.manage. Offering the
+  // form to a quartermaster without either only produced a 403 toast; the
+  // later steps work from the rooms that already exist.
+  const checkPermission = useAuthStore((state) => state.checkPermission);
+  const canAddRooms = checkPermission('locations.create') || checkPermission('locations.manage');
   const [roomName, setRoomName] = useState('');
   const [roomBuilding, setRoomBuilding] = useState('');
   const [roomNumber, setRoomNumber] = useState('');
@@ -393,50 +400,61 @@ const InventorySetupPage: React.FC = () => {
               }))}
             />
 
-            <form onSubmit={(e) => void addRoom(e)} className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-              <div className="sm:col-span-2">
-                <label htmlFor="setup-room-name" className="form-label">
-                  Room name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  id="setup-room-name"
-                  className="form-input"
-                  value={roomName}
-                  onChange={(e) => setRoomName(e.target.value)}
-                  placeholder="e.g. Gear Room"
-                />
-              </div>
-              <div>
-                <label htmlFor="setup-room-building" className="form-label">
-                  Building
-                </label>
-                <input
-                  id="setup-room-building"
-                  className="form-input"
-                  value={roomBuilding}
-                  onChange={(e) => setRoomBuilding(e.target.value)}
-                  placeholder="Station 1"
-                />
-              </div>
-              <div>
-                <label htmlFor="setup-room-number" className="form-label">
-                  Room #
-                </label>
-                <input
-                  id="setup-room-number"
-                  className="form-input"
-                  value={roomNumber}
-                  onChange={(e) => setRoomNumber(e.target.value)}
-                  placeholder="103"
-                />
-              </div>
-              <div className="sm:col-span-4">
-                <button type="submit" disabled={savingRoom} className="btn-info btn-md inline-flex items-center gap-2">
-                  {savingRoom ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                  Add room
-                </button>
-              </div>
-            </form>
+            {!canAddRooms ? (
+              <p className="text-theme-text-secondary text-sm">
+                Adding a room needs permission to create locations, which your position does not have. Use a room listed
+                above, or ask someone who manages locations to add the one you need.
+              </p>
+            ) : (
+              <form onSubmit={(e) => void addRoom(e)} className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+                <div className="sm:col-span-2">
+                  <label htmlFor="setup-room-name" className="form-label">
+                    Room name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="setup-room-name"
+                    className="form-input"
+                    value={roomName}
+                    onChange={(e) => setRoomName(e.target.value)}
+                    placeholder="e.g. Gear Room"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="setup-room-building" className="form-label">
+                    Building
+                  </label>
+                  <input
+                    id="setup-room-building"
+                    className="form-input"
+                    value={roomBuilding}
+                    onChange={(e) => setRoomBuilding(e.target.value)}
+                    placeholder="Station 1"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="setup-room-number" className="form-label">
+                    Room #
+                  </label>
+                  <input
+                    id="setup-room-number"
+                    className="form-input"
+                    value={roomNumber}
+                    onChange={(e) => setRoomNumber(e.target.value)}
+                    placeholder="103"
+                  />
+                </div>
+                <div className="sm:col-span-4">
+                  <button
+                    type="submit"
+                    disabled={savingRoom}
+                    className="btn-info btn-md inline-flex items-center gap-2"
+                  >
+                    {savingRoom ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                    Add room
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </StepShell>
       )}

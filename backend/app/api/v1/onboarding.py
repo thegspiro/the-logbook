@@ -1304,7 +1304,7 @@ def _membership_id_settings(data: OrganizationSetupCreate) -> dict:
     """
     if data.membership_id is None:
         return {}
-    return {"membership_id": data.membership_id.model_dump()}
+    return {"membership_id": data.membership_id.model_dump(mode="json")}
 
 
 @router.post("/organization", response_model=OrganizationSetupResponse)

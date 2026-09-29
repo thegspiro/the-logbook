@@ -2,10 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
+import toast from 'react-hot-toast';
 import { EventDetailPage } from './EventDetailPage';
+import { electionService } from '../services/electionService';
+import { applicantService } from '../modules/prospective-members/services/api';
 import * as apiModule from '../services/api';
 import type { Event, EventStats, RSVP } from '../types/event';
 import type { CurrentUser } from '../types/auth';
+import type { TrainingSessionResponse } from '../services/api';
 
 /** Create a mock API error object (not a Promise) */
 function makeApiError(message: string, status = 400) {
@@ -32,11 +36,35 @@ vi.mock('../services/api', () => ({
     recordActualTimes: vi.fn(),
     finalizeAttendance: vi.fn(),
     reopenAttendance: vi.fn(),
+    endEvent: vi.fn(),
   },
 }));
 
-vi.mock('../components/event-detail/TrainingSessionLinkageCard', () => ({
-  default: () => null,
+// The card is tested on its own. Here it only reports a session, the way the
+// real one does once its fetch settles, and records the props the page gives it.
+const mockCardProps = vi.fn();
+let mockReportedSession: Partial<TrainingSessionResponse> | null = null;
+vi.mock('../components/event-detail/TrainingSessionLinkageCard', async () => {
+  const { useEffect } = await import('react');
+  const MockTrainingSessionLinkageCard = (props: { onSessionChange?: (session: unknown) => void }) => {
+    mockCardProps(props);
+    const { onSessionChange } = props;
+    useEffect(() => {
+      onSessionChange?.(mockReportedSession);
+    }, [onSessionChange]);
+    return null;
+  };
+  return { default: MockTrainingSessionLinkageCard };
+});
+
+// Neither is under test here. Left real, each sends a live request whose
+// failure ends in the auth redirect, which jsdom reports as "Not implemented:
+// navigation to another Document" in the middle of unrelated tests.
+vi.mock('../services/electionService', () => ({
+  electionService: { getElectionsByEvent: vi.fn() },
+}));
+vi.mock('../modules/prospective-members/services/api', () => ({
+  applicantService: { getApplicants: vi.fn() },
 }));
 
 // Mock react-hot-toast
@@ -137,6 +165,8 @@ describe('EventDetailPage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockReportedSession = null;
+    mockCardProps.mockReset();
     mockCheckPermission.mockReturnValue(false);
     mockAuthState.checkPermission = mockCheckPermission;
     mockAuthState.user = null;
@@ -144,6 +174,16 @@ describe('EventDetailPage', () => {
     // implementations but not the mock itself, so without this the member
     // roster fetch resolves undefined in blocks that never mention it.
     vi.mocked(eventService.getEventAttendees).mockResolvedValue([]);
+    vi.mocked(electionService.getElectionsByEvent).mockReset();
+    vi.mocked(electionService.getElectionsByEvent).mockResolvedValue([]);
+    vi.mocked(applicantService.getApplicants).mockReset();
+    vi.mocked(applicantService.getApplicants).mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      page_size: 25,
+      total_pages: 0,
+    });
   });
 
   describe('Loading State', () => {
@@ -685,13 +725,11 @@ describe('EventDetailPage', () => {
 
       // Modal should be open
       await waitFor(() => {
-        expect(
-          screen.getByText('This action cannot be undone. The event will be marked as cancelled.')
-        ).toBeInTheDocument();
+        expect(screen.getByText("The event will be marked Cancelled. You can't undo this.")).toBeInTheDocument();
       });
 
       // Fill in reason
-      const reasonInput = screen.getByPlaceholderText(/please provide a reason/i);
+      const reasonInput = screen.getByPlaceholderText(/why is this event being cancelled/i);
       await user.type(reasonInput, 'The venue is no longer available for this date');
 
       // Submit via the modal's submit button (type="submit")
@@ -732,11 +770,11 @@ describe('EventDetailPage', () => {
       await user.click(firstCancelBtn);
 
       // Check the notifications checkbox
-      const notifyCheckbox = screen.getByLabelText(/send cancellation notifications/i);
+      const notifyCheckbox = screen.getByLabelText(/notify members who rsvp'd going or maybe/i);
       await user.click(notifyCheckbox);
 
       // Fill in reason and submit
-      const reasonInput = screen.getByPlaceholderText(/please provide a reason/i);
+      const reasonInput = screen.getByPlaceholderText(/why is this event being cancelled/i);
       await user.type(reasonInput, 'Weather emergency - event postponed');
 
       const submitButtons2 = screen.getAllByRole('button', { name: /cancel event/i });
@@ -783,7 +821,9 @@ describe('EventDetailPage', () => {
 
       await waitFor(() => {
         expect(screen.getByText('Delete Event')).toBeInTheDocument();
-        expect(screen.getByText(/are you sure you want to permanently delete/i)).toBeInTheDocument();
+        expect(
+          screen.getByText(/permanently delete .*its rsvps and attendance records are deleted too/i)
+        ).toBeInTheDocument();
       });
     });
 
@@ -817,7 +857,7 @@ describe('EventDetailPage', () => {
       });
     });
 
-    it('should close delete modal on Go Back', async () => {
+    it('should close delete modal on Keep Event', async () => {
       vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
       vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
       vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
@@ -834,10 +874,10 @@ describe('EventDetailPage', () => {
       const deleteButton = screen.getByRole('button', { name: /delete event/i });
       await user.click(deleteButton);
 
-      // Click Go Back
+      // Click Keep Event
       await waitFor(async () => {
-        const goBackButton = screen.getByRole('button', { name: /go back/i });
-        await user.click(goBackButton);
+        const keepButton = screen.getByRole('button', { name: /keep event/i });
+        await user.click(keepButton);
       });
 
       await waitFor(() => {
@@ -1076,6 +1116,70 @@ describe('EventDetailPage', () => {
       expect(screen.queryByText(label)).not.toBeInTheDocument();
     });
 
+    describe('once the card reports a training session', () => {
+      const trainingEvent = (custom: Record<string, unknown>) =>
+        ({ ...withCustomFields(custom), event_type: 'training' }) as unknown as Event;
+
+      it('leaves course, type and hours to the card, which shows them live', async () => {
+        mockReportedSession = { id: 'sess-1', require_completion_confirmation: false };
+        vi.mocked(eventService.getEvent).mockResolvedValue(
+          trainingEvent({
+            course_name: 'Fire Behavior',
+            course_code: 'FB-1',
+            credit_hours: 4,
+            training_type: 'skills_practice',
+            instructor: 'Alex Rivera',
+          })
+        );
+
+        renderWithRouter(<EventDetailPage />);
+
+        expect(await screen.findByText('Alex Rivera')).toBeInTheDocument();
+        // Drawn until the card's fetch settles and reports the session.
+        await waitFor(() => expect(screen.queryByText('Fire Behavior')).not.toBeInTheDocument());
+        expect(screen.queryByText('FB-1')).not.toBeInTheDocument();
+        expect(screen.queryByText('4 hours')).not.toBeInTheDocument();
+        expect(screen.queryByText('Training Type')).not.toBeInTheDocument();
+      });
+
+      it('draws no card when those were the only training fields', async () => {
+        mockReportedSession = { id: 'sess-1', require_completion_confirmation: false };
+        vi.mocked(eventService.getEvent).mockResolvedValue(
+          trainingEvent({ course_name: 'Fire Behavior', credit_hours: 4 })
+        );
+
+        renderWithRouter(<EventDetailPage />);
+
+        await waitFor(() => expect(mockCardProps).toHaveBeenCalled());
+        await waitFor(() => expect(screen.queryByText('Training Session Details')).not.toBeInTheDocument());
+        expect(screen.queryByText('Fire Behavior')).not.toBeInTheDocument();
+      });
+
+      it('says credit is written at finalize, after approval when the session needs it', async () => {
+        mockReportedSession = { id: 'sess-1', require_completion_confirmation: true };
+        vi.mocked(eventService.getEvent).mockResolvedValue(trainingEvent({ auto_create_records: true }));
+
+        renderWithRouter(<EventDetailPage />);
+
+        expect(
+          await screen.findByText(
+            "Credited to members' training records when attendance is finalized after a training officer approves"
+          )
+        ).toBeInTheDocument();
+        expect(screen.queryByText(/automatically created when members check in/)).not.toBeInTheDocument();
+      });
+
+      it('says credit is written at finalize when no approval is needed', async () => {
+        vi.mocked(eventService.getEvent).mockResolvedValue(trainingEvent({ auto_create_records: true }));
+
+        renderWithRouter(<EventDetailPage />);
+
+        expect(
+          await screen.findByText("Credited to members' training records when attendance is finalized")
+        ).toBeInTheDocument();
+      });
+    });
+
     it('draws no card at all when only bookkeeping keys are present', async () => {
       // Otherwise every event the scheduler has touched carries an empty
       // purple "Training Session Details" box.
@@ -1089,6 +1193,291 @@ describe('EventDetailPage', () => {
         expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Monthly Business Meeting');
       });
       expect(screen.queryByText('Training Session Details')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Training events', () => {
+    // Pitfall #28: this block states every mock it depends on.
+    const pastTraining: Event = {
+      ...mockEvent,
+      title: 'Hose drill',
+      event_type: 'training',
+      start_datetime: '2025-04-15T18:00:00Z',
+      end_datetime: '2025-04-15T20:00:00Z',
+    };
+
+    beforeEach(() => {
+      mockCheckPermission.mockReset();
+      mockCheckPermission.mockReturnValue(true);
+      mockAuthState.checkPermission = mockCheckPermission;
+      mockAuthState.user = { id: 'admin-1', permissions: ['events.manage'] } as CurrentUser;
+      vi.mocked(eventService.getEvent).mockReset();
+      vi.mocked(eventService.getEvent).mockResolvedValue(pastTraining);
+      vi.mocked(eventService.getEventRSVPs).mockReset();
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue(mockRSVPs);
+      vi.mocked(eventService.getEventStats).mockReset();
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+      vi.mocked(eventService.finalizeAttendance).mockReset();
+      vi.mocked(eventService.endEvent).mockReset();
+      vi.mocked(eventService.recordActualTimes).mockReset();
+    });
+
+    const finalizeWith = async (result: Awaited<ReturnType<typeof eventService.finalizeAttendance>>) => {
+      vi.mocked(eventService.finalizeAttendance).mockResolvedValue(result);
+      const user = userEvent.setup();
+      renderWithRouter(<EventDetailPage />);
+      await user.click(await screen.findByRole('button', { name: 'Finalize Attendance' }));
+      await user.click(await screen.findByRole('button', { name: /finalize and close/i }));
+      await waitFor(() => expect(eventService.finalizeAttendance).toHaveBeenCalledWith('evt-1'));
+    };
+
+    it('gives the card what it needs to describe the event', async () => {
+      mockCheckPermission.mockImplementation((perm: string) => perm === 'training.manage');
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...pastTraining,
+        attendance_finalized_at: '2025-04-15T20:30:00Z',
+      });
+
+      renderWithRouter(<EventDetailPage />);
+
+      await waitFor(() =>
+        expect(mockCardProps).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            eventId: 'evt-1',
+            eventTitle: 'Hose drill',
+            canManage: false,
+            canApprove: true,
+            attendanceFinalized: true,
+            refreshKey: 0,
+          })
+        )
+      );
+    });
+
+    it('states how finalizing credits a Training event before it does so', async () => {
+      mockReportedSession = { id: 'sess-1', require_completion_confirmation: true };
+      const user = userEvent.setup();
+      renderWithRouter(<EventDetailPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Finalize Attendance' }));
+
+      expect(
+        await screen.findByText(/writes a training record for each checked-in member with time to credit/)
+      ).toBeInTheDocument();
+      expect(screen.getByText(/comes from Edit Times first, then a real check-out or End Event/)).toBeInTheDocument();
+      expect(
+        screen.getByText('Members with no credited time get no training record, so set their times first.')
+      ).toBeInTheDocument();
+      expect(screen.getByText(/Credit waits for a training officer's approval/)).toBeInTheDocument();
+      expect(screen.getByText('Earlier admin-hours entries for this event are removed.')).toBeInTheDocument();
+    });
+
+    it('does not mention an approval the session does not need', async () => {
+      mockReportedSession = { id: 'sess-1', require_completion_confirmation: false };
+      const user = userEvent.setup();
+      renderWithRouter(<EventDetailPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Finalize Attendance' }));
+
+      expect(
+        await screen.findByText(/writes a training record for each checked-in member with time to credit/)
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/Credit waits for a training officer's approval/)).not.toBeInTheDocument();
+    });
+
+    it('reports the records completed and the admin-hours entries removed', async () => {
+      await finalizeWith({
+        updated_count: 3,
+        training_credit: true,
+        training_records_completed: 3,
+        training_approval_pending: false,
+        training_attendees_uncredited: 0,
+        training_uncredited_names: [],
+        admin_hours_entries_removed: 2,
+      });
+
+      await waitFor(() =>
+        expect(toast.success).toHaveBeenCalledWith(
+          'Attendance finalized. 3 training records completed. 2 admin-hours entries removed'
+        )
+      );
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('reports credit waiting on a training officer', async () => {
+      await finalizeWith({
+        updated_count: 4,
+        training_credit: true,
+        training_records_completed: 0,
+        training_approval_pending: true,
+        training_attendees_pending: 4,
+      });
+
+      await waitFor(() =>
+        expect(toast.success).toHaveBeenCalledWith(
+          'Attendance finalized. Waiting for training officer approval (4 members)'
+        )
+      );
+    });
+
+    it('names the members who got no record, as an error', async () => {
+      await finalizeWith({
+        updated_count: 3,
+        training_credit: true,
+        training_records_completed: 1,
+        training_attendees_uncredited: 2,
+        training_uncredited_names: ['Sam Lee', 'Ana Ortiz'],
+      });
+
+      await waitFor(() =>
+        expect(toast.error).toHaveBeenCalledWith(
+          'No time to credit for: Sam Lee, Ana Ortiz — set their times, then reopen and finalize again',
+          expect.objectContaining({ duration: expect.any(Number) as unknown })
+        )
+      );
+      expect(toast.success).toHaveBeenCalledWith('Attendance finalized. 1 training record completed');
+    });
+
+    it('counts the rest rather than naming a long list', async () => {
+      const names = ['A One', 'B Two', 'C Three', 'D Four', 'E Five', 'F Six', 'G Seven'];
+      await finalizeWith({
+        updated_count: 7,
+        training_credit: true,
+        training_attendees_uncredited: 7,
+        training_uncredited_names: names,
+      });
+
+      await waitFor(() =>
+        expect(toast.error).toHaveBeenCalledWith(
+          'No time to credit for: A One, B Two, C Three, D Four, E Five and 2 more — set their times, then reopen and finalize again',
+          expect.anything()
+        )
+      );
+    });
+
+    it('keeps the member count for an event that credits no training', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({ ...pastTraining, event_type: 'business_meeting' });
+      await finalizeWith({ updated_count: 2, training_credit: false });
+
+      await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Attendance finalized for 2 members'));
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('has the card refetch after a finalize', async () => {
+      await finalizeWith({ updated_count: 1, training_credit: true, training_records_completed: 1 });
+
+      await waitFor(() => expect(mockCardProps).toHaveBeenLastCalledWith(expect.objectContaining({ refreshKey: 1 })));
+    });
+
+    describe('End Event', () => {
+      const ongoingTraining: Event = { ...pastTraining, end_datetime: '2099-04-15T20:00:00Z' };
+
+      const endWith = async (result: Awaited<ReturnType<typeof eventService.endEvent>>) => {
+        vi.mocked(eventService.getEvent).mockResolvedValue(ongoingTraining);
+        vi.mocked(eventService.endEvent).mockResolvedValue(result);
+        const user = userEvent.setup();
+        renderWithRouter(<EventDetailPage />);
+        await user.click(await screen.findByRole('button', { name: 'End Event' }));
+        await user.click(await screen.findByRole('button', { name: 'End Event Now' }));
+        await waitFor(() => expect(eventService.endEvent).toHaveBeenCalledWith('evt-1'));
+      };
+
+      it('reports the training credit alongside the check-outs', async () => {
+        await endWith({
+          checked_out_count: 2,
+          actual_end_time: '2026-09-29T20:00:00Z',
+          training_credit: true,
+          training_records_completed: 2,
+          training_attendees_uncredited: 1,
+          training_uncredited_names: ['Sam Lee'],
+        });
+
+        await waitFor(() =>
+          expect(toast.success).toHaveBeenCalledWith(
+            'Event ended — 2 members checked out. 2 training records completed'
+          )
+        );
+        expect(toast.error).toHaveBeenCalledWith(
+          'No time to credit for: Sam Lee — set their times, then reopen and finalize again',
+          expect.anything()
+        );
+        await waitFor(() => expect(mockCardProps).toHaveBeenLastCalledWith(expect.objectContaining({ refreshKey: 1 })));
+      });
+
+      it('keeps the plain wording when no training is credited', async () => {
+        await endWith({ checked_out_count: 1, actual_end_time: '2026-09-29T20:00:00Z', training_credit: false });
+
+        await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Event ended — 1 member checked out'));
+      });
+    });
+
+    describe('Record Times', () => {
+      const saveTimes = async () => {
+        const user = userEvent.setup();
+        renderWithRouter(<EventDetailPage />);
+        await user.click(await screen.findByRole('button', { name: /more/i }));
+        await user.click(screen.getByRole('button', { name: /record times/i }));
+        await user.click(screen.getByRole('button', { name: 'Save Times' }));
+        await waitFor(() => expect(eventService.recordActualTimes).toHaveBeenCalled());
+      };
+
+      it('warns when an end time was saved but attendance stayed open', async () => {
+        vi.mocked(eventService.recordActualTimes).mockResolvedValue({ ...pastTraining, attendance_finalized_at: null });
+
+        await saveTimes();
+
+        await waitFor(() =>
+          expect(toast.error).toHaveBeenCalledWith(
+            'Times recorded, but attendance could not be finalized. Try Finalize Attendance.'
+          )
+        );
+        await waitFor(() => expect(mockCardProps).toHaveBeenLastCalledWith(expect.objectContaining({ refreshKey: 1 })));
+      });
+
+      it('stays quiet when the end time finalized attendance', async () => {
+        vi.mocked(eventService.recordActualTimes).mockResolvedValue({
+          ...pastTraining,
+          attendance_finalized_at: '2025-04-15T20:30:00Z',
+        });
+
+        await saveTimes();
+
+        await waitFor(() => expect(eventService.getEvent).toHaveBeenCalledTimes(2));
+        expect(toast.error).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('once attendance is finalized', () => {
+      beforeEach(() => {
+        vi.mocked(eventService.getEvent).mockResolvedValue({
+          ...pastTraining,
+          attendance_finalized_at: '2025-04-15T20:30:00Z',
+          attendance_finalized_by_name: 'Pat Ramirez',
+        });
+      });
+
+      it('describes the lock in training terms', async () => {
+        renderWithRouter(<EventDetailPage />);
+
+        expect(
+          await screen.findByText(
+            /training records are written from this attendance, and attendance can no longer be changed/
+          )
+        ).toBeInTheDocument();
+        expect(screen.getByText(/Use Reopen Attendance to correct times or training details/)).toBeInTheDocument();
+      });
+
+      it('says what a reopen does to the training records and the approval', async () => {
+        const user = userEvent.setup();
+        renderWithRouter(<EventDetailPage />);
+
+        await user.click(await screen.findByRole('button', { name: /reopen attendance/i }));
+
+        expect(
+          await screen.findByText(/updates the training records already written rather than adding to them/)
+        ).toBeInTheDocument();
+        expect(screen.getByText(/finalizing again issues a new one/)).toBeInTheDocument();
+      });
     });
   });
 

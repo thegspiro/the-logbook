@@ -164,7 +164,7 @@ const NOTICE_GROUPS: NoticeGroup[] = [
         key: 'notifyAdminsOnOrder',
         notice: 'admin_new_order',
         label: 'New order alert',
-        detail: 'To store managers and the extra addresses below, each time an order lands.',
+        detail: 'To store managers and the extra addresses below, each time a member places an order.',
       },
     ],
   },
@@ -175,8 +175,7 @@ const NOTICE_GROUPS: NoticeGroup[] = [
         key: 'sendWindowOpened',
         notice: 'window_opened',
         label: 'Ordering is open',
-        detail:
-          'To every active member when a window opens. An individual window can still opt out of its own announcement.',
+        detail: 'To every active member when a window opens. Each window can also turn off its own announcement.',
       },
       {
         key: 'sendWindowClosingReminder',
@@ -194,7 +193,7 @@ const NOTICE_GROUPS: NoticeGroup[] = [
         key: 'sendVendorOrderUpdates',
         notice: 'vendor_order_placed',
         label: 'Order placed with the vendor',
-        detail: 'To everyone who ordered, when you record the vendor order — the update members chase.',
+        detail: 'To everyone who ordered, when you record the vendor order.',
       },
     ],
   },
@@ -211,7 +210,7 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
     try {
       setForm(toForm(await storefrontService.getSettings()));
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to load store settings'));
+      toast.error(getErrorMessage(err, 'Could not load store settings'));
     } finally {
       setLoading(false);
     }
@@ -321,15 +320,12 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
           <input
             type="checkbox"
             className="form-checkbox mt-0.5"
-            aria-label="Show prominent store status banner"
             checked={form.showOpenOrderBanner}
             onChange={(e) => update('showOpenOrderBanner', e.target.checked)}
           />
           <span>
             <span className="text-theme-text-primary block font-medium">Show the “Ordering is open” banner</span>
-            <span className="text-theme-text-muted block text-xs">
-              Turn this off for stores that are always open and do not need an availability callout.
-            </span>
+            <span className="text-theme-text-muted block text-xs">Turn this off if your store is always open.</span>
           </span>
         </label>
         <div className="form-grid-2">
@@ -401,8 +397,8 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
         <fieldset>
           <legend className="form-label">What happens to an unpaid order?</legend>
           <p className="text-theme-text-muted mb-2 text-xs">
-            Departments differ on this and all three are normal. You can change it whenever your practice changes — it
-            applies to what happens next, and never undoes a step already taken.
+            All three are common. You can change this at any time — it applies from then on and never undoes a step
+            already taken.
           </p>
           <div className="space-y-2">
             {PAYMENT_POLICY_OPTIONS.map((option) => {
@@ -704,8 +700,8 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
         <div>
           <h2 className="text-theme-text-primary text-sm font-semibold">Notifications</h2>
           <p className="text-theme-text-secondary mt-1 text-xs">
-            Every email the store can send is listed here. Unticking one stops it for the whole department; the
-            &ldquo;email members&rdquo; box on an individual action can still skip a single send.
+            Every email the store can send is listed here. Turning one off stops it for the whole department. To skip a
+            single send, untick the email box on that action instead.
           </p>
         </div>
 
@@ -773,7 +769,7 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
           </div>
           <div>
             <label htmlFor="settings-reminder-hours" className="form-label">
-              &ldquo;Closing soon&rdquo; reminder (hours before close)
+              Last call reminder (hours before close)
             </label>
             <input
               id="settings-reminder-hours"
@@ -788,7 +784,7 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
         </div>
         <div>
           <label htmlFor="settings-notify-emails" className="form-label">
-            Extra notification recipients (comma separated)
+            Extra recipients for new order alerts (comma-separated)
           </label>
           <input
             id="settings-notify-emails"

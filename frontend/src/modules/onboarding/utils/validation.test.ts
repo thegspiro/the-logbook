@@ -73,7 +73,7 @@ describe('onboarding validation utils', () => {
     it('rejects SVG, which can carry script', () => {
       const result = isValidImageFile(fileOf('logo.svg', 'image/svg+xml', 1024));
       expect(result.valid).toBe(false);
-      expect(result.error).toMatch(/valid image file/i);
+      expect(result.error).toMatch(/png, jpg, or webp image/i);
     });
 
     it('rejects a non-image MIME type', () => {
@@ -85,17 +85,19 @@ describe('onboarding validation utils', () => {
     it('rejects a valid MIME type carrying a mismatched extension', () => {
       const result = isValidImageFile(fileOf('logo.php', 'image/png', 1024));
       expect(result.valid).toBe(false);
-      expect(result.error).toBe('Invalid file extension');
+      expect(result.error).toBe('The file name must end in .png, .jpg, .jpeg, or .webp');
     });
 
     it('rejects a file with no extension at all', () => {
-      expect(isValidImageFile(fileOf('logo', 'image/png', 1024)).error).toBe('Invalid file extension');
+      expect(isValidImageFile(fileOf('logo', 'image/png', 1024)).error).toBe(
+        'The file name must end in .png, .jpg, .jpeg, or .webp'
+      );
     });
 
     it('rejects a file over the maximum size', () => {
       const result = isValidImageFile(fileOf('logo.png', 'image/png', MAX_AVATAR_SIZE + 1));
       expect(result.valid).toBe(false);
-      expect(result.error).toMatch(/less than 5MB/i);
+      expect(result.error).toMatch(/smaller than 5MB/i);
     });
 
     it('accepts a file at exactly the maximum size', () => {

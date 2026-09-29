@@ -35,6 +35,44 @@ def _is_loopback_url(url: str) -> bool:
     return addr.is_loopback or addr.is_unspecified
 
 
+# Hostname suffixes that only resolve inside a local network. ``.local`` is
+# mDNS (an Unraid box answers as ``tower.local``); ``.home.arpa`` is the
+# RFC 8375 home-network zone; the rest are the conventional router and
+# directory defaults. A public DNS name never ends in one of these.
+_PRIVATE_NETWORK_SUFFIXES = (
+    ".local",
+    ".lan",
+    ".internal",
+    ".intranet",
+    ".home.arpa",
+    ".localdomain",
+)
+
+
+def _is_private_network_url(url: str) -> bool:
+    """Whether *url* is reachable only from inside the station's own network.
+
+    Distinct from loopback, which only this machine can open: a private
+    address works for everyone at the station, so the app looks fine to the
+    people setting it up, while every emailed link and logo is dead for a
+    member reading on a phone at home. Covers private and link-local IPs,
+    local-only DNS suffixes, and single-label names (``http://tower``), which
+    only a local resolver can answer. Loopback is reported by
+    ``_is_loopback_url`` and is not repeated here.
+    """
+    if _is_loopback_url(url):
+        return False
+    try:
+        host = (urlsplit((url or "").strip()).hostname or "").lower()
+    except ValueError:
+        return False
+    try:
+        addr = ipaddress.ip_address(host)
+    except ValueError:
+        return "." not in host or host.endswith(_PRIVATE_NETWORK_SUFFIXES)
+    return addr.is_private or addr.is_link_local
+
+
 class Settings(BaseSettings):
     """
     Application settings loaded from environment variables
@@ -504,6 +542,20 @@ class Settings(BaseSettings):
                 "Set FRONTEND_URL to the address recipients use."
             )
 
+        # Non-blocking and in every environment: a station-only address is a
+        # legitimate choice for a department that reads its mail only on the
+        # station network, so it is reported rather than refused. It is also
+        # the failure nobody at the station can see, since every link works
+        # for them.
+        if self.EMAIL_ENABLED and _is_private_network_url(self.FRONTEND_URL):
+            warnings.append(
+                f"WARNING: FRONTEND_URL is {self.FRONTEND_URL!r}, which only "
+                "resolves inside a local network. Links and the logo in "
+                "outgoing email will not open for a member reading away from "
+                "the station. Set FRONTEND_URL to the site's public address "
+                "if members reach it from outside."
+            )
+
         # --- Additional production/staging checks ---
         if self.ENVIRONMENT in ("production", "staging"):
             # Blocking: every emailed link (password resets, ballots,
@@ -924,6 +976,7 @@ class Settings(BaseSettings):
             "override_url": self._frontend_url_override or None,
             "source": source,
             "is_loopback": _is_loopback_url(effective),
+            "is_private_network": _is_private_network_url(effective),
             "is_https": effective.lower().startswith("https://"),
             "email_enabled": bool(self.EMAIL_ENABLED),
             "allowed_hosts": self.link_domain_allowed_hosts(),

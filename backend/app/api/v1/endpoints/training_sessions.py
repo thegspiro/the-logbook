@@ -23,19 +23,44 @@ from app.api.dependencies import (
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.models.event import Event
-from app.models.training import TrainingSession
+from app.models.training import TrainingApproval, TrainingSession
 from app.models.user import User
 from app.schemas.training_session import (
     RecurringTrainingSessionCreate,
     TrainingApprovalRequest,
     TrainingApprovalResponse,
+    TrainingApprovalSummary,
+    TrainingSessionAttach,
     TrainingSessionCreate,
     TrainingSessionLinkageUpdate,
     TrainingSessionResponse,
 )
-from app.services.training_session_service import TrainingSessionService
+from app.services.event_service import ATTENDANCE_LOCKED_PREFIX
+from app.services.training_session_service import (
+    TRAINING_DETAILS_EXIST,
+    TrainingSessionService,
+)
 
 router = APIRouter()
+
+
+def _session_error(error: str) -> HTTPException:
+    """Map a session service error onto the right HTTP status.
+
+    A closed event (the attendance lock) and a second set of training details
+    are conflicts with the event's state, not bad requests; the lock's
+    sentinel prefix is stripped so the client shows only the sentence.
+    """
+    if error.startswith(ATTENDANCE_LOCKED_PREFIX):
+        return HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=error[len(ATTENDANCE_LOCKED_PREFIX) :],
+        )
+    if error == TRAINING_DETAILS_EXIST:
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error)
+    if error in ("Event not found", "Training session not found"):
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
 
 def _session_response(ts: TrainingSession) -> TrainingSessionResponse:
@@ -205,6 +230,90 @@ async def get_training_session_by_event(
     return _session_response(training_session)
 
 
+@router.post(
+    "/by-event/{event_id}",
+    response_model=TrainingSessionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def attach_training_details(
+    event_id: UUID,
+    details: TrainingSessionAttach,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Attach training details to an existing Training event
+
+    For a Training event made from Events → Create Event: picking a course,
+    category, training type or program requirement attaches a training
+    session, which files the attendance credit under them when attendance is
+    finalized. Refused (409) once attendance is finalized — reopen it first —
+    or when the event already has details.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = TrainingSessionService(db)
+    training_session, error = await service.attach_session_to_event(
+        event_id=event_id,
+        details=details,
+        organization_id=current_user.organization_id,
+        created_by=current_user.id,
+    )
+
+    if error:
+        raise _session_error(error)
+
+    await log_audit_event(
+        db=db,
+        event_type="training_session_updated",
+        event_category="training",
+        severity="info",
+        event_data={
+            "session_id": str(training_session.id),
+            "event_id": str(event_id),
+            "action": "attached",
+            "fields": sorted(details.model_dump(exclude_none=True).keys()),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return _session_response(training_session)
+
+
+@router.get("/by-event/{event_id}/approval", response_model=TrainingApprovalSummary)
+async def get_event_training_approval(
+    event_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("events.manage", "training.manage")
+    ),
+):
+    """
+    Where a Training event's attendance approval stands
+
+    For the event page: whether finalized credit is waiting on a training
+    officer, and — only for a caller who can approve it (training.manage) and
+    only while it is pending — the approval link's token, so they can go
+    straight to the review. 404 when the event has no approval.
+
+    **Authentication required**
+    **Requires permission: events.manage or training.manage**
+    """
+    summary = await TrainingSessionService(db).get_approval_summary_for_event(
+        event_id=event_id,
+        organization_id=current_user.organization_id,
+        include_token=user_has_permission(current_user, "training.manage"),
+    )
+    if summary is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No training approval for this event",
+        )
+    return TrainingApprovalSummary(**summary)
+
+
 @router.patch("/{training_session_id}", response_model=TrainingSessionResponse)
 async def update_training_session_linkage(
     training_session_id: UUID,
@@ -213,11 +322,12 @@ async def update_training_session_linkage(
     current_user: User = Depends(require_permission("events.manage")),
 ):
     """
-    Update a training session's requirement/program links
+    Update a training session's course, type and requirement/program links
 
-    Omitted fields are left untouched; explicit nulls clear a link. Links
-    steer how future attendance is credited — records already written at
-    finalization are not reflowed.
+    Omitted fields are left untouched; explicit nulls clear a link. A change
+    applies the next time the event's attendance is finalized, which rewrites
+    the members' records under it; while attendance is finalized it is
+    refused (409) — reopen attendance first.
 
     **Authentication required**
     **Requires permission: events.manage**
@@ -231,7 +341,7 @@ async def update_training_session_linkage(
     )
 
     if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+        raise _session_error(error)
 
     await log_audit_event(
         db=db,
@@ -259,8 +369,10 @@ async def finalize_training_session(
     """
     Finalize a training session after the event ends
 
-    This triggers the approval workflow by creating a TrainingApproval record
-    and sending email notifications to training officers.
+    Finalizes the session's event attendance, exactly as Finalize Attendance
+    on the event page does: the event is closed, members are credited, and a
+    session that requires confirmation leaves an approval for training
+    officers, who are emailed. Returns the approval that finalize issued.
 
     **Authentication required**
     **Requires permission: events.manage**
@@ -395,7 +507,7 @@ async def submit_training_approval(
     token: str,
     approval_data: TrainingApprovalRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("events.manage")),
+    current_user: User = Depends(require_permission("training.manage")),
 ):
     """
     Submit training approval with time adjustments
@@ -403,8 +515,12 @@ async def submit_training_approval(
     Training officers can approve attendance times, adjust check-in/check-out times,
     or override durations for individual members.
 
+    The same permission as the roster behind it (GET): approving is the
+    training officer's call, and an approver who cannot open the roster cannot
+    review what they are approving.
+
     **Authentication required**
-    **Requires permission: events.manage**
+    **Requires permission: training.manage**
     """
     service = TrainingSessionService(db)
 
@@ -420,13 +536,24 @@ async def submit_training_approval(
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
+    approval_id = (
+        await db.execute(
+            select(TrainingApproval.id).where(
+                TrainingApproval.approval_token == token,
+                TrainingApproval.organization_id == str(current_user.organization_id),
+            )
+        )
+    ).scalar_one_or_none()
+
     await log_audit_event(
         db=db,
         event_type="training_session_approved",
         event_category="training",
         severity="info",
+        # The token is the approval link's secret; the audit log names the
+        # approval by id instead of copying it into a table more people read.
         event_data={
-            "token": token,
+            "approval_id": approval_id,
             "attendee_count": len(approval_data.attendees),
         },
         user_id=str(current_user.id),

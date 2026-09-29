@@ -18,6 +18,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.services.cert_alert_service import CertAlertService
+from app.services.email_policy import EmailKind
 
 
 def _one(obj):
@@ -113,11 +114,11 @@ class TestMemberEmailEnabled:
         return CertAlertService(MagicMock())
 
     def test_no_prefs_defaults_enabled(self):
-        assert self._svc()._member_has_email_enabled(_member()) is True
+        assert self._svc()._member_has_email_enabled(_member(), frozenset()) is True
 
     def test_email_notifications_off(self):
         m = SimpleNamespace(notification_preferences={"email_notifications": False})
-        assert self._svc()._member_has_email_enabled(m) is False
+        assert self._svc()._member_has_email_enabled(m, frozenset()) is False
 
     def test_a_leftover_email_key_no_longer_suppresses_mail(self):
         # `email` was a second master switch that only this sender read, while
@@ -128,7 +129,7 @@ class TestMemberEmailEnabled:
         m = SimpleNamespace(
             notification_preferences={"email_notifications": True, "email": False}
         )
-        assert self._svc()._member_has_email_enabled(m) is True
+        assert self._svc()._member_has_email_enabled(m, frozenset()) is True
 
     def test_training_reminders_off(self):
         # Cert expiration alerts are training reminders; disabling that
@@ -139,7 +140,7 @@ class TestMemberEmailEnabled:
                 "training_reminders": False,
             }
         )
-        assert self._svc()._member_has_email_enabled(m) is False
+        assert self._svc()._member_has_email_enabled(m, frozenset()) is False
 
     def test_training_reminders_on(self):
         m = SimpleNamespace(
@@ -148,7 +149,14 @@ class TestMemberEmailEnabled:
                 "training_reminders": True,
             }
         )
-        assert self._svc()._member_has_email_enabled(m) is True
+        assert self._svc()._member_has_email_enabled(m, frozenset()) is True
+
+    def test_a_department_that_requires_training_reminders_overrides_the_member(
+        self,
+    ):
+        m = SimpleNamespace(notification_preferences={"email_notifications": False})
+        required = frozenset({EmailKind.TRAINING_REMINDERS})
+        assert self._svc()._member_has_email_enabled(m, required) is True
 
 
 class TestProcessAlertsGuards:

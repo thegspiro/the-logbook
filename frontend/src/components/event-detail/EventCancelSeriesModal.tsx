@@ -50,14 +50,14 @@ const EventCancelSeriesModal: React.FC<EventCancelSeriesModalProps> = ({
             onClick={onClose}
             className="btn-secondary text-theme-text-secondary mt-3 inline-flex w-full justify-center text-base font-medium shadow-xs focus:ring-offset-2 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
           >
-            Go Back
+            Keep Series
           </button>
         </>
       }
     >
       <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-500/30 dark:bg-red-500/10">
         <p className="text-sm text-red-800 dark:text-red-300">
-          This will cancel multiple events in this recurring series. This action cannot be undone.
+          The events in this series will be cancelled. You can&apos;t undo this.
         </p>
       </div>
 
@@ -93,7 +93,7 @@ const EventCancelSeriesModal: React.FC<EventCancelSeriesModalProps> = ({
           value={cancelReason}
           onChange={(e) => setCancelReason(e.target.value)}
           className="form-input mt-1 shadow-xs sm:text-sm"
-          placeholder="Please provide a reason for cancelling this series..."
+          placeholder="Why is this series being cancelled?"
         />
         <p className="text-theme-text-muted mt-1 text-xs">{cancelReason.length}/500 characters (minimum 10)</p>
       </div>

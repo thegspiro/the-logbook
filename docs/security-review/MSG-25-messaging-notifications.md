@@ -1256,6 +1256,8 @@ in CI.
 | POST   | `/notifications/logs/{id}/read`                     | `require_permission` | `notifications.manage`                            | org (any recipient)                | admin log view                         |
 | GET    | `/notifications/my`                                 | `get_current_user`   | —                                                 | self                               | cursor-paginated                       |
 | GET    | `/notifications/my/unread-count`                    | `get_current_user`   | —                                                 | self                               |                                        |
+| GET    | `/notifications/my/unread-by-category`              | `get_current_user`   | —                                                 | self                               | inbox stacks                           |
+| POST   | `/notifications/my/read-category`                   | `get_current_user`   | —                                                 | self (`recipient_id` filter)       | inbox stacks; skips pinned             |
 | POST   | `/notifications/my/read-all`                        | `get_current_user`   | —                                                 | self                               |                                        |
 | POST   | `/notifications/my/{id}/read`                       | `get_current_user`   | —                                                 | self (`user_id` filter)            |                                        |
 | POST   | `/notifications/my/{id}/pin`                        | `get_current_user`   | —                                                 | self (`user_id` filter)            |                                        |

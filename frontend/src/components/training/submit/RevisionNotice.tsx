@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pencil, RotateCcw } from 'lucide-react';
-import { formatCalendarDate } from '../../../utils/dateFormatting';
+import { useTimezone } from '../../../hooks/useTimezone';
+import { formatCalendarDate, formatDateCustom } from '../../../utils/dateFormatting';
 import { formatHours } from '../../../utils/hoursFormatting';
 import type { TrainingSubmission } from '../../../types/training';
 
@@ -9,6 +10,7 @@ export const RevisionNotice: React.FC<{
   onFix: () => void;
   onWithdraw: () => void;
 }> = ({ submission, onFix, onWithdraw }) => {
+  const tz = useTimezone();
   const meta = [
     `${formatHours(submission.hours_completed)}h`,
     formatCalendarDate(submission.completion_date, { month: 'short', day: 'numeric' }),
@@ -31,7 +33,9 @@ export const RevisionNotice: React.FC<{
           )}
           <p className="text-theme-text-muted text-xs">
             {submission.reviewed_at
-              ? `Returned ${formatCalendarDate(submission.reviewed_at.slice(0, 10), { month: 'short', day: 'numeric' })} · `
+              ? // reviewed_at is an instant, not a calendar date: its UTC day is the
+                // next day for an evening review west of Greenwich.
+                `Returned ${formatDateCustom(submission.reviewed_at, { month: 'short', day: 'numeric' }, tz)} · `
               : ''}
             Your hours are not counted yet
           </p>

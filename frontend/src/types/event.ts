@@ -174,6 +174,45 @@ export interface EventListItem {
   hour_category_label?: string | null;
 }
 
+/**
+ * Training details picked for a Training-type event. Picking any attaches a
+ * training session to the event, which files attendance credit under them;
+ * a Training event without any is still credited, as its title and
+ * Continuing Education. Every id is validated server-side against the org.
+ */
+export interface EventTrainingDetails {
+  course_id?: string | undefined;
+  category_id?: string | undefined;
+  program_id?: string | undefined;
+  phase_id?: string | undefined;
+  requirement_id?: string | undefined;
+  training_type?: string | undefined;
+}
+
+/**
+ * What finalizing a Training event credited. Present (defaulted) on every
+ * finalize and End Event response; `training_credit` is false for any other
+ * kind of event.
+ */
+export interface TrainingCreditReport {
+  training_credit?: boolean | undefined;
+  training_records_completed?: number | undefined;
+  training_approval_pending?: boolean | undefined;
+  training_attendees_pending?: number | undefined;
+  training_attendees_uncredited?: number | undefined;
+  training_uncredited_names?: string[] | undefined;
+  admin_hours_entries_removed?: number | undefined;
+}
+
+export interface FinalizeAttendanceResult extends TrainingCreditReport {
+  updated_count: number;
+}
+
+export interface EndEventResult extends TrainingCreditReport {
+  checked_out_count: number;
+  actual_end_time: string;
+}
+
 export interface EventCreate {
   title: string;
   description?: string | undefined;
@@ -209,6 +248,8 @@ export interface EventCreate {
   custom_fields?: Record<string, string | number | boolean | null> | undefined;
   attachments?: EventAttachment[] | undefined;
   is_draft?: boolean | undefined;
+  /** Only for event_type "training"; omit unless a detail was picked. */
+  training_details?: EventTrainingDetails | undefined;
 }
 
 export interface EventUpdate {
@@ -349,6 +390,13 @@ export interface QRCheckInData {
   require_checkout?: boolean | undefined;
   timezone?: string | undefined;
   allow_guest_check_in?: boolean | undefined;
+  /**
+   * Set by the server: whether attendance here is credited to members'
+   * training records (every Training event, when attendance is finalized).
+   */
+  records_training?: boolean | undefined;
+  /** Whether that credit waits for a training officer's approval. */
+  training_requires_approval?: boolean | undefined;
 }
 
 /** Public event detail shown on the unauthenticated guest sign-in page. */
@@ -470,24 +518,25 @@ export interface EventTemplate {
 }
 
 export interface EventTemplateCreate {
+  // `null` clears a field on update; a create omits blanks instead.
   name: string;
-  description?: string | undefined;
+  description?: string | null | undefined;
   event_type?: EventType | undefined;
-  default_title?: string | undefined;
-  default_description?: string | undefined;
+  default_title?: string | null | undefined;
+  default_description?: string | null | undefined;
   default_location_id?: string | undefined;
-  default_location?: string | undefined;
+  default_location?: string | null | undefined;
   default_location_details?: string | undefined;
-  default_duration_minutes?: number | undefined;
+  default_duration_minutes?: number | null | undefined;
   requires_rsvp?: boolean | undefined;
-  max_attendees?: number | undefined;
+  max_attendees?: number | null | undefined;
   is_mandatory?: boolean | undefined;
 
   allow_guests?: boolean | undefined;
   attendee_visibility?: 'members' | 'managers' | null | undefined;
-  check_in_window_type?: 'flexible' | 'strict' | 'window' | undefined;
-  check_in_minutes_before?: number | undefined;
-  check_in_minutes_after?: number | undefined;
+  check_in_window_type?: 'flexible' | 'strict' | 'window' | null | undefined;
+  check_in_minutes_before?: number | null | undefined;
+  check_in_minutes_after?: number | null | undefined;
   require_checkout?: boolean | undefined;
   send_reminders?: boolean | undefined;
   reminder_target?: 'going' | 'all' | 'none' | undefined;
@@ -538,6 +587,8 @@ export interface RecurringEventCreate {
   attachments?: EventAttachment[] | undefined;
   allowed_rsvp_statuses?: RSVPStatus[] | undefined;
   template_id?: string | undefined;
+  /** Attached to every occurrence; refused on a rolling series. */
+  training_details?: EventTrainingDetails | undefined;
 }
 
 // Event Attachments & Document Folder

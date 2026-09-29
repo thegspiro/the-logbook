@@ -40,6 +40,15 @@ import { Breadcrumbs } from '../../../components/ux';
 const STATUS_OPTIONS = ['pending', 'approved', 'ordered', 'partially_received', 'received', 'cancelled'] as const;
 const URGENCY_OPTIONS = ['low', 'normal', 'high', 'critical'] as const;
 
+const STATUS_LABELS: Record<string, string> = {
+  pending: 'Pending',
+  approved: 'Approved',
+  ordered: 'Ordered',
+  partially_received: 'Partially received',
+  received: 'Received',
+  cancelled: 'Cancelled',
+};
+
 const STATUS_COLORS: Record<string, string> = {
   pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
   approved: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
@@ -247,8 +256,11 @@ const ReorderFormModal: React.FC<{
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <label className={lbl}>Item Name *</label>
+            <label className={lbl} htmlFor="reorder-item-name">
+              Item Name *
+            </label>
             <input
+              id="reorder-item-name"
               className={inp}
               value={f.item_name}
               onChange={(e) => up('item_name', e.target.value)}
@@ -257,8 +269,15 @@ const ReorderFormModal: React.FC<{
             />
           </div>
           <div>
-            <label className={lbl}>Category</label>
-            <select className={inp} value={f.category_id} onChange={(e) => up('category_id', e.target.value)}>
+            <label className={lbl} htmlFor="reorder-category">
+              Category
+            </label>
+            <select
+              id="reorder-category"
+              className={inp}
+              value={f.category_id}
+              onChange={(e) => up('category_id', e.target.value)}
+            >
               <option value="">— Select —</option>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -268,8 +287,11 @@ const ReorderFormModal: React.FC<{
             </select>
           </div>
           <div>
-            <label className={lbl}>Quantity *</label>
+            <label className={lbl} htmlFor="reorder-quantity">
+              Quantity *
+            </label>
             <input
+              id="reorder-quantity"
               type="number"
               min="1"
               className={inp}
@@ -340,8 +362,11 @@ const ReorderFormModal: React.FC<{
               />
             </div>
             <div>
-              <label className={lbl}>Est. Unit Cost ($)</label>
+              <label className={lbl} htmlFor="reorder-est-cost">
+                Est. Unit Cost ($)
+              </label>
               <input
+                id="reorder-est-cost"
                 type="number"
                 min="0"
                 step="0.01"
@@ -351,8 +376,11 @@ const ReorderFormModal: React.FC<{
               />
             </div>
             <div>
-              <label className={lbl}>Expected Delivery</label>
+              <label className={lbl} htmlFor="reorder-delivery">
+                Expected Delivery
+              </label>
               <input
+                id="reorder-delivery"
                 type="date"
                 className={inp}
                 value={f.expected_delivery_date}
@@ -364,8 +392,15 @@ const ReorderFormModal: React.FC<{
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
-            <label className={lbl}>Urgency</label>
-            <select className={inp} value={f.urgency} onChange={(e) => up('urgency', e.target.value)}>
+            <label className={lbl} htmlFor="reorder-urgency">
+              Urgency
+            </label>
+            <select
+              id="reorder-urgency"
+              className={inp}
+              value={f.urgency}
+              onChange={(e) => up('urgency', e.target.value)}
+            >
               {URGENCY_OPTIONS.map((u) => (
                 <option key={u} value={u}>
                   {u.charAt(0).toUpperCase() + u.slice(1)}
@@ -374,8 +409,11 @@ const ReorderFormModal: React.FC<{
             </select>
           </div>
           <div className="sm:col-span-1">
-            <label className={lbl}>Notes</label>
+            <label className={lbl} htmlFor="reorder-notes">
+              Notes
+            </label>
             <textarea
+              id="reorder-notes"
               className={inp}
               rows={2}
               value={f.notes}
@@ -405,6 +443,12 @@ const ACTION_LABELS: Record<WorkflowAction, string> = {
   mark_ordered: 'Mark ordered',
   receive: 'Receive stock',
   cancel: 'Cancel request',
+};
+const ACTION_DONE: Record<WorkflowAction, string> = {
+  approve: 'Request approved',
+  mark_ordered: 'Marked as ordered',
+  receive: 'Stock received',
+  cancel: 'Request cancelled',
 };
 const WorkflowActionModal: React.FC<{
   isOpen: boolean;
@@ -440,7 +484,7 @@ const WorkflowActionModal: React.FC<{
       if (action === 'receive') {
         const qty = Number(quantity);
         if (qty <= 0 || !location.trim() || Number(unitCost) < 0 || unitCost === '') {
-          toast.error('Positive quantity, storage location, and unit cost are required');
+          toast.error('Enter a quantity above 0, a storage location, and a unit cost');
           return;
         }
         await inventoryService.receiveReorderStock(request.id, {
@@ -460,7 +504,7 @@ const WorkflowActionModal: React.FC<{
           ...(poNumber.trim() ? { purchase_order_number: poNumber.trim() } : {}),
         });
       }
-      toast.success(`${ACTION_LABELS[action]} completed`);
+      toast.success(ACTION_DONE[action]);
       onSaved();
       onClose();
     } catch (err: unknown) {
@@ -475,8 +519,15 @@ const WorkflowActionModal: React.FC<{
         {action === 'mark_ordered' && (
           <>
             <div>
-              <label className={lbl}>Vendor</label>
-              <select className={inp} value={vendorId} onChange={(e) => setVendorId(e.target.value)}>
+              <label className={lbl} htmlFor="reorder-order-vendor">
+                Vendor
+              </label>
+              <select
+                id="reorder-order-vendor"
+                className={inp}
+                value={vendorId}
+                onChange={(e) => setVendorId(e.target.value)}
+              >
                 <option value="">Select vendor</option>
                 {vendors
                   .filter((v) => v.is_active)
@@ -488,34 +539,60 @@ const WorkflowActionModal: React.FC<{
               </select>
             </div>
             <div>
-              <label className={lbl}>Purchase-order reference</label>
-              <input className={inp} value={poNumber} onChange={(e) => setPONumber(e.target.value)} />
+              <label className={lbl} htmlFor="reorder-po">
+                Purchase-order reference
+              </label>
+              <input id="reorder-po" className={inp} value={poNumber} onChange={(e) => setPONumber(e.target.value)} />
             </div>
           </>
         )}
-        {action === 'receive' && (
+        {action === 'receive' && !request?.item_id && (
+          // Receipts post stock onto a linked item, and the server refuses one
+          // without (W41-5). Nothing on this page links an item yet, so say so
+          // before the quartermaster fills in a form that can only be refused.
+          <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+            This request isn&apos;t linked to an inventory item, so its stock can&apos;t be received here. Receive it
+            against the item itself, then cancel this request.
+          </p>
+        )}
+        {action === 'receive' && request?.item_id && (
           <>
             <p className="text-theme-text-muted text-sm">
               Ordered {request?.quantity_requested ?? 0} · Received {request?.quantity_received ?? 0} · Outstanding{' '}
               {request?.quantity_outstanding ?? 0}
             </p>
             <div>
-              <label className={lbl}>Quantity received</label>
+              <label className={lbl} htmlFor="reorder-receive-qty">
+                Quantity received *
+              </label>
               <input
+                id="reorder-receive-qty"
                 type="number"
                 min="1"
+                required
                 className={inp}
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
               />
             </div>
             <div>
-              <label className={lbl}>Storage location</label>
-              <input required className={inp} value={location} onChange={(e) => setLocation(e.target.value)} />
+              <label className={lbl} htmlFor="reorder-receive-location">
+                Storage location *
+              </label>
+              <input
+                id="reorder-receive-location"
+                required
+                className={inp}
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+              />
             </div>
             <div>
-              <label className={lbl}>Unit cost ($)</label>
+              <label className={lbl} htmlFor="reorder-receive-cost">
+                Unit cost ($) *
+              </label>
               <input
+                id="reorder-receive-cost"
                 required
                 type="number"
                 min="0"
@@ -526,8 +603,15 @@ const WorkflowActionModal: React.FC<{
               />
             </div>
             <div>
-              <label className={lbl}>Lot number</label>
-              <input className={inp} value={lotNumber} onChange={(e) => setLotNumber(e.target.value)} />
+              <label className={lbl} htmlFor="reorder-receive-lot">
+                Lot number
+              </label>
+              <input
+                id="reorder-receive-lot"
+                className={inp}
+                value={lotNumber}
+                onChange={(e) => setLotNumber(e.target.value)}
+              />
             </div>
             {Number(quantity) > (request?.quantity_outstanding ?? 0) && (
               <label className="flex gap-2 text-sm">
@@ -536,6 +620,11 @@ const WorkflowActionModal: React.FC<{
               </label>
             )}
           </>
+        )}
+        {action === 'approve' && request && (
+          <p className="text-theme-text-secondary text-sm">
+            Approve ordering {request.quantity_requested} × {request.item_name}?
+          </p>
         )}
         {action === 'cancel' && (
           <p className="text-theme-text-secondary text-sm">
@@ -546,7 +635,10 @@ const WorkflowActionModal: React.FC<{
           <button type="button" onClick={onClose} className="btn-secondary btn-md">
             Back
           </button>
-          <button disabled={saving} className={action === 'cancel' ? 'btn-danger btn-md' : 'btn-info btn-md'}>
+          <button
+            disabled={saving || (action === 'receive' && !request?.item_id)}
+            className={action === 'cancel' ? 'btn-danger btn-md' : 'btn-info btn-md'}
+          >
             {saving ? 'Saving…' : action && ACTION_LABELS[action]}
           </button>
         </div>
@@ -667,6 +759,7 @@ export const ReorderRequestsPage: React.FC = () => {
               void load();
             }}
             className="btn-secondary btn-md"
+            aria-label="Refresh"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
@@ -731,15 +824,25 @@ export const ReorderRequestsPage: React.FC = () => {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <select className={inp + ' w-auto'} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+          <select
+            aria-label="Filter by status"
+            className={inp + ' w-auto'}
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
             <option value="">All Statuses</option>
             {STATUS_OPTIONS.map((s) => (
               <option key={s} value={s}>
-                {s.charAt(0).toUpperCase() + s.slice(1)}
+                {STATUS_LABELS[s] ?? s}
               </option>
             ))}
           </select>
-          <select className={inp + ' w-auto'} value={urgencyFilter} onChange={(e) => setUrgencyFilter(e.target.value)}>
+          <select
+            aria-label="Filter by urgency"
+            className={inp + ' w-auto'}
+            value={urgencyFilter}
+            onChange={(e) => setUrgencyFilter(e.target.value)}
+          >
             <option value="">All Urgencies</option>
             {URGENCY_OPTIONS.map((u) => (
               <option key={u} value={u}>
@@ -825,7 +928,7 @@ export const ReorderRequestsPage: React.FC = () => {
                         className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[req.status] ?? ''}`}
                       >
                         {STATUS_ICONS[req.status]}
-                        {req.status}
+                        {STATUS_LABELS[req.status] ?? req.status}
                       </span>
                     </td>
                     <td data-label="Urgency" className="px-4 py-3">

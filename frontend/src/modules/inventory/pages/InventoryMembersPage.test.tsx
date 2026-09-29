@@ -152,7 +152,7 @@ describe('InventoryMembersPage', () => {
     renderWithRouter(<InventoryMembersPage />);
     await screen.findByText('Jane Doe');
 
-    expect(screen.queryByRole('button', { name: 'Assign' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Assign items to/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Scan Member ID/ })).not.toBeInTheDocument();
   });
 
@@ -161,6 +161,26 @@ describe('InventoryMembersPage', () => {
     renderWithRouter(<InventoryMembersPage />);
     await screen.findByText('Jane Doe');
 
-    expect(screen.getByRole('button', { name: 'Assign' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Assign items to Jane Doe' })).toBeInTheDocument();
+  });
+
+  // Every row read "Assign", "Return", "Sizes": with 27 members a screen
+  // reader heard 27 identical buttons and could not tell whose they were.
+  it('names each row action after its member, and names the sort', async () => {
+    mockGetMembersSummary.mockResolvedValue({
+      members: [
+        makeMember(),
+        makeMember({ user_id: 'u-2', username: 'asmith', full_name: 'Al Smith', total_items: 0 }),
+      ],
+      total: 2,
+    });
+    renderWithRouter(<InventoryMembersPage />);
+    await screen.findByText('Jane Doe');
+
+    expect(screen.getByRole('button', { name: 'Assign items to Jane Doe' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Assign items to Al Smith' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Return items from Jane Doe' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit sizes for Al Smith' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Sort members' })).toHaveValue('name');
   });
 });

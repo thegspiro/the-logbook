@@ -135,6 +135,57 @@ describe('EventSelfCheckInPage', () => {
     });
   });
 
+  describe('Training record notice (workflow review W20-1)', () => {
+    // The success screen said "Training Record Created" for every training
+    // event, including ones with no session to record against.
+    beforeEach(() => {
+      // clearAllMocks leaves queued *Once values in place (CLAUDE.md #28).
+      vi.mocked(eventService.getQRCheckInData).mockReset();
+      vi.mocked(eventService.selfCheckIn).mockReset();
+    });
+
+    const checkIn = async (recordsTraining: boolean, requiresApproval = false) => {
+      vi.mocked(eventService.getQRCheckInData).mockResolvedValue({
+        ...mockQRCheckInData,
+        event_type: 'training',
+        records_training: recordsTraining,
+        training_requires_approval: requiresApproval,
+      });
+      vi.mocked(eventService.selfCheckIn).mockResolvedValue(mockRSVP);
+      const user = userEvent.setup();
+      renderWithRouter(<EventSelfCheckInPage />);
+      await user.click(await screen.findByRole('button', { name: /check in to this event/i }));
+      await screen.findByText("You're Checked In");
+    };
+
+    it('says attendance is credited when attendance is finalized', async () => {
+      await checkIn(true);
+      expect(screen.getByText('Training Record')).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          "Your attendance will be added to your training record when the event's attendance is finalized."
+        )
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/training officer approves/)).not.toBeInTheDocument();
+    });
+
+    it('says credit waits for a training officer when the session requires approval', async () => {
+      await checkIn(true, true);
+      expect(screen.getByText('Training Record')).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          "Your attendance will be added to your training record after a training officer approves the event's attendance."
+        )
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/when the event's attendance is finalized/)).not.toBeInTheDocument();
+    });
+
+    it('makes no training-record claim for a training event that records nothing', async () => {
+      await checkIn(false);
+      expect(screen.queryByText(/Training Record/)).not.toBeInTheDocument();
+    });
+  });
+
   describe('Successful Check-In Flow', () => {
     it('should disable button and show loading text during check-in', async () => {
       vi.mocked(eventService.getQRCheckInData).mockResolvedValue(mockQRCheckInData);
@@ -171,7 +222,7 @@ describe('EventSelfCheckInPage', () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByText('Successfully Checked In!')).toBeInTheDocument();
+        expect(screen.getByText("You're Checked In")).toBeInTheDocument();
         expect(screen.getByText(/You've been checked in to:/)).toBeInTheDocument();
       });
     });
@@ -192,7 +243,7 @@ describe('EventSelfCheckInPage', () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByText('Successfully Checked In!')).toBeInTheDocument();
+        expect(screen.getByText("You're Checked In")).toBeInTheDocument();
         expect(screen.getByText(/official check-in window/i)).toBeInTheDocument();
       });
     });
@@ -337,7 +388,7 @@ describe('EventSelfCheckInPage', () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByText('Successfully Checked In!')).toBeInTheDocument();
+        expect(screen.getByText("You're Checked In")).toBeInTheDocument();
       });
     });
   });
@@ -389,7 +440,7 @@ describe('EventSelfCheckInPage', () => {
       renderWithRouter(<EventSelfCheckInPage />);
 
       await waitFor(() => {
-        expect(screen.getByText(/This event was ended early by the event officer/)).toBeInTheDocument();
+        expect(screen.getByText(/This event was ended early\./)).toBeInTheDocument();
       });
     });
 
@@ -530,7 +581,7 @@ describe('EventSelfCheckInPage', () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByText('Successfully Checked In!')).toBeInTheDocument();
+        expect(screen.getByText("You're Checked In")).toBeInTheDocument();
         // Should not crash when timestamp is missing
         expect(screen.queryByText(/Checked In At:/)).not.toBeInTheDocument();
       });
@@ -574,7 +625,7 @@ describe('EventSelfCheckInPage', () => {
 
       await waitFor(() => {
         // Success state should be visually indicated
-        expect(screen.getByText('Successfully Checked In!')).toBeInTheDocument();
+        expect(screen.getByText("You're Checked In")).toBeInTheDocument();
       });
     });
   });

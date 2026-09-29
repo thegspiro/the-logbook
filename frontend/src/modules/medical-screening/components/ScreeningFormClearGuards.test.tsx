@@ -60,7 +60,7 @@ describe('ScreeningRecordForm — edit clears as null, not omitted', () => {
     await user.clear(screen.getByLabelText('Result Summary'));
     await user.clear(screen.getByLabelText('Notes'));
     await user.clear(screen.getByLabelText('Expiration Date'));
-    await user.click(screen.getByRole('button', { name: 'Update' }));
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
 
     expect(onSave).toHaveBeenCalledTimes(1);
     const payload = onSave.mock.calls[0]?.[0] as Record<string, unknown>;
@@ -79,7 +79,7 @@ describe('ScreeningRecordForm — edit clears as null, not omitted', () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     render(<ScreeningRecordForm record={baseRecord} requirements={[]} onSave={onSave} onClose={vi.fn()} />);
 
-    await user.click(screen.getByRole('button', { name: 'Update' }));
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
 
     const payload = onSave.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(payload.provider_name).toBe('Valley Medical Center');
@@ -90,7 +90,7 @@ describe('ScreeningRecordForm — edit clears as null, not omitted', () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     render(<ScreeningRecordForm record={null} requirements={[]} onSave={onSave} onClose={vi.fn()} />);
 
-    await user.click(screen.getByRole('button', { name: 'Create' }));
+    await user.click(screen.getByRole('button', { name: 'Add Record' }));
 
     const payload = onSave.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(payload.provider_name).toBeUndefined();
@@ -106,7 +106,7 @@ describe('ScreeningRequirementForm — edit clears as null, not omitted', () => 
 
     await user.clear(screen.getByLabelText('Description'));
     await user.clear(screen.getByLabelText('Applies to Roles (comma-separated)'));
-    await user.click(screen.getByRole('button', { name: 'Update' }));
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
 
     const payload = onSave.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(payload.description).toBeNull();
@@ -119,7 +119,7 @@ describe('ScreeningRequirementForm — edit clears as null, not omitted', () => 
     render(<ScreeningRequirementForm requirement={baseRequirement} onSave={onSave} onClose={vi.fn()} />);
 
     await user.click(screen.getByLabelText('One-time requirement (not recurring)'));
-    await user.click(screen.getByRole('button', { name: 'Update' }));
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
 
     const payload = onSave.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(payload.frequency_months).toBeNull();
@@ -131,7 +131,7 @@ describe('ScreeningRequirementForm — edit clears as null, not omitted', () => 
     render(<ScreeningRequirementForm requirement={null} onSave={onSave} onClose={vi.fn()} />);
 
     await user.type(screen.getByLabelText('Name *'), 'Vision Exam');
-    await user.click(screen.getByRole('button', { name: 'Create' }));
+    await user.click(screen.getByRole('button', { name: 'Add Requirement' }));
 
     const payload = onSave.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(payload.description).toBeUndefined();

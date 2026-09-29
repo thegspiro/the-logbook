@@ -290,7 +290,7 @@ export default function SystemsSection({ facilityId, canCreate, canEdit, canDele
                 className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs"
               >
                 {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                {editingSystem ? 'Update' : 'Add'}
+                {editingSystem ? 'Save Changes' : 'Save System'}
               </button>
               <button
                 onClick={resetForm}
@@ -335,7 +335,7 @@ export default function SystemsSection({ facilityId, canCreate, canEdit, canDele
                           Warranty: {formatDate(sys.warrantyExpiration, tz)}
                         </span>
                       )}
-                      {sys.testFrequencyDays != null && <span>Test every {sys.testFrequencyDays}d</span>}
+                      {sys.testFrequencyDays != null && <span>Test every {sys.testFrequencyDays} days</span>}
                     </div>
                   </div>
                 </div>

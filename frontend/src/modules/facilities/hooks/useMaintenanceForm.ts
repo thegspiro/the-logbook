@@ -139,7 +139,7 @@ export function useMaintenanceForm({ facilityId, initialStatusFilter = 'all' }: 
 
   const handleSave = async () => {
     if (!facilityId && !formData.facility_id) {
-      toast.error('Please select a facility');
+      toast.error('Select a facility');
       return;
     }
     if (!formData.description.trim()) {
@@ -174,7 +174,7 @@ export function useMaintenanceForm({ facilityId, initialStatusFilter = 'all' }: 
       toast.success('Marked as completed');
       void loadRecords();
     } catch {
-      toast.error('Failed to update record');
+      toast.error('Failed to mark record completed');
     }
   };
 

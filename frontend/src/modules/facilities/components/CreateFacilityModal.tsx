@@ -170,7 +170,7 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
             </div>
             <div>
               <label htmlFor="facility-zip" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                Zip
+                Zip Code
               </label>
               <input
                 id="facility-zip"

@@ -38,6 +38,9 @@ export const RequestsTab: React.FC = () => {
   const [activeView, setActiveView] = useState<'swaps' | 'timeoff'>(
     searchParams.get('requestView') === 'timeoff' ? 'timeoff' : 'swaps'
   );
+  // Pending by default, so an answered request drops out of view; the empty
+  // states say so, or a member reads "No swap requests" the moment theirs is
+  // approved.
   const [statusFilter, setStatusFilter] = useState<string>('pending');
   const [swapRequests, setSwapRequests] = useState<SwapRequest[]>([]);
   const [timeOffRequests, setTimeOffRequests] = useState<TimeOffRequest[]>([]);
@@ -186,8 +189,16 @@ export const RequestsTab: React.FC = () => {
     }
   };
 
-  // Quick inline approve/deny without notes
+  // Quick inline approve/deny without notes. A ref, not state alone: a
+  // double-click lands both clicks before a re-render could disable the row,
+  // and the second review then fails with "no longer pending" beside the
+  // success toast of the first.
+  const quickReviewingRef = useRef<Set<string>>(new Set());
+  const [quickReviewing, setQuickReviewing] = useState<string | null>(null);
   const handleQuickReview = async (type: 'swap' | 'timeoff', id: string, action: 'approved' | 'denied') => {
+    if (quickReviewingRef.current.has(id)) return;
+    quickReviewingRef.current.add(id);
+    setQuickReviewing(id);
     try {
       if (type === 'swap') {
         await schedulingService.reviewSwapRequest(id, { status: action });
@@ -198,6 +209,9 @@ export const RequestsTab: React.FC = () => {
       void loadData();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to process request'));
+    } finally {
+      quickReviewingRef.current.delete(id);
+      setQuickReviewing(null);
     }
   };
 
@@ -283,6 +297,11 @@ export const RequestsTab: React.FC = () => {
                 ? 'No swap requests to review. Pending requests from members will appear here.'
                 : 'Your swap requests will appear here. Go to My Shifts to request a swap for an upcoming shift.'}
             </p>
+            {statusFilter && (
+              <p className="text-theme-text-muted mx-auto mt-2 max-w-sm text-sm">
+                Showing {statusFilter} requests only. Choose All Statuses to see the rest.
+              </p>
+            )}
           </div>
         ) : (
           <div className="space-y-3">
@@ -354,8 +373,9 @@ export const RequestsTab: React.FC = () => {
                             onClick={() => {
                               void handleQuickReview('swap', req.id, 'approved');
                             }}
+                            disabled={quickReviewing === req.id}
                             className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-green-700 transition-colors hover:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20"
-                            aria-label="Approve swap"
+                            aria-label={`Approve swap for ${req.requesting_user_name || req.user_name || 'member'}`}
                           >
                             <Check className="h-3.5 w-3.5" /> Approve
                           </button>
@@ -363,8 +383,9 @@ export const RequestsTab: React.FC = () => {
                             onClick={() => {
                               void handleQuickReview('swap', req.id, 'denied');
                             }}
+                            disabled={quickReviewing === req.id}
                             className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
-                            aria-label="Deny swap"
+                            aria-label={`Deny swap for ${req.requesting_user_name || req.user_name || 'member'}`}
                           >
                             <X className="h-3.5 w-3.5" /> Deny
                           </button>
@@ -430,6 +451,11 @@ export const RequestsTab: React.FC = () => {
               ? 'No time-off requests to review. Pending requests from members will appear here.'
               : 'Your time-off requests will appear here. Use the My Shifts tab to request time off.'}
           </p>
+          {statusFilter && (
+            <p className="text-theme-text-muted mx-auto mt-2 max-w-sm text-sm">
+              Showing {statusFilter} requests only. Choose All Statuses to see the rest.
+            </p>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
@@ -472,8 +498,9 @@ export const RequestsTab: React.FC = () => {
                           onClick={() => {
                             void handleQuickReview('timeoff', req.id, 'approved');
                           }}
+                          disabled={quickReviewing === req.id}
                           className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-green-700 transition-colors hover:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20"
-                          aria-label="Approve time off"
+                          aria-label={`Approve time off for ${req.user_name || 'member'}`}
                         >
                           <Check className="h-3.5 w-3.5" /> Approve
                         </button>
@@ -481,8 +508,9 @@ export const RequestsTab: React.FC = () => {
                           onClick={() => {
                             void handleQuickReview('timeoff', req.id, 'denied');
                           }}
+                          disabled={quickReviewing === req.id}
                           className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
-                          aria-label="Deny time off"
+                          aria-label={`Deny time off for ${req.user_name || 'member'}`}
                         >
                           <X className="h-3.5 w-3.5" /> Deny
                         </button>

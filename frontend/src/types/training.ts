@@ -497,17 +497,17 @@ export interface TrainingCourseCreate {
 
 export interface TrainingCourseUpdate {
   name?: string;
-  code?: string;
-  description?: string;
+  code?: string | null;
+  description?: string | null;
   training_type?: TrainingType;
-  duration_hours?: number;
-  credit_hours?: number;
+  duration_hours?: number | null;
+  credit_hours?: number | null;
   prerequisites?: string[];
-  expiration_months?: number;
+  expiration_months?: number | null;
   /** Qualification code completing this course grants its holder. */
   grants_qualification?: string | null;
-  instructor?: string;
-  max_participants?: number;
+  instructor?: string | null;
+  max_participants?: number | null;
   materials_required?: string[];
   category_ids?: string[];
   active?: boolean;
@@ -539,6 +539,8 @@ export interface TrainingRecord {
   apparatus_id?: string;
   external_provider_id?: string;
   external_record_id?: string;
+  /** Set by the server when attendance finalize wrote this record. */
+  source_event_id?: string | null;
   notes?: string;
   attachments?: string[];
   rank_at_completion?: string;
@@ -1326,6 +1328,9 @@ export interface ExternalProviderConfig {
   records_path?: string; // JSON path to records array in response (e.g. "data.records")
   additional_headers?: Record<string, string>;
   date_format?: string;
+
+  // Daily 30-day review time ("HH:MM", department timezone); Target Solutions
+  review_time?: string | null | undefined;
 }
 
 export interface ExternalTrainingProvider {
@@ -1431,7 +1436,7 @@ export interface ExternalTrainingSyncLog {
   id: string;
   provider_id: string;
   organization_id: string;
-  sync_type: 'full' | 'incremental' | 'manual';
+  sync_type: 'full' | 'incremental' | 'manual' | 'review';
   status: SyncStatus;
   started_at: string;
   completed_at?: string;
@@ -1940,6 +1945,8 @@ export interface MyTrainingSummary {
   enrollments?: Array<{
     id: string;
     program_id: string;
+    /** Absent from servers that predate it; the card then shows no heading. */
+    program_name?: string;
     status: string;
     progress_percentage: number;
     enrolled_at: string | null;

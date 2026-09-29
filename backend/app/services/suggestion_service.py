@@ -1803,10 +1803,9 @@ async def send_suggestion_notice(
     Runs on its own session after the response; never raises.
 
     Each member gets their own email, so no recipient sees another's address.
-    The email goes out whatever the member's preferences say: for a reviewer
-    it is the channel of record (CLAUDE.md pitfall #18), and the bell is an
-    addition, not a substitute. Email only, never SMS — nothing here warrants
-    a text. ``sent_by`` is never passed: the triggering member may be
+    The email follows the member's suggestion-box email choice
+    (``EmailKind.SUGGESTION_BOX``); the bell entry is written either way.
+    Email only, never SMS — nothing here warrants a text. ``sent_by`` is never passed: the triggering member may be
     anonymous, and nothing identifying them goes into the bell entry either.
     """
     if not user_ids:
@@ -1901,11 +1900,21 @@ async def _email(
     users: Sequence[User],
     notice: Dict[str, str],
 ) -> None:
+    from app.services.email_policy import (
+        EmailKind,
+        department_required_kinds,
+        member_receives_email,
+    )
     from app.services.email_service import EmailService, wrap_email_body
 
     email_service = EmailService(organization=org)
+    department_required = department_required_kinds(org)
     for user in users:
         if not user.email:
+            continue
+        if not member_receives_email(
+            user.notification_preferences, EmailKind.SUGGESTION_BOX, department_required
+        ):
             continue
         try:
             if notice.get("template") == "suggestion_submitted":

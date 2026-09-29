@@ -23,6 +23,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.event_request import EventRequest, EventRequestActivity
 from app.models.user import Organization, User
 from app.schemas.event import MAX_EVENT_DURATION_MINUTES
+from app.services.email_policy import (
+    EmailKind,
+    department_required_kinds,
+    member_receives_email,
+)
 from app.utils.outreach_roles import (
     MAX_TOTAL_SEATS,
     normalize_staffing_roles,
@@ -664,7 +669,15 @@ async def send_request_notification(
                 select(User).where(User.id == event_request.assigned_to)
             )
             assignee = assignee_result.scalar_one_or_none()
-            if assignee and assignee.email:
+            if (
+                assignee
+                and assignee.email
+                and member_receives_email(
+                    assignee.notification_preferences,
+                    EmailKind.EVENT_DUTIES,
+                    department_required_kinds(org),
+                )
+            ):
                 from app.services.email_service import build_email_logo_html
 
                 outreach_label = event_request.outreach_type.replace("_", " ").title()
@@ -1075,8 +1088,11 @@ async def send_volunteer_call(
     for member in members:
         if not member.email:
             continue
-        prefs = member.notification_preferences or {}
-        if not prefs.get("email_notifications", True):
+        if not member_receives_email(
+            member.notification_preferences,
+            EmailKind.VOLUNTEER_CALLS,
+            department_required_kinds(org),
+        ):
             skipped += 1
             continue
         recipients.append(member.email)

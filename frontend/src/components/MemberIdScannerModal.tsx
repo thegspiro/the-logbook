@@ -27,6 +27,7 @@ import { isMemberIdPayload } from '../types/scanner';
 import { describeCameraError, QR_SCAN_CONFIG } from '../constants/camera';
 import { useOverlaySurface } from '../hooks/useOverlaySurface';
 import { MemberCardTap } from './MemberCardTap';
+import { matchesMemberBadgeCode } from '../utils/memberBadgeCode';
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -95,8 +96,8 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({ isOp
           const data = await inventoryService.getMembersSummary();
           membersRef.current = data.members;
         }
-        const match = membersRef.current.find(
-          (m) => m.membership_number?.toLowerCase() === decoded.trim().toLowerCase()
+        const match = membersRef.current.find((m) =>
+          matchesMemberBadgeCode(decoded, { id: m.user_id, membership_number: m.membership_number })
         );
 
         if (match) {

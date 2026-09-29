@@ -68,6 +68,28 @@ describe('extended facility sections', () => {
     expect(screen.getByRole('button', { name: /Delete/i })).toBeInTheDocument();
   });
 
+  it('names one record correctly rather than stripping the section title', async () => {
+    // "Utilities" with its trailing "s" cut off read as "Utilitie".
+    getUtilityReadings.mockResolvedValue([
+      {
+        id: 'reading-june',
+        utilityAccountId: 'utility-1',
+        readingDate: '2026-06-01',
+        amount: 120.5,
+        createdAt: '2026-06-02T00:00:00Z',
+      },
+    ]);
+    render(
+      <ConfirmProvider>
+        <UtilitiesSection facilityId="facility-1" canDelete canCreate canEdit />
+      </ConfirmProvider>
+    );
+
+    expect(await screen.findByRole('button', { name: 'Edit utility account' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete utility account' })).toBeInTheDocument();
+    expect(await screen.findByText('1 recent reading')).toBeInTheDocument();
+  });
+
   it('gives facilities.delete holders only the destructive control', async () => {
     render(
       <ConfirmProvider>

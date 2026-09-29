@@ -170,16 +170,19 @@ export const LoginPage: React.FC = () => {
   useEffect(() => {
     const code = new URLSearchParams(location.search).get('error');
     if (!code) return;
+    // The same codes come back from both the Google and the Microsoft
+    // callback, so the wording must not name one provider.
     const messages: Record<string, string> = {
-      access_denied: 'Google sign-in was cancelled.',
-      invalid_state: 'Your sign-in session expired. Please try again.',
-      domain_not_allowed: 'That Google account is not from an allowed domain. Contact your administrator.',
-      no_account: 'No account matches that Google email. Contact your administrator for access.',
-      inactive: 'Your account is inactive. Please contact an administrator.',
-      account_conflict: 'That Google account is already linked to a different user.',
+      access_denied: 'Sign-in was cancelled.',
+      invalid_state: 'Your sign-in expired. Try again.',
+      domain_not_allowed: "That account's email domain isn't allowed. Contact your administrator.",
+      no_account: 'No account matches that email. Contact your administrator for access.',
+      no_email: 'That Microsoft account has no email address. Contact your administrator.',
+      inactive: 'Your account is inactive. Contact your administrator.',
+      account_conflict: 'That Google or Microsoft account is already linked to a different user.',
       unverified_email: 'Your Google email address is not verified.',
     };
-    setOAuthError(messages[code] || 'Sign-in with Google failed. Please try again.');
+    setOAuthError(messages[code] || 'Sign-in failed. Try again.');
     // Strip the error param so a refresh doesn't re-show it.
     void navigate('/login', { replace: true });
   }, [location.search, navigate]);
@@ -448,7 +451,7 @@ export const LoginPage: React.FC = () => {
                 </div>
                 <div className="ml-3">
                   <p className="text-sm font-medium text-yellow-800 dark:text-yellow-400">
-                    Your session has expired due to inactivity. Please sign in again.
+                    You were signed out after a period of inactivity. Sign in again.
                   </p>
                 </div>
               </div>
@@ -555,8 +558,7 @@ export const LoginPage: React.FC = () => {
               aria-live="polite"
             >
               <p className="text-sm font-medium text-yellow-800 dark:text-yellow-400">
-                Too many failed attempts. Please wait {lockoutRemaining} second{lockoutRemaining !== 1 ? 's' : ''}{' '}
-                before trying again.
+                Too many failed attempts. Try again in {lockoutRemaining} second{lockoutRemaining !== 1 ? 's' : ''}.
               </p>
             </div>
           )}

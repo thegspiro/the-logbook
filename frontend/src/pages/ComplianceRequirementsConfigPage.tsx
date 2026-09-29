@@ -29,6 +29,7 @@ import {
   Send,
   X,
 } from 'lucide-react';
+import { getErrorMessage } from '../utils/errorHandling';
 import toast from 'react-hot-toast';
 import { formatDate, formatDateCustom } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
@@ -253,8 +254,10 @@ export default function ComplianceRequirementsConfigPage() {
 
       await loadConfig();
       toast.success('Configuration saved');
-    } catch {
-      toast.error('Failed to save configuration');
+    } catch (err: unknown) {
+      // The server says why (e.g. an at-risk threshold above the compliant
+      // one); a bare "Failed" left the officer to guess which field was wrong.
+      toast.error(getErrorMessage(err, 'Failed to save configuration'));
     } finally {
       setIsSaving(false);
     }
@@ -345,8 +348,10 @@ export default function ComplianceRequirementsConfigPage() {
 
       resetProfileForm();
       await loadConfig();
-    } catch {
-      toast.error('Failed to save profile');
+    } catch (err: unknown) {
+      // The server says why (e.g. an at-risk threshold above the compliant
+      // one); a bare "Failed" left the officer to guess which field was wrong.
+      toast.error(getErrorMessage(err, 'Failed to save profile'));
     } finally {
       setIsSaving(false);
     }
@@ -388,7 +393,7 @@ export default function ComplianceRequirementsConfigPage() {
       };
 
       await complianceConfigService.generateReport(data);
-      toast.success('Report generated successfully');
+      toast.success('Report generated');
       await loadReports();
     } catch {
       toast.error('Failed to generate report');
@@ -503,6 +508,7 @@ export default function ComplianceRequirementsConfigPage() {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
+            aria-pressed={activeTab === tab.id}
             className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
               activeTab === tab.id ? 'bg-blue-600 text-white' : 'text-theme-text-secondary hover:bg-theme-surface-hover'
             }`}
@@ -523,8 +529,11 @@ export default function ComplianceRequirementsConfigPage() {
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div>
-              <label className={labelClass}>Threshold Type</label>
+              <label className={labelClass} htmlFor="compliance-threshold-type">
+                Threshold Type
+              </label>
               <select
+                id="compliance-threshold-type"
                 className={selectClass}
                 value={thresholdType}
                 onChange={(e: ChangeEvent<HTMLSelectElement>) => setThresholdType(e.target.value)}
@@ -542,8 +551,11 @@ export default function ComplianceRequirementsConfigPage() {
             {thresholdType === 'percentage' && (
               <>
                 <div>
-                  <label className={labelClass}>Compliant Threshold (%)</label>
+                  <label className={labelClass} htmlFor="compliance-compliant-threshold">
+                    Compliant Threshold (%)
+                  </label>
                   <input
+                    id="compliance-compliant-threshold"
                     type="number"
                     className={inputClass}
                     min={0}
@@ -558,8 +570,11 @@ export default function ComplianceRequirementsConfigPage() {
                 </div>
 
                 <div>
-                  <label className={labelClass}>At-Risk Threshold (%)</label>
+                  <label className={labelClass} htmlFor="compliance-at-risk-threshold">
+                    At-Risk Threshold (%)
+                  </label>
                   <input
+                    id="compliance-at-risk-threshold"
                     type="number"
                     className={inputClass}
                     min={0}
@@ -679,8 +694,11 @@ export default function ComplianceRequirementsConfigPage() {
               </label>
 
               <div>
-                <label className={labelClass}>Reminder Days Before Deadline</label>
+                <label className={labelClass} htmlFor="compliance-reminder-days-before-deadline">
+                  Reminder Days Before Deadline
+                </label>
                 <input
+                  id="compliance-reminder-days-before-deadline"
                   type="text"
                   className={inputClass}
                   value={notifyDaysBefore}
@@ -752,8 +770,11 @@ export default function ComplianceRequirementsConfigPage() {
               </h3>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <label className={labelClass}>Profile Name</label>
+                  <label className={labelClass} htmlFor="compliance-profile-name">
+                    Profile Name
+                  </label>
                   <input
+                    id="compliance-profile-name"
                     type="text"
                     className={inputClass}
                     value={profileName}
@@ -762,8 +783,11 @@ export default function ComplianceRequirementsConfigPage() {
                   />
                 </div>
                 <div>
-                  <label className={labelClass}>Priority</label>
+                  <label className={labelClass} htmlFor="compliance-priority">
+                    Priority
+                  </label>
                   <input
+                    id="compliance-priority"
                     type="number"
                     className={inputClass}
                     value={profilePriority}
@@ -775,8 +799,11 @@ export default function ComplianceRequirementsConfigPage() {
                   </p>
                 </div>
                 <div className="md:col-span-2">
-                  <label className={labelClass}>Description</label>
+                  <label className={labelClass} htmlFor="compliance-description">
+                    Description
+                  </label>
                   <input
+                    id="compliance-description"
                     type="text"
                     className={inputClass}
                     value={profileDescription}
@@ -808,8 +835,11 @@ export default function ComplianceRequirementsConfigPage() {
 
                 {/* Threshold Overrides */}
                 <div>
-                  <label className={labelClass}>Compliant Threshold Override (%)</label>
+                  <label className={labelClass} htmlFor="compliance-compliant-threshold-override">
+                    Compliant Threshold Override (%)
+                  </label>
                   <input
+                    id="compliance-compliant-threshold-override"
                     type="number"
                     className={inputClass}
                     value={profileCompliantOverride}
@@ -820,8 +850,11 @@ export default function ComplianceRequirementsConfigPage() {
                   />
                 </div>
                 <div>
-                  <label className={labelClass}>At-Risk Threshold Override (%)</label>
+                  <label className={labelClass} htmlFor="compliance-at-risk-threshold-override">
+                    At-Risk Threshold Override (%)
+                  </label>
                   <input
+                    id="compliance-at-risk-threshold-override"
                     type="number"
                     className={inputClass}
                     value={profileAtRiskOverride}
@@ -1118,8 +1151,11 @@ export default function ComplianceRequirementsConfigPage() {
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div>
-              <label className={labelClass}>Report Frequency</label>
+              <label className={labelClass} htmlFor="compliance-report-frequency">
+                Report Frequency
+              </label>
               <select
+                id="compliance-report-frequency"
                 className={selectClass}
                 value={autoReportFrequency}
                 onChange={(e: ChangeEvent<HTMLSelectElement>) => setAutoReportFrequency(e.target.value)}
@@ -1138,8 +1174,11 @@ export default function ComplianceRequirementsConfigPage() {
             {autoReportFrequency !== 'none' && (
               <>
                 <div>
-                  <label className={labelClass}>Day of Month to Generate</label>
+                  <label className={labelClass} htmlFor="compliance-day-of-month-to-generate">
+                    Day of Month to Generate
+                  </label>
                   <input
+                    id="compliance-day-of-month-to-generate"
                     type="number"
                     className={inputClass}
                     min={1}
@@ -1153,8 +1192,11 @@ export default function ComplianceRequirementsConfigPage() {
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className={labelClass}>Email Recipients</label>
+                  <label className={labelClass} htmlFor="compliance-email-recipients">
+                    Email Recipients
+                  </label>
                   <input
+                    id="compliance-email-recipients"
                     type="text"
                     className={inputClass}
                     value={reportEmailRecipients}
@@ -1226,8 +1268,11 @@ export default function ComplianceRequirementsConfigPage() {
               <>
                 <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-4">
                   <div>
-                    <label className={labelClass}>Report Type</label>
+                    <label className={labelClass} htmlFor="compliance-report-type">
+                      Report Type
+                    </label>
                     <select
+                      id="compliance-report-type"
                       className={selectClass}
                       value={reportType}
                       onChange={(e: ChangeEvent<HTMLSelectElement>) => setReportType(e.target.value)}
@@ -1237,8 +1282,11 @@ export default function ComplianceRequirementsConfigPage() {
                     </select>
                   </div>
                   <div>
-                    <label className={labelClass}>Year</label>
+                    <label className={labelClass} htmlFor="compliance-year">
+                      Year
+                    </label>
                     <input
+                      id="compliance-year"
                       type="number"
                       className={inputClass}
                       value={reportYear}
@@ -1249,8 +1297,11 @@ export default function ComplianceRequirementsConfigPage() {
                   </div>
                   {reportType === 'monthly' && (
                     <div>
-                      <label className={labelClass}>Month</label>
+                      <label className={labelClass} htmlFor="compliance-month">
+                        Month
+                      </label>
                       <select
+                        id="compliance-month"
                         className={selectClass}
                         value={reportMonth}
                         onChange={(e: ChangeEvent<HTMLSelectElement>) => setReportMonth(Number(e.target.value))}
@@ -1278,8 +1329,11 @@ export default function ComplianceRequirementsConfigPage() {
 
                 {reportSendEmail && (
                   <div className="mt-3">
-                    <label className={labelClass}>Additional Recipients (optional)</label>
+                    <label className={labelClass} htmlFor="compliance-additional-recipients-optional">
+                      Additional Recipients (optional)
+                    </label>
                     <input
+                      id="compliance-additional-recipients-optional"
                       type="text"
                       className={inputClass}
                       value={reportAdditionalRecipients}
@@ -1415,8 +1469,11 @@ export default function ComplianceRequirementsConfigPage() {
               </button>
             </div>
             <div className="mt-4">
-              <label className={labelClass}>Recipients</label>
+              <label className={labelClass} htmlFor="compliance-recipients">
+                Recipients
+              </label>
               <input
+                id="compliance-recipients"
                 type="text"
                 className={inputClass}
                 value={emailRecipients}

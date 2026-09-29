@@ -169,6 +169,14 @@ export interface EventHourMapping {
   percentage: number;
   isActive: boolean;
   createdAt: string;
+  /**
+   * Whether the crediting path reads this mapping. False for a stored mapping
+   * whose event type never earns admin hours (training events credit members'
+   * training records instead) — backend EVENT_TYPES_WITHOUT_ADMIN_HOURS.
+   */
+  inEffect?: boolean | undefined;
+  /** Why the mapping is inert, when inEffect is false. */
+  notInEffectReason?: string | null | undefined;
 }
 
 export interface EventHourMappingCreate {

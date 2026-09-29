@@ -29,7 +29,7 @@ import {
   Archive,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import type { Applicant, StageHistoryEntry } from '../types';
+import type { Applicant, MultiApprovalConfig, StageHistoryEntry } from '../types';
 import { StepProgressStatus } from '../types';
 import { isSafeUrl, getInitials } from '../utils';
 import { STAGE_TYPE_ICONS } from '../constants';
@@ -318,9 +318,9 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   <span className="text-sm font-medium text-amber-600 dark:text-amber-300">Application Inactive</span>
                 </div>
                 <p className="text-theme-text-muted text-xs">
-                  This application was marked inactive due to no activity
-                  {applicant.deactivated_at && <> since {formatDate(applicant.deactivated_at, tz)}</>}. A coordinator
-                  can reactivate it, or the individual may resubmit an interest form.
+                  This application was marked inactive
+                  {applicant.deactivated_at && <> on {formatDate(applicant.deactivated_at, tz)}</>} after a period with
+                  no activity. A coordinator can reactivate it, or the applicant can submit a new interest form.
                 </p>
                 {applicant.reactivated_at && (
                   <p className="text-theme-text-muted mt-1 text-xs">
@@ -338,7 +338,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   <span className="text-theme-text-secondary text-sm font-medium">Application Withdrawn</span>
                 </div>
                 <p className="text-theme-text-muted text-xs">
-                  This applicant voluntarily withdrew from the pipeline
+                  This application was withdrawn
                   {applicant.withdrawn_at && <> on {formatDate(applicant.withdrawn_at, tz)}</>}.
                 </p>
                 {applicant.withdrawal_reason && (
@@ -660,23 +660,28 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
               {applicant.current_stage_type === StageTypeEnum.MULTI_APPROVAL &&
                 applicant.status === ApplicantStatus.ACTIVE &&
                 (() => {
-                  const currentEntry = applicant.stage_history[applicant.stage_history.length - 1];
+                  // Who must sign is the stage's configuration; who has signed is
+                  // the progress row for *this* stage. Reading both off the last
+                  // history entry's action_result found neither, so the panel
+                  // said "No approval data" after every signer had signed.
+                  const currentEntry = applicant.stage_history.find((h) => h.stage_id === applicant.current_stage_id);
                   const actionResult = currentEntry?.action_result ?? {};
                   const approvals =
                     (actionResult.approvals as
                       Array<{ role: string; approved_by?: string; approved_at?: string }> | undefined) ?? [];
-                  const requiredApprovers = (actionResult.required_approvers as string[] | undefined) ?? [];
+                  const stageConfig = applicant.current_stage_config as Partial<MultiApprovalConfig> | undefined;
+                  const requiredApprovers = stageConfig?.required_approvers ?? [];
                   return (
                     <div className="border-theme-surface-border border-b p-4">
                       <h3 className="text-theme-text-muted mb-3 text-xs font-medium tracking-wider uppercase">
                         Approval Status
                       </h3>
                       {requiredApprovers.length > 0 ? (
-                        <div className="space-y-2">
+                        <ul className="space-y-2" aria-label="Approval status">
                           {requiredApprovers.map((role) => {
-                            const approval = approvals.find((a) => a.role === role);
+                            const approval = approvals.find((a) => a.role.toLowerCase() === role.toLowerCase());
                             return (
-                              <div key={role} className="flex items-center justify-between text-xs">
+                              <li key={role} className="flex items-center justify-between text-xs">
                                 <span className="text-theme-text-secondary capitalize">{role.replace(/_/g, ' ')}</span>
                                 {approval ? (
                                   <span className="flex items-center gap-1 text-emerald-500">
@@ -689,10 +694,10 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                                     Pending
                                   </span>
                                 )}
-                              </div>
+                              </li>
                             );
                           })}
-                        </div>
+                        </ul>
                       ) : (
                         <p className="text-theme-text-muted text-xs">No approval data recorded yet.</p>
                       )}

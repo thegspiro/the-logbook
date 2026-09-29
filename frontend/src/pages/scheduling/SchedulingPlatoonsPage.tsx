@@ -117,6 +117,7 @@ const SchedulingPlatoonsPage: React.FC = () => {
             <div className="card mb-6 flex flex-wrap items-center gap-3 p-4">
               <span className="text-theme-text-secondary text-sm">{selected.size} selected</span>
               <select
+                aria-label="Platoon to assign"
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
                 disabled={saving || selected.size === 0}

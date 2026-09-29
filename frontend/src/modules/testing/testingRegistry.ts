@@ -274,9 +274,15 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         module: 'prospective_members',
       },
       {
+        path: '/prospective-members/sign-offs',
+        label: 'Sign-offs',
+        module: 'prospective_members',
+        note: 'Officers a Multi-Signer Approval stage names approve applicants here',
+      },
+      {
         path: '/prospective-members/print-labels',
         label: 'Print prospect labels',
-        permission: 'prospective_members.view',
+        anyPermission: ['prospective_members.view', 'prospective_members.manage'],
         module: 'prospective_members',
       },
     ],
@@ -314,6 +320,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/training/programs/:programId', label: 'Program detail', module: 'training' },
       { path: '/training/my-progress/:enrollmentId', label: 'My program progress', module: 'training' },
       { path: '/training/my-skill-tests/:testId', label: 'My skill test result', module: 'training' },
+      {
+        path: '/training/approve/:token',
+        label: 'Training approval',
+        permission: 'training.manage',
+        module: 'training',
+      },
       { path: '/training/admin', label: 'Training administration', permission: 'training.manage', module: 'training' },
       { path: '/training/cohorts', label: 'Cohorts', permission: 'training.manage', module: 'training' },
       {
@@ -891,6 +903,11 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/messages/:messageId', label: 'Message detail' },
       { path: '/communications/messages', label: 'Messages administration', permission: 'notifications.manage' },
       { path: '/communications/email-templates', label: 'Email templates', permission: 'settings.manage' },
+      {
+        path: '/communications/member-emails',
+        label: 'Member emails & texts',
+        anyPermission: ['settings.manage', 'organization.update_settings', 'notifications.manage'],
+      },
       {
         path: '/communications/photo-use-consent',
         label: 'Photo use consent',

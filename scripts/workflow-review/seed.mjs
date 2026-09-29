@@ -182,7 +182,8 @@ async function onboard(page, admin) {
   // continue otherwise, and stop the moment a step offers neither: a new
   // required step should fail the seed loudly, not be guessed through.
   const skip = /^(skip|i'll add these later)/i;
-  const advance = /^(continue|save & continue)|go to dashboard|complete setup/i;
+  const advance =
+    /^(continue|save & continue)|go to dashboard|complete setup|finish setup/i;
   const labels = () =>
     page.$$eval("main button", (buttons) =>
       buttons.map((b) =>
@@ -235,6 +236,24 @@ async function onboard(page, admin) {
       .waitForLoadState("networkidle", { timeout: 10000 })
       .catch(() => {});
     await page.locator("main button").first().waitFor({ timeout: 10000 });
+    // Ranks & Positions refuses Continue while the membership ladder holds
+    // edits nobody saved (RoleSetup's handleContinue), and a new department's
+    // ladder opens that way. Pressing Continue then only raises a toast and
+    // the step never advances. Keep the ladder as offered, as an administrator
+    // pressing Save tiers would, and wait for the save to land.
+    if (path === "/onboarding/positions" && (await press(/^save tiers$/i))) {
+      await page
+        .locator("main button", { hasText: /^save tiers$/i })
+        .waitFor({ state: "detached", timeout: 15000 });
+    }
+    // Finish setup stays disabled until a navigation layout is picked, and
+    // the step has no Skip. Take the first layout offered.
+    if (path === "/onboarding/navigation-choice") {
+      await page
+        .locator("main button", { hasText: /^top navigation/i })
+        .first()
+        .click();
+    }
     // The modules step has a Skip on every module card; skipping one is a
     // choice about that module, not about the step. Modules are enabled over
     // the API afterwards.

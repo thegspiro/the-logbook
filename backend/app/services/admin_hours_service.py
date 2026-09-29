@@ -7,7 +7,7 @@ manual entry, and approval workflows.
 
 import io
 from datetime import date, datetime, timedelta, timezone
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from loguru import logger
 from sqlalchemy import and_, func, select
@@ -15,6 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
 
 from app.models.admin_hours import (
+    EVENT_TYPE_WITHOUT_ADMIN_HOURS_REASON,
+    EVENT_TYPES_WITHOUT_ADMIN_HOURS,
     AdminHoursCategory,
     AdminHoursEntry,
     AdminHoursEntryMethod,
@@ -70,6 +72,21 @@ def _require_utc(dt: datetime, field: str) -> datetime:
             "(UTC, e.g. 2026-08-12T14:00:00Z)"
         )
     return dt.astimezone(timezone.utc)
+
+
+def mapping_effect(event_type: Optional[str]) -> Dict[str, Any]:
+    """Whether a mapping can credit anything, for the settings screen.
+
+    A mapping for a type in EVENT_TYPES_WITHOUT_ADMIN_HOURS is stored but inert
+    (CLAUDE.md pitfall #19): the screen labels it rather than showing it as
+    live.
+    """
+    if event_type in EVENT_TYPES_WITHOUT_ADMIN_HOURS:
+        return {
+            "in_effect": False,
+            "not_in_effect_reason": EVENT_TYPE_WITHOUT_ADMIN_HOURS_REASON,
+        }
+    return {"in_effect": True, "not_in_effect_reason": None}
 
 
 class AdminHoursService:
@@ -1594,6 +1611,7 @@ class AdminHoursService:
                 "percentage": mapping.percentage,
                 "is_active": mapping.is_active,
                 "created_at": mapping.created_at,
+                **mapping_effect(mapping.event_type),
             }
             for mapping, cat in rows
         ]
@@ -1616,6 +1634,8 @@ class AdminHoursService:
             raise ValueError("Either event_type or custom_category is required")
         if event_type and custom_category:
             raise ValueError("Only one of event_type or custom_category can be set")
+        if event_type in EVENT_TYPES_WITHOUT_ADMIN_HOURS:
+            raise ValueError(EVENT_TYPE_WITHOUT_ADMIN_HOURS_REASON)
 
         # Verify target category exists in this org
         cat = await self.get_category(admin_hours_category_id, organization_id)
@@ -1686,6 +1706,8 @@ class AdminHoursService:
         mapping = result.scalar_one_or_none()
         if not mapping:
             raise ValueError("Mapping not found")
+        if is_active is True and mapping.event_type in EVENT_TYPES_WITHOUT_ADMIN_HOURS:
+            raise ValueError(EVENT_TYPE_WITHOUT_ADMIN_HOURS_REASON)
 
         # An inactive-to-active transition must be validated exactly like
         # adding a new active percentage: it adds this mapping's percentage
@@ -1884,6 +1906,11 @@ class AdminHoursService:
         move. An entry whose method is no longer EVENT_ATTENDANCE was taken over
         by hand and is left alone.
         """
+        # A Training event credits training records instead. Checked before
+        # the mappings so a mapping stored before the rule existed does nothing.
+        if event_type in EVENT_TYPES_WITHOUT_ADMIN_HOURS:
+            return 0
+
         mappings = await self.get_mappings_for_event(
             organization_id, event_type, custom_category
         )
@@ -1986,6 +2013,30 @@ class AdminHoursService:
             select(AdminHoursEntry).where(
                 AdminHoursEntry.organization_id == organization_id,
                 AdminHoursEntry.source_rsvp_id == rsvp_id,
+                AdminHoursEntry.entry_method == AdminHoursEntryMethod.EVENT_ATTENDANCE,
+            )
+        )
+        entries = list(result.scalars().all())
+        for entry in entries:
+            await self.db.delete(entry)
+        return len(entries)
+
+    async def delete_event_attendance_entries_for_event(
+        self, event_id: str, organization_id: str
+    ) -> int:
+        """Remove every admin-hours entry an event's attendance credited.
+
+        Called when a Training event's attendance is finalized. Training events
+        no longer credit admin hours, but one mapped before that rule — or a
+        business meeting reopened and re-typed as training — still carries the
+        entries its earlier finalize wrote, and they would keep counting the
+        same hours the training records now hold. Only attendance-derived
+        entries go; one a member or officer took over by hand is theirs.
+        """
+        result = await self.db.execute(
+            select(AdminHoursEntry).where(
+                AdminHoursEntry.organization_id == organization_id,
+                AdminHoursEntry.source_event_id == event_id,
                 AdminHoursEntry.entry_method == AdminHoursEntryMethod.EVENT_ATTENDANCE,
             )
         )

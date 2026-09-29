@@ -342,7 +342,7 @@ export const EventsPage: React.FC = () => {
           );
           return;
         }
-        setError('Failed to load events. Please try again later.');
+        setError('Failed to load events.');
       } finally {
         if (!background) setLoading(false);
       }
@@ -371,7 +371,7 @@ export const EventsPage: React.FC = () => {
         // is how the capacity label drifts further, not less.
         setEvents((prev) => prev.map((e) => (e.id === eventId ? { ...e, user_rsvp_status: savedStatus } : e)));
         if (savedStatus === 'waitlisted') {
-          toast('This event is full — you have been added to the waitlist.', { icon: '⏳' });
+          toast("This event is full. You're on the waitlist.", { icon: '⏳' });
         }
         setRsvpChanging((prev) => ({ ...prev, [eventId]: false }));
         // Background: the answer is already saved and on screen, so a refresh
@@ -581,7 +581,7 @@ export const EventsPage: React.FC = () => {
     async (eventId: string) => {
       try {
         const newEvent = await eventService.duplicateEvent(eventId);
-        toast.success('Event duplicated successfully');
+        toast.success('Event duplicated');
         void navigate(`/events/${newEvent.id}`);
       } catch {
         toast.error('Failed to duplicate event');
@@ -619,7 +619,7 @@ export const EventsPage: React.FC = () => {
   const handleCancelSelected = useCallback(async () => {
     const selected = sortedEvents.filter((e) => selectedEvents.has(e.id) && !e.is_cancelled);
     if (selected.length === 0) {
-      toast.error('No cancellable events selected');
+      toast.error('The selected events are already cancelled');
       setShowCancelConfirm(false);
       return;
     }
@@ -861,7 +861,7 @@ export const EventsPage: React.FC = () => {
                           </Link>
                           <Link to="/events/admin?tab=settings" onClick={closeMoreMenu} className={MENU_ITEM_CLASS}>
                             <Settings className="h-4 w-4 shrink-0" aria-hidden="true" />
-                            Event Module Settings
+                            Event Settings
                           </Link>
                         </>
                       )}
@@ -1429,7 +1429,7 @@ export const EventsPage: React.FC = () => {
               Cancel {selectedEvents.size} Event{selectedEvents.size !== 1 ? 's' : ''}?
             </h3>
             <p className="text-theme-text-secondary mb-4 text-sm">
-              This will cancel all selected events. This action cannot be easily undone.
+              The selected events will be cancelled without notifying members. You can&apos;t undo this.
             </p>
             <div className="flex justify-end gap-3">
               <button
@@ -1437,7 +1437,7 @@ export const EventsPage: React.FC = () => {
                 disabled={bulkActionLoading}
                 className="btn-secondary text-theme-text-secondary text-sm font-medium"
               >
-                Go Back
+                Keep Events
               </button>
               <button
                 onClick={() => {
@@ -1446,7 +1446,7 @@ export const EventsPage: React.FC = () => {
                 disabled={bulkActionLoading}
                 className="rounded-md bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900 disabled:opacity-50"
               >
-                {bulkActionLoading ? 'Cancelling...' : 'Confirm Cancel'}
+                {bulkActionLoading ? 'Cancelling...' : 'Cancel Events'}
               </button>
             </div>
           </DialogPanel>

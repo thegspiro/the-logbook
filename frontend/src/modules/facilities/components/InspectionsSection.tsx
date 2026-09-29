@@ -74,7 +74,7 @@ export default function InspectionsSection({ facilityId, canEdit, canDelete }: P
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              aria-label="Search inspections..."
+              aria-label="Search inspections"
               placeholder="Search inspections..."
               className={inputCls + ' pl-9'}
             />
@@ -292,7 +292,7 @@ export default function InspectionsSection({ facilityId, canEdit, canDelete }: P
                   />
                 </div>
                 <div>
-                  <label className={labelCls}>Organization</label>
+                  <label className={labelCls}>Inspector Organization</label>
                   <input
                     type="text"
                     value={formData.inspector_organization}
@@ -364,7 +364,7 @@ export default function InspectionsSection({ facilityId, canEdit, canDelete }: P
                 className="btn-primary flex items-center gap-2 px-4 text-sm"
               >
                 {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
-                {editingInspection ? 'Update' : 'Create'}
+                {editingInspection ? 'Save Changes' : 'Create Inspection'}
               </button>
             </div>
           </DialogPanel>

@@ -41,6 +41,13 @@ for (const tab of STATUS_TABS) {
   }
 }
 
+const PRIORITY_LABELS: Record<string, string> = {
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  urgent: 'Urgent',
+};
+
 const PRIORITY_COLORS: Record<string, string> = {
   low: 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400',
   medium: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
@@ -103,7 +110,7 @@ const PurchaseRequestsPage: React.FC = () => {
           className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
         >
           <Plus className="h-4 w-4" />
-          New Request
+          New Purchase Request
         </Link>
       </div>
 
@@ -141,7 +148,7 @@ const PurchaseRequestsPage: React.FC = () => {
           autoCorrect="off"
           spellCheck={false}
           type="text"
-          aria-label="Search by number, title, or vendor..."
+          aria-label="Search purchase requests"
           placeholder="Search by number, title, or vendor..."
           value={searchText}
           onChange={(e) => setSearchText(e.target.value)}
@@ -151,6 +158,7 @@ const PurchaseRequestsPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setSearchText('')}
+            aria-label="Clear search"
             className="text-theme-text-secondary hover:text-theme-text-primary absolute top-1/2 right-3 -translate-y-1/2"
           >
             <X className="h-4 w-4" />
@@ -172,7 +180,7 @@ const PurchaseRequestsPage: React.FC = () => {
             !searchText && !statusFilter
               ? [
                   {
-                    label: 'New Request',
+                    label: 'New Purchase Request',
                     onClick: () => void navigate('/finance/purchase-requests/new'),
                     icon: Plus,
                   },
@@ -249,7 +257,7 @@ const PurchaseRequestsPage: React.FC = () => {
                       <span
                         className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_COLORS[pr.priority] ?? 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400'}`}
                       >
-                        {pr.priority}
+                        {PRIORITY_LABELS[pr.priority] ?? pr.priority}
                       </span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">

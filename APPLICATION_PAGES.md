@@ -218,6 +218,7 @@ Requires `members.manage` permission. Tab-based admin interface.
 | `/prospective-members`                        | Prospective Members Pipeline | `prospective_members.manage`                         |
 | `/prospective-members/settings`               | Pipeline Settings            | `prospective_members.manage`                         |
 | `/prospective-members/:applicantId/interview` | Applicant Interview          | `prospective_members.manage`                         |
+| `/prospective-members/sign-offs`              | Sign-offs                    | Authenticated                                        |
 | `/application-status/:token`                  | Public Application Status    | None (token-based; see the public-routes note above) |
 
 > **Board view fetch size** _(2026-08-08)_: the kanban view requests `KANBAN_PAGE_SIZE` (**200**, the list endpoint's ceiling), not `DEFAULT_PAGE_SIZE` (25) — it groups applicants into stage columns client-side, so a page of 25 produced a board silently assembled from a fraction of the pipeline. Switching between board and table **refetches** rather than inheriting the other view's page. Past 200 the board renders a truncation notice naming the real total. Column headers count only the cards that loaded, so a stage on a truncated board can read low — the table view is the accurate one at that size.
@@ -340,18 +341,30 @@ Requires `events.manage` permission. Tab-based admin interface.
 
 ### Member-Facing Pages
 
-| URL                                   | Page                                    | Permission        |
-| ------------------------------------- | --------------------------------------- | ----------------- |
-| `/training`                           | My Training                             | Authenticated     |
-| `/training/my-training`               | My Training                             | Authenticated     |
-| `/training/submit`                    | Submit Training                         | Authenticated     |
-| `/training/courses`                   | Course Library                          | Authenticated     |
-| `/training/programs`                  | Training Programs                       | Authenticated     |
-| `/training/programs/:programId`       | Program Detail                          | Authenticated     |
-| `/training/cohorts`                   | Course Cohorts                          | `training.manage` |
-| `/training/cohorts/:cohortId`         | Cohort Detail (class timeline + roster) | `training.manage` |
-| `/training/my-skill-tests/:testId`    | My Skill Test Result (read-only)        | Authenticated     |
-| `/training/my-progress/:enrollmentId` | My Program Progress                     | Authenticated     |
+| URL                                   | Page                                      | Permission        |
+| ------------------------------------- | ----------------------------------------- | ----------------- |
+| `/training`                           | My Training                               | Authenticated     |
+| `/training/my-training`               | My Training                               | Authenticated     |
+| `/training/submit`                    | Submit Training                           | Authenticated     |
+| `/training/courses`                   | Course Library                            | Authenticated     |
+| `/training/programs`                  | Training Programs                         | Authenticated     |
+| `/training/programs/:programId`       | Program Detail                            | Authenticated     |
+| `/training/cohorts`                   | Course Cohorts                            | `training.manage` |
+| `/training/cohorts/:cohortId`         | Cohort Detail (class timeline + roster)   | `training.manage` |
+| `/training/my-skill-tests/:testId`    | My Skill Test Result (read-only)          | Authenticated     |
+| `/training/my-progress/:enrollmentId` | My Program Progress                       | Authenticated     |
+| `/training/approve/:token`            | Training Approval (officer credit review) | `training.manage` |
+
+> **`/training/approve/:token` is the officer's review of a Training event's
+> credit** _(2026-09-29)_. When a Training event's session requires officer
+> confirmation, Finalize Attendance holds each member's record at In Progress
+> and emails training officers this link; the event page links to it too. The
+> officer confirms or adjusts each member's approved minutes (0 gives no credit)
+> and records the credit. The token is not the authorization — the roster carries
+> member names and emails, so the API requires `training.manage` in the
+> approval's organization. The link had no route before this, so the email
+> bounced officers to the dashboard. An expired link is replaced by reopening the
+> event's attendance and finalizing it again.
 
 > **`/training/my-progress/:enrollmentId` is where every training notification
 > now lands** _(2026-08-09)_. All eight `action_url`s previously pointed at
@@ -1229,15 +1242,16 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ## Communications & Messaging _(documented 2026-08-10)_
 
-| URL                                 | Page                      | Permission                                                                           |
-| ----------------------------------- | ------------------------- | ------------------------------------------------------------------------------------ |
-| `/messages`                         | Messages                  | Authenticated                                                                        |
-| `/messages/:messageId`              | Message Detail            | Authenticated _(2026-08-26)_                                                         |
-| `/communications/messages`          | Message Administration    | `notifications.manage`                                                               |
-| `/communications/email-templates`   | Email Template Management | `settings.manage`                                                                    |
-| `/communications/photo-use-consent` | Photo Use Consent         | any of `users.view_consents`, `notifications.manage`, `members.manage`, `users.edit` |
-| `/communications/suggestion-boxes`  | Suggestion Box Management | `suggestions.manage` _(2026-09-23)_                                                  |
-| `/suggestions`                      | Suggestions               | Authenticated _(2026-09-23)_                                                         |
+| URL                                 | Page                      | Permission                                                                                      |
+| ----------------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------- |
+| `/messages`                         | Messages                  | Authenticated                                                                                   |
+| `/messages/:messageId`              | Message Detail            | Authenticated _(2026-08-26)_                                                                    |
+| `/communications/messages`          | Message Administration    | `notifications.manage`                                                                          |
+| `/communications/email-templates`   | Email Template Management | `settings.manage`                                                                               |
+| `/communications/member-emails`     | Member Emails & Texts     | any of `settings.manage`, `organization.update_settings`, `notifications.manage` _(2026-09-28)_ |
+| `/communications/photo-use-consent` | Photo Use Consent         | any of `users.view_consents`, `notifications.manage`, `members.manage`, `users.edit`            |
+| `/communications/suggestion-boxes`  | Suggestion Box Management | `suggestions.manage` _(2026-09-23)_                                                             |
+| `/suggestions`                      | Suggestions               | Authenticated _(2026-09-23)_                                                                    |
 
 > **Suggestions** _(2026-09-23)_ is where every member submits to the
 > department's suggestion boxes — named or anonymously, as each box allows —
@@ -1333,21 +1347,21 @@ lot's number or expiration date require `inventory.check_manage` or
 Print-optimized routes. They render a print layout rather than an app screen, and
 are opened from the corresponding module's list view.
 
-| URL                                     | Prints                  | Permission                                   |
-| --------------------------------------- | ----------------------- | -------------------------------------------- |
-| `/members/print-labels`                 | Member labels           | `members.view`                               |
-| `/members/:userId/id-card`              | Member ID card          | Authenticated                                |
-| `/members/scan`                         | Member badge scanner    | `users.view` **OR** `members.manage`         |
-| `/prospective-members/print-labels`     | Applicant badges        | `prospective_members.view`                   |
-| `/inventory/print-labels`               | Inventory labels        | `inventory.manage`                           |
-| `/inventory/storage-areas/print-labels` | Storage area labels     | `inventory.manage`                           |
-| `/apparatus/print-labels`               | Apparatus labels        | `apparatus.view` **OR** `apparatus.manage`   |
-| `/facilities/print-labels`              | Facility / room labels  | `facilities.view` **OR** `facilities.manage` |
-| `/training/print/member`                | Member training history | Authenticated                                |
-| `/training/print/program`               | Training program        | Authenticated                                |
-| `/training/print/compliance`            | Compliance matrix       | `training.manage`                            |
-| `/scheduling/checkin/print`             | Shift check-in sheet    | Authenticated                                |
-| `/scheduling/shift-reports/print`       | Shift report            | Authenticated                                |
+| URL                                     | Prints                  | Permission                                                     |
+| --------------------------------------- | ----------------------- | -------------------------------------------------------------- |
+| `/members/print-labels`                 | Member labels           | `members.view`                                                 |
+| `/members/:userId/id-card`              | Member ID card          | Authenticated                                                  |
+| `/members/scan`                         | Member badge scanner    | `users.view` **OR** `members.manage`                           |
+| `/prospective-members/print-labels`     | Applicant badges        | `prospective_members.view` **OR** `prospective_members.manage` |
+| `/inventory/print-labels`               | Inventory labels        | `inventory.manage`                                             |
+| `/inventory/storage-areas/print-labels` | Storage area labels     | `inventory.manage`                                             |
+| `/apparatus/print-labels`               | Apparatus labels        | `apparatus.view` **OR** `apparatus.manage`                     |
+| `/facilities/print-labels`              | Facility / room labels  | `facilities.view` **OR** `facilities.manage`                   |
+| `/training/print/member`                | Member training history | Authenticated                                                  |
+| `/training/print/program`               | Training program        | Authenticated                                                  |
+| `/training/print/compliance`            | Compliance matrix       | `training.manage`                                              |
+| `/scheduling/checkin/print`             | Shift check-in sheet    | Authenticated                                                  |
+| `/scheduling/shift-reports/print`       | Shift report            | Authenticated                                                  |
 
 ---
 
@@ -1468,6 +1482,8 @@ reviewable in one place.
 | ------------------------------- | ---------------------------- | ---------------------------- |
 | `/prospective-members`          | Prospective Members Pipeline | `prospective_members.manage` |
 | `/prospective-members/settings` | Pipeline Settings            | `prospective_members.manage` |
+
+> **Sign-offs (`/prospective-members/sign-offs`)** _(added 2026-09-28)_. Where the officers a Multi-Signer Approval stage names (the Chief, the President) approve an applicant. Authenticated with the module on, and no permission beyond it: those officers rarely hold `prospective_members` access, and `GET /prospective-members/my-sign-offs` lists only stages asking for a role the caller holds — by applicant name and stage, not their record. Conversion refuses until every required stage is complete.
 
 > The **Pipeline Settings** page includes a **Report Stage Groups Editor** for configuring how pipeline stages are grouped in the pipeline overview report (e.g., combining Application + Interview into "Early Stages").
 

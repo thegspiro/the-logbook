@@ -146,6 +146,7 @@ export const PositionNamesCard: React.FC<PositionNamesCardProps> = ({
               setNewPositionValue(e.target.value.trim().toLowerCase().replace(/\s+/g, '_'));
             }}
             placeholder="Display name (e.g., Tillerman)"
+            aria-label="Custom position name"
             className="form-input flex-1"
           />
           <button

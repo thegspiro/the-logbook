@@ -35,7 +35,8 @@ texts.
 """
 
 import enum
-from typing import Any, List, Optional, Sequence, Tuple
+from dataclasses import dataclass
+from typing import Any, List, Mapping, Optional, Sequence, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -51,6 +52,38 @@ class SmsAlert(str, enum.Enum):
     # A department message an officer explicitly marked urgent. The member is
     # emailed regardless; the text exists to shorten the time to being read.
     URGENT_DEPARTMENT_MESSAGE = "urgent_department_message"
+
+
+@dataclass(frozen=True)
+class SmsAlertInfo:
+    """How an alert is described to administrators on Member Emails & Texts."""
+
+    label: str
+    description: str
+    # The email that always accompanies the text.
+    email_kind: str
+
+
+SMS_ALERT_DETAILS: Mapping[SmsAlert, SmsAlertInfo] = {
+    SmsAlert.URGENT_DEPARTMENT_MESSAGE: SmsAlertInfo(
+        label="Urgent department messages",
+        description=(
+            "A department message an officer marks urgent is also texted, "
+            "after the email has gone out."
+        ),
+        email_kind="department_messages",
+    ),
+}
+
+# Every condition a member must meet before any alert is texted to them, in
+# the order resolve_sms_targets applies them.
+SMS_CONDITIONS: Sequence[str] = (
+    "Text messaging (Twilio) is configured for the department.",
+    "The member has agreed to receive texts; a member never asked counts as "
+    "having said no.",
+    "The member has not turned off Urgent Text Messages in their settings.",
+    "The member has a mobile or phone number on file.",
+)
 
 
 def wants_channel(preferences: Optional[dict], key: str) -> bool:

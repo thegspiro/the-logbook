@@ -4814,16 +4814,31 @@ class EquipmentCheckService:
                 try:
                     from html import escape as _esc
 
+                    from app.services.email_policy import (
+                        EmailKind,
+                        department_required_kinds,
+                        member_receives_email,
+                    )
                     from app.services.email_service import EmailService, wrap_email_body
                     from app.services.email_theme import ACCENT_AMBER, ACCENT_RED
 
                     recip_result = await self.db.execute(
-                        select(User.email).where(
+                        select(User.email, User.notification_preferences).where(
                             User.id.in_(list(recipient_ids)),
+                            User.organization_id == str(organization_id),
                             User.email.isnot(None),
                         )
                     )
-                    to_emails = [r[0] for r in recip_result.all() if r[0]]
+                    to_emails = [
+                        email
+                        for email, prefs in recip_result.all()
+                        if email
+                        and member_receives_email(
+                            prefs,
+                            EmailKind.INVENTORY_DUTIES,
+                            department_required_kinds(org),
+                        )
+                    ]
                     cc_emails = cfg.get("cc_emails", [])
                     if to_emails:
                         email_svc = EmailService(organization=org)

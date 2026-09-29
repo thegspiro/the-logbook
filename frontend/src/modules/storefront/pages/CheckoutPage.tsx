@@ -85,7 +85,7 @@ const CheckoutPage: React.FC = () => {
       toast.success(`Order ${order.orderNumber} submitted`);
       void navigate(`/store/orders?highlight=${order.id}`);
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to place order');
+      toast.error(err instanceof Error ? err.message : 'Could not place your order');
     }
   }, [fulfillmentMethod, memberNotes, navigate, paymentMethod, placeOrder, shippingAddress]);
 
@@ -115,10 +115,10 @@ const CheckoutPage: React.FC = () => {
 
   const vendorGate =
     storefront?.paymentPolicy === StorePaymentPolicy.BEFORE_VENDOR_ORDER
-      ? 'Payable to the department after you submit. Orders reach the vendor once payment is recorded.'
+      ? 'You pay the department after you submit. Your order goes to the vendor once your payment is recorded.'
       : storefront?.paymentPolicy === StorePaymentPolicy.BEFORE_PICKUP
-        ? 'Payable to the department after you submit. Your item is held for collection until payment is recorded.'
-        : 'Payable to the department after you submit. Nothing here is charged now.';
+        ? 'You pay the department after you submit. Your items are held for pickup until your payment is recorded.'
+        : 'You pay the department after you submit. Nothing is charged now.';
 
   const pickingUp = fulfillmentMethod === StoreFulfillmentMethod.PICKUP;
 
@@ -134,7 +134,7 @@ const CheckoutPage: React.FC = () => {
         <p className="text-theme-text-primary text-sm font-semibold">
           Pick up{storefront?.pickupLocation ? ` at ${storefront.pickupLocation}` : ''}
         </p>
-        <p className="text-theme-text-secondary mt-0.5 text-xs">Free · ready when the order lands</p>
+        <p className="text-theme-text-secondary mt-0.5 text-xs">Free · ready when the order arrives</p>
       </div>
     </>
   );
@@ -234,9 +234,9 @@ const CheckoutPage: React.FC = () => {
               <section className="card p-4 sm:p-5">
                 <h2 className="text-theme-text-primary text-[15px] font-bold">How you&apos;ll pay</h2>
                 <p className="text-theme-text-secondary mt-1 mb-3.5 text-[13px]">
-                  Pick one now — you&apos;ll get the handle and a payment link on the confirmation screen
-                  {storefront?.sendsOrderConfirmation === false ? '' : ' and by email'}. The department records the
-                  payment when it arrives.
+                  Choose one. After you submit, your order page
+                  {storefront?.sendsOrderConfirmation === false ? '' : ' and confirmation email'} will show where to
+                  send the money. The department records your payment when it arrives.
                 </p>
                 <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                   {methods.map((option) => {

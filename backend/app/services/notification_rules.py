@@ -52,6 +52,10 @@ _DEFAULT_CONFIG: Dict[NotificationTrigger, Dict[str, Any]] = {
     # changes are the conversation itself, and switching them off would leave
     # a submitter or a forward recipient waiting on a message nobody sends.
     NotificationTrigger.SUGGESTION_SUBMITTED: {},
+    # The member's notice that their equipment request was approved, declined
+    # or issued. Switching it off stops the bell entry, push and email alike;
+    # the request's status on My Equipment is unaffected.
+    NotificationTrigger.EQUIPMENT_REQUEST_UPDATE: {},
 }
 
 

@@ -243,7 +243,7 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
 
     const successCount = returnResults.filter((r) => r.success).length;
     if (successCount > 0) {
-      toast.success(`Returned ${successCount} item${successCount !== 1 ? 's' : ''} successfully`);
+      toast.success(`Returned ${successCount} item${successCount !== 1 ? 's' : ''}`);
       onComplete?.();
     }
   };
@@ -402,17 +402,17 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
                           onClick={() => toggleSelection(item)}
                         >
                           <div className="flex items-start gap-3">
-                            {/* Checkbox */}
+                            {/* A real checkbox, so the row can be chosen from the keyboard
+                                and is announced; the row's own click is a mouse shortcut. */}
                             <div className="pt-0.5">
-                              <div
-                                className={`flex h-5 w-5 items-center justify-center rounded border-2 transition-colors ${
-                                  isSelected
-                                    ? 'border-emerald-600 bg-emerald-600'
-                                    : 'border-theme-surface-border bg-theme-surface'
-                                }`}
-                              >
-                                {isSelected && <Check className="h-3 w-3 text-white" />}
-                              </div>
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleSelection(item)}
+                                onClick={(e) => e.stopPropagation()}
+                                aria-label={`Return ${item.itemName} (${kindLabel})`}
+                                className="form-checkbox"
+                              />
                             </div>
 
                             {/* Item info */}

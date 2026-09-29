@@ -22,6 +22,7 @@ import type { User } from '../types/user';
 import { useAuthStore } from '../stores/authStore';
 import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
+import { useRanks } from '../hooks/useRanks';
 import { getErrorMessage } from '../utils/errorHandling';
 import { UserStatus } from '../constants/enums';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -40,10 +41,15 @@ const WAIVER_TYPES = [
   { value: 'other', label: 'Other' },
 ];
 
+// One option for meetings and shifts, not two. Both are served by a leave of
+// absence, which has no field saying which of the two it covers — scheduling,
+// attendance and tier grading all treat a leave as excusing both. Offering them
+// separately let an officer tick "Meeting Attendance" alone and create a leave
+// that also excused every shift (workflow review W13; whether the two should
+// be separable is recorded in KNOWN_LIMITATIONS).
 const APPLIES_TO_OPTIONS = [
   { value: 'training', label: 'Training Requirements' },
-  { value: 'meetings', label: 'Meeting Attendance' },
-  { value: 'shifts', label: 'Shift Requirements' },
+  { value: 'leave', label: 'Meeting Attendance & Shift Requirements' },
 ];
 
 function getWaiverTypeLabel(type: string): string {
@@ -92,6 +98,7 @@ export const WaiverManagementPage: React.FC = () => {
     tabParam && ['active', 'create', 'history'].includes(tabParam) ? tabParam : 'active'
   );
   const tz = useTimezone();
+  const { formatRank } = useRanks();
   const { checkPermission: _checkPermission } = useAuthStore();
 
   // Data
@@ -105,7 +112,7 @@ export const WaiverManagementPage: React.FC = () => {
   const [formData, setFormData] = useState({
     user_id: '',
     waiver_type: 'leave_of_absence',
-    applies_to: ['training', 'meetings', 'shifts'] as string[],
+    applies_to: ['training', 'leave'] as string[],
     reason: '',
     start_date: '',
     end_date: '',
@@ -155,7 +162,7 @@ export const WaiverManagementPage: React.FC = () => {
       setTrainingWaivers(waiversData);
       setMembers(membersData);
     } catch (_err) {
-      setError('Failed to load waiver data');
+      setError('Unable to load waivers. Refresh the page to try again.');
     } finally {
       setLoading(false);
     }
@@ -260,16 +267,16 @@ export const WaiverManagementPage: React.FC = () => {
     setCreateSuccess(null);
 
     try {
-      if (!formData.user_id) throw new Error('Please select a member');
-      if (formData.applies_to.length === 0) throw new Error('Please select at least one area');
+      if (!formData.user_id) throw new Error('Select a member');
+      if (formData.applies_to.length === 0) throw new Error('Select at least one area to waive');
       if (!formData.start_date) throw new Error('Start date is required');
-      if (!formData.is_permanent && !formData.end_date) throw new Error('End date is required (or select Permanent)');
+      if (!formData.is_permanent && !formData.end_date) throw new Error('Enter an end date, or check Permanent');
       if (!formData.is_permanent && formData.end_date < formData.start_date)
         throw new Error('End date must be after start date');
 
       const endDate = formData.is_permanent ? undefined : formData.end_date;
       const hasTraining = formData.applies_to.includes('training');
-      const hasMeetingsOrShifts = formData.applies_to.includes('meetings') || formData.applies_to.includes('shifts');
+      const hasMeetingsOrShifts = formData.applies_to.includes('leave');
 
       if (hasTraining && !hasMeetingsOrShifts) {
         // Training only — create standalone training waiver
@@ -298,7 +305,7 @@ export const WaiverManagementPage: React.FC = () => {
       setFormData({
         user_id: '',
         waiver_type: 'leave_of_absence',
-        applies_to: ['training', 'meetings', 'shifts'],
+        applies_to: ['training', 'leave'],
         reason: '',
         start_date: '',
         end_date: '',
@@ -332,8 +339,8 @@ export const WaiverManagementPage: React.FC = () => {
         await memberStatusService.deleteTrainingWaiver(waiver.id);
       }
       void fetchData();
-    } catch {
-      toast.error('Failed to deactivate waiver');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to deactivate waiver'));
     }
   };
 
@@ -365,7 +372,7 @@ export const WaiverManagementPage: React.FC = () => {
         <div className="mb-6">
           <h1 className="text-theme-text-primary text-2xl font-bold">Waiver Management</h1>
           <p className="text-theme-text-muted mt-1 text-sm">
-            Manage waivers for training, meetings, and shifts across all members
+            Excuse members from training, meeting and shift requirements
           </p>
         </div>
 
@@ -406,10 +413,10 @@ export const WaiverManagementPage: React.FC = () => {
           <div>
             {activeWaivers.length === 0 ? (
               <div className="card py-12 text-center">
-                <p className="text-theme-text-muted">No active waivers at this time.</p>
+                <p className="text-theme-text-muted">No active waivers.</p>
                 <button
                   onClick={() => handleTabChange('create')}
-                  className="mt-3 text-sm text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                  className="touch-target-phone mt-3 text-sm text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                 >
                   Create a new waiver
                 </button>
@@ -463,7 +470,7 @@ export const WaiverManagementPage: React.FC = () => {
                         <td className="px-4 py-3">
                           <Link
                             to={`/members/${waiver.user_id}`}
-                            className="text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                            className="touch-target-phone text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                           >
                             {waiver.member_name}
                           </Link>
@@ -533,8 +540,11 @@ export const WaiverManagementPage: React.FC = () => {
               >
                 {/* Member Selection */}
                 <div>
-                  <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Member</label>
+                  <label htmlFor="waiver-member" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                    Member
+                  </label>
                   <select
+                    id="waiver-member"
                     value={formData.user_id}
                     onChange={(e) => setFormData({ ...formData, user_id: e.target.value })}
                     className="form-input"
@@ -543,7 +553,7 @@ export const WaiverManagementPage: React.FC = () => {
                     <option value="">Select a member...</option>
                     {activeMembers.map((m) => (
                       <option key={m.id} value={m.id}>
-                        {m.full_name || m.username} {m.rank ? `(${m.rank})` : ''}
+                        {m.full_name || m.username} {m.rank ? `(${formatRank(m.rank)})` : ''}
                       </option>
                     ))}
                   </select>
@@ -551,8 +561,11 @@ export const WaiverManagementPage: React.FC = () => {
 
                 {/* Waiver Type */}
                 <div>
-                  <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Waiver Type</label>
+                  <label htmlFor="waiver-type" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                    Waiver Type
+                  </label>
                   <select
+                    id="waiver-type"
                     value={formData.waiver_type}
                     onChange={(e) => setFormData({ ...formData, waiver_type: e.target.value })}
                     className="form-input"
@@ -566,8 +579,8 @@ export const WaiverManagementPage: React.FC = () => {
                 </div>
 
                 {/* Applies To */}
-                <div>
-                  <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Applies To</label>
+                <fieldset>
+                  <legend className="text-theme-text-secondary mb-1 block text-sm font-medium">Applies To</legend>
                   <div className="mt-1 flex flex-wrap gap-x-4 gap-y-2">
                     {APPLIES_TO_OPTIONS.map((o) => (
                       <label
@@ -592,23 +605,26 @@ export const WaiverManagementPage: React.FC = () => {
                   <p className="text-theme-text-muted mt-1 text-xs">
                     {formData.applies_to.length === 0
                       ? 'Select at least one area to waive.'
-                      : formData.applies_to.includes('training') &&
-                          !formData.applies_to.includes('meetings') &&
-                          !formData.applies_to.includes('shifts')
+                      : formData.applies_to.includes('training') && !formData.applies_to.includes('leave')
                         ? 'Creates a standalone training waiver without a leave of absence.'
-                        : !formData.applies_to.includes('training') &&
-                            (formData.applies_to.includes('meetings') || formData.applies_to.includes('shifts'))
+                        : !formData.applies_to.includes('training') && formData.applies_to.includes('leave')
                           ? 'Creates a leave of absence but keeps training requirements active.'
                           : 'Creates a leave of absence that automatically generates a training waiver.'}
                   </p>
-                </div>
+                </fieldset>
 
                 {/* Date Range */}
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
-                      <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Start Date</label>
+                      <label
+                        htmlFor="waiver-start-date"
+                        className="text-theme-text-secondary mb-1 block text-sm font-medium"
+                      >
+                        Start Date
+                      </label>
                       <input
+                        id="waiver-start-date"
                         type="date"
                         value={formData.start_date}
                         onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
@@ -618,8 +634,14 @@ export const WaiverManagementPage: React.FC = () => {
                     </div>
                     {!formData.is_permanent && (
                       <div>
-                        <label className="text-theme-text-secondary mb-1 block text-sm font-medium">End Date</label>
+                        <label
+                          htmlFor="waiver-end-date"
+                          className="text-theme-text-secondary mb-1 block text-sm font-medium"
+                        >
+                          End Date
+                        </label>
                         <input
+                          id="waiver-end-date"
                           type="date"
                           value={formData.end_date}
                           onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
@@ -640,16 +662,19 @@ export const WaiverManagementPage: React.FC = () => {
                   </label>
                   {formData.is_permanent && (
                     <p className="text-theme-text-muted text-xs">
-                      This waiver will remain active indefinitely until manually deactivated. Use for long-service
-                      members exempt from certain requirements.
+                      The waiver stays active until you deactivate it. Use for long-serving members exempt from certain
+                      requirements.
                     </p>
                   )}
                 </div>
 
                 {/* Reason */}
                 <div>
-                  <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Reason</label>
+                  <label htmlFor="waiver-reason" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                    Reason
+                  </label>
                   <textarea
+                    id="waiver-reason"
                     value={formData.reason}
                     onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
                     rows={3}
@@ -676,7 +701,8 @@ export const WaiverManagementPage: React.FC = () => {
                   <button
                     key={f}
                     onClick={() => setHistoryFilter(f)}
-                    className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                    aria-pressed={historyFilter === f}
+                    className={`touch-target-phone px-3 py-1.5 text-xs font-medium transition-colors ${
                       historyFilter === f
                         ? 'bg-red-800 text-white'
                         : 'bg-theme-surface text-theme-text-muted hover:text-theme-text-primary'
@@ -690,7 +716,7 @@ export const WaiverManagementPage: React.FC = () => {
                 type="text"
                 value={memberFilter}
                 onChange={(e) => setMemberFilter(e.target.value)}
-                aria-label="Search by member name..."
+                aria-label="Search by member name"
                 placeholder="Search by member name..."
                 className="form-input w-64 px-3 py-1.5 text-sm"
               />
@@ -760,7 +786,7 @@ export const WaiverManagementPage: React.FC = () => {
                           <td className="px-4 py-3">
                             <Link
                               to={`/members/${waiver.user_id}`}
-                              className="text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                              className="touch-target-phone text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                             >
                               {waiver.member_name}
                             </Link>

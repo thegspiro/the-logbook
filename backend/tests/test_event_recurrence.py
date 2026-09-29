@@ -9,8 +9,9 @@ the Feb-29 fallback, custom weekdays), duration preservation, and the
 exception-date filter. Pure logic; no DB.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
+from zoneinfo import ZoneInfo
 
 from app.models.event import RecurrencePattern
 from app.services.event_service import EventService
@@ -151,6 +152,98 @@ class TestDurationAndExceptions:
         start = datetime(2026, 6, 1, 9, 0)
         out = _gen(start, start, "not_a_pattern", datetime(2026, 6, 30, 9, 0))
         assert len(out) == 1
+
+
+class TestDepartmentWallClock:
+    """W18-1: a series is stepped in the department's wall-clock time.
+
+    Stepping the stored UTC instant moved a weekly 7pm drill to 6pm when
+    daylight saving ended, and — a US evening being tomorrow in UTC — matched
+    weekdays and skipped dates against the wrong day.
+    """
+
+    CHI = ZoneInfo("America/Chicago")
+
+    def _local(self, dt):
+        return dt.astimezone(self.CHI)
+
+    def test_weekly_7pm_stays_7pm_across_the_end_of_daylight_saving(self):
+        # 7-9pm Chicago, Mondays 5 Oct - 16 Nov 2026; DST ends Sun 1 Nov.
+        start = datetime(2026, 10, 6, 0, 0, tzinfo=timezone.utc)
+        out = _gen(
+            start,
+            start + timedelta(hours=2),
+            "weekly",
+            datetime(2026, 11, 17, 5, 59, tzinfo=timezone.utc),
+            timezone_=self.CHI,
+        )
+        locals_ = [self._local(s) for s, _ in out]
+        assert len(out) == 7
+        assert {(d.weekday(), d.hour, d.minute) for d in locals_} == {(MON, 19, 0)}
+        assert out[4][0] == datetime(2026, 11, 3, 1, 0, tzinfo=timezone.utc)
+        assert all(e - s == timedelta(hours=2) for s, e in out)
+
+    def test_a_skipped_date_is_the_departments_date(self):
+        start = datetime(2026, 10, 6, 0, 0, tzinfo=timezone.utc)  # Mon 5 Oct, 7pm
+        out = _gen(
+            start,
+            start + timedelta(hours=2),
+            "weekly",
+            datetime(2026, 10, 27, 4, 59, tzinfo=timezone.utc),
+            exceptions=["2026-10-12"],
+            timezone_=self.CHI,
+        )
+        assert [self._local(s).day for s, _ in out] == [5, 19, 26]
+
+    def test_custom_weekdays_are_the_departments_weekdays(self):
+        # Mon and Wed at 7pm Chicago: Tue and Thu in UTC.
+        start = datetime(2026, 10, 6, 0, 0, tzinfo=timezone.utc)
+        out = _gen(
+            start,
+            start + timedelta(hours=1),
+            RecurrencePattern.CUSTOM.value,
+            datetime(2026, 10, 13, 4, 59, tzinfo=timezone.utc),
+            custom_days=[MON, WED],
+            timezone_=self.CHI,
+        )
+        assert [self._local(s).strftime("%a %H") for s, _ in out] == [
+            "Mon 19",
+            "Wed 19",
+            "Mon 19",
+        ]
+
+    def test_naive_utc_in_gives_naive_utc_out(self):
+        # The rolling-extension task passes naive-but-UTC column values.
+        start = datetime(2026, 10, 27, 0, 0)
+        out = _gen(
+            start,
+            start + timedelta(hours=2),
+            "weekly",
+            datetime(2026, 11, 4, 0, 0),
+            timezone_=self.CHI,
+        )
+        assert out == [
+            (datetime(2026, 10, 27, 0, 0), datetime(2026, 10, 27, 2, 0)),
+            (datetime(2026, 11, 3, 1, 0), datetime(2026, 11, 3, 3, 0)),
+        ]
+
+    async def test_create_steps_the_series_in_the_departments_zone(self):
+        svc = EventService(MagicMock())
+        event_data = {
+            "recurrence_pattern": "weekly",
+            "recurrence_end_date": datetime(2026, 11, 17, 5, 59, tzinfo=timezone.utc),
+            "start_datetime": datetime(2026, 10, 6, 0, 0, tzinfo=timezone.utc),
+            "end_datetime": datetime(2026, 10, 6, 2, 0, tzinfo=timezone.utc),
+            "title": "Weekly Drill",
+        }
+        with patch(
+            "app.services.event_service.resolve_scheduling_timezone",
+            AsyncMock(return_value=self.CHI),
+        ), patch.object(svc, "_generate_recurrence_dates", return_value=[]) as generate:
+            await svc.create_recurring_event(
+                event_data, organization_id="org-1", created_by="u1"
+            )
+        assert generate.call_args.kwargs["timezone_"] == self.CHI
 
 
 class TestCreateRecurringEventLocationValidation:

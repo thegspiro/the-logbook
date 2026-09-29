@@ -23,8 +23,11 @@ const AddMember: React.FC = () => {
   const { confirm } = useConfirm();
   const { rankOptions } = useRanks();
   const [isSaving, setIsSaving] = useState(false);
+  // The number the server will assign when Membership Number is left blank, or
+  // null when the department assigns numbers by hand. It decides whether the
+  // field is required: requiring it while auto-assignment is on meant the typed
+  // value always won and the counter never issued a number from this screen.
   const [membershipIdPreview, setMembershipIdPreview] = useState<string | null>(null);
-  const [membershipIdOverride, setMembershipIdOverride] = useState('');
   const [formData, setFormData] = useState<MemberFormData>({
     firstName: '',
     lastName: '',
@@ -145,7 +148,9 @@ const AddMember: React.FC = () => {
     // Required fields
     if (!formData.firstName.trim()) newErrors.firstName = 'First name is required';
     if (!formData.lastName.trim()) newErrors.lastName = 'Last name is required';
-    if (!formData.membershipNumber.trim()) newErrors.membershipNumber = 'Membership number is required';
+    if (!membershipIdPreview && !formData.membershipNumber.trim()) {
+      newErrors.membershipNumber = 'Membership number is required';
+    }
 
     // Address
     if (!formData.street.trim()) newErrors.street = 'Street address is required';
@@ -157,7 +162,7 @@ const AddMember: React.FC = () => {
     if (!formData.primaryPhone.trim()) newErrors.primaryPhone = 'Primary phone is required';
     if (!formData.email.trim()) newErrors.email = 'Email is required';
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'Invalid email format';
+      newErrors.email = 'Enter a valid email address';
     }
 
     // Emergency Contact 1 (required)
@@ -192,7 +197,7 @@ const AddMember: React.FC = () => {
       // refuse is caught here, at the field, rather than in a toast after the
       // whole form has been sent (workflow review W08).
       if (!initialPassword) {
-        newErrors.password = 'Password is required when setting a custom password';
+        newErrors.password = 'Enter a password';
       } else if (!validatePasswordStrength(initialPassword).isValid) {
         newErrors.password = 'Password does not meet every rule listed below';
       }
@@ -209,7 +214,7 @@ const AddMember: React.FC = () => {
     e.preventDefault();
 
     if (!validateForm()) {
-      toast.error('Please fill in all required fields');
+      toast.error('Fill in the required fields marked below.');
       return;
     }
 
@@ -261,9 +266,7 @@ const AddMember: React.FC = () => {
         emergency_contacts: emergencyContacts,
         send_welcome_email: !useCustomPassword,
         ...(formData.middleName ? { middle_name: formData.middleName } : {}),
-        ...(membershipIdOverride || formData.membershipNumber
-          ? { membership_number: membershipIdOverride || formData.membershipNumber }
-          : {}),
+        ...(formData.membershipNumber.trim() ? { membership_number: formData.membershipNumber.trim() } : {}),
         ...(formData.primaryPhone ? { phone: formData.primaryPhone } : {}),
         ...(formData.secondaryPhone ? { mobile: formData.secondaryPhone } : {}),
         ...(formData.dateOfBirth ? { date_of_birth: formData.dateOfBirth } : {}),
@@ -300,10 +303,10 @@ const AddMember: React.FC = () => {
         }
       }
 
-      toast.success('Member added successfully!');
+      toast.success('Member added');
       void navigate('/members');
     } catch (error: unknown) {
-      const errorMessage = getErrorMessage(error, 'Failed to add member. Please try again.');
+      const errorMessage = getErrorMessage(error, 'Unable to add member. Try again.');
       toast.error(errorMessage);
 
       // Highlight the specific field if it's a duplicate membership number error
@@ -344,7 +347,7 @@ const AddMember: React.FC = () => {
               </div>
               <div>
                 <h1 className="text-theme-text-primary text-xl font-bold">Add New Member</h1>
-                <p className="text-theme-text-muted text-sm">Enter member information</p>
+                <p className="text-theme-text-muted text-sm">Add someone to the roster</p>
               </div>
             </div>
             <button
@@ -423,7 +426,7 @@ const AddMember: React.FC = () => {
                   htmlFor="add-membershipNumber"
                   className="text-theme-text-primary mb-2 block text-sm font-medium"
                 >
-                  Membership Number <span className="text-red-700 dark:text-red-400">*</span>
+                  Membership Number {!membershipIdPreview && <span className="text-red-700 dark:text-red-400">*</span>}
                 </label>
                 <input
                   type="text"
@@ -431,8 +434,15 @@ const AddMember: React.FC = () => {
                   value={formData.membershipNumber}
                   onChange={(e) => handleInputChange('membershipNumber', e.target.value)}
                   className={`form-input ${errors.membershipNumber ? 'border-red-500' : 'border-theme-input-border'}`}
-                  placeholder="FF-001"
+                  placeholder={membershipIdPreview ?? 'FF-001'}
+                  aria-describedby={membershipIdPreview ? 'add-membershipNumber-hint' : undefined}
                 />
+                {membershipIdPreview && (
+                  <p id="add-membershipNumber-hint" className="text-theme-text-muted mt-1 text-xs">
+                    Leave blank to assign {membershipIdPreview} automatically, or enter one yourself (for example, a
+                    returning member&apos;s number).
+                  </p>
+                )}
                 {errors.membershipNumber && (
                   <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.membershipNumber}</p>
                 )}
@@ -451,29 +461,6 @@ const AddMember: React.FC = () => {
                 />
               </div>
             </div>
-
-            {/* Membership ID - shown when membership IDs are enabled */}
-            {membershipIdPreview && (
-              <div className="mt-4">
-                <label className="text-theme-text-primary mb-2 block text-sm font-medium">Membership ID</label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="text"
-                    value={membershipIdOverride}
-                    onChange={(e) => setMembershipIdOverride(e.target.value)}
-                    className="form-input max-w-xs flex-1"
-                    placeholder={membershipIdPreview}
-                  />
-                  <span className="text-theme-text-muted text-sm">
-                    {membershipIdOverride ? 'Manual override' : `Auto-assigned: ${membershipIdPreview}`}
-                  </span>
-                </div>
-                <p className="text-theme-text-muted mt-1 text-xs">
-                  Leave blank to auto-assign the next ID. Enter a value to manually assign (e.g., for returning former
-                  members).
-                </p>
-              </div>
-            )}
           </div>
 
           {/* Home Address */}
@@ -638,7 +625,7 @@ const AddMember: React.FC = () => {
                   <p className="text-theme-text-muted text-xs">
                     {welcomeEmailAvailable === false
                       ? "Required: email isn't set up for this department, so a temporary password can't be sent. Set one here and give it to the member."
-                      : 'If unchecked, a temporary password will be generated and emailed to the member.'}
+                      : 'Leave unchecked to email the member a temporary password.'}
                   </p>
                 </div>
               </label>
@@ -728,7 +715,7 @@ const AddMember: React.FC = () => {
               )}
 
               <p className="text-theme-text-muted text-xs">
-                The member will be required to change their password on first login regardless of how it is set.
+                Either way, the member must change this password at first sign-in.
               </p>
             </div>
           </div>

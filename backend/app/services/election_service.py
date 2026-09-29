@@ -48,6 +48,12 @@ from app.schemas.election import (
     PositionResults,
     VoterEligibility,
 )
+from app.services.email_policy import (
+    EmailKind,
+    department_required_kinds,
+    member_receives_email,
+    recipients_for,
+)
 from app.services.email_service import BuiltMessage, EmailService
 from app.services.email_template_service import (
     DEFAULT_ELECTION_DELETED_HTML,
@@ -3208,7 +3214,15 @@ class ElectionService:
                 .where(User.is_active.is_(True))
             )
             members = members_result.scalars().all()
-            member_emails = [m.email for m in members if m.email]
+            member_emails = [
+                m.email
+                for m in recipients_for(
+                    members,
+                    EmailKind.ELECTION_NOTICES,
+                    department_required_kinds(organization),
+                )
+                if m.email
+            ]
             if not member_emails:
                 return
 
@@ -3285,6 +3299,12 @@ class ElectionService:
             )
             nominee = nominee_result.scalar_one_or_none()
             if not organization or not nominee or not nominee.email:
+                return
+            if not member_receives_email(
+                nominee.notification_preferences,
+                EmailKind.ELECTION_NOTICES,
+                department_required_kinds(organization),
+            ):
                 return
 
             deadline_line = ""
@@ -5371,13 +5391,13 @@ class ElectionService:
         )
         all_users = users_result.scalars().all()
 
-        leadership_users = [
+        leadership = [
             user
             for user in all_users
             if any(role.slug in leadership_roles for role in user.roles)
         ]
 
-        if not leadership_users:
+        if not leadership:
             return 0
 
         performer_result = await self.db.execute(
@@ -5392,6 +5412,15 @@ class ElectionService:
         organization = org_result.scalar_one_or_none()
 
         if not organization:
+            return 0
+
+        leadership_users = recipients_for(
+            leadership,
+            EmailKind.ELECTION_ADMIN,
+            department_required_kinds(organization),
+        )
+
+        if not leadership_users:
             return 0
 
         email_service = EmailService(organization)
@@ -6518,10 +6547,15 @@ class ElectionService:
         self,
         election_id: UUID,
         organization_id: UUID,
+        requested: bool = False,
     ) -> Tuple[bool, str]:
         """
         Generate and send an election report email to the secretary (election
         creator) and any leadership members.
+
+        *requested* is True when an officer pressed "Send report": that send
+        goes out regardless of the creator's email choices. The automatic send
+        when an election closes follows them (``EmailKind.ELECTION_ADMIN``).
 
         The report includes:
         - Election results (per-position winners, vote counts, percentages)
@@ -6590,7 +6624,18 @@ class ElectionService:
                 select(User).where(User.id == election.created_by)
             )
             creator = creator_result.scalar_one_or_none()
-            if creator and creator.email:
+            if (
+                creator
+                and creator.email
+                and (
+                    requested
+                    or member_receives_email(
+                        creator.notification_preferences,
+                        EmailKind.ELECTION_ADMIN,
+                        department_required_kinds(organization),
+                    )
+                )
+            ):
                 to_emails.append(creator.email)
                 recipient_name = creator.full_name or "Secretary"
 

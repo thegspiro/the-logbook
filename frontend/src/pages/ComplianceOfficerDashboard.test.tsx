@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 
@@ -197,6 +197,36 @@ describe('ComplianceOfficerDashboard', () => {
 
     expect(screen.getByText('Admin Hours')).toBeInTheDocument();
     expect(screen.getByText('Total Contributed')).toBeInTheDocument();
+  });
+
+  it('reads a requirement nobody is held to as not applicable, not 0%', async () => {
+    mockGetAnnualReport.mockResolvedValue({
+      ...mockAnnualReport,
+      requirement_analysis: [
+        {
+          requirement_id: 'r1',
+          name: 'Pump Operations',
+          type: 'courses',
+          members_compliant: 0,
+          members_total: 0,
+          compliance_pct: 0,
+        },
+        {
+          requirement_id: 'r2',
+          name: 'Annual Hazmat Hours',
+          type: 'hours',
+          members_compliant: 0,
+          members_total: 27,
+          compliance_pct: 0,
+        },
+      ],
+    });
+    renderWithRouter(<ComplianceOfficerDashboard activeTab="annual-report" />);
+
+    const pump = await screen.findByRole('row', { name: /Pump Operations/ });
+    expect(within(pump).getByText('Not applicable')).toBeInTheDocument();
+    const hazmat = screen.getByRole('row', { name: /Annual Hazmat Hours/ });
+    expect(within(hazmat).getByText('0%')).toBeInTheDocument();
   });
 
   it('shows admin hours by category breakdown', async () => {

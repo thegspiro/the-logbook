@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import ExternalTrainingPage from './ExternalTrainingPage';
@@ -11,6 +11,8 @@ const mockGetUserMappings = vi.fn();
 const mockUpdateCategoryMapping = vi.fn();
 const mockGetCategories = vi.fn();
 const mockDeleteProvider = vi.fn();
+const mockCreateProvider = vi.fn();
+const mockUpdateProvider = vi.fn();
 
 vi.mock('../services/api', () => ({
   externalTrainingService: {
@@ -20,6 +22,8 @@ vi.mock('../services/api', () => ({
     getUserMappings: (...a: unknown[]) => mockGetUserMappings(...a) as unknown,
     updateCategoryMapping: (...a: unknown[]) => mockUpdateCategoryMapping(...a) as unknown,
     deleteProvider: (...a: unknown[]) => mockDeleteProvider(...a) as unknown,
+    createProvider: (...a: unknown[]) => mockCreateProvider(...a) as unknown,
+    updateProvider: (...a: unknown[]) => mockUpdateProvider(...a) as unknown,
   },
   trainingService: {
     getCategories: (...a: unknown[]) => mockGetCategories(...a) as unknown,
@@ -125,5 +129,126 @@ describe('ExternalTrainingPage — modal behavior', () => {
     expect(await screen.findByRole('dialog', { name: 'Select Provider Type' })).toBeInTheDocument();
     await waitFor(() => expect(addProvider).not.toHaveFocus());
     expect(document.body.style.overflow).toBe('hidden');
+  });
+});
+
+describe('ExternalTrainingPage — provider setup form', () => {
+  const chooseProvider = async (label: RegExp) => {
+    renderWithRouter(<ExternalTrainingPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /add provider/i }));
+    await userEvent.click(await screen.findByRole('button', { name: label }));
+  };
+
+  // Target Solutions' Training Records API authenticates with a key and a
+  // secret in the report URL. The form offered no secret field for it, so a
+  // provider created from it could never authenticate.
+  it('collects a required key and secret for Target Solutions, without a Site ID', async () => {
+    await chooseProvider(/^Target Solutions/);
+
+    expect(await screen.findByLabelText(/^API Key/)).toBeRequired();
+    expect(screen.getByLabelText(/^API Secret/)).toBeRequired();
+    expect(screen.queryByLabelText(/^Site ID/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Authentication Type')).not.toBeInTheDocument();
+  });
+
+  it('keeps the AccessToken and Site ID fields for Vector Solutions', async () => {
+    await chooseProvider(/^Vector Solutions/);
+
+    expect(await screen.findByLabelText(/^Site ID/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^AccessToken/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^API Secret/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the generic API key fields for other providers', async () => {
+    await chooseProvider(/^Lexipol/);
+
+    expect(await screen.findByLabelText('Authentication Type')).toBeInTheDocument();
+    expect(screen.getByLabelText(/^API Key/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Site ID/)).not.toBeInTheDocument();
+  });
+});
+
+describe('ExternalTrainingPage — hourly pulls with a daily review', () => {
+  beforeEach(() => {
+    mockCreateProvider.mockReset();
+    mockCreateProvider.mockResolvedValue({ ...provider, id: 'prov-new' });
+    mockUpdateProvider.mockReset();
+    mockUpdateProvider.mockResolvedValue(provider);
+  });
+
+  it('defaults Target Solutions to hourly pulls and a 02:00 review', async () => {
+    renderWithRouter(<ExternalTrainingPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /add provider/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /^Target Solutions/ }));
+
+    await userEvent.type(screen.getByLabelText(/^API Base URL/), 'https://app.targetsolutions.com/tsapp/api/');
+    await userEvent.type(screen.getByLabelText(/^API Key/), 'k');
+    await userEvent.type(screen.getByLabelText(/^API Secret/), 's');
+    await userEvent.click(screen.getByRole('switch', { name: 'Enable auto-sync' }));
+
+    expect(screen.getByLabelText('Pull new completions')).toHaveValue('1');
+    expect(screen.getByLabelText('Daily 30-day review at')).toHaveValue('02:00');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Create Provider' }));
+
+    await waitFor(() => expect(mockCreateProvider).toHaveBeenCalledTimes(1));
+    const payload = mockCreateProvider.mock.calls[0]?.[0] as {
+      sync_interval_hours?: number;
+      config?: { review_time?: string | null };
+    };
+    expect(payload.sync_interval_hours).toBe(1);
+    expect(payload.config?.review_time).toBe('02:00');
+  });
+
+  it('offers no review time for other providers', async () => {
+    renderWithRouter(<ExternalTrainingPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /add provider/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /^Vector Solutions/ }));
+    await userEvent.click(screen.getByRole('switch', { name: 'Enable auto-sync' }));
+
+    expect(screen.getByLabelText('Sync Interval')).toHaveValue('24');
+    expect(screen.queryByLabelText('Daily 30-day review at')).not.toBeInTheDocument();
+  });
+
+  // The update endpoint replaces the stored config, so changing the review
+  // time must carry the provider's existing settings along with it.
+  it('keeps the existing config when an edit changes the review time', async () => {
+    mockGetProviders.mockResolvedValue([
+      {
+        ...provider,
+        provider_type: 'target_solutions',
+        api_base_url: 'https://app.targetsolutions.com/tsapp/api/',
+        auto_sync_enabled: true,
+        sync_interval_hours: 1,
+        config: { date_format: 'mm-dd-yyyy' },
+      },
+    ]);
+    renderWithRouter(<ExternalTrainingPage />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit provider' }));
+
+    // jsdom's time input does not take typed keystrokes like a browser does.
+    fireEvent.change(await screen.findByLabelText('Daily 30-day review at'), { target: { value: '03:30' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await waitFor(() => expect(mockUpdateProvider).toHaveBeenCalledTimes(1));
+    expect(mockUpdateProvider).toHaveBeenCalledWith(
+      'prov-1',
+      expect.objectContaining({ config: { date_format: 'mm-dd-yyyy', review_time: '03:30' } })
+    );
+  });
+
+  it('labels the schedule with its review time', async () => {
+    mockGetProviders.mockResolvedValue([
+      {
+        ...provider,
+        provider_type: 'target_solutions',
+        auto_sync_enabled: true,
+        sync_interval_hours: 1,
+        config: { review_time: '02:00' },
+      },
+    ]);
+    renderWithRouter(<ExternalTrainingPage />);
+
+    expect(await screen.findByText('Every 1h · review daily at 02:00')).toBeInTheDocument();
   });
 });

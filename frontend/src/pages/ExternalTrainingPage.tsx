@@ -56,6 +56,78 @@ const PROVIDER_TYPES: { value: ExternalProviderType; label: string; description:
   { value: 'custom_api', label: 'Custom API', description: 'Connect to any training platform with a compatible API' },
 ];
 
+// Target Solutions' Training Records API: one GET returning a CSV of
+// completions, authenticated by key and secret query parameters.
+const TARGET_SOLUTIONS_REPORT_URL = 'https://app.targetsolutions.com/tsapp/api/';
+
+// Target Solutions pulls recent completions every hour and re-checks the last
+// 30 days once a day at its review time (config.review_time, read by the
+// backend's review_time_for, which assumes this same default when unset).
+const DEFAULT_REVIEW_TIME = '02:00';
+const TS_DEFAULT_PULL_HOURS = 1;
+
+interface SyncScheduleFieldsProps {
+  idPrefix: string;
+  intervalHours: number;
+  // null hides the review time: only Target Solutions has a daily review.
+  reviewTime: string | null;
+  onChange: (next: { intervalHours: number; reviewTime: string | null }) => void;
+}
+
+const SyncScheduleFields: React.FC<SyncScheduleFieldsProps> = ({ idPrefix, intervalHours, reviewTime, onChange }) => {
+  const tz = useTimezone();
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <label
+          htmlFor={`${idPrefix}-sync-interval`}
+          className="text-theme-text-secondary mb-2 block text-sm font-medium"
+        >
+          {reviewTime !== null ? 'Pull new completions' : 'Sync Interval'}
+        </label>
+        <select
+          id={`${idPrefix}-sync-interval`}
+          value={intervalHours}
+          onChange={(e) => onChange({ intervalHours: parseInt(e.target.value), reviewTime })}
+          className="form-input"
+        >
+          <option value={1}>Every hour</option>
+          <option value={6}>Every 6 hours</option>
+          <option value={12}>Every 12 hours</option>
+          <option value={24}>Daily</option>
+          <option value={48}>Every 2 days</option>
+          <option value={168}>Weekly</option>
+        </select>
+      </div>
+
+      {reviewTime !== null && (
+        <div>
+          <label
+            htmlFor={`${idPrefix}-review-time`}
+            className="text-theme-text-secondary mb-2 block text-sm font-medium"
+          >
+            Daily 30-day review at
+          </label>
+          <input
+            id={`${idPrefix}-review-time`}
+            type="time"
+            value={reviewTime}
+            onChange={(e) => onChange({ intervalHours, reviewTime: e.target.value || DEFAULT_REVIEW_TIME })}
+            className="form-input w-40"
+            required
+          />
+          <p className="text-theme-text-muted mt-1 text-xs">
+            Each pull fetches completions since the last one. Once a day the review re-checks the last 30 days, which
+            catches completions recorded for a past date. Times are in the department&apos;s timezone ({tz}); runs start
+            within 30 minutes of their time.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
+
 interface CreateProviderModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -77,12 +149,19 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const isTargetSolutions = formData.provider_type === 'target_solutions';
 
   const handleTypeSelect = (type: ExternalProviderType) => {
     setFormData((prev) => ({
       ...prev,
       provider_type: type,
       name: PROVIDER_TYPES.find((p) => p.value === type)?.label || '',
+      ...(type === 'target_solutions'
+        ? {
+            sync_interval_hours: TS_DEFAULT_PULL_HOURS,
+            config: { ...prev.config, review_time: DEFAULT_REVIEW_TIME },
+          }
+        : {}),
     }));
     setStep('details');
   };
@@ -206,7 +285,9 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                 placeholder={
                   formData.provider_type === 'vector_solutions'
                     ? 'https://app.targetsolutions.com/tsapp/dashboard/pl/api/v1'
-                    : 'https://api.example.com'
+                    : isTargetSolutions
+                      ? TARGET_SOLUTIONS_REPORT_URL
+                      : 'https://api.example.com'
                 }
                 required
                 aria-required="true"
@@ -217,9 +298,14 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                   https://app.targetsolutions.com/tsapp/dashboard/pl/api/v1)
                 </p>
               )}
+              {isTargetSolutions && (
+                <p className="text-theme-text-muted mt-1 text-xs">
+                  The Training Records API address, without the query string: {TARGET_SOLUTIONS_REPORT_URL}
+                </p>
+              )}
             </div>
 
-            {formData.provider_type !== 'vector_solutions' && (
+            {formData.provider_type !== 'vector_solutions' && !isTargetSolutions && (
               <div>
                 <label
                   htmlFor="provider-auth-type"
@@ -256,7 +342,9 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                 placeholder={
                   formData.provider_type === 'vector_solutions'
                     ? 'Enter your TargetSolutions AccessToken'
-                    : 'Enter your API key'
+                    : isTargetSolutions
+                      ? 'The key= value from your Training Records API URL'
+                      : 'Enter your API key'
                 }
                 required
                 aria-required="true"
@@ -265,6 +353,12 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                 <p className="text-theme-text-muted mt-1 text-xs">
                   Your AccessToken is provided by your Vector Solutions account manager. Each token has specific access
                   levels.
+                </p>
+              )}
+              {isTargetSolutions && (
+                <p className="text-theme-text-muted mt-1 text-xs">
+                  Target Solutions issues a Training Records API URL containing a key and a secret. Enter each value
+                  separately; they are stored encrypted.
                 </p>
               )}
             </div>
@@ -293,13 +387,13 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
               </div>
             )}
 
-            {formData.auth_type === 'basic' && (
+            {(formData.auth_type === 'basic' || isTargetSolutions) && (
               <div>
                 <label
                   htmlFor="provider-api-secret"
                   className="text-theme-text-secondary mb-2 block text-sm font-medium"
                 >
-                  API Secret
+                  API Secret {isTargetSolutions && <span aria-hidden="true">*</span>}
                 </label>
                 <input
                   id="provider-api-secret"
@@ -307,7 +401,11 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                   value={formData.api_secret || ''}
                   onChange={(e) => setFormData((prev) => ({ ...prev, api_secret: e.target.value }))}
                   className="form-input"
-                  placeholder="Enter your API secret"
+                  placeholder={
+                    isTargetSolutions ? 'The secret= value from your Training Records API URL' : 'Enter your API secret'
+                  }
+                  required={isTargetSolutions}
+                  aria-required={isTargetSolutions}
                 />
               </div>
             )}
@@ -358,28 +456,18 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
               </div>
 
               {formData.auto_sync_enabled && (
-                <div>
-                  <label
-                    htmlFor="provider-sync-interval"
-                    className="text-theme-text-secondary mb-2 block text-sm font-medium"
-                  >
-                    Sync Interval (hours)
-                  </label>
-                  <select
-                    id="provider-sync-interval"
-                    value={formData.sync_interval_hours}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, sync_interval_hours: parseInt(e.target.value) }))
-                    }
-                    className="form-input"
-                  >
-                    <option value={6}>Every 6 hours</option>
-                    <option value={12}>Every 12 hours</option>
-                    <option value={24}>Daily</option>
-                    <option value={48}>Every 2 days</option>
-                    <option value={168}>Weekly</option>
-                  </select>
-                </div>
+                <SyncScheduleFields
+                  idPrefix="provider"
+                  intervalHours={formData.sync_interval_hours ?? 24}
+                  reviewTime={isTargetSolutions ? (formData.config?.review_time ?? DEFAULT_REVIEW_TIME) : null}
+                  onChange={({ intervalHours, reviewTime }) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      sync_interval_hours: intervalHours,
+                      ...(reviewTime !== null ? { config: { ...prev.config, review_time: reviewTime } } : {}),
+                    }))
+                  }
+                />
               )}
             </div>
 
@@ -502,7 +590,11 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
         <div className="bg-theme-surface-secondary rounded-lg p-3">
           <p className="text-theme-text-muted text-xs">Auto-Sync</p>
           <p className="text-theme-text-primary text-sm">
-            {provider.auto_sync_enabled ? `Every ${provider.sync_interval_hours}h` : 'Disabled'}
+            {!provider.auto_sync_enabled
+              ? 'Disabled'
+              : provider.provider_type === 'target_solutions'
+                ? `Every ${provider.sync_interval_hours}h · review daily at ${provider.config?.review_time ?? DEFAULT_REVIEW_TIME}`
+                : `Every ${provider.sync_interval_hours}h`}
           </p>
         </div>
       </div>
@@ -594,6 +686,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
     api_key: '',
     api_secret: '',
     auth_type: 'api_key' as 'api_key' | 'basic' | 'oauth2',
+    review_time: null as string | null,
     auto_sync_enabled: false,
     sync_interval_hours: 24,
   });
@@ -609,6 +702,8 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
         api_key: '',
         api_secret: '',
         auth_type: provider.auth_type || 'api_key',
+        review_time:
+          provider.provider_type === 'target_solutions' ? (provider.config?.review_time ?? DEFAULT_REVIEW_TIME) : null,
         auto_sync_enabled: provider.auto_sync_enabled || false,
         sync_interval_hours: provider.sync_interval_hours || 24,
       });
@@ -639,8 +734,13 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
       if (formData.api_secret) {
         updates.api_secret = formData.api_secret;
       }
+      // The update replaces the stored config wholesale, so a schedule change
+      // is sent on top of the existing settings (Site ID, endpoints, …).
+      if (formData.review_time !== null && formData.review_time !== (provider.config?.review_time ?? null)) {
+        updates.config = { ...(provider.config ?? {}), review_time: formData.review_time };
+      }
       await externalTrainingService.updateProvider(provider.id, updates);
-      toast.success('Provider updated successfully');
+      toast.success('Provider updated');
       onSuccess();
       onClose();
     } catch (err: unknown) {
@@ -734,7 +834,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
             />
           </div>
 
-          {formData.auth_type === 'basic' && (
+          {(formData.auth_type === 'basic' || provider?.provider_type === 'target_solutions') && (
             <div>
               <label
                 htmlFor="edit-provider-api-secret"
@@ -797,26 +897,14 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
             </div>
 
             {formData.auto_sync_enabled && (
-              <div>
-                <label
-                  htmlFor="edit-provider-sync-interval"
-                  className="text-theme-text-secondary mb-2 block text-sm font-medium"
-                >
-                  Sync Interval (hours)
-                </label>
-                <select
-                  id="edit-provider-sync-interval"
-                  value={formData.sync_interval_hours}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, sync_interval_hours: parseInt(e.target.value) }))}
-                  className="form-input"
-                >
-                  <option value={6}>Every 6 hours</option>
-                  <option value={12}>Every 12 hours</option>
-                  <option value={24}>Daily</option>
-                  <option value={48}>Every 2 days</option>
-                  <option value={168}>Weekly</option>
-                </select>
-              </div>
+              <SyncScheduleFields
+                idPrefix="edit-provider"
+                intervalHours={formData.sync_interval_hours}
+                reviewTime={formData.review_time}
+                onChange={({ intervalHours, reviewTime }) =>
+                  setFormData((prev) => ({ ...prev, sync_interval_hours: intervalHours, review_time: reviewTime }))
+                }
+              />
             )}
           </div>
 
@@ -1130,7 +1218,7 @@ const ExternalTrainingPage: React.FC = () => {
     setSyncingCategoriesProvider(providerId);
     try {
       const result = await externalTrainingService.syncCategories(providerId);
-      toast.success(result.message || 'Categories fetched successfully');
+      toast.success(result.message || 'Categories synced');
     } catch (err: unknown) {
       toast.error(`Category sync failed: ${getErrorMessage(err)}`);
     } finally {
@@ -1171,7 +1259,7 @@ const ExternalTrainingPage: React.FC = () => {
     try {
       await externalTrainingService.deleteProvider(providerId);
       await loadProviders();
-      toast.success('Provider deleted successfully');
+      toast.success('Provider deleted');
     } catch (err: unknown) {
       toast.error(`Failed to delete: ${getErrorMessage(err)}`);
     }

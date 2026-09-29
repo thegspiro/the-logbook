@@ -41,9 +41,17 @@ import {
 } from '../services/api';
 import { FormBuilder, FormRenderer, SubmissionViewer, FormResultsPanel } from '../components/forms';
 import { FormStatus, FieldType } from '../constants/enums';
-import { INTEGRATION_TARGET_FIELDS, STARTER_TEMPLATES, type StarterTemplate } from './formConstants';
+import {
+  INTEGRATION_HINT_LABELS,
+  INTEGRATION_TARGET_FIELDS,
+  STARTER_TEMPLATES,
+  type StarterTemplate,
+} from './formConstants';
 
 type FormCategory = 'all' | 'Safety' | 'Operations' | 'Administration' | 'Training';
+
+// The API stores status and category in lowercase; show them as labels.
+const capitalize = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
 
 const FormsPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
@@ -207,6 +215,16 @@ const FormsPage: React.FC = () => {
     }
   };
 
+  const handleToggleRequireAuthentication = async (form: FormDef) => {
+    try {
+      await formsService.updateForm(form.id, { require_authentication: !form.require_authentication });
+      await loadData();
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, 'Failed to update form');
+      setError(message);
+    }
+  };
+
   const handleViewSubmissions = (formId: string) => {
     setSelectedFormId(formId);
     setActiveTab('submissions');
@@ -275,7 +293,7 @@ const FormsPage: React.FC = () => {
       const targetFields = INTEGRATION_TARGET_FIELDS[integrationType] ?? [];
       const missingRequired = targetFields.filter((tf) => tf.required && !fieldMappings[tf.key]).map((tf) => tf.label);
       if (missingRequired.length > 0) {
-        setError(`Required field mappings missing: ${missingRequired.join(', ')}`);
+        setError(`Choose a form field for: ${missingRequired.join(', ')}`);
         return;
       }
 
@@ -372,7 +390,7 @@ const FormsPage: React.FC = () => {
             <div>
               <h1 className="text-theme-text-primary text-2xl font-bold">Custom Forms</h1>
               <p className="text-theme-text-muted text-sm">
-                Create custom forms, public-facing pages, and cross-module integrations
+                Build forms, share them publicly, and send responses to other modules
               </p>
             </div>
           </div>
@@ -457,7 +475,7 @@ const FormsPage: React.FC = () => {
               activeTab === 'forms' ? 'bg-red-800 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
             }`}
           >
-            My Forms
+            Forms
           </button>
           <button
             onClick={() => setActiveTab('templates')}
@@ -502,7 +520,7 @@ const FormsPage: React.FC = () => {
                 spellCheck={false}
                 id="forms-search"
                 type="text"
-                aria-label="Search forms..."
+                aria-label="Search forms"
                 placeholder="Search forms..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -543,8 +561,8 @@ const FormsPage: React.FC = () => {
             ) : forms.length === 0 ? (
               <EmptyState
                 icon={FormInput}
-                title="No Custom Forms Yet"
-                description="Build custom forms for incident reports, equipment inspections, public signup pages, and more. Start from a template for a quick setup, or create a blank form from scratch."
+                title="No Forms Yet"
+                description="Build forms for incident reports, equipment inspections, public sign-up pages and more. Start from a template or a blank form."
                 actions={
                   canManage
                     ? [
@@ -574,7 +592,7 @@ const FormsPage: React.FC = () => {
                         <h3 className="text-theme-text-primary font-semibold">{form.name}</h3>
                         <div className="mt-1 flex flex-wrap items-center space-x-2 gap-y-1">
                           <span className={`rounded-sm border px-2 py-0.5 text-xs ${statusColor(form.status)}`}>
-                            {form.status}
+                            {capitalize(form.status)}
                           </span>
                           {form.status === FormStatus.PUBLISHED && (
                             <span className="inline-flex items-center space-x-1 rounded-sm border border-green-500/30 bg-green-500/10 px-2 py-0.5 text-xs text-green-700 dark:text-green-400">
@@ -589,7 +607,7 @@ const FormsPage: React.FC = () => {
                             </span>
                           )}
                           <span className="rounded-sm border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-xs text-red-700 dark:text-red-400">
-                            {form.category}
+                            {capitalize(form.category)}
                           </span>
                           {form.is_public && (
                             <span className="inline-flex items-center space-x-1 rounded-sm border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-700 dark:text-cyan-400">
@@ -612,8 +630,7 @@ const FormsPage: React.FC = () => {
                           aria-hidden="true"
                         />
                         <span className="text-xs text-yellow-700 dark:text-yellow-300">
-                          This form is marked public but is not published — the public URL is inactive and submissions
-                          are blocked.
+                          This form is public but not published. Its link won&apos;t work until you publish it.
                         </span>
                       </div>
                     )}
@@ -786,7 +803,7 @@ const FormsPage: React.FC = () => {
                       <div className="mt-2 flex items-center space-x-1">
                         <Plug className="h-3 w-3 text-orange-700 dark:text-orange-400" aria-hidden="true" />
                         <span className="text-xs text-orange-700 dark:text-orange-400">
-                          Supports cross-module integration
+                          {INTEGRATION_HINT_LABELS[template.integrationHint] ?? 'Sends responses to another module'}
                         </span>
                       </div>
                     )}
@@ -919,10 +936,10 @@ const FormsPage: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`rounded-sm border px-2 py-0.5 text-xs ${statusColor(editingForm.status)}`}>
-                    {editingForm.status}
+                    {capitalize(editingForm.status)}
                   </span>
                   <span className="rounded-sm border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-xs text-red-700 dark:text-red-400">
-                    {editingForm.category}
+                    {capitalize(editingForm.category)}
                   </span>
                 </div>
               </div>
@@ -1032,7 +1049,7 @@ const FormsPage: React.FC = () => {
                 <div className="px-6 pt-5 pb-4">
                   <div className="mb-4 flex items-center justify-between">
                     <h3 id="create-form-title" className="text-theme-text-primary text-lg font-medium">
-                      Create New Form
+                      Create Form
                     </h3>
                     <button
                       onClick={() => setShowCreateModal(false)}
@@ -1104,7 +1121,8 @@ const FormsPage: React.FC = () => {
                       <label htmlFor="is_public" className="cursor-pointer text-sm">
                         <span className="font-medium text-cyan-700 dark:text-cyan-300">Public Form</span>
                         <p className="text-theme-text-muted mt-0.5 text-xs">
-                          Allow anyone to fill out this form via a public URL (no login required)
+                          Allow anyone to open this form via a public URL. Choose whether submitting needs a sign-in
+                          from the form&apos;s Share settings.
                         </p>
                       </label>
                     </div>
@@ -1150,7 +1168,7 @@ const FormsPage: React.FC = () => {
                       className="text-theme-text-primary flex items-center space-x-2 text-lg font-medium"
                     >
                       <Globe className="h-5 w-5 text-cyan-700 dark:text-cyan-400" aria-hidden="true" />
-                      <span>Public Sharing Settings</span>
+                      <span>Share Form</span>
                     </h3>
                     <button
                       onClick={() => setShowShareModal(false)}
@@ -1163,13 +1181,20 @@ const FormsPage: React.FC = () => {
                   {(() => {
                     const form = forms.find((f) => f.id === selectedFormId);
                     if (!form) return null;
+                    // Mirrors the public submit endpoint: a form that forbids
+                    // repeat submissions needs a signed-in identity to enforce
+                    // "once each", so it refuses anonymous visitors whatever
+                    // require_authentication says.
+                    const anonymousSubmissionsOpen = !form.require_authentication && form.allow_multiple_submissions;
                     return (
                       <div className="space-y-4">
                         <div className="card-secondary flex items-center justify-between p-4">
                           <div>
                             <p className="text-theme-text-primary font-medium">Public Access</p>
                             <p className="text-theme-text-muted mt-0.5 text-xs">
-                              Anyone with the link can view and submit this form
+                              {anonymousSubmissionsOpen
+                                ? 'Anyone with the link can view and submit this form'
+                                : 'Anyone with the link can view this form; submitting requires signing in'}
                             </p>
                           </div>
                           <button
@@ -1184,6 +1209,32 @@ const FormsPage: React.FC = () => {
                             <span className={`toggle-knob-sm ${form.is_public ? 'translate-x-6' : 'translate-x-1'}`} />
                           </button>
                         </div>
+
+                        <label
+                          htmlFor="share-allow-anonymous"
+                          className="card-secondary mobile-touch-row cursor-pointer gap-3 p-4"
+                        >
+                          <input
+                            type="checkbox"
+                            id="share-allow-anonymous"
+                            checked={anonymousSubmissionsOpen}
+                            disabled={!form.allow_multiple_submissions}
+                            onChange={() => {
+                              void handleToggleRequireAuthentication(form);
+                            }}
+                            className="form-checkbox shrink-0"
+                          />
+                          <span className="text-sm">
+                            <span className="text-theme-text-primary block font-medium">
+                              Allow submissions without signing in
+                            </span>
+                            <span className="text-theme-text-muted mt-0.5 block text-xs">
+                              {form.allow_multiple_submissions
+                                ? 'When off, visitors must sign in to a member account before they can submit.'
+                                : 'Unavailable because this form allows only one submission per person, which needs a signed-in account.'}
+                            </span>
+                          </span>
+                        </label>
 
                         {form.is_public && form.public_slug && (
                           <>
@@ -1300,14 +1351,14 @@ const FormsPage: React.FC = () => {
                                 </button>
                               </div>
                               <p className="text-theme-text-muted mt-2 text-center text-xs">
-                                Print this QR code and place it where users can scan to access the form.
+                                Print this code and post it where people can scan it to open the form.
                               </p>
                             </div>
 
                             {form.status !== FormStatus.PUBLISHED && (
                               <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/10 p-3">
                                 <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                                  This form must be published before the public URL will be active.
+                                  Publish this form to turn on its public link.
                                 </p>
                               </div>
                             )}
@@ -1316,9 +1367,10 @@ const FormsPage: React.FC = () => {
 
                         <div className="card-secondary p-3">
                           <p className="text-theme-text-secondary text-sm">
-                            Public forms allow anyone to submit without logging in. Submissions include the
-                            submitter&apos;s name and email (optional) and are marked as &quot;Public&quot; in your
-                            submissions list.
+                            {anonymousSubmissionsOpen
+                              ? 'Anyone can submit this form without signing in.'
+                              : 'Only signed-in members can submit this form.'}{' '}
+                            Responses sent through the public link show a globe icon in your submissions list.
                           </p>
                         </div>
                       </div>
@@ -1359,7 +1411,7 @@ const FormsPage: React.FC = () => {
                       className="text-theme-text-primary flex items-center space-x-2 text-lg font-medium"
                     >
                       <Plug className="h-5 w-5 text-orange-700 dark:text-orange-400" aria-hidden="true" />
-                      <span>Cross-Module Integrations</span>
+                      <span>Integrations</span>
                     </h3>
                     <button
                       onClick={() => setShowIntegrationModal(false)}
@@ -1435,7 +1487,7 @@ const FormsPage: React.FC = () => {
                                     {mappingCount === 0 && (
                                       <span className="text-yellow-700 dark:text-yellow-400">
                                         {' '}
-                                        &middot; No field mappings configured
+                                        &middot; No fields mapped
                                       </span>
                                     )}
                                   </p>
@@ -1538,7 +1590,7 @@ const FormsPage: React.FC = () => {
                       {selectedFormDetail && (INTEGRATION_TARGET_FIELDS[integrationType] ?? []).length > 0 && (
                         <div>
                           <p className="text-theme-text-muted mb-2 text-xs font-medium">
-                            Map your form fields to the integration&apos;s target fields:
+                            Choose the form field that fills each target field:
                           </p>
                           <div className="space-y-2">
                             {(INTEGRATION_TARGET_FIELDS[integrationType] ?? []).map((tf) => (

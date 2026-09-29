@@ -141,7 +141,7 @@ export default function FacilitiesDashboard() {
               className="btn-secondary flex items-center gap-2 text-sm"
             >
               <Printer className="h-4 w-4" />
-              Print Page Labels
+              Print Labels
             </button>
           )}
           {canCreate && (
@@ -358,7 +358,9 @@ export default function FacilitiesDashboard() {
                 <p className="text-theme-text-muted mb-4">
                   {searchQuery
                     ? 'No facilities match your search.'
-                    : 'No facilities yet. Add your first facility to get started.'}
+                    : canCreate
+                      ? 'No facilities yet. Select Add Facility to add one.'
+                      : 'No facilities yet.'}
                 </p>
               </div>
             ) : (

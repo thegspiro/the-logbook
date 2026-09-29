@@ -3,6 +3,7 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import { MemberScanPage } from './MemberScanPage';
+import { userService } from '../services/api';
 
 // Mock html5-qrcode
 const mockStart = vi.fn().mockResolvedValue(undefined);
@@ -84,7 +85,7 @@ describe('MemberScanPage', () => {
     renderWithRouter(<MemberScanPage />);
 
     expect(screen.getByText('How to use')).toBeInTheDocument();
-    expect(screen.getByText(/Point the camera at a member/)).toBeInTheDocument();
+    expect(screen.getByText(/Point the camera at the QR code or barcode on the member/)).toBeInTheDocument();
   });
 
   it('should display the description text', () => {
@@ -181,5 +182,23 @@ describe('MemberScanPage', () => {
         expect.any(Function)
       );
     });
+  });
+
+  // A printed badge encodes the short id when the member has no membership
+  // number (label_service._short_id), and this page matched membership numbers
+  // only, so the department's own badge scanned as "No member found".
+  it('opens the member a badge printed without a membership number belongs to', async () => {
+    const user = userEvent.setup();
+    vi.mocked(userService.getUsers).mockResolvedValue([
+      { id: '1996d34a-56fe-42b1-9848-c1404ae55992', username: 'javery', membership_number: null },
+    ] as never);
+    renderWithRouter(<MemberScanPage />);
+
+    await user.click(screen.getByRole('button', { name: /start scanning/i }));
+    await waitFor(() => expect(mockStart).toHaveBeenCalled());
+    const onSuccess = mockStart.mock.calls[0]?.[2] as ((text: string) => void) | undefined;
+    onSuccess?.('1996D34A56FE');
+
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/members/1996d34a-56fe-42b1-9848-c1404ae55992'));
   });
 });

@@ -4,6 +4,7 @@ Training Pydantic Schemas
 Request and response schemas for training-related endpoints.
 """
 
+import re
 from datetime import date, datetime
 from enum import Enum
 from typing import List, Optional
@@ -11,6 +12,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.core.logging import redact_url_secrets
 from app.models.training import RequirementFrequency as ModelRequirementFrequency
 from app.models.training import TrainingStatus as ModelTrainingStatus
 from app.models.training import TrainingType as ModelTrainingType
@@ -343,6 +345,10 @@ class TrainingRecordResponse(TrainingRecordBase, UTCResponseBase):
     apparatus_id: Optional[UUID] = None
     external_provider_id: Optional[UUID] = None
     external_record_id: Optional[str] = None
+    # Response only: the source is stamped by attendance finalize and is not
+    # accepted on create or update, where a client could point a record at an
+    # event it did not come from.
+    source_event_id: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
     created_by: Optional[UUID] = None
@@ -663,6 +669,10 @@ class ImportStatus(str, Enum):
 # External Training Provider Schemas
 
 
+# Daily review time for external training auto-sync: 24-hour HH:MM.
+_REVIEW_TIME_PATTERN = re.compile(r"([01]?\d|2[0-3]):([0-5]\d)")
+
+
 class ExternalProviderConfig(BaseModel):
     """Provider-specific configuration"""
 
@@ -696,6 +706,22 @@ class ExternalProviderConfig(BaseModel):
     additional_headers: Optional[dict] = None
     date_format: Optional[str] = None  # Date format used by the API
 
+    # Daily long-range review time ("HH:MM", org timezone). Frequent pulls
+    # run every sync_interval_hours; read by review_time_for.
+    review_time: Optional[str] = None
+
+    @field_validator("review_time")
+    @classmethod
+    def validate_review_time(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        match = _REVIEW_TIME_PATTERN.fullmatch(value.strip())
+        if not match:
+            raise ValueError(
+                "Review time must be a 24-hour HH:MM value, e.g. 02:00 or 18:30"
+            )
+        return f"{int(match.group(1)):02d}:{match.group(2)}"
+
     @field_validator(
         "records_endpoint", "users_endpoint", "categories_endpoint", "test_endpoint"
     )
@@ -704,6 +730,23 @@ class ExternalProviderConfig(BaseModel):
         if value is not None:
             relative_endpoint(value)
         return value
+
+
+def _reject_credentials_in_url(value: Optional[str]) -> Optional[str]:
+    """Refuse a provider URL that carries a credential in its query string.
+
+    TargetSolutions issues its Training Records API as one URL with ``key=`` and
+    ``secret=`` in it, so pasting that whole URL is the natural mistake. The
+    base URL is stored in plain text and returned by the API, unlike the
+    encrypted api_key/api_secret fields the values belong in.
+    """
+    if value is not None and redact_url_secrets(value) != value:
+        raise ValueError(
+            "The API base URL must not contain a key, secret or token. Enter "
+            "the address without its query string and put each credential in "
+            "its own field."
+        )
+    return value
 
 
 class ExternalTrainingProviderBase(BaseModel):
@@ -718,6 +761,11 @@ class ExternalTrainingProviderBase(BaseModel):
     auto_sync_enabled: bool = False
     sync_interval_hours: int = Field(24, ge=1, le=168)  # 1 hour to 1 week
     default_category_id: Optional[UUID] = None
+
+    @field_validator("api_base_url")
+    @classmethod
+    def validate_api_base_url(cls, value: Optional[str]) -> Optional[str]:
+        return _reject_credentials_in_url(value)
 
 
 class ExternalTrainingProviderCreate(ExternalTrainingProviderBase):
@@ -745,6 +793,11 @@ class ExternalTrainingProviderUpdate(BaseModel):
     sync_interval_hours: Optional[int] = Field(None, ge=1, le=168)
     default_category_id: Optional[UUID] = None
     active: Optional[bool] = None
+
+    @field_validator("api_base_url")
+    @classmethod
+    def validate_api_base_url(cls, value: Optional[str]) -> Optional[str]:
+        return _reject_credentials_in_url(value)
 
 
 class ExternalTrainingProviderResponse(ExternalTrainingProviderBase, UTCResponseBase):

@@ -46,6 +46,10 @@ def _ended_event(custom_fields=None, finalized_at=None):
         end_datetime=now - timedelta(hours=2),
         attendance_finalized_at=finalized_at,
         attendance_finalized_by=None,
+        # Not a Training event: finalize reads the type before the roster to
+        # decide whether training credit is written.
+        event_type=None,
+        is_cancelled=False,
     )
 
 

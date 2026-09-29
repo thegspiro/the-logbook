@@ -5,8 +5,10 @@ Business logic for training session management, approval workflows, and notifica
 """
 
 import secrets
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, List, Optional, Tuple
+from types import SimpleNamespace
+from typing import Any, Dict, List, Optional, Set, Tuple
 from uuid import UUID
 
 from loguru import logger
@@ -16,6 +18,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.core.constants import ROLE_TRAINING_OFFICER
+from app.core.utils import generate_uuid
 from app.models.event import (
     CheckInWindowType,
     Event,
@@ -36,21 +39,78 @@ from app.models.training import (
     TrainingRecord,
     TrainingRequirement,
     TrainingSession,
+    TrainingStatus,
     TrainingType,
 )
 from app.models.user import Role, User
 from app.schemas.training_session import (
     AttendeeApprovalData,
     RecurringTrainingSessionCreate,
+    TrainingSessionAttach,
     TrainingSessionCreate,
     TrainingSessionLinkageUpdate,
 )
 from app.services.admin_hours_service import AdminHoursService
-from app.services.event_service import EventService
+from app.services.event_service import (
+    EventService,
+    attendance_is_finalized,
+    attendance_locked_error,
+)
 from app.services.location_service import LocationService
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import is_in_org
 from app.utils.org_timezone import local_and_utc_dates, resolve_scheduling_timezone
+
+# A second set of training details for one event. training_sessions.event_id
+# is unique; the endpoint answers this with a 409, not a 400.
+TRAINING_DETAILS_EXIST = "This event already has training details"
+
+# How far out an approval link stays usable, from when it is issued.
+APPROVAL_TOKEN_TTL = timedelta(days=30)
+
+# What an approving officer may change on a roster entry. Everything else —
+# who the member is, the times finalize credited — stays as finalize wrote it.
+_APPROVER_EDITABLE_FIELDS = frozenset(
+    {
+        "override_check_in_at",
+        "override_check_out_at",
+        "override_duration_minutes",
+        "approved",
+        "notes",
+    }
+)
+
+
+def _display_name(user: User) -> str:
+    return f"{user.first_name or ''} {user.last_name or ''}".strip() or (
+        user.username or "Member"
+    )
+
+
+@dataclass
+class EventTrainingCredit:
+    """What finalizing a Training event's attendance credited.
+
+    Built inside finalize's transaction and returned to it: the counts go back
+    to the officer who pressed Finalize, and the rest drives the steps that
+    must wait for the commit — pipeline credit and its reversal commit
+    internally, and an officer email should not go out for an approval that
+    might still roll back.
+    """
+
+    records_completed: int = 0
+    approval_pending: bool = False
+    attendees_pending: int = 0
+    uncredited_names: List[str] = field(default_factory=list)
+    session_id: Optional[str] = None
+    program_id: Optional[str] = None
+    approval_id: Optional[str] = None
+    removed_user_ids: Set[str] = field(default_factory=set)
+    pipeline_updates: List[Tuple[str, str, str, float, str]] = field(
+        default_factory=list
+    )
+    sweep_session_id: Optional[str] = None
+    notify: Optional[Dict[str, Any]] = None
 
 
 class TrainingSessionService:
@@ -131,11 +191,13 @@ class TrainingSessionService:
         updates: TrainingSessionLinkageUpdate,
         organization_id: UUID,
     ) -> Tuple[Optional[TrainingSession], Optional[str]]:
-        """Update a session's category/program/phase/requirement links.
+        """Update a session's course, type and category/program/phase/requirement links.
 
         Fields omitted from the payload are untouched; explicit nulls clear
-        the link. Links only steer *future* crediting — records and pipeline
-        progress already written at finalization are not reflowed.
+        the link. A change applies the next time the event's attendance is
+        finalized, which rewrites the members' records under the new links —
+        so it is refused while attendance is finalized, where it would sit
+        unapplied and disagree with the records until a reopen.
 
         Returns: (training_session, error_message)
         """
@@ -152,9 +214,44 @@ class TrainingSessionService:
         if not payload:
             return training_session, None
 
+        # Locked, and in the same order finalize takes (event, then session),
+        # so a change cannot land between a finalize reading the links and
+        # writing the records they steer.
+        event_result = await self.db.execute(
+            select(Event)
+            .where(Event.id == training_session.event_id)
+            .where(Event.organization_id == str(organization_id))
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        event = event_result.scalar_one_or_none()
+        if event is None:
+            return None, "Training session not found"
+        if attendance_is_finalized(event):
+            return None, attendance_locked_error("changing its training details")
+
         linkage_error = await self._validate_linkage_ids(updates, organization_id)
         if linkage_error:
             return None, linkage_error
+
+        if "training_type" in payload:
+            if payload["training_type"] is None:
+                return None, "Training type is required"
+            training_session.training_type = TrainingType(payload.pop("training_type"))
+
+        if "course_id" in payload:
+            course_id = payload.pop("course_id")
+            if course_id is None:
+                training_session.course_id = None
+                training_session.course_name = event.title
+                training_session.course_code = None
+            else:
+                course = await self._course_in_org(course_id, organization_id)
+                if course is None:
+                    return None, "Training course not found"
+                training_session.course_id = str(course.id)
+                training_session.course_name = course.name
+                training_session.course_code = course.code
 
         # The columns are String(36); UUIDs bound raw match/store nothing
         # sensible (same mismatch as the course lookup above).
@@ -169,6 +266,144 @@ class TrainingSessionService:
             return None, str(e)
 
         await self.db.commit()
+        await self.db.refresh(training_session)
+        return training_session, None
+
+    async def _course_in_org(
+        self, course_id: UUID, organization_id: UUID
+    ) -> Optional[TrainingCourse]:
+        # str(): the column is String(36) and the id arrives as a UUID.
+        result = await self.db.execute(
+            select(TrainingCourse)
+            .where(TrainingCourse.id == str(course_id))
+            .where(TrainingCourse.organization_id == str(organization_id))
+        )
+        return result.scalar_one_or_none()
+
+    async def resolve_attach_details(
+        self, details: TrainingSessionAttach, organization_id: UUID
+    ) -> Tuple[Optional[TrainingCourse], Optional[str]]:
+        """Validate picked training details against the caller's org (XC-1).
+
+        Returns the chosen course (or None when none was picked) and an error.
+        """
+        linkage_error = await self._validate_linkage_ids(details, organization_id)
+        if linkage_error:
+            return None, linkage_error
+        if details.course_id is None:
+            return None, None
+        course = await self._course_in_org(details.course_id, organization_id)
+        if course is None:
+            return None, "Training course not found"
+        return course, None
+
+    @staticmethod
+    def build_session_for_event(
+        event: Event,
+        details: TrainingSessionAttach,
+        course: Optional[TrainingCourse],
+        organization_id: UUID,
+        created_by: Optional[UUID],
+    ) -> TrainingSession:
+        """The session that files an Events-created Training event's credit.
+
+        Mirrors what the Create Training Session wizard pre-fills from a course
+        (name, code, type, credit hours, instructor), falling back to the event
+        itself when no course was picked. Created only because an officer picked
+        a detail, so it keeps the wizard's defaults: records complete when
+        attendance is finalized, with no separate officer confirmation.
+        """
+        if details.training_type:
+            training_type = TrainingType(details.training_type)
+        elif course is not None and course.training_type is not None:
+            training_type = TrainingType(
+                getattr(course.training_type, "value", course.training_type)
+            )
+        else:
+            training_type = TrainingType.CONTINUING_EDUCATION
+
+        # credit_hours is NOT NULL on the session. A course's own figure wins;
+        # otherwise the scheduled length stands in, as the wizard's default does.
+        credit_hours = course.credit_hours if course is not None else None
+        if credit_hours is None:
+            credit_hours = 0.0
+            if event.start_datetime and event.end_datetime:
+                span = (event.end_datetime - event.start_datetime).total_seconds()
+                credit_hours = round(max(0.0, span) / 3600, 2)
+
+        return TrainingSession(
+            organization_id=str(organization_id),
+            event_id=str(event.id),
+            course_id=str(course.id) if course is not None else None,
+            category_id=str(details.category_id) if details.category_id else None,
+            program_id=str(details.program_id) if details.program_id else None,
+            phase_id=str(details.phase_id) if details.phase_id else None,
+            requirement_id=(
+                str(details.requirement_id) if details.requirement_id else None
+            ),
+            course_name=course.name if course is not None else event.title,
+            course_code=course.code if course is not None else None,
+            training_type=training_type,
+            credit_hours=float(credit_hours),
+            instructor=course.instructor if course is not None else None,
+            auto_create_records=True,
+            require_completion_confirmation=False,
+            counts_toward_certification=True,
+            created_by=str(created_by) if created_by else None,
+        )
+
+    async def attach_session_to_event(
+        self,
+        event_id: UUID,
+        details: TrainingSessionAttach,
+        organization_id: UUID,
+        created_by: UUID,
+    ) -> Tuple[Optional[TrainingSession], Optional[str]]:
+        """Give an existing Training event its training details.
+
+        The way an event made from Events → Create Event gets a course,
+        category or program requirement after the fact — including an event
+        whose attendance was finalized with no details, which a department
+        leader reopens so it can be filed properly and finalized again.
+
+        Returns: (training_session, error_message)
+        """
+        from sqlalchemy.exc import IntegrityError
+
+        event_result = await self.db.execute(
+            select(Event)
+            .where(Event.id == str(event_id))
+            .where(Event.organization_id == str(organization_id))
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        event = event_result.scalar_one_or_none()
+        if event is None:
+            return None, "Event not found"
+        if event.event_type != EventType.TRAINING:
+            return None, "Training details can only be added to a Training event"
+        if event.is_cancelled:
+            return None, "Training details cannot be added to a cancelled event"
+        if attendance_is_finalized(event):
+            return None, attendance_locked_error("adding training details")
+        if await self.get_session_by_event(event.id, organization_id) is not None:
+            return None, TRAINING_DETAILS_EXIST
+
+        course, error = await self.resolve_attach_details(details, organization_id)
+        if error:
+            return None, error
+
+        training_session = self.build_session_for_event(
+            event, details, course, organization_id, created_by
+        )
+        self.db.add(training_session)
+        try:
+            await self.db.commit()
+        except IntegrityError:
+            # training_sessions.event_id is unique: another request attached
+            # details to this event between the check above and this commit.
+            await self.db.rollback()
+            return None, TRAINING_DETAILS_EXIST
         await self.db.refresh(training_session)
         return training_session, None
 
@@ -500,363 +735,77 @@ class TrainingSessionService:
         finalized_by: UUID,
         can_manage_training: bool = False,
     ) -> Tuple[Optional[TrainingApproval], Optional[str]]:
+        """Finalize a training session by finalizing its event's attendance.
+
+        The event's Finalize Attendance is the one writer of training credit
+        and the event lock its authority. This route predates that and wrote
+        credit on its own: without the event lock, on an event whose
+        attendance stayed open, in a different lock order, and on a cancelled
+        or re-typed event. It now runs the event's finalize. Kept for API
+        callers; the app finalizes from the event page.
+
+        Returns: (the approval this finalize issued, error_message)
         """
-        Finalize a training session after the event ends
-
-        This creates a TrainingApproval record and triggers email notifications
-        to training officers.
-
-        Returns: (training_approval, error_message)
-        """
-        # Get training session with event and RSVPs
-        session_result = await self.db.execute(
-            select(TrainingSession)
-            .options(selectinload(TrainingSession.event).selectinload(Event.rsvps))
-            .where(TrainingSession.id == str(training_session_id))
-            .where(TrainingSession.organization_id == str(organization_id))
-        )
-        training_session = session_result.scalar_one_or_none()
-
+        training_session = (
+            await self.db.execute(
+                select(TrainingSession)
+                .where(TrainingSession.id == str(training_session_id))
+                .where(TrainingSession.organization_id == str(organization_id))
+            )
+        ).scalar_one_or_none()
         if not training_session:
             return None, "Training session not found"
-
-        if training_session.is_finalized:
-            return None, "Training session is already finalized"
-
-        # Get event through relationship
-        event_result = await self.db.execute(
-            select(Event)
-            .options(selectinload(Event.rsvps))
-            .where(Event.id == training_session.event_id)
-        )
-        event = event_result.scalar_one_or_none()
-
-        if not event:
+        if not training_session.event_id:
             return None, "Event not found"
 
-        # Check if event has ended
-        now = datetime.now(timezone.utc)
-        event_end = event.actual_end_time or event.end_datetime
-        if event_end and event_end.tzinfo is None:
-            event_end = event_end.replace(tzinfo=timezone.utc)
-        if event_end and now < event_end:
-            return None, "Cannot finalize training session before event ends"
-
-        # Get all checked-in attendees
-        checked_in_rsvps = [rsvp for rsvp in event.rsvps if rsvp.checked_in]
-
-        if not checked_in_rsvps:
-            return None, "No attendees checked in to this training session"
-
-        # Build attendee data
-        attendee_data = []
-        for rsvp in checked_in_rsvps:
-            # Get user details
-            user_result = await self.db.execute(
-                select(User).where(User.id == rsvp.user_id)
-            )
-            user = user_result.scalar_one_or_none()
-
-            if not user:
-                continue
-
-            # Calculate duration
-            check_in = rsvp.override_check_in_at or rsvp.checked_in_at
-            check_out = rsvp.override_check_out_at or rsvp.checked_out_at or event_end
-            duration_minutes = (
-                int((check_out - check_in).total_seconds() / 60)
-                if check_in and check_out
-                else None
-            )
-
-            attendee_data.append(
-                {
-                    "user_id": str(rsvp.user_id),
-                    "user_name": f"{user.first_name} {user.last_name}",
-                    "user_email": user.email,
-                    "checked_in_at": check_in.isoformat() if check_in else None,
-                    "checked_out_at": check_out.isoformat() if check_out else None,
-                    "calculated_duration_minutes": duration_minutes,
-                    "override_check_in_at": (
-                        rsvp.override_check_in_at.isoformat()
-                        if rsvp.override_check_in_at
-                        else None
-                    ),
-                    "override_check_out_at": (
-                        rsvp.override_check_out_at.isoformat()
-                        if rsvp.override_check_out_at
-                        else None
-                    ),
-                    "override_duration_minutes": rsvp.override_duration_minutes,
-                    "approved": False,
-                    "notes": None,
-                }
-            )
-
-        # A re-finalize after a reopen has to answer for who is NO LONGER on
-        # the roster, not just for who is. Do it before the new approval row
-        # exists so "the previous roster" is unambiguous.
-        await self._revoke_credit_for_removed_attendees(
-            training_session=training_session,
-            event=event,
-            current_user_ids={str(a["user_id"]) for a in attendee_data},
-            organization_id=organization_id,
-            verified_by=finalized_by,
-        )
-
-        # Generate secure token for approval link
-        approval_token = secrets.token_urlsafe(48)
-        token_expires_at = now + timedelta(days=30)  # Token valid for 30 days
-        approval_deadline = event_end + timedelta(
-            days=training_session.approval_deadline_days
-        )
-
-        # Create TrainingApproval record
-        training_approval = TrainingApproval(
-            organization_id=organization_id,
-            training_session_id=training_session.id,
-            event_id=event.id,
-            approval_token=approval_token,
-            token_expires_at=token_expires_at,
-            status=ApprovalStatus.PENDING,
-            approval_deadline=approval_deadline,
-            attendee_data=attendee_data,
-        )
-
-        self.db.add(training_approval)
-
-        # Mark training session as finalized
-        training_session.is_finalized = True
-        training_session.finalized_at = now
-        training_session.finalized_by = finalized_by
-
-        # When the session does not require explicit instructor confirmation,
-        # auto-approve and complete the records immediately rather than routing
-        # through the token-based officer approval workflow. (Capture the flag
-        # before commit expires the ORM object.)
-        requires_confirmation = training_session.require_completion_confirmation
-        pipeline_updates: List[Tuple[str, str, str, float, str]] = []
-        if not requires_confirmation:
-            training_approval.status = ApprovalStatus.APPROVED
-            training_approval.approved_by = str(finalized_by)
-            training_approval.approved_at = now
-            attendees = [AttendeeApprovalData(**a) for a in attendee_data]
-            pipeline_updates = await self._finalize_training_records(
-                approval=training_approval,
-                attendees=attendees,
-                approved_by=finalized_by,
-            )
-
-        # Capture values before commit expires the relationships
-        event_title = event.title
-        event_start = event.start_datetime
-        session_course = training_session.course_name
-
-        await self.db.commit()
-        await self.db.refresh(training_approval)
-
-        # Feed the pipeline after the approval+records commit — the real updater
-        # commits internally, so it must run outside the transaction above.
-        #
-        # The session id is what arms the stale-credit sweep, and it is passed
-        # only when this finalize actually approved the records. A session that
-        # requires an officer's confirmation has no approved records yet, so
-        # ``pipeline_updates`` is deliberately empty — and sweeping against an
-        # empty destination set would reverse every credit the *previous*
-        # approval earned, the moment a leader reopens the session and before
-        # anyone has confirmed what replaces it. If the officer then never
-        # submits, those hours are simply gone. ``submit_training_approval``
-        # runs the sweep with the same session id once the new records are
-        # approved, which is the point at which the destination set is real.
-        await self._apply_pipeline_updates(
-            pipeline_updates,
+        outcome = await EventService(self.db).finalize_event_attendance_detailed(
+            training_session.event_id,
             organization_id,
-            finalized_by,
-            can_manage_training,
-            session_id=(None if requires_confirmation else str(training_session.id)),
+            finalized_by=finalized_by,
+            can_manage_training=can_manage_training,
+            require_training=True,
         )
+        if outcome.error:
+            return None, outcome.error
+        if not outcome.training_approval_id:
+            return None, "Training session not found"
 
-        # Notify training officers only when their confirmation is required;
-        # an auto-approved session has nothing pending to act on.
-        if requires_confirmation:
-            await self._notify_training_officers(
-                organization_id=organization_id,
-                event_title=event_title,
-                event_start=event_start,
-                course_name=session_course,
-                approval_token=approval_token,
-                attendee_count=len(attendee_data),
-                approval_deadline=approval_deadline,
-                finalized_by=finalized_by,
+        approval = (
+            await self.db.execute(
+                select(TrainingApproval)
+                .where(TrainingApproval.id == outcome.training_approval_id)
+                .where(TrainingApproval.organization_id == str(organization_id))
             )
-
-        return training_approval, None
-
-    async def _revoke_credit_for_removed_attendees(
-        self,
-        training_session: TrainingSession,
-        event: Event,
-        current_user_ids: set,
-        organization_id: UUID,
-        verified_by: UUID,
-    ) -> None:
-        """Undo credit for members dropped from the roster during a reopen.
-
-        Re-finalization writes records for whoever is on the roster now. That
-        alone is not enough: the reason a leader reopens a session is often that
-        somebody was on it who should not have been, and re-finalizing left that
-        member's pipeline credit and completed training record exactly where the
-        first finalize put them — still counting toward their certification for
-        a session they are no longer recorded at.
-
-        The previous roster is the newest prior approval's ``attendee_data``.
-        Anyone in it and not in the current roster is reconciled:
-
-        * Pipeline credit is revoked through ``revoke_requirement_credit``, the
-          same reversal an officer's un-apply uses, so the requirement
-          percentage, enrollment rollup and phase state unwind the way they
-          accrued. The ledger key is (progress, source_type, source_id) and
-          progress is per member, so this touches only the member who left.
-        * The training record is reverted to not-completed rather than deleted.
-          Nothing on ``TrainingRecord`` records which session created it — the
-          check-in auto-create path writes one before finalization ever runs —
-          so deleting could destroy a record this session never authored.
-          Zeroing the hours and clearing the completion removes the credit while
-          leaving something a human can see and put right.
-
-        Failures are logged, not raised: the finalize that follows is the
-        caller's actual request, and losing it to a reconciliation problem on a
-        member who already left the roster is the worse outcome.
-        """
-        from app.models.training import ProgressCreditSource
-        from app.services.training_program_service import TrainingProgramService
-
-        prior_result = await self.db.execute(
-            select(TrainingApproval)
-            .where(TrainingApproval.training_session_id == training_session.id)
-            .where(TrainingApproval.organization_id == str(organization_id))
-            .order_by(TrainingApproval.created_at.desc())
-            .limit(1)
-        )
-        prior = prior_result.scalar_one_or_none()
-        if prior is None:
-            return
-
-        prior_user_ids = {
-            str(entry.get("user_id"))
-            for entry in (prior.attendee_data or [])
-            if entry.get("user_id")
-        }
-        removed = prior_user_ids - {str(uid) for uid in current_user_ids}
-        if not removed:
-            return
-
-        program_service = TrainingProgramService(self.db)
-        tz = await resolve_scheduling_timezone(self.db, organization_id)
-        event_dates = local_and_utc_dates(event.start_datetime, tz)
-
-        for user_id in removed:
-            try:
-                await self._revoke_pipeline_credit_for_user(
-                    program_service=program_service,
-                    user_id=user_id,
-                    training_session=training_session,
-                    organization_id=organization_id,
-                    verified_by=verified_by,
-                    source_type=ProgressCreditSource.TRAINING_SESSION,
-                )
-                await self._uncomplete_training_record(
-                    user_id=user_id,
-                    training_session=training_session,
-                    event_dates=event_dates,
-                )
-            except Exception:
-                logger.exception(
-                    "Failed to reconcile removed attendee {} on session {}",
-                    user_id,
-                    training_session.id,
-                )
-
-        await self.db.commit()
+        ).scalar_one_or_none()
+        if approval is None:
+            return None, "Training session not found"
+        return approval, None
 
     async def _revoke_pipeline_credit_for_user(
         self,
         program_service,
         user_id: str,
-        training_session: TrainingSession,
+        training_session: Any,
         organization_id: UUID,
-        verified_by: UUID,
+        verified_by: Optional[UUID],
         source_type,
     ) -> None:
-        """Reverse this session's credit on every requirement it fed for a member."""
-        if not training_session.program_id:
-            return
+        """Reverse this session's credit on every requirement it fed for a member.
 
-        # Same resolution as the crediting path, and for the same reason: a
-        # member who completed this program and enrolled again holds an ACTIVE
-        # row and a COMPLETED one, so a single-row fetch raises
-        # MultipleResultsFound. Here the caller logs and moves on, so the
-        # symptom is quieter and worse — the removed attendee simply keeps the
-        # credit this call exists to take back.
-        enrollment = await self._resolve_pipeline_enrollment(
-            user_id=user_id,
-            program_id=str(training_session.program_id),
-            session_id=str(training_session.id),
-            organization_id=organization_id,
-        )
-        if enrollment is None:
-            return
-
-        # Every requirement row under this enrollment, not just the session's
-        # explicit requirement_id — a category-linked session fans credit out
-        # across the category's requirements, and all of it has to come back.
-        progress_result = await self.db.execute(
-            select(RequirementProgress).where(
-                RequirementProgress.enrollment_id == enrollment.id
-            )
-        )
-        for progress in progress_result.scalars().all():
-            await program_service.revoke_requirement_credit(
-                progress_id=progress.id,
-                organization_id=organization_id,
-                source_type=source_type,
-                source_id=str(training_session.id),
-                verified_by=verified_by,
-            )
-
-    async def _uncomplete_training_record(
-        self,
-        user_id: str,
-        training_session: TrainingSession,
-        event_dates: List[date],
-    ) -> None:
-        """Take the completion back off a removed attendee's training record.
-
-        ``event_dates`` is the session's day on the department's calendar and,
-        for a record written before that, the UTC day it was filed under.
+        Found by the session as the credit's source, in whichever program it
+        landed — not through the session's program as it stands now. A session
+        re-linked (or unlinked) during a reopen still has its old credit in the
+        old program, and resolving through the new link left that standing. It
+        also reaches every enrollment the member holds, so a member who
+        completed the program and enrolled again is not skipped.
         """
-        record_result = await self.db.execute(
-            select(TrainingRecord)
-            .where(TrainingRecord.user_id == str(user_id))
-            .where(
-                TrainingRecord.organization_id == str(training_session.organization_id)
-            )
-            .where(TrainingRecord.course_name == training_session.course_name)
-            .where(
-                or_(
-                    TrainingRecord.scheduled_date.in_(event_dates),
-                    TrainingRecord.completion_date.in_(event_dates),
-                )
-            )
+        await program_service.reverse_credits_for_source(
+            organization_id=organization_id,
+            source_id=str(training_session.id),
+            source_type=source_type,
+            verified_by=verified_by,
+            user_id=user_id,
         )
-        record = record_result.scalars().first()
-        if record is None:
-            return
-
-        record.hours_completed = 0
-        record.completion_date = None
-        record.status = "scheduled"
-        record.updated_at = datetime.now(timezone.utc)
 
     async def _resync_admin_hours(
         self,
@@ -905,9 +854,11 @@ class TrainingSessionService:
             # bounds against the old number of minutes, so the ledger entry
             # would disagree with itself as well as with the training record,
             # which _finalize_training_records computes from the same interval.
+            # `is None`, not truthiness: an explicit 0 is "no credit" and must
+            # not fall through to the measured minutes (credited_minutes).
             duration = rsvp.override_duration_minutes
             if (
-                not duration
+                duration is None
                 and rsvp.override_check_in_at
                 and rsvp.override_check_out_at
             ):
@@ -915,9 +866,9 @@ class TrainingSessionService:
                     rsvp.override_check_out_at - rsvp.override_check_in_at
                 ).total_seconds() / 60
                 duration = max(0, int(span))
-            if not duration:
+            if duration is None:
                 duration = rsvp.attendance_duration_minutes
-            if not check_in or not check_out or not duration or duration <= 0:
+            if not check_in or not check_out or duration is None or duration <= 0:
                 continue
             try:
                 await admin_hours.credit_event_attendance(
@@ -945,62 +896,932 @@ class TrainingSessionService:
     ) -> Tuple[Optional[TrainingSession], Optional[str]]:
         """Reopen a finalized training session so it can be corrected.
 
-        Finalizing a session was previously one-way: ``is_finalized`` refused a
-        second finalize and nothing ever cleared it, so a member left off the
-        roster could not be added and a wrong duration could not be fixed —
-        the opposite failure from the event side, which locked nothing at all.
+        The session's finalized flag follows its event's attendance lock, so
+        this reopens the event's attendance (``reopen_event_attendance``, which
+        reopens the session and expires any pending approval with it). Reopening
+        only the session left the event locked while a second finalize could
+        write credit behind that lock.
 
-        Reopening clears the flag and kills any approval still outstanding:
-
-        * A PENDING approval's token is expired on the spot. It was emailed to
-          the training officers against attendee data that is about to change,
-          and the whole point of reopening is that those numbers were wrong.
-          Re-finalizing issues a fresh token and a fresh notification.
-        * An APPROVED one is left as it is. Its training records were already
-          written, and re-finalizing updates them in place rather than
-          duplicating (``_finalize_training_records`` matches on user, course
-          and event date). Pipeline credit is idempotent per session through
-          the progress ledger, so the corrected hours land without
-          double-crediting.
+        A session finalized by the old route has an event whose attendance was
+        never closed; for that one the session alone is reopened, under the
+        event's lock and in the order every writer uses.
 
         The caller audit-logs who reopened it and why.
         """
-        result = await self.db.execute(
-            select(TrainingSession)
-            .where(TrainingSession.id == str(training_session_id))
-            .where(TrainingSession.organization_id == str(organization_id))
-            .with_for_update()
-        )
-        training_session = result.scalar_one_or_none()
-
+        training_session = (
+            await self.db.execute(
+                select(TrainingSession)
+                .where(TrainingSession.id == str(training_session_id))
+                .where(TrainingSession.organization_id == str(organization_id))
+            )
+        ).scalar_one_or_none()
         if not training_session:
             return None, "Training session not found"
-
         if not training_session.is_finalized:
             return None, "Training session is not finalized"
 
-        now = datetime.now(timezone.utc)
+        event = (
+            await self.db.execute(
+                select(Event)
+                .where(Event.id == str(training_session.event_id))
+                .where(Event.organization_id == str(organization_id))
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
+        if event is None:
+            return None, "Event not found"
 
+        if attendance_is_finalized(event):
+            _, error = await EventService(self.db).reopen_event_attendance(
+                event.id, organization_id
+            )
+            if error:
+                return None, error
+        else:
+            await self.reopen_for_event(
+                event, organization_id, datetime.now(timezone.utc)
+            )
+            await self.db.commit()
+
+        await self.db.refresh(training_session)
+        return training_session, None
+
+    # ------------------------------------------------------------------
+    # Credit from event attendance
+    #
+    # Finalize Attendance on a Training event is the one place training credit
+    # is written from attendance. EventService.finalize_event_attendance takes
+    # the event lock and calls these inside its own transaction; nothing here
+    # commits except ``after_event_attendance_recorded``, which runs once the
+    # finalize has.
+    # ------------------------------------------------------------------
+
+    async def lock_for_event_finalize(
+        self, event: Event, organization_id: UUID
+    ) -> Tuple[Optional[TrainingSession], List[TrainingApproval]]:
+        """Lock the event's session and its pending approvals.
+
+        Taken straight after the event's own lock, in the order every path
+        uses — event, session, approvals, RSVPs — so a finalize cannot deadlock
+        against an officer submitting an approval or a leader reopening.
+        """
+        # populate_existing, as on the event: an identity-mapped session or
+        # approval would otherwise be handed back as it was before this call
+        # waited, and a flag another writer just committed would go unseen.
+        session_result = await self.db.execute(
+            select(TrainingSession)
+            .where(TrainingSession.event_id == str(event.id))
+            .where(TrainingSession.organization_id == str(organization_id))
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        training_session = session_result.scalar_one_or_none()
+        if training_session is None:
+            return None, []
         pending_result = await self.db.execute(
             select(TrainingApproval)
-            .where(
-                TrainingApproval.training_session_id == training_session.id,
-                TrainingApproval.status == ApprovalStatus.PENDING,
-            )
+            .where(TrainingApproval.training_session_id == training_session.id)
+            .where(TrainingApproval.organization_id == str(organization_id))
+            .where(TrainingApproval.status == ApprovalStatus.PENDING)
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
-        for approval in pending_result.scalars().all():
-            approval.token_expires_at = now
+        return training_session, list(pending_result.scalars().all())
 
+    @staticmethod
+    def _supersede(approvals: List[TrainingApproval], now: datetime) -> None:
+        """Kill the links of approvals issued against numbers being replaced.
+
+        Floored and a second back: MySQL DATETIME(0) *rounds* a fraction, so a
+        raw ``now`` of 12:00:00.6 is stored as 12:00:01 and the link stays
+        good for another 0.4 s — long enough for a submit queued behind this
+        lock to approve the roster that was just superseded.
+        """
+        expired_at = now.replace(microsecond=0) - timedelta(seconds=1)
+        for approval in approvals:
+            approval.token_expires_at = expired_at
+
+    async def record_event_attendance(
+        self,
+        event: Event,
+        training_session: Optional[TrainingSession],
+        pending_approvals: List[TrainingApproval],
+        attended: List[EventRSVP],
+        effective_end: datetime,
+        actor: Optional[UUID],
+        organization_id: UUID,
+    ) -> EventTrainingCredit:
+        """Credit every checked-in attendee of a Training event.
+
+        Minutes follow ``EventService.credited_minutes``: a manager's override,
+        then the measured duration, then the derived one. An attendee with no
+        creditable minutes gets no record and is named back to the officer.
+
+        * **No session** (an event made from Events with no training details):
+          a completed record per attendee, filed under the event's title as
+          Continuing Education.
+        * **Session, no confirmation required:** an approved approval and
+          completed records through ``_finalize_training_records``, with the
+          session's course, category and program links.
+        * **Session requiring confirmation:** a pending approval for training
+          officers and an in-progress record per attendee; the records complete
+          when an officer approves. A record already completed by an earlier
+          finalize is left as it is until then.
+
+        Anyone credited by an earlier finalize and not credited now has that
+        record voided.
+        """
+        credit = EventTrainingCredit()
+        now = datetime.now(timezone.utc)
+        org = str(organization_id)
+        tz = await resolve_scheduling_timezone(self.db, org)
+        event_dates = local_and_utc_dates(event.start_datetime, tz)
+        event_date = event_dates[0]
+
+        user_ids = sorted({str(rsvp.user_id) for rsvp in attended})
+        users: Dict[str, User] = {}
+        if user_ids:
+            user_result = await self.db.execute(
+                select(User).where(User.id.in_(user_ids), User.organization_id == org)
+            )
+            users = {str(u.id): u for u in user_result.scalars().all()}
+
+        credited: Dict[str, int] = {}
+        rsvp_by_user: Dict[str, EventRSVP] = {}
+        for rsvp in attended:
+            user_id = str(rsvp.user_id)
+            user = users.get(user_id)
+            if user is None:
+                continue
+            minutes = EventService.credited_minutes(event, rsvp, effective_end)
+            if minutes is None or minutes <= 0:
+                credit.uncredited_names.append(_display_name(user))
+                continue
+            credited[user_id] = minutes
+            rsvp_by_user[user_id] = rsvp
+        credit.uncredited_names.sort()
+
+        if training_session is None:
+            await self._write_sessionless_records(
+                event, credited, event_date, actor, org, now
+            )
+            credit.records_completed = len(credited)
+            await self.void_event_records(
+                event.id,
+                org,
+                event_title=event.title,
+                keep_user_ids=set(credited),
+            )
+            await self.db.flush()
+            return credit
+
+        credit.session_id = str(training_session.id)
+        credit.program_id = (
+            str(training_session.program_id) if training_session.program_id else None
+        )
+
+        # An approval issued against the roster as it was is superseded: its
+        # link would approve numbers this finalize is replacing.
+        self._supersede(pending_approvals, now)
+
+        prior_ids = await self._prior_credit_user_ids(training_session, event, org)
+        removed = prior_ids - set(credited)
+        credit.removed_user_ids = removed
+
+        attendee_data = [
+            self._attendee_snapshot_entry(
+                event,
+                rsvp_by_user[user_id],
+                users[user_id],
+                effective_end,
+                minutes,
+            )
+            for user_id, minutes in credited.items()
+        ]
+
+        requires_confirmation = bool(training_session.require_completion_confirmation)
+        # Every finalize leaves an approval, an empty one when it credited
+        # nobody: the newest approval is how the event page knows where this
+        # finalize stands, and without one it went on reporting an earlier
+        # finalize's approval for members who no longer hold any credit.
+        approval = TrainingApproval(
+            # Assigned here rather than at flush: the legacy finalize route
+            # returns this approval's id.
+            id=generate_uuid(),
+            organization_id=org,
+            training_session_id=training_session.id,
+            event_id=str(event.id),
+            approval_token=secrets.token_urlsafe(48),
+            token_expires_at=now + APPROVAL_TOKEN_TTL,
+            status=ApprovalStatus.PENDING,
+            approval_deadline=effective_end
+            + timedelta(days=training_session.approval_deadline_days or 7),
+            attendee_data=attendee_data,
+        )
+        self.db.add(approval)
+        credit.approval_id = str(approval.id)
+        if not attendee_data:
+            # Nothing to confirm; nothing waits on an officer.
+            approval.status = ApprovalStatus.APPROVED
+            approval.approved_by = str(actor) if actor else None
+            approval.approved_at = now
+        else:
+            if requires_confirmation:
+                await self._hold_pending_records(
+                    training_session, event, credited, event_dates, actor, org
+                )
+                credit.approval_pending = True
+                credit.attendees_pending = len(credited)
+                credit.notify = {
+                    "organization_id": organization_id,
+                    "event_title": event.title,
+                    "event_start": event.start_datetime,
+                    "course_name": training_session.course_name,
+                    "approval_token": approval.approval_token,
+                    "attendee_count": len(attendee_data),
+                    "approval_deadline": approval.approval_deadline,
+                    "finalized_by": actor,
+                }
+            else:
+                approval.status = ApprovalStatus.APPROVED
+                approval.approved_by = str(actor) if actor else None
+                approval.approved_at = now
+                credit.pipeline_updates = await self._finalize_training_records(
+                    approval=approval,
+                    attendees=[AttendeeApprovalData(**a) for a in attendee_data],
+                    approved_by=actor,
+                    credited_minutes=credited,
+                )
+                credit.records_completed = len(credited)
+                credit.sweep_session_id = str(training_session.id)
+
+        await self.void_event_records(
+            event.id,
+            org,
+            event_title=event.title,
+            keep_user_ids=set(credited),
+            legacy_course_name=training_session.course_name,
+            legacy_dates=event_dates,
+            legacy_user_ids=removed,
+        )
+
+        training_session.is_finalized = True
+        training_session.finalized_at = now
+        training_session.finalized_by = str(actor) if actor else None
+        training_session.updated_at = now
+        await self.db.flush()
+        return credit
+
+    async def _write_sessionless_records(
+        self,
+        event: Event,
+        credited: Dict[str, int],
+        event_date: date,
+        actor: Optional[UUID],
+        organization_id: str,
+        now: datetime,
+    ) -> None:
+        """Completed records for a Training event with no training details.
+
+        Filed under the event's title as Continuing Education — the same
+        default a session gets when nothing more specific is known. Matched on
+        the source alone: a manual record that happens to share the title and
+        date is somebody else's entry and is never taken over.
+        """
+        for user_id, minutes in credited.items():
+            result = await self.db.execute(
+                EventService.event_training_record_query(
+                    organization_id, user_id, event.id, lock=True
+                )
+            )
+            record = result.scalars().first()
+            if record is None:
+                record = TrainingRecord(
+                    organization_id=organization_id,
+                    user_id=user_id,
+                    source_event_id=str(event.id),
+                    created_by=str(actor) if actor else None,
+                    hours_completed=0.0,
+                    course_name=event.title,
+                    training_type=TrainingType.CONTINUING_EDUCATION,
+                )
+                self.db.add(record)
+            record.course_name = event.title
+            record.course_id = None
+            record.course_code = None
+            record.category_id = None
+            record.training_type = TrainingType.CONTINUING_EDUCATION
+            record.scheduled_date = event_date
+            record.completion_date = event_date
+            record.hours_completed = round(minutes / 60.0, 2)
+            record.status = TrainingStatus.COMPLETED
+            record.location_id = str(event.location_id) if event.location_id else None
+            # The record's column is shorter than the event's.
+            record.location = (event.location or "")[:255] or None
+            record.updated_at = now
+
+    async def _hold_pending_records(
+        self,
+        training_session: TrainingSession,
+        event: Event,
+        credited: Dict[str, int],
+        event_dates: List[date],
+        actor: Optional[UUID],
+        organization_id: str,
+    ) -> None:
+        """An in-progress record per attendee while the approval is pending.
+
+        So the member's training history shows the class as in progress rather
+        than nothing at all. A record an earlier finalize already completed is
+        not taken back to in-progress: that credit stands until the officer's
+        approval replaces it.
+        """
+        for user_id in credited:
+            result = await self.db.execute(
+                EventService.event_training_record_query(
+                    organization_id,
+                    user_id,
+                    event.id,
+                    adopt_course_name=training_session.course_name,
+                    dates=event_dates,
+                    lock=True,
+                )
+            )
+            record = result.scalars().first()
+            if record is not None:
+                record.source_event_id = str(event.id)
+                continue
+            self.db.add(
+                TrainingRecord(
+                    organization_id=organization_id,
+                    user_id=user_id,
+                    source_event_id=str(event.id),
+                    course_id=(
+                        str(training_session.course_id)
+                        if training_session.course_id
+                        else None
+                    ),
+                    category_id=(
+                        str(training_session.category_id)
+                        if training_session.category_id
+                        else None
+                    ),
+                    course_name=training_session.course_name,
+                    course_code=training_session.course_code,
+                    training_type=training_session.training_type
+                    or TrainingType.CONTINUING_EDUCATION,
+                    scheduled_date=event_dates[0],
+                    completion_date=None,
+                    status=TrainingStatus.IN_PROGRESS,
+                    hours_completed=0.0,
+                    credit_hours=float(training_session.credit_hours or 0),
+                    instructor=training_session.instructor,
+                    location=(event.location or "")[:255] or None,
+                    created_by=str(actor) if actor else None,
+                )
+            )
+
+    async def _prior_credit_user_ids(
+        self, training_session: TrainingSession, event: Event, organization_id: str
+    ) -> Set[str]:
+        """Everyone an earlier finalize of this event credited or held.
+
+        Every earlier approval's roster, not just the newest: approvals are
+        ordered by a second-precision timestamp, and a reopen-and-finalize
+        inside the same second would make "the newest" a coin toss. Plus
+        anyone holding a live record this event wrote.
+        """
+        approvals_result = await self.db.execute(
+            select(TrainingApproval.attendee_data)
+            .where(TrainingApproval.training_session_id == training_session.id)
+            .where(TrainingApproval.organization_id == organization_id)
+        )
+        user_ids: Set[str] = set()
+        for (attendee_data,) in approvals_result.all():
+            for entry in attendee_data or []:
+                if isinstance(entry, dict) and entry.get("user_id"):
+                    user_ids.add(str(entry["user_id"]))
+
+        records_result = await self.db.execute(
+            select(TrainingRecord.user_id)
+            .where(TrainingRecord.organization_id == organization_id)
+            .where(TrainingRecord.source_event_id == str(event.id))
+            .where(TrainingRecord.status != TrainingStatus.CANCELLED)
+        )
+        user_ids.update(str(row[0]) for row in records_result.all())
+        return user_ids
+
+    @staticmethod
+    def _attendee_snapshot_entry(
+        event: Event,
+        rsvp: EventRSVP,
+        user: User,
+        effective_end: datetime,
+        minutes: int,
+    ) -> Dict[str, Any]:
+        """One row of an approval's roster, as the approval page shows it.
+
+        The times are the credited ones — an early tap already clamped to the
+        start, a manager's corrected check-out in place of the tap — so the
+        officer reviews the same figure the member would be credited.
+        """
+        check_in = EventService._credited_check_in_time(event, rsvp) or (
+            EventService._as_utc(event.start_datetime)
+        )
+        check_out = (
+            EventService._as_utc(rsvp.override_check_out_at)
+            or EventService._as_utc(rsvp.checked_out_at)
+            or EventService._as_utc(effective_end)
+        )
+
+        def _iso(value: Optional[datetime]) -> Optional[str]:
+            value = EventService._as_utc(value)
+            return value.isoformat() if value else None
+
+        return {
+            "user_id": str(rsvp.user_id),
+            "user_name": _display_name(user),
+            "user_email": user.email or "",
+            "checked_in_at": _iso(check_in),
+            "checked_out_at": _iso(check_out),
+            "calculated_duration_minutes": minutes,
+            "override_check_in_at": _iso(rsvp.override_check_in_at),
+            "override_check_out_at": _iso(rsvp.override_check_out_at),
+            "override_duration_minutes": rsvp.override_duration_minutes,
+            "approved": False,
+            "notes": None,
+        }
+
+    async def void_event_records(
+        self,
+        event_id: Any,
+        organization_id: Any,
+        *,
+        event_title: Optional[str] = None,
+        keep_user_ids: Optional[Set[str]] = None,
+        only_user_ids: Optional[Set[str]] = None,
+        legacy_course_name: Optional[str] = None,
+        legacy_dates: Optional[List[date]] = None,
+        legacy_user_ids: Optional[Set[str]] = None,
+    ) -> int:
+        """Take back the credit this event gave, for the members named.
+
+        Covers the records this event's finalize wrote (``source_event_id``),
+        optionally narrowed to ``only_user_ids`` and sparing ``keep_user_ids``.
+        ``legacy_*`` also reaches records written before the source existed,
+        for the listed members only, by course name and the event's day — and
+        of those only a completed record or the member's own check-in
+        placeholder, never a record somebody scheduled or entered by hand.
+
+        A record that never carried credit — the in-progress placeholder a
+        check-in or a pending approval started — is deleted. One that did is
+        kept, marked CANCELLED with its hours zeroed and a note of what it had,
+        so the member's history shows credit given and taken back rather than
+        a record silently vanishing. Hours are zeroed because some totals
+        (the profile's Total Hours) sum records of every status.
+
+        Flushes; never commits. Returns how many records it changed.
+        """
+        from app.services.qualification_service import QualificationService
+
+        org = str(organization_id)
+        keep = {str(u) for u in (keep_user_ids or set())}
+
+        sourced = (
+            select(TrainingRecord)
+            .where(TrainingRecord.organization_id == org)
+            .where(TrainingRecord.source_event_id == str(event_id))
+        )
+        if only_user_ids is not None:
+            sourced = sourced.where(
+                TrainingRecord.user_id.in_([str(u) for u in only_user_ids])
+            )
+        if keep:
+            sourced = sourced.where(TrainingRecord.user_id.notin_(sorted(keep)))
+        records = list(
+            (await self.db.execute(sourced.with_for_update())).scalars().all()
+        )
+
+        legacy_ids = {str(u) for u in (legacy_user_ids or set())} - keep
+        if legacy_course_name and legacy_ids:
+            day_dates = list(legacy_dates or [])
+            legacy = (
+                select(TrainingRecord)
+                .where(TrainingRecord.organization_id == org)
+                .where(TrainingRecord.source_event_id.is_(None))
+                .where(TrainingRecord.user_id.in_(sorted(legacy_ids)))
+                .where(TrainingRecord.course_name == legacy_course_name)
+                .where(TrainingRecord.status != TrainingStatus.CANCELLED)
+                .where(
+                    or_(
+                        TrainingRecord.scheduled_date.in_(day_dates),
+                        TrainingRecord.completion_date.in_(day_dates),
+                    )
+                )
+                .with_for_update()
+            )
+            # A same-named record on the same day is not necessarily this
+            # event's: an officer may have scheduled the member for the class,
+            # or entered it by hand. Only the two shapes this event's own
+            # writers left before the source link existed are taken back — the
+            # member's check-in placeholder (created by the member, never
+            # credited) and a completed record, which the callers only look
+            # for among members this session's approvals credited.
+            for record in (await self.db.execute(legacy)).scalars().all():
+                status = getattr(record.status, "value", record.status)
+                own_placeholder = (
+                    status == TrainingStatus.IN_PROGRESS.value
+                    and record.completion_date is None
+                    and not record.hours_completed
+                    and str(record.created_by or "") == str(record.user_id)
+                )
+                if own_placeholder or status == TrainingStatus.COMPLETED.value:
+                    records.append(record)
+
+        changed = 0
+        touched_courses: List[Tuple[str, str]] = []
+        for record in records:
+            status = getattr(record.status, "value", record.status)
+            if status == TrainingStatus.CANCELLED.value:
+                continue
+            if record.course_id:
+                touched_courses.append((str(record.user_id), str(record.course_id)))
+            never_credited = (
+                status
+                in (TrainingStatus.IN_PROGRESS.value, TrainingStatus.SCHEDULED.value)
+                and record.completion_date is None
+            )
+            if never_credited:
+                await self.db.delete(record)
+            else:
+                label = f"'{event_title}'" if event_title else "the event"
+                note = (
+                    f"[Voided: removed from {label} attendance; "
+                    f"was {float(record.hours_completed or 0):.2f} h]"
+                )
+                record.notes = f"{record.notes}\n{note}" if record.notes else note
+                record.status = TrainingStatus.CANCELLED
+                record.hours_completed = 0.0
+                record.updated_at = datetime.now(timezone.utc)
+            changed += 1
+
+        if touched_courses:
+            await self.db.flush()
+            qualifications = QualificationService(self.db)
+            for user_id, course_id in touched_courses:
+                await qualifications.sync_from_training_record(
+                    SimpleNamespace(
+                        organization_id=org, user_id=user_id, course_id=course_id
+                    )
+                )
+        return changed
+
+    async def void_event_credit(
+        self,
+        event: Event,
+        organization_id: Any,
+        *,
+        only_user_ids: Optional[Set[str]] = None,
+    ) -> Optional[Tuple[str, Optional[str]]]:
+        """Take back the training credit an event's attendance gave.
+
+        For an event about to be deleted, cancelled or re-typed away from
+        Training (every attendee), or for one attendee being removed. Records
+        this event wrote are voided; for a session-backed event, records from
+        before the source link existed are reached by course name and date, for
+        the members its approvals rostered (or the named attendee).
+
+        Does not commit. Returns ``(session_id, program_id)`` when the event
+        has a session, so the caller can reverse any pipeline credit it gave
+        once it has committed (``reverse_event_pipeline_credit``) — the
+        reversal commits internally, and a deleted event takes its session row
+        with it, so the ids are captured here, before the delete.
+        """
+        org = str(organization_id)
+        training_session = await self.get_session_by_event(event.id, org)
+        legacy_ids: Set[str] = set()
+        legacy_name = None
+        legacy_dates: List[date] = []
+        if training_session is not None:
+            legacy_name = training_session.course_name
+            # Pre-source records are reached only for members this session
+            # actually credited or held; removing somebody it never rostered
+            # must leave every same-named record of theirs alone.
+            legacy_ids = await self._prior_credit_user_ids(training_session, event, org)
+            if only_user_ids is not None:
+                legacy_ids &= {str(u) for u in only_user_ids}
+            if only_user_ids is None:
+                # The whole event's credit is going, so a link still pending
+                # would ask an officer to approve credit for an event that was
+                # cancelled, deleted or is no longer training. Every caller
+                # holds the event lock, so these are taken after it.
+                pending = await self.db.execute(
+                    select(TrainingApproval)
+                    .where(TrainingApproval.training_session_id == training_session.id)
+                    .where(TrainingApproval.organization_id == org)
+                    .where(TrainingApproval.status == ApprovalStatus.PENDING)
+                    .with_for_update()
+                )
+                self._supersede(
+                    list(pending.scalars().all()), datetime.now(timezone.utc)
+                )
+            if event.start_datetime is not None:
+                tz = await resolve_scheduling_timezone(self.db, org)
+                legacy_dates = local_and_utc_dates(event.start_datetime, tz)
+
+        await self.void_event_records(
+            event.id,
+            org,
+            event_title=event.title,
+            only_user_ids=only_user_ids,
+            legacy_course_name=legacy_name,
+            legacy_dates=legacy_dates,
+            legacy_user_ids=legacy_ids,
+        )
+        # Whenever there is a session, whatever it links to now: its credit is
+        # found by the session as source, and a link cleared or changed during
+        # a reopen does not take back what the old link credited.
+        if training_session is not None:
+            return (
+                str(training_session.id),
+                (
+                    str(training_session.program_id)
+                    if training_session.program_id
+                    else None
+                ),
+            )
+        return None
+
+    async def rename_event_records(
+        self,
+        event: Event,
+        old_title: str,
+        organization_id: Any,
+        training_session: Optional[TrainingSession],
+    ) -> int:
+        """Carry an event's new title onto the records filed under its old one.
+
+        The records this event wrote (``source_event_id``) and still hold
+        credit — a cancelled one keeps the name its void note refers to. For a
+        session-backed event, a record written before the source link existed
+        is found the way finalize adopts one (course name and the event's day,
+        for members this session credited) and is stamped with the source as
+        it is renamed; renamed alone, it could no longer be found by either.
+        Does not commit. Returns how many records were renamed.
+        """
+        org = str(organization_id)
+        now = datetime.now(timezone.utc)
+        new_title = (event.title or "")[:255]
+        sourced = (
+            (
+                await self.db.execute(
+                    select(TrainingRecord)
+                    .where(TrainingRecord.organization_id == org)
+                    .where(TrainingRecord.source_event_id == str(event.id))
+                    .where(TrainingRecord.course_name == old_title)
+                    .where(TrainingRecord.status != TrainingStatus.CANCELLED)
+                    .with_for_update()
+                )
+            )
+            .scalars()
+            .all()
+        )
+        renamed = 0
+        sourced_users = set()
+        for record in sourced:
+            record.course_name = new_title
+            record.updated_at = now
+            sourced_users.add(str(record.user_id))
+            renamed += 1
+
+        if training_session is None or event.start_datetime is None:
+            return renamed
+        prior = await self._prior_credit_user_ids(training_session, event, org)
+        # One sourced record per member and event (the unique key): a member
+        # who already has one keeps any older duplicate as it was.
+        legacy_users = sorted(prior - sourced_users)
+        if not legacy_users:
+            return renamed
+        tz = await resolve_scheduling_timezone(self.db, org)
+        dates = local_and_utc_dates(event.start_datetime, tz)
+        legacy = (
+            (
+                await self.db.execute(
+                    select(TrainingRecord)
+                    .where(TrainingRecord.organization_id == org)
+                    .where(TrainingRecord.source_event_id.is_(None))
+                    .where(TrainingRecord.user_id.in_(legacy_users))
+                    .where(TrainingRecord.course_name == old_title)
+                    .where(TrainingRecord.status != TrainingStatus.CANCELLED)
+                    .where(
+                        or_(
+                            TrainingRecord.scheduled_date.in_(dates),
+                            TrainingRecord.completion_date.in_(dates),
+                        )
+                    )
+                    .with_for_update()
+                )
+            )
+            .scalars()
+            .all()
+        )
+        stamped = set()
+        for record in legacy:
+            user_id = str(record.user_id)
+            if user_id in stamped:
+                continue
+            stamped.add(user_id)
+            record.source_event_id = str(event.id)
+            record.course_name = new_title
+            record.updated_at = now
+            renamed += 1
+        return renamed
+
+    async def reverse_event_pipeline_credit(
+        self,
+        session_ref: Tuple[str, Optional[str]],
+        organization_id: Any,
+        user_ids: Optional[Set[str]] = None,
+    ) -> None:
+        """Reverse the program credit a session gave, after the caller's commit.
+
+        ``user_ids`` None reverses everything the session credited (the event
+        is gone or no longer training); otherwise only those members'. Failures
+        are logged: the records are already voided and durable, and a pipeline
+        that could not be unwound is visible and correctable, where refusing
+        the whole removal would not be.
+        """
+        from app.models.training import ProgressCreditSource
+        from app.services.training_program_service import TrainingProgramService
+
+        session_id, program_id = session_ref
+        program_service = TrainingProgramService(self.db)
+        try:
+            if user_ids is None:
+                await program_service.reverse_credits_for_source(
+                    organization_id=organization_id,
+                    source_id=session_id,
+                    source_type=ProgressCreditSource.TRAINING_SESSION,
+                )
+                return
+            reference = SimpleNamespace(id=session_id, program_id=program_id)
+            for user_id in sorted(user_ids):
+                await self._revoke_pipeline_credit_for_user(
+                    program_service=program_service,
+                    user_id=user_id,
+                    training_session=reference,
+                    organization_id=organization_id,
+                    verified_by=None,
+                    source_type=ProgressCreditSource.TRAINING_SESSION,
+                )
+        except Exception:
+            logger.exception(
+                "Failed to reverse pipeline credit for training session {}", session_id
+            )
+
+    async def reopen_for_event(
+        self, event: Event, organization_id: UUID, now: datetime
+    ) -> None:
+        """Reopen the event's session alongside the event's attendance.
+
+        The event lock is the authority; the session's flag follows it. Any
+        approval still pending was issued against numbers the reopen exists to
+        correct, so its link is expired — finalizing again issues a fresh one.
+        Records are left as they are: the next finalize updates them in place.
+        Never commits; the caller's reopen does.
+        """
+        training_session, pending = await self.lock_for_event_finalize(
+            event, organization_id
+        )
+        if training_session is None:
+            return
+        self._supersede(pending, now)
         training_session.is_finalized = False
         training_session.finalized_at = None
         training_session.finalized_by = None
         training_session.updated_at = now
 
-        await self.db.commit()
-        await self.db.refresh(training_session)
+    async def after_event_attendance_recorded(
+        self,
+        credit: EventTrainingCredit,
+        organization_id: UUID,
+        actor: Optional[UUID],
+        can_manage_training: bool,
+    ) -> None:
+        """The steps that must wait for finalize's commit.
 
-        return training_session, None
+        Pipeline credit and its reversal commit internally, so they cannot run
+        inside the transaction holding the event lock. Each step logs its own
+        failure: the records and the lock are already durable, and one failing
+        member's pipeline must not take the rest with it.
+        """
+        from app.models.training import ProgressCreditSource
+        from app.services.training_program_service import TrainingProgramService
+
+        # Keyed on the session alone: a member dropped from the roster loses
+        # the credit this session gave them in any program, including one the
+        # session was linked to before a reopen changed it.
+        if credit.session_id and credit.removed_user_ids and actor:
+            program_service = TrainingProgramService(self.db)
+            reference = SimpleNamespace(id=credit.session_id)
+            for user_id in sorted(credit.removed_user_ids):
+                try:
+                    await self._revoke_pipeline_credit_for_user(
+                        program_service=program_service,
+                        user_id=user_id,
+                        training_session=reference,
+                        organization_id=organization_id,
+                        verified_by=actor,
+                        source_type=ProgressCreditSource.TRAINING_SESSION,
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to revoke pipeline credit for removed attendee {}",
+                        user_id,
+                    )
+            await self.db.commit()
+
+        if actor and (credit.pipeline_updates or credit.sweep_session_id):
+            try:
+                await self._apply_pipeline_updates(
+                    credit.pipeline_updates,
+                    organization_id,
+                    actor,
+                    can_manage_training,
+                    session_id=credit.sweep_session_id,
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to apply pipeline credit for session {}", credit.session_id
+                )
+
+        if credit.notify and actor:
+            await self._notify_training_officers(**credit.notify)
+
+    async def get_approval_summary_for_event(
+        self,
+        event_id: UUID,
+        organization_id: UUID,
+        include_token: bool,
+    ) -> Optional[Dict[str, Any]]:
+        """Where this event's training approval stands, or None if it has none.
+
+        A pending, unexpired approval is the one that matters and wins;
+        otherwise the most recent. The token is the approval link's secret and
+        is returned only for a pending, unexpired approval and only when the
+        caller may approve.
+        """
+        session = await self.get_session_by_event(event_id, organization_id)
+        if session is None:
+            return None
+        result = await self.db.execute(
+            select(TrainingApproval)
+            .where(TrainingApproval.training_session_id == session.id)
+            .where(TrainingApproval.organization_id == str(organization_id))
+            .order_by(TrainingApproval.created_at.desc())
+        )
+        approvals = list(result.scalars().all())
+        if not approvals:
+            return None
+
+        now = datetime.now(timezone.utc)
+
+        def _expired(approval: TrainingApproval) -> bool:
+            expires = EventService._as_utc(approval.token_expires_at)
+            return expires is not None and now > expires
+
+        chosen = next(
+            (
+                a
+                for a in approvals
+                if a.status == ApprovalStatus.PENDING and not _expired(a)
+            ),
+            approvals[0],
+        )
+        # The newest finalize credited nobody (record_event_attendance leaves an
+        # empty approval for exactly this): there is nothing approved or
+        # awaited to report, and an older approval would describe credit that
+        # has since been taken back. "Newest" is by a one-second created_at, so
+        # a reopen and re-finalize inside the second of the first finalize
+        # would tie; nothing here depends on it but this display.
+        if not chosen.attendee_data and chosen.status != ApprovalStatus.PENDING:
+            return None
+        status_value = getattr(chosen.status, "value", chosen.status)
+        pending_and_live = chosen.status == ApprovalStatus.PENDING and not _expired(
+            chosen
+        )
+        return {
+            "approval_id": chosen.id,
+            "status": status_value,
+            "approval_deadline": chosen.approval_deadline,
+            "approved_at": chosen.approved_at,
+            "attendee_count": len(chosen.attendee_data or []),
+            "expired": _expired(chosen),
+            "token": (
+                chosen.approval_token if include_token and pending_and_live else None
+            ),
+        }
 
     async def _notify_training_officers(
         self,
@@ -1017,6 +1838,11 @@ class TrainingSessionService:
         Send email notifications to training officers about pending approval.
         """
         from app.models.user import user_roles
+        from app.services.email_policy import (
+            EmailKind,
+            department_required_kinds,
+            recipients_for,
+        )
         from app.services.email_service import EmailService
 
         try:
@@ -1044,9 +1870,23 @@ class TrainingSessionService:
             if not training_officers:
                 return
 
+            # Load organization for org-specific email settings
+            from app.models.user import Organization
+
+            org_result = await self.db.execute(
+                select(Organization).where(Organization.id == str(organization_id))
+            )
+            org = org_result.scalar_one_or_none()
+
             # Get officer emails
             to_emails = [
-                officer.email for officer in training_officers if officer.email
+                officer.email
+                for officer in recipients_for(
+                    training_officers,
+                    EmailKind.TRAINING_DUTIES,
+                    department_required_kinds(org),
+                )
+                if officer.email
             ]
 
             if not to_emails:
@@ -1063,14 +1903,6 @@ class TrainingSessionService:
 
             # Build approval URL
             approval_url = f"{settings.FRONTEND_URL}/training/approve/{approval_token}"
-
-            # Load organization for org-specific email settings
-            from app.models.user import Organization
-
-            org_result = await self.db.execute(
-                select(Organization).where(Organization.id == str(organization_id))
-            )
-            org = org_result.scalar_one_or_none()
 
             # Send email
             email_service = EmailService(organization=org)
@@ -1125,15 +1957,21 @@ class TrainingSessionService:
         if datetime.now(timezone.utc) > token_exp:
             return None, "This approval link has expired"
 
-        # Get event and training session details
+        # Get event and training session details. Org-scoped although the ids
+        # come from an approval already scoped to the caller's org, so the rule
+        # holds by inspection (pitfall #14a).
         event_result = await self.db.execute(
-            select(Event).where(Event.id == approval.event_id)
+            select(Event).where(
+                Event.id == approval.event_id,
+                Event.organization_id == str(organization_id),
+            )
         )
         event = event_result.scalar_one_or_none()
 
         session_result = await self.db.execute(
             select(TrainingSession).where(
-                TrainingSession.id == approval.training_session_id
+                TrainingSession.id == approval.training_session_id,
+                TrainingSession.organization_id == str(organization_id),
             )
         )
         training_session = session_result.scalar_one_or_none()
@@ -1179,33 +2017,58 @@ class TrainingSessionService:
         # it travels by email and can leak, so the approving user must
         # belong to the approval's organization. Filtering here (rather
         # than comparing after fetch) also avoids revealing whether a
-        # foreign-org token exists.
-        approval_result = await self.db.execute(
-            select(TrainingApproval)
-            .where(
-                TrainingApproval.approval_token == token,
-                TrainingApproval.organization_id == str(organization_id),
-            )
-            .with_for_update()
+        # foreign-org token exists. A plain read, for its event and session:
+        # the locks below are taken in the order every writer uses.
+        found = await self.db.execute(
+            select(TrainingApproval.event_id, TrainingApproval.training_session_id)
+            .where(TrainingApproval.approval_token == token)
+            .where(TrainingApproval.organization_id == str(organization_id))
         )
-        approval = approval_result.scalar_one_or_none()
+        ids = found.one_or_none()
+        if ids is None:
+            return False, "Invalid approval link"
+        event_id, session_id = ids
 
-        if not approval:
+        # Event, session, approval — the order finalize, reopen, cancel and
+        # retype lock in. Each of those can make this approval stand for
+        # nothing, and whichever commits first, the other sees its outcome:
+        # a reopen or re-finalize has expired the link, a cancel or a retype
+        # has marked the event, and an approval that won leaves nothing
+        # pending for them to void.
+        event = (
+            await self.db.execute(
+                select(Event)
+                .where(Event.id == str(event_id))
+                .where(Event.organization_id == str(organization_id))
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
+        training_session = (
+            await self.db.execute(
+                select(TrainingSession)
+                .where(TrainingSession.id == str(session_id))
+                .where(TrainingSession.organization_id == str(organization_id))
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
+        if event is None or training_session is None:
+            return False, "Training session or event not found"
+        approval = (
+            await self.db.execute(
+                select(TrainingApproval)
+                .where(TrainingApproval.approval_token == token)
+                .where(TrainingApproval.organization_id == str(organization_id))
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
+        if approval is None:
             return False, "Invalid approval link"
 
         if approval.status != ApprovalStatus.PENDING:
             return False, "This training session has already been processed"
-
-        # The FOR UPDATE above serializes this against
-        # reopen_training_session, which locks the same row to expire the token.
-        # Without it an officer holding a page loaded before the reopen could
-        # commit an approval — and its training records — against a session a
-        # leader had just opened for correction, leaving the session marked open
-        # while carrying an approved result. With it, one of the two transactions
-        # reaches the row first and the other sees its outcome: a reopen that
-        # committed first has already expired the token, so the expiry check
-        # below refuses; an approval that committed first leaves nothing pending
-        # for the reopen to void.
 
         # Check if token is expired
         token_exp = (
@@ -1215,13 +2078,77 @@ class TrainingSessionService:
         )
         if datetime.now(timezone.utc) > token_exp:
             return False, "This approval link has expired"
+        # A reopen clears the flag and expires the link together; checked
+        # separately so the refusal does not depend on a timestamp alone.
+        if not training_session.is_finalized:
+            return False, "This approval link has expired"
+        if event.is_cancelled or not EventService.event_credits_training(event):
+            return False, "This event was cancelled or is no longer a Training event"
+
+        # The roster is the one this approval was issued for, exactly. The
+        # request names attendees by user id: without the membership check an
+        # approver could write a completed record — and an attendance override
+        # — for any member of the organization (XC-1); without the coverage
+        # check a partial submission approved the rest into limbo, their
+        # in-progress records left with nothing pending to complete them.
+        roster = {
+            str(entry.get("user_id")): entry
+            for entry in (approval.attendee_data or [])
+            if isinstance(entry, dict) and entry.get("user_id")
+        }
+        submitted_ids = [str(a.user_id) for a in attendees]
+        if any(uid not in roster for uid in submitted_ids):
+            return False, "Attendee is not part of this approval"
+        if len(submitted_ids) != len(set(submitted_ids)):
+            return False, "An attendee is listed more than once"
+        if set(submitted_ids) != set(roster):
+            return (
+                False,
+                "Every attendee on this approval must be included; approve 0 "
+                "minutes to give a member no credit",
+            )
+        # Checked here rather than on the schema: AttendeeApprovalData also
+        # parses the stored snapshot, where a bound would reject old rows.
+        if any(
+            a.override_duration_minutes is not None and a.override_duration_minutes < 0
+            for a in attendees
+        ):
+            return False, "Approved minutes cannot be negative"
+
+        # Every member approved still has their attendance on the event. One
+        # removed since cannot be credited from the officer's figure alone —
+        # the roster changed, and finalizing again is what reflects that.
+        rsvp_result = await self.db.execute(
+            select(EventRSVP)
+            .where(EventRSVP.event_id == str(event.id))
+            .where(EventRSVP.organization_id == str(organization_id))
+            .where(EventRSVP.user_id.in_(sorted(roster)))
+        )
+        rsvps = {str(r.user_id): r for r in rsvp_result.scalars().all()}
+        if set(rsvps) != set(roster):
+            return (
+                False,
+                "A member on this approval is no longer on the event's attendance; "
+                "reopen the event's attendance and finalize it again",
+            )
 
         # Update approval record
         approval.status = ApprovalStatus.APPROVED
-        approval.approved_by = approved_by
+        approval.approved_by = str(approved_by)
         approval.approved_at = datetime.now(timezone.utc)
         approval.approval_notes = approval_notes
-        approval.attendee_data = [a.model_dump(mode="python") for a in attendees]
+        # The stored roster is the server's, with only what an officer may
+        # change taken from the request — a client-sent name or email must not
+        # rewrite the record of who attended. mode="json": attendee_data is a
+        # JSON column and the engine has no custom serializer, so the UUIDs and
+        # datetimes a python-mode dump carries failed every submission at flush.
+        approval.attendee_data = [
+            {
+                **roster[str(a.user_id)],
+                **a.model_dump(mode="json", include=_APPROVER_EDITABLE_FIELDS),
+            }
+            for a in attendees
+        ]
 
         # Update RSVP records with overrides.
         #
@@ -1234,22 +2161,27 @@ class TrainingSessionService:
         # officer's number while admin hours keeps the finalized one.
         corrected_rsvps = []
         for attendee in attendees:
-            rsvp_result = await self.db.execute(
-                select(EventRSVP)
-                .where(EventRSVP.event_id == approval.event_id)
-                .where(EventRSVP.user_id == attendee.user_id)
-            )
-            rsvp = rsvp_result.scalar_one_or_none()
+            rsvp = rsvps.get(str(attendee.user_id))
 
             if rsvp:
-                if attendee.override_check_in_at:
+                if attendee.override_check_in_at is not None:
                     rsvp.override_check_in_at = attendee.override_check_in_at
-                if attendee.override_check_out_at:
+                if attendee.override_check_out_at is not None:
                     rsvp.override_check_out_at = attendee.override_check_out_at
-                if attendee.override_duration_minutes:
+                if attendee.override_duration_minutes is not None:
                     rsvp.override_duration_minutes = attendee.override_duration_minutes
+                elif (
+                    attendee.override_check_in_at is not None
+                    and attendee.override_check_out_at is not None
+                ):
+                    # Times without minutes: derive the duration from them, as
+                    # Edit Times does, so the RSVP and the record it feeds agree.
+                    span = (
+                        attendee.override_check_out_at - attendee.override_check_in_at
+                    ).total_seconds() / 60
+                    rsvp.override_duration_minutes = max(0, int(span))
 
-                rsvp.overridden_by = approved_by
+                rsvp.overridden_by = str(approved_by)
                 rsvp.overridden_at = datetime.now(timezone.utc)
                 corrected_rsvps.append(rsvp)
 
@@ -1287,12 +2219,24 @@ class TrainingSessionService:
         self,
         approval: TrainingApproval,
         attendees: list[AttendeeApprovalData],
-        approved_by: UUID,
+        approved_by: Optional[UUID],
+        credited_minutes: Optional[Dict[str, int]] = None,
     ) -> List[Tuple[str, str, str, float, str]]:
         """
         Create or update TrainingRecords for all approved attendees.
 
-        Calculates final hours from approved durations and marks records as completed.
+        Every record written here carries ``source_event_id``: it is the credit
+        for this event, and finalizing again after a reopen updates that same
+        row. A row from before the source existed (a member's own check-in
+        started it, or a pre-upgrade finalize completed it) is adopted by the
+        course name and the event's day and stamped.
+
+        Minutes come from ``credited_minutes`` when the event's finalize
+        supplies them — the credited-minutes rule applied to each RSVP. An
+        officer approving on the approval page supplies the approved figure as
+        the attendee's override instead; with neither, the RSVP is read and the
+        same rule applied. An attendee with nothing to credit has any record
+        this event wrote voided rather than kept at stale hours.
 
         Returns a list of ``(user_id, program_id, requirement_id, hours)`` pipeline
         updates for program-linked sessions. These are NOT applied here — the real
@@ -1301,6 +2245,10 @@ class TrainingSessionService:
         """
         pipeline_updates: List[Tuple[str, str, str, float, str]] = []
         completed_records: List[Any] = []
+        # Courses whose qualification has to be recomputed because a record
+        # stopped pointing at them (the session's course was cleared or
+        # changed).
+        detached_courses: List[Tuple[str, str]] = []
 
         # Get training session details
         session_result = await self.db.execute(
@@ -1322,13 +2270,14 @@ class TrainingSessionService:
         if not event:
             return pipeline_updates
 
+        organization_id = str(training_session.organization_id)
+        event_id = str(approval.event_id)
+
         # A record's date is the session's day on the department's calendar:
         # the event's UTC date is already tomorrow for an evening session, which
         # filed an 8 PM drill on the 31st under the next month's compliance.
         # Records written before that carry the UTC date, so lookups accept both.
-        tz = await resolve_scheduling_timezone(
-            self.db, training_session.organization_id
-        )
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
         event_dates = local_and_utc_dates(event.start_datetime, tz)
         event_date = event_dates[0]
 
@@ -1355,86 +2304,101 @@ class TrainingSessionService:
                 training_session.phase_id,
             )
 
-        # Process each attendee
-        for attendee in attendees:
-            # Calculate final hours
-            # Priority: override_duration_minutes > calculated from check-in/out > session credit_hours
-            hours_completed = 0.0
+        course_code = getattr(training_session, "course_code", None) or (
+            training_session.course.code if training_session.course else None
+        )
+        now = datetime.now(timezone.utc)
 
-            if attendee.override_duration_minutes:
-                hours_completed = attendee.override_duration_minutes / 60.0
-            elif attendee.override_check_in_at and attendee.override_check_out_at:
-                # Calculate from override times
-                duration = (
-                    attendee.override_check_out_at - attendee.override_check_in_at
-                )
-                hours_completed = duration.total_seconds() / 3600.0
+        for attendee in attendees:
+            user_id = str(attendee.user_id)
+            minutes: Optional[int]
+            if credited_minutes is not None and user_id in credited_minutes:
+                minutes = credited_minutes[user_id]
+            elif attendee.override_duration_minutes is not None:
+                minutes = max(0, int(attendee.override_duration_minutes))
             else:
-                # Get actual RSVP check-in/out times
                 rsvp_result = await self.db.execute(
                     select(EventRSVP)
-                    .where(EventRSVP.event_id == approval.event_id)
-                    .where(EventRSVP.user_id == attendee.user_id)
+                    .where(EventRSVP.event_id == event_id)
+                    .where(EventRSVP.user_id == user_id)
+                    .where(EventRSVP.organization_id == organization_id)
                 )
                 rsvp = rsvp_result.scalar_one_or_none()
-
-                if rsvp and rsvp.checked_in_at and rsvp.checked_out_at:
-                    duration = rsvp.checked_out_at - rsvp.checked_in_at
-                    hours_completed = duration.total_seconds() / 3600.0
-                else:
-                    # Fall back to session credit hours
-                    hours_completed = float(training_session.credit_hours or 0)
-
-            # Round to 2 decimal places
-            hours_completed = round(hours_completed, 2)
-
-            # Find an existing record for this user/session on the event date.
-            # Check-in (auto_create_records) creates an IN_PROGRESS record keyed
-            # by scheduled_date with a NULL completion_date, so match on either
-            # date and prefer the not-yet-completed one — otherwise finalizing
-            # would leave that record orphaned and create a duplicate.
-            existing_record_result = await self.db.execute(
-                select(TrainingRecord)
-                .where(TrainingRecord.user_id == str(attendee.user_id))
-                .where(
-                    TrainingRecord.organization_id
-                    == str(training_session.organization_id)
-                )
-                .where(TrainingRecord.course_name == training_session.course_name)
-                .where(
-                    or_(
-                        TrainingRecord.scheduled_date.in_(event_dates),
-                        TrainingRecord.completion_date.in_(event_dates),
+                minutes = (
+                    EventService.credited_minutes(
+                        event, rsvp, EventService.effective_end(event)
                     )
+                    if rsvp is not None
+                    else None
                 )
-                .order_by(TrainingRecord.completion_date.is_(None).desc())
+
+            if not minutes or minutes <= 0:
+                await self.void_event_records(
+                    event_id,
+                    organization_id,
+                    event_title=getattr(event, "title", None),
+                    only_user_ids={user_id},
+                )
+                continue
+
+            hours_completed = round(minutes / 60.0, 2)
+
+            existing_record_result = await self.db.execute(
+                EventService.event_training_record_query(
+                    organization_id,
+                    user_id,
+                    event_id,
+                    adopt_course_name=training_session.course_name,
+                    dates=event_dates,
+                    lock=True,
+                )
             )
             existing_record = existing_record_result.scalars().first()
 
             if existing_record:
-                # Promote/refresh the existing record to completed
+                existing_record.source_event_id = event_id
                 existing_record.hours_completed = hours_completed
+                existing_record.scheduled_date = event_date
                 existing_record.completion_date = event_date
-                existing_record.status = "completed"
-                completed_records.append(existing_record)
-                # Carry the session's current links across too. Reopening is
+                existing_record.status = TrainingStatus.COMPLETED
+                # Carry the session's current details across too. Reopening is
                 # what makes this reachable: a leader corrects a session filed
-                # against the wrong category, re-finalizes, and the screen says
-                # it worked — while the member's stored record kept the old
-                # category and kept reporting under it.
+                # against the wrong category or course, re-finalizes, and the
+                # screen says it worked — while the member's stored record kept
+                # the old one and kept reporting under it.
+                existing_record.course_name = training_session.course_name
+                existing_record.course_code = course_code
+                existing_record.training_type = (
+                    training_session.training_type or TrainingType.CONTINUING_EDUCATION
+                )
                 existing_record.category_id = (
                     str(training_session.category_id)
                     if training_session.category_id
                     else None
                 )
-                if training_session.course_id:
-                    existing_record.course_id = str(training_session.course_id)
-                existing_record.updated_at = datetime.now(timezone.utc)
+                # Moved off a course — cleared, or switched to another — the
+                # old course's qualification is recomputed without this record,
+                # or the member keeps a credential nothing supports any more.
+                old_course_id = (
+                    str(existing_record.course_id)
+                    if existing_record.course_id
+                    else None
+                )
+                new_course_id = (
+                    str(training_session.course_id)
+                    if training_session.course_id
+                    else None
+                )
+                if old_course_id and old_course_id != new_course_id:
+                    detached_courses.append((user_id, old_course_id))
+                existing_record.course_id = new_course_id
+                existing_record.updated_at = now
+                completed_records.append(existing_record)
             else:
-                # Create new training record
                 training_record = TrainingRecord(
-                    organization_id=str(training_session.organization_id),
-                    user_id=str(attendee.user_id),
+                    organization_id=organization_id,
+                    user_id=user_id,
+                    source_event_id=event_id,
                     course_id=(
                         str(training_session.course_id)
                         if training_session.course_id
@@ -1446,21 +2410,18 @@ class TrainingSessionService:
                         else None
                     ),
                     course_name=training_session.course_name,
-                    course_code=(
-                        training_session.course.code
-                        if training_session.course
-                        else None
-                    ),
+                    course_code=course_code,
                     training_type=training_session.training_type
                     or TrainingType.CONTINUING_EDUCATION,
                     scheduled_date=event_date,
                     completion_date=event_date,
                     hours_completed=hours_completed,
                     credit_hours=float(training_session.credit_hours or 0),
-                    status="completed",
+                    status=TrainingStatus.COMPLETED,
                     instructor=training_session.instructor,
-                    location=event.location,
-                    created_by=str(approved_by),
+                    # The record's column is shorter than the event's.
+                    location=(getattr(event, "location", None) or "")[:255] or None,
+                    created_by=str(approved_by) if approved_by else None,
                 )
                 self.db.add(training_record)
                 completed_records.append(training_record)
@@ -1470,15 +2431,11 @@ class TrainingSessionService:
             # advance, and only when the session counts toward certification. An
             # explicit requirement link wins; otherwise fan out to the program's
             # requirements matching the session's category.
-            if (
-                feeds_certificate
-                and training_session.program_id
-                and hours_completed > 0
-            ):
+            if feeds_certificate and training_session.program_id:
                 if training_session.requirement_id:
                     pipeline_updates.append(
                         (
-                            str(attendee.user_id),
+                            user_id,
                             str(training_session.program_id),
                             str(training_session.requirement_id),
                             hours_completed,
@@ -1489,7 +2446,7 @@ class TrainingSessionService:
                     for req_id in category_requirement_ids:
                         pipeline_updates.append(
                             (
-                                str(attendee.user_id),
+                                user_id,
                                 str(training_session.program_id),
                                 req_id,
                                 hours_completed,
@@ -1507,13 +2464,24 @@ class TrainingSessionService:
         # runs inside the caller's approval+records transaction, and a failure
         # here should roll the whole thing back rather than finalize attendance
         # against a half-written qualification.
-        if completed_records:
+        if completed_records or detached_courses:
             from app.services.qualification_service import QualificationService
 
             await self.db.flush()
             qualifications = QualificationService(self.db)
             for completed in completed_records:
                 await qualifications.sync_from_training_record(completed)
+            # A record that no longer names a course no longer supports the
+            # qualification that course confers; recompute it without them.
+            # After the flush above, so the recompute sees the record moved.
+            for user_id, course_id in detached_courses:
+                await qualifications.sync_from_training_record(
+                    SimpleNamespace(
+                        organization_id=organization_id,
+                        user_id=user_id,
+                        course_id=course_id,
+                    )
+                )
 
         # NOTE: Callers are responsible for commit/rollback to keep approval +
         # record creation atomic; they apply the returned pipeline updates only

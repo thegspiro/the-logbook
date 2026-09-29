@@ -127,8 +127,8 @@ const DuesManagementPage: React.FC = () => {
       <div className="space-y-6">
         <Breadcrumbs />
         <div>
-          <h1 className="text-theme-text-primary text-2xl font-bold">Dues Management</h1>
-          <p className="text-theme-text-secondary mt-1 text-sm">Manage member dues schedules and payments</p>
+          <h1 className="text-theme-text-primary text-2xl font-bold">Dues</h1>
+          <p className="text-theme-text-secondary mt-1 text-sm">What members owe and have paid, by dues schedule</p>
         </div>
         <SkeletonPage rows={6} showStats />
       </div>
@@ -141,8 +141,8 @@ const DuesManagementPage: React.FC = () => {
 
       {/* Header */}
       <div>
-        <h1 className="text-theme-text-primary text-2xl font-bold">Dues Management</h1>
-        <p className="text-theme-text-secondary mt-1 text-sm">Manage member dues schedules and payments</p>
+        <h1 className="text-theme-text-primary text-2xl font-bold">Dues</h1>
+        <p className="text-theme-text-secondary mt-1 text-sm">What members owe and have paid, by dues schedule</p>
       </div>
 
       {/* Error */}
@@ -217,9 +217,7 @@ const DuesManagementPage: React.FC = () => {
           icon={Calendar}
           title="No dues records found"
           description={
-            statusFilter || selectedScheduleId
-              ? 'Try adjusting your filters.'
-              : 'No dues have been generated yet. Create a schedule and generate dues to get started.'
+            statusFilter || selectedScheduleId ? 'Try adjusting your filters.' : 'No dues have been generated yet.'
           }
         />
       ) : (

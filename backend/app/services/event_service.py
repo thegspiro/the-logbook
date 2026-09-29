@@ -8,6 +8,8 @@ import calendar
 import copy
 import csv
 import io
+from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from datetime import date, datetime, timedelta
 from datetime import timezone as dt_timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -20,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
 
 from app.core.config import settings
+from app.models.admin_hours import EVENT_TYPES_WITHOUT_ADMIN_HOURS
 from app.models.event import (
     EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS,
     AttendeeVisibility,
@@ -43,6 +46,7 @@ from app.schemas.event import (
     RSVPCreate,
     RSVPOverride,
 )
+from app.schemas.training_session import TrainingSessionAttach
 from app.services.admin_hours_service import AdminHoursService
 from app.services.location_service import LocationService
 from app.services.notifications_service import NotificationsService
@@ -55,6 +59,17 @@ from app.utils.org_timezone import (
 )
 
 DEFAULT_ALLOWED_RSVP_STATUSES = ["going", "not_going"]
+
+
+def _wall_time(value: datetime, tz: ZoneInfo) -> datetime:
+    """A stored time as naive wall-clock time in ``tz``, for calendar arithmetic."""
+    return to_local(value, tz).replace(tzinfo=None)
+
+
+def _stored_time(wall: datetime, tz: ZoneInfo) -> datetime:
+    """A naive wall-clock time in ``tz`` back as the UTC instant to store."""
+    return wall.replace(tzinfo=tz).astimezone(dt_timezone.utc)
+
 
 BULK_ADD_MAX_SIZE = 200
 
@@ -200,11 +215,38 @@ def attendance_locked_error(action: str) -> str:
     )
 
 
+@dataclass
+class FinalizeOutcome:
+    """What finalizing an event's attendance did, for the officer who asked.
+
+    ``updated_count`` keeps its long-standing meaning — rows whose duration
+    finalize derived — so existing callers read it unchanged. The training
+    fields report the credit a Training event wrote: records completed, an
+    approval left for training officers, and the attendees who got nothing
+    because there was no time to credit them with.
+    """
+
+    updated_count: int = 0
+    training_credit: bool = False
+    training_records_completed: int = 0
+    training_approval_pending: bool = False
+    training_attendees_pending: int = 0
+    training_attendees_uncredited: int = 0
+    training_uncredited_names: List[str] = dataclass_field(default_factory=list)
+    training_approval_id: Optional[str] = None
+    admin_hours_entries_removed: int = 0
+    error: Optional[str] = None
+
+
 class EventService:
     """Service for event management"""
 
     def __init__(self, db: AsyncSession):
         self.db = db
+        # The outcome of the most recent finalize this service ran, for a
+        # caller that reached it through end_event or record_actual_times,
+        # whose return shapes predate the training report.
+        self.last_finalize_outcome: Optional[FinalizeOutcome] = None
 
     async def create_event(
         self, event_data: EventCreate, organization_id: UUID, created_by: UUID
@@ -250,8 +292,26 @@ class EventService:
                     f"Conflicting event(s): {titles}"
                 )
 
-        # Prepare event data
-        event_dict = event_data.model_dump()
+        # Prepare event data. training_details is not an event column: it
+        # becomes a training session attached below.
+        event_dict = event_data.model_dump(exclude={"training_details"})
+        training_details = event_data.training_details
+        training = None
+        course = None
+        if training_details is not None:
+            if event_dict.get("event_type") != EventType.TRAINING.value:
+                raise ValueError(
+                    "Training details can only be added to a Training event"
+                )
+            # Local import: training_session_service imports this module.
+            from app.services.training_session_service import TrainingSessionService
+
+            training = TrainingSessionService(self.db)
+            course, error = await training.resolve_attach_details(
+                training_details, organization_id
+            )
+            if error:
+                raise ValueError(error)
 
         # Set default allowed_rsvp_statuses if not provided and RSVP is required
         if event_data.requires_rsvp and not event_dict.get("allowed_rsvp_statuses"):
@@ -263,6 +323,15 @@ class EventService:
         )
 
         self.db.add(event)
+        if training is not None:
+            # One commit for both, so an event is never left behind without
+            # the details the officer picked for it.
+            await self.db.flush()
+            self.db.add(
+                training.build_session_for_event(
+                    event, training_details, course, organization_id, created_by
+                )
+            )
         await self.db.commit()
         await self.db.refresh(event)
 
@@ -678,6 +747,10 @@ class EventService:
             if hasattr(event.event_type, "value")
             else event.event_type
         )
+        # Credited to training records, not admin hours: the card must not
+        # promise a credit credit_event_attendance will not make.
+        if event_type in EVENT_TYPES_WITHOUT_ADMIN_HOURS:
+            return None, None
         if event_type:
             matched = mappings.get(("event_type", event_type))
         elif event.custom_category:
@@ -720,6 +793,7 @@ class EventService:
             .where(Event.organization_id == str(organization_id))
             .options(selectinload(Event.location_obj))
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         event = result.scalar_one_or_none()
 
@@ -802,8 +876,14 @@ class EventService:
                     f"Conflicting event(s): {titles}"
                 )
 
+        was_training = self.event_credits_training(event)
+        old_title = event.title
         for field, value in update_data.items():
             setattr(event, field, value)
+
+        training_follow_up = await self._follow_training_changes(
+            event, was_training, old_title, organization_id
+        )
 
         if updated_by:
             event.updated_by = str(updated_by)
@@ -811,6 +891,10 @@ class EventService:
 
         await self.db.commit()
         await self.db.refresh(event)
+        if training_follow_up:
+            await self._reverse_pipeline_after_commit(
+                [training_follow_up], organization_id
+            )
 
         return event
 
@@ -879,10 +963,52 @@ class EventService:
                 Event.start_datetime >= anchor.start_datetime,
             )
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         future_events = result.scalars().all()
 
         update_data = event_data.model_dump(exclude_unset=True)
+
+        # The times are the anchor's, not the series'. Written verbatim, as the
+        # other fields are, they stamped the anchor's date onto every later
+        # occurrence: changing a description from the edit form, which always
+        # sends the times, moved a weekly series onto one day (workflow
+        # review W18-2). Each occurrence instead moves by the anchor's own
+        # shift in the department's wall-clock time, takes its new length, and
+        # keeps an RSVP deadline the same lead ahead of its own start.
+        timing = {
+            key: update_data.pop(key)
+            for key in ("start_datetime", "end_datetime", "rsvp_deadline")
+            if key in update_data
+        }
+        if ("start_datetime" in timing and timing["start_datetime"] is None) or (
+            "end_datetime" in timing and timing["end_datetime"] is None
+        ):
+            raise ValueError("An event's start and end cannot be cleared")
+        times_change = False
+        shift = length = timedelta(0)
+        deadline_lead: Optional[timedelta] = None
+        if timing:
+            # Resolved only when times were sent: a series edit that changes
+            # no time needs no timezone and touches no occurrence's times.
+            tz = await resolve_scheduling_timezone(self.db, organization_id)
+            new_start = _wall_time(
+                timing.get("start_datetime") or anchor.start_datetime, tz
+            )
+            new_end = _wall_time(timing.get("end_datetime") or anchor.end_datetime, tz)
+            if new_end <= new_start:
+                raise ValueError("End date/time must be after start date/time")
+            shift = new_start - _wall_time(anchor.start_datetime, tz)
+            length = new_end - new_start
+            times_change = shift != timedelta(0) or length != (
+                _wall_time(anchor.end_datetime, tz)
+                - _wall_time(anchor.start_datetime, tz)
+            )
+            if timing.get("rsvp_deadline") is not None:
+                deadline_lead = _wall_time(timing["rsvp_deadline"], tz) - new_start
+        changed_fields = set(update_data)
+        if times_change:
+            changed_fields |= {"start_datetime", "end_datetime"}
 
         # EV-17 / XC-1: this path writes the same client-supplied attachment
         # dictionaries as update_event, across every future occurrence.
@@ -892,7 +1018,7 @@ class EventService:
         # A series-wide edit reaches finalized occurrences too. Descriptive
         # fields stay allowed here exactly as they do on the single-event path;
         # only the ones the credited durations were derived from are refused.
-        sensitive = ATTENDANCE_SENSITIVE_UPDATE_FIELDS & set(update_data)
+        sensitive = ATTENDANCE_SENSITIVE_UPDATE_FIELDS & changed_fields
         if sensitive:
             locked = [e for e in future_events if attendance_is_finalized(e)]
             if locked:
@@ -919,9 +1045,29 @@ class EventService:
         now = datetime.now(dt_timezone.utc)
         updated_count = 0
 
+        training_follow_ups = []
         for event in future_events:
+            was_training = self.event_credits_training(event)
+            old_title = event.title
             for field, value in update_data.items():
                 setattr(event, field, value)
+            follow_up = await self._follow_training_changes(
+                event, was_training, old_title, organization_id
+            )
+            if follow_up:
+                training_follow_ups.append(follow_up)
+            if times_change:
+                start_wall = _wall_time(event.start_datetime, tz) + shift
+                event.start_datetime = _stored_time(start_wall, tz)
+                event.end_datetime = _stored_time(start_wall + length, tz)
+            if "rsvp_deadline" in timing:
+                event.rsvp_deadline = (
+                    None
+                    if deadline_lead is None
+                    else _stored_time(
+                        _wall_time(event.start_datetime, tz) + deadline_lead, tz
+                    )
+                )
             if updated_by:
                 event.updated_by = str(updated_by)
             event.updated_at = now
@@ -929,6 +1075,9 @@ class EventService:
 
         if updated_count > 0:
             await self.db.commit()
+            await self._reverse_pipeline_after_commit(
+                training_follow_ups, organization_id
+            )
 
         return updated_count
 
@@ -946,6 +1095,7 @@ class EventService:
             .where(Event.organization_id == str(organization_id))
             .options(selectinload(Event.location_obj), selectinload(Event.rsvps))
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         event = result.scalar_one_or_none()
 
@@ -962,7 +1112,9 @@ class EventService:
 
         # Same reasoning as delete_event: a reopened event that is cancelled
         # rather than re-finalized would leave its credited hours standing.
-        await self._revoke_event_attendance_credit(event_id, organization_id)
+        pending_reversals = await self._revoke_event_attendance_credit(
+            event_id, organization_id, event=event
+        )
 
         event.is_cancelled = True
         event.cancellation_reason = reason
@@ -974,6 +1126,7 @@ class EventService:
 
         await self.db.commit()
         await self.db.refresh(event)
+        await self._reverse_pipeline_after_commit(pending_reversals, organization_id)
 
         # Send cancellation notifications if requested
         if send_notifications and rsvps_to_notify:
@@ -1020,7 +1173,10 @@ class EventService:
         )
 
         result = await self.db.execute(
-            select(Event).where(*conditions).with_for_update()
+            select(Event)
+            .where(*conditions)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         events = result.scalars().all()
 
@@ -1035,6 +1191,10 @@ class EventService:
                 )
             )
 
+        pending_reversals = await self._void_training_credit_before_removal(
+            list(events), organization_id
+        )
+
         now = datetime.now(dt_timezone.utc)
         cancelled_count = 0
         for event in events:
@@ -1046,6 +1206,9 @@ class EventService:
 
         if cancelled_count > 0:
             await self.db.commit()
+            await self._reverse_pipeline_after_commit(
+                pending_reversals, organization_id
+            )
 
         return cancelled_count
 
@@ -1137,6 +1300,7 @@ class EventService:
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         event = result.scalar_one_or_none()
 
@@ -1152,7 +1316,9 @@ class EventService:
         # Reachable on a reopened event, where entries from the earlier
         # finalize are still on the ledger waiting to be resynced by a
         # re-finalize that is now never going to happen.
-        await self._revoke_event_attendance_credit(event_id, organization_id)
+        pending_reversals = await self._revoke_event_attendance_credit(
+            event_id, organization_id, event=event
+        )
 
         await self.db.delete(event)
         try:
@@ -1164,6 +1330,7 @@ class EventService:
                 "(e.g. meeting minutes). Remove or unlink them first."
             )
 
+        await self._reverse_pipeline_after_commit(pending_reversals, organization_id)
         return True
 
     async def delete_event_series(
@@ -1188,7 +1355,10 @@ class EventService:
             conditions.append(Event.start_datetime >= datetime.now(dt_timezone.utc))
 
         result = await self.db.execute(
-            select(Event).where(*conditions).with_for_update()
+            select(Event)
+            .where(*conditions)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         events = result.scalars().all()
 
@@ -1210,6 +1380,10 @@ class EventService:
                 )
             )
 
+        pending_reversals = await self._void_training_credit_before_removal(
+            list(events), organization_id
+        )
+
         for event in events:
             await self.db.delete(event)
 
@@ -1222,6 +1396,7 @@ class EventService:
                 "(e.g. meeting minutes). Remove or unlink them first."
             )
 
+        await self._reverse_pipeline_after_commit(pending_reversals, organization_id)
         return len(events)
 
     # RSVP Methods
@@ -1313,6 +1488,7 @@ class EventService:
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         event = event_result.scalar_one_or_none()
 
@@ -1428,9 +1604,14 @@ class EventService:
         if event.max_attendees and rsvp_data.status == RSVPStatus.GOING.value:
             party_size = 1 + effective_guest_count
             if party_size > event.max_attendees:
+                seats = (
+                    "1 person"
+                    if event.max_attendees == 1
+                    else f"{event.max_attendees} people"
+                )
                 return (
                     None,
-                    f"This event holds {event.max_attendees} people, so a party "
+                    f"This event holds {seats}, so a party "
                     f"of {party_size} cannot be accommodated.",
                 )
 
@@ -1709,6 +1890,7 @@ class EventService:
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         event = event_result.scalar_one_or_none()
         if not event or not event.max_attendees:
@@ -1995,6 +2177,7 @@ class EventService:
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         event = event_result.scalar_one_or_none()
 
@@ -2090,6 +2273,7 @@ class EventService:
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         event = event_result.scalar_one_or_none()
 
@@ -2152,6 +2336,84 @@ class EventService:
 
         return rsvp, None
 
+    async def _follow_training_changes(
+        self,
+        event: Event,
+        was_training: bool,
+        old_title: Optional[str],
+        organization_id: UUID,
+    ) -> Optional[Tuple[Any, Tuple[str, Optional[str]]]]:
+        """Keep an event's training credit in step with an edit to the event.
+
+        * Re-typed away from Training (possible only while attendance is
+          open): the credit its attendance gave is taken back, since the event
+          no longer credits training.
+        * Renamed, where the credit is filed under the title (no session, or
+          one with no course named after the old title): the session and the
+          records this event wrote follow the new title.
+
+        Does not commit. Returns the training service and the session to
+        reverse pipeline credit for after the caller commits, if any.
+        """
+        is_training = self.event_credits_training(event)
+        if not was_training and not is_training:
+            return None
+        # Local import: training_session_service imports this module.
+        from app.services.training_session_service import TrainingSessionService
+
+        training = TrainingSessionService(self.db)
+        if was_training and not is_training:
+            session_ref = await training.void_event_credit(event, organization_id)
+            return (training, session_ref) if session_ref else None
+        if old_title is not None and event.title != old_title:
+            session = await training.get_session_by_event(event.id, organization_id)
+            files_under_title = session is None or (
+                session.course_id is None and session.course_name == old_title
+            )
+            if files_under_title:
+                if session is not None:
+                    session.course_name = event.title
+                # The records were filed under the old title too, and a title
+                # can be fixed on a finalized event — where no re-finalize will
+                # come along to carry the new one across.
+                await training.rename_event_records(
+                    event, old_title, organization_id, session
+                )
+        return None
+
+    async def _void_training_credit_before_removal(
+        self, events: List[Event], organization_id: UUID
+    ) -> List[Tuple[Any, Tuple[str, Optional[str]]]]:
+        """Void the training credit of events about to be deleted or cancelled.
+
+        Only an open event can reach here — a finalized one is refused before
+        it — but an open event can be a reopened one, whose earlier finalize
+        credited its attendees. Deleting it nulls ``source_event_id`` (SET
+        NULL), which would leave those records completed with no attendance
+        behind them. Returns the sessions whose program credit must be reversed
+        once the caller has committed.
+        """
+        training_events = [e for e in events if self.event_credits_training(e)]
+        if not training_events:
+            return []
+        # Local import: training_session_service imports this module.
+        from app.services.training_session_service import TrainingSessionService
+
+        training = TrainingSessionService(self.db)
+        pending = []
+        for event in training_events:
+            session_ref = await training.void_event_credit(event, organization_id)
+            if session_ref:
+                pending.append((training, session_ref))
+        return pending
+
+    @staticmethod
+    async def _reverse_pipeline_after_commit(
+        pending: List[Tuple[Any, Tuple[str, Optional[str]]]], organization_id: UUID
+    ) -> None:
+        for training, session_ref in pending:
+            await training.reverse_event_pipeline_credit(session_ref, organization_id)
+
     async def remove_attendee(
         self, event_id: UUID, user_id: UUID, organization_id: UUID
     ) -> Optional[str]:
@@ -2166,6 +2428,7 @@ class EventService:
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         event = event_result.scalar_one_or_none()
 
@@ -2196,8 +2459,26 @@ class EventService:
             str(rsvp.id), str(organization_id)
         )
 
+        # And the training credit, on a reopened Training event whose earlier
+        # finalize credited this member.
+        training = None
+        session_ref = None
+        if self.event_credits_training(event):
+            # Local import: training_session_service imports this module.
+            from app.services.training_session_service import TrainingSessionService
+
+            training = TrainingSessionService(self.db)
+            session_ref = await training.void_event_credit(
+                event, organization_id, only_user_ids={str(user_id)}
+            )
+
         await self.db.delete(rsvp)
         await self.db.commit()
+
+        if training is not None and session_ref:
+            await training.reverse_event_pipeline_credit(
+                session_ref, organization_id, user_ids={str(user_id)}
+            )
 
         # Auto-promote from waitlist if a "going" attendee was removed
         if was_going and event.max_attendees:
@@ -2221,6 +2502,7 @@ class EventService:
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         event = event_result.scalar_one_or_none()
 
@@ -2363,6 +2645,7 @@ class EventService:
         actual_start_time: Optional[datetime],
         actual_end_time: Optional[datetime],
         finalized_by: Optional[UUID] = None,
+        can_manage_training: bool = False,
     ) -> Tuple[Optional[Event], Optional[str]]:
         """
         Record actual start and end times for an event
@@ -2376,11 +2659,17 @@ class EventService:
             .where(Event.organization_id == str(organization_id))
             .options(selectinload(Event.location_obj))
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         event = event_result.scalar_one_or_none()
 
         if not event:
             return None, "Event not found"
+
+        # As End Event: a cancelled event has no attendance to time, and the
+        # auto-finalize below would re-credit what cancelling voided.
+        if event.is_cancelled:
+            return None, "Cannot record actual times for a cancelled event"
 
         if attendance_is_finalized(event):
             return None, attendance_locked_error("recording actual times")
@@ -2406,6 +2695,11 @@ class EventService:
         if actual_start_time is not None:
             event.actual_start_time = actual_start_time
         if actual_end_time is not None:
+            previous_end = event.actual_end_time
+            if previous_end is not None and self._as_utc(previous_end) != self._as_utc(
+                actual_end_time
+            ):
+                await self._clear_bulk_check_outs(event, previous_end)
             event.actual_end_time = actual_end_time
 
         event.updated_at = datetime.now(dt_timezone.utc)
@@ -2416,8 +2710,24 @@ class EventService:
         # Auto-finalize attendance when actual end time is recorded
         if actual_end_time is not None:
             await self.finalize_event_attendance(
-                event_id, organization_id, finalized_by=finalized_by
+                event_id,
+                organization_id,
+                finalized_by=finalized_by,
+                can_manage_training=can_manage_training,
             )
+            # Finalize re-reads the event with populate_existing, which resets
+            # its relationships; the endpoint serializes location_obj, and a
+            # lazy load there raises MissingGreenlet.
+            reloaded = await self.db.execute(
+                select(Event)
+                .where(Event.id == str(event_id))
+                .where(Event.organization_id == str(organization_id))
+                .options(selectinload(Event.location_obj))
+                .execution_options(populate_existing=True)
+            )
+            event = reloaded.scalar_one_or_none()
+            if event is None:
+                return None, "Event not found"
 
         return event, None
 
@@ -2448,16 +2758,43 @@ class EventService:
         event_id: UUID,
         organization_id: UUID,
         finalized_by: Optional[UUID] = None,
+        can_manage_training: bool = False,
     ) -> Tuple[int, Optional[str]]:
+        """Finalize attendance; see ``finalize_event_attendance_detailed``.
+
+        Returns:
+            Tuple of (number_of_rsvps_updated, error_message)
         """
-        Finalize attendance duration for all checked-in members who didn't check out.
+        outcome = await self.finalize_event_attendance_detailed(
+            event_id,
+            organization_id,
+            finalized_by=finalized_by,
+            can_manage_training=can_manage_training,
+        )
+        return outcome.updated_count, outcome.error
+
+    async def finalize_event_attendance_detailed(
+        self,
+        event_id: UUID,
+        organization_id: UUID,
+        finalized_by: Optional[UUID] = None,
+        can_manage_training: bool = False,
+        require_training: bool = False,
+    ) -> "FinalizeOutcome":
+        """
+        Finalize attendance: settle every attendee's credited time and close
+        the event.
 
         When require_checkout is false (the default), members check in but never
         check out, leaving attendance_duration_minutes as NULL. This method
         calculates duration using: actual_end_time (if recorded) > end_datetime,
         minus the member's check-in time.
 
-        Also updates any linked training records that have hours_completed == 0.
+        On a Training event it also writes the members' training credit —
+        this is the one place attendance becomes training records. See
+        ``TrainingSessionService.record_event_attendance`` for what each kind
+        of Training event credits; a Training event's attendance can only be
+        finalized once the event has ended.
 
         Finalizing closes the event: the attendance-affecting writes are refused
         afterwards until ``reopen_event_attendance`` runs. Because of that lock
@@ -2465,32 +2802,71 @@ class EventService:
         finds for one of these RSVPs is left over from an earlier cycle and is
         resynced to the corrected numbers rather than skipped.
 
-        Returns:
-            Tuple of (number_of_rsvps_updated, error_message)
+        ``can_manage_training`` is the caller's training.manage, which the
+        training pipeline requires before it will move program progress.
+        ``require_training`` refuses, under the lock, an event that is no
+        longer a Training event — for a caller that asked to credit training.
         """
-        # Get event
+        outcome = FinalizeOutcome()
+        self.last_finalize_outcome = outcome
+
+        # populate_existing: sessions do not expire on commit, so End Event and
+        # Record Times hand this method an Event already in the identity map.
+        # Without it the lock would be taken but the stale object returned, and
+        # a finalize that committed while this call waited would go unseen.
         event_result = await self.db.execute(
             select(Event)
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         event = event_result.scalar_one_or_none()
 
         if not event:
-            return 0, "Event not found"
+            outcome.error = "Event not found"
+            return outcome
+
+        # Cancelling voided this event's credit; finalizing would write it back
+        # for an event that did not happen.
+        if event.is_cancelled:
+            outcome.error = "Cannot finalize attendance for a cancelled event"
+            return outcome
 
         if attendance_is_finalized(event):
-            return 0, attendance_locked_error("finalizing attendance again")
+            outcome.error = attendance_locked_error("finalizing attendance again")
+            return outcome
 
         # Determine effective end time: actual_end_time takes priority
-        effective_end = event.actual_end_time or event.end_datetime
+        effective_end = self.effective_end(event)
         if not effective_end:
-            return 0, "Event has no end time"
-        # Datetimes read straight from MySQL are naive while ones set in this
-        # session are UTC-aware; normalize before any subtraction below.
-        if effective_end.tzinfo is None:
-            effective_end = effective_end.replace(tzinfo=dt_timezone.utc)
+            outcome.error = "Event has no end time"
+            return outcome
+
+        credits_training = self.event_credits_training(event)
+        if require_training and not credits_training:
+            outcome.error = "This event is no longer a Training event"
+            return outcome
+        training = None
+        training_session = None
+        pending_approvals: List[Any] = []
+        if credits_training:
+            # A class still running has no final roster or durations to credit.
+            if datetime.now(dt_timezone.utc) < effective_end:
+                outcome.error = (
+                    "A training event's attendance can be finalized once the "
+                    "event has ended"
+                )
+                return outcome
+            # Local import: training_session_service imports this module.
+            from app.services.training_session_service import TrainingSessionService
+
+            training = TrainingSessionService(self.db)
+            # Straight after the event lock, before any RSVP is read: event,
+            # session, approvals, RSVPs is the order every writer takes.
+            training_session, pending_approvals = (
+                await training.lock_for_event_finalize(event, organization_id)
+            )
 
         # Two different sets, and conflating them is what left whole
         # categories of attendee uncredited:
@@ -2507,52 +2883,46 @@ class EventService:
         # before this runs — was skipped by the query and never credited at
         # all. Reported by review on PR #1791; the miss predates the lock, but
         # the lock is what made it unrecoverable without a chief.
-        derivable_result = await self.db.execute(
-            select(EventRSVP).where(
-                EventRSVP.event_id == str(event_id),
-                EventRSVP.checked_in.is_(True),
-                EventRSVP.checked_out_at.is_(None),
-                EventRSVP.override_duration_minutes.is_(None),
-                EventRSVP.attendance_duration_minutes.is_(None),
-            )
-        )
-        rsvps = list(derivable_result.scalars().all())
-
+        #
+        # One LOCKING read, with the derivable subset taken from it. The event
+        # lock serializes the attendance writers, but under REPEATABLE READ a
+        # plain SELECT answers from the snapshot this request took before it
+        # waited for that lock (pitfall #27): an Edit Times save or a check-in
+        # this finalize queued behind would be invisible to it, and credited
+        # from the stale row. FOR UPDATE reads the committed rows, and
+        # populate_existing makes the RSVPs End Event already loaded show them.
         attended_result = await self.db.execute(
-            select(EventRSVP).where(
+            select(EventRSVP)
+            .where(
                 EventRSVP.event_id == str(event_id),
+                EventRSVP.organization_id == str(organization_id),
                 EventRSVP.checked_in.is_(True),
             )
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         attended = list(attended_result.scalars().all())
+        rsvps = [
+            r
+            for r in attended
+            if r.checked_out_at is None
+            and r.override_duration_minutes is None
+            and r.attendance_duration_minutes is None
+        ]
 
-        if not attended:
+        if not attended and not credits_training:
             # No member checked in — the ordinary shape of an open house or a
             # recruitment night, whose whole roster is guests. This return is
             # why the applicant advance below cannot live at the tail of this
             # method: the events most likely to carry prospective members are
-            # exactly the ones that never reach it.
+            # exactly the ones that never reach it. (A Training event carries
+            # on: an empty roster still has to take back credit an earlier
+            # finalize gave.)
             await self._record_attendance_finalized(
                 event, organization_id, finalized_by
             )
             await self._advance_prospects_after_finalize(event)
-            return 0, None
-
-        # Get linked training session if this is a training event
-        training_session = None
-        if event.event_type == EventType.TRAINING:
-            session_result = await self.db.execute(
-                select(TrainingSession).where(TrainingSession.event_id == event.id)
-            )
-            training_session = session_result.scalar_one_or_none()
-        event_dates: List[date] = []
-        if training_session is not None and event.start_datetime is not None:
-            # The record was filed under the session's day on the department's
-            # calendar, or -- written before that -- under its UTC day.
-            event_dates = local_and_utc_dates(
-                event.start_datetime,
-                await resolve_scheduling_timezone(self.db, organization_id),
-            )
+            return outcome
 
         updated_count = 0
         for rsvp in rsvps:
@@ -2566,35 +2936,16 @@ class EventService:
             duration_minutes = max(0, int(duration_minutes))
             rsvp.attendance_duration_minutes = duration_minutes
             updated_count += 1
-
-            # Update linked training record if hours are still 0
-            if training_session and event_dates:
-                record_result = await self.db.execute(
-                    select(TrainingRecord)
-                    .where(
-                        TrainingRecord.organization_id == str(organization_id),
-                        TrainingRecord.user_id == str(rsvp.user_id),
-                        TrainingRecord.course_name == training_session.course_name,
-                        TrainingRecord.scheduled_date.in_(event_dates),
-                    )
-                    .order_by(TrainingRecord.completion_date.is_(None).desc())
-                )
-                training_record = record_result.scalars().first()
-                # Write the derived hours whenever this event is the thing the
-                # record came from. The old "only if null or zero" guard was
-                # there to avoid trampling a number someone else set, but it
-                # also meant a reopen-and-correct left the training record on
-                # the first finalize's figure while the RSVP and the hours
-                # ledger both moved — three records, two answers.
-                if training_record is not None:
-                    training_record.hours_completed = round(duration_minutes / 60.0, 2)
+        outcome.updated_count = updated_count
 
         # Close the event and credit the hours in the SAME transaction that
         # holds its row lock. Every attendance writer takes that lock too, so
         # one arriving mid-finalize blocks and then finds the event closed —
-        # rather than committing a check-in between the roster snapshot above
-        # and the close, which left an attendee checked in, uncredited, and
-        # behind a lock nobody could see a reason for.
+        # rather than committing a check-in between the roster read above and
+        # the close, which left an attendee checked in, uncredited, and behind
+        # a lock nobody could see a reason for. (A writer that committed
+        # *before* this call took the lock is seen only because that roster
+        # read is a locking one.)
         #
         # Crediting is inside the lock rather than after it, which is a
         # correction to the first cut of this: committing the close first
@@ -2606,19 +2957,52 @@ class EventService:
         # back and leaves the event open, which is the honest outcome.
         self._stamp_attendance_finalized(event, finalized_by)
 
-        # Auto-credit event hours to admin hours categories via mappings
+        credit = None
+        if training is not None:
+            credit = await training.record_event_attendance(
+                event,
+                training_session,
+                pending_approvals,
+                attended,
+                effective_end,
+                finalized_by,
+                organization_id,
+            )
+            outcome.training_credit = True
+            outcome.training_records_completed = credit.records_completed
+            outcome.training_approval_pending = credit.approval_pending
+            outcome.training_attendees_pending = credit.attendees_pending
+            outcome.training_uncredited_names = list(credit.uncredited_names)
+            outcome.training_attendees_uncredited = len(credit.uncredited_names)
+            outcome.training_approval_id = credit.approval_id
+            # Training events no longer credit admin hours. Entries an earlier
+            # finalize wrote for this event (mapped before the rule, or re-typed
+            # to training while reopened) would keep counting the same hours
+            # the training records now hold, so they go.
+            outcome.admin_hours_entries_removed = await AdminHoursService(
+                self.db
+            ).delete_event_attendance_entries_for_event(
+                str(event.id), str(organization_id)
+            )
+
+        # Auto-credit event hours to admin hours categories via mappings.
+        # A Training event is credited to training records above instead.
         admin_hours_service = AdminHoursService(self.db)
         event_type_val = event.event_type.value if event.event_type else None
-        for rsvp in attended:
+        admin_credited = [] if credits_training else attended
+        for rsvp in admin_credited:
             # Same clamp as above: the window handed to admin hours has to
             # match the duration credited, or the two disagree on the record.
             check_in_time = self._credited_check_in_time(event, rsvp)
-            duration = (
-                rsvp.override_duration_minutes or rsvp.attendance_duration_minutes
-            )
-            if not check_in_time or not duration or duration <= 0:
+            # The same rule as training credit, so an explicit 0 override
+            # credits nothing here either rather than falling through to the
+            # measured minutes.
+            duration = self.credited_minutes(event, rsvp, effective_end)
+            if not check_in_time or duration is None or duration <= 0:
                 continue
-            check_out_time = rsvp.checked_out_at or effective_end
+            check_out_time = self._credited_check_out_time(
+                rsvp, check_in_time, effective_end
+            )
             try:
                 await admin_hours_service.credit_event_attendance(
                     organization_id=str(event.organization_id),
@@ -2640,9 +3024,13 @@ class EventService:
         # releases the row lock. _record_attendance_finalized re-stamps (a
         # no-op), commits, and archives the validation prompt.
         await self._record_attendance_finalized(event, organization_id, finalized_by)
+        if credit is not None:
+            await training.after_event_attendance_recorded(
+                credit, organization_id, finalized_by, can_manage_training
+            )
         await self._advance_prospects_after_finalize(event)
 
-        return updated_count, None
+        return outcome
 
     async def _advance_prospects_after_finalize(self, event: Event) -> None:
         """Move applicants this event's now-settled attendance clears.
@@ -2672,8 +3060,11 @@ class EventService:
             )
 
     async def _revoke_event_attendance_credit(
-        self, event_id: UUID, organization_id: UUID
-    ) -> None:
+        self,
+        event_id: UUID,
+        organization_id: UUID,
+        event: Optional[Event] = None,
+    ) -> List[Tuple[Any, Tuple[str, Optional[str]]]]:
         """Drop the admin-hours entries derived from this event's attendance.
 
         Reopening leaves the entries in place on the assumption that
@@ -2696,6 +3087,12 @@ class EventService:
             await admin_hours.delete_event_attendance_entries(
                 str(rsvp_id), str(organization_id)
             )
+        # The same holds for the training credit a reopened Training event's
+        # earlier finalize wrote. The caller reverses the program credit once
+        # it has committed.
+        if event is None:
+            return []
+        return await self._void_training_credit_before_removal([event], organization_id)
 
     @staticmethod
     def _stamp_attendance_finalized(
@@ -2767,8 +3164,10 @@ class EventService:
         * Durations that finalize *derived* are cleared — the rows with a
           check-in, no check-out and no manual override. Finalize only fills a
           NULL duration, so leaving them set would mean a corrected end time
-          changed nothing on the next finalize. A duration measured from a real
-          check-out, or set by hand as an override, is not derived and stays.
+          changed nothing on the next finalize. End Event's bulk check-outs are
+          cleared with them (see ``_clear_bulk_check_outs``). A duration
+          measured from a member's own check-out, or set by hand as an
+          override, is not derived and stays.
         * The ``attendance_finalized`` marker goes, so the post-event validation
           task can prompt again for an event that is open once more; the
           ``validation_notification_sent`` marker goes with it, or the task
@@ -2786,6 +3185,7 @@ class EventService:
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         event = result.scalar_one_or_none()
 
@@ -2794,6 +3194,18 @@ class EventService:
 
         if not attendance_is_finalized(event):
             return None, "Attendance for this event is not finalized"
+
+        now = datetime.now(dt_timezone.utc)
+        if self.event_credits_training(event):
+            # The session's finalized flag follows the event's lock, and an
+            # approval still pending was issued against the numbers this
+            # reopen exists to correct. Taken before the RSVPs: event,
+            # session, approvals, RSVPs is the order every writer locks in.
+            from app.services.training_session_service import TrainingSessionService
+
+            await TrainingSessionService(self.db).reopen_for_event(
+                event, organization_id, now
+            )
 
         rsvp_result = await self.db.execute(
             select(EventRSVP).where(
@@ -2806,6 +3218,11 @@ class EventService:
         for rsvp in rsvp_result.scalars().all():
             rsvp.attendance_duration_minutes = None
 
+        # End Event's bulk check-outs are derived too, though they carry a
+        # check-out: each is stamped with the event's recorded end, so a
+        # corrected end would otherwise change nobody's credit.
+        await self._clear_bulk_check_outs(event, event.actual_end_time)
+
         event.attendance_finalized_at = None
         event.attendance_finalized_by = None
 
@@ -2817,7 +3234,7 @@ class EventService:
             custom.pop(marker, None)
         event.custom_fields = custom
 
-        event.updated_at = datetime.now(dt_timezone.utc)
+        event.updated_at = now
 
         await self.db.commit()
 
@@ -2842,11 +3259,43 @@ class EventService:
 
         return event, None
 
+    async def _clear_bulk_check_outs(
+        self, event: Event, bulk_end: Optional[datetime]
+    ) -> None:
+        """Undo End Event's bulk check-out so finalize derives those members.
+
+        End Event stamps one instant as both the event's ``actual_end_time``
+        and every open attendee's ``checked_out_at``, with a duration measured
+        to it. That duration is the measured tier of ``credited_minutes``, so
+        while it stands a corrected end time changes nobody's credit — an
+        officer who pressed End Event two hours late could not take the two
+        hours back. A row whose check-out matches ``bulk_end`` exactly is one
+        of those; a member's own check-out, or a manual override, is left.
+        """
+        end = self._as_utc(bulk_end)
+        if end is None:
+            return
+        result = await self.db.execute(
+            select(EventRSVP).where(
+                EventRSVP.event_id == str(event.id),
+                EventRSVP.organization_id == str(event.organization_id),
+                EventRSVP.checked_in.is_(True),
+                EventRSVP.checked_out_at.is_not(None),
+                EventRSVP.override_duration_minutes.is_(None),
+            )
+        )
+        for rsvp in result.scalars().all():
+            # Compared in Python: MySQL hands the column back naive.
+            if self._as_utc(rsvp.checked_out_at) == end:
+                rsvp.checked_out_at = None
+                rsvp.attendance_duration_minutes = None
+
     async def end_event(
         self,
         event_id: UUID,
         organization_id: UUID,
         ended_by: Optional[UUID] = None,
+        can_manage_training: bool = False,
     ) -> Tuple[Optional[Event], int, Optional[str]]:
         """
         End an in-progress event: record actual_end_time as now,
@@ -2855,7 +3304,11 @@ class EventService:
         Returns:
             Tuple of (event, checked_out_count, error_message)
         """
-        now = datetime.now(dt_timezone.utc)
+        # Whole seconds: MySQL DATETIME(0) *rounds* a fraction, so 12:00:00.7
+        # is stored as 12:00:01 — an end time a second in the future, which
+        # the finalize below reads back and refuses as "the event has not
+        # ended yet". Flooring keeps every stored stamp at or before the clock.
+        now = datetime.now(dt_timezone.utc).replace(microsecond=0)
 
         event_result = await self.db.execute(
             select(Event)
@@ -2863,6 +3316,7 @@ class EventService:
             .where(Event.organization_id == str(organization_id))
             .options(selectinload(Event.location_obj))
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         event = event_result.scalar_one_or_none()
 
@@ -2912,8 +3366,12 @@ class EventService:
         await self.db.refresh(event)
 
         # Finalize attendance durations
-        updated_count, _ = await self.finalize_event_attendance(
-            event_id, organization_id, finalized_by=ended_by
+        # The detailed outcome stays on last_finalize_outcome for the endpoint.
+        await self.finalize_event_attendance(
+            event_id,
+            organization_id,
+            finalized_by=ended_by,
+            can_manage_training=can_manage_training,
         )
 
         return event, len(rsvps), None
@@ -2973,6 +3431,20 @@ class EventService:
         if event.location_obj:
             location_name = event.location_obj.name
 
+        # The same test finalize applies (pitfall #29): every Training event's
+        # attendance becomes a training record when it is finalized, session or
+        # not. Whether an officer must approve it first is the session's call.
+        records_training = self.event_credits_training(event)
+        training_requires_approval = False
+        if records_training:
+            session_result = await self.db.execute(
+                select(TrainingSession.require_completion_confirmation).where(
+                    TrainingSession.event_id == event.id,
+                    TrainingSession.organization_id == str(organization_id),
+                )
+            )
+            training_requires_approval = bool(session_result.scalars().first())
+
         return {
             "event_id": str(event.id),
             "event_name": event.title,
@@ -2995,6 +3467,8 @@ class EventService:
             "location_name": location_name,
             "require_checkout": event.require_checkout or False,
             "timezone": org_timezone,
+            "records_training": records_training,
+            "training_requires_approval": training_requires_approval,
         }, None
 
     # A self check-in this far ahead of the scheduled start is worth putting in
@@ -3031,6 +3505,139 @@ class EventService:
             return None
         minutes = int((scheduled_start - moment_utc).total_seconds() / 60)
         return minutes if minutes > 0 else None
+
+    @staticmethod
+    def event_credits_training(event: Event) -> bool:
+        """Whether finalizing this event's attendance writes training records.
+
+        Every Training-type event does, with or without a training session
+        attached: the session only decides what the record is filed under and
+        whether an officer must approve it first. The self check-in page reads
+        this to tell a member their attendance will be recorded (pitfall #29),
+        so the two cannot disagree.
+        """
+        return event.event_type == EventType.TRAINING
+
+    @classmethod
+    def effective_end(cls, event: Event) -> Optional[datetime]:
+        """When the event's attendance stops counting: the recorded actual end,
+        else the scheduled one, as a UTC-aware datetime."""
+        return cls._as_utc(event.actual_end_time or event.end_datetime)
+
+    @classmethod
+    def credited_minutes(
+        cls,
+        event: Event,
+        rsvp: EventRSVP,
+        effective_end: Optional[datetime],
+    ) -> Optional[int]:
+        """Minutes of attendance this member is credited with.
+
+        The precedence the department agreed for training credit:
+
+        1. A manager's override (Edit Times writes one from the two times it
+           is given). An explicit override of 0 means no credit and is honoured
+           as such — ``is not None``, not truthiness, or a 0 would fall through
+           to the member's measured time.
+        2. The measured duration — a real check-out, or End Event's bulk
+           check-out — which is ``attendance_duration_minutes`` once set.
+           Finalize also stores the duration it derives there, so after the
+           derive loop this tier covers every checked-in row without an
+           override.
+        3. Derived: from the credited check-in (early taps clamped to the
+           scheduled start) to the event's effective end.
+
+        None when there is nothing to measure from — no credited check-in, or
+        no end.
+        """
+        if rsvp.override_duration_minutes is not None:
+            return max(0, int(rsvp.override_duration_minutes))
+        if rsvp.attendance_duration_minutes is not None:
+            return max(0, int(rsvp.attendance_duration_minutes))
+        start = cls._credited_check_in_time(event, rsvp)
+        end = cls._as_utc(effective_end)
+        if start is None or end is None:
+            return None
+        return max(0, int((end - start).total_seconds() / 60))
+
+    @staticmethod
+    def event_training_record_query(
+        organization_id: Any,
+        user_id: Any,
+        event_id: Any,
+        *,
+        adopt_course_name: Optional[str] = None,
+        dates: Optional[List[date]] = None,
+        lock: bool = False,
+    ):
+        """The select that finds a member's training record for an event.
+
+        The record this event's finalize wrote carries ``source_event_id``,
+        and that is the whole key: title edits, a moved start and a manual
+        record with the same name cannot confuse it.
+
+        ``adopt_course_name`` (session-backed events only) also matches a row
+        written before the source existed — the in-progress record a member's
+        own check-in starts, or one a pre-upgrade finalize completed — by the
+        course name and the event's day, as every writer used to. A CANCELLED
+        row is never adopted: it is a voided credit, not a live one. Sourced
+        rows sort first so an adopted duplicate can never win.
+
+        ``lock`` makes it a locking read. Under REPEATABLE READ a plain read
+        answers from the transaction's first snapshot, which predates the
+        event lock the caller took, and would miss a row a concurrent check-in
+        committed in between.
+        """
+        condition = TrainingRecord.source_event_id == str(event_id)
+        if adopt_course_name:
+            day_dates = list(dates or [])
+            condition = or_(
+                condition,
+                and_(
+                    TrainingRecord.source_event_id.is_(None),
+                    TrainingRecord.course_name == adopt_course_name,
+                    TrainingRecord.status != TrainingStatus.CANCELLED,
+                    or_(
+                        TrainingRecord.scheduled_date.in_(day_dates),
+                        TrainingRecord.completion_date.in_(day_dates),
+                    ),
+                ),
+            )
+        query = (
+            select(TrainingRecord)
+            .where(
+                TrainingRecord.organization_id == str(organization_id),
+                TrainingRecord.user_id == str(user_id),
+                condition,
+            )
+            .order_by(
+                TrainingRecord.source_event_id.is_(None).asc(),
+                TrainingRecord.completion_date.is_(None).desc(),
+            )
+        )
+        return query.with_for_update() if lock else query
+
+    @classmethod
+    def _credited_check_out_time(
+        cls,
+        rsvp: EventRSVP,
+        check_in_time: datetime,
+        effective_end: datetime,
+    ) -> datetime:
+        """The end of the window an admin-hours entry records.
+
+        A manager's corrected check-out wins over the tap it corrects, the same
+        order ``TrainingSessionService._resync_admin_hours`` already uses. The
+        window has to agree with the credited duration: an entry stamped with
+        the original check-out beside the override's minutes reads as a
+        contradiction, and editing it later recomputes the minutes from the
+        wrong window. A check-out at or before the check-in cannot bound a
+        window, so the tap (or the event's end) is used instead.
+        """
+        override = cls._as_utc(rsvp.override_check_out_at)
+        if override is not None and override > check_in_time:
+            return override
+        return cls._as_utc(rsvp.checked_out_at) or effective_end
 
     @classmethod
     def _credited_check_in_time(
@@ -3218,6 +3825,7 @@ class EventService:
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         event = event_result.scalar_one_or_none()
 
@@ -3328,11 +3936,16 @@ class EventService:
         # value to recompute if the organizer later moves the event.
         rsvp.early_check_in_minutes = self._minutes_before_start(event, now)
 
+        # The training placeholder goes in with the check-in, while this
+        # transaction still holds the event lock. Written after the commit, it
+        # raced a finalize that could land in between and then found nothing
+        # to void, leaving the member "in progress" on a closed event.
+        # Flushed first so the savepoint it uses covers only the placeholder.
+        await self.db.flush()
+        await self._auto_create_training_record(event, rsvp, user_id, organization_id)
+
         await self.db.commit()
         await self.db.refresh(rsvp)
-
-        # Auto-create TrainingRecord if this is a training event
-        await self._auto_create_training_record(event, rsvp, user_id, organization_id)
 
         return rsvp, None, notice
 
@@ -3340,77 +3953,81 @@ class EventService:
         self, event: Event, rsvp: EventRSVP, user_id: UUID, organization_id: UUID
     ) -> None:
         """
-        Auto-create a TrainingRecord if the event is a training session
-        with auto_create_records enabled.
+        Start an in-progress training record when a member checks in to a
+        training session with auto_create_records enabled.
 
-        Errors are logged but do not propagate — the check-in has
-        already committed, so a training-record failure must not
-        cause the caller to return an error to the user.
+        Runs inside the check-in's transaction, under its event lock, in a
+        savepoint; never commits. Any failure unwinds the placeholder alone and
+        is logged — the check-in still commits, and a record the member lacks
+        is written by finalize regardless.
         """
         if event.event_type != EventType.TRAINING:
             return
 
         try:
-            # Check if this event has a training session
-            session_result = await self.db.execute(
-                select(TrainingSession).where(TrainingSession.event_id == event.id)
-            )
-            training_session = session_result.scalar_one_or_none()
+            async with self.db.begin_nested():
+                session_result = await self.db.execute(
+                    select(TrainingSession).where(
+                        TrainingSession.event_id == event.id,
+                        TrainingSession.organization_id == str(organization_id),
+                    )
+                )
+                training_session = session_result.scalar_one_or_none()
+                if not training_session or not training_session.auto_create_records:
+                    return
 
-            if not training_session:
-                return
+                # Filed under the session's day on the department's calendar;
+                # a record written before that carries the UTC day, so the
+                # duplicate check accepts both.
+                event_dates = local_and_utc_dates(
+                    event.start_datetime,
+                    await resolve_scheduling_timezone(self.db, organization_id),
+                )
 
-            if not training_session.auto_create_records:
-                return
+                # The record this event's attendance wrote, or one started
+                # before the source link existed.
+                existing_record_result = await self.db.execute(
+                    self.event_training_record_query(
+                        organization_id,
+                        user_id,
+                        event.id,
+                        adopt_course_name=training_session.course_name,
+                        dates=event_dates,
+                    )
+                )
+                if existing_record_result.scalars().first():
+                    return
 
-            # Filed under the session's day on the department's calendar; a
-            # record written before that carries the UTC day, so the duplicate
-            # check accepts both.
-            event_dates = local_and_utc_dates(
-                event.start_datetime,
-                await resolve_scheduling_timezone(self.db, organization_id),
-            )
-
-            # Check if training record already exists
-            existing_record_result = await self.db.execute(
-                select(TrainingRecord)
-                .where(TrainingRecord.organization_id == str(organization_id))
-                .where(TrainingRecord.user_id == str(user_id))
-                .where(TrainingRecord.course_name == training_session.course_name)
-                .where(TrainingRecord.scheduled_date.in_(event_dates))
-            )
-            existing_record = existing_record_result.scalars().first()
-
-            if existing_record:
-                return  # Record already exists
-
-            # Create training record
-            training_record = TrainingRecord(
-                organization_id=organization_id,
-                user_id=user_id,
-                course_id=training_session.course_id,
-                category_id=training_session.category_id,
-                course_name=training_session.course_name,
-                course_code=training_session.course_code,
-                training_type=training_session.training_type,
-                scheduled_date=event_dates[0],
-                completion_date=None,
-                status=TrainingStatus.IN_PROGRESS,
-                hours_completed=0.0,
-                credit_hours=training_session.credit_hours,
-                instructor=training_session.instructor,
-                location=event.location,
-                certification_number=None,
-                issuing_agency=(
-                    training_session.issuing_agency
-                    if training_session.issues_certification
-                    else None
-                ),
-                created_by=user_id,
-            )
-
-            self.db.add(training_record)
-            await self.db.commit()
+                self.db.add(
+                    TrainingRecord(
+                        organization_id=organization_id,
+                        user_id=user_id,
+                        source_event_id=str(event.id),
+                        course_id=training_session.course_id,
+                        category_id=training_session.category_id,
+                        course_name=training_session.course_name,
+                        course_code=training_session.course_code,
+                        training_type=training_session.training_type,
+                        scheduled_date=event_dates[0],
+                        completion_date=None,
+                        status=TrainingStatus.IN_PROGRESS,
+                        hours_completed=0.0,
+                        credit_hours=training_session.credit_hours,
+                        instructor=training_session.instructor,
+                        location_id=(
+                            str(event.location_id) if event.location_id else None
+                        ),
+                        # The record's column is shorter than the event's.
+                        location=(event.location or "")[:255] or None,
+                        certification_number=None,
+                        issuing_agency=(
+                            training_session.issuing_agency
+                            if training_session.issues_certification
+                            else None
+                        ),
+                        created_by=user_id,
+                    )
+                )
         except Exception:
             logger.opt(exception=True).error(
                 "Failed to auto-create training record for user {} "
@@ -3420,7 +4037,6 @@ class EventService:
                 event.id,
                 event.title,
             )
-            await self.db.rollback()
 
     async def get_check_in_monitoring_stats(
         self, event_id: UUID, organization_id: UUID
@@ -3729,12 +4345,47 @@ class EventService:
         week_ordinal: Optional[int] = None,
         month: Optional[int] = None,
         exceptions: Optional[List[str]] = None,
+        timezone_: Optional[ZoneInfo] = None,
     ) -> List[Tuple[datetime, datetime]]:
         """
         Generate all occurrence dates for a recurring event.
 
         Returns list of (start, end) datetime tuples.
+
+        With ``timezone_`` (the department's zone) the series is stepped in
+        wall-clock time there and each occurrence converted back to UTC, in
+        the same naive-or-aware form the start came in (naive is read as
+        UTC). Stepping the stored UTC instant instead moved a weekly 7pm drill
+        to 6pm when daylight saving ended, and — because a US evening is
+        already the next day in UTC — matched custom weekdays, the Nth
+        weekday of a month and the skipped dates against the wrong day
+        (workflow review W18-1). The client sends all three as the
+        department's calendar.
         """
+        naive_in = start_datetime.tzinfo is None
+        if timezone_ is not None:
+
+            def _local(value: datetime) -> datetime:
+                aware = value if value.tzinfo else value.replace(tzinfo=dt_timezone.utc)
+                return aware.astimezone(timezone_).replace(tzinfo=None)
+
+            def _utc(value: datetime) -> datetime:
+                out = value.replace(tzinfo=timezone_).astimezone(dt_timezone.utc)
+                return out.replace(tzinfo=None) if naive_in else out
+
+            local_occurrences = self._generate_recurrence_dates(
+                start_datetime=_local(start_datetime),
+                end_datetime=_local(end_datetime),
+                pattern=pattern,
+                recurrence_end_date=_local(recurrence_end_date),
+                custom_days=custom_days,
+                weekday=weekday,
+                week_ordinal=week_ordinal,
+                month=month,
+                exceptions=exceptions,
+            )
+            return [(_utc(s), _utc(e)) for s, e in local_occurrences]
+
         duration = end_datetime - start_datetime
         occurrences = []
         current = start_datetime
@@ -3864,6 +4515,29 @@ class EventService:
         recurrence_week_ordinal = event_data.pop("recurrence_week_ordinal", None)
         recurrence_month = event_data.pop("recurrence_month", None)
         recurrence_exceptions = event_data.pop("recurrence_exceptions", None)
+        raw_training_details = event_data.pop("training_details", None)
+
+        # Training details become one training session per occurrence. The
+        # schema already refuses them on a rolling series (the job extending
+        # it copies events, not sessions); the type is checked here.
+        training = None
+        training_details = None
+        course = None
+        if raw_training_details is not None:
+            # Local import: training_session_service imports this module.
+            from app.services.training_session_service import TrainingSessionService
+
+            if event_data.get("event_type") != EventType.TRAINING.value:
+                return [], "Training details can only be added to a Training event"
+            if rolling_recurrence:
+                return [], "Training details can't be added to a rolling series"
+            training_details = TrainingSessionAttach(**raw_training_details)
+            training = TrainingSessionService(self.db)
+            course, error = await training.resolve_attach_details(
+                training_details, organization_id
+            )
+            if error:
+                return [], error
 
         # EV-17 / XC-1: RecurringEventCreate carries `attachments` too, and it
         # is copied onto every generated occurrence — so an unvalidated foreign
@@ -3899,6 +4573,7 @@ class EventService:
 
         # Generate occurrence dates
         occurrences = self._generate_recurrence_dates(
+            timezone_=await resolve_scheduling_timezone(self.db, organization_id),
             start_datetime=event_data["start_datetime"],
             end_datetime=event_data["end_datetime"],
             pattern=recurrence_pattern,
@@ -3960,6 +4635,19 @@ class EventService:
             )
             self.db.add(child_event)
             created_events.append(child_event)
+
+        if training is not None:
+            await self.db.flush()
+            for occurrence in created_events:
+                self.db.add(
+                    training.build_session_for_event(
+                        occurrence,
+                        training_details,
+                        course,
+                        organization_id,
+                        created_by,
+                    )
+                )
 
         await self.db.commit()
 

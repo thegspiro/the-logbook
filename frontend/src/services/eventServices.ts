@@ -269,9 +269,12 @@ export const eventService = {
   /**
    * Finalize attendance duration for all checked-in members who didn't check out.
    * Uses actual_end_time (if recorded) or end_datetime minus check-in time.
+   * On a Training event the result also reports the training credit written.
    */
-  async finalizeAttendance(eventId: string): Promise<{ updated_count: number }> {
-    const response = await api.post<{ updated_count: number }>(`/events/${eventId}/finalize-attendance`);
+  async finalizeAttendance(eventId: string): Promise<import('../types/event').FinalizeAttendanceResult> {
+    const response = await api.post<import('../types/event').FinalizeAttendanceResult>(
+      `/events/${eventId}/finalize-attendance`
+    );
     return response.data;
   },
 
@@ -287,10 +290,8 @@ export const eventService = {
     return response.data;
   },
 
-  async endEvent(eventId: string): Promise<{ checked_out_count: number; actual_end_time: string }> {
-    const response = await api.post<{ checked_out_count: number; actual_end_time: string }>(
-      `/events/${eventId}/end-event`
-    );
+  async endEvent(eventId: string): Promise<import('../types/event').EndEventResult> {
+    const response = await api.post<import('../types/event').EndEventResult>(`/events/${eventId}/end-event`);
     return response.data;
   },
 

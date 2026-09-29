@@ -115,6 +115,70 @@ export interface TrainingSessionLinkageUpdate {
   program_id?: string | null;
   phase_id?: string | null;
   requirement_id?: string | null;
+  /** Setting it files the session under the course; null files it under the event title. */
+  course_id?: string | null;
+  /** Cannot be cleared: every training record needs a type. */
+  training_type?: string;
+}
+
+/** Training details attached to an existing Training event (a create payload: omit blanks). */
+export interface TrainingSessionAttach {
+  course_id?: string | undefined;
+  category_id?: string | undefined;
+  program_id?: string | undefined;
+  phase_id?: string | undefined;
+  requirement_id?: string | undefined;
+  training_type?: string | undefined;
+}
+
+/** Where an event's training approval stands. `token` only for approvers, only while live. */
+export interface TrainingApprovalSummary {
+  approval_id: string;
+  /** ApprovalStatus value: pending, approved or rejected. */
+  status: string;
+  approval_deadline: string;
+  approved_at?: string | null;
+  attendee_count: number;
+  expired: boolean;
+  token?: string | null;
+}
+
+/** One attendee on an approval's roster, as the approval page reviews it. */
+export interface TrainingApprovalAttendee {
+  user_id: string;
+  user_name: string;
+  user_email: string;
+  checked_in_at: string;
+  checked_out_at?: string | null;
+  calculated_duration_minutes?: number | null;
+  override_check_in_at?: string | null;
+  override_check_out_at?: string | null;
+  override_duration_minutes?: number | null;
+  approved?: boolean;
+  notes?: string | null;
+}
+
+export interface TrainingApprovalData {
+  id: string;
+  training_session_id: string;
+  event_id: string;
+  status: string;
+  approval_deadline: string;
+  event_title: string;
+  event_start_datetime: string;
+  event_end_datetime: string;
+  course_name: string;
+  credit_hours: number;
+  attendees: TrainingApprovalAttendee[];
+  approved_by?: string | null;
+  approved_at?: string | null;
+  approval_notes?: string | null;
+  created_at: string;
+}
+
+export interface TrainingApprovalSubmit {
+  attendees: TrainingApprovalAttendee[];
+  approval_notes?: string | undefined;
 }
 
 export interface TrainingSessionCreate {

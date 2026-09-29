@@ -60,13 +60,20 @@ const membershipSelect = () => screen.getByRole('combobox', { name: /membership 
  * their controls. They are now (workflow review W08, asserted below), and the
  * placeholders still identify each field.
  */
-const fillRequired = async (user: ReturnType<typeof userEvent.setup>) => {
+const fillRequired = async (
+  user: ReturnType<typeof userEvent.setup>,
+  { membershipNumber = 'FF-001' }: { membershipNumber?: string | null } = {}
+) => {
   const type = async (placeholder: string, value: string) => {
     await user.type(screen.getByPlaceholderText(placeholder), value);
   };
   await type('John', 'Dana');
   await type('Doe', 'Reyes');
-  await type('FF-001', 'FF-001');
+  // Null leaves it blank, for a department that auto-assigns numbers. Found by
+  // label because its placeholder is the previewed number when there is one.
+  if (membershipNumber !== null) {
+    await user.type(screen.getByLabelText(/^membership number/i), membershipNumber);
+  }
   await type('123 Main Street', '1 Main St');
   await type('Springfield', 'Falls Church');
   await type('IL', 'VA');
@@ -267,6 +274,61 @@ describe('AddMember', () => {
       await waitFor(() => expect(mockCreateMember).toHaveBeenCalled());
       const payload = mockCreateMember.mock.calls[0]?.[0] as Record<string, unknown>;
       expect(payload.emergency_contacts).toHaveLength(1);
+    });
+  });
+
+  describe('membership number', () => {
+    beforeEach(() => {
+      mockPreviewNextMembershipId.mockReset();
+      mockPreviewNextMembershipId.mockResolvedValue({ enabled: true, next_id: 'FD-0012' });
+    });
+
+    it('may be left blank when the department auto-assigns, and is then omitted', async () => {
+      // It used to be required regardless, so the typed value always won and
+      // the server's counter never issued a number from this screen.
+      const user = userEvent.setup();
+      renderWithRouter(<AddMember />);
+      expect(await screen.findByText(/leave blank to assign FD-0012 automatically/i)).toBeInTheDocument();
+
+      await fillRequired(user, { membershipNumber: null });
+      await user.click(screen.getByRole('button', { name: /save member/i }));
+
+      await waitFor(() => expect(mockCreateMember).toHaveBeenCalled());
+      const payload = mockCreateMember.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(payload).not.toHaveProperty('membership_number');
+    });
+
+    it('sends a typed number as a manual override', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<AddMember />);
+      await screen.findByText(/leave blank to assign FD-0012 automatically/i);
+
+      await fillRequired(user, { membershipNumber: ' FD-0003 ' });
+      await user.click(screen.getByRole('button', { name: /save member/i }));
+
+      await waitFor(() => expect(mockCreateMember).toHaveBeenCalled());
+      const payload = mockCreateMember.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(payload.membership_number).toBe('FD-0003');
+    });
+
+    it('offers one membership number field, not a second override box', async () => {
+      renderWithRouter(<AddMember />);
+      await screen.findByText(/leave blank to assign FD-0012 automatically/i);
+
+      expect(screen.getAllByLabelText(/^membership (number|id)/i)).toHaveLength(1);
+    });
+
+    it('is required when nothing will be assigned automatically', async () => {
+      mockPreviewNextMembershipId.mockResolvedValue({ enabled: true, next_id: null });
+      const user = userEvent.setup();
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockPreviewNextMembershipId).toHaveBeenCalled());
+
+      await fillRequired(user, { membershipNumber: null });
+      await user.click(screen.getByRole('button', { name: /save member/i }));
+
+      expect(await screen.findByText('Membership number is required')).toBeInTheDocument();
+      expect(mockCreateMember).not.toHaveBeenCalled();
     });
   });
 

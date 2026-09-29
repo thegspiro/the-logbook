@@ -112,5 +112,55 @@ class TestDeadKeys:
         assert result == {"email_notifications": True, "sms_notifications": False}
 
 
+class TestOtherStoredKeys:
+    async def test_the_scheduling_dashboard_layout_survives_a_save(self):
+        # The scheduling dashboard keeps its widget layout in the same blob.
+        # Keeping only NotificationPreferences' fields discarded it every time
+        # a member saved their notification settings.
+        layout = {"coverage": {"station_id": "s1"}}
+        stored = {"email_notifications": True, "scheduling_dashboard_widgets": layout}
+        result = await _save(stored, {"sms_notifications": False})
+        assert result["scheduling_dashboard_widgets"] == layout
+
+
+class TestEmailKindChoices:
+    async def test_choices_merge_per_kind(self):
+        stored = {"email_kinds": {"shift_notices": False}}
+        result = await _save(stored, {"email_kinds": {"store_announcements": False}})
+        assert result["email_kinds"] == {
+            "shift_notices": False,
+            "store_announcements": False,
+        }
+
+    async def test_a_choice_can_be_switched_back_on(self):
+        stored = {"email_kinds": {"shift_notices": False}}
+        result = await _save(stored, {"email_kinds": {"shift_notices": True}})
+        assert result["email_kinds"] == {"shift_notices": True}
+
+    async def test_unknown_and_required_kinds_are_not_stored(self):
+        result = await _save(
+            {},
+            {
+                "email_kinds": {
+                    "no_such_kind": False,
+                    "election_ballots": False,
+                    "volunteer_calls": False,
+                }
+            },
+        )
+        assert result["email_kinds"] == {"volunteer_calls": False}
+
+    async def test_a_save_without_choices_keeps_them(self):
+        stored = {"email_kinds": {"shift_notices": False}}
+        result = await _save(stored, {"event_reminders": False})
+        assert result["email_kinds"] == {"shift_notices": False}
+
+    async def test_a_malformed_stored_value_does_not_break_the_save(self):
+        result = await _save(
+            {"email_kinds": "garbage"}, {"email_kinds": {"shift_notices": False}}
+        )
+        assert result["email_kinds"] == {"shift_notices": False}
+
+
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))

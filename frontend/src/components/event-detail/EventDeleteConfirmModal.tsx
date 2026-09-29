@@ -40,7 +40,7 @@ const EventDeleteConfirmModal: React.FC<EventDeleteConfirmModalProps> = ({
             onClick={onClose}
             className="btn-secondary text-theme-text-secondary mt-3 inline-flex w-full justify-center text-base font-medium shadow-xs focus:ring-offset-2 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
           >
-            Go Back
+            Keep Event
           </button>
         </>
       }
@@ -65,8 +65,8 @@ const EventDeleteConfirmModal: React.FC<EventDeleteConfirmModalProps> = ({
         <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
           <div className="mt-2">
             <p className="text-theme-text-muted text-sm">
-              Are you sure you want to permanently delete &ldquo;{eventTitle}&rdquo;? This will remove all RSVPs and
-              attendance records. This action cannot be undone.
+              Permanently delete &ldquo;{eventTitle}&rdquo;? Its RSVPs and attendance records are deleted too. You
+              can&apos;t undo this.
             </p>
             {isRecurring && (
               <div className="mt-4 space-y-2">

@@ -78,6 +78,12 @@ describe('WriteOffsPage', () => {
     expect(screen.getByText(/\$450\.00/)).toBeInTheDocument();
   });
 
+  it('names the refresh button', async () => {
+    renderWithRouter(<WriteOffsPage />);
+
+    expect(await screen.findByRole('button', { name: 'Refresh' })).toBeInTheDocument();
+  });
+
   it('shows empty state when no write-offs', async () => {
     mockGetWriteOffRequests.mockResolvedValue([]);
     renderWithRouter(<WriteOffsPage />);

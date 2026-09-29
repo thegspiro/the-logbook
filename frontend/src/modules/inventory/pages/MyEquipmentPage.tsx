@@ -35,7 +35,7 @@ import type {
 import { EQUIPMENT_REQUEST_STATUS_LABELS, getConditionColor, REQUEST_STATUS_BADGES, sizeLabel } from '../types';
 import { useAuthStore } from '../../../stores/authStore';
 import { useTimezone } from '../../../hooks/useTimezone';
-import { formatDate } from '../../../utils/dateFormatting';
+import { formatDate, localToUTC } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { RETURN_CONDITION_OPTIONS } from '../../../constants/enums';
 import { Modal } from '../../../components/Modal';
@@ -193,9 +193,11 @@ const MyEquipmentPage: React.FC = () => {
   useEffect(() => {
     void loadInventory();
   }, [loadInventory]);
+  // Loaded with the page, not when the panel opens: the Pending tile counts
+  // them, and it read 0 until the member happened to open My Requests.
   useEffect(() => {
-    if (showRequests) void loadRequests();
-  }, [showRequests, loadRequests]);
+    void loadRequests();
+  }, [loadRequests]);
 
   /* ---------- Quick stats ---------- */
   const assignments = inventory?.permanent_assignments ?? [];
@@ -203,7 +205,11 @@ const MyEquipmentPage: React.FC = () => {
   const issued = inventory?.issued_items ?? [];
   const myGear = mergeGear(assignments, issued);
   const overdueCount = checkouts.filter((c) => c.is_overdue).length;
-  const pendingReqCount = equipRequests.filter((r) => r.status === 'pending').length;
+  // Everything still waiting on the quartermaster: a gear request not yet
+  // decided, and a return notice for gear not yet received.
+  const pendingReqCount =
+    equipRequests.filter((r) => r.status === 'pending').length +
+    returnRequests.filter((r) => r.status === 'requested').length;
   const totalItems = myGear.length + checkouts.length;
 
   /* ---------- Extend checkout ---------- */
@@ -214,7 +220,8 @@ const MyEquipmentPage: React.FC = () => {
     }
     setSubmitting(true);
     try {
-      await inventoryService.extendCheckout(extendModal.checkoutId, new Date(extendDate).toISOString());
+      // End of the picked day in the department's zone; see InventoryCheckoutsPage.
+      await inventoryService.extendCheckout(extendModal.checkoutId, localToUTC(`${extendDate}T23:59`, tz));
       toast.success('Temporary loan extended');
       setExtendModal({ open: false, checkoutId: '' });
       setExtendDate('');
@@ -249,7 +256,7 @@ const MyEquipmentPage: React.FC = () => {
       setRetCondition('good');
       setRetNotes('');
       setRetQty(1);
-      if (showRequests) void loadRequests();
+      void loadRequests();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to submit return request'));
     } finally {
@@ -541,7 +548,7 @@ const MyEquipmentPage: React.FC = () => {
           isOpen={requestModal}
           onClose={() => setRequestModal(false)}
           onSubmitted={() => {
-            if (showRequests) void loadRequests();
+            void loadRequests();
           }}
         />
 
@@ -554,8 +561,11 @@ const MyEquipmentPage: React.FC = () => {
         >
           <div className="space-y-4">
             <div>
-              <label className={labelClass}>New Return Date</label>
+              <label htmlFor="extend-return-date" className={labelClass}>
+                New Return Date
+              </label>
               <input
+                id="extend-return-date"
                 type="date"
                 value={extendDate}
                 onChange={(e) => setExtendDate(e.target.value)}
@@ -591,8 +601,15 @@ const MyEquipmentPage: React.FC = () => {
         >
           <div className="space-y-4">
             <div>
-              <label className={labelClass}>Condition</label>
-              <select value={retCondition} onChange={(e) => setRetCondition(e.target.value)} className={selectClass}>
+              <label htmlFor="return-condition" className={labelClass}>
+                Condition
+              </label>
+              <select
+                id="return-condition"
+                value={retCondition}
+                onChange={(e) => setRetCondition(e.target.value)}
+                className={selectClass}
+              >
                 {RETURN_CONDITION_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
                     {o.label}
@@ -602,8 +619,11 @@ const MyEquipmentPage: React.FC = () => {
             </div>
             {returnModal.returnType === 'issuance' && returnModal.maxQty > 1 && (
               <div>
-                <label className={labelClass}>Quantity Returning</label>
+                <label htmlFor="return-quantity" className={labelClass}>
+                  Quantity Returning
+                </label>
                 <input
+                  id="return-quantity"
                   type="number"
                   min={1}
                   max={returnModal.maxQty}
@@ -614,8 +634,11 @@ const MyEquipmentPage: React.FC = () => {
               </div>
             )}
             <div>
-              <label className={labelClass}>Notes (optional)</label>
+              <label htmlFor="return-notes" className={labelClass}>
+                Notes (optional)
+              </label>
               <textarea
+                id="return-notes"
                 rows={3}
                 value={retNotes}
                 onChange={(e) => setRetNotes(e.target.value)}
@@ -659,7 +682,7 @@ const StatCard: React.FC<{
   value: number;
   extra?: React.ReactNode;
 }> = ({ icon, label, value, extra }) => (
-  <div className="card-secondary flex items-center gap-3 p-3">
+  <div role="group" aria-label={label} className="card-secondary flex items-center gap-3 p-3">
     {icon}
     <div>
       <p className="text-theme-text-primary text-xl font-bold">{value}</p>

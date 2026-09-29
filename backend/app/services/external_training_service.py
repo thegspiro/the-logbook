@@ -5,15 +5,19 @@ Business logic for syncing training records from external providers
 like Vector Solutions, Target Solutions, Lexipol, etc.
 """
 
-from datetime import date, datetime, timedelta, timezone
+import csv
+import io
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
+from zoneinfo import ZoneInfo
 
 import httpx
 from cryptography.fernet import InvalidToken
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.logging import install_httpx_url_redaction, redact_url_secrets
 from app.core.security import decrypt_data
 from app.models.training import (
     ExternalCategoryMapping,
@@ -29,7 +33,88 @@ from app.models.training import (
     TrainingType,
 )
 from app.models.user import User
+from app.utils.org_timezone import resolve_scheduling_timezone
 from app.utils.ssrf_transport import SSRFSafeAsyncTransport, join_endpoint
+
+# Target Solutions puts credentials in the request URL; make sure httpx's
+# request log is redacted even in a worker that never ran setup_logging().
+install_httpx_url_redaction()
+
+# Scheduled syncs come in two sizes. The frequent pull (every
+# sync_interval_hours) asks only for completions since the last sync, so a
+# finished class shows up under Imports within the hour. Once a day, at the
+# provider's review time, a review re-requests a wider window: Target
+# Solutions lets a completion be recorded for a past date, which a pull that
+# only looks forward from the last sync never sees. Re-fetched rows update in
+# place by Transcript ID, so the overlap never duplicates.
+REVIEW_SYNC_TYPE = "review"
+REVIEW_LOOKBACK_DAYS = 30
+QUICK_PULL_MIN_LOOKBACK_DAYS = 1
+DEFAULT_TS_REVIEW_TIME = time(2, 0)
+
+
+def parse_review_time(value: Any) -> Optional[time]:
+    """Stored ``config.review_time`` ("HH:MM") as a ``time``, or None.
+
+    ``config`` is unvalidated JSON once stored, so anything malformed is
+    treated as unset rather than raising inside the scheduler loop.
+    """
+    if not isinstance(value, str):
+        return None
+    try:
+        hour, minute = value.strip().split(":")
+        return time(int(hour), int(minute))
+    except (ValueError, TypeError):
+        return None
+
+
+def review_time_for(provider: ExternalTrainingProvider) -> Optional[time]:
+    """The provider's daily review time; Target Solutions always has one."""
+    configured = parse_review_time((provider.config or {}).get("review_time"))
+    if configured is not None:
+        return configured
+    if provider.provider_type == ExternalProviderType.TARGET_SOLUTIONS:
+        return DEFAULT_TS_REVIEW_TIME
+    return None
+
+
+def next_review_slot(review_time: time, tz: ZoneInfo, after: datetime) -> datetime:
+    """The first ``review_time`` (wall clock in ``tz``) strictly after ``after``.
+
+    Built per calendar date so a DST change moves the UTC instant, not the
+    local time the department chose. Returned in UTC.
+    """
+    local_after = after.astimezone(tz)
+    for day_offset in range(2):
+        candidate = datetime.combine(
+            local_after.date() + timedelta(days=day_offset), review_time, tzinfo=tz
+        )
+        if candidate > local_after:
+            return candidate.astimezone(timezone.utc)
+    raise AssertionError("a daily time always recurs within two days")
+
+
+def latest_review_slot(review_time: time, tz: ZoneInfo, now: datetime) -> datetime:
+    """The most recent ``review_time`` at or before ``now``, in UTC."""
+    local_now = now.astimezone(tz)
+    for day_offset in range(2):
+        candidate = datetime.combine(
+            local_now.date() - timedelta(days=day_offset), review_time, tzinfo=tz
+        )
+        if candidate <= local_now:
+            return candidate.astimezone(timezone.utc)
+    raise AssertionError("a daily time always recurs within two days")
+
+
+def compute_next_sync_at(
+    provider: ExternalTrainingProvider, tz: ZoneInfo, now: datetime
+) -> datetime:
+    """The next frequent pull, or the next daily review if that comes first."""
+    quick = now + timedelta(hours=provider.sync_interval_hours or 24)
+    review_time = review_time_for(provider)
+    if review_time is None:
+        return quick
+    return min(quick, next_review_slot(review_time, tz, now))
 
 
 class ExternalTrainingSyncService:
@@ -69,12 +154,10 @@ class ExternalTrainingSyncService:
         """
         try:
             self._validate_provider_url(provider)
-            if provider.provider_type in (
-                ExternalProviderType.VECTOR_SOLUTIONS,
-                ExternalProviderType.TARGET_SOLUTIONS,
-            ):
-                # Vector Solutions acquired TargetSolutions; same API.
+            if provider.provider_type == ExternalProviderType.VECTOR_SOLUTIONS:
                 return await self._test_vector_solutions_connection(provider)
+            elif provider.provider_type == ExternalProviderType.TARGET_SOLUTIONS:
+                return await self._test_target_solutions_connection(provider)
             elif provider.provider_type == ExternalProviderType.LEXIPOL:
                 return await self._test_lexipol_connection(provider)
             elif provider.provider_type == ExternalProviderType.I_AM_RESPONDING:
@@ -86,10 +169,10 @@ class ExternalTrainingSyncService:
         except httpx.TimeoutException:
             return False, "Connection timed out"
         except httpx.ConnectError as e:
-            return False, f"Failed to connect: {str(e)}"
+            return False, f"Failed to connect: {redact_url_secrets(str(e))}"
         except Exception as e:
             logger.exception(f"Error testing connection for provider {provider.id}")
-            return False, f"Connection test failed: {str(e)}"
+            return False, f"Connection test failed: {redact_url_secrets(str(e))}"
 
     async def _test_vector_solutions_connection(
         self, provider: ExternalTrainingProvider
@@ -239,7 +322,9 @@ class ExternalTrainingSyncService:
         api_key = self._decrypt_field(provider.api_key)
         api_secret = self._decrypt_field(provider.api_secret)
 
-        # Vector Solutions / TargetSolutions uses a custom AccessToken header
+        # Vector Solutions uses a custom AccessToken header. (TargetSolutions'
+        # Training Records API authenticates in the query string instead and
+        # does not use these headers — see _target_solutions_report.)
         if provider.provider_type == ExternalProviderType.VECTOR_SOLUTIONS:
             if api_key:
                 headers["AccessToken"] = api_key
@@ -313,6 +398,15 @@ class ExternalTrainingSyncService:
                     provider.last_sync_at
                     or datetime.now(timezone.utc) - timedelta(days=30)
                 ).date()
+                if review_time_for(provider) is not None:
+                    # A frequent pull: at least yesterday too, so a class
+                    # finished just before midnight is not skipped.
+                    from_date = min(
+                        from_date,
+                        date.today() - timedelta(days=QUICK_PULL_MIN_LOOKBACK_DAYS),
+                    )
+            elif sync_type == REVIEW_SYNC_TYPE and not from_date:
+                from_date = date.today() - timedelta(days=REVIEW_LOOKBACK_DAYS)
             elif sync_type == "full" and not from_date:
                 # Full sync: get all records from a year ago
                 from_date = (datetime.now(timezone.utc) - timedelta(days=365)).date()
@@ -361,8 +455,11 @@ class ExternalTrainingSyncService:
             # Update provider sync timestamps
             provider.last_sync_at = datetime.now(timezone.utc)
             if provider.auto_sync_enabled:
-                provider.next_sync_at = datetime.now(timezone.utc) + timedelta(
-                    hours=provider.sync_interval_hours
+                tz = await resolve_scheduling_timezone(
+                    self.db, provider.organization_id
+                )
+                provider.next_sync_at = compute_next_sync_at(
+                    provider, tz, provider.last_sync_at
                 )
 
             await self.db.commit()
@@ -370,11 +467,52 @@ class ExternalTrainingSyncService:
         except Exception as e:
             logger.exception(f"Sync failed for provider {provider.id}")
             sync_log.status = SyncStatus.FAILED
-            sync_log.error_message = str(e)
+            # Shown to officers; never let a credential-bearing URL through.
+            sync_log.error_message = redact_url_secrets(str(e))
             sync_log.completed_at = datetime.now(timezone.utc)
             await self.db.commit()
 
         return sync_log
+
+    async def run_scheduled_sync(
+        self, provider: ExternalTrainingProvider
+    ) -> ExternalTrainingSyncLog:
+        """One scheduled run: the daily review if one is owed, else a quick pull.
+
+        A review is owed when none has succeeded since the most recent review
+        time, which also means a provider that has never been reviewed starts
+        with a full-window backfill.
+        """
+        sync_type = "incremental"
+        review_time = review_time_for(provider)
+        if review_time is not None:
+            tz = await resolve_scheduling_timezone(self.db, provider.organization_id)
+            due_since = latest_review_slot(review_time, tz, datetime.now(timezone.utc))
+            last_review = await self._last_successful_review_at(provider)
+            if last_review is None or last_review < due_since:
+                sync_type = REVIEW_SYNC_TYPE
+        return await self.sync_training_records(provider, sync_type=sync_type)
+
+    async def _last_successful_review_at(
+        self, provider: ExternalTrainingProvider
+    ) -> Optional[datetime]:
+        result = await self.db.execute(
+            select(ExternalTrainingSyncLog.started_at)
+            .where(ExternalTrainingSyncLog.provider_id == provider.id)
+            .where(ExternalTrainingSyncLog.sync_type == REVIEW_SYNC_TYPE)
+            .where(
+                ExternalTrainingSyncLog.status.in_(
+                    [SyncStatus.COMPLETED, SyncStatus.PARTIAL]
+                )
+            )
+            .order_by(ExternalTrainingSyncLog.started_at.desc())
+            .limit(1)
+        )
+        started_at = result.scalar_one_or_none()
+        if started_at is not None and started_at.tzinfo is None:
+            # MySQL hands DateTime(timezone=True) back naive; it is stored UTC.
+            started_at = started_at.replace(tzinfo=timezone.utc)
+        return started_at
 
     async def _fetch_external_records(
         self,
@@ -384,12 +522,12 @@ class ExternalTrainingSyncService:
     ) -> List[Dict[str, Any]]:
         """Fetch training records from external provider"""
         self._validate_provider_url(provider)
-        if provider.provider_type in (
-            ExternalProviderType.VECTOR_SOLUTIONS,
-            ExternalProviderType.TARGET_SOLUTIONS,
-        ):
-            # Vector Solutions acquired TargetSolutions; same API.
+        if provider.provider_type == ExternalProviderType.VECTOR_SOLUTIONS:
             return await self._fetch_vector_solutions_records(
+                provider, from_date, to_date
+            )
+        elif provider.provider_type == ExternalProviderType.TARGET_SOLUTIONS:
+            return await self._fetch_target_solutions_records(
                 provider, from_date, to_date
             )
         elif provider.provider_type == ExternalProviderType.LEXIPOL:
@@ -636,6 +774,19 @@ class ExternalTrainingSyncService:
 
         return all_records
 
+    @staticmethod
+    def _first_present(record: Dict[str, Any], *keys: str) -> str:
+        """First non-empty value among ``keys`` as a string, else "".
+
+        ``str(record.get(k))`` turns a key present with a JSON null into the
+        literal "None", which then keys every such member into one mapping.
+        """
+        for key in keys:
+            value = record.get(key)
+            if value is not None and str(value).strip():
+                return str(value).strip()
+        return ""
+
     def _normalize_vector_solutions_record(
         self, record: Dict[str, Any]
     ) -> Dict[str, Any]:
@@ -658,10 +809,8 @@ class ExternalTrainingSyncService:
                     "id", record.get("credentialId", record.get("completionId", ""))
                 )
             ),
-            "external_user_id": str(
-                record.get(
-                    "userId", record.get("employeeId", record.get("user_id", ""))
-                )
+            "external_user_id": self._first_present(
+                record, "userId", "employeeId", "user_id"
             ),
             "external_course_id": str(
                 record.get("courseId", record.get("course_id", ""))
@@ -722,27 +871,180 @@ class ExternalTrainingSyncService:
             "raw_data": record,
         }
 
+    # ------------------------------------------
+    # TargetSolutions Training Records API
+    # ------------------------------------------
+    # Documented at support.vectorlmstargetsolutionsedition.com, article
+    # "Training-Records-API": a single GET returning a CSV of every course and
+    # activity completion for all active and offline users. Credentials are the
+    # ``key`` and ``secret`` query parameters — there is no header form — so
+    # app.core.logging redacts them from httpx logs and Sentry data. Dates are
+    # mm-dd-yyyy; without them the report covers the current day only.
+
+    TS_REPORT_ACTION = "reports.buildReport"
+    TS_REPORT_TYPE = "completionsall"
+    TS_REQUIRED_COLUMNS = ("Employee ID", "Email")
+
+    def _target_solutions_params(
+        self,
+        provider: ExternalTrainingProvider,
+        from_date: Optional[date] = None,
+        to_date: Optional[date] = None,
+    ) -> Dict[str, str]:
+        key = self._decrypt_field(provider.api_key)
+        secret = self._decrypt_field(provider.api_secret)
+        if not key or not secret:
+            raise ValueError("Target Solutions API key and secret are both required")
+        params = {
+            "action": self.TS_REPORT_ACTION,
+            "reportType": self.TS_REPORT_TYPE,
+            "key": key,
+            "secret": secret,
+        }
+        if from_date:
+            params["startDate"] = from_date.strftime("%m-%d-%Y")
+        if to_date:
+            params["endDate"] = to_date.strftime("%m-%d-%Y")
+        return params
+
+    async def _target_solutions_report(
+        self, provider: ExternalTrainingProvider, params: Dict[str, str]
+    ) -> List[Dict[str, str]]:
+        """Request the completions report and return its rows.
+
+        Error messages never include the URL or response body: the URL holds
+        the credentials, and the message is stored on the sync log and shown
+        to officers.
+        """
+        url = join_endpoint(provider.api_base_url, "/")
+        response = await self.http_client.get(
+            url, params=params, headers={"Accept": "text/csv"}
+        )
+        if response.status_code in (401, 403):
+            raise ValueError("Target Solutions rejected the API key or secret")
+        if response.status_code != 200:
+            raise ValueError(
+                f"Target Solutions report request failed (HTTP {response.status_code})"
+            )
+
+        body = response.content.decode("utf-8-sig", errors="replace")
+        if not body.strip():
+            return []
+
+        reader = csv.DictReader(io.StringIO(body))
+        columns = [(name or "").strip() for name in (reader.fieldnames or [])]
+        if not all(col in columns for col in self.TS_REQUIRED_COLUMNS):
+            # An invalid key comes back as a 200 with an error page rather
+            # than a CSV, so the header row is the only reliable signal.
+            raise ValueError(
+                "Target Solutions did not return a completions report. "
+                "Check the API base URL, key and secret."
+            )
+        reader.fieldnames = columns
+        return [
+            {k: (v or "").strip() for k, v in row.items() if k}
+            for row in reader
+            if any((v or "").strip() for v in row.values() if isinstance(v, str))
+        ]
+
+    async def _test_target_solutions_connection(
+        self, provider: ExternalTrainingProvider
+    ) -> Tuple[bool, str]:
+        """Request today's completions report, the cheapest call the API offers."""
+        if not provider.api_key or not provider.api_secret:
+            return False, "API key and secret are required"
+        try:
+            rows = await self._target_solutions_report(
+                provider, self._target_solutions_params(provider)
+            )
+        except ValueError as e:
+            return False, str(e)
+        return (
+            True,
+            f"Connection successful - completions report returned {len(rows)} "
+            "record(s) for today",
+        )
+
+    async def _fetch_target_solutions_records(
+        self,
+        provider: ExternalTrainingProvider,
+        from_date: date,
+        to_date: date,
+    ) -> List[Dict[str, Any]]:
+        rows = await self._target_solutions_report(
+            provider, self._target_solutions_params(provider, from_date, to_date)
+        )
+        records = []
+        for row in rows:
+            record = self._normalize_target_solutions_record(row)
+            if record is not None:
+                records.append(record)
+        return records
+
+    @staticmethod
+    def _parse_number(value: Any) -> Optional[float]:
+        if value is None:
+            return None
+        text = str(value).strip().rstrip("%").strip()
+        if not text:
+            return None
+        try:
+            return float(text)
+        except ValueError:
+            return None
+
     def _normalize_target_solutions_record(
-        self, record: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Normalize Target Solutions record to standard format"""
+        self, row: Dict[str, str]
+    ) -> Optional[Dict[str, Any]]:
+        """Map one Training Records API CSV row to the standard format.
+
+        Returns None for a row that names no assignment, which cannot become a
+        training record.
+        """
+        employee_id = row.get("Employee ID", "")
+        email = row.get("Email", "")
+        course_id = row.get("Course ID", "")
+        title = row.get("Assignment Name", "") or course_id
+        if not title:
+            return None
+
+        completion_date = row.get("Completion Date", "")
+        # Transcript ID identifies a completion, so a re-sync updates the same
+        # staging row. If it is ever blank, fall back to who + what + when.
+        record_id = (
+            row.get("Transcript ID", "")
+            or "|".join(
+                [
+                    employee_id or email.lower(),
+                    course_id or title,
+                    completion_date,
+                    row.get("Completion Time", ""),
+                ]
+            )[:255]
+        )
+
+        hours = self._parse_number(row.get("Duration (hours)"))
         return {
-            "external_record_id": str(record.get("id", "")),
-            "external_user_id": str(record.get("userId", record.get("employeeId", ""))),
-            "external_course_id": str(record.get("courseId", "")),
-            "external_category_id": str(record.get("categoryId", "")),
-            "course_title": record.get("courseName", record.get("courseTitle", "")),
-            "course_code": record.get("courseCode", ""),
-            "description": record.get("courseDescription", ""),
-            "duration_minutes": record.get("durationMinutes", 0),
-            "completion_date": record.get("completionDate", record.get("completedOn")),
-            "score": record.get("score", record.get("percentScore")),
-            "passed": record.get("passed", record.get("isPassed", True)),
-            "external_category_name": record.get("categoryName", ""),
-            "external_username": record.get("username", ""),
-            "external_email": record.get("email", record.get("userEmail", "")),
-            "external_name": record.get("userName", record.get("displayName", "")),
-            "raw_data": record,
+            "external_record_id": record_id,
+            "external_user_id": employee_id,
+            "external_course_id": course_id,
+            "external_category_id": "",
+            "course_title": title,
+            "course_code": course_id,
+            "description": "",
+            "training_type": row.get("Assignment Type", ""),
+            # The import endpoints derive hours from duration_minutes, so the
+            # reported hours must be carried there as well as in credit_hours.
+            "duration_minutes": round(hours * 60) if hours is not None else None,
+            "credit_hours": hours,
+            "completion_date": completion_date,
+            "score": self._parse_number(row.get("Test Score")),
+            "passed": True,
+            "external_category_name": "",
+            "external_username": "",
+            "external_email": email,
+            "external_name": "",
+            "raw_data": row,
         }
 
     async def _fetch_lexipol_records(
@@ -927,6 +1229,14 @@ class ExternalTrainingSyncService:
 
         Returns: "imported", "updated", or "skipped"
         """
+        # A record that carries an email but no provider user id still belongs
+        # to someone: key the member by that email so it can be mapped (and
+        # later bulk-imported, which looks mappings up by external_user_id).
+        if not record_data.get("external_user_id"):
+            email_key = self._normalize_email(record_data.get("external_email"))
+            if email_key:
+                record_data["external_user_id"] = email_key
+
         # Check if record already exists
         existing = await self.db.execute(
             select(ExternalTrainingImport)
@@ -941,10 +1251,31 @@ class ExternalTrainingSyncService:
         if existing_import:
             # Update existing record
             for key, value in record_data.items():
-                if key != "raw_data" and hasattr(existing_import, key):
+                if key in ("raw_data", "completion_date"):
+                    continue
+                if hasattr(existing_import, key):
                     setattr(existing_import, key, value)
+            # The provider sends dates as strings; the column is a DateTime, so
+            # the value must go through the same parser the insert path uses.
+            existing_import.completion_date = self._parse_date(
+                record_data.get("completion_date")
+            )
             existing_import.raw_data = record_data.get("raw_data")
             existing_import.sync_log_id = sync_log_id
+
+            # A member who could not be matched on an earlier sync (email not yet
+            # on file in the Logbook) is attached once the mapping resolves.
+            # Records already imported keep the member they were imported to.
+            if (
+                not existing_import.user_id
+                and existing_import.import_status != "imported"
+                and record_data.get("external_user_id")
+            ):
+                user_mapping = await self._find_or_create_user_mapping(
+                    provider, record_data
+                )
+                if user_mapping and user_mapping.internal_user_id:
+                    existing_import.user_id = user_mapping.internal_user_id
             return "updated"
 
         # Create new import record
@@ -1049,6 +1380,7 @@ class ExternalTrainingSyncService:
                 "%Y-%m-%d %H:%M:%S",
                 "%Y-%m-%d",
                 "%m/%d/%Y",
+                "%m-%d-%Y",
             ]:
                 try:
                     return datetime.strptime(date_value, fmt)
@@ -1073,8 +1405,28 @@ class ExternalTrainingSyncService:
             .where(ExternalUserMapping.external_user_id == external_user_id)
         )
         mapping = result.scalar_one_or_none()
+        email = self._normalize_email(record_data.get("external_email"))
 
         if mapping:
+            if email:
+                mapping.external_email = email
+            if record_data.get("external_username"):
+                mapping.external_username = record_data["external_username"]
+            if record_data.get("external_name"):
+                mapping.external_name = record_data["external_name"]
+
+            # Retry the email match on every sync until it lands, so a member
+            # whose email is added or corrected in the Logbook after the first
+            # sync is picked up. A mapping an officer has touched (mapped_by is
+            # set, including a deliberate un-map) is never overridden.
+            if not mapping.internal_user_id and not mapping.mapped_by and email:
+                user_id = await self._match_member_by_email(
+                    provider.organization_id, email
+                )
+                if user_id:
+                    mapping.internal_user_id = user_id
+                    mapping.is_mapped = True
+                    mapping.auto_mapped = True
             return mapping
 
         # Create new mapping
@@ -1083,27 +1435,49 @@ class ExternalTrainingSyncService:
             organization_id=provider.organization_id,
             external_user_id=external_user_id,
             external_username=record_data.get("external_username"),
-            external_email=record_data.get("external_email"),
+            external_email=email or None,
             external_name=record_data.get("external_name"),
             is_mapped=False,
             auto_mapped=False,
         )
 
-        # Try to auto-map by email
-        if record_data.get("external_email"):
-            user_result = await self.db.execute(
-                select(User)
-                .where(User.organization_id == provider.organization_id)
-                .where(User.email == record_data["external_email"])
-            )
-            user = user_result.scalar_one_or_none()
-            if user:
-                mapping.internal_user_id = user.id
+        if email:
+            user_id = await self._match_member_by_email(provider.organization_id, email)
+            if user_id:
+                mapping.internal_user_id = user_id
                 mapping.is_mapped = True
                 mapping.auto_mapped = True
 
         self.db.add(mapping)
         return mapping
+
+    @staticmethod
+    def _normalize_email(value: Any) -> str:
+        """Trim and lowercase an email so provider and Logbook spellings compare."""
+        if not isinstance(value, str):
+            return ""
+        return value.strip().lower()
+
+    async def _match_member_by_email(
+        self, organization_id: str, email: str
+    ) -> Optional[str]:
+        """Return the id of the one live member in the org with this email.
+
+        Case-insensitive, and deleted members are excluded so a completion is
+        never attached to a removed account. Two candidates means the match is
+        ambiguous, so nothing is mapped and the officer decides.
+        """
+        result = await self.db.execute(
+            select(User.id)
+            .where(User.organization_id == organization_id)
+            .where(func.lower(func.trim(User.email)) == email)
+            .where(User.deleted_at.is_(None))
+            .limit(2)
+        )
+        ids = list(result.scalars().all())
+        if len(ids) != 1:
+            return None
+        return ids[0]
 
     async def _find_or_create_category_mapping(
         self,

@@ -455,6 +455,7 @@ export const inventoryService = {
     clearances: Array<{
       id: string;
       user_id: string;
+      member_name?: string | null;
       status: string;
       items_outstanding: number;
       initiated_at: string;
@@ -467,6 +468,7 @@ export const inventoryService = {
       clearances: Array<{
         id: string;
         user_id: string;
+        member_name?: string | null;
         status: string;
         items_outstanding: number;
         initiated_at: string;
@@ -1057,7 +1059,7 @@ export const inventoryService = {
 
   async reviewEquipmentRequest(
     requestId: string,
-    data: { status: string; review_notes?: string | undefined }
+    data: { status: string; review_notes?: string | undefined; notify_member?: boolean | undefined }
   ): Promise<{ id: string; status: string; message: string }> {
     const response = await api.put<{ id: string; status: string; message: string }>(
       `/inventory/requests/${requestId}/review`,

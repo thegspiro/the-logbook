@@ -236,6 +236,9 @@ const Section: React.FC<SectionProps> = ({ title, children }) => (
 type AdminTab = 'overview' | 'settings';
 
 /** Settings is always last — the frame's rule, on every module. */
+/** A clearance still waiting on the member: the backend's INITIATED and IN_PROGRESS. */
+const OPEN_CLEARANCE_STATUSES = new Set(['initiated', 'in_progress']);
+
 const TABS: AdminHubTab<AdminTab>[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'settings', label: 'Settings' },
@@ -341,7 +344,11 @@ export const InventoryAdminHub: React.FC = () => {
           ['maintenance', inventoryService.getMaintenanceDueItems(30)],
           ['write-offs', inventoryService.getWriteOffRequests({ status: 'pending' })],
           ['purchase deliveries', inventoryService.getReorderRequests({ status: 'ordered' })],
-          ['departure clearances', inventoryService.getDepartureClearances({ status: 'in_progress' })],
+          // Every status, filtered below: a clearance opens as `initiated` and
+          // only becomes `in_progress` once something is returned, so asking for
+          // `in_progress` alone left a freshly dropped member's clearance off this
+          // list entirely (workflow review W15).
+          ['departure clearances', inventoryService.getDepartureClearances()],
         ]
       : [];
     const [results, medicalSettled] = await Promise.all([
@@ -377,11 +384,13 @@ export const InventoryAdminHub: React.FC = () => {
       clearances: Array<{
         id: string;
         user_id: string;
+        member_name?: string | null;
+        status: string;
         items_outstanding: number;
         initiated_at: string;
         return_deadline?: string;
       }>;
-    }>(9, { clearances: [] }).clearances;
+    }>(9, { clearances: [] }).clearances.filter((c) => OPEN_CLEARANCE_STATUSES.has(c.status));
 
     setSummary(summaryData);
     setLowStockAlerts(lowStock);
@@ -480,7 +489,7 @@ export const InventoryAdminHub: React.FC = () => {
       ...clearances.map((clearance) => ({
         key: `clearance-${clearance.id}`,
         subject: 'Unresolved departure clearance',
-        party: `Member ${clearance.user_id} · ${clearance.items_outstanding} outstanding`,
+        party: `${clearance.member_name || 'A departed member'} · ${clearance.items_outstanding} outstanding`,
         when: dateLabel(clearance.return_deadline, dateLabel(clearance.initiated_at, 'In progress', tz), tz),
         severity:
           clearance.return_deadline && new Date(clearance.return_deadline).getTime() < now

@@ -5,7 +5,7 @@
  * No authentication required. Read-only view of limited, public-safe data.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router';
 import {
   CheckCircle2,
@@ -24,7 +24,7 @@ import type { CurrentStageAction } from '../types';
 import { formatDate } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { isSafeExternalUrl } from '../../../utils/safeUrl';
-import { getErrorMessage } from '../../../utils/errorHandling';
+import { getErrorMessage, toAppError } from '../../../utils/errorHandling';
 import { PromptDialog } from '../../../components/ux';
 
 interface StatusData {
@@ -63,23 +63,35 @@ export const ApplicationStatusPage: React.FC = () => {
   const tz = useTimezone();
   const [data, setData] = useState<StatusData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<'not_found' | 'unavailable' | null>(null);
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     if (!token) {
-      setError('Invalid link');
+      setError('not_found');
       setLoading(false);
       return;
     }
-
+    setLoading(true);
+    setError(null);
     publicStatusService
       .getApplicationStatus(token)
       .then((result) => setData(result))
-      .catch(() => setError('Application not found. Please check your link or contact the department.'))
+      .catch((err: unknown) => {
+        // Only the server's own answers about the link mean it does not work:
+        // 404 (unknown, expired or switched off) and 400/422 (malformed).
+        // An outage or a dropped connection said "Application not found" too,
+        // which tells an applicant whose application is open that it is gone.
+        const status = toAppError(err).status;
+        setError(status === 404 || status === 400 || status === 422 ? 'not_found' : 'unavailable');
+      })
       .finally(() => setLoading(false));
   }, [token]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const handleWithdraw = async (reason: string) => {
     if (!token) return;
@@ -92,7 +104,9 @@ export const ApplicationStatusPage: React.FC = () => {
       setShowWithdraw(false);
       toast.success('Your application has been withdrawn.');
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Unable to withdraw your application. Please contact the department.'));
+      toast.error(
+        getErrorMessage(err, 'Your application could not be withdrawn. Contact the department to withdraw it.')
+      );
     } finally {
       setWithdrawing(false);
     }
@@ -118,6 +132,7 @@ export const ApplicationStatusPage: React.FC = () => {
   }
 
   if (error || !data) {
+    const unavailable = error === 'unavailable';
     return (
       <main
         id="main-content"
@@ -125,8 +140,19 @@ export const ApplicationStatusPage: React.FC = () => {
       >
         <div className="w-full max-w-md text-center">
           <AlertTriangle className="mx-auto mb-4 h-12 w-12 text-amber-700 dark:text-amber-400" aria-hidden="true" />
-          <h1 className="text-theme-text-primary mb-2 text-xl font-bold">Application Not Found</h1>
-          <p className="text-theme-text-secondary">{error}</p>
+          <h1 className="text-theme-text-primary mb-2 text-xl font-bold">
+            {unavailable ? 'Status Unavailable' : 'Application Not Found'}
+          </h1>
+          <p className="text-theme-text-secondary">
+            {unavailable
+              ? 'Your application status could not be loaded. Try again in a few minutes.'
+              : 'This status link is not valid, has expired, or has been turned off. Check the link, or contact the department.'}
+          </p>
+          {unavailable && (
+            <button type="button" onClick={load} className="btn-secondary mobile-touch-target mt-4 px-4">
+              Try again
+            </button>
+          )}
         </div>
       </main>
     );
@@ -282,7 +308,7 @@ export const ApplicationStatusPage: React.FC = () => {
           onSubmit={(reason) => void handleWithdraw(reason)}
           title="Withdraw your application?"
           message="This closes your application with the department. It cannot be undone from this page."
-          label="Reason (optional)"
+          label="Reason"
           placeholder="Let the department know why, if you like"
           hint="Shared with the department's membership coordinator."
           required={false}
@@ -295,7 +321,7 @@ export const ApplicationStatusPage: React.FC = () => {
 
         {/* Footer */}
         <p className="text-theme-text-muted mt-6 text-center text-xs">
-          For questions about your application, please contact the department directly.
+          Questions about your application? Contact the department directly.
         </p>
       </main>
     </div>

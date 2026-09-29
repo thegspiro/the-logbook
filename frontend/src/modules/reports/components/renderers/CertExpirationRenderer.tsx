@@ -37,7 +37,7 @@ export const CertExpirationRenderer: React.FC<Props> = ({ data }) => {
     { key: 'expiration_date', header: 'Expires' },
     {
       key: 'days_until_expiry',
-      header: 'Days Until',
+      header: 'Days Left',
       align: 'right' as const,
       render: (v: unknown) => {
         if (v == null) return '-';

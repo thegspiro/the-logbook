@@ -109,7 +109,7 @@ export const OperatorModal: React.FC<OperatorModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editOperator && !f.userId) {
-      toast.error('Please select a member');
+      toast.error('Select a member');
       return;
     }
 
@@ -326,7 +326,7 @@ export const OperatorModal: React.FC<OperatorModalProps> = ({
             Cancel
           </button>
           <button type="submit" disabled={saving} className="btn-primary px-6 py-2">
-            {saving ? 'Saving...' : editOperator ? 'Update Operator' : 'Add Operator'}
+            {saving ? 'Saving...' : editOperator ? 'Save Changes' : 'Add Operator'}
           </button>
         </div>
       </form>

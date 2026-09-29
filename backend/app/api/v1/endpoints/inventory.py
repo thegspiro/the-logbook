@@ -12,6 +12,7 @@ from uuid import UUID
 
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Depends,
 )
 from fastapi import File as FastAPIFile
@@ -194,6 +195,9 @@ from app.schemas.inventory import (
     WriteOffReview,
 )
 from app.services.departure_clearance_service import DepartureClearanceService
+from app.services.equipment_request_notifications import (
+    send_equipment_request_notice,
+)
 from app.services.inventory_service import InventoryService, is_pool_without_stock
 from app.services.label_printer_service import LabelPrinterService
 from app.services.label_service import UNSET, LabelService
@@ -4193,11 +4197,13 @@ async def get_request_fulfillment_options(
 async def review_equipment_request(
     request_id: UUID,
     review_data: EquipmentRequestReview,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """
-    Review (approve/deny) an equipment request.
+    Review (approve/deny) an equipment request, and tell the requester
+    unless ``notify_member`` is false.
 
     **Requires permission: inventory.manage**
     """
@@ -4244,6 +4250,14 @@ async def review_equipment_request(
         username=current_user.username,
     )
 
+    if review_data.notify_member:
+        background_tasks.add_task(
+            send_equipment_request_notice,
+            str(current_user.organization_id),
+            str(req.id),
+            review_data.status,
+        )
+
     return {
         "id": req.id,
         "status": review_data.status,
@@ -4255,13 +4269,14 @@ async def review_equipment_request(
 async def fulfill_equipment_request(
     request_id: UUID,
     fulfill_data: EquipmentRequestFulfill,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """
     Fulfill an approved equipment request by issuing, checking out, or
     assigning the relevant item to the requester, then marking the request
-    fulfilled.
+    fulfilled and telling the requester.
 
     **Requires permission: inventory.manage**
     """
@@ -4297,6 +4312,13 @@ async def fulfill_equipment_request(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+    )
+
+    background_tasks.add_task(
+        send_equipment_request_notice,
+        str(current_user.organization_id),
+        str(req.id),
+        "fulfilled",
     )
 
     return {

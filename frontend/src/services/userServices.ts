@@ -206,6 +206,15 @@ export const userService = {
   },
 
   /**
+   * The optional emails the signed-in member can turn off, and the ones they
+   * always receive — including any the department has made required.
+   */
+  async getMyEmailChoices(): Promise<import('../types/user').MemberEmailChoices> {
+    const response = await api.get<import('../types/user').MemberEmailChoices>('/users/me/email-choices');
+    return response.data;
+  },
+
+  /**
    * Update notification preferences for a user.
    *
    * Partial by design: the backend merges, so a key you omit is left as it
@@ -593,8 +602,9 @@ export const organizationService = {
     return response.enabled_modules.includes(moduleId);
   },
 
-  async previewNextMembershipId(): Promise<{ enabled: boolean; next_id?: string }> {
-    const response = await api.get<{ enabled: boolean; next_id?: string }>(
+  /** The number the next auto-numbered member receives; null when none will be. */
+  async previewNextMembershipId(): Promise<{ enabled: boolean; next_id: string | null }> {
+    const response = await api.get<{ enabled: boolean; next_id: string | null }>(
       '/organization/settings/membership-id/preview'
     );
     return response.data;

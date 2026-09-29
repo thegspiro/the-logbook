@@ -33,6 +33,7 @@ vi.mock('../hooks/useNfcScanner', () => ({
     };
   },
 }));
+vi.mock('../hooks/useTimezone', () => ({ useTimezone: () => 'America/Chicago' }));
 vi.mock('../stores/authStore', () => ({
   useAuthStore: (selector: (s: object) => unknown) => selector({ checkPermission: () => true }),
 }));
@@ -179,6 +180,61 @@ describe('InventoryScanModal custody conflicts', () => {
     expect(screen.getByRole('checkbox', { name: /Chris Baker/ })).not.toBeChecked();
     expect(screen.getByRole('textbox', { name: /Transfer reason/ })).toHaveValue('');
     expect(screen.getByRole('button', { name: 'Confirm transfer' })).toBeDisabled();
+  });
+});
+
+describe('InventoryScanModal distributing', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getNfcSettings.mockReset();
+    getNfcSettings.mockResolvedValue({ enabled: false });
+    lookupByCode.mockReset();
+    lookupByCode.mockResolvedValue({
+      total: 1,
+      results: [
+        {
+          matched_field: 'name',
+          matched_value: 'Nitrile Gloves',
+          item: { id: 'gloves-1', name: 'Nitrile Gloves', status: 'available', tracking_type: 'pool' },
+        },
+      ],
+    });
+    distributeItems.mockReset();
+    distributeItems.mockResolvedValue({ user_id: 'm-1', total_scanned: 1, successful: 1, failed: 0, results: [] });
+  });
+
+  const addGloves = async (user: ReturnType<typeof userEvent.setup>) => {
+    render(<InventoryScanModal isOpen onClose={vi.fn()} mode="distribute" userId="m-1" memberName="Jordan Avery" />);
+    await user.type(screen.getByRole('textbox', { name: /Item to add/ }), 'Nitrile');
+    await waitFor(() => expect(lookupByCode).toHaveBeenCalled());
+    await user.click(await screen.findByText('Nitrile Gloves'));
+  };
+
+  it('names the search box and each pool quantity', async () => {
+    const user = userEvent.setup();
+    await addGloves(user);
+
+    expect(screen.getByRole('spinbutton', { name: 'Quantity of Nitrile Gloves' })).toHaveValue(1);
+  });
+
+  // The return time was typed in the department's clock but read in the
+  // browser's, and its minimum was UTC: in Central time the earliest return
+  // a quartermaster could pick was five hours away.
+  it("sends a temporary loan's return time from the department's timezone", async () => {
+    const user = userEvent.setup();
+    await addGloves(user);
+
+    await user.click(screen.getByRole('radio', { name: 'Temporary loan' }));
+    const returnAt = screen.getByLabelText('Expected return');
+    expect(returnAt.getAttribute('min')).not.toBe(new Date().toISOString().slice(0, 16));
+    await user.type(returnAt, '2026-10-01T10:00');
+    await user.click(screen.getByRole('button', { name: /Review 1 Item/ }));
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    await waitFor(() => expect(distributeItems).toHaveBeenCalledTimes(1));
+    expect(distributeItems.mock.calls[0]?.[0]).toMatchObject({
+      items: [{ item_id: 'gloves-1', operation: 'temporary_loan', expected_return_at: '2026-10-01T15:00:00.000Z' }],
+    });
   });
 });
 

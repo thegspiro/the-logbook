@@ -232,7 +232,7 @@ export const OrgChartNodeModal: React.FC<OrgChartNodeModalProps> = ({
 
   const handleSave = async () => {
     if (!draft.title.trim()) {
-      setValidationError('Give the position a title.');
+      setValidationError('Enter a position title.');
       return;
     }
     setValidationError(null);
@@ -324,9 +324,9 @@ export const OrgChartNodeModal: React.FC<OrgChartNodeModalProps> = ({
             </div>
           ) : (
             <p className="text-theme-text-muted mt-2 text-xs">
-              Link the box to a role and it lists whoever holds that role, staying current on its own — an election
-              becomes one edit rather than two. Leave it unlinked for anything the application has no name for: a
-              committee, a board seat, a trustee.
+              Link a role and this position lists whoever holds it, updating on its own when the role changes hands.
+              Leave it unlinked for anything the application has no role for, such as a committee, a board seat, or a
+              trustee.
             </p>
           )}
         </div>
@@ -346,9 +346,8 @@ export const OrgChartNodeModal: React.FC<OrgChartNodeModalProps> = ({
             placeholder="e.g. Training Officer"
           />
           <p className="text-theme-text-muted mt-2 text-xs">
-            What members actually call it, which need not match the role above &mdash; a box linked to the Fire Chief
-            role can be titled &ldquo;Chief&rdquo;, and one linked to nothing can be titled &ldquo;Station 2 House
-            Captain&rdquo;.
+            What members call it. It does not have to match the role above &mdash; a position linked to the Fire Chief
+            role can be titled &ldquo;Chief&rdquo;, and an unlinked one &ldquo;Station 2 House Captain&rdquo;.
           </p>
         </div>
 
@@ -370,8 +369,8 @@ export const OrgChartNodeModal: React.FC<OrgChartNodeModalProps> = ({
             ))}
           </select>
           <p className="text-theme-text-muted mt-2 text-xs">
-            Your department&rsquo;s real reporting line, which is never derived from anything in the application. A
-            position cannot be listed under one of its own subordinates, so those are left out of this list.
+            Your department&rsquo;s real reporting line, set here rather than taken from roles or permissions. A
+            position cannot report to one of its own subordinates, so they are left out of this list.
           </p>
         </div>
 
@@ -382,16 +381,15 @@ export const OrgChartNodeModal: React.FC<OrgChartNodeModalProps> = ({
             <p className="text-theme-text-muted flex items-start gap-1.5 text-xs">
               <Link2 className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
               <span>
-                {chosenLink.label} holders are listed automatically and are not repeated here. Add anybody who shares
-                the position without holding the role &mdash; a co-chair, an auxiliary officer, somebody with no login.
+                Everyone who holds {chosenLink.label} is listed automatically, so they are not repeated here. Add anyone
+                else who shares this position &mdash; a co-chair, an auxiliary officer, someone with no account.
               </span>
             </p>
           ) : null}
 
           {draft.holders.length === 0 && !chosenLink ? (
             <p className="text-theme-text-muted text-xs">
-              Nobody yet. A vacant position still appears on the chart, so members can see it exists and that nobody is
-              in it.
+              Nobody yet. A position with nobody in it still appears on the chart, marked Vacant.
             </p>
           ) : null}
 
@@ -466,8 +464,8 @@ export const OrgChartNodeModal: React.FC<OrgChartNodeModalProps> = ({
           </button>
           {chosenLink ? null : (
             <p className="text-theme-text-muted text-xs">
-              Add as many as the position really holds. Trustees, co-chairs and a pair of assistant chiefs belong in one
-              box with one area of responsibility, not in several boxes side by side.
+              Add everyone who holds this position. Trustees, co-chairs, or two assistant chiefs who share one area of
+              responsibility go in one position, not several side by side.
             </p>
           )}
         </fieldset>
@@ -484,8 +482,7 @@ export const OrgChartNodeModal: React.FC<OrgChartNodeModalProps> = ({
             placeholder="e.g. Drill scheduling, certification tracking, and the annual training plan."
           />
           <p className="text-theme-text-muted mt-2 text-xs">
-            This is the line a member reads when they are trying to work out who to ask. Say it the way you would say it
-            to a probationary member.
+            Members read this to work out who to ask. Write it in words a probationary member would understand.
           </p>
         </div>
 
@@ -517,9 +514,8 @@ export const OrgChartNodeModal: React.FC<OrgChartNodeModalProps> = ({
           </div>
         </div>
         <p className="text-theme-text-muted text-xs">
-          These are the position&rsquo;s published details and are shown to every member. Nothing is copied from a
-          holder&rsquo;s own profile — their personal email and phone stay governed by the department&rsquo;s contact
-          visibility setting.
+          Every member can see these. They belong to the position &mdash; nothing is copied from a holder&rsquo;s
+          profile, and personal email and phone still follow the department&rsquo;s contact visibility setting.
         </p>
 
         <label className="flex items-start gap-3">
@@ -530,9 +526,10 @@ export const OrgChartNodeModal: React.FC<OrgChartNodeModalProps> = ({
             onChange={(e) => setDraft({ ...draft, isPublished: e.target.checked })}
           />
           <span className="text-theme-text-secondary text-sm">
-            Show this position to the membership.
+            Show this position to members
             <span className="text-theme-text-muted block text-xs">
-              Turn it off to build out a reorganisation first. Hidden positions hide everyone reporting to them too.
+              Turn off to prepare a reorganization before members see it. Hiding a position also hides every position
+              below it on the chart.
             </span>
           </span>
         </label>

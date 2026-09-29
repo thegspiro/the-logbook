@@ -8,10 +8,19 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import toast from 'react-hot-toast';
 import { eventService, meetingsService } from '../services/api';
+import type { TrainingSessionResponse } from '../services/api';
 import { electionService } from '../services/electionService';
 import type { ElectionListItem } from '../types/election';
 import { getStatusBadgeClass } from '../utils/electionHelpers';
-import type { Event, EventAttendee, EventListItem, RSVP, EventStats, RSVPHistory } from '../types/event';
+import type {
+  Event,
+  EventAttendee,
+  EventListItem,
+  RSVP,
+  EventStats,
+  RSVPHistory,
+  TrainingCreditReport,
+} from '../types/event';
 import { useAuthStore } from '../stores/authStore';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { EventTypeBadge } from '../components/EventTypeBadge';
@@ -109,15 +118,77 @@ const DISPLAYED_TRAINING_FIELD_KEYS = [
   'auto_create_records',
 ] as const;
 
+/**
+ * Training keys the Requirements & Programs card reports live from the
+ * event's training session. The copies here were written when the event was
+ * created and go stale the moment that card edits the session, so once a
+ * session is reported they are not drawn at all rather than contradicting it.
+ */
+const SESSION_REPORTED_TRAINING_KEYS: ReadonlySet<string> = new Set([
+  'course_name',
+  'course_code',
+  'training_type',
+  'credit_hours',
+]);
+
 /** True when the column holds anything the details card would draw. */
-const hasVisibleCustomFields = (event: Event): boolean => {
+const hasVisibleCustomFields = (event: Event, sessionReported: boolean): boolean => {
   const fields = event.custom_fields;
   if (!fields) return false;
 
   return (
     Object.keys(fields).some((key) => !HIDDEN_CUSTOM_FIELD_KEYS.has(key)) ||
-    (event.event_type === EventTypeEnum.TRAINING && DISPLAYED_TRAINING_FIELD_KEYS.some((key) => Boolean(fields[key])))
+    (event.event_type === EventTypeEnum.TRAINING &&
+      DISPLAYED_TRAINING_FIELD_KEYS.some(
+        (key) => !(sessionReported && SESSION_REPORTED_TRAINING_KEYS.has(key)) && Boolean(fields[key])
+      ))
   );
+};
+
+/** Past this many, the uncredited toast counts the rest instead of naming them. */
+const MAX_NAMED_UNCREDITED = 5;
+
+const pluralize = (count: number, singular: string, plural = `${singular}s`): string =>
+  `${count} ${count === 1 ? singular : plural}`;
+
+/**
+ * Toasts for what a finalize (or End Event) credited on a Training event.
+ *
+ * Built from the response rather than re-derived here (pitfall #29): the
+ * backend decided who was credited, whose credit waits for a training
+ * officer, and who had no time to credit. Returns false for an event that
+ * credits no training, so the caller keeps its own wording.
+ */
+const toastTrainingCredit = (result: TrainingCreditReport, lead: string): boolean => {
+  if (!result.training_credit) return false;
+
+  const parts = [lead];
+  const completed = result.training_records_completed ?? 0;
+  if (completed > 0) parts.push(`${pluralize(completed, 'training record')} completed`);
+  if (result.training_approval_pending) {
+    const pending = result.training_attendees_pending ?? 0;
+    parts.push(`Waiting for training officer approval (${pluralize(pending, 'member')})`);
+  }
+  const removed = result.admin_hours_entries_removed ?? 0;
+  if (removed > 0) parts.push(`${pluralize(removed, 'admin-hours entry', 'admin-hours entries')} removed`);
+  toast.success(parts.join('. '));
+
+  // A member with no creditable time gets no record at all, which nothing
+  // else on the page would reveal — so it is an error toast, and it names them.
+  const names = result.training_uncredited_names ?? [];
+  const uncredited = Math.max(result.training_attendees_uncredited ?? 0, names.length);
+  if (uncredited > 0) {
+    const named = names.slice(0, MAX_NAMED_UNCREDITED);
+    const unnamed = uncredited - named.length;
+    const who =
+      named.length > 0
+        ? `${named.join(', ')}${unnamed > 0 ? ` and ${unnamed} more` : ''}`
+        : pluralize(uncredited, 'member');
+    toast.error(`No time to credit for: ${who} — set their times, then reopen and finalize again`, {
+      duration: 10000,
+    });
+  }
+  return true;
 };
 
 export const EventDetailPage: React.FC = () => {
@@ -160,6 +231,13 @@ export const EventDetailPage: React.FC = () => {
   const [bulkAddLoading, setBulkAddLoading] = useState(false);
   const [rsvpHistory, setRsvpHistory] = useState<RSVPHistory[]>([]);
   const [linkedElections, setLinkedElections] = useState<ElectionListItem[]>([]);
+  // The training session the Requirements & Programs card found, if any. The
+  // card owns the fetch; the page only needs it to describe the event the way
+  // the card does.
+  const [trainingSession, setTrainingSession] = useState<TrainingSessionResponse | null>(null);
+  // Bumped after anything that can change the session or its approval, so the
+  // card refetches what the backend now holds.
+  const [trainingRefreshKey, setTrainingRefreshKey] = useState(0);
   const actionsMenuRef = useRef<HTMLDivElement>(null);
   const reminderMenuRef = useRef<HTMLDivElement>(null);
 
@@ -169,6 +247,8 @@ export const EventDetailPage: React.FC = () => {
   // Deliberately a separate grant from events.manage: whoever closed the event
   // should not also be able to quietly reopen it and move the numbers.
   const canReopenAttendance = checkPermission('events.reopen_attendance');
+  // Who may act on a training event's approval; the card links them to it.
+  const canApproveTraining = checkPermission('training.manage');
   const { confirm } = useConfirm();
 
   // Extracted hooks for RSVP form, notifications, and override attendance
@@ -443,7 +523,7 @@ export const EventDetailPage: React.FC = () => {
       });
 
       setShowCancelModal(false);
-      toast.success('Event cancelled successfully');
+      toast.success('Event cancelled');
       await fetchEvent();
     } catch (err) {
       setSubmitError(getErrorDetail(err) || 'Failed to cancel event');
@@ -474,7 +554,9 @@ export const EventDetailPage: React.FC = () => {
       );
 
       setShowCancelSeriesModal(false);
-      toast.success(result.message);
+      toast.success(
+        `Cancelled ${result.cancelled_count} event${result.cancelled_count !== 1 ? 's' : ''} in the series`
+      );
       await fetchEvent();
     } catch (err) {
       setSubmitError(getErrorDetail(err) || 'Failed to cancel series');
@@ -490,7 +572,7 @@ export const EventDetailPage: React.FC = () => {
       await eventService.checkInAttendee(eventId, { user_id: userId });
       await fetchRSVPs();
       await fetchStats();
-      toast.success('Member checked in successfully');
+      toast.success('Member checked in');
     } catch (err) {
       toast.error(getErrorDetail(err) || 'Failed to check in attendee');
     }
@@ -502,7 +584,7 @@ export const EventDetailPage: React.FC = () => {
     try {
       setSubmitting(true);
       const newEvent = await eventService.duplicateEvent(eventId);
-      toast.success('Event duplicated successfully');
+      toast.success('Event duplicated');
       void navigate(`/events/${newEvent.id}/edit`);
     } catch (err) {
       toast.error(getErrorDetail(err) || 'Failed to duplicate event');
@@ -526,7 +608,7 @@ export const EventDetailPage: React.FC = () => {
         toast.success('All events in the series deleted');
       } else {
         await eventService.deleteEvent(eventId);
-        toast.success('Event deleted successfully');
+        toast.success('Event deleted');
       }
       void navigate('/events');
     } catch (err) {
@@ -544,13 +626,34 @@ export const EventDetailPage: React.FC = () => {
     // corrections all stop working afterwards, and only a department leader
     // can undo it. That is worth a sentence before the click, not a toast
     // after it.
+    const creditsTraining = event?.event_type === EventTypeEnum.TRAINING;
     const confirmed = await confirm({
       title: 'Finalize attendance?',
-      message:
+      message: creditsTraining ? (
+        <div className="space-y-2">
+          <p>This closes the event and writes a training record for each checked-in member with time to credit.</p>
+          <ul className="list-disc space-y-1 pl-5">
+            <li>
+              Each member&apos;s time comes from Edit Times first, then a real check-out or End Event, otherwise
+              check-in to the event&apos;s end time.
+            </li>
+            <li>Members with no credited time get no training record, so set their times first.</li>
+            {trainingSession?.require_completion_confirmation && (
+              <li>Credit waits for a training officer&apos;s approval; the records show In Progress until then.</li>
+            )}
+            <li>Earlier admin-hours entries for this event are removed.</li>
+          </ul>
+          <p>
+            Check-in, adding or removing attendees, and correcting times then stop being available. Only someone who can
+            reopen attendance will be able to make further changes.
+          </p>
+        </div>
+      ) : (
         'This closes the event. Credited hours are written to the members\u2019 ' +
         'records, and check-in, adding or removing attendees, and correcting ' +
         'times all stop being available. Only someone who can reopen ' +
-        'attendance will be able to make further changes.',
+        'attendance will be able to make further changes.'
+      ),
       confirmLabel: 'Finalize and close',
       cancelLabel: 'Keep it open',
       variant: 'warning',
@@ -560,16 +663,19 @@ export const EventDetailPage: React.FC = () => {
     try {
       setFinalizingAttendance(true);
       const result = await eventService.finalizeAttendance(eventId);
-      if (result.updated_count > 0) {
-        toast.success(
-          `Attendance finalized for ${result.updated_count} member${result.updated_count !== 1 ? 's' : ''}`
-        );
-      } else {
-        toast.success('Attendance finalized');
+      if (!toastTrainingCredit(result, 'Attendance finalized')) {
+        if (result.updated_count > 0) {
+          toast.success(
+            `Attendance finalized for ${result.updated_count} member${result.updated_count !== 1 ? 's' : ''}`
+          );
+        } else {
+          toast.success('Attendance finalized');
+        }
       }
       // Refetch the event too: the lock it just acquired is what decides which
       // actions this page still offers.
       await fetchEvent();
+      setTrainingRefreshKey((key) => key + 1);
       await fetchRSVPs();
       await fetchStats();
     } catch (err) {
@@ -588,6 +694,7 @@ export const EventDetailPage: React.FC = () => {
       toast.success('Attendance reopened for corrections');
       setShowReopenPrompt(false);
       await fetchEvent();
+      setTrainingRefreshKey((key) => key + 1);
       await fetchRSVPs();
       await fetchStats();
     } catch (err) {
@@ -604,9 +711,11 @@ export const EventDetailPage: React.FC = () => {
       setSubmitting(true);
       const result = await eventService.endEvent(eventId);
       const count = result.checked_out_count;
-      toast.success(count > 0 ? `Event ended — ${count} member${count !== 1 ? 's' : ''} checked out` : 'Event ended');
+      const ended = count > 0 ? `Event ended — ${count} member${count !== 1 ? 's' : ''} checked out` : 'Event ended';
+      if (!toastTrainingCredit(result, ended)) toast.success(ended);
       setShowEndEventConfirm(false);
       await fetchEvent();
+      setTrainingRefreshKey((key) => key + 1);
       if (canManage) {
         await fetchRSVPs();
         await fetchStats();
@@ -636,13 +745,20 @@ export const EventDetailPage: React.FC = () => {
       setSubmitting(true);
       setSubmitError(null);
 
-      await eventService.recordActualTimes(eventId, {
+      const updated = await eventService.recordActualTimes(eventId, {
         actual_start_time: actualStartTime ? localToUTC(actualStartTime, tz) : undefined,
         actual_end_time: actualEndTime ? localToUTC(actualEndTime, tz) : undefined,
       });
 
       setShowRecordTimesModal(false);
+      // An end time finalizes attendance, but the backend can decline to (a
+      // Training event cannot be finalized before it ends) and still save the
+      // times. Without this the officer believes the event is closed.
+      if (actualEndTime && !updated.attendance_finalized_at) {
+        toast.error('Times recorded, but attendance could not be finalized. Try Finalize Attendance.');
+      }
       await fetchEvent();
+      setTrainingRefreshKey((key) => key + 1);
       if (canManage) {
         await fetchRSVPs();
       }
@@ -709,6 +825,9 @@ export const EventDetailPage: React.FC = () => {
   // that would hit those endpoints are not rendered at all — an enabled button
   // that always 409s is worse than an absent one.
   const isAttendanceFinalized = Boolean(event.attendance_finalized_at);
+  const isTrainingEvent = event.event_type === EventTypeEnum.TRAINING;
+  // The card has found a session, so it — not custom_fields — describes it.
+  const trainingSessionReported = isTrainingEvent && trainingSession !== null;
   // Seats taken, which is what max_attendees caps. Falls back to the member
   // count for payloads predating the aggregate.
   const occupiedSeats = event.occupied_seats ?? event.going_count ?? 0;
@@ -859,7 +978,7 @@ export const EventDetailPage: React.FC = () => {
                         try {
                           setSubmitting(true);
                           await eventService.publishEvent(eventId);
-                          toast.success('Event published successfully');
+                          toast.success('Event published');
                           await fetchEvent();
                         } catch (err) {
                           toast.error(getErrorDetail(err) || 'Failed to publish event');
@@ -1198,11 +1317,15 @@ export const EventDetailPage: React.FC = () => {
                         {event.attendance_finalized_at
                           ? ` on ${formatDateTime(event.attendance_finalized_at, tz)}`
                           : ''}
-                        . Credited hours are recorded, and attendance can no longer be changed.
+                        {isTrainingEvent
+                          ? '. Members\u2019 training records are written from this attendance, and attendance can no longer be changed.'
+                          : '. Credited hours are recorded, and attendance can no longer be changed.'}
                       </p>
                       {canReopenAttendance && (
                         <p className="text-theme-text-muted mt-1 text-sm">
-                          Use Reopen Attendance to make a correction, then finalize again.
+                          {isTrainingEvent
+                            ? 'Use Reopen Attendance to correct times or training details, then finalize again \u2014 members\u2019 training records are updated rather than added to.'
+                            : 'Use Reopen Attendance to make a correction, then finalize again.'}
                         </p>
                       )}
                     </div>
@@ -1309,7 +1432,7 @@ export const EventDetailPage: React.FC = () => {
                 the column being non-empty drew an empty purple card for any
                 event the scheduler had touched, since its bookkeeping keys
                 count towards the length but never render. */}
-            {event.custom_fields && hasVisibleCustomFields(event) && (
+            {event.custom_fields && hasVisibleCustomFields(event, trainingSessionReported) && (
               <div className="bg-theme-surface rounded-lg border-l-4 border-purple-600 p-6 shadow-sm backdrop-blur-xs">
                 <div className="mb-4 flex items-center">
                   <svg
@@ -1334,28 +1457,28 @@ export const EventDetailPage: React.FC = () => {
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   {event.event_type === EventTypeEnum.TRAINING && (
                     <>
-                      {event.custom_fields.course_name && (
+                      {!trainingSessionReported && event.custom_fields.course_name && (
                         <div>
                           <p className="text-theme-text-secondary text-sm font-medium">Course Name</p>
                           <p className="text-theme-text-primary text-sm">{event.custom_fields.course_name}</p>
                         </div>
                       )}
 
-                      {event.custom_fields.course_code && (
+                      {!trainingSessionReported && event.custom_fields.course_code && (
                         <div>
                           <p className="text-theme-text-secondary text-sm font-medium">Course Code</p>
                           <p className="text-theme-text-primary text-sm">{event.custom_fields.course_code}</p>
                         </div>
                       )}
 
-                      {event.custom_fields.credit_hours && (
+                      {!trainingSessionReported && event.custom_fields.credit_hours && (
                         <div>
                           <p className="text-theme-text-secondary text-sm font-medium">Credit Hours</p>
                           <p className="text-theme-text-primary text-sm">{event.custom_fields.credit_hours} hours</p>
                         </div>
                       )}
 
-                      {event.custom_fields.training_type && (
+                      {!trainingSessionReported && event.custom_fields.training_type && (
                         <div>
                           <p className="text-theme-text-secondary text-sm font-medium">Training Type</p>
                           <p className="text-theme-text-primary text-sm capitalize">
@@ -1390,7 +1513,7 @@ export const EventDetailPage: React.FC = () => {
                       )}
 
                       {event.custom_fields.issues_certification && (
-                        <div className="col-span-2">
+                        <div className="sm:col-span-2">
                           <div className="flex items-center rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-500/30 dark:bg-green-500/10">
                             <svg
                               className="mr-2 h-5 w-5 text-green-600"
@@ -1414,7 +1537,7 @@ export const EventDetailPage: React.FC = () => {
                       )}
 
                       {event.custom_fields.auto_create_records && (
-                        <div className="col-span-2">
+                        <div className="sm:col-span-2">
                           <div className="flex items-center rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-500/30 dark:bg-blue-500/10">
                             <svg
                               className="mr-2 h-5 w-5 text-blue-600"
@@ -1431,7 +1554,10 @@ export const EventDetailPage: React.FC = () => {
                               />
                             </svg>
                             <span className="text-sm font-medium text-blue-800 dark:text-blue-400">
-                              Training records are automatically created when members check in
+                              Credited to members&apos; training records when attendance is finalized
+                              {trainingSession?.require_completion_confirmation
+                                ? ' after a training officer approves'
+                                : ''}
                             </span>
                           </div>
                         </div>
@@ -1454,10 +1580,19 @@ export const EventDetailPage: React.FC = () => {
               </div>
             )}
 
-            {/* Requirement/program links for the attached training session.
-                Renders nothing when the event has no training session. */}
-            {event.event_type === EventTypeEnum.TRAINING && (
-              <TrainingSessionLinkageCard eventId={event.id} canManage={canManage} canReopen={canReopenAttendance} />
+            {/* The training details the credit is filed under, and the approval
+                it waits on. With no session it says what the credit falls back
+                to, to those who can change that or approve it. */}
+            {isTrainingEvent && (
+              <TrainingSessionLinkageCard
+                eventId={event.id}
+                eventTitle={event.title}
+                canManage={canManage}
+                canApprove={canApproveTraining}
+                attendanceFinalized={isAttendanceFinalized}
+                refreshKey={trainingRefreshKey}
+                onSessionChange={setTrainingSession}
+              />
             )}
 
             {/* Pipeline meeting stages can also link prospects to ordinary
@@ -1526,8 +1661,8 @@ export const EventDetailPage: React.FC = () => {
                        Arises when an organizer lowers the cap below a party
                        that had already queued. */
                     <p className="mt-3 text-sm text-amber-600 dark:text-amber-400">
-                      Your party is larger than this event can hold, so it cannot be moved up. Reduce your guest count
-                      or contact the event organizer.
+                      Your party is larger than this event can hold, so it can&apos;t move off the waitlist. Reduce your
+                      guest count or contact the event organizer.
                     </p>
                   ) : (
                     <p className="mt-3 text-sm text-purple-600 dark:text-purple-400">
@@ -1909,7 +2044,7 @@ export const EventDetailPage: React.FC = () => {
                     templateData.check_in_minutes_after = event.check_in_minutes_after;
                   await eventService.createTemplate(templateData);
                   setShowTemplateModal(false);
-                  toast.success('Template saved successfully');
+                  toast.success('Template saved');
                 } catch (err) {
                   toast.error(getErrorDetail(err) || 'Failed to save template');
                 } finally {
@@ -1926,7 +2061,11 @@ export const EventDetailPage: React.FC = () => {
           onClose={() => setShowReopenPrompt(false)}
           onSubmit={(reason) => void handleReopenAttendance(reason)}
           title="Reopen attendance?"
-          message="Attendance becomes editable again and the event can be corrected, then finalized a second time. Re-finalizing updates the hours already credited rather than adding to them."
+          message={
+            isTrainingEvent
+              ? 'Attendance and the training details become editable again, then the event can be finalized a second time. Re-finalizing updates the training records already written rather than adding to them. An approval still waiting on a training officer has its link expired; finalizing again issues a new one.'
+              : 'Attendance becomes editable again and the event can be corrected, then finalized a second time. Re-finalizing updates the hours already credited rather than adding to them.'
+          }
           label="Reason"
           placeholder="e.g. Two members were left off the roster"
           multiline

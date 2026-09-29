@@ -176,12 +176,50 @@ class TrainingSessionLinkageUpdate(BaseModel):
     payload is left untouched, an explicit null clears the link, a value sets
     it. The service applies this via ``model_dump(exclude_unset=True)`` +
     ``apply_updates``.
+
+    ``course_id`` also re-files the session: setting it takes the course's name
+    and code, clearing it files the session under the event's title again.
+    ``training_type`` cannot be cleared — every record needs one.
     """
 
     category_id: Optional[UUID] = None
     program_id: Optional[UUID] = None
     phase_id: Optional[UUID] = None
     requirement_id: Optional[UUID] = None
+    course_id: Optional[UUID] = None
+    training_type: Optional[str] = None
+
+    @field_validator("training_type")
+    @classmethod
+    def _validate_training_type(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        return validate_enum_value(v, ModelTrainingType, "training_type")
+
+
+class TrainingSessionAttach(BaseModel):
+    """Training details picked for a Training event created from Events.
+
+    Picking any of these attaches a training session to the event, which is
+    what files its attendance credit under a course and category and feeds a
+    program requirement. Every field is optional: a Training event with no
+    details at all still credits its attendees, filed under the event's title
+    as Continuing Education.
+    """
+
+    course_id: Optional[UUID] = None
+    category_id: Optional[UUID] = None
+    program_id: Optional[UUID] = None
+    phase_id: Optional[UUID] = None
+    requirement_id: Optional[UUID] = None
+    training_type: Optional[str] = None
+
+    @field_validator("training_type")
+    @classmethod
+    def _validate_training_type(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        return validate_enum_value(v, ModelTrainingType, "training_type")
 
 
 class TrainingSessionResponse(UTCResponseBase):
@@ -250,6 +288,23 @@ class AttendeeApprovalData(UTCResponseBase):
     # Status
     approved: bool = False
     notes: Optional[str] = None
+
+
+class TrainingApprovalSummary(UTCResponseBase):
+    """Where an event's training approval stands, for the event page.
+
+    ``token`` is the approval link's secret and is included only while the
+    approval is pending and unexpired, and only for a caller who may approve
+    (training.manage) — the event page links them straight to the review.
+    """
+
+    approval_id: UUID
+    status: str
+    approval_deadline: datetime
+    approved_at: Optional[datetime] = None
+    attendee_count: int
+    expired: bool
+    token: Optional[str] = None
 
 
 class TrainingApprovalRequest(BaseModel):

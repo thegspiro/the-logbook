@@ -91,14 +91,19 @@ class TestTheAnswerReachesSettings:
             }
         )
 
-        assert _membership_id_settings(data) == {
-            "membership_id": {
-                "enabled": True,
-                "auto_generate": True,
-                "prefix": "FD-",
-                "next_number": 7,
-            }
+        stored = _membership_id_settings(data)["membership_id"]
+
+        assert {
+            k: stored[k] for k in ("enabled", "auto_generate", "prefix", "next_number")
+        } == {
+            "enabled": True,
+            "auto_generate": True,
+            "prefix": "FD-",
+            "next_number": 7,
         }
+        # Nothing asked in step 1 about the format, so the one numbers had
+        # before patterns existed: prefix, then four digits.
+        assert (stored["pattern"], stored["padding"]) == ("{PREFIX}{SEQ}", 4)
 
     def test_skipping_the_question_writes_nothing(self):
         # Absent, not an explicit "off": a department that never saw the

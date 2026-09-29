@@ -33,7 +33,7 @@ import { useInventoryNfcEnabled } from '../modules/inventory/hooks/useInventoryN
 import { parseInventoryTagCode } from '../constants/nfc';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
-import { formatDateTime } from '../utils/dateFormatting';
+import { formatDateTime, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 import { useScanFeedback } from '../hooks/useScanFeedback';
 import { ScanSuccessFlash } from './ux/ScanSuccessFlash';
 import { FlashlightToggle } from './ux/FlashlightToggle';
@@ -546,7 +546,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
       if (is404) {
         setLookupError(`No item found for "${trimmed}"`);
       } else {
-        setLookupError('Failed to look up item. Please check your connection and try again.');
+        setLookupError('Could not look up the item. Check your connection and try again.');
       }
       setTimeout(() => setLookupError(null), 3000);
     } finally {
@@ -582,7 +582,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
       signalScanSuccess();
       addItemFromResult(match);
     } catch (err: unknown) {
-      setLookupError(getErrorMessage(err, 'Failed to look up the tag. Please check your connection and try again.'));
+      setLookupError(getErrorMessage(err, 'Could not look up the tag. Check your connection and try again.'));
       setTimeout(() => setLookupError(null), 3000);
     } finally {
       setLookupLoading(false);
@@ -680,7 +680,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
             quantity: si.quantity,
             operation: distributionOperation,
             ...(distributionOperation === 'temporary_loan'
-              ? { expected_return_at: new Date(expectedReturnAt).toISOString() }
+              ? { expected_return_at: localToUTC(expectedReturnAt, tz) }
               : {}),
           })),
         });
@@ -700,7 +700,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
         onComplete?.(response);
       }
     } catch {
-      setLookupError('Failed to process batch. Please try again.');
+      setLookupError('Could not process the batch. Try again.');
     } finally {
       setSubmitting(false);
     }
@@ -797,7 +797,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                 <input
                   type="datetime-local"
                   value={expectedReturnAt}
-                  min={new Date().toISOString().slice(0, 16)}
+                  min={formatForDateTimeInput(new Date(), tz)}
                   onChange={(event) => setExpectedReturnAt(event.target.value)}
                   className="form-input mt-1 block w-full"
                   required
@@ -947,6 +947,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                         if (searchResults.length > 0) setShowDropdown(true);
                       }}
                       placeholder="Search by name, barcode, serial, or asset tag..."
+                      aria-label="Item to add: name, barcode, serial or asset tag"
                       className="form-input pr-8 pl-9 text-sm focus:border-transparent"
                       autoComplete="off"
                       autoFocus
@@ -1120,6 +1121,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                               onChange={(e) => updateQuantity(si.itemId, parseInt(e.target.value) || 1)}
                               className="form-input w-16 px-2 py-1 text-center text-sm"
                               title={mode === 'return' ? 'Quantity to return (partial return supported)' : 'Quantity'}
+                              aria-label={`Quantity of ${si.itemName}`}
                             />
                           </div>
                         )}
@@ -1131,6 +1133,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                             onChange={(e) => updateCondition(si.itemId, e.target.value)}
                             className="form-input px-2 py-1 text-sm"
                             title="Return condition"
+                            aria-label={`Return condition for ${si.itemName}`}
                           >
                             {RETURN_CONDITION_OPTIONS.map((c) => (
                               <option key={c.value} value={c.value}>

@@ -58,6 +58,7 @@ const {
   mockGetAdminHoursSummary,
   mockGetEnabledModules,
   mockMarkNotificationRead,
+  mockGetMyUnreadCountsByCategory,
 } = vi.hoisted(() => ({
   mockGetMyShifts: vi.fn(),
   mockGetOpenShifts: vi.fn(),
@@ -65,6 +66,7 @@ const {
   mockGetInbox: vi.fn(),
   mockGetUnreadCount: vi.fn(),
   mockGetMyNotifications: vi.fn(),
+  mockGetMyUnreadCountsByCategory: vi.fn(),
   mockAcknowledge: vi.fn(),
   mockGetMyTraining: vi.fn(),
   mockGetEvents: vi.fn(),
@@ -97,6 +99,7 @@ vi.mock('../modules/scheduling/services/api', () => ({
 vi.mock('../services/api', () => ({
   notificationsService: {
     getMyNotifications: mockGetMyNotifications,
+    getMyUnreadCountsByCategory: mockGetMyUnreadCountsByCategory,
     markMyNotificationRead: mockMarkNotificationRead,
   },
   messagesService: {
@@ -138,6 +141,11 @@ vi.mock('../services/api', () => ({
     getCommunityEngagement: vi.fn().mockResolvedValue({}),
     getBranding: vi.fn().mockResolvedValue({ name: 'Test FD' }),
   },
+}));
+
+const { mockListMySignOffs } = vi.hoisted(() => ({ mockListMySignOffs: vi.fn() }));
+vi.mock('../modules/prospective-members/services/api', () => ({
+  signOffService: { listMine: mockListMySignOffs },
 }));
 
 vi.mock('../modules/admin-hours/services/api', () => ({
@@ -235,6 +243,7 @@ const ALL_SERVICE_MOCKS = [
   mockGetTrainingEnrollments,
   mockGetEnrollmentProgress,
   mockMarkNotificationRead,
+  mockGetMyUnreadCountsByCategory,
 ];
 
 describe('Dashboard', () => {
@@ -255,6 +264,7 @@ describe('Dashboard', () => {
     mockGetInbox.mockResolvedValue([]);
     mockGetUnreadCount.mockResolvedValue({ unread_count: 0 });
     mockGetMyNotifications.mockResolvedValue({ logs: [], total: 0 });
+    mockGetMyUnreadCountsByCategory.mockResolvedValue({ categories: {} });
     mockMarkNotificationRead.mockResolvedValue(undefined);
     mockAcknowledge.mockResolvedValue(undefined);
     mockGetMyTraining.mockResolvedValue({ hours_summary: { total_hours: 0, hours_this_month: 0 }, certifications: [] });
@@ -1360,6 +1370,49 @@ describe('Dashboard', () => {
       });
     });
 
+    it('folds same-category notifications into one row that opens the inbox', async () => {
+      // A weekend of events leaves one validation prompt per event. Unstacked,
+      // they fill every row the card shows and push the rest off it.
+      const validation = (id: string, title: string) => ({
+        id,
+        category: 'event_validation',
+        subject: `Action Required: Validate attendance for ${title}`,
+        message: 'Please review.',
+        read: false,
+        pinned: false,
+        sent_at: '2026-09-01T12:00:00Z',
+      });
+      mockGetMyNotifications.mockResolvedValue({
+        logs: [
+          validation('v1', 'Saturday Drill'),
+          { id: 'n1', subject: 'Drill reminder', message: 'Tuesday', sent_at: '2026-09-01T11:00:00Z' },
+          validation('v2', 'Sunday Drill'),
+        ],
+        total: 3,
+      });
+      // More are waiting than the card loaded.
+      mockGetMyUnreadCountsByCategory.mockResolvedValue({ categories: { event_validation: 6 } });
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+      const updates = await screen.findByRole('region', { name: 'My Updates' });
+
+      const stackRow = await within(updates).findByText('6 attendance validations');
+      expect(
+        within(updates).getByText('Latest: Action Required: Validate attendance for Saturday Drill')
+      ).toBeInTheDocument();
+      expect(within(updates).getByText('Drill reminder')).toBeInTheDocument();
+      expect(
+        within(updates).queryByText('Action Required: Validate attendance for Sunday Drill')
+      ).not.toBeInTheDocument();
+
+      await user.click(stackRow);
+
+      // Opening the stack is not reading it.
+      expect(mockMarkNotificationRead).not.toHaveBeenCalled();
+      expect(mockNavigate).toHaveBeenCalledWith('/notifications?tab=inbox');
+    });
+
     it('queues a read after marking a notification read', async () => {
       // The row is removed locally. A notifications read that started before
       // the mutation still carries it, so it puts the row back -- and the
@@ -2158,6 +2211,42 @@ describe('Dashboard', () => {
       is_acknowledged: false,
       acknowledged_at: null,
       ...overrides,
+    });
+
+    // The officers a Multi-Signer Approval stage names rarely open the
+    // applicant pages; this row is how they learn a conversion is waiting on
+    // their signature (workflow review W16-1).
+    it("says when an applicant is waiting on the member's sign-off", async () => {
+      mockGetEnabledModules.mockResolvedValue({ configured: true, enabled_modules: ['prospective_members'] });
+      mockListMySignOffs.mockResolvedValue([
+        {
+          prospect_id: 'p1',
+          first_name: 'Pat',
+          last_name: 'Applicant',
+          pipeline_name: 'Volunteer Applicants',
+          step_id: 's2',
+          step_name: 'Officer Sign-Off',
+          step_description: null,
+          roles_to_sign: [{ role: 'chief', label: 'Chief' }],
+          required_roles: [],
+        },
+      ]);
+
+      renderWithRouter(<Dashboard />);
+
+      const panel = await screen.findByRole('region', { name: 'Needs you' });
+      expect(within(panel).getByText('Pat Applicant is waiting on your sign-off')).toBeInTheDocument();
+      expect(within(panel).getByRole('button', { name: 'Review' })).toBeInTheDocument();
+    });
+
+    it('does not ask for sign-offs when the department does not run prospective members', async () => {
+      mockListMySignOffs.mockReset();
+      renderWithRouter(<Dashboard />);
+
+      await waitFor(() => {
+        expect(mockGetInbox).toHaveBeenCalledWith({ include_read: false, limit: 10 });
+      });
+      expect(mockListMySignOffs).not.toHaveBeenCalled();
     });
 
     it('stays hidden when nothing needs the member', async () => {

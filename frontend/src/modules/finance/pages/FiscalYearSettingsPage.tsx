@@ -63,7 +63,7 @@ const CreateFYModal: React.FC<CreateFYModalProps> = ({ open, onClose }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !startDate || !endDate) {
-      toast.error('Please fill in all fields');
+      toast.error('Enter a name, start date, and end date');
       return;
     }
     setSubmitting(true);
@@ -202,7 +202,7 @@ const CreateCategoryModal: React.FC<CreateCategoryModalProps> = ({ open, onClose
               rows={3}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Budget category description"
+              placeholder="What this category covers"
             />
           </div>
           <div className="flex items-center justify-end gap-3 pt-2">
@@ -420,7 +420,7 @@ const FiscalYearSettingsPage: React.FC = () => {
             headingLevel={3}
             icon={Tag}
             title="No budget categories"
-            description="Create categories to organize your budget line items."
+            description="Categories group your budgets, such as Equipment or Training."
             actions={[
               {
                 label: 'Create Category',
@@ -466,7 +466,7 @@ const FiscalYearSettingsPage: React.FC = () => {
           if (lockingId) void handleLock(lockingId);
         }}
         title="Lock Fiscal Year"
-        message="Locking this fiscal year will prevent any further changes to budgets. This action cannot be undone."
+        message="Locking closes this fiscal year and stops its name and dates from being edited. You can't unlock it."
         confirmLabel="Lock"
         variant="danger"
       />
@@ -479,7 +479,7 @@ const FiscalYearSettingsPage: React.FC = () => {
           if (deletingCategoryId) void handleDeleteCategory(deletingCategoryId);
         }}
         title="Delete Category"
-        message="Are you sure you want to delete this budget category? Any budgets using it will need to be reassigned."
+        message="Its budgets in every fiscal year are deleted too, and requests charged to them are left without a budget. This can't be undone."
         confirmLabel="Delete"
         variant="danger"
       />

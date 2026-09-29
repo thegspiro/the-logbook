@@ -295,7 +295,16 @@ const EquipmentRequestsPage: React.FC = () => {
     setFulfillItemId(req.item_id ?? '');
     setFulfillQuantity(String(req.quantity || 1));
     setFulfillReturnAt('');
-    setFulfillmentType(req.requested_duration === 'ongoing' ? 'assignment' : 'checkout');
+    // Pool stock can only be fulfilled as an issuance, and the server refuses
+    // any other method. Defaulting a pool item to "checkout" from the member's
+    // "temporary" handed the quartermaster a form that could only fail.
+    setFulfillmentType(
+      req.requested_item?.tracking_type === 'pool'
+        ? 'issuance'
+        : req.requested_duration === 'ongoing'
+          ? 'assignment'
+          : 'checkout'
+    );
     setFulfillOverride(false);
     setSubstitutionOverride(false);
     setSubstitutionReason('');
@@ -311,9 +320,13 @@ const EquipmentRequestsPage: React.FC = () => {
     const request = reviewModal.request;
     setSubmitting(true);
     try {
+      // The member is told once, when the item is issued, rather than twice
+      // in a few seconds. If the fulfil step is abandoned they hear nothing
+      // until it is completed — an accepted trade-off.
       await inventoryService.reviewEquipmentRequest(request.id, {
         status: 'approved',
         review_notes: reviewNotes || undefined,
+        notify_member: false,
       });
       setReviewModal({ open: false, request: null });
       setReviewNotes('');
@@ -390,6 +403,7 @@ const EquipmentRequestsPage: React.FC = () => {
               void loadRequests();
             }}
             className="btn-secondary btn-md shrink-0 self-start sm:self-auto"
+            aria-label="Refresh"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
@@ -474,6 +488,7 @@ const EquipmentRequestsPage: React.FC = () => {
                         loadFulfillOptions(req);
                       }}
                       className="btn-info shrink-0 px-3 py-1.5 text-xs"
+                      aria-label={`Review ${req.item_name} for ${req.requester_name ?? 'unknown member'}`}
                     >
                       Review
                     </button>
@@ -742,7 +757,12 @@ const EquipmentRequestsPage: React.FC = () => {
                 <select
                   id="fulfill-item"
                   value={fulfillItemId}
-                  onChange={(e) => setFulfillItemId(e.target.value)}
+                  onChange={(e) => {
+                    const itemId = e.target.value;
+                    setFulfillItemId(itemId);
+                    const option = fulfillOptions?.options.find((o) => o.item_id === itemId);
+                    if (option?.tracking_type === 'pool') setFulfillmentType('issuance');
+                  }}
                   className="form-input w-full"
                 >
                   <option value="">{optionsLoading ? 'Loading items…' : 'Select an item…'}</option>

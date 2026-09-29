@@ -24,6 +24,11 @@ from sqlalchemy.orm import selectinload
 from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
 from app.models.inventory import CheckOutRecord, ItemAssignment, PropertyReturnReminder
 from app.models.user import Organization, User, UserStatus
+from app.services.email_policy import (
+    EmailKind,
+    department_required_kinds,
+    member_receives_email,
+)
 
 # Reminder thresholds in days
 REMINDER_THRESHOLDS = [
@@ -422,7 +427,11 @@ class PropertyReturnReminderService:
         for u in admins:
             role_slugs = [r.slug for r in (u.roles or [])]
             if any(r in role_slugs for r in ADMIN_NOTIFY_ROLE_SLUGS):
-                if u.email:
+                if u.email and member_receives_email(
+                    u.notification_preferences,
+                    EmailKind.MEMBERSHIP_ADMIN,
+                    department_required_kinds(org),
+                ):
                     admin_emails.append(u.email)
 
         if admin_emails:

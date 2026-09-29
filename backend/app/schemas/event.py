@@ -26,6 +26,7 @@ from app.models.event import (
     RSVPStatus,
 )
 from app.schemas.base import UTCResponseBase
+from app.schemas.training_session import TrainingSessionAttach
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -321,6 +322,11 @@ class EventCreate(EventBase):
         ):
             return {**data, "reminder_target": "all"}
         return data
+
+    # Training details for a Training event: picking any attaches a training
+    # session to the new event in the same transaction. Not a column of the
+    # event, so the service strips it before building the row.
+    training_details: Optional[TrainingSessionAttach] = None
 
     @model_validator(mode="after")
     def validate_dates(self) -> "EventCreate":
@@ -735,6 +741,20 @@ class QRCheckInData(BaseModel):
     allow_guest_check_in: bool = Field(
         default=False,
         description="Whether non-members may self-record attendance",
+    )
+    records_training: bool = Field(
+        default=False,
+        description=(
+            "Whether attendance at this event is credited to members' training "
+            "records — every Training event, when its attendance is finalized"
+        ),
+    )
+    training_requires_approval: bool = Field(
+        default=False,
+        description=(
+            "Whether that credit waits for a training officer's approval after "
+            "attendance is finalized"
+        ),
     )
 
 
@@ -1193,6 +1213,8 @@ class RecurringEventCreate(BaseModel):
     )
     template_id: Optional[UUID] = None  # Created from a template
     is_draft: bool = False
+    # Training details attached to every occurrence; see EventCreate.
+    training_details: Optional[TrainingSessionAttach] = None
 
     @model_validator(mode="after")
     def validate_recurrence_fields(self):
@@ -1200,6 +1222,11 @@ class RecurringEventCreate(BaseModel):
             raise ValueError(
                 "recurrence_end_date is required unless rolling_recurrence is true"
             )
+        # The nightly job that extends a rolling series copies the event, not
+        # a session attached to it, so later occurrences would silently lose
+        # the details the first ones carry.
+        if self.rolling_recurrence and self.training_details is not None:
+            raise ValueError("Training details can't be added to a rolling series")
         if self.recurrence_pattern == "custom" and not self.recurrence_custom_days:
             raise ValueError(
                 "recurrence_custom_days is required when recurrence_pattern is 'custom'"
@@ -1298,7 +1325,41 @@ class BulkAddAttendeesResponse(BaseModel):
     errors: List[BulkAddAttendeesError]
 
 
-class FinalizeAttendanceResponse(BaseModel):
+class TrainingCreditReport(BaseModel):
+    """What finalizing a Training event credited to members' training records.
+
+    All defaults, so an event that is not a Training event — and any client
+    written before these fields existed — reads exactly what it read before.
+    """
+
+    training_credit: bool = Field(
+        default=False,
+        description="Whether this finalize wrote training credit (a Training event)",
+    )
+    training_records_completed: int = Field(
+        default=0, description="Training records completed by this finalize"
+    )
+    training_approval_pending: bool = Field(
+        default=False,
+        description="Credit is waiting for a training officer's approval",
+    )
+    training_attendees_pending: int = Field(
+        default=0, description="Attendees whose credit awaits that approval"
+    )
+    training_attendees_uncredited: int = Field(
+        default=0,
+        description="Checked-in attendees with no time to credit, so no record",
+    )
+    training_uncredited_names: List[str] = Field(
+        default_factory=list, description="Their names, so their times can be set"
+    )
+    admin_hours_entries_removed: int = Field(
+        default=0,
+        description="Admin-hours entries this event had written, now removed",
+    )
+
+
+class FinalizeAttendanceResponse(TrainingCreditReport):
     """Response for finalizing event attendance."""
 
     updated_count: int
@@ -1318,7 +1379,7 @@ class ReopenAttendanceRequest(BaseModel):
     )
 
 
-class EndEventResponse(BaseModel):
+class EndEventResponse(TrainingCreditReport):
     """Response for ending an in-progress event."""
 
     checked_out_count: int

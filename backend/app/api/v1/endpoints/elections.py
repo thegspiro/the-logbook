@@ -2551,6 +2551,7 @@ async def send_election_report(
         success, message = await service.generate_and_send_election_report(
             election_id=election_id,
             organization_id=current_user.organization_id,
+            requested=True,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))

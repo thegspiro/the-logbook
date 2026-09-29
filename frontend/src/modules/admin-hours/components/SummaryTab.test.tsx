@@ -71,7 +71,9 @@ describe('SummaryTab', () => {
     expect(fetchSummary).toHaveBeenCalledWith({});
     expect(screen.getByText('All recorded time')).toBeInTheDocument();
     expect(screen.getByText('Counted hours')).toBeInTheDocument();
-    expect(screen.getByText(/Active sessions, rejected entries, and deleted entries are excluded/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Active sessions, rejected entries, and withdrawn entries are excluded/)
+    ).toBeInTheDocument();
   });
 
   it('requests presets as UTC instants covering the whole selected day', async () => {

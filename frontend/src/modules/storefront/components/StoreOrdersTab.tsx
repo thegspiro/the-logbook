@@ -42,6 +42,8 @@ interface StoreOrdersTabProps {
   initialOpenOnly?: boolean;
 }
 
+const ordersLabel = (count: number): string => `${count} ${count === 1 ? 'order' : 'orders'}`;
+
 export const StoreOrdersTab: React.FC<StoreOrdersTabProps> = ({
   onChanged,
   initialStatusFilter,
@@ -117,7 +119,7 @@ export const StoreOrdersTab: React.FC<StoreOrdersTabProps> = ({
       setTotal(response.total);
     } catch (err: unknown) {
       if (sequence !== loadSequence.current) return;
-      toast.error(getErrorMessage(err, 'Failed to load orders'));
+      toast.error(getErrorMessage(err, 'Could not load orders'));
     } finally {
       // The spinner belongs to the newest request too: an older one finishing
       // last would otherwise clear it while the current fetch is still running.
@@ -180,7 +182,7 @@ export const StoreOrdersTab: React.FC<StoreOrdersTabProps> = ({
         notifyMembers: true,
       });
       toast.success(
-        `${result.updated} order(s) marked paid${result.skipped ? `, ${result.skipped} already settled` : ''}`
+        `${ordersLabel(result.updated)} marked paid${result.skipped ? `, ${result.skipped} already settled` : ''}`
       );
       setSelected([]);
       setBulkReference('');
@@ -201,7 +203,7 @@ export const StoreOrdersTab: React.FC<StoreOrdersTabProps> = ({
         status: bulkStatus,
         notifyMembers: true,
       });
-      toast.success(`${result.updated} order(s) updated${result.skipped ? `, ${result.skipped} skipped` : ''}`);
+      toast.success(`${ordersLabel(result.updated)} updated${result.skipped ? `, ${result.skipped} skipped` : ''}`);
       setSelected([]);
       void load();
       onChanged();
@@ -373,7 +375,7 @@ export const StoreOrdersTab: React.FC<StoreOrdersTabProps> = ({
           }}
         >
           <Download className="h-4 w-4" />
-          Export
+          Export CSV
         </button>
       </div>
 
@@ -425,7 +427,7 @@ export const StoreOrdersTab: React.FC<StoreOrdersTabProps> = ({
           <span className="border-theme-surface-border mx-1 h-5 border-l" aria-hidden="true" />
 
           <label htmlFor="bulk-status" className="sr-only">
-            Bulk status
+            New status for selected orders
           </label>
           <select
             id="bulk-status"
@@ -459,7 +461,21 @@ export const StoreOrdersTab: React.FC<StoreOrdersTabProps> = ({
           <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
         </div>
       ) : orders.length === 0 ? (
-        <EmptyState icon={ShoppingBag} title="No orders" description="Orders placed by members will appear here." />
+        <EmptyState
+          icon={ShoppingBag}
+          title="No orders"
+          description={
+            windowFilter ||
+            statusFilter ||
+            paymentFilter ||
+            methodFilter ||
+            search.trim() ||
+            submittedWithinHours ||
+            openOnly
+              ? 'No orders match these filters.'
+              : 'Orders placed by members will appear here.'
+          }
+        />
       ) : (
         <>
           <label className="text-theme-text-secondary mb-2 flex items-center gap-2 text-sm">
@@ -482,8 +498,8 @@ export const StoreOrdersTab: React.FC<StoreOrdersTabProps> = ({
                     {order.orderNumber} — {order.customerName}
                   </p>
                   <p className="text-theme-text-muted text-xs">
-                    {formatDateTime(order.submittedAt, tz)} · {order.items.length} item(s) ·{' '}
-                    {formatCurrency(Number(order.total))}
+                    {formatDateTime(order.submittedAt, tz)} · {order.items.length}{' '}
+                    {order.items.length === 1 ? 'item' : 'items'} · {formatCurrency(Number(order.total))}
                     {Number(order.balanceDue) > 0 ? ` · ${formatCurrency(Number(order.balanceDue))} due` : ''}
                   </p>
                 </div>

@@ -280,7 +280,7 @@ export const ApparatusFormPage: React.FC = () => {
     e.preventDefault();
 
     if (!validate()) {
-      toast.error('Please fix the errors before submitting');
+      toast.error('Fix the highlighted fields, then save again');
       return;
     }
 
@@ -301,10 +301,10 @@ export const ApparatusFormPage: React.FC = () => {
 
       if (isEditing && id) {
         await apparatusService.updateApparatus(id, cleanedData);
-        toast.success('Apparatus updated successfully');
+        toast.success('Apparatus updated');
       } else {
         await apparatusService.createApparatus(cleanedData as ApparatusCreate);
-        toast.success('Apparatus created successfully');
+        toast.success('Apparatus added');
       }
 
       void navigate('/apparatus');
@@ -337,6 +337,7 @@ export const ApparatusFormPage: React.FC = () => {
             <div className="flex items-center space-x-4">
               <button
                 onClick={() => void navigate('/apparatus')}
+                aria-label="Back to apparatus"
                 className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-2 transition-colors"
               >
                 <ArrowLeft className="h-5 w-5" />
@@ -674,13 +675,13 @@ export const ApparatusFormPage: React.FC = () => {
                   })}
                   {(formData.crewPositions ?? []).length === 0 && (
                     <p className="border-theme-surface-border text-theme-text-muted rounded-lg border border-dashed px-3 py-2 text-sm">
-                      No crew seats configured. Add a seat to select a position backed by your department ranks.
+                      No crew seats yet. Select Add Seat to add one.
                     </p>
                   )}
                 </div>
                 <p className="text-theme-text-muted mt-1 text-xs">
-                  Select positions in riding order. Each option shows the configured ranks eligible to fill it. Add the
-                  same position more than once for repeated seats; these positions are imported into shifts.
+                  List seats in riding order. Each option shows the ranks that can fill it. Repeat a position for each
+                  seat of that kind. New shifts on this apparatus start with these seats.
                 </p>
               </div>
               <div>
@@ -886,7 +887,7 @@ export const ApparatusFormPage: React.FC = () => {
 
           {/* Important Dates */}
           <div className="card p-6">
-            <h2 className="text-theme-text-primary mb-6 font-bold">Important Dates</h2>
+            <h2 className="text-theme-text-primary mb-6 font-bold">Expiration Dates</h2>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
               <div>
                 <label className="text-theme-text-secondary mb-1 block text-sm">Registration Expiration</label>
@@ -1000,7 +1001,7 @@ export const ApparatusFormPage: React.FC = () => {
               ) : (
                 <>
                   <Save className="h-5 w-5" />
-                  <span>{isEditing ? 'Update Apparatus' : 'Create Apparatus'}</span>
+                  <span>{isEditing ? 'Save Changes' : 'Add Apparatus'}</span>
                 </>
               )}
             </button>

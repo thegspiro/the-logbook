@@ -321,7 +321,7 @@ export const ElectionDetailPage: React.FC = () => {
     try {
       const updated = await electionService.openElection(electionId);
       setElection(updated);
-      toast.success('Election opened successfully');
+      toast.success('Election opened');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to open election'));
     }
@@ -345,7 +345,7 @@ export const ElectionDetailPage: React.FC = () => {
       const updated = await electionService.closeElection(electionId);
       setElection(updated);
       setActiveTab('results');
-      toast.success('Election closed successfully');
+      toast.success('Election closed');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to close election'));
     }
@@ -620,11 +620,9 @@ export const ElectionDetailPage: React.FC = () => {
       setElection(response.election);
       setShowRollbackModal(false);
 
-      toast.success(
-        `Election rolled back successfully. ${response.notifications_sent} leadership members were notified.`
-      );
+      toast.success(`Election rolled back. ${response.notifications_sent} leadership members notified.`);
     } catch (err: unknown) {
-      setRollbackError(getErrorMessage(err, 'Failed to rollback election'));
+      setRollbackError(getErrorMessage(err, 'Failed to roll back election'));
     } finally {
       setIsRollingBack(false);
     }
@@ -662,7 +660,7 @@ export const ElectionDetailPage: React.FC = () => {
       }
 
       if (!response.success && response.recipients_count === 0 && response.failed_count === 0) {
-        toast.error(response.message || 'No eligible recipients found. Verify election settings.');
+        toast.error(response.message || "No eligible voters to send to. Check the election's eligibility settings.");
         return;
       }
 
@@ -698,7 +696,7 @@ export const ElectionDetailPage: React.FC = () => {
       setNonVoterCount(data.count);
 
       if (data.count === 0) {
-        toast.success('All eligible voters have already voted!');
+        toast.success('All eligible voters have already voted.');
         return;
       }
 
@@ -816,7 +814,7 @@ export const ElectionDetailPage: React.FC = () => {
     try {
       setIsVoidingVote(true);
       await electionService.softDeleteVote(electionId, voidVoteId.trim(), voidVoteReason.trim());
-      toast.success('Vote voided successfully');
+      toast.success('Vote voided');
       setVoidVoteId('');
       setVoidVoteReason('');
       // Refresh forensics if open
@@ -1067,8 +1065,8 @@ export const ElectionDetailPage: React.FC = () => {
                   {lastSkippedDetails.length} member(s) skipped when sending ballots
                 </h3>
                 <p className="mt-1 mb-2 text-xs text-amber-600 dark:text-amber-400">
-                  These members were not sent a ballot because they did not meet the eligibility requirements for any
-                  ballot item. You can use voter overrides to grant exceptions.
+                  These members were not sent a ballot, for the reason shown. To let one of them vote, add a voter
+                  override on the Overrides tab.
                 </p>
                 <ul className="space-y-1 text-sm text-amber-700 dark:text-amber-300">
                   {lastSkippedDetails.map((d, i) => (
@@ -1374,7 +1372,7 @@ export const ElectionDetailPage: React.FC = () => {
                       onClick={() => setShowRollbackModal(true)}
                       className="rounded-md bg-orange-700 px-4 py-2 text-sm text-white hover:bg-orange-800"
                     >
-                      Rollback
+                      Roll Back
                     </button>
                   )}
 
@@ -1570,7 +1568,7 @@ export const ElectionDetailPage: React.FC = () => {
                           <p className="text-theme-text-muted py-2 text-sm">Loading pending applications...</p>
                         ) : pendingPackages.length === 0 ? (
                           <p className="text-theme-text-muted py-2 text-sm">
-                            No applications are ready for ballot assignment.
+                            No applications are ready to add to the ballot.
                           </p>
                         ) : (
                           <div className="space-y-2">
@@ -1822,7 +1820,7 @@ export const ElectionDetailPage: React.FC = () => {
                 <div className="border-theme-surface-border border-t pt-4">
                   <h3 className="text-md text-theme-text-primary mb-3 font-semibold">Void a Vote</h3>
                   <p className="text-theme-text-muted mb-3 text-sm">
-                    Soft-deletes a vote with full audit trail. The vote is preserved but excluded from results.
+                    Removes a vote from the results. The vote record is kept, and the void is logged in the audit trail.
                   </p>
                   <div className="flex flex-col gap-3 sm:flex-row">
                     <input
@@ -1896,7 +1894,7 @@ export const ElectionDetailPage: React.FC = () => {
                                   scope="col"
                                   className="text-theme-text-muted px-3 py-2 text-left text-xs font-medium"
                                 >
-                                  Deleted At
+                                  Voided At
                                 </th>
                               </tr>
                             </thead>

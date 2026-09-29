@@ -221,7 +221,9 @@ class TestInventoryChangeDate:
         db.commit = AsyncMock()
         service = InventoryNotificationService(db)
         service._get_user = AsyncMock(
-            return_value=SimpleNamespace(first_name="Dana", email="d@example.org")
+            return_value=SimpleNamespace(
+                first_name="Dana", email="d@example.org", notification_preferences=None
+            )
         )
         service._get_organization = AsyncMock(return_value=_org("America/New_York"))
         send = AsyncMock(return_value=True)

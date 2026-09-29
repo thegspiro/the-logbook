@@ -30,6 +30,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Megaphone,
+  PenLine,
   Pin,
   Plus,
   Share,
@@ -56,6 +57,8 @@ import { schedulingService } from '../modules/scheduling/services/api';
 import { memberSignupClosedReason } from '../modules/scheduling/utils/shiftBoard';
 import { useSignupWindow } from '../modules/scheduling/hooks/useSignupWindow';
 import { adminHoursEntryService } from '../modules/admin-hours/services/api';
+import { signOffService } from '../modules/prospective-members/services/api';
+import type { PendingSignOff } from '../modules/prospective-members/types';
 import { endOfReportingDayUTC, startOfReportingDayUTC } from '../modules/admin-hours/utils/reportingRange';
 import { getErrorMessage } from '../utils/errorHandling';
 import { getProgressBarColor, getEventTypeLabel, getRSVPStatusLabel, getRSVPStatusColor } from '../utils/eventHelpers';
@@ -82,6 +85,7 @@ import type { EventListItem } from '../types/event';
 import { dashboardService } from '../services/api';
 import { positionLabel } from '../modules/scheduling/utils/positionLabels';
 import { useNotificationCountStore } from '../hooks/useNotificationCount';
+import { describeStack, groupNotificationsIntoStacks, stackUnreadCount } from '../utils/notificationStacks';
 
 /**
  * Main Dashboard Component — "station board"
@@ -277,6 +281,9 @@ const Dashboard: React.FC = () => {
 
   // Notifications
   const [notifications, setNotifications] = useState<NotificationLogRecord[]>([]);
+  // Per-category unread totals, so a stacked feed row can count past the ten
+  // rows this card loads.
+  const [notificationCategoryCounts, setNotificationCategoryCounts] = useState<Record<string, number>>({});
   const unreadCount = useNotificationCountStore((s) => s.unreadCount);
   const decrementUnread = useNotificationCountStore((s) => s.decrement);
   const [loadingNotifications, setLoadingNotifications] = useState(true);
@@ -328,6 +335,7 @@ const Dashboard: React.FC = () => {
   // fails so the verdict states a narrower scope rather than implying
   // screenings were checked and passed.
   const [myScreenings, setMyScreenings] = useState<MyComplianceSummary | null>(null);
+  const [mySignOffs, setMySignOffs] = useState<PendingSignOff[]>([]);
 
   // Department Messages
   const [deptMessages, setDeptMessages] = useState<InboxMessage[]>([]);
@@ -464,6 +472,7 @@ const Dashboard: React.FC = () => {
     void runRetry('openShifts', () => loadOpenShifts());
     void runRetry('seats', () => loadMySeats());
     void runRetry('screenings', () => loadMyScreenings());
+    void runRetry('signOffs', () => loadMySignOffs());
     void runRetry('training', () => loadTrainingProgress());
     void runRetry('equipment', () => loadMyEquipment());
     void runRetry('hours', () => loadHours());
@@ -618,6 +627,13 @@ const Dashboard: React.FC = () => {
       setNotificationsError(true);
     } finally {
       if (!isRetry) setLoadingNotifications(false);
+    }
+    try {
+      const counts = await notificationsService.getMyUnreadCountsByCategory();
+      setNotificationCategoryCounts(counts.categories || {});
+    } catch {
+      // A stacked row falls back to counting the rows loaded here.
+      setNotificationCategoryCounts({});
     }
   };
 
@@ -907,6 +923,24 @@ const Dashboard: React.FC = () => {
       setSeatsError(true);
       // Seat eligibility is non-critical; the verdict falls back to
       // certifications alone and says so.
+    }
+  };
+
+  // The officers a Multi-Signer Approval stage names (the Chief, the
+  // President) rarely use the applicant pages, so this is where they learn a
+  // signature is waiting on them — and conversion waits until they sign
+  // (workflow review W16-1). The list only ever holds stages asking for a role
+  // the member holds. A failure shows nothing: the Sign-offs page itself says
+  // when it cannot load.
+  const loadMySignOffs = async () => {
+    if (!isModuleOn('prospective_members')) {
+      setMySignOffs([]);
+      return;
+    }
+    try {
+      setMySignOffs(await signOffService.listMine());
+    } catch {
+      setMySignOffs([]);
     }
   };
 
@@ -1261,6 +1295,21 @@ const Dashboard: React.FC = () => {
       busy: acknowledgingId === msg.id,
     });
   }
+  if (mySignOffs.length > 0) {
+    const first = mySignOffs[0];
+    needsYouItems.push({
+      id: 'sign-offs',
+      icon: PenLine,
+      title:
+        mySignOffs.length === 1 && first
+          ? `${first.first_name} ${first.last_name} is waiting on your sign-off`
+          : `${mySignOffs.length} applicants are waiting on your sign-off`,
+      detail: [...new Set(mySignOffs.map((s) => s.step_name))].join(', '),
+      actionLabel: 'Review',
+      onAction: () => void navigate('/prospective-members/sign-offs'),
+      tone: needsYouItems.length === 0 ? 'primary' : 'warning',
+    });
+  }
   // Department-wide action-item and setup totals belong in Organization. They
   // must not make the personal "Needs you" list look like an individual inbox.
 
@@ -1293,7 +1342,26 @@ const Dashboard: React.FC = () => {
       });
     }
 
-    for (const notif of notifications) {
+    // A run of same-category notifications — a weekend's attendance
+    // validations, one follow-up per flagged report — becomes one row that
+    // opens the inbox, where the stack expands. Otherwise five of them fill
+    // every row this card shows.
+    for (const entry of groupNotificationsIntoStacks(notifications)) {
+      if (entry.kind === 'stack') {
+        const newest = entry.notifications[0];
+        const count = stackUnreadCount(entry.notifications, notificationCategoryCounts[entry.category]);
+        entries.push({
+          key: `notif-stack-${entry.category}`,
+          title: describeStack(entry.category, count),
+          body: newest ? `Latest: ${newest.subject || 'Notification'}` : '',
+          meta: newest ? formatRelativeTime(newest.sent_at || newest.created_at) : '',
+          sortAt: newest?.sent_at ? new Date(newest.sent_at).getTime() : 0,
+          unread: true,
+          onClick: () => void navigate('/notifications?tab=inbox'),
+        });
+        continue;
+      }
+      const notif = entry.notification;
       entries.push({
         key: `notif-${notif.id}`,
         title: notif.subject || 'Notification',
@@ -1321,7 +1389,7 @@ const Dashboard: React.FC = () => {
     const standing = (entry: FeedEntry) => (entry.message?.is_pinned ? 2 : entry.message?.is_persistent ? 1 : 0);
     return entries.sort((a, b) => standing(b) - standing(a) || b.sortAt - a.sortAt);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deptMessages, notifications, pendingAcknowledgements, tz]);
+  }, [deptMessages, notifications, notificationCategoryCounts, pendingAcknowledgements, tz]);
 
   const feedUnread = unreadCount + deptMsgUnread;
 
@@ -1465,6 +1533,7 @@ const Dashboard: React.FC = () => {
             runRetry('openShifts', () => loadOpenShifts(true)),
             runRetry('seats', () => loadMySeats(true)),
             runRetry('screenings', () => loadMyScreenings(true)),
+            runRetry('signOffs', () => loadMySignOffs()),
             runRetry('training', () => loadTrainingProgress(true)),
             runRetry('equipment', () => loadMyEquipment(true)),
           ]),
@@ -1789,7 +1858,7 @@ const Dashboard: React.FC = () => {
                   </span>
                   <span className="min-w-0">
                     <span className="block text-base font-bold">Log Training</span>
-                    <span className="mt-0.5 block truncate text-[13px] text-red-100">Course, hours, done</span>
+                    <span className="mt-0.5 block truncate text-[13px] text-red-100">Record a course or hours</span>
                   </span>
                 </button>
 

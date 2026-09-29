@@ -96,9 +96,8 @@ export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({ record
         <form onSubmit={(e) => void handleSubmit(e)} className="max-h-[70dvh] space-y-4 overflow-y-auto p-6">
           {!record && (
             <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs font-medium text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
-              Not linked to a member or prospect — this dialog has no way to choose who the screening is for, so the
-              record it creates will not count toward any member&apos;s or prospect&apos;s compliance status, and
-              won&apos;t appear on their screening history.
+              Not linked to a member or prospect. You can&apos;t choose who a screening is for here, so this record
+              won&apos;t count toward anyone&apos;s compliance or appear in their screening history.
             </p>
           )}
           {!record && (
@@ -257,7 +256,7 @@ export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({ record
               disabled={isSaving}
               className="rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:opacity-50"
             >
-              {isSaving ? 'Saving...' : record ? 'Update' : 'Create'}
+              {isSaving ? 'Saving...' : record ? 'Save Changes' : 'Add Record'}
             </button>
           </div>
         </form>

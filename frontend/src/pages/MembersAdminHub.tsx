@@ -96,7 +96,7 @@ export const MembersAdminHub: React.FC = () => {
     <AdminHubFrame<AdminTab>
       moduleKey="members"
       title="Members Administration"
-      description="Manage members, roles, and member onboarding"
+      description="Manage members and their roles, and add new members"
       actions={actions}
       primaryAction={
         canCreate
@@ -133,8 +133,8 @@ export const MembersAdminHub: React.FC = () => {
             <section className="card p-4">
               <h3 className="text-theme-text-primary text-sm font-semibold">Roster settings</h3>
               <p className="text-theme-text-muted mt-1 text-xs">
-                Moved here from Settings. Changing them needs a settings grant, which is separate from managing the
-                roster.
+                Moved here from Settings. Some sections need a separate permission, and the settings page shows only the
+                ones you can change.
               </p>
               <ul className="mt-3 space-y-2">
                 {MEMBERS_SETTINGS_SECTIONS.map((entry) => (

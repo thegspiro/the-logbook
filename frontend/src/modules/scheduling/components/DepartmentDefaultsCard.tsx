@@ -2,7 +2,11 @@
  * Department Defaults Card
  *
  * Configures department-level scheduling defaults: shift duration,
- * minimum staffing, overtime threshold, and assignment confirmation.
+ * minimum staffing and overtime threshold.
+ *
+ * No control for `requireAssignmentConfirmation`: the backend stores it but
+ * nothing acts on it, so a switch would claim an effect it does not have
+ * (CLAUDE.md pitfall #19). The value still round-trips unchanged on save.
  */
 
 import React, { useId } from 'react';
@@ -85,22 +89,6 @@ export const DepartmentDefaultsCard: React.FC<DepartmentDefaultsCardProps> = ({ 
             min="1"
             max="168"
           />
-        </div>
-        <div className="flex items-center">
-          <label className="mobile-touch-row text-theme-text-secondary flex cursor-pointer items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={settings.requireAssignmentConfirmation}
-              onChange={(e) =>
-                onSettingsChange((prev) => ({
-                  ...prev,
-                  requireAssignmentConfirmation: e.target.checked,
-                }))
-              }
-              className="border-theme-input-border rounded-sm"
-            />
-            Require assignment confirmation
-          </label>
         </div>
       </div>
     </div>

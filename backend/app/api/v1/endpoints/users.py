@@ -4,6 +4,7 @@ Users API Endpoints
 Endpoints for user management and listing.
 """
 
+import copy
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
@@ -44,7 +45,7 @@ from app.models.audit import AuditLog
 from app.models.document import Document
 from app.models.inventory import ItemAssignment, ItemIssuance
 from app.models.training import TrainingRecord as TrainingRecordModel
-from app.models.user import Role, User, UserStatus, user_roles
+from app.models.user import Organization, Role, User, UserStatus, user_roles
 from app.schemas.role import UserRoleAssignment, UserRoleResponse
 from app.schemas.user import (
     AdminPasswordReset,
@@ -52,7 +53,8 @@ from app.schemas.user import (
     ContactInfoUpdate,
     DeletionImpactResponse,
     MemberAuditLogEntry,
-    NotificationPreferences,
+    MemberEmailChoice,
+    MemberEmailChoicesResponse,
     ProfileVisibility,
     UserListResponse,
     UserProfileResponse,
@@ -64,6 +66,14 @@ from app.services.admin_continuity_service import (
     LastAdministratorError,
     assert_not_last_administrator,
     assert_positions_retain_administrator,
+)
+from app.services.email_policy import (
+    EMAIL_POLICIES,
+    EmailAudience,
+    clean_email_kind_choices,
+    department_required_kinds,
+    is_required,
+    member_choice,
 )
 from app.services.email_service import welcome_email_can_send
 from app.services.operational_rank_service import (
@@ -86,6 +96,9 @@ from app.utils.membership import (
 from app.utils.security_notifications import notify_security_event
 
 router = APIRouter()
+
+# Preference keys no sender reads any more; dropped on the member's next save.
+_RETIRED_PREFERENCE_KEYS = frozenset({"email"})
 
 
 async def _rate_limit_admin_reset(request: Request) -> None:
@@ -210,17 +223,14 @@ async def create_member(
 
     # Check if membership number already exists in the organization
     if user_data.membership_number:
-        result = await db.execute(
-            select(User)
-            .where(User.membership_number == user_data.membership_number)
-            .where(User.organization_id == str(current_user.organization_id))
-            .where(User.deleted_at.is_(None))
-        )
-        if result.scalar_one_or_none():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="A member with this membership number already exists",
+        try:
+            await OrganizationService(db).ensure_membership_number_available(
+                current_user.organization_id, user_data.membership_number
             )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+            ) from e
 
     # Check if email already exists (including archived members)
     result = await db.execute(
@@ -1499,21 +1509,30 @@ async def update_contact_info(
         # silently switched the member's other preferences back on, and the
         # 200 made it look like the save had done exactly what was asked.
         # An omitted key means "leave this alone" (CLAUDE.md pitfall 1b).
-        known_keys = set(NotificationPreferences.model_fields)
+        # Deep-copied: email_kinds and scheduling_dashboard_widgets are nested,
+        # and mutating a shared reference would leave SQLAlchemy seeing no
+        # change (pitfall 12).
         merged = {
             key: value
-            for key, value in (user.notification_preferences or {}).items()
-            # Drops keys no sender reads any more, so a blob that predates
-            # migration 20260816_0007 heals on its next save instead of
-            # carrying a dead `email` flag forever.
-            if key in known_keys
+            for key, value in copy.deepcopy(user.notification_preferences or {}).items()
+            # Drops only the retired `email` flag, so a blob that predates
+            # migration 20260816_0007 heals on its next save. This used to keep
+            # only NotificationPreferences' own fields, which also discarded
+            # everything else stored here — the scheduling dashboard layout
+            # among it — every time a member saved their preferences.
+            if key not in _RETIRED_PREFERENCE_KEYS
         }
-        merged.update(
-            contact_update.notification_preferences.model_dump(exclude_unset=True)
+        incoming = contact_update.notification_preferences.model_dump(
+            exclude_unset=True
         )
-        # Every value is a flat bool, so this rebuilt dict is a genuinely new
-        # value and SQLAlchemy issues the UPDATE. Pitfall 12 (shallow copies
-        # sharing nested references) does not arise — there is no nesting.
+        if "email_kinds" in incoming:
+            # Merged per kind, so a screen that sends one choice does not
+            # erase the others.
+            merged["email_kinds"] = {
+                **clean_email_kind_choices(merged.get("email_kinds")),
+                **clean_email_kind_choices(incoming.pop("email_kinds")),
+            }
+        merged.update(incoming)
         user.notification_preferences = merged
 
     await db.commit()
@@ -1632,20 +1651,25 @@ async def update_user_profile(
     # Update only provided fields
     update_data = profile_update.model_dump(exclude_unset=True)
 
-    # Check membership_number uniqueness within the organization
-    if "membership_number" in update_data and update_data["membership_number"]:
-        existing = await db.execute(
-            select(User)
-            .where(User.membership_number == update_data["membership_number"])
-            .where(User.organization_id == str(current_user.organization_id))
-            .where(User.id != str(user_id))
-            .where(User.deleted_at.is_(None))
-        )
-        if existing.scalar_one_or_none():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="A member with this membership number already exists",
+    # Check membership_number uniqueness within the organization. Only a change
+    # is checked: a member already holding a number that is now reserved (the
+    # generator could reissue a former member's number before reservations
+    # existed) must still be able to save the rest of their profile.
+    if (
+        "membership_number" in update_data
+        and update_data["membership_number"]
+        and update_data["membership_number"] != user.membership_number
+    ):
+        try:
+            await OrganizationService(db).ensure_membership_number_available(
+                current_user.organization_id,
+                update_data["membership_number"],
+                exclude_user_id=str(user_id),
             )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+            ) from e
 
     # Eligibility and assignment fields are restricted to leadership,
     # the secretary, or the membership coordinator. In particular, hire_date
@@ -2768,6 +2792,58 @@ async def get_my_consents(
 # route must be declared *below* these two: FastAPI matches in declaration
 # order and parses ``user_id: UUID`` only after choosing the route, so a
 # by-id route declared above would capture ``me`` and answer 422.
+def _holds_officer_permissions(user: User) -> bool:
+    """Whether *user* holds any management grant, which is what makes them a
+    possible recipient of the officer duty emails. Deliberately broad: showing
+    an officer a toggle for an email their role never produces costs a line
+    on a settings screen, while hiding one they do receive leaves them no
+    way to turn it off."""
+    permissions = _collect_user_permissions(user)
+    return any(
+        permission == "*" or permission.endswith((".manage", ".*"))
+        for permission in permissions
+    )
+
+
+@router.get("/me/email-choices", response_model=MemberEmailChoicesResponse)
+async def get_my_email_choices(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    The optional emails the calling member can turn off, with their current
+    setting for each. Officer duty emails are listed only to members who
+    hold a management permission. An optional email the department has made
+    required is listed under always_sent instead: the member receives it
+    whatever they chose, so offering the switch would mislead them.
+    """
+    organization = await db.get(Organization, str(current_user.organization_id))
+    department_required = department_required_kinds(organization)
+    prefs = current_user.notification_preferences or {}
+    show_officer = _holds_officer_permissions(current_user)
+    return MemberEmailChoicesResponse(
+        email_notifications=prefs.get("email_notifications", True) is not False,
+        choices=[
+            MemberEmailChoice(
+                key=kind.value,
+                label=policy.label,
+                audience=policy.audience.value,
+                includes=list(policy.includes),
+                enabled=member_choice(prefs, kind),
+            )
+            for kind, policy in EMAIL_POLICIES.items()
+            if not is_required(kind, department_required)
+            and (show_officer or policy.audience is not EmailAudience.OFFICERS)
+        ],
+        always_sent=[
+            policy.label
+            for kind, policy in EMAIL_POLICIES.items()
+            if is_required(kind, department_required)
+            and (show_officer or policy.audience is not EmailAudience.OFFICERS)
+        ],
+    )
+
+
 @router.get("/me/profile-visibility", response_model=ProfileVisibility)
 async def get_my_profile_visibility(
     current_user: User = Depends(get_current_user),

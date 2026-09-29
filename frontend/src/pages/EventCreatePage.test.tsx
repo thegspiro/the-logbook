@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
@@ -19,6 +19,7 @@ function makeApiError(message: string, status = 400) {
 vi.mock('../services/api', () => ({
   eventService: {
     createEvent: vi.fn(),
+    createRecurringEvent: vi.fn(),
     getEvents: vi.fn().mockResolvedValue([]),
     getTemplates: vi.fn().mockResolvedValue([]),
     getVisibleEventTypes: vi.fn().mockResolvedValue([]),
@@ -33,6 +34,16 @@ vi.mock('../services/api', () => ({
   },
   locationsService: {
     getLocations: vi.fn().mockResolvedValue([]),
+  },
+  // Behind EventForm's Training details section.
+  trainingService: {
+    getCourses: vi.fn(),
+    getCategories: vi.fn(),
+    getRequirements: vi.fn(),
+  },
+  trainingProgramService: {
+    getPrograms: vi.fn(),
+    getProgramPhases: vi.fn(),
   },
 }));
 
@@ -165,6 +176,66 @@ describe('EventCreatePage', () => {
     });
   });
 
+  describe('Training details', () => {
+    // Pitfall #28: state every mock this block depends on, reset first.
+    beforeEach(() => {
+      const { trainingService, trainingProgramService } = apiModule;
+      vi.mocked(trainingService.getCourses).mockReset();
+      vi.mocked(trainingService.getCourses).mockResolvedValue([]);
+      vi.mocked(trainingService.getCategories).mockReset();
+      vi.mocked(trainingService.getCategories).mockResolvedValue([]);
+      vi.mocked(trainingService.getRequirements).mockReset();
+      vi.mocked(trainingService.getRequirements).mockResolvedValue([]);
+      vi.mocked(trainingProgramService.getPrograms).mockReset();
+      vi.mocked(trainingProgramService.getPrograms).mockResolvedValue([]);
+      vi.mocked(trainingProgramService.getProgramPhases).mockReset();
+      vi.mocked(trainingProgramService.getProgramPhases).mockResolvedValue([]);
+      vi.mocked(eventService.createEvent).mockReset();
+      vi.mocked(eventService.createEvent).mockResolvedValue({ id: 'evt-new' } as unknown as Event);
+      vi.mocked(eventService.createRecurringEvent).mockReset();
+      vi.mocked(eventService.createRecurringEvent).mockResolvedValue([{ id: 'evt-a' }] as unknown as Event[]);
+    });
+
+    const fillTrainingEvent = async (user: ReturnType<typeof userEvent.setup>) => {
+      await user.type(screen.getByLabelText(/title/i), 'Ladder drill');
+      await user.selectOptions(screen.getByLabelText(/event type/i), 'training');
+      await user.selectOptions(screen.getByLabelText('Training Type'), 'orientation');
+      fireEvent.change(screen.getByLabelText(/start date & time/i), { target: { value: '2026-04-01' } });
+      fireEvent.change(screen.getByLabelText(/end date & time/i), { target: { value: '2026-04-02' } });
+    };
+
+    it('passes the picked details through on a single event', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<EventCreatePage />);
+
+      await fillTrainingEvent(user);
+      await user.click(screen.getByRole('button', { name: /create event/i }));
+
+      await waitFor(() => {
+        expect(eventService.createEvent).toHaveBeenCalledWith(
+          expect.objectContaining({ event_type: 'training', training_details: { training_type: 'orientation' } })
+        );
+      });
+    });
+
+    it('passes the picked details through on a recurring series', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<EventCreatePage />);
+
+      await fillTrainingEvent(user);
+      await user.click(screen.getByLabelText('Make this a recurring event'));
+      fireEvent.change(screen.getByLabelText('Series end date'), { target: { value: '2026-06-30' } });
+      await user.click(screen.getByRole('button', { name: /create event/i }));
+
+      await waitFor(() => {
+        expect(eventService.createRecurringEvent).toHaveBeenCalledWith(
+          expect.objectContaining({ event_type: 'training', training_details: { training_type: 'orientation' } })
+        );
+      });
+      expect(eventService.createEvent).not.toHaveBeenCalled();
+    });
+  });
+
   describe('Cancel Action', () => {
     it('should navigate back to events on cancel', async () => {
       const user = userEvent.setup();
@@ -175,5 +246,65 @@ describe('EventCreatePage', () => {
 
       expect(mockNavigate).toHaveBeenCalledWith('/events');
     });
+  });
+});
+
+describe('EventCreatePage starting from a template (workflow review W21)', () => {
+  const { eventService } = apiModule;
+  const template = {
+    id: 'tpl-1',
+    name: 'Monday Drill',
+    event_type: 'training',
+    default_title: 'Monday Night Drill',
+    default_duration_minutes: 120,
+    is_active: true,
+    requires_rsvp: false,
+    is_mandatory: false,
+    allow_guests: false,
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    // 9:48 PM on 28 September in New York; 01:48 on the 29th in UTC.
+    vi.setSystemTime(new Date('2026-09-29T01:48:00Z'));
+    vi.mocked(eventService.getTemplates).mockReset();
+    vi.mocked(eventService.getTemplates).mockResolvedValue([template] as never);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.mocked(eventService.getTemplates).mockReset();
+    vi.mocked(eventService.getTemplates).mockResolvedValue([]);
+  });
+
+  const pickTemplate = async () => {
+    renderWithRouter(<EventCreatePage />);
+    const picker = await screen.findByRole('combobox', { name: 'Start from a template' });
+    await screen.findByRole('option', { name: 'Monday Drill' });
+    fireEvent.change(picker, { target: { value: 'tpl-1' } });
+  };
+
+  // The default start was the next hour on the browser's clock, not the
+  // department's: in a browser whose offset differs by a part-hour (India,
+  // UTC+5:30) it landed on the half hour. Run under TZ=Asia/Kolkata to see it.
+  it("starts at the next hour on the department's clock", async () => {
+    await pickTemplate();
+
+    await waitFor(() => expect(screen.getByLabelText('Start Date & Time *')).toHaveValue('2026-09-28'));
+    expect(screen.getByLabelText('Start time hour')).toHaveDisplayValue('10');
+    expect(screen.getByLabelText('Start time minute')).toHaveDisplayValue('00');
+    expect(screen.getByLabelText('Start time AM/PM')).toHaveDisplayValue('PM');
+  });
+
+  // Moving the start left the end on the old day, before the new start.
+  it('carries the end with the start, keeping the length', async () => {
+    await pickTemplate();
+    await waitFor(() => expect(screen.getByLabelText('Start Date & Time *')).toHaveValue('2026-09-28'));
+
+    fireEvent.change(screen.getByLabelText('Start Date & Time *'), { target: { value: '2026-10-12' } });
+
+    expect(screen.getByLabelText('End Date & Time *')).toHaveValue('2026-10-13');
+    expect(screen.getByLabelText('End time hour')).toHaveDisplayValue('12');
+    expect(screen.getByLabelText('End time AM/PM')).toHaveDisplayValue('AM');
   });
 });

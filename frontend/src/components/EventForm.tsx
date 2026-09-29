@@ -33,15 +33,24 @@ import type {
   RSVPStatus,
   EventAttachment,
 } from '../types/event';
+import { Link as RouterLink } from 'react-router';
 import { eventService, locationsService } from '../services/api';
 import { EventType as EventTypeEnum, RSVPStatus as RSVPStatusEnum, CheckInWindowType } from '../constants/enums';
 import type { Location } from '../services/api';
 import { getEventTypeLabel } from '../utils/eventHelpers';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
+import { useAuthStore } from '../stores/authStore';
 import { formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 import { Collapsible } from './ux/Collapsible';
 import DateTimeQuarterHour from './ux/DateTimeQuarterHour';
+import { TrainingDetailsFields } from './training/TrainingDetailsFields';
+import {
+  EMPTY_TRAINING_DETAILS,
+  hasExplicitTrainingDetails,
+  toTrainingDetailsPayload,
+  type TrainingDetailsValue,
+} from './training/trainingDetailsValue';
 
 export interface ConflictEvent {
   id: string;
@@ -193,6 +202,9 @@ export const EventForm: React.FC<EventFormProps> = ({
   editingEventId,
 }) => {
   const tz = useTimezone();
+  // Create Training Session lives in the Training admin hub, which only a
+  // training.manage holder can open; anyone else is pointed at who can.
+  const canCreateTrainingSession = useAuthStore((state) => state.checkPermission('training.manage'));
 
   // Convert any ISO date strings from the API into datetime-local format
   // in the user's timezone so the inputs display correctly.
@@ -244,6 +256,7 @@ export const EventForm: React.FC<EventFormProps> = ({
     initialRecurrence?.recurrence_exceptions || []
   );
   const [newExceptionDate, setNewExceptionDate] = useState('');
+  const [trainingDetails, setTrainingDetails] = useState<TrainingDetailsValue>(EMPTY_TRAINING_DETAILS);
   const checkInLeadTimeEdited = useRef(initialData?.check_in_minutes_before !== undefined);
   const reminderAudienceEdited = useRef(initialData?.reminder_target !== undefined);
 
@@ -422,10 +435,19 @@ export const EventForm: React.FC<EventFormProps> = ({
 
   const handleStartDateChange = (startDate: string) => {
     const changes: Partial<EventCreate> = { start_datetime: startDate };
-    // Auto-set end date to 2 hours later if not already set
     if (!formData.end_datetime && startDate) {
+      // Auto-set end date to 2 hours later if not already set
       const startUtc = localToUTC(startDate, tz);
       const end = new Date(new Date(startUtc).getTime() + 2 * 60 * 60 * 1000);
+      changes.end_datetime = formatForDateTimeInput(end, tz);
+    } else if (formData.start_datetime && formData.end_datetime && startDate) {
+      // Moving the start carries the end with it, keeping the event's length.
+      // Left behind, the end stayed on the old day — before a start moved
+      // later, which a template's pre-filled times made the usual case
+      // (workflow review W21).
+      const shiftMs =
+        new Date(localToUTC(startDate, tz)).getTime() - new Date(localToUTC(formData.start_datetime, tz)).getTime();
+      const end = new Date(new Date(localToUTC(formData.end_datetime, tz)).getTime() + shiftMs);
       changes.end_datetime = formatForDateTimeInput(end, tz);
     }
     update(changes);
@@ -433,7 +455,7 @@ export const EventForm: React.FC<EventFormProps> = ({
 
   const setDuration = (hours: number) => {
     if (!formData.start_datetime) {
-      setError('Please set a start date first');
+      setError('Set a start date first');
       return;
     }
     const startUtc = localToUTC(formData.start_datetime, tz);
@@ -510,6 +532,13 @@ export const EventForm: React.FC<EventFormProps> = ({
   // no deadline (a single fixed deadline has no meaning across a series).
   const rsvpDeadlineRequired = formData.requires_rsvp && !editingEventId && !(isRecurring && onSubmitRecurring);
 
+  // Training details are picked only while creating: an existing event's are
+  // edited on its detail page, where the attendance lock can be checked. The
+  // backend refuses them on a rolling series, whose occurrences are generated
+  // later by a task that has no details to attach.
+  const showsTrainingDetails = formData.event_type === EventTypeEnum.TRAINING && !editingEventId;
+  const submitsRollingSeries = isRecurring && Boolean(onSubmitRecurring) && isRolling;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -539,6 +568,13 @@ export const EventForm: React.FC<EventFormProps> = ({
 
     // Clean up data before submit
     const submitData = { ...formData };
+
+    // Only an explicit pick attaches a training session; an untouched section
+    // leaves the event to be credited under its title as Continuing Education.
+    delete submitData.training_details;
+    if (showsTrainingDetails && !submitsRollingSeries && hasExplicitTrainingDetails(trainingDetails)) {
+      submitData.training_details = toTrainingDetailsPayload(trainingDetails);
+    }
 
     // Clear location fields based on mode
     if (locationMode === 'select') {
@@ -650,7 +686,7 @@ export const EventForm: React.FC<EventFormProps> = ({
             <button
               type="button"
               onClick={() => insertMarkdown('bold')}
-              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded p-1.5 transition-colors"
+              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover touch-target-phone rounded p-1.5 transition-colors"
               title="Bold (**text**)"
               aria-label="Insert bold text"
             >
@@ -659,7 +695,7 @@ export const EventForm: React.FC<EventFormProps> = ({
             <button
               type="button"
               onClick={() => insertMarkdown('italic')}
-              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded p-1.5 transition-colors"
+              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover touch-target-phone rounded p-1.5 transition-colors"
               title="Italic (*text*)"
               aria-label="Insert italic text"
             >
@@ -668,7 +704,7 @@ export const EventForm: React.FC<EventFormProps> = ({
             <button
               type="button"
               onClick={() => insertMarkdown('list')}
-              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded p-1.5 transition-colors"
+              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover touch-target-phone rounded p-1.5 transition-colors"
               title="Bullet list (- item)"
               aria-label="Insert bullet list"
             >
@@ -677,7 +713,7 @@ export const EventForm: React.FC<EventFormProps> = ({
             <button
               type="button"
               onClick={() => insertMarkdown('link')}
-              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded p-1.5 transition-colors"
+              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover touch-target-phone rounded p-1.5 transition-colors"
               title="Link ([text](url))"
               aria-label="Insert link"
             >
@@ -725,12 +761,10 @@ export const EventForm: React.FC<EventFormProps> = ({
               </optgroup>
             )}
           </select>
-          {formData.event_type === EventTypeEnum.TRAINING && (
-            <div className="mt-2 rounded-lg border border-purple-500/30 bg-purple-500/10 p-3">
-              <p className="text-sm text-purple-700 dark:text-purple-300">
-                For training events with course tracking, use "Create Training Session" instead.
-              </p>
-            </div>
+          {formData.event_type === EventTypeEnum.TRAINING && editingEventId && (
+            <p className="text-theme-text-muted mt-2 text-sm">
+              Training details are edited on the event page&apos;s Requirements &amp; Programs card.
+            </p>
           )}
           {/* A recruitment event only reaches the prospective-members pipeline
               through guest sign-in, and those two switches live in Check-In,
@@ -746,8 +780,8 @@ export const EventForm: React.FC<EventFormProps> = ({
               ) : (
                 <>
                   <p className="text-sm text-teal-700 dark:text-teal-300">
-                    Prospective members reach the pipeline by signing in as guests. Turn that on to have attendees of
-                    this event opened as applicants.
+                    Attendees join the prospective members pipeline by signing in as guests. Turn on guest sign-in to
+                    add this event&apos;s guests to the pipeline.
                   </p>
                   <button
                     type="button"
@@ -766,6 +800,50 @@ export const EventForm: React.FC<EventFormProps> = ({
             </div>
           )}
         </div>
+
+        {showsTrainingDetails && (
+          <div
+            role="group"
+            aria-labelledby="training-details-heading"
+            className="border-theme-surface-border space-y-4 rounded-lg border p-4"
+          >
+            <div>
+              <h3 id="training-details-heading" className="text-theme-text-primary text-base font-semibold">
+                Training details (optional)
+              </h3>
+              <p className="text-theme-text-secondary mt-1 text-sm">
+                Attendance is credited to members&apos; training records when attendance is finalized. Without details
+                it is filed under the event title as Continuing Education.
+              </p>
+              <p className="text-theme-text-muted mt-1 text-sm">
+                {canCreateTrainingSession ? (
+                  <>
+                    Use{' '}
+                    <RouterLink
+                      to="/training/admin?page=records&tab=sessions"
+                      className="font-medium text-red-700 underline hover:text-red-800 dark:text-red-400"
+                    >
+                      Create Training Session
+                    </RouterLink>{' '}
+                    for instructor sign-off, certification or an assigned instructor.
+                  </>
+                ) : (
+                  'For instructor sign-off, certification or an assigned instructor, a training officer uses Create Training Session instead.'
+                )}
+              </p>
+            </div>
+            {submitsRollingSeries && (
+              <p className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
+                Training details can&apos;t be added to a rolling series.
+              </p>
+            )}
+            <TrainingDetailsFields
+              value={trainingDetails}
+              onChange={setTrainingDetails}
+              disabled={submitsRollingSeries}
+            />
+          </div>
+        )}
 
         {/* Custom Category (optional) */}
         {customCategories.length > 0 && (
@@ -821,6 +899,7 @@ export const EventForm: React.FC<EventFormProps> = ({
             </label>
             <DateTimeQuarterHour
               id="start-datetime"
+              timeLabel="Start time"
               required
               value={formData.start_datetime}
               onChange={(val) => handleStartDateChange(val)}
@@ -833,6 +912,7 @@ export const EventForm: React.FC<EventFormProps> = ({
             </label>
             <DateTimeQuarterHour
               id="end-datetime"
+              timeLabel="End time"
               required
               value={formData.end_datetime}
               onChange={(val) => update({ end_datetime: val })}
@@ -847,7 +927,7 @@ export const EventForm: React.FC<EventFormProps> = ({
             <div className="flex items-start gap-3">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-yellow-600 dark:text-yellow-400" />
               <div>
-                <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-200">Schedule Conflict Detected</p>
+                <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-200">Schedule Conflict</p>
                 <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-300">
                   This time overlaps with {conflicts.length === 1 ? 'an event' : 'events'} you have RSVP&apos;d to:
                 </p>
@@ -873,7 +953,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                 key={h}
                 type="button"
                 onClick={() => setDuration(h)}
-                className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-secondary focus:ring-theme-focus-ring rounded-lg border px-4 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden"
+                className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-secondary focus:ring-theme-focus-ring touch-target-phone rounded-lg border px-4 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden"
               >
                 {h} {h === 1 ? 'hour' : 'hours'}
               </button>
@@ -934,12 +1014,13 @@ export const EventForm: React.FC<EventFormProps> = ({
                       </label>
                       {isRolling ? (
                         <p className="text-theme-text-muted text-xs">
-                          New occurrences are created automatically to maintain a 12-month horizon.
+                          New occurrences are added automatically so the series always runs 12 months ahead.
                         </p>
                       ) : (
                         <input
                           type="date"
                           id="recurrence-end-date"
+                          aria-label="Series end date"
                           value={recurrenceEndDate}
                           onChange={(e) => setRecurrenceEndDate(e.target.value)}
                           className={inputClass}
@@ -1040,6 +1121,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                   <div className="mb-2 flex items-center gap-2">
                     <input
                       type="date"
+                      aria-label="Date to skip"
                       value={newExceptionDate}
                       onChange={(e) => setNewExceptionDate(e.target.value)}
                       className={inputClass}
@@ -1053,7 +1135,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                         }
                       }}
                       disabled={!newExceptionDate}
-                      className="rounded-lg bg-red-700 px-4 py-2 text-sm font-medium whitespace-nowrap text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="touch-target-phone rounded-lg bg-red-700 px-4 py-2 text-sm font-medium whitespace-nowrap text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Add
                     </button>
@@ -1069,6 +1151,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                           <button
                             type="button"
                             onClick={() => setRecurrenceExceptions((prev) => prev.filter((d) => d !== date))}
+                            aria-label={`Remove ${date}`}
                             className="text-xs font-medium text-red-500 hover:text-red-700"
                           >
                             Remove
@@ -1081,8 +1164,7 @@ export const EventForm: React.FC<EventFormProps> = ({
 
                 <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-3">
                   <p className="text-sm text-blue-700 dark:text-blue-300">
-                    Individual events will be created for each occurrence. You can edit or cancel them independently
-                    after creation.
+                    Each occurrence is created as its own event, which you can edit or cancel on its own.
                   </p>
                 </div>
               </div>
@@ -1400,9 +1482,9 @@ export const EventForm: React.FC<EventFormProps> = ({
               onChange={(e) => update({ check_in_window_type: e.target.value as 'flexible' | 'strict' | 'window' })}
               className={selectClass}
             >
-              <option value="flexible">Flexible - Configured start through event end</option>
-              <option value="strict">Strict - Only during actual event time</option>
-              <option value="window">Window - Custom before/after start</option>
+              <option value="flexible">Flexible - Opens before the start, closes when the event ends</option>
+              <option value="strict">Strict - Only while the event is running</option>
+              <option value="window">Window - Opens before the start, closes after the end</option>
             </select>
           </div>
 
@@ -1415,7 +1497,7 @@ export const EventForm: React.FC<EventFormProps> = ({
             >
               <div>
                 <label htmlFor="checkin-before" className={labelClass}>
-                  Minutes before
+                  Minutes before start
                 </label>
                 <input
                   type="number"
@@ -1433,7 +1515,7 @@ export const EventForm: React.FC<EventFormProps> = ({
               {formData.check_in_window_type === CheckInWindowType.WINDOW && (
                 <div>
                   <label htmlFor="checkin-after" className={labelClass}>
-                    Minutes after
+                    Minutes after end
                   </label>
                   <input
                     type="number"
@@ -1561,7 +1643,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                               reminder_schedule: (formData.reminder_schedule || [24]).filter((h) => h !== hours),
                             })
                           }
-                          className="ml-0.5 hover:text-red-900 dark:hover:text-red-100"
+                          className="touch-target-phone ml-0.5 inline-flex items-center justify-center hover:text-red-900 dark:hover:text-red-100"
                           aria-label={`Remove ${hours}-hour reminder`}
                         >
                           &times;
@@ -1573,6 +1655,7 @@ export const EventForm: React.FC<EventFormProps> = ({
 
               <select
                 id="add-reminder"
+                aria-label="Add a reminder"
                 value=""
                 onChange={(e) => {
                   const val = parseInt(e.target.value);
@@ -1652,10 +1735,7 @@ export const EventForm: React.FC<EventFormProps> = ({
           <div className="flex items-start space-x-3 rounded-lg border border-blue-500/30 bg-blue-500/10 p-4">
             <Upload className="mt-0.5 h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
             <div className="text-sm text-blue-700 dark:text-blue-300">
-              <p className="font-medium">Upload attachments after creating the event.</p>
-              <p className="mt-1 text-blue-600 dark:text-blue-400">
-                Once saved, you can upload files from the event detail page.
-              </p>
+              <p className="font-medium">Files can&apos;t be attached from the app yet.</p>
             </div>
           </div>
         </div>

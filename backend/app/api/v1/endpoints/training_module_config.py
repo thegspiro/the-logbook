@@ -29,6 +29,7 @@ from app.models.training import (
     RequirementProgress,
     ShiftCompletionReport,
     SkillEvaluation,
+    TrainingProgram,
     TrainingRecord,
     TrainingRequirement,
     TrainingStatus,
@@ -391,11 +392,24 @@ async def get_my_training_summary(
         )
         enrollments = enrollments_result.scalars().all()
 
+        # The card named neither the program nor its requirements, so a member
+        # enrolled in two programs saw two anonymous progress bars.
+        program_ids = list({str(e.program_id) for e in enrollments})
+        program_names: dict[str, str] = {}
+        if program_ids:
+            names = await db.execute(
+                select(TrainingProgram.id, TrainingProgram.name).where(
+                    TrainingProgram.id.in_(program_ids)
+                )
+            )
+            program_names = {str(row[0]): row[1] for row in names.all()}
+
         enrollment_list: list[dict[str, Any]] = []
         for e in enrollments:
             entry: dict[str, Any] = {
                 "id": str(e.id),
                 "program_id": str(e.program_id),
+                "program_name": program_names.get(str(e.program_id), ""),
                 "status": (
                     e.status.value if hasattr(e.status, "value") else str(e.status)
                 ),
