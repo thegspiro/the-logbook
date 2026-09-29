@@ -23,12 +23,13 @@ from app.api.dependencies import (
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.models.event import Event
-from app.models.training import TrainingSession
+from app.models.training import TrainingApproval, TrainingSession
 from app.models.user import User
 from app.schemas.training_session import (
     RecurringTrainingSessionCreate,
     TrainingApprovalRequest,
     TrainingApprovalResponse,
+    TrainingApprovalSummary,
     TrainingSessionAttach,
     TrainingSessionCreate,
     TrainingSessionLinkageUpdate,
@@ -281,6 +282,38 @@ async def attach_training_details(
     return _session_response(training_session)
 
 
+@router.get("/by-event/{event_id}/approval", response_model=TrainingApprovalSummary)
+async def get_event_training_approval(
+    event_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("events.manage", "training.manage")
+    ),
+):
+    """
+    Where a Training event's attendance approval stands
+
+    For the event page: whether finalized credit is waiting on a training
+    officer, and — only for a caller who can approve it (training.manage) and
+    only while it is pending — the approval link's token, so they can go
+    straight to the review. 404 when the event has no approval.
+
+    **Authentication required**
+    **Requires permission: events.manage or training.manage**
+    """
+    summary = await TrainingSessionService(db).get_approval_summary_for_event(
+        event_id=event_id,
+        organization_id=current_user.organization_id,
+        include_token=user_has_permission(current_user, "training.manage"),
+    )
+    if summary is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No training approval for this event",
+        )
+    return TrainingApprovalSummary(**summary)
+
+
 @router.patch("/{training_session_id}", response_model=TrainingSessionResponse)
 async def update_training_session_linkage(
     training_session_id: UUID,
@@ -472,7 +505,7 @@ async def submit_training_approval(
     token: str,
     approval_data: TrainingApprovalRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("events.manage")),
+    current_user: User = Depends(require_permission("training.manage")),
 ):
     """
     Submit training approval with time adjustments
@@ -480,8 +513,12 @@ async def submit_training_approval(
     Training officers can approve attendance times, adjust check-in/check-out times,
     or override durations for individual members.
 
+    The same permission as the roster behind it (GET): approving is the
+    training officer's call, and an approver who cannot open the roster cannot
+    review what they are approving.
+
     **Authentication required**
-    **Requires permission: events.manage**
+    **Requires permission: training.manage**
     """
     service = TrainingSessionService(db)
 
@@ -497,13 +534,24 @@ async def submit_training_approval(
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
+    approval_id = (
+        await db.execute(
+            select(TrainingApproval.id).where(
+                TrainingApproval.approval_token == token,
+                TrainingApproval.organization_id == str(current_user.organization_id),
+            )
+        )
+    ).scalar_one_or_none()
+
     await log_audit_event(
         db=db,
         event_type="training_session_approved",
         event_category="training",
         severity="info",
+        # The token is the approval link's secret; the audit log names the
+        # approval by id instead of copying it into a table more people read.
         event_data={
-            "token": token,
+            "approval_id": approval_id,
             "attendee_count": len(approval_data.attendees),
         },
         user_id=str(current_user.id),

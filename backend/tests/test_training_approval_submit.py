@@ -183,3 +183,76 @@ class TestOverrides:
         compiled = str(rsvp_query.compile(compile_kwargs={"literal_binds": True}))
         assert "event_rsvps.organization_id = 'org-1'" in compiled
         assert f"event_rsvps.user_id = '{MEMBER}'" in compiled
+
+
+class TestApprovalSummary:
+    """The event page's view of an approval: the token is the link's secret."""
+
+    def _svc(self, approvals):
+        db = MagicMock()
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = approvals
+        db.execute = AsyncMock(return_value=result)
+        svc = TrainingSessionService(db)
+        svc.get_session_by_event = AsyncMock(return_value=SimpleNamespace(id="s-1"))
+        return svc
+
+    def _approval(self, status, expires_in_days, created_offset=0):
+        now = datetime.now(timezone.utc)
+        return SimpleNamespace(
+            id=f"a-{status.value}-{created_offset}",
+            status=status,
+            token_expires_at=now + timedelta(days=expires_in_days),
+            approval_deadline=now + timedelta(days=7),
+            approved_at=None,
+            attendee_data=[{"user_id": "u-1"}, {"user_id": "u-2"}],
+            approval_token="secret-token",
+        )
+
+    async def test_token_only_for_an_approver_while_pending(self):
+        pending = self._approval(ApprovalStatus.PENDING, 5)
+
+        summary = await self._svc([pending]).get_approval_summary_for_event(
+            "event-1", "org-1", include_token=True
+        )
+        assert summary["token"] == "secret-token"
+        assert summary["attendee_count"] == 2
+        assert summary["expired"] is False
+
+        summary = await self._svc([pending]).get_approval_summary_for_event(
+            "event-1", "org-1", include_token=False
+        )
+        assert summary["token"] is None
+
+    async def test_no_token_once_approved_or_expired(self):
+        approved = self._approval(ApprovalStatus.APPROVED, 5)
+        summary = await self._svc([approved]).get_approval_summary_for_event(
+            "event-1", "org-1", include_token=True
+        )
+        assert summary["token"] is None
+        assert summary["status"] == "approved"
+
+        expired = self._approval(ApprovalStatus.PENDING, -1)
+        summary = await self._svc([expired]).get_approval_summary_for_event(
+            "event-1", "org-1", include_token=True
+        )
+        assert summary["token"] is None
+        assert summary["expired"] is True
+
+    async def test_a_live_pending_approval_wins_over_a_newer_one(self):
+        """Newest first by creation, but the one an officer can act on is
+        what the page must show."""
+        newer_approved = self._approval(ApprovalStatus.APPROVED, 5, 1)
+        live = self._approval(ApprovalStatus.PENDING, 5, 2)
+        summary = await self._svc(
+            [newer_approved, live]
+        ).get_approval_summary_for_event("event-1", "org-1", include_token=True)
+        assert summary["approval_id"] == live.id
+
+    async def test_none_without_a_session(self):
+        svc = self._svc([])
+        svc.get_session_by_event = AsyncMock(return_value=None)
+        assert (
+            await svc.get_approval_summary_for_event("e", "o", include_token=True)
+            is None
+        )

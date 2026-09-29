@@ -71,7 +71,6 @@ ALLOWED = {
         "/{training_session_id}/finalize",
         "training.manage",
     ),
-    ("training_sessions.py", "POST", "/approve/{token}", "training.manage"),
     # Same authority, reached from the event: finalizing a Training event's
     # attendance writes its training credit, and `training.manage` only decides
     # whether that credit may also move program progress. Finalizing, ending
