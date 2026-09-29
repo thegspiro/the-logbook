@@ -119,7 +119,9 @@ const ChainCard: React.FC<ChainCardProps> = ({ chain, onDelete }) => {
           {chain.description && <p className="text-theme-text-secondary mb-3 text-sm">{chain.description}</p>}
 
           {sortedSteps.length === 0 ? (
-            <p className="text-theme-text-secondary text-sm">No steps configured.</p>
+            <p className="text-theme-text-secondary text-sm">
+              No steps yet. Requests routed to this chain get no approval steps.
+            </p>
           ) : (
             <div className="space-y-2">
               {sortedSteps.map((step, index) => (
@@ -271,7 +273,7 @@ const ApprovalChainsSettingsPage: React.FC = () => {
         <div>
           <h1 className="text-theme-text-primary text-2xl font-bold">Approval Chains</h1>
           <p className="text-theme-text-secondary mt-1 text-sm">
-            Configure multi-step approval workflows for financial requests
+            Set who approves purchase requests, expense reports, and check requests
           </p>
         </div>
         <SkeletonPage rows={4} showStats={false} />
@@ -296,7 +298,7 @@ const ApprovalChainsSettingsPage: React.FC = () => {
         <div>
           <h1 className="text-theme-text-primary text-2xl font-bold">Approval Chains</h1>
           <p className="text-theme-text-secondary mt-1 text-sm">
-            Configure multi-step approval workflows for financial requests
+            Set who approves purchase requests, expense reports, and check requests
           </p>
         </div>
         <button
@@ -402,7 +404,7 @@ const ApprovalChainsSettingsPage: React.FC = () => {
                   className="border-theme-surface-border rounded"
                 />
                 <span className="text-theme-text-primary text-sm">
-                  Set as default chain (used when no other chain matches)
+                  Default chain (preferred when no more specific chain matches)
                 </span>
               </label>
             </div>
@@ -432,7 +434,7 @@ const ApprovalChainsSettingsPage: React.FC = () => {
         <EmptyState
           icon={GitBranch}
           title="No approval chains configured"
-          description="Create approval chains to define multi-step workflows for financial request approvals."
+          description="A chain sets the approval steps a request goes through, based on its type, amount, and budget category."
           actions={[
             {
               label: 'New Chain',
