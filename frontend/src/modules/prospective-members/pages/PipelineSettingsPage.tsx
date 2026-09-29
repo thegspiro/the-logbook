@@ -161,7 +161,10 @@ export const PipelineSettingsPage: React.FC = () => {
       await fetchPipelines();
       toast.success(updated.is_active ? 'Pipeline activated' : 'Pipeline deactivated');
     } catch (err: unknown) {
-      const msg = getErrorMessage(err, 'Failed to toggle pipeline');
+      const msg = getErrorMessage(
+        err,
+        currentPipeline.is_active ? 'Failed to deactivate pipeline' : 'Failed to activate pipeline'
+      );
       toast.error(msg);
     }
   };
@@ -300,7 +303,7 @@ export const PipelineSettingsPage: React.FC = () => {
       setCurrentPipeline(updated);
       toast.success(updated.public_status_enabled ? 'Public status page enabled' : 'Public status page disabled');
     } catch (err: unknown) {
-      const msg = getErrorMessage(err, 'Failed to toggle setting');
+      const msg = getErrorMessage(err, 'Failed to update the status page setting');
       toast.error(msg);
     }
   };
@@ -318,7 +321,7 @@ export const PipelineSettingsPage: React.FC = () => {
           : 'Applicants will see completed stages only'
       );
     } catch (err: unknown) {
-      const msg = getErrorMessage(err, 'Failed to toggle setting');
+      const msg = getErrorMessage(err, 'Failed to update the upcoming stages setting');
       toast.error(msg);
     }
   };
@@ -438,7 +441,8 @@ export const PipelineSettingsPage: React.FC = () => {
                       />
                     </div>
                     <p className="text-theme-text-muted mt-1 text-xs">
-                      {p.stage_count} stages &middot; {p.applicant_count} applicants
+                      {p.stage_count} {p.stage_count === 1 ? 'stage' : 'stages'} &middot; {p.applicant_count}{' '}
+                      {p.applicant_count === 1 ? 'applicant' : 'applicants'}
                     </p>
                   </button>
                 ))}
@@ -463,7 +467,7 @@ export const PipelineSettingsPage: React.FC = () => {
               <p className="text-theme-text-muted mb-4 text-sm">
                 {visiblePipelines.length === 0
                   ? 'Set up the stages prospective members will go through.'
-                  : 'Choose a pipeline from the left to configure its stages.'}
+                  : 'Choose a pipeline from the list to configure its stages.'}
               </p>
               {visiblePipelines.length === 0 && (
                 <div className="flex items-center justify-center gap-3">
@@ -504,8 +508,8 @@ export const PipelineSettingsPage: React.FC = () => {
                       {currentPipeline.applicant_count === 1 ? '' : 's'}
                     </p>
                     <p className="mt-0.5 text-xs text-amber-700/80 dark:text-amber-300/60">
-                      Changes to stages will affect in-progress applications. Consider cloning this pipeline before
-                      making major changes.
+                      Stage changes affect applications already in progress. Clone the pipeline first if you are making
+                      major changes.
                     </p>
                   </div>
                 </div>
@@ -738,8 +742,8 @@ export const PipelineSettingsPage: React.FC = () => {
                   <h3 className="text-theme-text-secondary text-sm font-medium">Inactivity Timeout</h3>
                 </div>
                 <p className="text-theme-text-muted mb-5 text-xs">
-                  Applications with no activity within the timeout period will be automatically marked inactive.
-                  Individual stages can override this default in their settings.
+                  Applications with no activity for this long are marked inactive automatically. A stage can set its own
+                  timeout in its settings.
                 </p>
 
                 {/* Timeout Preset */}
@@ -929,8 +933,8 @@ export const PipelineSettingsPage: React.FC = () => {
                             aria-hidden="true"
                           />
                           <p className="text-xs text-amber-700 dark:text-amber-300/80">
-                            Purged applications are permanently deleted and cannot be recovered. This helps reduce the
-                            amount of private information stored in the event of a security incident.
+                            Purged applications are permanently deleted and can&apos;t be recovered. Keeping less
+                            personal data limits what a security breach could expose.
                           </p>
                         </div>
                       </>
@@ -964,9 +968,9 @@ export const PipelineSettingsPage: React.FC = () => {
                   <h3 className="text-theme-text-primary text-sm font-semibold">Public Application Status Page</h3>
                 </div>
                 <p className="text-theme-text-muted mb-4 text-xs">
-                  When enabled, prospects receive a link to check their application status. Only stages marked as
-                  &quot;public visible&quot; in the stage settings will be shown. An Enable Status Page stage overrides
-                  this for each prospect who reaches it.
+                  When on, applicants get a link to check their application status. Only stages set to &quot;Show this
+                  stage on the public status page&quot; appear. An Enable Status Page stage overrides this for each
+                  applicant who reaches it.
                 </p>
                 <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
                   <input
@@ -977,7 +981,7 @@ export const PipelineSettingsPage: React.FC = () => {
                     }}
                     className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
                   />
-                  Allow prospects to check their application status via a public link
+                  Let applicants check their application status through a public link
                 </label>
                 <label className="text-theme-text-secondary mt-3 ml-6 flex items-start gap-2 text-sm">
                   <input
@@ -992,8 +996,8 @@ export const PipelineSettingsPage: React.FC = () => {
                   <span>
                     Show upcoming stages
                     <span className="text-theme-text-muted block text-xs">
-                      When off, prospects see only the public-visible stages they have completed — not the stage they
-                      are on now, and not how many stages remain.
+                      When off, applicants see only the visible stages they have completed — not the stage they are on
+                      now, and not how many stages remain.
                     </span>
                   </span>
                 </label>
@@ -1018,8 +1022,8 @@ export const PipelineSettingsPage: React.FC = () => {
         title="Delete Pipeline"
         message={
           currentPipeline && (currentPipeline.applicant_count ?? 0) > 0
-            ? `This pipeline has ${currentPipeline.applicant_count} applicant${currentPipeline.applicant_count === 1 ? '' : 's'}. Deleting it will permanently remove all applicant data. This cannot be undone.`
-            : 'Are you sure you want to delete this pipeline? This cannot be undone.'
+            ? `This pipeline has ${currentPipeline.applicant_count} applicant${currentPipeline.applicant_count === 1 ? '' : 's'}. Deleting it permanently deletes their application records and can’t be undone. A pipeline with active or on-hold applicants can’t be deleted.`
+            : 'Delete this pipeline and its stages? This can’t be undone.'
         }
         confirmLabel="Delete Pipeline"
         variant="danger"
@@ -1215,7 +1219,9 @@ export const PipelineSettingsPage: React.FC = () => {
                       >
                         <div className="mb-2 flex items-center justify-between">
                           <h3 className="text-theme-text-primary text-sm font-medium">{tpl.name}</h3>
-                          <span className="text-theme-text-muted text-xs">{tpl.stage_count} stages</span>
+                          <span className="text-theme-text-muted text-xs">
+                            {tpl.stage_count} {tpl.stage_count === 1 ? 'stage' : 'stages'}
+                          </span>
                         </div>
                         {tpl.description && <p className="text-theme-text-muted mb-3 text-xs">{tpl.description}</p>}
                         <button

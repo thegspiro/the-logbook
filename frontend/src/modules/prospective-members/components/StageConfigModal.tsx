@@ -102,7 +102,7 @@ const STAGE_TYPE_OPTIONS: { value: StageType; label: string; icon: React.Element
     value: 'manual_approval',
     label: 'Manual Approval',
     icon: CheckCircle,
-    description: 'Admin or designated role manually approves advancement.',
+    description: 'A pipeline manager approves the applicant before they advance.',
   },
   {
     value: 'status_page_toggle',
@@ -526,7 +526,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({ isOpen, onCl
 
     if (stageType === StageTypeConst.FORM_SUBMISSION) {
       const c = config as FormStageConfig;
-      if (!c.form_id) newErrors.form_id = 'Please select a form';
+      if (!c.form_id) newErrors.form_id = 'Select a form';
     }
 
     if (stageType === StageTypeConst.DOCUMENT_UPLOAD) {
@@ -653,7 +653,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({ isOpen, onCl
       // long stage form is usually scrolled out of sight — so a rejected save
       // read as a dead button. Name the first problem where the user is
       // looking; the inline message still marks which control it belongs to.
-      toast.error(Object.values(found)[0] || 'Please fix the highlighted fields before saving.');
+      toast.error(Object.values(found)[0] || 'Fix the highlighted fields before saving.');
       return;
     }
 
@@ -1017,8 +1017,8 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({ isOpen, onCl
                     Require approval notes
                   </label>
                   <p className="text-theme-text-muted text-xs">
-                    Approver roles can be configured in the organization settings. Any user with the{' '}
-                    <code className="text-theme-text-muted">prospective_members.manage</code> permission can approve.
+                    Anyone with the <code className="text-theme-text-muted">prospective_members.manage</code> permission
+                    can approve this stage.
                   </p>
                 </div>
               )}
@@ -1231,8 +1231,8 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({ isOpen, onCl
                     </p>
                   </div>
                   <p className="text-theme-text-muted text-xs">
-                    Interviews are managed in the applicant detail view. This stage gates advancement until the required
-                    number of interviews are recorded.
+                    Interviews are recorded on the applicant&apos;s Interview page. The applicant cannot advance past
+                    this stage until the required number is recorded.
                   </p>
                   <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
                     <input
