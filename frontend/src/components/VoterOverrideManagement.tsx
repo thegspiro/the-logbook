@@ -77,7 +77,7 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
       });
       setOverrides((prev) => [...prev, newOverride]);
       resetForm();
-      toast.success('Voter override added successfully');
+      toast.success('Voter override added');
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to add voter override'));
     } finally {
