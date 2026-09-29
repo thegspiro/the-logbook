@@ -149,6 +149,20 @@ class TestRelatedActionArchiving:
         db.commit.assert_awaited_once()
         db.rollback.assert_not_awaited()
 
+    async def test_archives_with_a_whole_second_expiry(self):
+        # MySQL 8 rounds a fractional second into a DATETIME(0) column, so an
+        # expiry written as 12:00:00.7 is stored as 12:00:01 and the prompt
+        # reads as unexpired until then. MariaDB truncates, which is why only
+        # the MySQL integration job saw archived prompts linger.
+        db, _ = _db_with_savepoint(execute_result=MagicMock(rowcount=1))
+
+        await NotificationsService(db).archive_related_notifications(
+            "org-1", "event_validation", "event_id", "event-1"
+        )
+
+        params = db.execute.await_args.args[0].compile().params
+        assert params["expires_at"].microsecond == 0
+
     async def test_no_match_is_idempotent_without_a_commit(self):
         db, _ = _db_with_savepoint(execute_result=MagicMock(rowcount=0))
 

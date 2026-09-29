@@ -7,6 +7,7 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { Breadcrumbs } from '../components/ux';
 import { formatShortDateTime, formatTime } from '../utils/dateFormatting';
+import { getRSVPStatusLabel } from '../utils/eventHelpers';
 
 /**
  * Event Check-In Monitoring Dashboard
@@ -423,7 +424,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
                     </td>
                     <td data-label="Status" className="px-6 py-4 whitespace-nowrap">
                       <span className="inline-flex rounded-full bg-green-100 px-2 py-1 text-xs leading-5 font-semibold text-green-800 dark:bg-green-500/20 dark:text-green-400">
-                        {activity.rsvp_status}
+                        {getRSVPStatusLabel(activity.rsvp_status)}
                       </span>
                     </td>
                     <td data-label="Guests" className="text-theme-text-secondary px-6 py-4 text-sm whitespace-nowrap">

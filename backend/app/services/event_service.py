@@ -3042,6 +3042,19 @@ class EventService:
         if event.location_obj:
             location_name = event.location_obj.name
 
+        # The same test _auto_create_training_record applies. The check-in page
+        # announced "Training Record Created" for every training-type event,
+        # including ones with no session to record against (workflow review
+        # W20-1); it now shows that only when a record will be written.
+        records_training = False
+        if event.event_type == EventType.TRAINING:
+            session_result = await self.db.execute(
+                select(TrainingSession.auto_create_records).where(
+                    TrainingSession.event_id == event.id
+                )
+            )
+            records_training = bool(session_result.scalars().first())
+
         return {
             "event_id": str(event.id),
             "event_name": event.title,
@@ -3064,6 +3077,7 @@ class EventService:
             "location_name": location_name,
             "require_checkout": event.require_checkout or False,
             "timezone": org_timezone,
+            "records_training": records_training,
         }, None
 
     # A self check-in this far ahead of the scheduled start is worth putting in
