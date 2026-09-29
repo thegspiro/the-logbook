@@ -181,7 +181,8 @@ class TestAdminHoursWindow:
             return result
 
         db = MagicMock()
-        db.execute = AsyncMock(side_effect=[_one(event), _all([]), _all([rsvp])])
+        # The event lock, then the one locking roster read.
+        db.execute = AsyncMock(side_effect=[_one(event), _all([rsvp])])
         db.commit = AsyncMock()
         svc = EventService(db)
 
@@ -198,3 +199,43 @@ class TestAdminHoursWindow:
         kwargs = credit.await_args.kwargs
         assert kwargs["check_out_at"] == override_out
         assert kwargs["duration_minutes"] == 180
+
+    async def test_an_explicit_zero_override_credits_no_admin_hours(self):
+        """The same rule as training credit: 0 is "no credit", not a missing
+        value to fall through to the measured minutes."""
+        event = _event(
+            event_type=EventType.BUSINESS_MEETING,
+            actual_end_time=END,
+            is_cancelled=False,
+        )
+        rsvp = _rsvp(
+            checked_out_at=START + timedelta(minutes=90),
+            override_duration_minutes=0,
+            attendance_duration_minutes=90,
+        )
+
+        def _one(value):
+            result = MagicMock()
+            result.scalar_one_or_none.return_value = value
+            return result
+
+        def _all(items):
+            result = MagicMock()
+            result.scalars.return_value.all.return_value = items
+            return result
+
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(event), _all([rsvp])])
+        db.commit = AsyncMock()
+        svc = EventService(db)
+
+        with patch("app.services.event_service.AdminHoursService") as ahs_cls, patch(
+            "app.services.event_service.NotificationsService"
+        ) as notif_cls:
+            credit = AsyncMock(return_value=1)
+            ahs_cls.return_value.credit_event_attendance = credit
+            notif_cls.return_value.archive_related_notifications = AsyncMock()
+            svc._advance_prospects_after_finalize = AsyncMock()
+            await svc.finalize_event_attendance("event-1", "org-1")
+
+        credit.assert_not_awaited()

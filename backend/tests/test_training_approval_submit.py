@@ -256,3 +256,21 @@ class TestApprovalSummary:
             await svc.get_approval_summary_for_event("e", "o", include_token=True)
             is None
         )
+
+
+class TestSupersede:
+    def test_a_superseded_link_is_dead_even_after_mysql_rounds_it(self):
+        """MySQL DATETIME(0) rounds a fraction: a raw now of x.6 s is stored as
+        x+1 s, leaving the link good for another 0.4 s — long enough for a
+        submit queued behind the reopen's lock to approve the old roster."""
+        now = datetime(2026, 9, 20, 13, 0, 0, 600000, tzinfo=timezone.utc)
+        approval = SimpleNamespace(token_expires_at=now + timedelta(days=30))
+
+        TrainingSessionService._supersede([approval], now)
+
+        stored = approval.token_expires_at
+        assert stored.microsecond == 0
+        # Rounding a whole second changes nothing, and it is already past for
+        # a submit that arrives 50 ms later.
+        assert stored < now + timedelta(milliseconds=50)
+        assert stored <= now - timedelta(seconds=1)

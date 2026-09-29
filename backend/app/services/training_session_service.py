@@ -1116,9 +1116,11 @@ class TrainingSessionService:
             # bounds against the old number of minutes, so the ledger entry
             # would disagree with itself as well as with the training record,
             # which _finalize_training_records computes from the same interval.
+            # `is None`, not truthiness: an explicit 0 is "no credit" and must
+            # not fall through to the measured minutes (credited_minutes).
             duration = rsvp.override_duration_minutes
             if (
-                not duration
+                duration is None
                 and rsvp.override_check_in_at
                 and rsvp.override_check_out_at
             ):
@@ -1126,9 +1128,9 @@ class TrainingSessionService:
                     rsvp.override_check_out_at - rsvp.override_check_in_at
                 ).total_seconds() / 60
                 duration = max(0, int(span))
-            if not duration:
+            if duration is None:
                 duration = rsvp.attendance_duration_minutes
-            if not check_in or not check_out or not duration or duration <= 0:
+            if not check_in or not check_out or duration is None or duration <= 0:
                 continue
             try:
                 await admin_hours.credit_event_attendance(
@@ -1200,8 +1202,7 @@ class TrainingSessionService:
             )
             .with_for_update()
         )
-        for approval in pending_result.scalars().all():
-            approval.token_expires_at = now
+        self._supersede(list(pending_result.scalars().all()), now)
 
         training_session.is_finalized = False
         training_session.finalized_at = None
@@ -1232,11 +1233,15 @@ class TrainingSessionService:
         uses — event, session, approvals, RSVPs — so a finalize cannot deadlock
         against an officer submitting an approval or a leader reopening.
         """
+        # populate_existing, as on the event: an identity-mapped session or
+        # approval would otherwise be handed back as it was before this call
+        # waited, and a flag another writer just committed would go unseen.
         session_result = await self.db.execute(
             select(TrainingSession)
             .where(TrainingSession.event_id == str(event.id))
             .where(TrainingSession.organization_id == str(organization_id))
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         training_session = session_result.scalar_one_or_none()
         if training_session is None:
@@ -1247,8 +1252,22 @@ class TrainingSessionService:
             .where(TrainingApproval.organization_id == str(organization_id))
             .where(TrainingApproval.status == ApprovalStatus.PENDING)
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         return training_session, list(pending_result.scalars().all())
+
+    @staticmethod
+    def _supersede(approvals: List[TrainingApproval], now: datetime) -> None:
+        """Kill the links of approvals issued against numbers being replaced.
+
+        Floored and a second back: MySQL DATETIME(0) *rounds* a fraction, so a
+        raw ``now`` of 12:00:00.6 is stored as 12:00:01 and the link stays
+        good for another 0.4 s — long enough for a submit queued behind this
+        lock to approve the roster that was just superseded.
+        """
+        expired_at = now.replace(microsecond=0) - timedelta(seconds=1)
+        for approval in approvals:
+            approval.token_expires_at = expired_at
 
     async def record_event_attendance(
         self,
@@ -1331,8 +1350,7 @@ class TrainingSessionService:
 
         # An approval issued against the roster as it was is superseded: its
         # link would approve numbers this finalize is replacing.
-        for approval in pending_approvals:
-            approval.token_expires_at = now
+        self._supersede(pending_approvals, now)
 
         prior_ids = await self._prior_credit_user_ids(training_session, event, org)
         removed = prior_ids - set(credited)
@@ -1803,8 +1821,7 @@ class TrainingSessionService:
         )
         if training_session is None:
             return
-        for approval in pending:
-            approval.token_expires_at = now
+        self._supersede(pending, now)
         training_session.is_finalized = False
         training_session.finalized_at = None
         training_session.finalized_by = None

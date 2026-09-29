@@ -52,6 +52,7 @@ def _event(**overrides):
         "end_datetime": NOW - timedelta(hours=2),
         "actual_end_time": None,
         "custom_category": None,
+        "is_cancelled": False,
     }
     fields.update(overrides)
     return SimpleNamespace(**fields)
@@ -109,6 +110,16 @@ async def _finalize(event):
 
 
 class TestFinalizeWiring:
+    async def test_a_cancelled_event_is_refused_before_anything_is_locked(self):
+        """Cancelling voided the credit; finalizing would write it back for an
+        event that did not happen."""
+        outcome, calls, db, admin_hours = await _finalize(_event(is_cancelled=True))
+
+        assert outcome.error == "Cannot finalize attendance for a cancelled event"
+        assert calls == []
+        db.commit.assert_not_awaited()
+        admin_hours.return_value.credit_event_attendance.assert_not_awaited()
+
     async def test_credit_is_inside_the_transaction_and_follow_up_after_it(self):
         outcome, calls, db, admin_hours = await _finalize(_event())
 

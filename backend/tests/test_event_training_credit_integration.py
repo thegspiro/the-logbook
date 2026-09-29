@@ -530,6 +530,30 @@ class TestTakingCreditBack:
         (record,) = await _records(db_session, member)
         assert record["status"] == "cancelled"
 
+    async def test_a_cancelled_event_cannot_be_finalized_back(self, db_session, dept):
+        """Cancelling voided the credit. Finalize — directly or through Record
+        Times — would write it back for an event that did not happen."""
+        org, officer, member = dept
+        event_id, service = await self._credited_and_reopened(db_session, dept)
+        await service.cancel_event(event_id, org, reason="Rained out")
+
+        outcome = await service.finalize_event_attendance_detailed(
+            event_id, org, officer
+        )
+        _, times_error = await service.record_actual_times(
+            event_id, org, None, datetime.now(timezone.utc), finalized_by=officer
+        )
+
+        assert outcome.error == "Cannot finalize attendance for a cancelled event"
+        assert times_error == "Cannot record actual times for a cancelled event"
+        (record,) = await _records(db_session, member)
+        assert (record["status"], record["hours_completed"]) == ("cancelled", 0.0)
+        finalized = await db_session.execute(
+            text("SELECT attendance_finalized_at FROM events WHERE id = :id"),
+            {"id": event_id},
+        )
+        assert finalized.scalar_one() is None
+
     async def test_finalizing_again_restores_a_voided_credit(self, db_session, dept):
         """Removed by mistake, added back, finalized: the same row, live again."""
         org, officer, member = dept
@@ -555,6 +579,64 @@ class TestTakingCreditBack:
         (record,) = await _records(db_session, member)
         assert record["status"] == "completed"
         assert record["hours_completed"] == 4.0
+
+
+class TestEndEvent:
+    async def _checked_in_at_start(self, db, dept):
+        org, officer, member = dept
+        event_id, start, end = await _training_event(db, org, officer)
+        _, error = await EventService(db).manager_add_attendee(
+            event_id, member, org, officer, checked_in=True
+        )
+        assert error is None
+        await db.execute(
+            text(
+                "UPDATE event_rsvps SET checked_in_at = :t "
+                "WHERE event_id = :e AND user_id = :u"
+            ),
+            {"t": start.replace(tzinfo=None), "e": event_id, "u": member},
+        )
+        db.expire_all()
+        return event_id, start, end
+
+    async def test_end_event_credits_a_training_event(self, db_session, dept):
+        """End Event's trailing finalize must not see its own end as the
+        future — it did on MySQL, which rounds a stored fraction up."""
+        org, officer, member = dept
+        event_id, start, _end = await self._checked_in_at_start(db_session, dept)
+        service = EventService(db_session)
+
+        event, count, error = await service.end_event(event_id, org, officer)
+
+        assert (error, count) == (None, 1)
+        assert event.actual_end_time.microsecond == 0
+        outcome = service.last_finalize_outcome
+        assert outcome.error is None
+        assert outcome.training_credit is True
+        (record,) = await _records(db_session, member)
+        assert record["status"] == "completed"
+
+    async def test_a_corrected_end_after_end_event_changes_the_credit(
+        self, db_session, dept
+    ):
+        """Pressed two hours late: the bulk check-out measured six hours. A
+        reopen and the real end time must bring it back to four."""
+        org, officer, member = dept
+        event_id, start, end = await self._checked_in_at_start(db_session, dept)
+        service = EventService(db_session)
+        await service.end_event(event_id, org, officer)
+        (late,) = await _records(db_session, member)
+        assert late["hours_completed"] >= 5.9
+
+        _, error = await service.reopen_event_attendance(event_id, org)
+        assert error is None
+        _, error = await service.record_actual_times(
+            event_id, org, None, end, finalized_by=officer
+        )
+
+        assert error is None
+        (record,) = await _records(db_session, member)
+        assert (record["status"], record["hours_completed"]) == ("completed", 4.0)
 
 
 async def _admin_mapping(db, org_id: str, event_type: str) -> str:

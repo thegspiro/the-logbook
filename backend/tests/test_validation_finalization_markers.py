@@ -49,6 +49,7 @@ def _ended_event(custom_fields=None, finalized_at=None):
         # Not a Training event: finalize reads the type before the roster to
         # decide whether training credit is written.
         event_type=None,
+        is_cancelled=False,
     )
 
 
