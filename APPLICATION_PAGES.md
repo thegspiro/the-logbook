@@ -341,18 +341,30 @@ Requires `events.manage` permission. Tab-based admin interface.
 
 ### Member-Facing Pages
 
-| URL                                   | Page                                    | Permission        |
-| ------------------------------------- | --------------------------------------- | ----------------- |
-| `/training`                           | My Training                             | Authenticated     |
-| `/training/my-training`               | My Training                             | Authenticated     |
-| `/training/submit`                    | Submit Training                         | Authenticated     |
-| `/training/courses`                   | Course Library                          | Authenticated     |
-| `/training/programs`                  | Training Programs                       | Authenticated     |
-| `/training/programs/:programId`       | Program Detail                          | Authenticated     |
-| `/training/cohorts`                   | Course Cohorts                          | `training.manage` |
-| `/training/cohorts/:cohortId`         | Cohort Detail (class timeline + roster) | `training.manage` |
-| `/training/my-skill-tests/:testId`    | My Skill Test Result (read-only)        | Authenticated     |
-| `/training/my-progress/:enrollmentId` | My Program Progress                     | Authenticated     |
+| URL                                   | Page                                      | Permission        |
+| ------------------------------------- | ----------------------------------------- | ----------------- |
+| `/training`                           | My Training                               | Authenticated     |
+| `/training/my-training`               | My Training                               | Authenticated     |
+| `/training/submit`                    | Submit Training                           | Authenticated     |
+| `/training/courses`                   | Course Library                            | Authenticated     |
+| `/training/programs`                  | Training Programs                         | Authenticated     |
+| `/training/programs/:programId`       | Program Detail                            | Authenticated     |
+| `/training/cohorts`                   | Course Cohorts                            | `training.manage` |
+| `/training/cohorts/:cohortId`         | Cohort Detail (class timeline + roster)   | `training.manage` |
+| `/training/my-skill-tests/:testId`    | My Skill Test Result (read-only)          | Authenticated     |
+| `/training/my-progress/:enrollmentId` | My Program Progress                       | Authenticated     |
+| `/training/approve/:token`            | Training Approval (officer credit review) | `training.manage` |
+
+> **`/training/approve/:token` is the officer's review of a Training event's
+> credit** _(2026-09-29)_. When a Training event's session requires officer
+> confirmation, Finalize Attendance holds each member's record at In Progress
+> and emails training officers this link; the event page links to it too. The
+> officer confirms or adjusts each member's approved minutes (0 gives no credit)
+> and records the credit. The token is not the authorization — the roster carries
+> member names and emails, so the API requires `training.manage` in the
+> approval's organization. The link had no route before this, so the email
+> bounced officers to the dashboard. An expired link is replaced by reopening the
+> event's attendance and finalizing it again.
 
 > **`/training/my-progress/:enrollmentId` is where every training notification
 > now lands** _(2026-08-09)_. All eight `action_url`s previously pointed at

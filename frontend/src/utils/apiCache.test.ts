@@ -489,6 +489,13 @@ describe('apiCache', () => {
       expect(isCacheable('/training/sessions/approve/some-token')).toBe(false);
     });
 
+    it("returns false for an event's training session and approval summary", () => {
+      // The summary can carry the approval link's token, and finalize/reopen
+      // invalidate only /events, so a cached copy would outlive the change.
+      expect(isCacheable('/training/sessions/by-event/evt-1')).toBe(false);
+      expect(isCacheable('/training/sessions/by-event/evt-1/approval')).toBe(false);
+    });
+
     it('returns false for /training/effectiveness/evaluations (per-member evaluation PII)', () => {
       expect(isCacheable('/training/effectiveness/evaluations')).toBe(false);
       expect(isCacheable('/training/effectiveness/evaluations?course_id=c1')).toBe(false);

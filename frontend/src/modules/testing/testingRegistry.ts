@@ -320,6 +320,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/training/programs/:programId', label: 'Program detail', module: 'training' },
       { path: '/training/my-progress/:enrollmentId', label: 'My program progress', module: 'training' },
       { path: '/training/my-skill-tests/:testId', label: 'My skill test result', module: 'training' },
+      {
+        path: '/training/approve/:token',
+        label: 'Training approval',
+        permission: 'training.manage',
+        module: 'training',
+      },
       { path: '/training/admin', label: 'Training administration', permission: 'training.manage', module: 'training' },
       { path: '/training/cohorts', label: 'Cohorts', permission: 'training.manage', module: 'training' },
       {

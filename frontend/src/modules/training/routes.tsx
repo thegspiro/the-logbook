@@ -27,6 +27,9 @@ const MySkillTestResultPage = lazyWithRetry(() => import('../../pages/MySkillTes
 const CohortsPage = lazyWithRetry(() => import('../../pages/training/CohortsPage'));
 const CohortDetailPage = lazyWithRetry(() => import('../../pages/training/CohortDetailPage'));
 
+// Training Module - Officer approval of a Training event's credit (emailed link)
+const TrainingApprovalPage = lazyWithRetry(() => import('../../pages/training/TrainingApprovalPage'));
+
 // Training Module - Admin
 const TrainingAdminPage = lazyWithRetry(() =>
   import('../../pages/TrainingAdminPage').then((m) => ({
@@ -147,6 +150,20 @@ export const getTrainingRoutes = () => {
         element={
           <ProtectedRoute requiredModule="training" moduleLabel="Training" requiredPermission="training.manage">
             <CohortDetailPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Officer approval of a Training event's credit. Linked from the
+          officer's email and from the event page. The token is not the
+          authorization: the roster carries member names and emails, so the
+          API requires training.manage in the approval's organization, and the
+          route mirrors that gate. */}
+      <Route
+        path="/training/approve/:token"
+        element={
+          <ProtectedRoute requiredModule="training" moduleLabel="Training" requiredPermission="training.manage">
+            <TrainingApprovalPage />
           </ProtectedRoute>
         }
       />

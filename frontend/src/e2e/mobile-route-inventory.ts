@@ -1422,6 +1422,13 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
+    path: '/training/approve/:token',
+    source: 'src/modules/training/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'token-parameterized officer review reached from an emailed approval link or the event page; a token exists only after a Training event with officer confirmation is finalized, and the roster reflows through the shared rwd-table and 44px form utilities',
+  },
+  {
     path: '/training/cohorts',
     source: 'src/modules/training/routes.tsx',
     coverage: 'exempt',

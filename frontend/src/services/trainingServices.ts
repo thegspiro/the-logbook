@@ -162,6 +162,10 @@ import type {
   TrainingSessionCreate,
   TrainingSessionLinkageUpdate,
   RecurringTrainingSessionCreate,
+  TrainingSessionAttach,
+  TrainingApprovalSummary,
+  TrainingApprovalData,
+  TrainingApprovalSubmit,
 } from './adminServices';
 
 export const trainingService = {
@@ -1142,13 +1146,37 @@ export const trainingSessionService = {
     return response.data;
   },
 
-  async getApprovalData(token: string): Promise<Record<string, unknown>> {
-    const response = await api.get<Record<string, unknown>>(`/training/sessions/approve/${token}`);
+  /**
+   * Attach training details to an existing Training event (one made from
+   * Events). Refused with 409 once attendance is finalized, or when the event
+   * already has details.
+   */
+  async attachSession(eventId: string, details: TrainingSessionAttach): Promise<TrainingSessionResponse> {
+    const response = await api.post<TrainingSessionResponse>(`/training/sessions/by-event/${eventId}`, details);
     return response.data;
   },
 
-  async submitApproval(token: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post<Record<string, unknown>>(`/training/sessions/approve/${token}`, data);
+  /**
+   * Where the event's training approval stands, or null when it has none.
+   * Carries the approval link's token only for a caller who may approve.
+   */
+  async getApprovalSummary(eventId: string): Promise<TrainingApprovalSummary | null> {
+    try {
+      const response = await api.get<TrainingApprovalSummary>(`/training/sessions/by-event/${eventId}/approval`);
+      return response.data;
+    } catch (err: unknown) {
+      if (toAppError(err).status === 404) return null;
+      throw err;
+    }
+  },
+
+  async getApprovalData(token: string): Promise<TrainingApprovalData> {
+    const response = await api.get<TrainingApprovalData>(`/training/sessions/approve/${token}`);
+    return response.data;
+  },
+
+  async submitApproval(token: string, data: TrainingApprovalSubmit): Promise<{ message: string; status: string }> {
+    const response = await api.post<{ message: string; status: string }>(`/training/sessions/approve/${token}`, data);
     return response.data;
   },
 };
