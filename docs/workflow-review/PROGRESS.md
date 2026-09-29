@@ -51,7 +51,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W20 | Check-in: QR self check-in, live monitoring, an officer's manual check-in | member, secretary     | `/events/:id/qr-code`, `/events/:id/monitoring` | ✅     |
 | W21 | Event templates, the events admin hub, and event analytics                | secretary             | `/events/admin`, `/events/templates`            | ✅     |
 | W22 | A public event request and its status link                                | anonymous → secretary | `/event-request/status/:token`                  | ✅     |
-| W23 | Locations, the kiosk display and guest check-in                           | admin, anonymous      | `/locations`, `/display/:code`                  | ⬜     |
+| W23 | Locations, the kiosk display and guest check-in                           | admin, anonymous      | `/locations`, `/display/:code`                  | ✅     |
 
 ## Tier 4 — Training
 
@@ -176,6 +176,19 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W23 — Locations, the kiosk display and guest check-in — 2026-09-29
+
+Driven as: `admin` at 1280×900, anonymous at 1024×768 and 390×844, with
+`member` refused. Held: a double-clicked room made one room and one location;
+the kiosk showed the event in the department's zone; a double and a repeat
+guest sign-in made one attendee and one prospect; `member` was refused every
+write and the QR page, with display codes redacted; Regenerate retired the old
+kiosk URL. Fixed: W23-3 (LOW — `/locations` offered a member controls the
+server refuses). Flagged: W23-1 (HIGH — a guest's prospect lands in no
+pipeline when none is flagged default, and no screen shows it), W23-2 (HIGH —
+no screen reads a guest sign-in). Open: W23-4 (NIT). Gate: typecheck, lint and
+the touched suites clean. Next: W24.
 
 ### W22 — A public event request and its status link — 2026-09-29
 

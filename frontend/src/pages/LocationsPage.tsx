@@ -819,8 +819,8 @@ function RoomCard({
   onDelete,
 }: {
   room: Location;
-  onEdit: (r: Location) => void;
-  onDelete: (r: Location) => void;
+  onEdit?: ((r: Location) => void) | undefined;
+  onDelete?: ((r: Location) => void) | undefined;
 }) {
   const [copied, setCopied] = useState(false);
   const [showQR, setShowQR] = useState(false);
@@ -869,22 +869,28 @@ function RoomCard({
               <QrCode className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
           )}
-          <div className="flex items-center gap-0.5 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-            <button
-              onClick={() => onEdit(room)}
-              aria-label="Edit room"
-              className="text-theme-text-muted hover:text-theme-text-primary rounded-sm p-1 transition-colors"
-            >
-              <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
-            <button
-              onClick={() => onDelete(room)}
-              aria-label="Delete room"
-              className="text-theme-text-muted rounded-sm p-1 transition-colors hover:text-red-500"
-            >
-              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
-          </div>
+          {(onEdit || onDelete) && (
+            <div className="flex items-center gap-0.5 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+              {onEdit && (
+                <button
+                  onClick={() => onEdit(room)}
+                  aria-label="Edit room"
+                  className="text-theme-text-muted hover:text-theme-text-primary rounded-sm p-1 transition-colors"
+                >
+                  <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              )}
+              {onDelete && (
+                <button
+                  onClick={() => onDelete(room)}
+                  aria-label="Delete room"
+                  className="text-theme-text-muted rounded-sm p-1 transition-colors hover:text-red-500"
+                >
+                  <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
       {kioskUrl && (
@@ -916,6 +922,13 @@ export default function LocationsPage() {
   const { confirm } = useConfirm();
   const checkPermission = useAuthStore((state) => state.checkPermission);
   const canExportQRCodes = checkPermission('locations.manage') || checkPermission('facilities.manage');
+  // The page is open to every member, since events and forms pick from these
+  // locations, so each control mirrors the permission its endpoint enforces.
+  // Offered to a plain member, they ended in a 403 and "Failed to save setting".
+  const canCreate = checkPermission('locations.create') || checkPermission('locations.manage');
+  const canEdit = checkPermission('locations.edit') || checkPermission('locations.manage');
+  const canDelete = checkPermission('locations.delete') || checkPermission('locations.manage');
+  const canSetStationMode = checkPermission('settings.manage') || checkPermission('organization.update_settings');
   const [locations, setLocations] = useState<Location[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -994,14 +1007,14 @@ export default function LocationsPage() {
   // Auto-show wizard only when the user has zero locations and hasn't dismissed it
   useEffect(() => {
     if (stationModeLoading || isLoading) return;
-    if (wizardDismissedRef.current) return;
+    if (wizardDismissedRef.current || !canCreate) return;
     // Only auto-show when there are truly no locations at all.
     // If the user already has locations (even if stationMode isn't set), let them
     // use the page normally — they can launch the wizard manually if needed.
     if (locations.length === 0) {
       setShowWizard(true);
     }
-  }, [stationModeLoading, isLoading, locations]);
+  }, [stationModeLoading, isLoading, locations, canCreate]);
 
   const { stations, rooms } = groupLocations(
     locations.filter(
@@ -1226,28 +1239,32 @@ export default function LocationsPage() {
               <Building2 className="h-3.5 w-3.5" /> Multi-Station Agency
             </span>
           )}
-          <button
-            onClick={() => {
-              void handleSetStationMode(isSingleStation ? 'multi_station' : 'single_station');
-            }}
-            className="text-theme-text-muted hover:text-theme-text-secondary underline"
-          >
-            Change
-          </button>
-          <button
-            onClick={() => {
-              wizardDismissedRef.current = false;
-              setShowWizard(true);
-            }}
-            className="text-theme-text-muted hover:text-theme-text-secondary underline"
-          >
-            Run Setup Wizard
-          </button>
+          {canSetStationMode && (
+            <button
+              onClick={() => {
+                void handleSetStationMode(isSingleStation ? 'multi_station' : 'single_station');
+              }}
+              className="text-theme-text-muted hover:text-theme-text-secondary underline"
+            >
+              Change
+            </button>
+          )}
+          {canCreate && (
+            <button
+              onClick={() => {
+                wizardDismissedRef.current = false;
+                setShowWizard(true);
+              }}
+              className="text-theme-text-muted hover:text-theme-text-secondary underline"
+            >
+              Run Setup Wizard
+            </button>
+          )}
         </div>
       )}
 
       {/* Station mode not set but locations exist — let user set mode or launch wizard */}
-      {!stationModeLoading && stationMode === null && locations.length > 0 && (
+      {!stationModeLoading && stationMode === null && locations.length > 0 && canSetStationMode && (
         <div className="text-theme-text-muted flex flex-wrap items-center gap-2 text-xs">
           <span className="flex items-center gap-1.5 rounded-full bg-yellow-500/10 px-2.5 py-1 text-yellow-500">
             <HelpCircle className="h-3.5 w-3.5" /> Station mode not configured
@@ -1268,15 +1285,17 @@ export default function LocationsPage() {
           >
             Set Multi-Station
           </button>
-          <button
-            onClick={() => {
-              wizardDismissedRef.current = false;
-              setShowWizard(true);
-            }}
-            className="text-theme-text-muted hover:text-theme-text-secondary underline"
-          >
-            Run Setup Wizard
-          </button>
+          {canCreate && (
+            <button
+              onClick={() => {
+                wizardDismissedRef.current = false;
+                setShowWizard(true);
+              }}
+              className="text-theme-text-muted hover:text-theme-text-secondary underline"
+            >
+              Run Setup Wizard
+            </button>
+          )}
         </div>
       )}
 
@@ -1301,7 +1320,7 @@ export default function LocationsPage() {
               <QrCode className="h-4 w-4" aria-hidden="true" /> Check-In QR Codes
             </Link>
           )}
-          {(!isSingleStation || stations.length === 0) && (
+          {canCreate && (!isSingleStation || stations.length === 0) && (
             <button onClick={openCreateStation} className="btn-primary flex items-center gap-2 py-2.5">
               <Plus className="h-4 w-4" /> {isSingleStation ? 'Set Up Location' : 'Add Station'}
             </button>
@@ -1350,12 +1369,16 @@ export default function LocationsPage() {
         <div className="py-20 text-center">
           <Building2 className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
           <h3 className="text-theme-text-primary mb-1 text-lg font-medium">No locations yet</h3>
-          <p className="text-theme-text-muted mb-4">
-            Add your first station to get started. You can then add rooms within it.
-          </p>
-          <button onClick={openCreateStation} className="btn-primary inline-flex items-center gap-2 py-2.5">
-            <Plus className="h-4 w-4" /> Add Station
-          </button>
+          {canCreate && (
+            <>
+              <p className="text-theme-text-muted mb-4">
+                Add your first station to get started. You can then add rooms within it.
+              </p>
+              <button onClick={openCreateStation} className="btn-primary inline-flex items-center gap-2 py-2.5">
+                <Plus className="h-4 w-4" /> Add Station
+              </button>
+            </>
+          )}
         </div>
       ) : (
         <div className="space-y-4">
@@ -1381,24 +1404,28 @@ export default function LocationsPage() {
                     {station.description && <p className="text-theme-text-muted mt-1 text-sm">{station.description}</p>}
                   </div>
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => openEditStation(station)}
-                      title="Edit station"
-                      aria-label="Edit station"
-                      className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-2 transition-colors"
-                    >
-                      <Pencil className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        void handleDeleteStation(station);
-                      }}
-                      title="Delete station"
-                      aria-label="Delete station"
-                      className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-red-500/10 hover:text-red-500"
-                    >
-                      <Trash2 className="h-4 w-4" aria-hidden="true" />
-                    </button>
+                    {canEdit && (
+                      <button
+                        onClick={() => openEditStation(station)}
+                        title="Edit station"
+                        aria-label="Edit station"
+                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-2 transition-colors"
+                      >
+                        <Pencil className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    )}
+                    {canDelete && (
+                      <button
+                        onClick={() => {
+                          void handleDeleteStation(station);
+                        }}
+                        title="Delete station"
+                        aria-label="Delete station"
+                        className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-red-500/10 hover:text-red-500"
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    )}
                     <button
                       onClick={() => toggleStation(station.name)}
                       className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors"
@@ -1417,12 +1444,14 @@ export default function LocationsPage() {
                   <div className="border-theme-surface-border bg-theme-surface-hover/30 space-y-2 border-t p-4">
                     <div className="mb-2 flex items-center justify-between">
                       <h4 className="text-theme-text-primary text-sm font-semibold">Rooms</h4>
-                      <button
-                        onClick={() => openAddRoom(station.name)}
-                        className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400"
-                      >
-                        <Plus className="h-3 w-3" /> Add Room
-                      </button>
+                      {canCreate && (
+                        <button
+                          onClick={() => openAddRoom(station.name)}
+                          className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400"
+                        >
+                          <Plus className="h-3 w-3" /> Add Room
+                        </button>
+                      )}
                     </div>
                     {stationRooms.length === 0 ? (
                       <p className="text-theme-text-muted py-2 text-sm">
@@ -1434,10 +1463,14 @@ export default function LocationsPage() {
                           <RoomCard
                             key={room.id}
                             room={room}
-                            onEdit={openEditRoom}
-                            onDelete={(r) => {
-                              void handleDeleteRoom(r);
-                            }}
+                            onEdit={canEdit ? openEditRoom : undefined}
+                            onDelete={
+                              canDelete
+                                ? (r) => {
+                                    void handleDeleteRoom(r);
+                                  }
+                                : undefined
+                            }
                           />
                         ))}
                       </div>
@@ -1457,10 +1490,14 @@ export default function LocationsPage() {
                   <RoomCard
                     key={room.id}
                     room={room}
-                    onEdit={openEditRoom}
-                    onDelete={(r) => {
-                      void handleDeleteRoom(r);
-                    }}
+                    onEdit={canEdit ? openEditRoom : undefined}
+                    onDelete={
+                      canDelete
+                        ? (r) => {
+                            void handleDeleteRoom(r);
+                          }
+                        : undefined
+                    }
                   />
                 ))}
               </div>
