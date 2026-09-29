@@ -349,6 +349,8 @@ export interface QRCheckInData {
   require_checkout?: boolean | undefined;
   timezone?: string | undefined;
   allow_guest_check_in?: boolean | undefined;
+  /** Set by the server: whether a check-in writes a training record. */
+  records_training?: boolean | undefined;
 }
 
 /** Public event detail shown on the unauthenticated guest sign-in page. */

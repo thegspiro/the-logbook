@@ -48,7 +48,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | --- | ------------------------------------------------------------------------- | --------------------- | ----------------------------------------------- | ------ |
 | W18 | Create, edit and cancel an event, including a recurring one               | secretary             | `/events`, `/events/:id/edit`                   | ✅     |
 | W19 | RSVP, change it, and see it on the event                                  | member, member2       | `/events/:id`                                   | ✅     |
-| W20 | Check-in: QR self check-in, live monitoring, an officer's manual check-in | member, secretary     | `/events/:id/qr-code`, `/events/:id/monitoring` | ⬜     |
+| W20 | Check-in: QR self check-in, live monitoring, an officer's manual check-in | member, secretary     | `/events/:id/qr-code`, `/events/:id/monitoring` | ✅     |
 | W21 | Event templates, the events admin hub, and event analytics                | secretary             | `/events/admin`, `/events/templates`            | ⬜     |
 | W22 | A public event request and its status link                                | anonymous → secretary | `/event-request/status/:token`                  | ⬜     |
 | W23 | Locations, the kiosk display and guest check-in                           | admin, anonymous      | `/locations`, `/display/:code`                  | ⬜     |
@@ -165,6 +165,9 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   (first sign-in, admin reset), the shell and shared hooks fire ~17 requests
   the server refuses with 403, including `POST /errors/log`, so errors from
   that state cannot be reported (W08-6).
+- **Any run touching the app shell, or an accessibility activity** — every
+  page carries two "Skip to main content" links, one in `index.html` and one
+  in `AppLayout` (W20).
 - **W79** — tap targets under 44px on the onboarding Modules, Ranks &
   Positions and Apparatus steps at 390px wide (W01-13), and the sign-in
   screen's "Forgot your password?", Privacy and Terms links (W02-5), and
@@ -173,6 +176,19 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W20 — Check-in: QR, monitoring, manual — 2026-09-29
+
+Driven as: `member` at 390×844 and `secretary` at 1280×900, with `member2`
+checked in and refused, on a Training event with no linked session. Held:
+the QR page, a confirming self check-in that a double or repeat tap cannot
+duplicate, monitoring that counts and explains early taps, manual check-in;
+`member2` refused on page and APIs. Fixed: W20-1 (MED — the check-in screen
+said "Training Record Created" for a training event that records nothing;
+the server now says whether it will), W20-2 (LOW — the manual check-in
+search's label was overridden and 26 buttons were all "Check In"), W20-3
+(NIT — "going" in monitoring). Flagged: none. Gate: typecheck, lint and the
+touched suites clean. Next: W21.
 
 ### W19 — RSVP, change it, and see it on the event — 2026-09-28
 
