@@ -227,16 +227,13 @@ const StaffingGapsSection: React.FC = () => {
 
       {rangeReversed && (
         <div className="alert-warning text-sm" role="alert">
-          The <strong>To</strong> date is earlier than <strong>From</strong>, so this range holds no days at all.
-          Nothing has been checked.
+          The <strong>To</strong> date is before the <strong>From</strong> date. Change one of them to check this range.
         </div>
       )}
 
       {failed && (
         <div className="alert-warning flex items-center gap-2 text-sm" role="alert">
-          <span className="flex-1">
-            The schedule for this range did not load, so nothing below is a complete answer.
-          </span>
+          <span className="flex-1">The schedule for this range did not load, so this list may be incomplete.</span>
           <button
             type="button"
             className="mobile-touch-target px-2 font-semibold underline"
@@ -268,7 +265,7 @@ const StaffingGapsSection: React.FC = () => {
         <EmptyState
           icon={CalendarRange}
           title="Every shift in this range has the crew it asks for"
-          description="A shift that names neither positions nor a minimum staffing level is not counted here — it has never said how big its crew is, so nothing can say it is short."
+          description="Shifts with no positions and no minimum staffing aren't counted, because they don't say how many people they need."
         />
       )}
 

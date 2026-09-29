@@ -358,7 +358,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
         <h3 className="text-theme-text-primary text-base font-semibold">Scheduling Notifications</h3>
       </div>
       <p className="text-theme-text-muted mb-4 text-xs">
-        Configure which scheduling events trigger in-app notifications for your department members.
+        Choose which scheduling events send members an in-app notification.
       </p>
 
       {loadingRules ? (
@@ -369,8 +369,8 @@ export const SchedulingNotificationsPanel: React.FC = () => {
         <div className="alert-warning flex items-start gap-2 text-sm" role="alert">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
-            These settings could not be loaded, so the switches below are not shown — they would read as off whatever
-            their real state is. Reload the page to try again.
+            These settings could not be loaded, so the switches are hidden rather than shown as off. Reload the page to
+            try again.
           </span>
         </div>
       ) : (
@@ -679,7 +679,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                     htmlFor={reminderLookaheadId}
                     className="text-theme-text-secondary mb-1 block text-xs font-medium"
                   >
-                    Send reminder this many hours before shift starts:
+                    How long before the shift starts:
                   </label>
                   <select
                     id={reminderLookaheadId}

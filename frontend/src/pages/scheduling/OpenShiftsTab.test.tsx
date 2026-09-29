@@ -96,7 +96,7 @@ describe('OpenShiftsTab', () => {
   it('should render the filter bar and info section', () => {
     renderWithRouter(<OpenShiftsTab onViewShift={mockOnViewShift} />);
     expect(screen.getByText('Refresh')).toBeInTheDocument();
-    expect(screen.getByText(/Browse available shifts/)).toBeInTheDocument();
+    expect(screen.getByText(/Shifts with open seats/)).toBeInTheDocument();
   });
 
   it('should render shifts after loading', async () => {
