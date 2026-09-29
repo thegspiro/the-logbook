@@ -70,7 +70,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 
 | #   | Activity                                                           | Acts as                     | Starts at                                                   | Status |
 | --- | ------------------------------------------------------------------ | --------------------------- | ----------------------------------------------------------- | ------ |
-| W32 | Shift templates and patterns, then generate a month of shifts      | scheduling_officer          | `/scheduling/admin/planning/*`                              | ⬜     |
+| W32 | Shift templates and patterns, then generate a month of shifts      | scheduling_officer          | `/scheduling/admin/planning/*`                              | ✅     |
 | W33 | Sign up for a shift, swap it, request time off                     | member, member2 → officer   | `/scheduling`                                               | ⬜     |
 | W34 | Check in to a shift by apparatus QR, and close the shift out       | member → scheduling_officer | `/scheduling/checkin`, `/scheduling/admin/closeout`         | ⬜     |
 | W35 | Platoons and the position qualification roster                     | scheduling_officer          | `/scheduling/admin/platoons`, `/scheduling/admin/positions` | ⬜     |
@@ -179,6 +179,21 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W32 — Shift templates and patterns, then generate a month of shifts — 2026-09-29
+
+Driven as: `scheduling_officer` at 1280×900 and 390×844, with `member`
+refused and reading the result. Held: a double-clicked Save Template, Create
+Pattern and Generate each acted once; a 24/48 rotation produced 11 shifts
+every third day at 7 AM Central with the template's seats; a re-run added no
+duplicates; members see the shifts as open and are refused the writes and the
+pages. Fixed: W32-1 (MED — `driver_warnings`, the driver seats generation
+leaves empty for want of EVOC, were dropped by both generate screens; read from
+code, covered by tests), W32-2 (LOW — a re-run said "Generated 0 shifts"),
+W32-3 (LOW — the pattern form's fields unnamed, its choices by colour, and a
+duplicate "Generate" on phones), W32-4 (LOW — the template form's time pickers
+and crew seats indistinguishable). Open: W32-5, W32-6 (NIT). No flags. Gate:
+typecheck, lint and the scheduling suites clean. Next: W33.
 
 ### W31 — The learning center orientation — 2026-09-29
 

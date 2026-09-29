@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
+import { reportGeneration } from '../../modules/scheduling/utils/patternGeneration';
 import type { ShiftTemplateRecord } from '../../modules/scheduling/services/api';
 import type { ShiftPattern } from '../../types/scheduling';
 import { useTimezone } from '../../hooks/useTimezone';
@@ -332,8 +333,7 @@ export const PatternsTab: React.FC = () => {
         start_date: generateForm.start_date,
         end_date: generateForm.end_date,
       });
-      const count = Number(result.shifts_created ?? 0);
-      toast.success(`Generated ${count} shift${count !== 1 ? 's' : ''}`);
+      reportGeneration(result);
       setGeneratingFor(null);
       setGenerateForm({ start_date: '', end_date: '' });
     } catch (err) {
@@ -428,6 +428,8 @@ export const PatternsTab: React.FC = () => {
               ].map(({ mode, label, icon: Icon, desc }) => (
                 <button
                   key={mode}
+                  type="button"
+                  aria-pressed={creationMode === mode}
                   onClick={() => {
                     setCreationMode(mode);
                     setSelectedPreset(null);
@@ -467,8 +469,11 @@ export const PatternsTab: React.FC = () => {
             {creationMode === 'manual' && (
               <>
                 <div>
-                  <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Pattern Type</label>
+                  <label className="text-theme-text-secondary mb-1 block text-xs font-medium" htmlFor="pattern-type">
+                    Pattern Type
+                  </label>
                   <select
+                    id="pattern-type"
                     value={createForm.pattern_type}
                     onChange={(e) =>
                       setCreateForm((p) => ({
@@ -488,11 +493,15 @@ export const PatternsTab: React.FC = () => {
                 {/* Weekly: weekday picker */}
                 {createForm.pattern_type === 'weekly' && (
                   <div>
-                    <label className="text-theme-text-secondary mb-2 block text-xs font-medium">Active Days</label>
-                    <div className="flex flex-wrap gap-1.5">
+                    <p id="pattern-active-days" className="text-theme-text-secondary mb-2 block text-xs font-medium">
+                      Active Days
+                    </p>
+                    <div role="group" aria-labelledby="pattern-active-days" className="flex flex-wrap gap-1.5">
                       {WEEKDAY_LABELS.map((label, i) => (
                         <button
                           key={i}
+                          type="button"
+                          aria-pressed={createForm.weekdays.includes(i)}
                           onClick={() => toggleWeekday(i)}
                           className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
                             createForm.weekdays.includes(i)
@@ -512,8 +521,14 @@ export const PatternsTab: React.FC = () => {
                   <div>
                     <div className="form-grid-3">
                       <div>
-                        <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Days On</label>
+                        <label
+                          className="text-theme-text-secondary mb-1 block text-xs font-medium"
+                          htmlFor="pattern-days-on"
+                        >
+                          Days On
+                        </label>
                         <input
+                          id="pattern-days-on"
                           type="number"
                           min="1"
                           value={createForm.days_on}
@@ -527,8 +542,14 @@ export const PatternsTab: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Days Off</label>
+                        <label
+                          className="text-theme-text-secondary mb-1 block text-xs font-medium"
+                          htmlFor="pattern-days-off"
+                        >
+                          Days Off
+                        </label>
                         <input
+                          id="pattern-days-off"
                           type="number"
                           min="1"
                           value={createForm.days_off}
@@ -542,10 +563,14 @@ export const PatternsTab: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
+                        <label
+                          className="text-theme-text-secondary mb-1 block text-xs font-medium"
+                          htmlFor="pattern-rotation-days"
+                        >
                           Rotation Cycle
                         </label>
                         <input
+                          id="pattern-rotation-days"
                           type="number"
                           min="1"
                           value={createForm.rotation_days}
@@ -577,8 +602,14 @@ export const PatternsTab: React.FC = () => {
 
                   <div className="form-grid-2">
                     <div>
-                      <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Pattern Name *</label>
+                      <label
+                        className="text-theme-text-secondary mb-1 block text-xs font-medium"
+                        htmlFor="pattern-name"
+                      >
+                        Pattern Name *
+                      </label>
                       <input
+                        id="pattern-name"
                         type="text"
                         value={createForm.name}
                         onChange={(e) => setCreateForm((p) => ({ ...p, name: e.target.value }))}
@@ -587,8 +618,14 @@ export const PatternsTab: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Description</label>
+                      <label
+                        className="text-theme-text-secondary mb-1 block text-xs font-medium"
+                        htmlFor="pattern-description"
+                      >
+                        Description
+                      </label>
                       <input
+                        id="pattern-description"
                         type="text"
                         value={createForm.description}
                         onChange={(e) =>
@@ -613,11 +650,15 @@ export const PatternsTab: React.FC = () => {
                       </p>
                       <div className="form-grid-2">
                         <div>
-                          <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
+                          <label
+                            className="text-theme-text-secondary mb-1 block text-xs font-medium"
+                            htmlFor="pattern-day-template"
+                          >
                             <Sun className="mr-1 inline h-3 w-3 text-amber-500" />
                             Day Shift Template *
                           </label>
                           <select
+                            id="pattern-day-template"
                             value={createForm.day_template_id}
                             onChange={(e) =>
                               setCreateForm((p) => ({
@@ -637,11 +678,15 @@ export const PatternsTab: React.FC = () => {
                           </select>
                         </div>
                         <div>
-                          <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
+                          <label
+                            className="text-theme-text-secondary mb-1 block text-xs font-medium"
+                            htmlFor="pattern-night-template"
+                          >
                             <Moon className="mr-1 inline h-3 w-3 text-indigo-700 dark:text-indigo-400" />
                             Night Shift Template *
                           </label>
                           <select
+                            id="pattern-night-template"
                             value={createForm.night_template_id}
                             onChange={(e) =>
                               setCreateForm((p) => ({
@@ -663,10 +708,14 @@ export const PatternsTab: React.FC = () => {
                     </div>
                   ) : (
                     <div>
-                      <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
+                      <label
+                        className="text-theme-text-secondary mb-1 block text-xs font-medium"
+                        htmlFor="pattern-template"
+                      >
                         Shift Template *
                       </label>
                       <select
+                        id="pattern-template"
                         value={createForm.template_id}
                         onChange={(e) =>
                           setCreateForm((p) => ({
@@ -693,8 +742,14 @@ export const PatternsTab: React.FC = () => {
 
                   <div className="form-grid-2">
                     <div>
-                      <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Start Date *</label>
+                      <label
+                        className="text-theme-text-secondary mb-1 block text-xs font-medium"
+                        htmlFor="pattern-start-date"
+                      >
+                        Start Date *
+                      </label>
                       <input
+                        id="pattern-start-date"
                         type="date"
                         value={createForm.start_date}
                         onChange={(e) =>
@@ -708,10 +763,14 @@ export const PatternsTab: React.FC = () => {
                       <p className="text-theme-text-muted mt-1 text-[11px]">The cycle begins counting from this date</p>
                     </div>
                     <div>
-                      <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
+                      <label
+                        className="text-theme-text-secondary mb-1 block text-xs font-medium"
+                        htmlFor="pattern-end-date"
+                      >
                         End Date (optional)
                       </label>
                       <input
+                        id="pattern-end-date"
                         type="date"
                         value={createForm.end_date}
                         onChange={(e) =>
@@ -882,6 +941,10 @@ export const PatternsTab: React.FC = () => {
                     </span>
                   </button>
                   <button
+                    type="button"
+                    // One of these per pattern, and on a phone its text is just
+                    // "Generate" — beside the form's own Generate button.
+                    aria-label={`Generate shifts from ${pattern.name}`}
                     onClick={() => {
                       setExpandedId(pattern.id);
                       setGeneratingFor(pattern.id);
@@ -972,10 +1035,14 @@ export const PatternsTab: React.FC = () => {
                         </p>
                         <div className="form-grid-2">
                           <div>
-                            <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
+                            <label
+                              className="text-theme-text-secondary mb-1 block text-xs font-medium"
+                              htmlFor={`pattern-generate-start-${pattern.id}`}
+                            >
                               Start Date *
                             </label>
                             <input
+                              id={`pattern-generate-start-${pattern.id}`}
                               type="date"
                               value={generateForm.start_date}
                               onChange={(e) =>
@@ -988,10 +1055,14 @@ export const PatternsTab: React.FC = () => {
                             />
                           </div>
                           <div>
-                            <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
+                            <label
+                              className="text-theme-text-secondary mb-1 block text-xs font-medium"
+                              htmlFor={`pattern-generate-end-${pattern.id}`}
+                            >
                               End Date *
                             </label>
                             <input
+                              id={`pattern-generate-end-${pattern.id}`}
                               type="date"
                               value={generateForm.end_date}
                               onChange={(e) =>

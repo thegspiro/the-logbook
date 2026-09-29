@@ -189,7 +189,7 @@ describe('TemplateFormModal administrative position access', () => {
     );
 
     expect(screen.getByText(/Administrative members can only use positions/)).toBeInTheDocument();
-    await user.click(screen.getByRole('checkbox', { name: 'Administrative access' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Administrative access, position 1' }));
     await user.click(screen.getByRole('button', { name: 'Save Template' }));
 
     expect(onSubmit).toHaveBeenCalledWith(
@@ -236,5 +236,40 @@ describe('TemplateFormModal administrative position access', () => {
         flat_positions: [expect.objectContaining({ position: 'other', allow_administrative_members: true })],
       })
     );
+  });
+});
+
+describe('TemplateFormModal field names', () => {
+  it('tells the start and end pickers apart, and names each crew seat and the chosen category', () => {
+    renderWithRouter(
+      <TemplateFormModal
+        isOpen
+        onClose={vi.fn()}
+        onSubmit={vi.fn<(data: Record<string, unknown>) => Promise<void>>().mockResolvedValue(undefined)}
+        title="Create Template"
+        apparatusOptions={[]}
+        apparatusSource="default"
+        initialData={{
+          ...emptyTemplateForm,
+          name: 'Day Shift A',
+          positions: [
+            { position: 'officer', required: true, allow_administrative_members: false },
+            { position: 'driver', required: true, allow_administrative_members: false },
+          ],
+        }}
+      />
+    );
+
+    expect(screen.getByRole('combobox', { name: 'Starts at hour' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Ends at hour' })).toBeInTheDocument();
+
+    const category = screen.getByRole('group', { name: 'Category' });
+    expect(category).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Standard/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /Event \/ Special/ })).toHaveAttribute('aria-pressed', 'false');
+
+    expect(screen.getByRole('combobox', { name: 'Position 1' })).toHaveValue('officer');
+    expect(screen.getByRole('combobox', { name: 'Position 2' })).toHaveValue('driver');
+    expect(screen.getByRole('checkbox', { name: 'Administrative access, position 2' })).not.toBeChecked();
   });
 });

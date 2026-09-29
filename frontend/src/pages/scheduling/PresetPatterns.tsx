@@ -82,6 +82,7 @@ const PresetPatterns: React.FC<PresetPatternsProps> = ({ onSelect, selectedId })
           return (
             <button
               key={preset.id}
+              aria-pressed={isSelected}
               onClick={() => onSelect(preset)}
               className={`rounded-xl border p-4 text-left transition-all ${
                 isSelected
