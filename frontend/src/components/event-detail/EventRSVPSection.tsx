@@ -153,7 +153,7 @@ export const EventRSVPSection: React.FC<EventRSVPSectionProps> = ({
                         {effectiveCheckOut && <span>Out: {formatTime(effectiveCheckOut, timezone)}</span>}
                         {effectiveDuration != null && <span>Duration: {effectiveDuration} min</span>}
                         {rsvp.override_check_in_at && (
-                          <span className="text-[10px] text-amber-500">(times overridden)</span>
+                          <span className="text-[10px] text-amber-500">(times edited)</span>
                         )}
                         {/* Their credited time already starts at the event's
                             scheduled start, so this is not a correction to

@@ -82,7 +82,7 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!f.name.trim()) {
-      toast.error('Please enter an equipment name');
+      toast.error('Enter an equipment name');
       return;
     }
 
@@ -249,7 +249,7 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
             Cancel
           </button>
           <button type="submit" disabled={saving} className="btn-primary px-6 py-2">
-            {saving ? 'Saving...' : editEquipment ? 'Update Equipment' : 'Add Equipment'}
+            {saving ? 'Saving...' : editEquipment ? 'Save Changes' : 'Add Equipment'}
           </button>
         </div>
       </form>

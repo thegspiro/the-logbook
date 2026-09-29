@@ -3,7 +3,7 @@
  *
  * With no meetings recorded, the page rendered three cards pitching what
  * recording minutes gets you — templates, action items, archives — and a card
- * telling the reader to "Start recording meeting minutes". Creating minutes is
+ * telling the reader to "Record your first meeting to start keeping minutes". Creating minutes is
  * `minutes.manage`-gated on the server, and the buttons beside that copy were
  * already withheld, so a member read an advertisement for a feature they have
  * no way to reach.
@@ -50,7 +50,7 @@ import MinutesPage from './MinutesPage';
 import { renderWithRouter } from '../../../test/utils';
 
 const PITCH = /Structured templates for recording meeting minutes/i;
-const INSTRUCTION = /Start recording meeting minutes/i;
+const INSTRUCTION = /Record your first meeting to start keeping minutes/i;
 
 describe('MinutesPage — empty state', () => {
   beforeEach(() => {
@@ -68,7 +68,7 @@ describe('MinutesPage — empty state', () => {
   it('reports the emptiness to a member without pitching or instructing', async () => {
     renderWithRouter(<MinutesPage />);
 
-    expect(await screen.findByText('No Meeting Minutes')).toBeInTheDocument();
+    expect(await screen.findByText('No Meetings Recorded')).toBeInTheDocument();
     expect(screen.queryByText(PITCH)).not.toBeInTheDocument();
     expect(screen.queryByText(INSTRUCTION)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Record First Minutes/i })).not.toBeInTheDocument();
@@ -79,7 +79,7 @@ describe('MinutesPage — empty state', () => {
     mockCheckPermission.mockReturnValue(true);
     renderWithRouter(<MinutesPage />);
 
-    expect(await screen.findByText('No Meeting Minutes')).toBeInTheDocument();
+    expect(await screen.findByText('No Meetings Recorded')).toBeInTheDocument();
     expect(screen.getByText(PITCH)).toBeInTheDocument();
     expect(screen.getByText(INSTRUCTION)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Record First Minutes/i })).toBeInTheDocument();
@@ -90,7 +90,7 @@ describe('MinutesPage — empty state', () => {
     mockCheckPermission.mockReturnValue(true);
     const { rerender } = renderWithRouter(<MinutesPage />);
 
-    await screen.findByText('No Meeting Minutes');
+    await screen.findByText('No Meetings Recorded');
     await user.click(screen.getByRole('button', { name: /Record First Minutes/i }));
     expect(await screen.findByText('Record Meeting Minutes')).toBeInTheDocument();
 

@@ -65,7 +65,9 @@ export const EquipmentTab: React.FC<EquipmentTabProps> = ({ equipment, loadingTa
             <div className="border-theme-text-primary mx-auto h-8 w-8 animate-spin rounded-full border-b-2"></div>
           </div>
         ) : equipment.length === 0 ? (
-          <p className="text-theme-text-muted py-8 text-center">No equipment assigned.</p>
+          <p className="text-theme-text-muted py-8 text-center">
+            No equipment yet. Select Add Equipment to list what this apparatus carries.
+          </p>
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {equipment.map((item) => (
@@ -144,8 +146,8 @@ export const EquipmentTab: React.FC<EquipmentTabProps> = ({ equipment, loadingTa
         onClose={() => setDeleteTarget(null)}
         onConfirm={() => void handleDelete()}
         title="Remove Equipment"
-        message={`Are you sure you want to remove "${deleteTarget?.name ?? ''}" from this apparatus? This action cannot be undone.`}
-        confirmLabel="Remove"
+        message={`Remove "${deleteTarget?.name ?? ''}" from this apparatus? You can't undo this.`}
+        confirmLabel="Remove equipment"
         variant="danger"
       />
     </>

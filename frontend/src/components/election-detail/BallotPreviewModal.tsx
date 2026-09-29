@@ -58,8 +58,8 @@ const BallotPreviewModal: React.FC<BallotPreviewModalProps> = ({ election, candi
 
         <div className="px-6 pt-6">
           <p className="text-theme-text-secondary text-sm">
-            Please review each item below and make your selection. You may vote for the presented option, write in an
-            alternative, or abstain from voting on any item.
+            Make a selection for each item below. You can vote for an option, write in your own choice where allowed, or
+            abstain on any item.
           </p>
         </div>
 
@@ -204,7 +204,7 @@ const BallotPreviewModal: React.FC<BallotPreviewModalProps> = ({ election, candi
           )}
 
           <div className="text-theme-text-muted mt-6 text-center text-xs">
-            <p>Your vote is anonymous and securely recorded.</p>
+            <p>Your vote is securely recorded.</p>
             <p>This voting link is unique to you. Do not share it with others.</p>
           </div>
         </div>

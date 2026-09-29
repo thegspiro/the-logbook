@@ -234,7 +234,7 @@ describe('StageConfigModal', () => {
 
     await user.click(screen.getByText('Add Stage'));
 
-    expect(screen.getByText('Please select a form')).toBeInTheDocument();
+    expect(screen.getByText('Select a form')).toBeInTheDocument();
     expect(defaultProps.onSave).not.toHaveBeenCalled();
   });
 

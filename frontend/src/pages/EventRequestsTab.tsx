@@ -400,7 +400,7 @@ const EventRequestsTab: React.FC = () => {
 
   const handleSchedule = async (requestId: string) => {
     if (!scheduleDate) {
-      toast.error('Please select a date.');
+      toast.error('Pick a start date.');
       return;
     }
     setActionLoading(true);
@@ -888,7 +888,7 @@ const EventRequestsTab: React.FC = () => {
                               <div className="flex items-center justify-between">
                                 <p className="text-xs text-blue-700 dark:text-blue-300">
                                   <Eye className="mr-1 inline h-3 w-3" />
-                                  Public status link available
+                                  The requester can track progress with a status link
                                 </p>
                                 <button
                                   type="button"
@@ -1169,7 +1169,7 @@ const EventRequestsTab: React.FC = () => {
                                     Say what help you need and members can claim a role from{' '}
                                     <span className="font-medium">Scheduling → Open Shifts</span>. These are outreach
                                     roles, not riding positions — nobody is taking a seat on an engine at a school
-                                    visit. Edit the list in Events settings.
+                                    visit. Edit the list in Event settings.
                                   </p>
                                   <div className="space-y-2">
                                     {roleNeeds.map((need, idx) => (

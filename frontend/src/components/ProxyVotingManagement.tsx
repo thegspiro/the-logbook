@@ -272,7 +272,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({ el
         <div className="text-theme-text-muted py-8 text-center">
           <p>No proxy authorizations for this election.</p>
           {canManage && proxyVotingEnabled && (
-            <p className="mt-1 text-sm">Click &quot;Add Authorization&quot; to authorize a proxy voter.</p>
+            <p className="mt-1 text-sm">Select Add Authorization to let a member vote for an absent member.</p>
           )}
         </div>
       ) : (

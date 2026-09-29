@@ -649,7 +649,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
       await loadTemplates();
       setSavedTemplateName('');
       setShowSaveTemplate(false);
-      toast.success('Reusable ballot template saved');
+      toast.success('Ballot template saved');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to save ballot template'));
     } finally {

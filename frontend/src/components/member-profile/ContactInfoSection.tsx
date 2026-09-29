@@ -217,8 +217,8 @@ const ContactInfoSection: React.FC<ContactInfoSectionProps> = ({
               </label>
               {smsConsentGranted === false && (
                 <p className="text-theme-text-muted text-sm">
-                  No text-message consent on record. Texts will not send until this member turns them on themselves
-                  under Settings → Notifications — consent has to come from them, not from staff.
+                  No text-message consent on record. Texts stay off until the member turns them on in Settings →
+                  Notifications. Staff cannot give consent for them.
                 </p>
               )}
             </div>

@@ -397,7 +397,7 @@ export const MemberProfilePage: React.FC = () => {
       await fetchUserData(userId);
       setStatusModalOpen(false);
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Unable to change member status. Please try again.'));
+      setError(getErrorMessage(err, 'Unable to change member status. Try again.'));
     } finally {
       setStatusChanging(false);
     }
@@ -458,7 +458,7 @@ export const MemberProfilePage: React.FC = () => {
       setUser(updatedUser);
       setIsEditing(false);
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Unable to update contact information. Please check your input and try again.'));
+      setError(getErrorMessage(err, 'Unable to update contact information. Check your entries and try again.'));
     } finally {
       setSaving(false);
     }
@@ -501,7 +501,7 @@ export const MemberProfilePage: React.FC = () => {
     // Client-side validation
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
     if (!allowedTypes.includes(file.type)) {
-      setError('Please select a JPEG, PNG, or WebP image.');
+      setError('Choose a JPEG, PNG, or WebP image.');
       return;
     }
     if (file.size > MAX_AVATAR_SIZE) {
@@ -906,6 +906,8 @@ export const MemberProfilePage: React.FC = () => {
                   <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Assigned Inventory</h2>
                   {inventoryLoading ? (
                     <div className="text-theme-text-muted py-4 text-center">Loading inventory...</div>
+                  ) : inventoryItems.length === 0 ? (
+                    <p className="text-theme-text-muted text-sm">No equipment is assigned to this member.</p>
                   ) : (
                     <div className="overflow-x-auto">
                       <table className="divide-theme-surface-border min-w-full divide-y">
@@ -1086,7 +1088,7 @@ export const MemberProfilePage: React.FC = () => {
                           }))
                         }
                         className="form-input px-3 text-sm"
-                        placeholder="Home email for post-separation contact"
+                        placeholder="Home email, for contact after leaving the department"
                       />
                     </div>
                     <div>
@@ -1263,7 +1265,7 @@ export const MemberProfilePage: React.FC = () => {
                     </div>
                     {user.status === UserStatus.ACTIVE && (
                       <p className="text-theme-text-muted mt-1 text-xs">
-                        Shown to you because you manage members. Other members do not see an active status.
+                        You see this because you manage members. Other members see a status only when it is not Active.
                       </p>
                     )}
                     {/* Only a departed member can be anonymized; the backend
@@ -1413,14 +1415,14 @@ export const MemberProfilePage: React.FC = () => {
                     value={statusReason}
                     onChange={(e) => setStatusReason(e.target.value)}
                     rows={3}
-                    placeholder="Reason for the status change..."
+                    placeholder="Why is the status changing?"
                     className="form-input px-3 text-sm focus:ring-blue-500"
                   />
                 </div>
                 {isRejoining && <RejoinServiceFields state={rejoin} disabled={statusChanging} />}
                 {(newStatus === UserStatus.DROPPED_VOLUNTARY || newStatus === UserStatus.DROPPED_INVOLUNTARY) && (
                   <p className="rounded-md border border-yellow-500/20 bg-yellow-500/10 p-2 text-xs text-yellow-600 dark:text-yellow-400">
-                    Dropping a member will generate a property return report and may send an email notification.
+                    Dropping a member creates a property return report and may send an email notification.
                   </p>
                 )}
                 {error && <p className="text-sm text-red-500">{error}</p>}

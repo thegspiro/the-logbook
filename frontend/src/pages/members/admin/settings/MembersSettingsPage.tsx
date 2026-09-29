@@ -90,8 +90,7 @@ const MembersSettingsPage: React.FC<MembersSettingsPageProps> = ({ section }) =>
       <div className="mx-auto max-w-3xl px-4 py-16 text-center">
         <h1 className="text-theme-text-primary text-lg font-semibold">Members Settings</h1>
         <p className="text-theme-text-muted mt-2 text-sm">
-          These settings are changed by whoever administers the department&rsquo;s settings. Your account manages the
-          roster but does not hold that grant.
+          Your account cannot change any of these settings. Ask whoever administers your department&rsquo;s settings.
         </p>
         <button
           type="button"
@@ -134,7 +133,7 @@ const MembersSettingsPage: React.FC<MembersSettingsPageProps> = ({ section }) =>
       onSectionChange={handleSectionChange}
       navLabel="Members settings sections"
       title="Members Settings"
-      subtitle="What members see of each other, how they are numbered, and the ranks they hold"
+      subtitle="Contact visibility, membership numbers, ranks, tiers and EVOC levels"
       saveState={saveState}
       onRetrySave={retry}
       onBack={() => void navigate(backPath)}

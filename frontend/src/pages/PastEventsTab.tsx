@@ -52,7 +52,7 @@ const PastEventsTab: React.FC = () => {
       data.sort((a, b) => new Date(b.start_datetime).getTime() - new Date(a.start_datetime).getTime());
       setEvents(data);
     } catch (_err) {
-      setError('Failed to load past events. Please try again later.');
+      setError('Failed to load past events.');
     } finally {
       setLoading(false);
     }
@@ -138,7 +138,7 @@ const PastEventsTab: React.FC = () => {
           <h3 className="text-theme-text-primary mt-2 text-sm font-medium">No past events</h3>
           <p className="text-theme-text-muted mt-1 text-sm">
             {typeFilter === 'all'
-              ? 'There are no past events to display.'
+              ? 'Events appear here after they end.'
               : `No past ${getEventTypeLabel(typeFilter).toLowerCase()} events found.`}
           </p>
         </div>

@@ -149,7 +149,7 @@ const TrainingSection: React.FC<TrainingSectionProps> = ({
       ) : trainings.length === 0 ? (
         <div className="py-8 text-center">
           <p className="text-theme-text-muted text-sm">No training records found.</p>
-          <p className="text-theme-text-muted mt-1 text-xs">Training records will appear here as they are completed.</p>
+          <p className="text-theme-text-muted mt-1 text-xs">Completed training will appear here.</p>
         </div>
       ) : (
         <div className="space-y-3">

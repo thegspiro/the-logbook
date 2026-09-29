@@ -115,7 +115,7 @@ describe('EventsPage', () => {
       renderWithRouter(<EventsPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Failed to load events. Please try again later.')).toBeInTheDocument();
+        expect(screen.getByText('Failed to load events.')).toBeInTheDocument();
       });
     });
 
@@ -142,7 +142,7 @@ describe('EventsPage', () => {
       renderWithRouter(<EventsPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Failed to load events. Please try again later.')).toBeInTheDocument();
+        expect(screen.getByText('Failed to load events.')).toBeInTheDocument();
       });
 
       const retryButton = screen.getByRole('button', { name: /try again/i });
@@ -446,7 +446,7 @@ describe('EventsPage', () => {
 
       await user.click(await screen.findByRole('button', { name: /more event actions/i }));
 
-      const settingsLink = await screen.findByRole('link', { name: /event module settings/i });
+      const settingsLink = await screen.findByRole('link', { name: /^event settings$/i });
       expect(settingsLink).toHaveAttribute('href', '/events/admin?tab=settings');
     });
 
