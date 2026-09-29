@@ -1077,23 +1077,30 @@ export const SchedulingReportsPage: React.FC = () => {
                           </div>
                         </div>
                         <div className="ml-4 flex shrink-0 items-center gap-4">
-                          {/* Compliance rate badge */}
-                          <div className="text-right">
-                            <div
-                              className={`text-lg font-bold ${
-                                req.compliance_rate >= 80
-                                  ? 'text-green-700 dark:text-green-400'
-                                  : req.compliance_rate >= 50
-                                    ? 'text-yellow-700 dark:text-yellow-400'
-                                    : 'text-red-700 dark:text-red-400'
-                              }`}
-                            >
-                              {req.compliance_rate}%
+                          {/* Compliance rate badge. A requirement no member is held
+                              to has no rate: "0% · 0/0" in red read as everyone
+                              failing it (CLAUDE.md pitfall 29, an empty set is not
+                              a score). */}
+                          {req.total_members === 0 ? (
+                            <div className="text-theme-text-muted text-right text-sm font-medium">Not applicable</div>
+                          ) : (
+                            <div className="text-right">
+                              <div
+                                className={`text-lg font-bold ${
+                                  req.compliance_rate >= 80
+                                    ? 'text-green-700 dark:text-green-400'
+                                    : req.compliance_rate >= 50
+                                      ? 'text-yellow-700 dark:text-yellow-400'
+                                      : 'text-red-700 dark:text-red-400'
+                                }`}
+                              >
+                                {req.compliance_rate}%
+                              </div>
+                              <div className="text-theme-text-muted text-xs">
+                                {req.compliant_count}/{req.total_members} compliant
+                              </div>
                             </div>
-                            <div className="text-theme-text-muted text-xs">
-                              {req.compliant_count}/{req.total_members} compliant
-                            </div>
-                          </div>
+                          )}
                           {/* Progress bar */}
                           <div className="bg-theme-surface-secondary h-2 w-24 overflow-hidden rounded-full">
                             <div
