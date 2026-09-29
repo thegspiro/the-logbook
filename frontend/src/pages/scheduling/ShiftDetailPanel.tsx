@@ -1535,7 +1535,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
               {showDeleteConfirm && (
                 <div className="space-y-3 rounded-lg border border-red-500/20 bg-red-500/10 p-4">
                   <p className="text-sm text-red-700 dark:text-red-300">
-                    Are you sure you want to delete this shift? This will remove all assignments and cannot be undone.
+                    Delete this shift? Its assignments are removed too, and this cannot be undone.
                   </p>
                   <div className="flex items-center justify-end gap-2">
                     <button
@@ -1681,8 +1681,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                             Equipment check status could not be read
                           </span>
                           <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-300">
-                            This needs an Inventory checklist permission your account may not hold, so nothing below
-                            counts the outstanding checks.
+                            Reading them needs an Inventory checklist permission your account may not have, so
+                            outstanding checks are not counted below.
                             {requireEndOfShiftChecks
                               ? ' Your department blocks close-out on them, so the server may still refuse this.'
                               : ' Your department does not block close-out on them.'}
@@ -2285,9 +2285,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
 
                   {showNoClaimableSeatNote && (
                     <p className="text-theme-text-muted mt-2 text-xs">
-                      None of the open seats on this shift match your rank, the positions you hold, or your completed
-                      training, so there is nothing here for you to claim. A scheduling admin can review your rank and
-                      positions, or the positions on this shift.
+                      None of the open seats match your rank, positions or completed training, so there is none for you
+                      to claim. If that seems wrong, ask a scheduling admin to check your rank and positions, or the
+                      positions on this shift.
                     </p>
                   )}
 
@@ -2630,7 +2630,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                       <>
                         <p className="text-theme-text-primary text-sm font-bold">Signup is closed for this shift</p>
                         <p className="text-theme-text-secondary mt-0.5 text-xs">
-                          {viewerSignupClosed ?? memberSignupClosed} Reopen it if you are a body short and somebody can
+                          {viewerSignupClosed ?? memberSignupClosed} Reopen it if you are short-handed and someone can
                           still get here.
                         </p>
                         <div className="mt-2.5 flex flex-wrap gap-2">
@@ -2670,8 +2670,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                   </h3>
                   {signupOptions.length === 0 ? (
                     <p className="text-theme-text-muted text-xs">
-                      No position on this shift matches your rank, the positions you hold, or your completed training. A
-                      scheduling admin can review your rank and positions, or the positions on this shift.
+                      No position on this shift matches your rank, positions or completed training. If that seems wrong,
+                      ask a scheduling admin to check your rank and positions, or the positions on this shift.
                     </p>
                   ) : (
                     <div className="flex items-center gap-2">

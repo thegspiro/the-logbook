@@ -372,7 +372,7 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
             <span className="text-theme-text-muted text-[10px] tracking-wider uppercase">Total calls</span>
           </div>
           <p className="text-theme-text-muted text-xs">
-            Enter them by type below. If you don’t break them down, put the lot in “Not categorised”.
+            Enter them by type below. If you don’t break them down, enter them all under “Not categorised”.
           </p>
           <div className="divide-theme-surface-border divide-y">
             {rows.map((r) => (
@@ -409,7 +409,7 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
             </div>
           </div>
           <p className="text-theme-text-muted text-xs">
-            Everyone starts on the apparatus’s count. Lower anyone who wasn’t on them all.
+            Everyone starts with the apparatus’s call count. Lower it for anyone who wasn’t on every call.
           </p>
           <div className="divide-theme-surface-border divide-y">
             {members.map((m) => (
@@ -489,7 +489,7 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
               <p className="text-xs text-red-600 dark:text-red-300">
                 {overrideChecks
                   ? 'A reason is required — it goes on the shift’s record.'
-                  : 'Complete the outstanding checks, or tick the box to override.'}
+                  : 'Complete the outstanding checks, or check the box to override.'}
               </p>
             </div>
           )}

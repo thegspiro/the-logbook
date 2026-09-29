@@ -522,15 +522,15 @@ export const ShiftReportsTab: React.FC = () => {
 
   const handleBatchSubmit = async (asDraft: boolean) => {
     if (!form.shift_id) {
-      toast.error('Please select a shift');
+      toast.error('Select a shift');
       return;
     }
     if (selectedCrewIds.size === 0) {
-      toast.error('Please select at least one crew member');
+      toast.error('Select at least one crew member');
       return;
     }
     if (!form.hours_on_shift || form.hours_on_shift <= 0) {
-      toast.error('Please enter hours on shift');
+      toast.error('Enter the hours on shift');
       return;
     }
 
@@ -602,7 +602,7 @@ export const ShiftReportsTab: React.FC = () => {
       if (!isOnline && !asDraft) {
         await enqueueShiftReport(payload);
         setPendingOfflineCount(await pendingReportCount());
-        toast.success("You're offline — report queued and will submit automatically when connectivity returns");
+        toast.success("You're offline — the report is saved and will be sent automatically when you're back online");
         if (form.shift_id) deleteDraft(form.shift_id);
       } else {
         const result = await shiftCompletionService.batchCreateReports(payload);
@@ -647,7 +647,7 @@ export const ShiftReportsTab: React.FC = () => {
   const handleReview = async (action: typeof SubmissionStatus.APPROVED | 'flagged') => {
     if (!reviewReportId) return;
     if (action === 'flagged' && !reviewNotes.trim()) {
-      toast.error('Please add notes when flagging a report');
+      toast.error('Add a note saying why you are flagging this report');
       return;
     }
     setReviewing(true);
@@ -672,7 +672,7 @@ export const ShiftReportsTab: React.FC = () => {
   const handleBatchReview = async (action: typeof SubmissionStatus.APPROVED | 'flagged') => {
     if (selectedReportIds.size === 0) return;
     if (action === 'flagged' && !batchReviewNotes.trim()) {
-      toast.error('Please add a comment explaining why these reports are being flagged');
+      toast.error('Add a comment saying why you are flagging these reports');
       return;
     }
     setBatchReviewing(true);
@@ -1264,7 +1264,7 @@ export const ShiftReportsTab: React.FC = () => {
                       <AlertCircle className="h-3 w-3" /> Flagged for Review
                     </p>
                     <p className="text-theme-text-secondary text-sm">
-                      This report has been flagged and requires attention. You can re-review it to approve or add notes.
+                      This report is flagged. Review it again to approve it or add notes.
                     </p>
                   </div>
                 )}
@@ -1570,7 +1570,7 @@ export const ShiftReportsTab: React.FC = () => {
       {canManage && viewMode === 'create' && (
         <div className="flex items-center gap-2 rounded-lg border border-green-500/20 bg-green-500/5 px-3 py-2 text-xs text-green-700 dark:text-green-400">
           <Shield className="h-3.5 w-3.5 shrink-0" />
-          Narratives and evaluations are encrypted at rest (AES-256) to protect against data exfiltration.
+          Narratives and evaluations are encrypted at rest (AES-256).
         </div>
       )}
 
@@ -1578,7 +1578,7 @@ export const ShiftReportsTab: React.FC = () => {
       {!isOnline && (
         <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
           <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-          You&apos;re offline. Reports will be saved locally and submitted automatically when connectivity returns.
+          You&apos;re offline. Reports are saved on this device and sent automatically when you&apos;re back online.
           {pendingOfflineCount > 0 && <span className="ml-1 font-medium">({pendingOfflineCount} pending)</span>}
         </div>
       )}
@@ -2256,7 +2256,7 @@ export const ShiftReportsTab: React.FC = () => {
                   : viewMode === 'flagged'
                     ? 'No reports have been flagged for follow-up.'
                     : viewMode === 'drafts'
-                      ? 'Draft reports are auto-created when shifts are finalized. Complete them to track trainee progress.'
+                      ? 'A draft report is created when a shift is finalized. Complete it to track trainee progress.'
                       : 'Submit a shift report to track trainee progress.'
               }
               actions={
@@ -2587,7 +2587,7 @@ export const ShiftReportsTab: React.FC = () => {
                   <button
                     onClick={() => {
                       if (!reviewNotes.trim()) {
-                        toast.error('Please add a comment explaining why this report is being flagged');
+                        toast.error('Add a comment saying why you are flagging this report');
                         return;
                       }
                       void handleReview('flagged');
