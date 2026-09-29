@@ -480,6 +480,7 @@ class TestEveryAttendeeReachesTheLedger:
             checked_out_at=event.end_datetime,
             override_duration_minutes=None,
             override_check_in_at=None,
+            override_check_out_at=None,
             attendance_duration_minutes=90,
             early_check_in_minutes=None,
         )
@@ -512,6 +513,7 @@ class TestEveryAttendeeReachesTheLedger:
             attendance_duration_minutes=None,
             override_duration_minutes=None,
             override_check_in_at=None,
+            override_check_out_at=None,
             early_check_in_minutes=None,
             status=None,
         )
@@ -680,6 +682,7 @@ class TestCreditRunsInsideTheLock:
             checked_out_at=event.end_datetime,
             override_duration_minutes=None,
             override_check_in_at=None,
+            override_check_out_at=None,
             attendance_duration_minutes=60,
             early_check_in_minutes=None,
         )

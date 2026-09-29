@@ -2687,7 +2687,9 @@ class EventService:
             )
             if not check_in_time or not duration or duration <= 0:
                 continue
-            check_out_time = rsvp.checked_out_at or effective_end
+            check_out_time = self._credited_check_out_time(
+                rsvp, check_in_time, effective_end
+            )
             try:
                 await admin_hours_service.credit_event_attendance(
                     organization_id=str(event.organization_id),
@@ -3114,6 +3116,82 @@ class EventService:
             return None
         minutes = int((scheduled_start - moment_utc).total_seconds() / 60)
         return minutes if minutes > 0 else None
+
+    @staticmethod
+    def event_credits_training(event: Event) -> bool:
+        """Whether finalizing this event's attendance writes training records.
+
+        Every Training-type event does, with or without a training session
+        attached: the session only decides what the record is filed under and
+        whether an officer must approve it first. The self check-in page reads
+        this to tell a member their attendance will be recorded (pitfall #29),
+        so the two cannot disagree.
+        """
+        return event.event_type == EventType.TRAINING
+
+    @classmethod
+    def effective_end(cls, event: Event) -> Optional[datetime]:
+        """When the event's attendance stops counting: the recorded actual end,
+        else the scheduled one, as a UTC-aware datetime."""
+        return cls._as_utc(event.actual_end_time or event.end_datetime)
+
+    @classmethod
+    def credited_minutes(
+        cls,
+        event: Event,
+        rsvp: EventRSVP,
+        effective_end: Optional[datetime],
+    ) -> Optional[int]:
+        """Minutes of attendance this member is credited with.
+
+        The precedence the department agreed for training credit:
+
+        1. A manager's override (Edit Times writes one from the two times it
+           is given). An explicit override of 0 means no credit and is honoured
+           as such — ``is not None``, not truthiness, or a 0 would fall through
+           to the member's measured time.
+        2. The measured duration — a real check-out, or End Event's bulk
+           check-out — which is ``attendance_duration_minutes`` once set.
+           Finalize also stores the duration it derives there, so after the
+           derive loop this tier covers every checked-in row without an
+           override.
+        3. Derived: from the credited check-in (early taps clamped to the
+           scheduled start) to the event's effective end.
+
+        None when there is nothing to measure from — no credited check-in, or
+        no end.
+        """
+        if rsvp.override_duration_minutes is not None:
+            return max(0, int(rsvp.override_duration_minutes))
+        if rsvp.attendance_duration_minutes is not None:
+            return max(0, int(rsvp.attendance_duration_minutes))
+        start = cls._credited_check_in_time(event, rsvp)
+        end = cls._as_utc(effective_end)
+        if start is None or end is None:
+            return None
+        return max(0, int((end - start).total_seconds() / 60))
+
+    @classmethod
+    def _credited_check_out_time(
+        cls,
+        rsvp: EventRSVP,
+        check_in_time: datetime,
+        effective_end: datetime,
+    ) -> datetime:
+        """The end of the window an admin-hours entry records.
+
+        A manager's corrected check-out wins over the tap it corrects, the same
+        order ``TrainingSessionService._resync_admin_hours`` already uses. The
+        window has to agree with the credited duration: an entry stamped with
+        the original check-out beside the override's minutes reads as a
+        contradiction, and editing it later recomputes the minutes from the
+        wrong window. A check-out at or before the check-in cannot bound a
+        window, so the tap (or the event's end) is used instead.
+        """
+        override = cls._as_utc(rsvp.override_check_out_at)
+        if override is not None and override > check_in_time:
+            return override
+        return cls._as_utc(rsvp.checked_out_at) or effective_end
 
     @classmethod
     def _credited_check_in_time(
