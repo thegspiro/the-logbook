@@ -106,7 +106,7 @@ const DepartmentSetupPage: React.FC = () => {
       await loadChecklist();
       toast.success(item.is_complete ? `"${item.title}" reopened` : `"${item.title}" marked reviewed`);
     } catch {
-      toast.error('Failed to update that step');
+      toast.error('Could not update that step. Try again.');
     } finally {
       setAcknowledgingKey(null);
     }
@@ -156,7 +156,7 @@ const DepartmentSetupPage: React.FC = () => {
             {allComplete ? (
               <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
                 <PartyPopper className="h-6 w-6" />
-                <span className="text-lg font-semibold">All Done!</span>
+                <span className="text-lg font-semibold">All done</span>
               </div>
             ) : (
               <span className="text-theme-text-primary text-2xl font-bold">{progressPct}%</span>
@@ -171,7 +171,7 @@ const DepartmentSetupPage: React.FC = () => {
         </div>
         {allComplete && (
           <p className="mt-3 text-sm text-emerald-600 dark:text-emerald-400">
-            Your department is fully configured and ready to use. You can always return here to review your setup.
+            Every step is complete. Come back here any time to review your setup.
           </p>
         )}
       </div>
@@ -200,7 +200,7 @@ const DepartmentSetupPage: React.FC = () => {
         <div>
           <h2 className="text-theme-text-primary mb-1 text-lg font-semibold">Module Configuration</h2>
           <p className="text-theme-text-muted mb-4 text-sm">
-            Additional setup for the modules you've enabled. These are optional but recommended.
+            Optional but recommended setup for the modules you've enabled.
           </p>
           <div className="space-y-3">
             {moduleItems.map((item) => (

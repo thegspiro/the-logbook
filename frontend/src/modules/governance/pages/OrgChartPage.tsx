@@ -180,7 +180,7 @@ const OrgChartPage: React.FC = () => {
       title: `Remove ${node.title}?`,
       message: reports.length
         ? `${reports.length} position${reports.length === 1 ? '' : 's'} reporting to ${node.title} will move up to report to whoever ${node.title} reports to. This cannot be undone.`
-        : 'This position is removed from the chart for everyone. This cannot be undone.',
+        : 'This removes the position from the chart for everyone. This cannot be undone.',
       confirmLabel: 'Remove it',
       cancelLabel: 'Keep it',
       variant: 'danger',
@@ -229,8 +229,8 @@ const OrgChartPage: React.FC = () => {
           <Network className="h-6 w-6" aria-hidden="true" /> Organizational Chart
         </h1>
         <p className="text-theme-text-secondary text-sm leading-6">
-          Who is in charge of what, and who they report to. This is the department&rsquo;s real chain of command,
-          maintained by leadership — it is not a picture of anyone&rsquo;s access or permissions in this application.
+          Who is in charge of what, and who they report to. Leadership maintains this chart of the department&rsquo;s
+          real chain of command — it does not reflect anyone&rsquo;s access or permissions in this application.
         </p>
       </header>
 

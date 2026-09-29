@@ -28,7 +28,7 @@ export function getNfcUnavailableReason(): string | null {
   if (!window.isSecureContext) {
     return 'NFC requires a secure (HTTPS) connection. Open this page over HTTPS to use NFC tags.';
   }
-  return 'This device or browser does not support NFC tags. Use Chrome on Android, or scan the QR code instead.';
+  return 'This device or browser does not support NFC tags. NFC works only in Chrome on Android.';
 }
 
 /**
@@ -289,7 +289,7 @@ export function describeNfcError(error: unknown, fallback: string): string {
     case 'NotAllowedError':
       return 'NFC permission was denied. Allow NFC for this site in your browser settings and try again.';
     case 'NotSupportedError':
-      return 'This device does not have NFC hardware available.';
+      return 'This device has no NFC hardware.';
     case 'NotReadableError':
       return 'NFC is switched off. Turn on NFC in your device settings and try again.';
     case 'NetworkError':

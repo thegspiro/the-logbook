@@ -92,12 +92,12 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="e.g., Website Integration Key"
+              placeholder="e.g., Department website"
               required
               aria-required="true"
               className="form-input"
             />
-            <p className="text-theme-text-muted mt-1 text-xs">A descriptive name to identify this API key</p>
+            <p className="text-theme-text-muted mt-1 text-xs">Name it after the website or app that will use it</p>
           </div>
 
           <div>
@@ -116,10 +116,12 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
                   rate_limit: e.target.value ? parseInt(e.target.value) : undefined,
                 })
               }
-              placeholder="Leave blank for default (1000)"
+              placeholder="Leave blank to use the default"
               className="form-input"
             />
-            <p className="text-theme-text-muted mt-1 text-xs">Optional: Override the default rate limit for this key</p>
+            <p className="text-theme-text-muted mt-1 text-xs">
+              Optional. Overrides the default set on the Configuration tab
+            </p>
           </div>
 
           <div>
@@ -137,7 +139,7 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
               }
               className="form-input"
             />
-            <p className="text-theme-text-muted mt-1 text-xs">Optional: Set when this key should expire</p>
+            <p className="text-theme-text-muted mt-1 text-xs">Optional. Leave blank for a key that never expires</p>
           </div>
         </div>
       </form>
@@ -170,7 +172,7 @@ const KeyDisplayModal: React.FC<KeyDisplayModalProps> = ({ isOpen, apiKey, onClo
   );
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="API Key Created Successfully" size="lg" footer={footer}>
+    <Modal isOpen={isOpen} onClose={onClose} title="API Key Created" size="lg" footer={footer}>
       <div className="mb-4 border-l-4 border-yellow-400 bg-yellow-500/10 p-4">
         <div className="flex">
           <div className="shrink-0">
@@ -189,8 +191,8 @@ const KeyDisplayModal: React.FC<KeyDisplayModalProps> = ({ isOpen, apiKey, onClo
           </div>
           <div className="ml-3">
             <p className="text-sm text-yellow-700 dark:text-yellow-300">
-              <strong>IMPORTANT:</strong> This is the only time the full API key will be displayed. Copy it now and
-              store it securely. You will not be able to see it again.
+              <strong>Copy this key now and store it somewhere safe.</strong> This is the only time it is shown; you
+              can't view it again.
             </p>
           </div>
         </div>
@@ -254,7 +256,7 @@ const RevokeConfirmModal: React.FC<RevokeConfirmModalProps> = ({ isOpen, keyName
         onClick={onCancel}
         className="text-theme-text-secondary bg-theme-surface-secondary hover:bg-theme-surface-hover rounded-md px-4 py-2 sm:mr-3"
       >
-        Cancel
+        Keep Key
       </button>
     </>
   );
@@ -262,11 +264,9 @@ const RevokeConfirmModal: React.FC<RevokeConfirmModalProps> = ({ isOpen, keyName
   return (
     <Modal isOpen={isOpen} onClose={onCancel} title="Revoke API Key?" size="sm" footer={footer}>
       <p className="text-theme-text-secondary mb-4">
-        Are you sure you want to revoke the API key <strong>"{keyName}"</strong>?
+        Anything using <strong>"{keyName}"</strong> loses access immediately.
       </p>
-      <p className="text-theme-text-muted text-sm">
-        This action will immediately stop all requests using this key. This cannot be undone.
-      </p>
+      <p className="text-theme-text-muted text-sm">You can't undo this.</p>
     </Modal>
   );
 };
@@ -323,7 +323,7 @@ export const APIKeysTab: React.FC = () => {
   if (error) {
     return (
       <div className="rounded-md border border-red-200 bg-red-50 p-4 dark:border-red-500/30 dark:bg-red-500/10">
-        <p className="text-red-800 dark:text-red-400">Error loading API keys: {error}</p>
+        <p className="text-red-800 dark:text-red-400">Couldn't load API keys: {error}</p>
       </div>
     );
   }
@@ -335,7 +335,7 @@ export const APIKeysTab: React.FC = () => {
         <div>
           <h3 className="text-theme-text-primary text-lg font-semibold">API Keys</h3>
           <p className="text-theme-text-muted mt-1 text-sm">
-            Manage API keys for external applications to access your public portal
+            Websites and apps use these keys to read your public data
           </p>
         </div>
         <button onClick={() => setIsCreateModalOpen(true)} className="btn-info flex items-center rounded-md">
@@ -364,11 +364,9 @@ export const APIKeysTab: React.FC = () => {
             />
           </svg>
           <h3 className="text-theme-text-primary mt-2 text-sm font-medium">No API keys</h3>
-          <p className="text-theme-text-muted mt-1 text-sm">
-            Get started by creating a new API key for your public portal
-          </p>
+          <p className="text-theme-text-muted mt-1 text-sm">Create one to let a website or app read your public data</p>
           <button onClick={() => setIsCreateModalOpen(true)} className="btn-info mt-4 rounded-md">
-            Create First API Key
+            Create API Key
           </button>
         </div>
       ) : (

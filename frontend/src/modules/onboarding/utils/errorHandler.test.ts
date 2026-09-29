@@ -63,7 +63,7 @@ describe('onboarding errorHandler', () => {
       [401, /session expired/i],
       [403, /access denied/i],
       [429, /too many requests/i],
-      [500, /server error occurred/i],
+      [500, /the server hit an error/i],
       [502, /temporarily unavailable/i],
       [503, /temporarily unavailable/i],
       [504, /temporarily unavailable/i],
@@ -130,18 +130,18 @@ describe('onboarding errorHandler', () => {
       'getaddrinfo ENOTFOUND db',
     ])('suppresses the technical message %#', (message) => {
       const result = handleApiError(new Error(message));
-      expect(result).toBe('An unexpected error occurred. Please try again.');
+      expect(result).toBe('An unexpected error occurred. Try again.');
     });
 
     it('uses the context in the fallback when one is supplied', () => {
       expect(handleApiError(new Error('stack trace follows'), 'create the station')).toBe(
-        'Failed to create the station. Please try again.'
+        'Could not create the station. Try again.'
       );
     });
 
     it('falls back cleanly for a value that is not an error at all', () => {
-      expect(handleApiError(null)).toBe('An unexpected error occurred. Please try again.');
-      expect(handleApiError('just a string')).toBe('An unexpected error occurred. Please try again.');
+      expect(handleApiError(null)).toBe('An unexpected error occurred. Try again.');
+      expect(handleApiError('just a string')).toBe('An unexpected error occurred. Try again.');
     });
   });
 
@@ -173,11 +173,11 @@ describe('onboarding errorHandler', () => {
         { field: 'email', message: 'is not valid' },
         { field: 'port', message: 'must be an integer' },
       ]);
-      expect(result).toBe('Please fix the following errors:\n• Email: is not valid\n• Port: must be an integer');
+      expect(result).toBe('Fix these errors:\n• Email: is not valid\n• Port: must be an integer');
     });
 
     it('falls back when the list is empty', () => {
-      expect(formatValidationErrors([])).toMatch(/validation failed/i);
+      expect(formatValidationErrors([])).toMatch(/some fields are invalid/i);
     });
 
     it('supplies a reason when an entry carries none', () => {
@@ -190,9 +190,7 @@ describe('onboarding errorHandler', () => {
         null,
         { field: 'port', message: 'required' },
       ] as unknown as ValidationErrorEntry[];
-      expect(formatValidationErrors(entries)).toBe(
-        'Please fix the following errors:\n• Email: is not valid\n• Port: required'
-      );
+      expect(formatValidationErrors(entries)).toBe('Fix these errors:\n• Email: is not valid\n• Port: required');
     });
   });
 

@@ -100,7 +100,7 @@ const SystemOwnerCreation: React.FC = () => {
 
       case 'email':
         if (!value.trim()) return 'Email is required';
-        if (!isValidEmail(value)) return 'Please enter a valid email address';
+        if (!isValidEmail(value)) return 'Enter a valid email address';
         return '';
 
       case 'firstName':
@@ -123,7 +123,7 @@ const SystemOwnerCreation: React.FC = () => {
         return '';
 
       case 'confirmPassword':
-        if (!value) return 'Please confirm your password';
+        if (!value) return 'Confirm your password';
         if (value !== formData.password) return 'Passwords do not match';
         return '';
 
@@ -216,7 +216,7 @@ const SystemOwnerCreation: React.FC = () => {
           throw new Error(errorMessage);
         }
 
-        toast.success('System Owner account created!');
+        toast.success('System Owner account created');
 
         // Save system owner info to the onboarding store so the
         // IT Team step can auto-populate the primary contact.
@@ -307,10 +307,8 @@ const SystemOwnerCreation: React.FC = () => {
               <Shield aria-hidden="true" className="h-8 w-8 text-white" />
             </div>
             <h2 className="text-theme-text-primary mb-3 text-4xl font-bold md:text-5xl">Create System Owner Account</h2>
-            <p className="text-theme-text-secondary mb-2 text-xl">Set up the IT Manager / System Owner account</p>
-            <p className="text-theme-text-muted text-sm">
-              This account will have full access to all system settings and configurations
-            </p>
+            <p className="text-theme-text-secondary mb-2 text-xl">This is your administrator account</p>
+            <p className="text-theme-text-muted text-sm">It has full access to every setting in The Logbook</p>
           </div>
 
           {/* System Owner Clarification */}
@@ -320,17 +318,17 @@ const SystemOwnerCreation: React.FC = () => {
               <div>
                 <p className="text-theme-alert-purple-title mb-1 text-sm font-medium">System Owner / IT Manager</p>
                 <p className="text-theme-alert-purple-text mb-2 text-sm">
-                  This creates the <strong>System Owner</strong> account -- the IT Manager responsible for system and
-                  technical administration. This is different from members who hold organizational positions.
+                  The <strong>System Owner</strong> runs the technical side of The Logbook. It is separate from the
+                  offices members hold in your department.
                 </p>
                 <ul className="text-theme-alert-purple-text ml-2 list-inside list-disc space-y-1 text-sm">
                   <li>
-                    <strong>System Owner (IT Manager):</strong> Full technical access to all system settings (what
-                    you're creating now)
+                    <strong>System Owner (IT Manager):</strong> full access to every setting — the account you are
+                    creating now
                   </li>
                   <li>
-                    <strong>Organizational Positions:</strong> President, Secretary, and other positions are managed
-                    separately in the Members module
+                    <strong>Organizational Positions:</strong> President, Secretary and other positions are set up on
+                    the Ranks &amp; Positions step and managed later in the Members module
                   </li>
                 </ul>
               </div>
@@ -344,8 +342,8 @@ const SystemOwnerCreation: React.FC = () => {
               <div>
                 <p className="text-theme-alert-info-title mb-1 text-sm font-medium">Security Requirements</p>
                 <p className="text-theme-alert-info-text text-sm">
-                  Your password will be encrypted using Argon2id hashing and stored securely. Choose a strong password
-                  that meets all requirements below.
+                  Your password is hashed with Argon2id and never stored as plain text. It must meet every requirement
+                  below.
                 </p>
               </div>
             </div>
@@ -699,7 +697,7 @@ const SystemOwnerCreation: React.FC = () => {
 
               {/* Help Text */}
               <p className="text-theme-text-muted mt-4 text-center text-sm">
-                You'll be logged in automatically and continue with {nextStepName('system_owner')}
+                You'll be signed in automatically and continue with {nextStepName('system_owner')}
               </p>
 
               <ProgressIndicator step="system_owner" className="border-theme-nav-border mt-6 border-t pt-6" />

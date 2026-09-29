@@ -36,9 +36,7 @@ describe('SetupPrerequisites', () => {
 
     renderPage();
 
-    expect(
-      screen.getByText(`${required.join(' and ')} — the only steps setup cannot finish without.`)
-    ).toBeInTheDocument();
+    expect(screen.getByText(`${required.join(' and ')} — the only required steps.`)).toBeInTheDocument();
   });
 
   it('counts the optional steps from the flow itself', () => {

@@ -91,8 +91,8 @@ const MembershipLadderSection: React.FC<MembershipLadderSectionProps> = ({
         <div>
           <h2 className="text-theme-text-primary text-xl font-bold">Your Membership Ladder</h2>
           <p className="text-theme-text-secondary text-sm">
-            How a member progresses through your department, and what each stage lets them do. This is the one to check
-            against your bylaws — it decides who votes.
+            The stages a member moves through in your department, and what each one lets them do. Check it against your
+            bylaws — it decides who votes.
           </p>
         </div>
       </div>
@@ -123,7 +123,7 @@ const MembershipLadderSection: React.FC<MembershipLadderSectionProps> = ({
         <div className="alert-danger" role="alert">
           <p className="text-theme-text-primary text-sm font-medium">The membership ladder could not be loaded.</p>
           <p className="text-theme-text-muted mt-1 text-sm">
-            Nothing has changed — your tiers are not shown, not missing. You can carry on and set them up later under
+            Nothing has changed — your tiers just could not be shown. You can carry on and set them up later under
             Members → Settings → Membership Tiers.
           </p>
           <button

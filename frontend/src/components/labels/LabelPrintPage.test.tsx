@@ -80,7 +80,7 @@ describe('LabelPrintPage', () => {
 
   it('errors when no ids are provided', async () => {
     renderPage('');
-    expect(await screen.findByText(/No records specified/)).toBeInTheDocument();
+    expect(await screen.findByText(/Nothing selected to print/)).toBeInTheDocument();
   });
 
   it('loads the preview for the module and renders the records', async () => {

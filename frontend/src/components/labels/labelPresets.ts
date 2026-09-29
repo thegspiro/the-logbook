@@ -60,7 +60,7 @@ export const LABEL_PRESETS: LabelPreset[] = [
   {
     id: 'dymo_30334',
     name: 'Dymo 30334',
-    description: '2.25" x 1.25" — Multi-purpose label',
+    description: '2.25" x 1.25" — Multipurpose label',
     width: '2.25in',
     height: '1.25in',
     barcodeHeight: 35,
