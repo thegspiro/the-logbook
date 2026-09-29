@@ -79,7 +79,7 @@ export const UsageStatsTab: React.FC = () => {
   if (error) {
     return (
       <div className="rounded-md border border-red-200 bg-red-50 p-4 dark:border-red-500/30 dark:bg-red-500/10">
-        <p className="text-red-800 dark:text-red-400">Error loading usage statistics: {error}</p>
+        <p className="text-red-800 dark:text-red-400">Couldn't load usage statistics: {error}</p>
       </div>
     );
   }
@@ -115,7 +115,7 @@ export const UsageStatsTab: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-theme-text-primary text-lg font-semibold">Usage Statistics</h3>
-          <p className="text-theme-text-secondary mt-1 text-sm">Public portal usage metrics and analytics</p>
+          <p className="text-theme-text-secondary mt-1 text-sm">Traffic to the public API</p>
         </div>
         <button
           onClick={() => {
