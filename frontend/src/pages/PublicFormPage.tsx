@@ -15,6 +15,8 @@ const clean = (text: string | null | undefined): string => {
   return DOMPurify.sanitize(text, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
 };
 
+const fieldInputId = (fieldId: string): string => `public-field-${fieldId}`;
+
 const PublicFormPage = () => {
   const { slug } = useParams<{ slug: string }>();
   const [form, setForm] = useState<PublicFormDef | null>(null);
@@ -128,6 +130,10 @@ const PublicFormPage = () => {
   const renderField = (field: PublicFormField) => {
     const value = formData[field.id] || '';
     const baseInputClass = 'form-input py-3';
+    // Pairs the control with the visible label rendered beside it. Without it
+    // every field on a public form announced as a blank edit box (workflow
+    // review W22).
+    const inputId = fieldInputId(field.id);
 
     switch (field.field_type) {
       case FieldType.TEXT:
@@ -135,6 +141,7 @@ const PublicFormPage = () => {
       case FieldType.PHONE:
         return (
           <input
+            id={inputId}
             type={field.field_type === FieldType.PHONE ? 'tel' : field.field_type}
             className={baseInputClass}
             placeholder={field.placeholder || ''}
@@ -149,6 +156,7 @@ const PublicFormPage = () => {
       case FieldType.NUMBER:
         return (
           <input
+            id={inputId}
             type="number"
             className={baseInputClass}
             placeholder={field.placeholder || ''}
@@ -163,6 +171,7 @@ const PublicFormPage = () => {
       case FieldType.TEXTAREA:
         return (
           <textarea
+            id={inputId}
             className={`${baseInputClass} min-h-[100px]`}
             placeholder={field.placeholder || ''}
             value={value}
@@ -176,6 +185,7 @@ const PublicFormPage = () => {
       case FieldType.DATE:
         return (
           <input
+            id={inputId}
             type="date"
             className={baseInputClass}
             value={value}
@@ -187,6 +197,7 @@ const PublicFormPage = () => {
       case FieldType.TIME:
         return (
           <TimeQuarterHour
+            aria-label={field.label}
             className={baseInputClass}
             value={value}
             onChange={(e) => handleFieldChange(field.id, e.target.value)}
@@ -197,6 +208,8 @@ const PublicFormPage = () => {
       case FieldType.DATETIME:
         return (
           <DateTimeQuarterHour
+            id={inputId}
+            timeLabel={field.label}
             className={baseInputClass}
             value={value}
             onChange={(val) => handleFieldChange(field.id, val)}
@@ -207,6 +220,7 @@ const PublicFormPage = () => {
       case FieldType.SELECT:
         return (
           <select
+            id={inputId}
             className={baseInputClass}
             value={value}
             onChange={(e) => handleFieldChange(field.id, e.target.value)}
@@ -243,7 +257,8 @@ const PublicFormPage = () => {
 
       case FieldType.CHECKBOX:
         return (
-          <div className="space-y-2">
+          <fieldset className="space-y-2">
+            <legend className="sr-only">{field.label}</legend>
             {field.options?.map((opt) => {
               const checked = value.split(',').includes(opt.value);
               return (
@@ -264,7 +279,7 @@ const PublicFormPage = () => {
                 </label>
               );
             })}
-          </div>
+          </fieldset>
         );
 
       case FieldType.SECTION_HEADER:
@@ -278,6 +293,7 @@ const PublicFormPage = () => {
       default:
         return (
           <input
+            id={inputId}
             type="text"
             className={baseInputClass}
             placeholder={field.placeholder || ''}
@@ -418,7 +434,14 @@ const PublicFormPage = () => {
                         : ''
                   }
                 >
-                  <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                  <label
+                    // A radio or checkbox group is named by its own legend;
+                    // there is no single control for this label to point at.
+                    {...(field.field_type === FieldType.RADIO || field.field_type === FieldType.CHECKBOX
+                      ? {}
+                      : { htmlFor: fieldInputId(field.id) })}
+                    className="text-theme-text-secondary mb-1 block text-sm font-medium"
+                  >
                     {clean(field.label)}
                     {field.required && <span className="ml-1 text-red-700 dark:text-red-500">*</span>}
                   </label>

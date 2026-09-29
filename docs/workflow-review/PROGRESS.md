@@ -50,7 +50,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W19 | RSVP, change it, and see it on the event                                  | member, member2       | `/events/:id`                                   | ✅     |
 | W20 | Check-in: QR self check-in, live monitoring, an officer's manual check-in | member, secretary     | `/events/:id/qr-code`, `/events/:id/monitoring` | ✅     |
 | W21 | Event templates, the events admin hub, and event analytics                | secretary             | `/events/admin`, `/events/templates`            | ✅     |
-| W22 | A public event request and its status link                                | anonymous → secretary | `/event-request/status/:token`                  | ⬜     |
+| W22 | A public event request and its status link                                | anonymous → secretary | `/event-request/status/:token`                  | ✅     |
 | W23 | Locations, the kiosk display and guest check-in                           | admin, anonymous      | `/locations`, `/display/:code`                  | ⬜     |
 
 ## Tier 4 — Training
@@ -176,6 +176,19 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W22 — A public event request and its status link — 2026-09-29
+
+Driven as: anonymous at 390×844 and 1280×900, `secretary` at 1280×900, with
+`member` refused. Held: a double-clicked public submission made one request;
+the secretary's task ticks and Start Working showed on the anonymous status
+page; the requester's cancel survived a reload and reached the coordinator's
+list and activity log; `member` got 403 and Access Denied. Fixed: W22-1 (MED
+— the public form's fields had no accessible names), W22-2 (LOW — a pipeline
+task's done state was icon-only), W22-3 (LOW — coordinator lists showed rank
+codes). Flagged: W22-4 (MED — the requester is never given their status
+link). Open: W22-5 (NIT). Gate: typecheck, lint and the touched suites clean.
+Next: W23.
 
 ### W21 — Event templates, the admin hub, analytics — 2026-09-29
 
