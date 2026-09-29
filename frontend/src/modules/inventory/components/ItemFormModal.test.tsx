@@ -703,4 +703,27 @@ describe('ItemFormModal', () => {
       expect(onClose).toHaveBeenCalledTimes(1);
     });
   });
+
+  it('marks the fields a category requires, as the server does', async () => {
+    const strictCategory = { ...ppeCategory, requires_serial_number: true, requires_maintenance: true };
+    render(
+      <ItemFormModal
+        {...baseProps}
+        categories={[strictCategory]}
+        isOpen
+        editItem={makeItem({ category_id: 'cat-ppe' })}
+      />
+    );
+
+    const serial = await screen.findByLabelText('Serial # *');
+    expect(serial).toBeRequired();
+    expect(screen.getByLabelText('Inspection Interval (days) *')).toBeRequired();
+  });
+
+  it('leaves them optional for a category that does not require them', async () => {
+    render(<ItemFormModal {...ppeProps} isOpen editItem={makeItem({ category_id: 'cat-ppe' })} />);
+
+    expect(await screen.findByLabelText('Serial #')).not.toBeRequired();
+    expect(screen.getByLabelText('Inspection Interval (days)')).not.toBeRequired();
+  });
 });

@@ -46,6 +46,21 @@ vi.mock('react-hot-toast', () => ({
   ),
 }));
 
+// Which permissions the viewer holds, per test. The page is inventory.manage,
+// but adding a room is a location write and wants its own grant.
+const grantedPermissions = vi.hoisted(() => ({ current: ['inventory.manage', 'locations.create'] }));
+vi.mock('../../../stores/authStore', () => {
+  const state = () => ({
+    checkPermission: (permission: string) => grantedPermissions.current.includes(permission),
+  });
+  return {
+    useAuthStore: Object.assign(
+      (selector?: (s: ReturnType<typeof state>) => unknown) => (selector ? selector(state()) : state()),
+      { getState: state }
+    ),
+  };
+});
+
 import InventorySetupPage from './InventorySetupPage';
 
 const emptyStatus: InventorySetupStatus = {
@@ -133,6 +148,7 @@ const advance = async (user: ReturnType<typeof userEvent.setup>, times: number) 
 describe('InventorySetupPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    grantedPermissions.current = ['inventory.manage', 'locations.create'];
     // The current step lives in the query string, and BrowserRouter reads the
     // real jsdom URL — without this every test after the first starts on
     // whatever step its predecessor navigated to.
@@ -173,6 +189,16 @@ describe('InventorySetupPage', () => {
         room_number: undefined,
       });
     });
+  });
+
+  it('does not offer to add a room to someone who cannot create locations', async () => {
+    grantedPermissions.current = ['inventory.manage'];
+    renderWithRouter(<InventorySetupPage />);
+    await screen.findByRole('heading', { name: 'Rooms' });
+
+    expect(screen.queryByLabelText(/Room name/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Add room/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/Adding a room needs permission to create locations/)).toBeInTheDocument();
   });
 
   it('blocks the storage step until a room exists', async () => {
