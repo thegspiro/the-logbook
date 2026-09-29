@@ -363,9 +363,7 @@ const TrainingRequirementsPage: React.FC = () => {
               setSelectedRequirement(null);
               setTemplateSeed(null);
             }}
-            onSave={(...args) => {
-              void handleSave(...args);
-            }}
+            onSave={handleSave}
           />
         )}
 
@@ -582,7 +580,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
                   : 'bg-theme-surface-hover/20 text-theme-text-muted hover:bg-theme-surface-hover/30'
               }`}
               title={requirement.active ? 'Deactivate' : 'Activate'}
-              aria-label={requirement.active ? 'Deactivate requirement' : 'Activate requirement'}
+              aria-label={`${requirement.active ? 'Deactivate' : 'Activate'} ${requirement.name}`}
             >
               {requirement.active ? (
                 <CheckCircle className="h-5 w-5" aria-hidden="true" />
@@ -594,7 +592,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
               onClick={onEdit}
               className="rounded-lg bg-blue-600/20 p-2 text-blue-700 transition-colors hover:bg-blue-600/30 dark:text-blue-400"
               title="Edit"
-              aria-label="Edit requirement"
+              aria-label={`Edit ${requirement.name}`}
             >
               <Edit className="h-5 w-5" aria-hidden="true" />
             </button>
@@ -610,7 +608,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
               onClick={onDelete}
               className="rounded-lg bg-red-600/20 p-2 text-red-700 transition-colors hover:bg-red-600/30 dark:text-red-400"
               title="Delete"
-              aria-label="Delete requirement"
+              aria-label={`Delete ${requirement.name}`}
             >
               <Trash2 className="h-5 w-5" aria-hidden="true" />
             </button>

@@ -100,6 +100,15 @@ interface RequirementGroup {
   milestones: MilestoneFormData[];
 }
 
+const TARGET_POSITIONS = [
+  { value: 'probationary', label: 'Probationary' },
+  { value: 'firefighter', label: 'Firefighter' },
+  { value: 'driver_candidate', label: 'Driver Candidate' },
+  { value: 'driver', label: 'Driver' },
+  { value: 'officer', label: 'Officer' },
+  { value: 'aic', label: 'AIC (Attendant in Charge)' },
+] as const;
+
 /** Group key for the program-level bucket (no phase). */
 const PROGRAM_GROUP = 'program';
 
@@ -319,12 +328,11 @@ const StepInfo: React.FC<{
           className="form-input"
         >
           <option value="">All Positions</option>
-          <option value="probationary">Probationary</option>
-          <option value="firefighter">Firefighter</option>
-          <option value="driver_candidate">Driver Candidate</option>
-          <option value="driver">Driver</option>
-          <option value="officer">Officer</option>
-          <option value="aic">AIC (Attendant in Charge)</option>
+          {TARGET_POSITIONS.map((position) => (
+            <option key={position.value} value={position.value}>
+              {position.label}
+            </option>
+          ))}
         </select>
         <HelpText>Who this program is aimed at. Informational — it does not restrict who you can enroll.</HelpText>
       </div>
@@ -485,8 +493,11 @@ const StepPhases: React.FC<{
             {phase.isExpanded && (
               <div className="border-theme-surface-border space-y-4 border-t px-4 pt-4 pb-4">
                 <div>
-                  <label className="form-label-sm">Phase Name *</label>
+                  <label htmlFor={`pipeline-phase-name-${phase.id}`} className="form-label-sm">
+                    Phase Name *
+                  </label>
                   <input
+                    id={`pipeline-phase-name-${phase.id}`}
                     type="text"
                     value={phase.name}
                     onChange={(e) => onUpdate(phase.id, 'name', e.target.value)}
@@ -495,8 +506,11 @@ const StepPhases: React.FC<{
                   />
                 </div>
                 <div>
-                  <label className="form-label-sm">Description</label>
+                  <label htmlFor={`pipeline-phase-description-${phase.id}`} className="form-label-sm">
+                    Description
+                  </label>
                   <textarea
+                    id={`pipeline-phase-description-${phase.id}`}
                     value={phase.description}
                     onChange={(e) => onUpdate(phase.id, 'description', e.target.value)}
                     rows={2}
@@ -506,8 +520,11 @@ const StepPhases: React.FC<{
                 </div>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="form-label-sm">Time Limit (days)</label>
+                    <label htmlFor={`pipeline-phase-time-limit-${phase.id}`} className="form-label-sm">
+                      Time Limit (days)
+                    </label>
                     <input
+                      id={`pipeline-phase-time-limit-${phase.id}`}
                       type="number"
                       value={phase.time_limit_days}
                       onChange={(e) => onUpdate(phase.id, 'time_limit_days', e.target.value)}
@@ -682,10 +699,14 @@ const StepRequirements: React.FC<{
                     <div className="flex items-start justify-between">
                       <div className="grid flex-1 grid-cols-1 gap-3 md:grid-cols-2">
                         <div>
-                          <label className="text-theme-text-muted mb-1 block text-xs font-medium">
+                          <label
+                            htmlFor={`pipeline-requirement-name-${req.id}`}
+                            className="text-theme-text-muted mb-1 block text-xs font-medium"
+                          >
                             Requirement Name *
                           </label>
                           <input
+                            id={`pipeline-requirement-name-${req.id}`}
                             type="text"
                             value={req.name}
                             onChange={(e) => onUpdateRequirement(phase.key, req.id, 'name', e.target.value)}
@@ -694,8 +715,14 @@ const StepRequirements: React.FC<{
                           />
                         </div>
                         <div>
-                          <label className="text-theme-text-muted mb-1 block text-xs font-medium">Type</label>
+                          <label
+                            htmlFor={`pipeline-requirement-type-${req.id}`}
+                            className="text-theme-text-muted mb-1 block text-xs font-medium"
+                          >
+                            Type
+                          </label>
                           <select
+                            id={`pipeline-requirement-type-${req.id}`}
                             value={req.requirement_type}
                             onChange={(e) => onUpdateRequirement(phase.key, req.id, 'requirement_type', e.target.value)}
                             className="form-input-sm"
@@ -724,8 +751,14 @@ const StepRequirements: React.FC<{
                     </div>
 
                     <div>
-                      <label className="text-theme-text-muted mb-1 block text-xs font-medium">Description</label>
+                      <label
+                        htmlFor={`pipeline-requirement-description-${req.id}`}
+                        className="text-theme-text-muted mb-1 block text-xs font-medium"
+                      >
+                        Description
+                      </label>
                       <textarea
+                        id={`pipeline-requirement-description-${req.id}`}
                         value={req.description}
                         onChange={(e) => onUpdateRequirement(phase.key, req.id, 'description', e.target.value)}
                         rows={2}
@@ -809,8 +842,14 @@ const StepRequirements: React.FC<{
                     {/* Conditional fields based on type */}
                     {req.requirement_type === 'hours' && (
                       <div>
-                        <label className="text-theme-text-muted mb-1 block text-xs font-medium">Required Hours</label>
+                        <label
+                          htmlFor={`pipeline-required-hours-${req.id}`}
+                          className="text-theme-text-muted mb-1 block text-xs font-medium"
+                        >
+                          Required Hours
+                        </label>
                         <input
+                          id={`pipeline-required-hours-${req.id}`}
                           type="number"
                           value={req.required_hours}
                           onChange={(e) => onUpdateRequirement(phase.key, req.id, 'required_hours', e.target.value)}
@@ -824,8 +863,14 @@ const StepRequirements: React.FC<{
 
                     {req.requirement_type === 'shifts' && (
                       <div>
-                        <label className="text-theme-text-muted mb-1 block text-xs font-medium">Required Shifts</label>
+                        <label
+                          htmlFor={`pipeline-required-shifts-${req.id}`}
+                          className="text-theme-text-muted mb-1 block text-xs font-medium"
+                        >
+                          Required Shifts
+                        </label>
                         <input
+                          id={`pipeline-required-shifts-${req.id}`}
                           type="number"
                           value={req.required_shifts}
                           onChange={(e) => onUpdateRequirement(phase.key, req.id, 'required_shifts', e.target.value)}
@@ -838,8 +883,14 @@ const StepRequirements: React.FC<{
 
                     {req.requirement_type === 'calls' && (
                       <div>
-                        <label className="text-theme-text-muted mb-1 block text-xs font-medium">Required Calls</label>
+                        <label
+                          htmlFor={`pipeline-required-calls-${req.id}`}
+                          className="text-theme-text-muted mb-1 block text-xs font-medium"
+                        >
+                          Required Calls
+                        </label>
                         <input
+                          id={`pipeline-required-calls-${req.id}`}
                           type="number"
                           value={req.required_calls}
                           onChange={(e) => onUpdateRequirement(phase.key, req.id, 'required_calls', e.target.value)}
@@ -861,10 +912,14 @@ const StepRequirements: React.FC<{
                     {req.requirement_type === 'knowledge_test' && (
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div>
-                          <label className="text-theme-text-muted mb-1 block text-xs font-medium">
+                          <label
+                            htmlFor={`pipeline-passing-score-${req.id}`}
+                            className="text-theme-text-muted mb-1 block text-xs font-medium"
+                          >
                             Passing Score (%)
                           </label>
                           <input
+                            id={`pipeline-passing-score-${req.id}`}
                             type="number"
                             value={req.passing_score}
                             onChange={(e) => onUpdateRequirement(phase.key, req.id, 'passing_score', e.target.value)}
@@ -876,8 +931,14 @@ const StepRequirements: React.FC<{
                           <HelpText>Minimum score to pass. Defaults to 70% if left blank.</HelpText>
                         </div>
                         <div>
-                          <label className="text-theme-text-muted mb-1 block text-xs font-medium">Max Attempts</label>
+                          <label
+                            htmlFor={`pipeline-max-attempts-${req.id}`}
+                            className="text-theme-text-muted mb-1 block text-xs font-medium"
+                          >
+                            Max Attempts
+                          </label>
                           <input
+                            id={`pipeline-max-attempts-${req.id}`}
                             type="number"
                             value={req.max_attempts}
                             onChange={(e) => onUpdateRequirement(phase.key, req.id, 'max_attempts', e.target.value)}
@@ -976,10 +1037,14 @@ const StepMilestones: React.FC<{
                       </div>
                       <div className="grid flex-1 grid-cols-1 gap-3 md:grid-cols-2">
                         <div>
-                          <label className="text-theme-text-muted mb-1 block text-xs font-medium">
+                          <label
+                            htmlFor={`pipeline-milestone-name-${ms.id}`}
+                            className="text-theme-text-muted mb-1 block text-xs font-medium"
+                          >
                             Milestone Name *
                           </label>
                           <input
+                            id={`pipeline-milestone-name-${ms.id}`}
                             type="text"
                             value={ms.name}
                             onChange={(e) => onUpdateMilestone(phase.key, ms.id, 'name', e.target.value)}
@@ -988,10 +1053,14 @@ const StepMilestones: React.FC<{
                           />
                         </div>
                         <div>
-                          <label className="text-theme-text-muted mb-1 block text-xs font-medium">
+                          <label
+                            htmlFor={`pipeline-trigger-at-complete-${ms.id}`}
+                            className="text-theme-text-muted mb-1 block text-xs font-medium"
+                          >
                             Trigger at (% complete)
                           </label>
                           <input
+                            id={`pipeline-trigger-at-complete-${ms.id}`}
                             type="number"
                             value={ms.completion_percentage_threshold}
                             onChange={(e) =>
@@ -1008,13 +1077,20 @@ const StepMilestones: React.FC<{
                     <button
                       onClick={() => onRemoveMilestone(phase.key, ms.id)}
                       className="text-theme-text-muted ml-2 p-1 hover:text-red-800 dark:hover:text-red-400"
+                      aria-label="Remove milestone"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
                   <div className="pl-7">
-                    <label className="text-theme-text-muted mb-1 block text-xs font-medium">Notification Message</label>
+                    <label
+                      htmlFor={`pipeline-notification-message-${ms.id}`}
+                      className="text-theme-text-muted mb-1 block text-xs font-medium"
+                    >
+                      Notification Message
+                    </label>
                     <input
+                      id={`pipeline-notification-message-${ms.id}`}
                       type="text"
                       value={ms.notification_message}
                       onChange={(e) => onUpdateMilestone(phase.key, ms.id, 'notification_message', e.target.value)}
@@ -1099,7 +1175,8 @@ const StepReview: React.FC<{
           )}
           {info.target_position && (
             <span className="rounded-sm bg-red-500/20 px-2 py-1 text-red-700 dark:text-red-400">
-              {info.target_position}
+              {TARGET_POSITIONS.find((position) => position.value === info.target_position)?.label ??
+                info.target_position}
             </span>
           )}
           <span className="rounded-sm bg-blue-500/20 px-2 py-1 text-blue-700 dark:text-blue-400">

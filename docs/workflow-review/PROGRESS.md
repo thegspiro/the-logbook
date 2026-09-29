@@ -49,29 +49,29 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W18 | Create, edit and cancel an event, including a recurring one               | secretary             | `/events`, `/events/:id/edit`                   | ✅     |
 | W19 | RSVP, change it, and see it on the event                                  | member, member2       | `/events/:id`                                   | ✅     |
 | W20 | Check-in: QR self check-in, live monitoring, an officer's manual check-in | member, secretary     | `/events/:id/qr-code`, `/events/:id/monitoring` | ✅     |
-| W21 | Event templates, the events admin hub, and event analytics                | secretary             | `/events/admin`, `/events/templates`            | ⬜     |
-| W22 | A public event request and its status link                                | anonymous → secretary | `/event-request/status/:token`                  | ⬜     |
-| W23 | Locations, the kiosk display and guest check-in                           | admin, anonymous      | `/locations`, `/display/:code`                  | ⬜     |
+| W21 | Event templates, the events admin hub, and event analytics                | secretary             | `/events/admin`, `/events/templates`            | ✅     |
+| W22 | A public event request and its status link                                | anonymous → secretary | `/event-request/status/:token`                  | ✅     |
+| W23 | Locations, the kiosk display and guest check-in                           | admin, anonymous      | `/locations`, `/display/:code`                  | ✅     |
 
 ## Tier 4 — Training
 
 | #   | Activity                                                              | Acts as                   | Starts at                                          | Status |
 | --- | --------------------------------------------------------------------- | ------------------------- | -------------------------------------------------- | ------ |
-| W24 | Submit a training record, and the officer approves or returns it      | member → training_officer | `/training/submit`, `/training/submissions`        | ⬜     |
-| W25 | Courses and requirements                                              | training_officer          | `/training/courses`, `/training/requirements`      | ⬜     |
-| W26 | A training program: build it, enroll a member, the member's progress  | training_officer → member | `/training/programs`                               | ⬜     |
-| W27 | A course cohort: schedule classes, roster, attendance                 | training_officer          | `/training/cohorts`                                | ⬜     |
-| W28 | Skills testing: build a sheet, run a test, the member sees the result | training_officer → member | `/training/skills-testing`                         | ⬜     |
-| W29 | Compliance: configure requirements, read the matrix, print it         | training_officer          | `/training/compliance-config`, `/training/officer` | ⬜     |
-| W30 | Log a shift and file a shift report                                   | member                    | `/training/log-shift`                              | ⬜     |
-| W31 | The learning center orientation                                       | member                    | `/learning`                                        | ⬜     |
+| W24 | Submit a training record, and the officer approves or returns it      | member → training_officer | `/training/submit`, `/training/submissions`        | ✅     |
+| W25 | Courses and requirements                                              | training_officer          | `/training/courses`, `/training/requirements`      | ✅     |
+| W26 | A training program: build it, enroll a member, the member's progress  | training_officer → member | `/training/programs`                               | ✅     |
+| W27 | A course cohort: schedule classes, roster, attendance                 | training_officer          | `/training/cohorts`                                | ✅     |
+| W28 | Skills testing: build a sheet, run a test, the member sees the result | training_officer → member | `/training/skills-testing`                         | ✅     |
+| W29 | Compliance: configure requirements, read the matrix, print it         | training_officer          | `/training/compliance-config`, `/training/officer` | ✅     |
+| W30 | Log a shift and file a shift report                                   | training_officer → member | `/training/log-shift`                              | ✅     |
+| W31 | The learning center orientation                                       | member                    | `/learning`                                        | ✅     |
 
 ## Tier 5 — Scheduling
 
 | #   | Activity                                                           | Acts as                     | Starts at                                                   | Status |
 | --- | ------------------------------------------------------------------ | --------------------------- | ----------------------------------------------------------- | ------ |
-| W32 | Shift templates and patterns, then generate a month of shifts      | scheduling_officer          | `/scheduling/admin/planning/*`                              | ⬜     |
-| W33 | Sign up for a shift, swap it, request time off                     | member, member2 → officer   | `/scheduling`                                               | ⬜     |
+| W32 | Shift templates and patterns, then generate a month of shifts      | scheduling_officer          | `/scheduling/admin/planning/*`                              | ✅     |
+| W33 | Sign up for a shift, swap it, request time off                     | member, member2 → officer   | `/scheduling`                                               | ✅     |
 | W34 | Check in to a shift by apparatus QR, and close the shift out       | member → scheduling_officer | `/scheduling/checkin`, `/scheduling/admin/closeout`         | ⬜     |
 | W35 | Platoons and the position qualification roster                     | scheduling_officer          | `/scheduling/admin/platoons`, `/scheduling/admin/positions` | ⬜     |
 | W36 | Every scheduling settings section                                  | scheduling_officer          | `/scheduling/admin/settings/*`                              | ⬜     |
@@ -168,6 +168,9 @@ and not yet confirmed or fixed. The run for each activity starts from these.
 - **Any run touching the app shell, or an accessibility activity** — every
   page carries two "Skip to main content" links, one in `index.html` and one
   in `AppLayout` (W20).
+- **W48** — the basic apparatus form (`/apparatus-basic` → Add Apparatus)
+  names none of its fields: unit number, name, type, crew size and every
+  position select are placeholders or nothing (W30).
 - **W79** — tap targets under 44px on the onboarding Modules, Ranks &
   Positions and Apparatus steps at 390px wide (W01-13), and the sign-in
   screen's "Forgot your password?", Privacy and Terms links (W02-5), and
@@ -176,6 +179,187 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W33 — Sign up for a shift, swap it, request time off — 2026-09-29
+
+Driven as: `member`, `member2` → `scheduling_officer`, at 1280×900 and
+390×844. Held: a double-clicked sign-up, swap request and time-off request
+each acted once; only the seat the member is cleared for was offered;
+approving time off cancelled the member's seat and notified them; `member2`
+was refused another member's requests (403/404). Fixed: W33-1 (LOW — every
+row's Sign up / Confirm / Swap / Approve buttons had one shared name), W33-2
+(LOW — signing up promised an officer review that does not exist), W33-3 (LOW —
+a double-clicked Approve reviewed twice and showed an error), W33-5 (LOW — an
+answered request vanished behind the Pending filter with "No requests").
+Flagged: W33-4 (MED — an open swap is visible to nobody else and approving it
+moves nothing; the dialog's "Any member can pick it up" is corrected). Gate:
+typecheck, lint and the scheduling suites clean. Next: W34.
+
+### W32 — Shift templates and patterns, then generate a month of shifts — 2026-09-29
+
+Driven as: `scheduling_officer` at 1280×900 and 390×844, with `member`
+refused and reading the result. Held: a double-clicked Save Template, Create
+Pattern and Generate each acted once; a 24/48 rotation produced 11 shifts
+every third day at 7 AM Central with the template's seats; a re-run added no
+duplicates; members see the shifts as open and are refused the writes and the
+pages. Fixed: W32-1 (MED — `driver_warnings`, the driver seats generation
+leaves empty for want of EVOC, were dropped by both generate screens; read from
+code, covered by tests), W32-2 (LOW — a re-run said "Generated 0 shifts"),
+W32-3 (LOW — the pattern form's fields unnamed, its choices by colour, and a
+duplicate "Generate" on phones), W32-4 (LOW — the template form's time pickers
+and crew seats indistinguishable). Open: W32-5, W32-6 (NIT). No flags. Gate:
+typecheck, lint and the scheduling suites clean. Next: W33.
+
+### W31 — The learning center orientation — 2026-09-29
+
+Driven as: `member` at 1280×900 and 390×844, with `member2` for isolation.
+Every lesson step's instructions were read against the screen it links to.
+Held: progress survives a reload and is kept per member (`member2` starts at
+0); the dashboard's orientation prompt opens the first lesson; every lesson
+link resolves; the lesson pages fit 390px. Fixed: W31-1 (LOW — seven lesson
+steps named controls the screens do not have, e.g. "Next 7 days" for "Next
+30 Days", "Inbox" for "My Notifications", "Claim" for "Sign Up"), W31-2 (LOW
+— Reset progress discarded every tick without asking), W31-3 (LOW — the My
+Sizes dialog's fields had no names). Open: W31-4 (NIT — an expected 404 on a
+first My Sizes visit). No flags. Gate: typecheck, lint and the touched suites
+clean. Next: W32.
+
+### W30 — Log a shift and file a shift report — 2026-09-29
+
+Driven as: `training_officer` → `member` (the tracker's `member` was wrong —
+filing needs `training.manage`; the member reads and acknowledges), at
+1280×900 and 390×844, with `member` and `member2` refused. Held: a
+double-clicked Submit filed one approved report; the member saw it on My
+Training and in Scheduling → Shift Reports and acknowledged it once; filing
+refused the member, and another member got 404. Needed an apparatus first
+(added through `/apparatus-basic`). Fixed: W30-1 (LOW — the shift report form's
+fields, crew checkbox and call-type toggles had no names or state), W30-2 (NIT —
+the acknowledgment comment box). New lead for W48 (the basic apparatus form).
+No flags. Gate: typecheck, lint and the touched suites clean. Next: W31.
+
+### W29 — Compliance: configure requirements, read the matrix, print it — 2026-09-29
+
+Driven as: `training_officer` at 1280×900 and in print media, with `member`
+refused. Held: a threshold saved and survived reload; an at-risk threshold
+above the compliant one was refused; unread settings are labelled "not in
+effect yet"; the print page drops the app chrome; `member` was refused the
+write, the matrix and both pages. Fixed: W29-1 (MED — the printed matrix
+re-derived its summary from completion instead of standing, printed "not
+started" as "does not apply", and cut requirement names to 12 characters),
+W29-2 (LOW — a refused save gave no reason), W29-3 (LOW — 17 configuration
+fields unnamed, tab state colour-only), W29-4 (LOW — a requirement nobody is
+held to read "0/0 — 0%"). No flags. Gate: typecheck, lint and the touched
+suites clean. Next: W30.
+
+### W28 — Skills testing: build a sheet, run a test, the member sees the result — 2026-09-29
+
+Driven as: `training_officer` at 1280×900 and `member` at 390×844, with
+`member2` refused. Held: double-clicked Create Template, Begin Evaluation and
+Submit each acted once; the scoring screen exposes PASS/FAIL state; the result
+page explains an unscored sheet and shows the department's time; the member
+sees their result, another member gets 404. Fixed: W28-1 (LOW — the template
+builder's fields had no accessible names), W28-2 (LOW — Start Skill Test's
+fields unnamed and its mode chosen only by colour), W28-3 (LOW — "Avg Score
+0%" and "Pass Rate 0%" for figures the API could not compute). No flags.
+Member-examined validation and delayed release not driven. Gate: typecheck,
+lint and the touched suites clean. Next: W29.
+
+### W27 — A course cohort: schedule classes, roster, attendance — 2026-09-29
+
+Driven as: `training_officer` at 1280×900 and `member` at 390×844, with
+`quartermaster` refused. Held: a double-clicked Generate made one cohort with
+two events and both members signed up; Remove withdrew a member from the
+classes to come; a double-clicked Shift moved the schedule once; a roster
+member sees the schedule without peers, a non-member gets 404. Fixed: W27-1
+(HIGH — "Create a new course" opened beneath the syllabus dialog and took no
+clicks, blocking every department's first syllabus), W27-2 (MED — a course
+created from the syllabus was not listed, so it could not be picked). Flagged:
+W27-3 (MED — no way to add a member to a generated cohort). Open: W27-4 (NIT).
+Attendance not driven — the classes are in October. Gate: typecheck, lint and
+the touched suites clean. Next: W28.
+
+### W26 — A training program: build it, enroll a member, the member's progress — 2026-09-29
+
+Driven as: `training_officer` at 1280×900 and `member` at 390×844, with
+`member` and `member2` refused. Held: a double-clicked Create Pipeline and a
+double-clicked Enroll each acted once; a member cannot set their own progress;
+`member2` was refused another member's enrollment, enrolling and editing.
+Fixed: W26-2 (LOW — the member's pipeline card named neither program nor
+requirements; `program_name` added to the summary), W26-3 (LOW — two refused
+requests per visit, an "Enrolled 0" and a Duplicate for a plain member), W26-4
+(LOW — the wizard's new-requirement fields had no accessible names; a raw
+position slug on the review), W26-5 (NIT — the enroll picker's selection was
+colour only). Flagged: W26-1 (MED — a linked requirement starts at zero,
+contradicting the compliance figure on the same screen and the wizard's
+promise). Gate: typecheck, lint, flake8, black, isort and the touched suites
+clean. Next: W27.
+
+### W25 — Courses and requirements — 2026-09-29
+
+Driven as: `training_officer` at 1280×900, with `member` refused. Held: a
+double-clicked course made one; empty names and hours were refused; a
+requirement's cleared description saved; Deactivate kept a requirement
+restorable; `member` was refused every write, saw a read-only library and got
+Access Denied on requirements. Fixed: W25-1 (MED — a double-clicked Create
+Requirement made two), W25-2 (LOW — clearing a course's optional fields did not
+save), W25-3 (LOW — the course form's fields had no accessible names), W25-5
+(NIT — action buttons named the wrong action or no row). Flagged: W25-4 (LOW —
+a deactivated course cannot be brought back). Gate: typecheck, lint and the
+touched suites clean. Next: W26.
+
+### W24 — Submit a training record, and the officer approves or returns it — 2026-09-29
+
+Driven as: `member` at 390×844 and `training_officer` at 1280×900, with
+`member` and `member2` refused. Held: a double-tapped submit, return and
+approval each acted once; the officer's note reached the member, Fix and
+Resubmit kept every value, and the approved record showed on My Training with
+its hours; officer routes refused `member`, another member's submission refused
+`member2`, and an approved submission refused edits. Fixed: W24-1 (LOW — the
+"Returned" date was the UTC day), W24-2 (LOW — missing fields were marked only
+in red), W24-3 (LOW — raw ISO dates and an unnamed notes box on the officer's
+review). Open: W24-4 (NIT). No flags. Gate: typecheck, lint and the touched
+suites clean. Next: W25.
+
+### W23 — Locations, the kiosk display and guest check-in — 2026-09-29
+
+Driven as: `admin` at 1280×900, anonymous at 1024×768 and 390×844, with
+`member` refused. Held: a double-clicked room made one room and one location;
+the kiosk showed the event in the department's zone; a double and a repeat
+guest sign-in made one attendee and one prospect; `member` was refused every
+write and the QR page, with display codes redacted; Regenerate retired the old
+kiosk URL. Fixed: W23-3 (LOW — `/locations` offered a member controls the
+server refuses). Flagged: W23-1 (HIGH — a guest's prospect lands in no
+pipeline when none is flagged default, and no screen shows it), W23-2 (HIGH —
+no screen reads a guest sign-in). Open: W23-4 (NIT). Gate: typecheck, lint and
+the touched suites clean. Next: W24.
+
+### W22 — A public event request and its status link — 2026-09-29
+
+Driven as: anonymous at 390×844 and 1280×900, `secretary` at 1280×900, with
+`member` refused. Held: a double-clicked public submission made one request;
+the secretary's task ticks and Start Working showed on the anonymous status
+page; the requester's cancel survived a reload and reached the coordinator's
+list and activity log; `member` got 403 and Access Denied. Fixed: W22-1 (MED
+— the public form's fields had no accessible names), W22-2 (LOW — a pipeline
+task's done state was icon-only), W22-3 (LOW — coordinator lists showed rank
+codes). Flagged: W22-4 (MED — the requester is never given their status
+link). Open: W22-5 (NIT). Gate: typecheck, lint and the touched suites clean.
+Next: W23.
+
+### W21 — Event templates, the admin hub, analytics — 2026-09-29
+
+Driven as: `secretary` at 1280×900 and 390×844, with `member` refused on
+three pages and two APIs. Held: templates are created once and listed; the
+hub's counts and analytics' totals match the data; creating from a template
+fills title, type and location; deactivating hides it from the picker.
+Fixed: W21-1 (MED — moving an event's start left its end behind, before the
+new start, which every template start made the usual case), W21-2 (LOW —
+clearing a template's fields did not save, pitfall 1), W21-3 (NIT — the
+template picker was unnamed), W21-4 (NIT — a template's default start came
+from the browser's clock). Flagged: W21-5 (LOW — Delete only deactivates,
+while the dialog says it cannot be undone), W21-6 (LOW — the attendance
+rate counts upcoming events as no-shows). Gate: typecheck, lint and the
+touched suites clean. Next: W22.
 
 ### W20 — Check-in: QR, monitoring, manual — 2026-09-29
 

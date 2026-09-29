@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
@@ -175,5 +175,65 @@ describe('EventCreatePage', () => {
 
       expect(mockNavigate).toHaveBeenCalledWith('/events');
     });
+  });
+});
+
+describe('EventCreatePage starting from a template (workflow review W21)', () => {
+  const { eventService } = apiModule;
+  const template = {
+    id: 'tpl-1',
+    name: 'Monday Drill',
+    event_type: 'training',
+    default_title: 'Monday Night Drill',
+    default_duration_minutes: 120,
+    is_active: true,
+    requires_rsvp: false,
+    is_mandatory: false,
+    allow_guests: false,
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    // 9:48 PM on 28 September in New York; 01:48 on the 29th in UTC.
+    vi.setSystemTime(new Date('2026-09-29T01:48:00Z'));
+    vi.mocked(eventService.getTemplates).mockReset();
+    vi.mocked(eventService.getTemplates).mockResolvedValue([template] as never);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.mocked(eventService.getTemplates).mockReset();
+    vi.mocked(eventService.getTemplates).mockResolvedValue([]);
+  });
+
+  const pickTemplate = async () => {
+    renderWithRouter(<EventCreatePage />);
+    const picker = await screen.findByRole('combobox', { name: 'Start from a template' });
+    await screen.findByRole('option', { name: 'Monday Drill' });
+    fireEvent.change(picker, { target: { value: 'tpl-1' } });
+  };
+
+  // The default start was the next hour on the browser's clock, not the
+  // department's: in a browser whose offset differs by a part-hour (India,
+  // UTC+5:30) it landed on the half hour. Run under TZ=Asia/Kolkata to see it.
+  it("starts at the next hour on the department's clock", async () => {
+    await pickTemplate();
+
+    await waitFor(() => expect(screen.getByLabelText('Start Date & Time *')).toHaveValue('2026-09-28'));
+    expect(screen.getByLabelText('Start time hour')).toHaveDisplayValue('10');
+    expect(screen.getByLabelText('Start time minute')).toHaveDisplayValue('00');
+    expect(screen.getByLabelText('Start time AM/PM')).toHaveDisplayValue('PM');
+  });
+
+  // Moving the start left the end on the old day, before the new start.
+  it('carries the end with the start, keeping the length', async () => {
+    await pickTemplate();
+    await waitFor(() => expect(screen.getByLabelText('Start Date & Time *')).toHaveValue('2026-09-28'));
+
+    fireEvent.change(screen.getByLabelText('Start Date & Time *'), { target: { value: '2026-10-12' } });
+
+    expect(screen.getByLabelText('End Date & Time *')).toHaveValue('2026-10-13');
+    expect(screen.getByLabelText('End time hour')).toHaveDisplayValue('12');
+    expect(screen.getByLabelText('End time AM/PM')).toHaveDisplayValue('AM');
   });
 });

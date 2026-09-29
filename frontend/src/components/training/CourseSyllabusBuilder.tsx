@@ -317,6 +317,19 @@ export const CourseSyllabusBuilder: React.FC<CourseSyllabusBuilderProps> = ({ co
     void load();
   }, [load]);
 
+  // The catalog is read once, so a course made from inside the form was
+  // selected by id with no option to show it: the picker fell back to its
+  // placeholder and the class could not be saved.
+  const createCourseIntoCatalog = onCreateCourse
+    ? async () => {
+        const created = await onCreateCourse();
+        if (created) {
+          setCatalog((current) => (current.some((c) => c.id === created.id) ? current : [...current, created]));
+        }
+        return created;
+      }
+    : undefined;
+
   const totalCreditHours = useMemo(() => classes.reduce((sum, c) => sum + (c.credit_hours ?? 0), 0), [classes]);
 
   const spanDays = useMemo(() => {
@@ -535,7 +548,7 @@ export const CourseSyllabusBuilder: React.FC<CourseSyllabusBuilderProps> = ({ co
           submitting={submitting}
           onCancel={() => setAdding(false)}
           onSubmit={(data) => void handleAdd(data)}
-          onCreateCourse={onCreateCourse}
+          onCreateCourse={createCourseIntoCatalog}
         />
       )}
 
@@ -562,7 +575,7 @@ export const CourseSyllabusBuilder: React.FC<CourseSyllabusBuilderProps> = ({ co
                     submitting={submitting}
                     onCancel={() => setEditingId(null)}
                     onSubmit={(data) => void handleUpdate(item.id, data)}
-                    onCreateCourse={onCreateCourse}
+                    onCreateCourse={createCourseIntoCatalog}
                   />
                 </li>
               );

@@ -14,24 +14,23 @@ import { EventForm } from '../components/EventForm';
 import type { ConflictEvent } from '../components/EventForm';
 import toast from 'react-hot-toast';
 import { getErrorDetail } from '../utils/errorHandling';
+import { formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
+import { useTimezone } from '../hooks/useTimezone';
 
 /**
  * Convert an EventTemplate into a partial EventCreate suitable for pre-populating the form.
- * start_datetime is set to the next full hour; end_datetime is offset by the template's
- * default_duration_minutes (or 60 min if unset).
+ * start_datetime is the next full hour on the department's clock; end_datetime is offset
+ * by the template's default_duration_minutes (or 60 min if unset). Both are UTC instants,
+ * as EventForm expects of initialData; it converts them to `tz` itself. The naive
+ * browser-clock strings this used to build were read as browser time, which put the
+ * default an hour or a day out for anyone away from the department (workflow review W21).
  */
-function templateToInitialData(template: EventTemplate): Partial<EventCreate> {
-  const now = new Date();
-  now.setMinutes(0, 0, 0);
-  now.setHours(now.getHours() + 1);
+function templateToInitialData(template: EventTemplate, tz: string): Partial<EventCreate> {
+  const nowLocal = formatForDateTimeInput(new Date(), tz);
+  const hourStart = new Date(localToUTC(`${nowLocal.slice(0, 13)}:00`, tz));
+  const start = new Date(hourStart.getTime() + 60 * 60 * 1000);
   const durationMs = (template.default_duration_minutes || 60) * 60 * 1000;
-  const end = new Date(now.getTime() + durationMs);
-
-  // Format as datetime-local value (YYYY-MM-DDTHH:mm)
-  const toLocal = (d: Date) => {
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  };
+  const end = new Date(start.getTime() + durationMs);
 
   return {
     title: template.default_title || '',
@@ -40,8 +39,8 @@ function templateToInitialData(template: EventTemplate): Partial<EventCreate> {
     location_id: template.default_location_id || undefined,
     location: template.default_location || undefined,
     location_details: template.default_location_details || undefined,
-    start_datetime: toLocal(now),
-    end_datetime: toLocal(end),
+    start_datetime: start.toISOString(),
+    end_datetime: end.toISOString(),
     requires_rsvp: template.requires_rsvp,
     max_attendees: template.max_attendees || undefined,
     is_mandatory: template.is_mandatory,
@@ -63,6 +62,7 @@ function templateToInitialData(template: EventTemplate): Partial<EventCreate> {
 
 export const EventCreatePage: React.FC = () => {
   const navigate = useNavigate();
+  const tz = useTimezone();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [templates, setTemplates] = useState<EventTemplate[]>([]);
@@ -137,7 +137,7 @@ export const EventCreatePage: React.FC = () => {
     }
     const template = templates.find((t) => t.id === id);
     if (template) {
-      setTemplateInitialData(templateToInitialData(template));
+      setTemplateInitialData(templateToInitialData(template, tz));
     }
   };
 
@@ -188,6 +188,7 @@ export const EventCreatePage: React.FC = () => {
               Pick a template to pre-fill common settings, or start blank.
             </p>
             <select
+              aria-label="Start from a template"
               value={selectedTemplateId}
               onChange={handleTemplateChange}
               className="form-input px-3 text-sm focus:ring-red-500 sm:w-96"

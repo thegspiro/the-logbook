@@ -132,10 +132,14 @@ const CriterionEditor: React.FC<{
         <div className="grid flex-1 grid-cols-1 gap-3 lg:grid-cols-12">
           {/* Label */}
           <div className="lg:col-span-4">
-            <label className="text-theme-text-muted mb-1 block text-xs font-medium">
+            <label
+              htmlFor={`criterion-criterion-label-${criterion.localId}`}
+              className="text-theme-text-muted mb-1 block text-xs font-medium"
+            >
               Criterion Label <span className="text-red-500">*</span>
             </label>
             <input
+              id={`criterion-criterion-label-${criterion.localId}`}
               type="text"
               value={criterion.label}
               onChange={(e) => onChange({ ...criterion, label: e.target.value })}
@@ -146,8 +150,14 @@ const CriterionEditor: React.FC<{
 
           {/* Type */}
           <div className="lg:col-span-2">
-            <label className="text-theme-text-muted mb-1 block text-xs font-medium">Type</label>
+            <label
+              htmlFor={`criterion-type-${criterion.localId}`}
+              className="text-theme-text-muted mb-1 block text-xs font-medium"
+            >
+              Type
+            </label>
             <select
+              id={`criterion-type-${criterion.localId}`}
               value={criterion.type}
               onChange={(e) => onChange({ ...criterion, type: e.target.value as CriterionType })}
               className="form-input px-3 text-sm"
@@ -164,8 +174,14 @@ const CriterionEditor: React.FC<{
           {criterion.type === 'score' && (
             <>
               <div className="lg:col-span-2">
-                <label className="text-theme-text-muted mb-1 block text-xs font-medium">Max Points</label>
+                <label
+                  htmlFor={`criterion-max-points-${criterion.localId}`}
+                  className="text-theme-text-muted mb-1 block text-xs font-medium"
+                >
+                  Max Points
+                </label>
                 <input
+                  id={`criterion-max-points-${criterion.localId}`}
                   type="number"
                   min="1"
                   value={criterion.max_score ?? ''}
@@ -194,8 +210,14 @@ const CriterionEditor: React.FC<{
                   hint doing the explaining. */}
               {criterion.required && (
                 <div className="lg:col-span-2">
-                  <label className="text-theme-text-muted mb-1 block text-xs font-medium">Passing Points</label>
+                  <label
+                    htmlFor={`criterion-passing-points-${criterion.localId}`}
+                    className="text-theme-text-muted mb-1 block text-xs font-medium"
+                  >
+                    Passing Points
+                  </label>
                   <input
+                    id={`criterion-passing-points-${criterion.localId}`}
                     type="number"
                     min="0"
                     value={criterion.passing_score ?? ''}
@@ -212,8 +234,14 @@ const CriterionEditor: React.FC<{
 
           {criterion.type === 'time_limit' && (
             <div className="lg:col-span-2">
-              <label className="text-theme-text-muted mb-1 block text-xs font-medium">Time Limit (sec)</label>
+              <label
+                htmlFor={`criterion-time-limit-sec-${criterion.localId}`}
+                className="text-theme-text-muted mb-1 block text-xs font-medium"
+              >
+                Time Limit (sec)
+              </label>
               <input
+                id={`criterion-time-limit-sec-${criterion.localId}`}
                 type="number"
                 min="1"
                 value={criterion.time_limit_seconds ?? ''}
@@ -228,10 +256,14 @@ const CriterionEditor: React.FC<{
 
           {criterion.type === 'checklist' && (
             <div className="lg:col-span-4">
-              <label className="text-theme-text-muted mb-1 block text-xs font-medium">
+              <label
+                htmlFor={`criterion-checklist-items-one-per-line-${criterion.localId}`}
+                className="text-theme-text-muted mb-1 block text-xs font-medium"
+              >
                 Checklist Items (one per line)
               </label>
               <textarea
+                id={`criterion-checklist-items-one-per-line-${criterion.localId}`}
                 value={checklistText}
                 onChange={(e) => {
                   setChecklistText(e.target.value);
@@ -249,10 +281,14 @@ const CriterionEditor: React.FC<{
 
           {criterion.type === 'statement' && (
             <div className="lg:col-span-4">
-              <label className="text-theme-text-muted mb-1 block text-xs font-medium">
+              <label
+                htmlFor={`criterion-statement-text-${criterion.localId}`}
+                className="text-theme-text-muted mb-1 block text-xs font-medium"
+              >
                 Statement Text <span className="text-red-500">*</span>
               </label>
               <textarea
+                id={`criterion-statement-text-${criterion.localId}`}
                 value={criterion.statement_text ?? ''}
                 onChange={(e) => onChange({ ...criterion, statement_text: e.target.value || undefined })}
                 rows={3}
@@ -288,9 +324,15 @@ const CriterionEditor: React.FC<{
               scorecard above a 100%. */}
           {takesScoreMode && (
             <div className="lg:col-span-4">
-              <label className="text-theme-text-muted mb-1 block text-xs font-medium">If this step is failed</label>
+              <label
+                htmlFor={`criterion-if-this-step-is-failed-${criterion.localId}`}
+                className="text-theme-text-muted mb-1 block text-xs font-medium"
+              >
+                If this step is failed
+              </label>
               <div className="flex gap-2">
                 <select
+                  id={`criterion-if-this-step-is-failed-${criterion.localId}`}
                   value={mode ?? ''}
                   aria-label={`Score effect for criterion ${index + 1}`}
                   onChange={(e) => {
@@ -380,8 +422,14 @@ const CriterionEditor: React.FC<{
 
         {/* Description */}
         <div className="hidden w-48 shrink-0 xl:block">
-          <label className="text-theme-text-muted mb-1 block text-xs font-medium">Description</label>
+          <label
+            htmlFor={`criterion-description-${criterion.localId}`}
+            className="text-theme-text-muted mb-1 block text-xs font-medium"
+          >
+            Description
+          </label>
           <input
+            id={`criterion-description-${criterion.localId}`}
             type="text"
             value={criterion.description ?? ''}
             onChange={(e) => onChange({ ...criterion, description: e.target.value || undefined })}
@@ -446,6 +494,7 @@ const SectionEditor: React.FC<{
             type="text"
             value={section.name}
             onChange={(e) => onChange({ ...section, name: e.target.value })}
+            aria-label="Section name"
             placeholder="Section name (e.g., SCBA Operations)"
             className="form-input flex-1 px-3 py-1.5 text-sm font-medium"
           />
@@ -453,6 +502,7 @@ const SectionEditor: React.FC<{
             type="text"
             value={section.description ?? ''}
             onChange={(e) => onChange({ ...section, description: e.target.value || undefined })}
+            aria-label="Section description"
             placeholder="Description (optional)"
             className="form-input hidden flex-1 px-3 py-1.5 text-sm lg:block"
           />
@@ -949,10 +999,11 @@ export const SkillTemplateBuilderPage: React.FC = () => {
           <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Template Settings</h2>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
-              <label className="text-theme-text-muted mb-1 block text-sm font-medium">
+              <label htmlFor="template-template-name" className="text-theme-text-muted mb-1 block text-sm font-medium">
                 Template Name <span className="text-red-500">*</span>
               </label>
               <input
+                id="template-template-name"
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -961,8 +1012,11 @@ export const SkillTemplateBuilderPage: React.FC = () => {
               />
             </div>
             <div>
-              <label className="text-theme-text-muted mb-1 block text-sm font-medium">Category</label>
+              <label htmlFor="template-category" className="text-theme-text-muted mb-1 block text-sm font-medium">
+                Category
+              </label>
               <input
+                id="template-category"
                 type="text"
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
@@ -971,8 +1025,15 @@ export const SkillTemplateBuilderPage: React.FC = () => {
               />
             </div>
             <div className="md:col-span-2">
-              <label className="text-theme-text-muted mb-1 block text-sm font-medium">Visibility</label>
-              <select value={visibility} onChange={(e) => setVisibility(e.target.value)} className="form-input px-3">
+              <label htmlFor="template-visibility" className="text-theme-text-muted mb-1 block text-sm font-medium">
+                Visibility
+              </label>
+              <select
+                id="template-visibility"
+                value={visibility}
+                onChange={(e) => setVisibility(e.target.value)}
+                className="form-input px-3"
+              >
                 <option value="all_members">All Members</option>
                 <option value="officers_only">Officers Only</option>
                 <option value="assigned_only">Assigned Members Only</option>
@@ -982,10 +1043,14 @@ export const SkillTemplateBuilderPage: React.FC = () => {
               </p>
             </div>
             <div className="md:col-span-2">
-              <label className="text-theme-text-muted mb-1 block text-sm font-medium">
+              <label
+                htmlFor="template-linked-training-requirement-optional"
+                className="text-theme-text-muted mb-1 block text-sm font-medium"
+              >
                 Linked Training Requirement (optional)
               </label>
               <select
+                id="template-linked-training-requirement-optional"
                 value={requirementId}
                 onChange={(e) => setRequirementId(e.target.value)}
                 className="form-input px-3"
@@ -1105,8 +1170,11 @@ export const SkillTemplateBuilderPage: React.FC = () => {
             </div>
 
             <div className="md:col-span-2">
-              <label className="text-theme-text-muted mb-1 block text-sm font-medium">Description</label>
+              <label htmlFor="template-description" className="text-theme-text-muted mb-1 block text-sm font-medium">
+                Description
+              </label>
               <textarea
+                id="template-description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={2}
@@ -1115,10 +1183,14 @@ export const SkillTemplateBuilderPage: React.FC = () => {
               />
             </div>
             <div>
-              <label className="text-theme-text-muted mb-1 block text-sm font-medium">
+              <label
+                htmlFor="template-global-time-limit-minutes"
+                className="text-theme-text-muted mb-1 block text-sm font-medium"
+              >
                 Global Time Limit (minutes)
               </label>
               <input
+                id="template-global-time-limit-minutes"
                 type="number"
                 min="0"
                 step="1"
@@ -1129,8 +1201,14 @@ export const SkillTemplateBuilderPage: React.FC = () => {
               />
             </div>
             <div>
-              <label className="text-theme-text-muted mb-1 block text-sm font-medium">Passing Percentage (%)</label>
+              <label
+                htmlFor="template-passing-percentage"
+                className="text-theme-text-muted mb-1 block text-sm font-medium"
+              >
+                Passing Percentage (%)
+              </label>
               <input
+                id="template-passing-percentage"
                 type="number"
                 min="0"
                 max="100"
@@ -1141,8 +1219,14 @@ export const SkillTemplateBuilderPage: React.FC = () => {
               />
             </div>
             <div>
-              <label className="text-theme-text-muted mb-1 block text-sm font-medium">Tags (comma-separated)</label>
+              <label
+                htmlFor="template-tags-comma-separated"
+                className="text-theme-text-muted mb-1 block text-sm font-medium"
+              >
+                Tags (comma-separated)
+              </label>
               <input
+                id="template-tags-comma-separated"
                 type="text"
                 value={tags}
                 onChange={(e) => setTags(e.target.value)}

@@ -348,6 +348,8 @@ export interface PatternGenerateRequest {
 
 export interface PatternGenerateResponse {
   shifts_created: number;
+  /** Driver seats generation left empty for want of an EVOC level; absent when none. */
+  driver_warnings?: string[] | undefined;
 }
 
 // ============================================================================

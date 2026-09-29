@@ -210,8 +210,11 @@ export const SizePreferencesModal: React.FC<SizePreferencesModalProps> = ({ isOp
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className={labelClass}>Shirt Size</label>
+              <label className={labelClass} htmlFor="size-prefs-shirt-size">
+                Shirt Size
+              </label>
               <select
+                id="size-prefs-shirt-size"
                 value={form.shirt_size}
                 onChange={(e) => set('shirt_size', e.target.value)}
                 className={inputClass}
@@ -220,8 +223,11 @@ export const SizePreferencesModal: React.FC<SizePreferencesModalProps> = ({ isOp
               </select>
             </div>
             <div>
-              <label className={labelClass}>Jacket Size</label>
+              <label className={labelClass} htmlFor="size-prefs-jacket-size">
+                Jacket Size
+              </label>
               <select
+                id="size-prefs-jacket-size"
                 value={form.jacket_size}
                 onChange={(e) => set('jacket_size', e.target.value)}
                 className={inputClass}
@@ -230,8 +236,11 @@ export const SizePreferencesModal: React.FC<SizePreferencesModalProps> = ({ isOp
               </select>
             </div>
             <div>
-              <label className={labelClass}>Pant Waist</label>
+              <label className={labelClass} htmlFor="size-prefs-pant-waist">
+                Pant Waist
+              </label>
               <input
+                id="size-prefs-pant-waist"
                 type="text"
                 value={form.pant_waist}
                 onChange={(e) => set('pant_waist', e.target.value)}
@@ -240,8 +249,11 @@ export const SizePreferencesModal: React.FC<SizePreferencesModalProps> = ({ isOp
               />
             </div>
             <div>
-              <label className={labelClass}>Pant Inseam</label>
+              <label className={labelClass} htmlFor="size-prefs-pant-inseam">
+                Pant Inseam
+              </label>
               <input
+                id="size-prefs-pant-inseam"
                 type="text"
                 value={form.pant_inseam}
                 onChange={(e) => set('pant_inseam', e.target.value)}
@@ -250,8 +262,15 @@ export const SizePreferencesModal: React.FC<SizePreferencesModalProps> = ({ isOp
               />
             </div>
             <div>
-              <label className={labelClass}>Boot Size</label>
-              <select value={form.boot_size} onChange={(e) => set('boot_size', e.target.value)} className={inputClass}>
+              <label className={labelClass} htmlFor="size-prefs-boot-size">
+                Boot Size
+              </label>
+              <select
+                id="size-prefs-boot-size"
+                value={form.boot_size}
+                onChange={(e) => set('boot_size', e.target.value)}
+                className={inputClass}
+              >
                 <option value="">--</option>
                 {SHOE_SIZES.map((s) => (
                   <option key={s} value={s}>
@@ -299,8 +318,11 @@ export const SizePreferencesModal: React.FC<SizePreferencesModalProps> = ({ isOp
                 </p>
               </div>
               <div>
-                <label className={labelClass}>Boot Width</label>
+                <label className={labelClass} htmlFor="size-prefs-boot-width">
+                  Boot Width
+                </label>
                 <input
+                  id="size-prefs-boot-width"
                   type="text"
                   value={form.boot_width}
                   onChange={(e) => set('boot_width', e.target.value)}
@@ -309,8 +331,11 @@ export const SizePreferencesModal: React.FC<SizePreferencesModalProps> = ({ isOp
                 />
               </div>
               <div>
-                <label className={labelClass}>Glove Size</label>
+                <label className={labelClass} htmlFor="size-prefs-glove-size">
+                  Glove Size
+                </label>
                 <select
+                  id="size-prefs-glove-size"
                   value={form.glove_size}
                   onChange={(e) => set('glove_size', e.target.value)}
                   className={inputClass}
@@ -319,8 +344,11 @@ export const SizePreferencesModal: React.FC<SizePreferencesModalProps> = ({ isOp
                 </select>
               </div>
               <div>
-                <label className={labelClass}>Hat Size</label>
+                <label className={labelClass} htmlFor="size-prefs-hat-size">
+                  Hat Size
+                </label>
                 <input
+                  id="size-prefs-hat-size"
                   type="text"
                   value={form.hat_size}
                   onChange={(e) => set('hat_size', e.target.value)}

@@ -84,6 +84,16 @@ describe('SkillTemplateBuilderPage', () => {
       expect(screen.getByPlaceholderText(/SCBA Proficiency Evaluation/i)).toBeInTheDocument();
     });
 
+    it('names the template, section and criterion fields by their labels', () => {
+      renderWithRouter(<SkillTemplateBuilderPage />);
+
+      for (const label of [/^Template Name/, 'Category', 'Visibility', 'Passing Percentage (%)', /^Criterion Label/]) {
+        expect(screen.getByLabelText(label)).toBeInTheDocument();
+      }
+      expect(screen.getByRole('textbox', { name: 'Section name' })).toBeInTheDocument();
+      expect(screen.getByRole('combobox', { name: 'Type' })).toBeInTheDocument();
+    });
+
     it('should display the evaluation sections header', () => {
       renderWithRouter(<SkillTemplateBuilderPage />);
 

@@ -15,6 +15,17 @@ import { formatDate } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
 import PrintPageStyles from '@/components/print/PrintPageStyles';
 
+// A member's row carries a cell only for requirements that apply to them, so a
+// missing cell is "does not apply". "Not started" printed the same dash, which
+// made an unmet requirement indistinguishable from one the member is exempt from.
+const cellMark = (status: string | undefined): string => {
+  if (status === undefined) return '—';
+  if (status === 'completed') return '✓';
+  if (status === 'in_progress') return '◐';
+  if (status === 'expired') return 'Exp';
+  return '✗';
+};
+
 const CompliancePrintPage: React.FC = () => {
   const tz = useTimezone();
   const [matrix, setMatrix] = useState<ComplianceMatrix | null>(null);
@@ -52,9 +63,12 @@ const CompliancePrintPage: React.FC = () => {
 
   const members: ComplianceMatrixMember[] = matrix.members || [];
   const requirements = matrix.requirements || [];
-  const compliant = members.filter((m) => m.completion_pct >= 100).length;
-  const partial = members.filter((m) => m.completion_pct > 0 && m.completion_pct < 100).length;
-  const nonCompliant = members.filter((m) => m.completion_pct === 0).length;
+  // Counted from the standing the backend decided, as the on-screen matrix is.
+  // Bucketing on completion_pct called a member with 4 of 6 hours "not
+  // started", and ignored the department's thresholds entirely.
+  const compliant = members.filter((m) => m.standing === 'compliant').length;
+  const atRisk = members.filter((m) => m.standing === 'at_risk').length;
+  const nonCompliant = members.filter((m) => m.standing === 'non_compliant').length;
 
   const cellStyle: React.CSSProperties = {
     border: '1px solid #ccc',
@@ -103,19 +117,19 @@ const CompliancePrintPage: React.FC = () => {
                 <td style={{ border: '1px solid #ccc', padding: '6pt 10pt', width: '25%', textAlign: 'center' }}>
                   <div style={{ fontSize: '18pt', fontWeight: 'bold', color: '#166534' }}>{compliant}</div>
                   <div style={{ fontSize: '8pt', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#555' }}>
-                    100% Complete
+                    Compliant
                   </div>
                 </td>
                 <td style={{ border: '1px solid #ccc', padding: '6pt 10pt', width: '25%', textAlign: 'center' }}>
-                  <div style={{ fontSize: '18pt', fontWeight: 'bold', color: '#92400e' }}>{partial}</div>
+                  <div style={{ fontSize: '18pt', fontWeight: 'bold', color: '#92400e' }}>{atRisk}</div>
                   <div style={{ fontSize: '8pt', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#555' }}>
-                    Partially Complete
+                    At Risk
                   </div>
                 </td>
                 <td style={{ border: '1px solid #ccc', padding: '6pt 10pt', width: '25%', textAlign: 'center' }}>
                   <div style={{ fontSize: '18pt', fontWeight: 'bold', color: '#991b1b' }}>{nonCompliant}</div>
                   <div style={{ fontSize: '8pt', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#555' }}>
-                    Not Started
+                    Non-Compliant
                   </div>
                 </td>
                 <td style={{ border: '1px solid #ccc', padding: '6pt 10pt', width: '25%', textAlign: 'center' }}>
@@ -142,11 +156,14 @@ const CompliancePrintPage: React.FC = () => {
                       textAlign: 'center',
                       fontSize: '6.5pt',
                       maxWidth: '60pt',
-                      overflow: 'hidden',
+                      // Wrapped, not truncated: paper has no tooltip to recover
+                      // "ANNUAL HAZMA…".
+                      whiteSpace: 'normal',
+                      overflowWrap: 'anywhere',
                     }}
                     title={r.name}
                   >
-                    {r.name.length > 12 ? r.name.slice(0, 12) + '…' : r.name}
+                    {r.name}
                   </th>
                 ))}
               </tr>
@@ -169,14 +186,9 @@ const CompliancePrintPage: React.FC = () => {
                     </td>
                     {requirements.map((req) => {
                       const memberReq = m.requirements.find((r) => r.requirement_id === req.id);
-                      const status = memberReq?.status || 'missing';
                       return (
                         <td key={req.id} style={{ ...cellStyle, textAlign: 'center', fontSize: '8pt' }}>
-                          {status === 'completed' || status === 'met'
-                            ? '✓'
-                            : status === 'in_progress' || status === 'partial'
-                              ? '◐'
-                              : '—'}
+                          {cellMark(memberReq?.status)}
                         </td>
                       );
                     })}
@@ -184,6 +196,9 @@ const CompliancePrintPage: React.FC = () => {
                 ))}
             </tbody>
           </table>
+          <p style={{ margin: '4pt 0 0', fontSize: '7.5pt', color: '#555' }}>
+            ✓ met · ◐ in progress · ✗ not started · Exp expired · — does not apply to this member
+          </p>
 
           {/* Signature Block */}
           <div style={{ marginTop: '24pt', pageBreakInside: 'avoid' }}>

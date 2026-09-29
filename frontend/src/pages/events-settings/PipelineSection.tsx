@@ -2,6 +2,7 @@ import React from 'react';
 import { Plus, Trash2, ChevronUp, ChevronDown, Calendar, UserCheck, Globe } from 'lucide-react';
 import type { PipelineTaskConfig } from '../../types/event';
 import type { PipelineSectionProps } from './types';
+import { useRanks } from '../../hooks/useRanks';
 
 const PipelineSection: React.FC<PipelineSectionProps> = ({
   settings,
@@ -20,6 +21,8 @@ const PipelineSection: React.FC<PipelineSectionProps> = ({
   onNewTaskDescChange,
 }) => {
   const pipeline = settings.request_pipeline;
+  // Inactive ranks too, so a member holding a retired rank still reads by its name.
+  const { formatRank } = useRanks(false);
 
   return (
     <div className="space-y-6">
@@ -45,7 +48,7 @@ const PipelineSection: React.FC<PipelineSectionProps> = ({
           {members.map((m) => (
             <option key={m.id} value={m.id}>
               {m.first_name} {m.last_name}
-              {m.rank ? ` — ${m.rank}` : ''}
+              {m.rank ? ` — ${formatRank(m.rank)}` : ''}
             </option>
           ))}
         </select>

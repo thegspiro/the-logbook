@@ -2430,8 +2430,14 @@ export const ShiftReportsTab: React.FC = () => {
               Acknowledging confirms you have reviewed this shift completion report.
             </p>
             <div>
-              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Comments (optional)</label>
+              <label
+                htmlFor="shift-report-ack-comments"
+                className="text-theme-text-secondary mb-1 block text-sm font-medium"
+              >
+                Comments (optional)
+              </label>
               <textarea
+                id="shift-report-ack-comments"
                 rows={3}
                 value={ackComments}
                 onChange={(e) => setAckComments(e.target.value)}

@@ -268,3 +268,32 @@ describe('ShiftReportsTab — Written by me', () => {
     expect(screen.getByTitle('Aug: 1 report').style.height).toBe('25%');
   });
 });
+
+describe('ShiftReportsTab — acknowledging a report about me', () => {
+  it('names the comment box by its label', async () => {
+    canManage = false;
+    searchParams = new URLSearchParams('view=my-reports');
+    mockGetMyReports.mockResolvedValue([
+      {
+        id: 'r-9',
+        organization_id: 'org-1',
+        shift_date: '2026-09-28',
+        trainee_id: 'user-1',
+        officer_id: 'user-2',
+        officer_name: 'Tariq Nolan',
+        hours_on_shift: 12,
+        calls_responded: 2,
+        review_status: 'approved',
+        trainee_acknowledged: false,
+        created_at: '2026-09-28T20:00:00Z',
+        updated_at: '2026-09-28T20:00:00Z',
+      },
+    ]);
+    renderWithRouter(<ShiftReportsTab />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /Tariq Nolan/ }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Acknowledge Report' }));
+
+    expect(screen.getByLabelText('Comments (optional)')).toBeInTheDocument();
+  });
+});
