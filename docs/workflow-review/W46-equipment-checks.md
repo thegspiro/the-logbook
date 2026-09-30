@@ -103,7 +103,7 @@ publish (not recorded), or from when the apparatus assignment changed. It is a
 compliance number departments read (CLAUDE.md pitfall 29). Mirrored into
 `docs/KNOWN_LIMITATIONS.md`.
 
-### W46-5 — decision — The seeded Quartermaster cannot build equipment checklists — 🚩 FLAGGED
+### W46-5 — decision — The seeded Quartermaster cannot build equipment checklists — ✅ RESOLVED
 
 **Did:** `quartermaster`, `/inventory/admin/checklists`.
 **Saw:** Access Denied. The seeded position holds `inventory.manage` and both
@@ -112,9 +112,12 @@ the chief, captain, lieutenant and EMS supply officer. The EMS supply officer's
 comment in `permissions.py` says stock is only useful if the officer who manages
 it can put it on the apparatus checklist.
 **Where:** `backend/app/core/permissions.py:2064`, the quartermaster position.
-**Flagged:** a permissions decision. It would also need a migration for
-installations already seeded (pitfall 23). Mirrored into `KNOWN_LIMITATIONS.md`.
-Per the rotation's rule, the rotation stops here for the owner.
+**Resolved:** the owner decided the quartermaster builds checklists. The
+registry now seeds `inventory.check_manage` on the position, and migration
+`f73b449bdb8b` writes it onto stored system quartermaster rows that still hold
+`inventory.manage`. Covered by `test_quartermaster_check_manage_grant.py`, and
+verified by upgrading, downgrading and re-upgrading the review database. The
+rotation resumes at W47.
 
 ### W46-6 — LOW — A basic-apparatus department cannot pin a checklist to one unit — 🚩 FLAGGED
 

@@ -199,8 +199,9 @@ linked to the fleet board). Flagged: W46-4 (MED — the log counts a checklist
 missed before it existed), W46-5 (decision — the quartermaster cannot build
 checklists), W46-6 (LOW — basic apparatus cannot be pinned). Open: W46-8 (NIT).
 The template was set back to a draft afterwards. Gate: typecheck, lint and the
-inventory suites clean. **Rotation stopped here:** W46-5 is a permissions
-decision for the owner. Next, when resumed: W47.
+inventory suites clean. The rotation stopped here for W46-5; the owner
+granted the quartermaster `inventory.check_manage` (migration `f73b449bdb8b`)
+and it resumed. Next: W47.
 
 ### W45 — The self-service kiosk — 2026-09-30
 

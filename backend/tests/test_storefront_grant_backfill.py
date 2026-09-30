@@ -67,7 +67,10 @@ _LATER_REVOCATIONS = (
     ),
 )
 # Later grant backfills, each exposing ``_SLUGS`` and ``_PERMISSION``.
-_LATER_GRANTS = (_VERSIONS / "20260923_2219_394600cbfae2_grant_suggestions_manage.py",)
+_LATER_GRANTS = (
+    _VERSIONS / "20260923_2219_394600cbfae2_grant_suggestions_manage.py",
+    _VERSIONS / "20260930_0327_f73b449bdb8b_add_quartermaster_check_manage.py",
+)
 
 
 def _load_module(path: Path, name: str):
