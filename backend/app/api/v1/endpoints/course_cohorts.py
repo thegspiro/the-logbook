@@ -18,6 +18,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.attendance_lock import attendance_lock_http_error
 from app.api.dependencies import (
     get_current_user,
     require_permission,
@@ -471,7 +472,9 @@ async def shift_cohort_classes(
             actor_id=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(
+        # A class whose attendance is finalized refuses the change: a
+        # conflict with its state, not a bad request or a missing record.
+        raise attendance_lock_http_error(e) or HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
 
@@ -516,7 +519,9 @@ async def cancel_cohort(
             actor_id=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(
+        # A class whose attendance is finalized refuses the change: a
+        # conflict with its state, not a bad request or a missing record.
+        raise attendance_lock_http_error(e) or HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=safe_error_detail(e)
         )
 
@@ -596,7 +601,9 @@ async def reschedule_cohort_class(
             cohort_id=cohort_id,
         )
     except ValueError as e:
-        raise HTTPException(
+        # A class whose attendance is finalized refuses the change: a
+        # conflict with its state, not a bad request or a missing record.
+        raise attendance_lock_http_error(e) or HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
 
@@ -630,7 +637,9 @@ async def cancel_cohort_class(
             cohort_id=cohort_id,
         )
     except ValueError as e:
-        raise HTTPException(
+        # A class whose attendance is finalized refuses the change: a
+        # conflict with its state, not a bad request or a missing record.
+        raise attendance_lock_http_error(e) or HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=safe_error_detail(e)
         )
 

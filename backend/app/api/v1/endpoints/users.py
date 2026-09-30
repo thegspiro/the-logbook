@@ -89,6 +89,8 @@ from app.services.user_deletion_service import (
 from app.services.user_service import UserService
 from app.utils.membership import (
     ADMINISTRATIVE_RANK_MESSAGE,
+    DEACTIVATED_EMAIL_MESSAGE,
+    DEACTIVATED_USERNAME_MESSAGE,
     DEFAULT_CLASS,
     is_administrative,
     split_membership_type,
@@ -209,16 +211,22 @@ async def create_member(
 
     from app.core.security import generate_temporary_password, hash_password
 
-    # Check if username already exists
+    # Check if username already exists. Deactivated rows count: the unique index
+    # includes them, so skipping them only moved the failure to the insert.
     result = await db.execute(
         select(User)
         .where(User.username == user_data.username)
         .where(User.organization_id == str(current_user.organization_id))
-        .where(User.deleted_at.is_(None))
     )
-    if result.scalar_one_or_none():
+    existing_username = result.scalar_one_or_none()
+    if existing_username:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Username already exists"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                DEACTIVATED_USERNAME_MESSAGE
+                if existing_username.deleted_at is not None
+                else "Username already exists"
+            ),
         )
 
     # Check if membership number already exists in the organization
@@ -232,14 +240,18 @@ async def create_member(
                 status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
             ) from e
 
-    # Check if email already exists (including archived members)
+    # Check if email already exists (including archived and deactivated members)
     result = await db.execute(
         select(User)
         .where(User.email == user_data.email)
         .where(User.organization_id == str(current_user.organization_id))
-        .where(User.deleted_at.is_(None))
     )
     existing_user = result.scalar_one_or_none()
+    if existing_user and existing_user.deleted_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=DEACTIVATED_EMAIL_MESSAGE,
+        )
     if existing_user:
         if existing_user.status == UserStatus.ARCHIVED:
             raise HTTPException(
@@ -398,7 +410,21 @@ async def create_member(
         new_user.member_status = user_data.member_status
 
     db.add(new_user)
-    await db.flush()  # Flush to get the user ID
+    try:
+        await db.flush()  # Flush to get the user ID
+    except IntegrityError as e:
+        # The checks above cover every unique column; this is the backstop for
+        # a row created concurrently between those checks and this insert, so
+        # it reads as a refused create rather than a 500.
+        await db.rollback()
+        logger.warning(f"Member create hit a unique index: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Another member record already uses this username, email or "
+                "membership number"
+            ),
+        ) from e
 
     # Assign initial roles if provided (already resolved and ceiling-checked
     # above, before this user row existed).
@@ -1050,8 +1076,18 @@ async def assign_user_roles(
 
     # Prevent privilege escalation: the caller cannot grant a role that exceeds
     # their own permissions (e.g. assigning a wildcard "System Owner" role).
+    #
+    # Only roles being *added* are grants. This call replaces the whole set, so
+    # the list always repeats the member's existing positions; checking those
+    # too refused a coordinator adding "Driver" to the Chief -- and reported it
+    # as a CRITICAL escalation attempt -- because the Chief's own position was
+    # still in the list. Keeping or removing a position grants nothing.
+    held = {str(r.id) for r in user.roles}
     await _enforce_role_grant_ceiling(
-        current_user, list(roles), db, get_client_ip(request)
+        current_user,
+        [r for r in roles if str(r.id) not in held],
+        db,
+        get_client_ip(request),
     )
 
     # The escalation ceiling above only guards *raising* permissions. This call
@@ -1490,8 +1526,8 @@ async def update_contact_info(
             # so the caller's own row is actually excluded (a UUID-vs-str compare
             # never matches, producing a spurious "already in use" on self-save).
             .where(User.id != str(user_id))
-            .where(User.deleted_at.is_(None))
         )
+        # Deactivated rows count, as on create: the unique index includes them.
         if existing.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -1503,11 +1539,14 @@ async def update_contact_info(
             user.email_verified = False
         user.email = contact_update.email
 
-    if contact_update.phone is not None:
-        user.phone = contact_update.phone
+    # Keyed on what the caller sent, not on None: an explicit null (or a blank)
+    # clears the number. `is not None` made clearing impossible -- the member
+    # emptied the box, saved, and got the old number back with a 200.
+    if "phone" in contact_update.model_fields_set:
+        user.phone = (contact_update.phone or "").strip() or None
 
-    if contact_update.mobile is not None:
-        user.mobile = contact_update.mobile
+    if "mobile" in contact_update.model_fields_set:
+        user.mobile = (contact_update.mobile or "").strip() or None
 
     if contact_update.notification_preferences is not None:
         # Merge, never replace. Every field on NotificationPreferences defaults

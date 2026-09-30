@@ -311,6 +311,83 @@ async def test_rescheduling_after_a_tbd_postponement_opens_a_fresh_entry():
     assert event_request.event_id == "a-brand-new-event"
 
 
+async def _reschedule_refused(error, *, create_calendar_event=True):
+    """Reschedule into an entry whose move is refused, returning the error."""
+    from fastapi import HTTPException
+
+    from app.api.v1.endpoints.event_requests import schedule_request
+    from app.schemas.event_request import EventRequestSchedule
+
+    event_request = _scheduled_request()
+    db = _schedule_db(event_request, _event(), _org())
+
+    class _Refusing(_Service):
+        def __init__(self, db):
+            super().__init__(db)
+            self.update_event = AsyncMock(side_effect=ValueError(error))
+
+    _Service.instances = []
+    with (
+        patch("app.services.event_service.EventService", _Refusing),
+        patch(
+            "app.api.v1.endpoints.event_requests.sync_calendar_event_date",
+            AsyncMock(return_value=error),
+        ),
+        patch(
+            "app.api.v1.endpoints.event_requests._send_request_notification",
+            AsyncMock(),
+        ),
+        pytest.raises(HTTPException) as exc,
+    ):
+        await schedule_request(
+            request_id=REQUEST_ID,
+            data=EventRequestSchedule(
+                event_date=START, create_calendar_event=create_calendar_event
+            ),
+            db=db,
+            current_user=SimpleNamespace(id=USER_ID, organization_id=ORG_ID),
+        )
+    return exc.value, db
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("create_calendar_event", [True, False])
+async def test_a_finalized_entry_refuses_with_the_sentence(create_calendar_event):
+    """The linked event's attendance is finalized, so it cannot move. The
+    coordinator reads why — not the internal marker the service uses to say
+    so — and the conflict is a 409 on both of the route's paths."""
+    from app.services.event_service import (
+        ATTENDANCE_LOCKED_PREFIX,
+        attendance_locked_error,
+    )
+
+    refusal = attendance_locked_error("changing end_datetime, start_datetime")
+    error, db = await _reschedule_refused(
+        refusal, create_calendar_event=create_calendar_event
+    )
+
+    assert error.status_code == 409
+    assert error.detail == refusal[len(ATTENDANCE_LOCKED_PREFIX) :]
+    db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("create_calendar_event", "status"), [(True, 400), (False, 409)]
+)
+async def test_any_other_refusal_to_move_the_entry_keeps_its_status(
+    create_calendar_event, status
+):
+    """update_event's refusal was a 400 and the no-new-entry branch's was a
+    409; a refusal that is not the attendance lock keeps whichever it had."""
+    error, db = await _reschedule_refused(
+        "Location not found", create_calendar_event=create_calendar_event
+    )
+
+    assert (error.status_code, error.detail) == (status, "Location not found")
+    db.commit.assert_not_awaited()
+
+
 # ============================================
 # An event needs a length
 # ============================================
