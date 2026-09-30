@@ -1,22 +1,40 @@
 /**
  * Approval Chains Settings Page
  *
- * CRUD interface for managing approval chains and their steps.
+ * Create approval chains, edit a chain's name, description and active flag,
+ * and add, edit, reorder and delete its steps.
  * Protected by finance.configure_approvals permission.
  */
 
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { ArrowLeft, Plus, Trash2, ChevronDown, ChevronRight, AlertTriangle, GitBranch, ArrowRight } from 'lucide-react';
+import {
+  ArrowLeft,
+  Plus,
+  Trash2,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  AlertTriangle,
+  GitBranch,
+  Pencil,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
+import { getErrorMessage } from '@/utils/errorHandling';
 import { useFinanceStore } from '../store/financeStore';
 import { SkeletonPage } from '@/components/ux/Skeleton';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { ApprovalEntityType, ApprovalStepType, ApproverType } from '../types';
-import type { ApprovalChain } from '../types';
+import type { ApprovalChain, ApprovalChainStep, ApprovalChainUpdatePayload } from '../types';
+import { ApprovalStepDialog } from '../components/ApprovalStepDialog';
+import { ApprovalChainEditDialog } from '../components/ApprovalChainEditDialog';
+import { useApproverOptions } from '../hooks/useApproverOptions';
+import type { ApproverOptions } from '../hooks/useApproverOptions';
+import { buildStepCreatePayload, buildStepUpdatePayload, stepToFormValues } from '../utils/approvalStepForm';
+import type { StepFormValues } from '../utils/approvalStepForm';
 
 import { useConfirm } from '../../../contexts/ConfirmContext';
 // =============================================================================
@@ -37,7 +55,7 @@ const STEP_TYPE_LABELS: Record<string, string> = {
 const APPROVER_TYPE_LABELS: Record<string, string> = {
   [ApproverType.POSITION]: 'Position',
   [ApproverType.PERMISSION]: 'Permission',
-  [ApproverType.SPECIFIC_USER]: 'Specific User',
+  [ApproverType.SPECIFIC_USER]: 'Member',
   [ApproverType.EMAIL]: 'Email',
 };
 
@@ -45,25 +63,64 @@ const inputClass = 'form-input';
 const selectClass = inputClass;
 const labelClass = 'form-label';
 
+const iconButtonClass =
+  'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded disabled:cursor-not-allowed disabled:opacity-40';
+
+/** The approver as a person would name it: a position's name rather than its slug, a member's name rather than their id. */
+function approverLabel(step: ApprovalChainStep, options: ApproverOptions): string {
+  const value = step.approverValue || '';
+  const list =
+    step.approverType === ApproverType.POSITION
+      ? options.positions
+      : step.approverType === ApproverType.SPECIFIC_USER
+        ? options.users
+        : null;
+  return list?.find((o) => o.value === value)?.label || value;
+}
+
 // =============================================================================
 // Chain Card Component
 // =============================================================================
 
 interface ChainCardProps {
   chain: ApprovalChain;
+  busy: boolean;
+  approverOptions: ApproverOptions;
   onDelete: (id: string) => void;
+  onEdit: (chain: ApprovalChain) => void;
+  onAddStep: (chain: ApprovalChain) => void;
+  onEditStep: (chain: ApprovalChain, step: ApprovalChainStep) => void;
+  onDeleteStep: (chain: ApprovalChain, step: ApprovalChainStep) => void;
+  onMoveStep: (chain: ApprovalChain, step: ApprovalChainStep, direction: 'up' | 'down') => void;
 }
 
-const ChainCard: React.FC<ChainCardProps> = ({ chain, onDelete }) => {
+const ChainCard: React.FC<ChainCardProps> = ({
+  chain,
+  busy,
+  approverOptions,
+  onDelete,
+  onEdit,
+  onAddStep,
+  onEditStep,
+  onDeleteStep,
+  onMoveStep,
+}) => {
   const [expanded, setExpanded] = useState(false);
 
-  const sortedSteps = [...chain.steps].sort((a, b) => a.stepOrder - b.stepOrder);
+  const sortedSteps = [...chain.steps].sort(
+    (a, b) => a.stepOrder - b.stepOrder || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)
+  );
 
   return (
     <div className="card">
       {/* Header */}
       <div className="flex items-center justify-between p-4">
-        <button type="button" onClick={() => setExpanded(!expanded)} className="flex items-center gap-3 text-left">
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          className="flex items-center gap-3 text-left"
+          aria-expanded={expanded}
+        >
           {expanded ? (
             <ChevronDown className="text-theme-text-secondary h-4 w-4" />
           ) : (
@@ -98,14 +155,26 @@ const ChainCard: React.FC<ChainCardProps> = ({ chain, onDelete }) => {
             </div>
           </div>
         </button>
-        <div className="flex items-center gap-2">
-          <span className="text-theme-text-secondary text-xs">
+        <div className="flex items-center gap-1">
+          <span className="text-theme-text-secondary mr-1 text-xs">
             {chain.steps.length} step{chain.steps.length !== 1 ? 's' : ''}
           </span>
           <button
             type="button"
+            onClick={() => onEdit(chain)}
+            disabled={busy}
+            className={iconButtonClass}
+            aria-label={`Edit chain ${chain.name}`}
+            title="Edit chain"
+          >
+            <Pencil className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
             onClick={() => onDelete(chain.id)}
-            className="rounded p-1 text-red-500 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-500/10 dark:hover:text-red-400"
+            disabled={busy}
+            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded text-red-700 hover:bg-red-50 hover:text-red-800 disabled:cursor-not-allowed disabled:opacity-40 dark:text-red-400 dark:hover:bg-red-500/10"
+            aria-label={`Delete chain ${chain.name}`}
             title="Delete chain"
           >
             <Trash2 className="h-4 w-4" />
@@ -123,13 +192,13 @@ const ChainCard: React.FC<ChainCardProps> = ({ chain, onDelete }) => {
               No steps yet. Requests routed to this chain get no approval steps.
             </p>
           ) : (
-            <div className="space-y-2">
+            <ol className="space-y-2" aria-label={`Steps in ${chain.name}`}>
               {sortedSteps.map((step, index) => (
-                <div key={step.id} className="flex items-center gap-2">
+                <li key={step.id} className="flex items-center gap-2">
                   <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-100 text-xs font-bold text-red-700 dark:bg-red-500/20 dark:text-red-400">
-                    {step.stepOrder}
+                    {index + 1}
                   </div>
-                  <div className="border-theme-surface-border flex-1 rounded border p-2">
+                  <div className="border-theme-surface-border min-w-0 flex-1 rounded border p-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-theme-text-primary text-sm font-medium">{step.name}</span>
                       <span
@@ -142,9 +211,9 @@ const ChainCard: React.FC<ChainCardProps> = ({ chain, onDelete }) => {
                         {STEP_TYPE_LABELS[step.stepType] ?? step.stepType}
                       </span>
                       {step.approverType && (
-                        <span className="text-theme-text-secondary text-xs">
+                        <span className="text-theme-text-secondary text-xs break-all">
                           {APPROVER_TYPE_LABELS[step.approverType] ?? step.approverType}
-                          {step.approverValue ? `: ${step.approverValue}` : ''}
+                          {step.approverValue ? `: ${approverLabel(step, approverOptions)}` : ''}
                         </span>
                       )}
                     </div>
@@ -154,13 +223,68 @@ const ChainCard: React.FC<ChainCardProps> = ({ chain, onDelete }) => {
                       </p>
                     )}
                   </div>
-                  {index < sortedSteps.length - 1 && (
-                    <ArrowRight className="text-theme-text-secondary/50 h-3 w-3 shrink-0" />
-                  )}
-                </div>
+                  <div className="flex shrink-0 flex-wrap items-center justify-end">
+                    <button
+                      type="button"
+                      onClick={() => onMoveStep(chain, step, 'up')}
+                      disabled={busy || index === 0}
+                      className={iconButtonClass}
+                      aria-label={`Move ${step.name} up`}
+                      title="Move up"
+                    >
+                      <ChevronUp className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onMoveStep(chain, step, 'down')}
+                      disabled={busy || index === sortedSteps.length - 1}
+                      className={iconButtonClass}
+                      aria-label={`Move ${step.name} down`}
+                      title="Move down"
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onEditStep(chain, step)}
+                      disabled={busy}
+                      className={iconButtonClass}
+                      aria-label={`Edit ${step.name}`}
+                      title="Edit step"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDeleteStep(chain, step)}
+                      disabled={busy}
+                      className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded text-red-700 hover:bg-red-50 hover:text-red-800 disabled:cursor-not-allowed disabled:opacity-40 dark:text-red-400 dark:hover:bg-red-500/10"
+                      aria-label={`Delete ${step.name}`}
+                      title="Delete step"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </li>
               ))}
-            </div>
+            </ol>
           )}
+
+          <p className="text-theme-text-secondary mt-3 text-xs">
+            A request gets this chain&rsquo;s steps when it is submitted, so a step you add applies only to requests
+            submitted after that. Editing, reordering, or deleting a step also affects requests already waiting on this
+            chain.
+          </p>
+
+          <button
+            type="button"
+            onClick={() => onAddStep(chain)}
+            disabled={busy}
+            className="btn-secondary mt-3 inline-flex items-center gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Add step
+          </button>
         </div>
       )}
     </div>
@@ -182,10 +306,18 @@ const ApprovalChainsSettingsPage: React.FC = () => {
     fetchBudgetCategories,
     createApprovalChain,
     deleteApprovalChain,
+    updateApprovalChain,
+    addChainStep,
+    updateChainStep,
+    deleteChainStep,
+    moveChainStep,
   } = useFinanceStore();
 
   const [showCreateForm, setShowCreateForm] = useState(false);
   const { busy, run } = useSubmitGuard();
+  const approverOptions = useApproverOptions();
+  const [stepDialog, setStepDialog] = useState<{ chain: ApprovalChain; step: ApprovalChainStep | null } | null>(null);
+  const [editingChain, setEditingChain] = useState<ApprovalChain | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -212,14 +344,12 @@ const ApprovalChainsSettingsPage: React.FC = () => {
         await createApprovalChain({
           name: formData.name.trim(),
           description: formData.description.trim() || undefined,
-          appliesTo: formData.appliesTo,
-          minAmount: formData.minAmount ? formData.minAmount : undefined,
-          maxAmount: formData.maxAmount ? formData.maxAmount : undefined,
-          budgetCategoryId: formData.budgetCategoryId || undefined,
-          isDefault: formData.isDefault,
-          isActive: true,
-          steps: [],
-        } as Partial<ApprovalChain>);
+          applies_to: formData.appliesTo,
+          min_amount: formData.minAmount || undefined,
+          max_amount: formData.maxAmount || undefined,
+          budget_category_id: formData.budgetCategoryId || undefined,
+          is_default: formData.isDefault,
+        });
         toast.success('Approval chain created');
         setShowCreateForm(false);
         setFormData({
@@ -256,6 +386,84 @@ const ApprovalChainsSettingsPage: React.FC = () => {
       // Error handled by store
     }
   };
+
+  const handleSaveChain = (data: ApprovalChainUpdatePayload) =>
+    run(async () => {
+      if (!editingChain) return;
+      try {
+        await updateApprovalChain(editingChain.id, data);
+        toast.success('Chain saved');
+        setEditingChain(null);
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Could not save the chain.'));
+      }
+    });
+
+  const handleSaveStep = (values: StepFormValues) =>
+    run(async () => {
+      if (!stepDialog) return;
+      const { chain, step } = stepDialog;
+      try {
+        if (step) {
+          await updateChainStep(chain.id, step.id, buildStepUpdatePayload(values));
+          toast.success('Step saved');
+        } else {
+          const nextOrder = chain.steps.reduce((max, s) => Math.max(max, s.stepOrder), 0) + 1;
+          await addChainStep(chain.id, buildStepCreatePayload(values, nextOrder));
+          toast.success('Step added');
+        }
+        setStepDialog(null);
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Could not save the step.'));
+      }
+    });
+
+  const handleDeleteStep = async (chain: ApprovalChain, step: ApprovalChainStep) => {
+    // What the cascade does, from finance_service.py: every request's record
+    // for this step goes with it (ApprovalStepRecord.step_id is ON DELETE
+    // CASCADE), and nothing re-evaluates the requests it leaves behind — the
+    // next step becomes current without its email being sent, and a request
+    // with no step left pending is never finalized.
+    if (
+      !(await confirm({
+        title: 'Delete step',
+        message: (
+          <div className="space-y-2">
+            <p>
+              Deleting &ldquo;{step.name}&rdquo; also removes it from every request routed through this chain, including
+              the record of who approved or denied it and their notes.
+            </p>
+            <p>
+              A request waiting on this step moves on to the next one, and an Email approver on that next step is not
+              sent a link. A request with no later step is left waiting with nothing to approve.
+            </p>
+            <p>This can&rsquo;t be undone.</p>
+          </div>
+        ),
+        confirmLabel: 'Delete step',
+        cancelLabel: 'Keep it',
+      }))
+    ) {
+      return;
+    }
+    await run(async () => {
+      try {
+        await deleteChainStep(chain.id, step.id);
+        toast.success('Step deleted');
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Could not delete the step.'));
+      }
+    });
+  };
+
+  const handleMoveStep = (chain: ApprovalChain, step: ApprovalChainStep, direction: 'up' | 'down') =>
+    run(async () => {
+      try {
+        await moveChainStep(chain.id, step.id, direction);
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Could not reorder the steps.'));
+      }
+    });
 
   if (isLoading && approvalChains.length === 0) {
     return (
@@ -446,9 +654,40 @@ const ApprovalChainsSettingsPage: React.FC = () => {
       ) : (
         <div className="space-y-3">
           {approvalChains.map((chain) => (
-            <ChainCard key={chain.id} chain={chain} onDelete={(id) => void handleDelete(id)} />
+            <ChainCard
+              key={chain.id}
+              chain={chain}
+              busy={busy}
+              approverOptions={approverOptions}
+              onDelete={(id) => void handleDelete(id)}
+              onEdit={setEditingChain}
+              onAddStep={(c) => setStepDialog({ chain: c, step: null })}
+              onEditStep={(c, s) => setStepDialog({ chain: c, step: s })}
+              onDeleteStep={(c, s) => void handleDeleteStep(c, s)}
+              onMoveStep={(c, s, direction) => void handleMoveStep(c, s, direction)}
+            />
           ))}
         </div>
+      )}
+
+      {stepDialog && (
+        <ApprovalStepDialog
+          mode={stepDialog.step ? 'edit' : 'add'}
+          {...(stepDialog.step ? { initialValues: stepToFormValues(stepDialog.step) } : {})}
+          approverOptions={approverOptions}
+          saving={busy}
+          onClose={() => setStepDialog(null)}
+          onSubmit={handleSaveStep}
+        />
+      )}
+
+      {editingChain && (
+        <ApprovalChainEditDialog
+          chain={editingChain}
+          saving={busy}
+          onClose={() => setEditingChain(null)}
+          onSubmit={handleSaveChain}
+        />
       )}
     </div>
   );
