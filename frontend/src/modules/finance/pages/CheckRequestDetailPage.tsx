@@ -26,6 +26,7 @@ import {
   CHECK_REQUEST_STATUS_COLORS,
   APPROVAL_STEP_STATUS_COLORS,
 } from '../types';
+import { ApprovalStepActions } from '../components/ApprovalStepActions';
 
 const STATUS_LABELS: Record<string, string> = {
   draft: 'Draft',
@@ -307,6 +308,12 @@ const CheckRequestDetailPage: React.FC = () => {
       {cr.approvalSteps.length > 0 && (
         <div className="card p-6">
           <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Approval Timeline</h2>
+          <ApprovalStepActions
+            isPendingApproval={cr.status === CheckRequestStatus.PENDING_APPROVAL}
+            steps={cr.approvalSteps}
+            subject={`Check to ${cr.payeeName} (${cr.requestNumber})`}
+            onDecided={() => void fetchCheckRequest(cr.id)}
+          />
           <div className="space-y-0">
             {[...cr.approvalSteps]
               .sort((a, b) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))

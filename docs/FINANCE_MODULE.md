@@ -190,7 +190,7 @@ Any Trustee approves Step 2 → Step 3 fires automatically
 - `GET/PUT/DELETE /finance/approval-chains/{id}`
 - `GET/POST/PUT/DELETE /finance/approval-chains/{id}/steps` (manage steps within a chain)
 - `GET /finance/approval-chains/preview?entity_type=purchase_request&amount=3000&category_id=X` (preview which chain would be selected — useful for the UI)
-- `GET /finance/approvals/pending` (all pending approval steps for the current user across all entity types — powers the approval queue widget)
+- `GET /finance/approvals/pending` (the step each request is currently waiting on, one row per request, across all entity types — organization-wide, not filtered to the step's named approver; powers the Approvals page)
 - `POST /finance/approvals/{step_record_id}/approve`
 - `POST /finance/approvals/{step_record_id}/deny`
 - `GET /finance/approvals/unrouted` (requests in `pending_approval` that have no approval steps because no chain applied)
@@ -201,11 +201,12 @@ Any Trustee approves Step 2 → Step 3 fires automatically
 Pages:
 
 - **ApprovalChainsSettingsPage** — `/finance/settings/approval-chains` — create and delete chains; edit a chain's name, description and active flag; add, edit, delete and reorder (move up/down) its steps. Protected: `finance.configure_approvals`. As built, the step form offers what the backend reads: step type, approver type and value (positions, permissions and members from their lists when the viewer can load them), auto-approve threshold, and self-approval for Email approvers only. It does not offer `notification_emails`, `email_template_id` or `required`, because nothing reads them yet (CLAUDE.md pitfall #19); a notification step is marked SENT without sending email, and any `finance.approve` holder can act on any approval step whatever its named approver. Deleting a step cascades to every request's record of it, and nothing re-evaluates in-flight requests afterwards — the page's confirmation says so
-- **Approval queue widget** on FinanceDashboardPage — shows "You have 3 items awaiting your approval" with links to each
+- **ApprovalsPage** — `/finance/approvals` — every request waiting on an approval step, with Approve (optional notes) and Deny (reason required) for that step. Protected: `finance.approve`. Linked from the dashboard's Pending Approvals KPI and an Approvals quick link, both shown only to `finance.approve` holders. Any `finance.approve` holder can act on any step; `approver_type` / `approver_value` are not enforced, so the page does not claim a step is assigned to the viewer
 
 Components:
 
-- **ApprovalTimeline** — reusable component shown on PurchaseRequestDetailPage, ExpenseReportDetailPage, CheckRequestDetailPage. Displays each step's status, who approved/denied, timestamps, and action buttons for the current user's pending step
+- **ApprovalTimeline** — shown on PurchaseRequestDetailPage, ExpenseReportDetailPage, CheckRequestDetailPage. Displays each step's status, timestamps and notes
+- **ApprovalStepActions** — above the timeline on the same three pages. When the request is pending approval, the viewer holds `finance.approve`, and the step it is waiting on is an APPROVAL step (not a NOTIFICATION), offers Approve / Deny for that step and re-fetches the request afterwards. Shares **ApprovalDecisionDialog** with the Approvals page
 - **ApprovalChainPreview** — shown on request forms before submission: "This request will require approval from: 1. Training Officer → 2. Board of Trustees"
 
 ### Impact on Phases 2-3
