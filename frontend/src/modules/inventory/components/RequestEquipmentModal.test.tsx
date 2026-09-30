@@ -91,6 +91,34 @@ describe('RequestEquipmentModal', () => {
     expect(screen.getByRole('button', { name: /Portable Radio/ })).toBeInTheDocument();
   });
 
+  it('says the catalog is empty, not that nothing matched, when nothing was typed', async () => {
+    mockGetRequestableCatalog.mockResolvedValue({ products: [], categories: [] });
+    renderModal();
+
+    expect(await screen.findByText('Your department has not listed any equipment yet')).toBeInTheDocument();
+    expect(screen.queryByText('Nothing matches that')).not.toBeInTheDocument();
+  });
+
+  it('still says nothing matched when a search finds nothing', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await screen.findByRole('button', { name: /Long Sleeve/ });
+    mockGetRequestableCatalog.mockResolvedValue({ products: [], categories: [] });
+
+    await user.type(screen.getByLabelText('What do you need?'), 'ladder');
+
+    expect(await screen.findByText('Nothing matches that')).toBeInTheDocument();
+    expect(screen.queryByText('Your department has not listed any equipment yet')).not.toBeInTheDocument();
+  });
+
+  it('does not call a failed load an empty catalog', async () => {
+    mockGetRequestableCatalog.mockRejectedValue(new Error('offline'));
+    renderModal();
+
+    expect(await screen.findByText('The equipment list did not load')).toBeInTheDocument();
+    expect(screen.queryByText('Your department has not listed any equipment yet')).not.toBeInTheDocument();
+  });
+
   it('lists a product once, not once per stocked size', async () => {
     renderModal();
 

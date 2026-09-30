@@ -52,6 +52,7 @@ from app.models.membership_pipeline import (
     StepProgressStatus,
 )
 from app.models.user import Organization, Role, User, UserStatus, generate_uuid
+from app.schemas.membership_pipeline import resolve_conversion_outcome
 from app.services.email_policy import (
     EmailKind,
     department_required_kinds,
@@ -570,6 +571,7 @@ class MembershipPipelineService:
         auto_transfer_on_approval: bool = False,
         inactivity_config: Optional[Dict[str, Any]] = None,
         steps: Optional[List[Dict[str, Any]]] = None,
+        conversion_config: Optional[Dict[str, Any]] = None,
         created_by: Optional[str] = None,
     ) -> MembershipPipeline:
         """Create a new pipeline with optional initial steps"""
@@ -587,6 +589,7 @@ class MembershipPipelineService:
             is_active=is_active,
             auto_transfer_on_approval=auto_transfer_on_approval,
             inactivity_config=inactivity_config or {},
+            conversion_config=conversion_config,
             created_by=created_by,
         )
         self.db.add(pipeline)
@@ -742,6 +745,7 @@ class MembershipPipelineService:
             is_active=source.is_active,
             auto_transfer_on_approval=source.auto_transfer_on_approval,
             inactivity_config=source.inactivity_config,
+            conversion_config=copy.deepcopy(source.conversion_config),
             steps=steps,
             created_by=created_by,
         )
@@ -3825,6 +3829,8 @@ class MembershipPipelineService:
         emergency_contacts: Optional[List[Dict[str, Any]]] = None,
         membership_type: Optional[str] = None,
         initial_password: Optional[str] = None,
+        member_class: Optional[str] = None,
+        member_status: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """Transfer a prospect to a full User record"""
         # Serialize on the prospect row: without the lock, two concurrent
@@ -3859,6 +3865,8 @@ class MembershipPipelineService:
             emergency_contacts=emergency_contacts,
             membership_type=membership_type,
             initial_password=initial_password,
+            member_class=member_class,
+            member_status=member_status,
         )
 
     async def _target_role_setter_may_grant(self, prospect: ProspectiveMember) -> bool:
@@ -3904,6 +3912,25 @@ class MembershipPipelineService:
         granted = _collect_user_permissions(setter)
         return all(permission_matches(p, granted) for p in role.permissions or [])
 
+    async def _conversion_outcome(self, prospect: ProspectiveMember) -> Tuple[str, str]:
+        """The pipeline's ``(member_class, member_status)`` for this applicant.
+
+        Read by column rather than through ``prospect.pipeline``: callers reach
+        here with the prospect loaded different ways, and a lazy load of the
+        relationship raises under async.
+        """
+        config = None
+        if prospect.pipeline_id:
+            config = (
+                await self.db.execute(
+                    select(MembershipPipeline.conversion_config).where(
+                        MembershipPipeline.id == prospect.pipeline_id,
+                        MembershipPipeline.organization_id == prospect.organization_id,
+                    )
+                )
+            ).scalar_one_or_none()
+        return resolve_conversion_outcome(config, prospect.desired_membership_type)
+
     async def _do_transfer(
         self,
         prospect: ProspectiveMember,
@@ -3922,8 +3949,18 @@ class MembershipPipelineService:
         initial_password: Optional[str] = None,
         defer_welcome_email: bool = False,
         completing_step_id: Optional[str] = None,
+        member_class: Optional[str] = None,
+        member_status: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Internal method to perform the actual transfer.
+
+        The new member's class and status are, in order of precedence: an
+        explicit ``member_class``/``member_status`` pair (the Convert dialog,
+        pre-filled from the pipeline's rule); a legacy ``membership_type``
+        (API callers written before the rule existed, unchanged); otherwise the
+        pipeline's conversion outcome for the applicant's track -- which is the
+        automatic path, and what makes an elected administrative applicant an
+        administrative member rather than a probationary operational one.
 
         ``initial_password`` is one the coordinator chose (already checked by
         the endpoint); without it a temporary one is generated, which only the
@@ -3989,6 +4026,14 @@ class MembershipPipelineService:
         if incomplete:
             return {"success": False, "message": _required_steps_refusal(incomplete)}
 
+        outcome: Optional[Tuple[str, str]]
+        if member_class and member_status:
+            outcome = (member_class, member_status)
+        elif membership_type:
+            outcome = None
+        else:
+            outcome = await self._conversion_outcome(prospect)
+
         # A rank that matches nothing the department has configured resolves to
         # no eligible seats and no default permissions, so the new member is
         # created unable to sign up for anything with nothing to explain why.
@@ -4019,7 +4064,7 @@ class MembershipPipelineService:
             # permissions would put somebody outside the chain of command into
             # it. The conversion screen offers both in one step, so refuse the
             # pair rather than silently drop the rank the operator typed.
-            if is_administrative(None, membership_type):
+            if is_administrative(outcome[0] if outcome else None, membership_type):
                 return {
                     "success": False,
                     "message": ADMINISTRATIVE_RANK_MESSAGE,
@@ -4153,7 +4198,15 @@ class MembershipPipelineService:
             rank=rank,
             station=station,
             status=UserStatus.ACTIVE,
-            membership_type=membership_type or "probationary",
+            # Class and status win over membership_type at flush (see
+            # User._reconcile_membership), which is what lets an outcome the
+            # legacy field cannot spell -- a probationary administrative
+            # member -- survive.
+            **(
+                {"member_class": outcome[0], "member_status": outcome[1]}
+                if outcome
+                else {"membership_type": membership_type}
+            ),
             must_change_password=True,
             password_changed_at=datetime.now(timezone.utc),
             # Preserve referral data from prospect
@@ -6036,30 +6089,82 @@ class MembershipPipelineService:
         prospect_ids: Optional[List[str]] = None,
         purged_by: Optional[str] = None,
     ) -> int:
-        """Delete withdrawn/inactive prospects from a pipeline"""
+        """Permanently delete inactive prospects from a pipeline.
+
+        Only ``INACTIVE`` applications are purged: this backs the Inactive
+        Applications tab, and matching WITHDRAWN here instead is what made the
+        tab's Purge button delete nothing while reporting success. Ids outside
+        the pipeline, or not inactive, are left alone; the returned count says
+        how many were actually deleted.
+
+        Uploaded documents are removed from disk first, the same way
+        ``delete_prospect_document`` does it. The row delete below cascades to
+        ``prospect_documents`` in the database but not to the files, so without
+        this every purged applicant's ID photos and background checks stayed on
+        the server. A file that exists but cannot be removed raises before any
+        row is deleted, so a retry can finish the job; files already removed by
+        then are treated as gone on the retry.
+        """
         pipeline = await self.get_pipeline(pipeline_id, organization_id)
         if not pipeline:
             return 0
 
         conditions = [
             ProspectiveMember.pipeline_id == pipeline_id,
-            ProspectiveMember.status == ProspectStatus.WITHDRAWN,
+            ProspectiveMember.organization_id == organization_id,
+            ProspectiveMember.status == ProspectStatus.INACTIVE,
         ]
         if prospect_ids:
             conditions.append(ProspectiveMember.id.in_(prospect_ids))
 
-        # Count first
-        count_query = select(func.count(ProspectiveMember.id)).where(and_(*conditions))
-        result = await self.db.execute(count_query)
-        count = result.scalar() or 0
+        # Locked so an applicant reactivated mid-purge is either purged before
+        # the reactivation or not at all.
+        ids = list(
+            (
+                await self.db.execute(
+                    select(ProspectiveMember.id)
+                    .where(and_(*conditions))
+                    .with_for_update()
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if not ids:
+            return 0
 
-        if count > 0:
-            # Delete (cascade will handle related records)
-            del_query = delete(ProspectiveMember).where(and_(*conditions))
-            await self.db.execute(del_query)
-            await self.db.commit()
+        paths = (
+            (
+                await self.db.execute(
+                    select(ProspectDocument.file_path).where(
+                        ProspectDocument.prospect_id.in_(ids)
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        import os
 
-        return count
+        for stored_path in paths:
+            if stored_path and os.path.exists(stored_path):
+                try:
+                    await asyncio.to_thread(os.remove, stored_path)
+                except OSError as exc:
+                    logger.error(
+                        f"Failed to remove prospect document file {stored_path}: {exc}"
+                    )
+                    raise ValueError(
+                        "Could not delete an applicant's document file, so "
+                        "nothing was purged; please try again"
+                    ) from exc
+
+        # Cascade handles the dependent rows.
+        await self.db.execute(
+            delete(ProspectiveMember).where(ProspectiveMember.id.in_(ids))
+        )
+        await self.db.commit()
+        return len(ids)
 
     # =========================================================================
     # Document Management

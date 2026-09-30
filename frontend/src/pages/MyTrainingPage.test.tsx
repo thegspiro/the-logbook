@@ -365,4 +365,49 @@ describe('MyTrainingPage', () => {
 
     vi.unstubAllGlobals();
   });
+
+  describe('first-time member guidance', () => {
+    const emptyRecord = {
+      ...mockTrainingData,
+      requirements_detail: [],
+      requirements_summary: { total_requirements: 0, met_requirements: 0, avg_compliance: null },
+      hours_summary: { total_records: 0, total_hours: 0, hours_this_month: 0, completed_courses: 0 },
+      certifications: [],
+      training_records: [],
+    };
+
+    it('explains how training reaches an empty record and links the walkthrough', async () => {
+      mockGetMyTraining.mockResolvedValue(emptyRecord);
+      renderWithRouter(<MyTrainingPage />);
+
+      expect(
+        await screen.findByRole('heading', { name: 'Nothing is on your training record yet' })
+      ).toBeInTheDocument();
+      expect(screen.getByText('Attend a department training.')).toBeInTheDocument();
+      expect(screen.getByText('Submit training you did elsewhere.')).toBeInTheDocument();
+      expect(screen.getByText('Take a skills test.')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /walkthrough in the Learning Center/ })).toHaveAttribute(
+        'href',
+        '/learning/training'
+      );
+      expect(screen.getByRole('button', { name: 'Submit External Training' })).toBeInTheDocument();
+    });
+
+    it('says no required training is assigned rather than N/A', async () => {
+      mockGetMyTraining.mockResolvedValue(emptyRecord);
+      renderWithRouter(<MyTrainingPage />);
+
+      expect(await screen.findByText('None assigned')).toBeInTheDocument();
+      expect(screen.getByText('Your department has not assigned you any required training yet.')).toBeInTheDocument();
+      expect(screen.queryByText('N/A')).not.toBeInTheDocument();
+    });
+
+    it('reports how many requirements are met beside the average', async () => {
+      renderWithRouter(<MyTrainingPage />);
+
+      expect(await screen.findByText('72%')).toBeInTheDocument();
+      expect(screen.getByText('3 of 5 requirements met')).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Nothing is on your training record yet' })).not.toBeInTheDocument();
+    });
+  });
 });

@@ -17,9 +17,13 @@ import re
 import sys
 import uuid
 from contextvars import ContextVar
-from typing import Any, Dict, Optional
+from types import FrameType
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from loguru import logger
+
+if TYPE_CHECKING:
+    from sentry_sdk.types import Event, Hint
 
 # Context variable for per-request ID, accessible from any async task
 request_id_ctx: ContextVar[str] = ContextVar("request_id", default="-")
@@ -43,6 +47,36 @@ def redact_url_secrets(text: str) -> str:
     return _SENSITIVE_QUERY_PARAM.sub(
         lambda m: f"{m.group(1)}={REDACTED_QUERY_VALUE}", text
     )
+
+
+# The anonymous side of the suggestion box: submitting, and following up with a
+# key. SuggestionService rounds these to noon so a submission cannot be lined up
+# against a member's sign-in; an access-log line with the exact second — and,
+# from uvicorn, the client address — would undo that. Nothing logs these as
+# requests. frontend/nginx.conf and infrastructure/nginx/nginx.conf carry the
+# same pattern for the proxy's own logs and must be kept in step with it.
+UNLOGGED_PATH = re.compile(
+    r"^/api/v1/suggestions/(?:boxes/[^/]+/submissions$|follow-up/)"
+)
+
+
+def is_unlogged_path(path: str) -> bool:
+    return UNLOGGED_PATH.match(path) is not None
+
+
+class _DropUnloggedAccessFilter(logging.Filter):
+    """Drop uvicorn access lines for UNLOGGED_PATH requests.
+
+    uvicorn formats the line as ``'%s - "%s %s HTTP/%s" %d'`` with the path and
+    query as the third argument, so the path is read from there rather than
+    parsed back out of the rendered message.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if isinstance(args, tuple) and len(args) >= 3 and isinstance(args[2], str):
+            return not is_unlogged_path(args[2].split("?", 1)[0])
+        return True
 
 
 class _RedactUrlSecretsFilter(logging.Filter):
@@ -119,15 +153,20 @@ def _scrub_credentials(value: Any) -> Any:
     return value
 
 
-def _sentry_before_send(event: Dict[str, Any], hint: Dict[str, Any]) -> Dict[str, Any]:
-    return _scrub_credentials(event)
+def _sentry_before_send(event: "Event", hint: "Hint") -> "Event":
+    scrubbed: "Event" = _scrub_credentials(event)
+    return scrubbed
 
 
-def _sentry_before_send_transaction(
-    event: Dict[str, Any], hint: Dict[str, Any]
-) -> Dict[str, Any]:
-    for span in event.get("spans") or []:
-        _redact_http_query(span.get("data"))
+def _sentry_before_send_transaction(event: "Event", hint: "Hint") -> "Event":
+    # Typed as a list or an AnnotatedValue (Sentry's marker for a trimmed
+    # payload); only a list holds spans to redact.
+    spans = event.get("spans")
+    if isinstance(spans, list):
+        for span in spans:
+            data = span.get("data")
+            if isinstance(data, dict):
+                _redact_http_query(data)
     return event
 
 
@@ -228,13 +267,15 @@ class _InterceptHandler(logging.Handler):
 
     def emit(self, record: logging.LogRecord) -> None:
         # Map stdlib level to Loguru level
+        level: str | int
         try:
             level = logger.level(record.levelname).name
         except ValueError:
             level = record.levelno
 
         # Find the caller frame that originated the log call
-        frame, depth = logging.currentframe(), 2
+        frame: FrameType | None = logging.currentframe()
+        depth = 2
         while frame and frame.f_code.co_filename == logging.__file__:
             frame = frame.f_back
             depth += 1
@@ -264,6 +305,10 @@ def _intercept_stdlib_logging() -> None:
         lib_logger = logging.getLogger(name)
         lib_logger.handlers = [_InterceptHandler()]
         lib_logger.propagate = False
+
+    access_logger = logging.getLogger("uvicorn.access")
+    if not any(isinstance(f, _DropUnloggedAccessFilter) for f in access_logger.filters):
+        access_logger.addFilter(_DropUnloggedAccessFilter())
 
     install_httpx_url_redaction()
 

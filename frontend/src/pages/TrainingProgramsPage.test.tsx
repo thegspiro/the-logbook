@@ -390,11 +390,14 @@ describe('TrainingProgramsPage', () => {
       expect(screen.queryByRole('button', { name: /Export Probationary Firefighter/i })).not.toBeInTheDocument();
     });
 
-    it('leaves the programs tab blank when there are no programs', async () => {
+    it('explains what a program is, without a create prompt, when there are none', async () => {
       mockGetPrograms.mockResolvedValue([]);
       renderWithRouter(<TrainingProgramsPage />);
 
-      await waitFor(() => expect(mockGetPrograms).toHaveBeenCalledWith({ is_template: false }));
+      expect(
+        await screen.findByRole('heading', { name: 'Your department has not published any training programs yet' })
+      ).toBeInTheDocument();
+      expect(screen.getByText(/A training program is a step-by-step path toward a role/)).toBeInTheDocument();
       expect(screen.queryByText('No programs yet')).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /Create Your First Pipeline/i })).not.toBeInTheDocument();
     });

@@ -20,6 +20,7 @@ import {
   loadTrainingWidgetPreferences,
   saveTrainingWidgetPreferences,
 } from '../components/dashboard/widgets/training/preferences';
+import { TrainingSetupGuide } from '../components/training/TrainingSetupGuide';
 
 const widgets: Record<TrainingWidgetId, React.FC<{ data: TrainingDashboardSummary }>> = {
   'compliance-overview': ComplianceOverviewWidget,
@@ -110,14 +111,17 @@ const TrainingOfficerDashboard: React.FC = () => {
         </div>
       ) : (
         data && (
-          <div className="grid gap-6 md:grid-cols-2">
-            {(Object.keys(widgets) as TrainingWidgetId[])
-              .filter((id) => enabled[id])
-              .map((id) => {
-                const Widget = widgets[id];
-                return <Widget key={id} data={data} />;
-              })}
-          </div>
+          <>
+            <TrainingSetupGuide stats={data.stats} />
+            <div className="grid gap-6 md:grid-cols-2">
+              {(Object.keys(widgets) as TrainingWidgetId[])
+                .filter((id) => enabled[id])
+                .map((id) => {
+                  const Widget = widgets[id];
+                  return <Widget key={id} data={data} />;
+                })}
+            </div>
+          </>
         )
       )}
     </div>

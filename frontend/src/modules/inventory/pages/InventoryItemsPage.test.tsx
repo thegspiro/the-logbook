@@ -102,6 +102,10 @@ const makeItem = (overrides: Partial<InventoryItem> = {}): InventoryItem => ({
   ...overrides,
 });
 
+// Either empty heading marks the list as loaded: which one depends on whether
+// the test has a filter applied.
+const EMPTY_LIST = /^(No items found|Your department has no inventory items yet)$/;
+
 describe('InventoryItemsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -123,9 +127,20 @@ describe('InventoryItemsPage', () => {
     mockCheckPermission.mockReturnValue(true);
   });
 
-  it('shows the empty state when there are no items', async () => {
+  it('tells a department with no items where to start', async () => {
+    renderWithRouter(<InventoryItemsPage />);
+    expect(await screen.findByText('Your department has no inventory items yet')).toBeInTheDocument();
+    expect(screen.getByText(/The Setup Guide walks through rooms, storage areas and categories/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Open the Setup Guide/ })).toBeInTheDocument();
+    expect(screen.queryByText('No items found')).not.toBeInTheDocument();
+  });
+
+  it('keeps the no-match message for a filter that found nothing', async () => {
+    window.history.pushState({}, '', '/inventory/admin/items?item_type=uniform');
     renderWithRouter(<InventoryItemsPage />);
     expect(await screen.findByText('No items found')).toBeInTheDocument();
+    expect(screen.getByText('Try adjusting your filters.')).toBeInTheDocument();
+    window.history.pushState({}, '', '/');
   });
 
   it('offers the org colours in the filter, from the endpoint', async () => {
@@ -154,6 +169,9 @@ describe('InventoryItemsPage', () => {
     mockGetItems.mockRejectedValue(new Error('boom'));
     renderWithRouter(<InventoryItemsPage />);
     await waitFor(() => expect(mockToastError).toHaveBeenCalledTimes(1));
+    // A failed load is not an empty department.
+    expect(await screen.findByText('The items did not load')).toBeInTheDocument();
+    expect(screen.queryByText('Your department has no inventory items yet')).not.toBeInTheDocument();
   });
 
   it('renders items and summary stats', async () => {
@@ -247,7 +265,7 @@ describe('InventoryItemsPage', () => {
   it('passes the search term to the items query (debounced)', async () => {
     const user = userEvent.setup();
     renderWithRouter(<InventoryItemsPage />);
-    await screen.findByText('No items found');
+    await screen.findByText(EMPTY_LIST);
 
     await user.type(screen.getByPlaceholderText('Search items...'), 'drill');
     await waitFor(() => expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'drill' })));
@@ -256,7 +274,7 @@ describe('InventoryItemsPage', () => {
   it('refetches when the status filter changes', async () => {
     const user = userEvent.setup();
     renderWithRouter(<InventoryItemsPage />);
-    await screen.findByText('No items found');
+    await screen.findByText(EMPTY_LIST);
 
     const statusSelect = screen.getByLabelText('Filter by status');
     await user.selectOptions(statusSelect, 'assigned');
@@ -266,7 +284,7 @@ describe('InventoryItemsPage', () => {
   it('filters to items that still need a label, and back', async () => {
     const user = userEvent.setup();
     renderWithRouter(<InventoryItemsPage />);
-    await screen.findByText('No items found');
+    await screen.findByText(EMPTY_LIST);
 
     const labelSelect = screen.getByLabelText('Filter by label status');
     await user.selectOptions(labelSelect, 'needed');
@@ -358,14 +376,14 @@ describe('InventoryItemsPage — the item_type URL filter', () => {
 
   it('filters the query by a type named in the URL', async () => {
     renderAt('/inventory/admin/items?item_type=uniform');
-    await screen.findByText('No items found');
+    await screen.findByText(EMPTY_LIST);
 
     expect(mockGetItems).toHaveBeenCalledWith(expect.objectContaining({ item_type: 'uniform' }));
   });
 
   it('shows that type as the selected option, so it can be cleared', async () => {
     renderAt('/inventory/admin/items?item_type=uniform');
-    await screen.findByText('No items found');
+    await screen.findByText(EMPTY_LIST);
 
     expect(screen.getByLabelText('Filter by type')).toHaveValue('uniform');
   });
@@ -374,7 +392,7 @@ describe('InventoryItemsPage — the item_type URL filter', () => {
     // GET /items 400s on an unknown item_type, so a hand-edited URL has to
     // degrade to the unfiltered list, not to an error page.
     renderAt('/inventory/admin/items?item_type=not-a-type');
-    await screen.findByText('No items found');
+    await screen.findByText(EMPTY_LIST);
 
     expect(mockGetItems).toHaveBeenCalledWith(expect.objectContaining({ item_type: undefined }));
     expect(screen.getByLabelText('Filter by type')).toHaveValue('');
@@ -382,7 +400,7 @@ describe('InventoryItemsPage — the item_type URL filter', () => {
 
   it('sends no type filter when the parameter is absent', async () => {
     renderAt('/inventory/admin/items');
-    await screen.findByText('No items found');
+    await screen.findByText(EMPTY_LIST);
 
     expect(mockGetItems).toHaveBeenCalledWith(expect.objectContaining({ item_type: undefined }));
   });
@@ -390,7 +408,7 @@ describe('InventoryItemsPage — the item_type URL filter', () => {
   it('writes the dropdown selection back to the URL', async () => {
     const user = userEvent.setup();
     renderAt('/inventory/admin/items');
-    await screen.findByText('No items found');
+    await screen.findByText(EMPTY_LIST);
 
     await user.selectOptions(screen.getByLabelText('Filter by type'), 'ppe');
 
@@ -401,7 +419,7 @@ describe('InventoryItemsPage — the item_type URL filter', () => {
   it('drops the parameter when the filter is cleared', async () => {
     const user = userEvent.setup();
     renderAt('/inventory/admin/items?item_type=ppe');
-    await screen.findByText('No items found');
+    await screen.findByText(EMPTY_LIST);
 
     await user.selectOptions(screen.getByLabelText('Filter by type'), '');
 
@@ -1140,7 +1158,7 @@ describe('InventoryItemsPage — CSV export', () => {
     // reaches the export too.
     const user = userEvent.setup();
     renderWithRouter(<InventoryItemsPage />);
-    await screen.findByText('No items found');
+    await screen.findByText(EMPTY_LIST);
 
     await user.type(screen.getByLabelText('Search items...'), 'helmet');
     await user.selectOptions(screen.getByLabelText('Filter by status'), 'assigned');
@@ -1188,7 +1206,7 @@ describe('InventoryItemsPage — CSV export', () => {
     mockExportItemsCsv.mockRejectedValue({ response: { data: { detail: 'Invalid status: bogus' } } });
     const user = userEvent.setup();
     renderWithRouter(<InventoryItemsPage />);
-    await screen.findByText('No items found');
+    await screen.findByText(EMPTY_LIST);
 
     await user.click(screen.getByRole('button', { name: /Export/ }));
 
@@ -1206,7 +1224,7 @@ describe('InventoryItemsPage — CSV export', () => {
     it('exports the filters the visible rows were fetched with, not the pending ones', async () => {
       const user = userEvent.setup();
       renderWithRouter(<InventoryItemsPage />);
-      await screen.findByText('No items found');
+      await screen.findByText(EMPTY_LIST);
       await waitFor(() => expect(mockGetItems).toHaveBeenCalled());
       const loadsBefore = mockGetItems.mock.calls.length;
 
@@ -1223,7 +1241,7 @@ describe('InventoryItemsPage — CSV export', () => {
     it('picks up the new filters once their rows have actually arrived', async () => {
       const user = userEvent.setup();
       renderWithRouter(<InventoryItemsPage />);
-      await screen.findByText('No items found');
+      await screen.findByText(EMPTY_LIST);
 
       await user.selectOptions(screen.getByLabelText('Filter by status'), 'assigned');
       await waitFor(() =>
@@ -1243,7 +1261,7 @@ describe('InventoryItemsPage — CSV export', () => {
       // never fetched with -- indefinitely.
       const user = userEvent.setup();
       renderWithRouter(<InventoryItemsPage />);
-      await screen.findByText('No items found');
+      await screen.findByText(EMPTY_LIST);
 
       mockGetItems.mockRejectedValue(new Error('boom'));
       await user.selectOptions(screen.getByLabelText('Filter by status'), 'assigned');
@@ -1866,7 +1884,7 @@ describe('InventoryItemsPage needs-a-label count', () => {
   it('says nothing when every item is labelled', async () => {
     mockGetItems.mockImplementation(needing(0));
     renderWithRouter(<InventoryItemsPage />);
-    await screen.findByText('No items found');
+    await screen.findByText(EMPTY_LIST);
 
     await waitFor(() => expect(mockGetItems).toHaveBeenCalledWith({ label_printed: false, skip: 0, limit: 1 }));
     expect(screen.queryByText(/need a label/)).not.toBeInTheDocument();
@@ -1875,7 +1893,7 @@ describe('InventoryItemsPage needs-a-label count', () => {
   it('is not fetched for a member who cannot manage inventory', async () => {
     mockCheckPermission.mockReturnValue(false);
     renderWithRouter(<InventoryItemsPage />);
-    await screen.findByText('No items found');
+    await screen.findByText(EMPTY_LIST);
 
     expect(mockGetItems).not.toHaveBeenCalledWith({ label_printed: false, skip: 0, limit: 1 });
     expect(screen.queryByText(/need a label/)).not.toBeInTheDocument();

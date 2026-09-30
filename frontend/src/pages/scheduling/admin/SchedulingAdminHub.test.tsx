@@ -34,6 +34,13 @@ vi.mock('../../../services/adminHubService', () => ({
   },
 }));
 
+const mockGetSchedulingSummary = vi.fn();
+vi.mock('../../../modules/scheduling/services/api', () => ({
+  schedulingService: {
+    getSummary: (...args: unknown[]) => mockGetSchedulingSummary(...args) as unknown,
+  },
+}));
+
 import SchedulingAdminHub from './SchedulingAdminHub';
 
 const grant = (...held: string[]) =>
@@ -66,8 +73,18 @@ describe('SchedulingAdminHub', () => {
     mockIsModuleOn.mockReset();
     mockModulesLoading.mockReset();
     mockGetAdminHubSummary.mockReset();
+    mockGetSchedulingSummary.mockReset();
+    localStorage.removeItem('scheduling_setup_guide_hidden');
 
     mockModulesLoading.mockReturnValue(false);
+    mockGetSchedulingSummary.mockResolvedValue({
+      shifts_scheduled: 0,
+      shifts_scheduled_this_week: 0,
+      shifts_scheduled_this_month: 0,
+      hours_worked_this_month: 0,
+      active_templates: 0,
+      active_patterns: 0,
+    });
     mockIsModuleOn.mockReturnValue(true);
     mockGetAdminHubSummary.mockResolvedValue({
       moduleKey: 'scheduling',
@@ -77,6 +94,13 @@ describe('SchedulingAdminHub', () => {
       attention: [],
     });
     window.history.replaceState({}, '', '/scheduling/admin');
+  });
+
+  it('shows a new scheduling officer where to start', async () => {
+    grant('scheduling.manage');
+    renderWithRouter(<SchedulingAdminHub />);
+
+    expect(await screen.findByRole('heading', { name: 'Set up scheduling for your department' })).toBeInTheDocument();
   });
 
   it('names the page', () => {

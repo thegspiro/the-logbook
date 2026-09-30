@@ -476,6 +476,25 @@ named ("N modules you did not enable are hidden") with a control to reveal
 them, so a department that cannot find Inventory learns it is off rather than
 concluding the permission does not exist.
 
+## Prospective Members — Purge Is Manual; Auto-Purge Is Not Wired (2026-09-30)
+
+**Purge Selected** on the Inactive Applications tab permanently deletes the
+selected applications that are still `inactive`, with their uploaded documents,
+and records the purge in the audit log. Until this date it matched `withdrawn`
+instead, so it deleted nothing while the page reported success. Withdrawn,
+rejected and on-hold applications are never purged; the owner chose to keep the
+button to exactly what its tab lists.
+
+**Open: the pipeline's Auto-Purge setting has no reader.** The settings page
+stores `auto_purge_enabled` and `purge_days_after_inactive`, and the user guide
+(`docs/training/15-prospective-members.md`) says inactive applicants are
+deleted after the grace period, but no scheduled task reads either value --
+nothing is ever purged automatically (CLAUDE.md pitfall #19). Wiring it means a
+nightly job calling `purge_inactive_prospects` per pipeline for applications
+inactive longer than the grace period, which needs the date an application went
+inactive (`deactivated_at`) and a decision on notifying coordinators first.
+Until then, departments purge from the Inactive tab.
+
 ## Email Link Address — How a Change Reaches Every Worker (2026-09-25)
 
 An address saved on **Settings → Email** is applied to `settings.FRONTEND_URL`
@@ -703,18 +722,39 @@ each of these against what is actually in the database and on disk.
 
 What the application cannot promise, and why each is left as it is:
 
-- **Someone with server access can still correlate by time.** The access log
-  records `POST /api/v1/suggestions/boxes/{id}/submissions` with a timestamp
-  (and the client IP at debug level), the reviewers' notification email is
-  sent — and logged to `message_history` — at submission time, their in-app
-  notification rows carry an exact `sent_at`, and session
-  activity is recorded on the member's row. None of these names the submitter
-  on its own, but together they can narrow one down for whoever can read the
-  server's logs and database. Closing it would mean batching notifications
-  into a delayed digest and scrubbing request logging for these routes; both
-  cost the reviewers timely notice and are a policy choice, not a fix. The
-  in-app guarantee — no reviewer, officer or administrator can find the author
-  through the application — holds.
+- **Request logging no longer records them (decided 2026-09-30).** The
+  submission and follow-up routes are written to no access log: the bundled
+  nginx configs drop the line (`$access_loggable` in `frontend/nginx.conf` and
+  `infrastructure/nginx/nginx.conf`) and raise the error log to `crit` for
+  them, and uvicorn's access log and `IPLoggingMiddleware` skip them
+  (`UNLOGGED_PATH` in `app/core/logging.py`, pinned by
+  `tests/test_unlogged_paths.py`). The cost is accepted: a failed or
+  rate-limited submission leaves no proxy-side trace, only the backend's own
+  error handling. **A proxy the operator runs in front of these is outside the
+  repository** — Unraid's SWAG or Nginx Proxy Manager, an AWS load balancer's
+  access logs, Cloudflare — and records the IP and the second unless it is
+  configured the same way. `docs/deployment/aws.md` shows how for the host
+  nginx it documents.
+- **Someone with server access can still correlate by time.** The reviewers'
+  notification email is sent — and logged to `message_history` — at
+  submission time, their in-app notification rows carry an exact `sent_at`,
+  and session activity is recorded on the member's row. None of these names
+  the submitter on its own, but together they can narrow one down for whoever
+  can read the server's database. Closing it would mean batching notifications
+  into a delayed digest, which costs the reviewers timely notice and is a
+  policy choice, not a fix.
+- **A failed submission is not reported under the member's name (decided
+  2026-09-30).** A 5xx on these routes used to write an `error_logs` row
+  carrying the caller's `user_id`, the route and the exact second, and the
+  frontend filed a second one — for a 5xx, a timeout or a network failure —
+  from the member's own session; both showed on the Error Monitoring page.
+  Now `persist_error_log` skips them (`is_excluded_path`), the frontend's
+  `reportApiError` does not send them, and `POST /errors/log` discards one
+  that arrives anyway (`is_excluded_client_path`) — a build cached before the
+  change still sends them. The cost is accepted: a failed anonymous
+  submission does not appear on the Error Monitoring page. The backend's
+  structured log still records the failure with the route and the time — no
+  user and no IP — so an operator can see that submissions are failing.
 - **A lost follow-up key cannot be recovered.** Nothing links the key to the
   member, which is the point. The submission itself survives; the member's
   ability to read replies and respond does not.

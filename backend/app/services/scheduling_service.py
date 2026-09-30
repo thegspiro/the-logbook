@@ -3084,11 +3084,29 @@ class SchedulingService:
         # ("total_shifts", "total_hours_this_month") that gave no hint, so a
         # member comparing this screen to a completion report saw a
         # discrepancy that looked like a bug.
+        # What the department has built to schedule from. The administration
+        # hub's setup guide ticks its steps off these; they are department-wide
+        # regardless of ``open_to_all_only``, which scopes shifts, not setup.
+        active_templates = await self.db.scalar(
+            select(func.count(ShiftTemplate.id)).where(
+                ShiftTemplate.organization_id == str(organization_id),
+                ShiftTemplate.is_active.is_(True),
+            )
+        )
+        active_patterns = await self.db.scalar(
+            select(func.count(ShiftPattern.id)).where(
+                ShiftPattern.organization_id == str(organization_id),
+                ShiftPattern.is_active.is_(True),
+            )
+        )
+
         return {
             "shifts_scheduled": total_shifts,
             "shifts_scheduled_this_week": shifts_this_week,
             "shifts_scheduled_this_month": shifts_this_month,
             "hours_worked_this_month": total_hours,
+            "active_templates": active_templates or 0,
+            "active_patterns": active_patterns or 0,
         }
 
     # ============================================

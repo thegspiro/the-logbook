@@ -12,6 +12,10 @@ const mockBudgetCreate = vi.fn();
 const mockApprovalChainList = vi.fn();
 const mockApprovalChainCreate = vi.fn();
 const mockApprovalChainDelete = vi.fn();
+const mockApprovalChainUpdate = vi.fn();
+const mockApprovalChainAddStep = vi.fn();
+const mockApprovalChainUpdateStep = vi.fn();
+const mockApprovalChainDeleteStep = vi.fn();
 const mockApprovalGetPending = vi.fn();
 const mockApprovalApprove = vi.fn();
 const mockApprovalDeny = vi.fn();
@@ -50,6 +54,10 @@ vi.mock('../services/api', () => ({
     list: (...args: unknown[]) => mockApprovalChainList(...args) as unknown,
     create: (...args: unknown[]) => mockApprovalChainCreate(...args) as unknown,
     delete: (...args: unknown[]) => mockApprovalChainDelete(...args) as unknown,
+    update: (...args: unknown[]) => mockApprovalChainUpdate(...args) as unknown,
+    addStep: (...args: unknown[]) => mockApprovalChainAddStep(...args) as unknown,
+    updateStep: (...args: unknown[]) => mockApprovalChainUpdateStep(...args) as unknown,
+    deleteStep: (...args: unknown[]) => mockApprovalChainDeleteStep(...args) as unknown,
   },
   approvalService: {
     getPending: (...args: unknown[]) => mockApprovalGetPending(...args) as unknown,
@@ -395,6 +403,7 @@ describe('financeStore', () => {
 
       const result = await getState().createApprovalChain({
         name: 'New Chain',
+        applies_to: 'purchase_request',
       });
 
       expect(result).toEqual(chain);
@@ -405,7 +414,9 @@ describe('financeStore', () => {
     it('should throw and set error on failure', async () => {
       mockApprovalChainCreate.mockRejectedValue(new Error('Invalid'));
 
-      await expect(getState().createApprovalChain({ name: 'Bad' })).rejects.toThrow('Invalid');
+      await expect(getState().createApprovalChain({ name: 'Bad', applies_to: 'purchase_request' })).rejects.toThrow(
+        'Invalid'
+      );
 
       expect(getState().error).toBe('Invalid');
     });
@@ -431,17 +442,100 @@ describe('financeStore', () => {
       expect(state.isLoading).toBe(false);
     });
 
-    it('should handle error', async () => {
+    it('should set the error and rethrow so the page does not report success', async () => {
       mockApprovalChainDelete.mockRejectedValue(new Error('Forbidden'));
 
       useFinanceStore.setState({
         approvalChains: [{ id: 'ac1', name: 'Chain' }] as never[],
       });
 
-      await getState().deleteApprovalChain('ac1');
+      await expect(getState().deleteApprovalChain('ac1')).rejects.toThrow('Forbidden');
 
       expect(getState().isLoading).toBe(false);
       expect(getState().error).toBe('Forbidden');
+      expect(getState().approvalChains).toHaveLength(1);
+    });
+  });
+
+  describe('approval chain step actions', () => {
+    const step = (id: string, stepOrder: number) => ({
+      id,
+      chainId: 'ac1',
+      stepOrder,
+      name: id,
+      stepType: 'approval',
+      allowSelfApproval: false,
+      required: true,
+      createdAt: '2026-09-01T00:00:00Z',
+    });
+
+    beforeEach(() => {
+      for (const mock of [
+        mockApprovalChainList,
+        mockApprovalChainUpdate,
+        mockApprovalChainAddStep,
+        mockApprovalChainUpdateStep,
+        mockApprovalChainDeleteStep,
+      ]) {
+        mock.mockReset();
+      }
+      mockApprovalChainList.mockResolvedValue([]);
+      mockApprovalChainUpdate.mockResolvedValue({});
+      mockApprovalChainAddStep.mockResolvedValue({});
+      mockApprovalChainUpdateStep.mockResolvedValue({});
+      mockApprovalChainDeleteStep.mockResolvedValue(undefined);
+    });
+
+    it('moveChainStep renumbers a gapped chain to 1..n with the swap applied', async () => {
+      useFinanceStore.setState({
+        approvalChains: [{ id: 'ac1', steps: [step('a', 1), step('b', 3), step('c', 7)] }] as never[],
+      });
+
+      await getState().moveChainStep('ac1', 'a', 'down');
+
+      // New order b, a, c written as 1, 2, 3 — every order changes here.
+      expect(mockApprovalChainUpdateStep).toHaveBeenCalledTimes(3);
+      expect(mockApprovalChainUpdateStep).toHaveBeenCalledWith('ac1', 'b', { step_order: 1 });
+      expect(mockApprovalChainUpdateStep).toHaveBeenCalledWith('ac1', 'a', { step_order: 2 });
+      expect(mockApprovalChainUpdateStep).toHaveBeenCalledWith('ac1', 'c', { step_order: 3 });
+      expect(mockApprovalChainList).toHaveBeenCalledTimes(1);
+    });
+
+    it('moveChainStep does nothing past either end', async () => {
+      useFinanceStore.setState({
+        approvalChains: [{ id: 'ac1', steps: [step('a', 1), step('b', 2)] }] as never[],
+      });
+
+      await getState().moveChainStep('ac1', 'a', 'up');
+      await getState().moveChainStep('ac1', 'b', 'down');
+
+      expect(mockApprovalChainUpdateStep).not.toHaveBeenCalled();
+    });
+
+    it('re-fetches the chains even when a step mutation fails, and rethrows', async () => {
+      mockApprovalChainAddStep.mockRejectedValue(new Error('Approval chain not found'));
+
+      await expect(
+        getState().addChainStep('ac1', {
+          step_order: 1,
+          name: 'x',
+          step_type: 'approval',
+          allow_self_approval: false,
+        })
+      ).rejects.toThrow('Approval chain not found');
+
+      expect(mockApprovalChainList).toHaveBeenCalledTimes(1);
+    });
+
+    it('updateApprovalChain sends the payload and re-fetches', async () => {
+      await getState().updateApprovalChain('ac1', { name: 'Renamed', description: null, is_active: false });
+
+      expect(mockApprovalChainUpdate).toHaveBeenCalledWith('ac1', {
+        name: 'Renamed',
+        description: null,
+        is_active: false,
+      });
+      expect(mockApprovalChainList).toHaveBeenCalledTimes(1);
     });
   });
 
