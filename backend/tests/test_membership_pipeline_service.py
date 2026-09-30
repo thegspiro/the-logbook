@@ -808,7 +808,7 @@ class TestStatusStopsProgression:
                 completed_by="u1",
             )
 
-        mock_advance.assert_called_once_with(prospect, "s1")
+        mock_advance.assert_called_once_with(prospect, "s1", entered_by="u1")
 
 
 class TestElectionVoteGate:

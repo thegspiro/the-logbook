@@ -1073,6 +1073,7 @@ class MembershipPipelineService:
                         row.status = StepProgressStatus.IN_PROGRESS
                         row.completed_at = None
                         row.completed_by = None
+                    await self.ensure_election_package_on_entry(prospect, fallback_step)
                 await self._log_activity(
                     prospect_id=prospect.id,
                     action="step_deleted_auto_moved",
@@ -1753,7 +1754,19 @@ class MembershipPipelineService:
         )
 
         await self.db.commit()
-        return await self.get_prospect(prospect.id, organization_id)
+        created = await self.get_prospect(prospect.id, organization_id)
+
+        # A pipeline can open on its vote. Done after the commit, on the
+        # reloaded record, because the snapshot reads server-defaulted columns
+        # (created_at) the unflushed insert does not yet hold; the application
+        # is durable either way, and the drawer offers Create package if this
+        # second write were ever to fail.
+        if created is not None and await self.ensure_election_package_on_entry(
+            created, created.current_step, created_by
+        ):
+            await self.db.commit()
+            created = await self.get_prospect(prospect.id, organization_id)
+        return created
 
     # Fields that may never be set via the generic update dict
     _PROSPECT_PROTECTED_FIELDS = frozenset(
@@ -2850,7 +2863,9 @@ class MembershipPipelineService:
         if not will_auto_transfer:
             # Advance to next step. The transfer, when there is one, already
             # ran above and moved the prospect out of the pipeline.
-            finished_on_arrival = await self._advance_current_step(prospect, step_id)
+            finished_on_arrival = await self._advance_current_step(
+                prospect, step_id, entered_by=completed_by
+            )
 
         # Some explicit operations have a domain-level audit event in addition
         # to the step-level event above.  Stage both before committing so the
@@ -3129,6 +3144,8 @@ class MembershipPipelineService:
             progress.status = StepProgressStatus.IN_PROGRESS
             progress.completed_at = None
             progress.completed_by = None
+
+        await self.ensure_election_package_on_entry(prospect, step, assigned_by)
 
         await self._log_activity(
             prospect_id=prospect.id,
@@ -3729,6 +3746,8 @@ class MembershipPipelineService:
                 )
             )
 
+        await self.ensure_election_package_on_entry(prospect, prev_step, regressed_by)
+
         await self._log_activity(
             prospect_id=prospect_id,
             action="prospect_regressed",
@@ -3744,7 +3763,11 @@ class MembershipPipelineService:
         return await self.get_prospect(prospect_id, organization_id)
 
     async def _advance_current_step(
-        self, prospect: ProspectiveMember, completed_step_id: str
+        self,
+        prospect: ProspectiveMember,
+        completed_step_id: str,
+        *,
+        entered_by: Optional[str] = None,
     ) -> Optional[Tuple[str, str]]:
         """After completing a step, move current_step_id to the next step.
 
@@ -3786,6 +3809,11 @@ class MembershipPipelineService:
 
             # Auto-link event if the new step requires meeting attendance
             await self._auto_link_event_for_step(prospect, next_step)
+
+            # Every forward move lands here, so this is what gives a bulk
+            # advance, a skip or an automated advance onto a vote stage the
+            # same package a single Advance gets.
+            await self.ensure_election_package_on_entry(prospect, next_step, entered_by)
 
             # Send automated email if the next step is an automated_email stage
             # (or a legacy action step with action_type=send_email)
@@ -6435,10 +6463,12 @@ class MembershipPipelineService:
         ):
             election_step = current_step
 
-        # MP-08 pass 4 round 2 (Codex, second finding): advanceApplicant
-        # (frontend) commits the stage advance, then makes a *separate*
-        # request to create the package, naming the stage it just entered as
-        # step_id — between those two requests, current_step can change again
+        # MP-08 pass 4 round 2 (Codex, second finding): a caller reads the
+        # applicant's stage, then makes a *separate* request to create the
+        # package, naming that stage as step_id (the frontend store's
+        # advanceApplicant did this until stage entry began creating packages
+        # server-side; the drawer's Create package action still does) —
+        # between those two requests, current_step can change again
         # (a regression, or another advance landing in the gap). If that
         # happens, the policy above would already be resolved from the new
         # current_step while the package below still stored the *request's*
@@ -6467,9 +6497,9 @@ class MembershipPipelineService:
         # step_type, so the guess below used to discard that validated
         # information even when it was the one signal actually naming the
         # stage this package is for. This matters for the same race MP-24
-        # guards on the current_step-governed side: advanceApplicant (the
-        # only frontend caller) sends step_id as the election_vote stage the
-        # applicant just entered, and if a second advance moves current_step
+        # guards on the current_step-governed side: the frontend caller sends
+        # step_id as the election_vote stage the applicant is on, and if an
+        # advance moves current_step
         # past every election_vote stage before this request lands, the old
         # fallback discarded that step_id and guessed whichever
         # election_vote step sorts first — which can be an earlier, more
@@ -6513,6 +6543,47 @@ class MembershipPipelineService:
                 None,
             )
 
+        pkg = await self._stage_election_package(
+            prospect,
+            election_step,
+            pipeline_id=pipeline_id or prospect.pipeline_id,
+            step_id=step_id,
+            coordinator_notes=coordinator_notes,
+            package_config=package_config,
+            created_by=created_by,
+        )
+
+        await self.db.commit()
+        # `created_at` / `updated_at` are server-side defaults, so the INSERT
+        # leaves them expired. The endpoint serialises this object through a
+        # response_model that requires both, and Pydantic's attribute read is
+        # synchronous — the lazy reload it triggers raises MissingGreenlet and
+        # the POST 500s on a package it did create. Load them here instead.
+        await self.db.refresh(pkg)
+        return pkg
+
+    async def _stage_election_package(
+        self,
+        prospect: ProspectiveMember,
+        election_step: Optional[MembershipPipelineStep],
+        *,
+        pipeline_id: Optional[str],
+        step_id: Optional[str],
+        coordinator_notes: Optional[str] = None,
+        package_config: Optional[Dict[str, Any]] = None,
+        created_by: Optional[str] = None,
+        activity_details: Optional[Dict[str, Any]] = None,
+    ) -> ProspectElectionPackage:
+        """Build an election package and add it to the session, uncommitted.
+
+        The one place a package's snapshot is assembled, shared by the
+        explicit endpoint (:meth:`create_election_package`) and stage entry
+        (:meth:`ensure_election_package_on_entry`), so the two cannot drift in
+        what they capture. ``election_step`` is the stage whose
+        ``package_fields`` govern the snapshot; resolving it is the caller's
+        job, because the two callers know it in different ways. The caller
+        owns the commit.
+        """
         package_fields: Optional[Dict[str, Any]] = None
         if (
             election_step
@@ -6536,7 +6607,7 @@ class MembershipPipelineService:
         if include_documents:
             doc_query = (
                 select(ProspectDocument)
-                .where(ProspectDocument.prospect_id == prospect_id)
+                .where(ProspectDocument.prospect_id == prospect.id)
                 .order_by(ProspectDocument.created_at)
             )
             doc_result = await self.db.execute(doc_query)
@@ -6546,10 +6617,23 @@ class MembershipPipelineService:
         # `step_progress` comes back in whatever order the database hands it
         # over, which put the stages of an election package's summary in an
         # arbitrary sequence for the members reading it before a vote.
+        #
+        # Read from the database rather than ``prospect.step_progress``: when
+        # the package is made on stage entry (:meth:`ensure_election_package_on_entry`)
+        # the completion that moved the applicant was staged in this very
+        # transaction, and a progress row created there is not in the loaded
+        # collection — the stage they had just finished would be missing from
+        # the history the members read. The flush makes it visible to the read.
         stage_history: List[Dict[str, Any]] = []
         if include_stage_history:
+            await self.db.flush()
+            progress_result = await self.db.execute(
+                select(ProspectStepProgress)
+                .where(ProspectStepProgress.prospect_id == prospect.id)
+                .options(selectinload(ProspectStepProgress.step))
+            )
             for sp in sorted(
-                prospect.step_progress or [],
+                progress_result.scalars().all(),
                 key=lambda p: (p.step.sort_order if p.step else 0, p.created_at),
             ):
                 if sp.status == StepProgressStatus.COMPLETED and sp.step:
@@ -6603,8 +6687,8 @@ class MembershipPipelineService:
 
         pkg = ProspectElectionPackage(
             id=generate_uuid(),
-            prospect_id=prospect_id,
-            pipeline_id=pipeline_id or prospect.pipeline_id,
+            prospect_id=prospect.id,
+            pipeline_id=pipeline_id,
             step_id=step_id,
             status="draft",
             applicant_snapshot=snapshot,
@@ -6614,20 +6698,75 @@ class MembershipPipelineService:
         self.db.add(pkg)
 
         await self._log_activity(
-            prospect_id=prospect_id,
+            prospect_id=prospect.id,
             action="election_package_created",
-            details={"package_id": pkg.id},
+            details={"package_id": pkg.id, **(activity_details or {})},
             performed_by=created_by,
         )
-
-        await self.db.commit()
-        # `created_at` / `updated_at` are server-side defaults, so the INSERT
-        # leaves them expired. The endpoint serialises this object through a
-        # response_model that requires both, and Pydantic's attribute read is
-        # synchronous — the lazy reload it triggers raises MissingGreenlet and
-        # the POST 500s on a package it did create. Load them here instead.
-        await self.db.refresh(pkg)
         return pkg
+
+    async def ensure_election_package_on_entry(
+        self,
+        prospect: ProspectiveMember,
+        step: Optional[MembershipPipelineStep],
+        created_by: Optional[str] = None,
+    ) -> Optional[ProspectElectionPackage]:
+        """Create the package for an Election Vote stage the applicant just entered.
+
+        Called by every path that moves ``current_step_id`` — the advance
+        inside :meth:`complete_step` (single advance, bulk advance, skip, an
+        approver's sign-off, an integration auto-advance), Back, placing a
+        stageless applicant, a stage deletion's fallback, and creation on a
+        pipeline whose first stage is a vote. It used to be created only by
+        the frontend store after a single Advance click, in a separate
+        request, so every other route onto the stage left the applicant with
+        nothing to put on a ballot. Deciding it here makes the arrival and the
+        package one transaction, whatever moved the applicant.
+
+        Idempotent per applicant and stage: a package already made for this
+        stage — or one with no stage recorded, which predates step tracking
+        or lost its stage to a deletion — is left alone, so moving back and
+        forth across the vote never stacks up drafts. A second vote on the
+        same stage is a coordinator's decision and goes through the explicit
+        endpoint. The caller holds the prospect row lock (or has just created
+        the row), and the existence check is itself a locking read, so two
+        movements of one applicant cannot both decide there is none
+        (CLAUDE.md Pitfall #27).
+
+        Returns the staged package, or None when there was nothing to do; the
+        caller commits.
+        """
+        if step is None or step.step_type != PipelineStepType.ELECTION_VOTE:
+            return None
+        # A closed application is not put in front of the members; the
+        # explicit endpoint refuses the same (see _assert_open there). Entry
+        # paths already require an active applicant, so this is a backstop.
+        if prospect.status in CLOSED_PROSPECT_STATUSES:
+            return None
+
+        existing = await self.db.execute(
+            select(ProspectElectionPackage.id)
+            .where(
+                ProspectElectionPackage.prospect_id == prospect.id,
+                or_(
+                    ProspectElectionPackage.step_id == step.id,
+                    ProspectElectionPackage.step_id.is_(None),
+                ),
+            )
+            .limit(1)
+            .with_for_update()
+        )
+        if existing.scalars().first() is not None:
+            return None
+
+        return await self._stage_election_package(
+            prospect,
+            step,
+            pipeline_id=prospect.pipeline_id,
+            step_id=str(step.id),
+            created_by=created_by,
+            activity_details={"step_id": str(step.id), "trigger": "stage_entered"},
+        )
 
     _ELECTION_PKG_PROTECTED_FIELDS = frozenset(
         {

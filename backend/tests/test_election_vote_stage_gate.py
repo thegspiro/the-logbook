@@ -114,6 +114,34 @@ async def _prospect_on_the_vote(svc, org_id, pipeline_id):
 
 
 async def _package(db_session, prospect_id, pipeline_id, step_id, status):
+    """Put the applicant's package for ``step_id`` into ``status``.
+
+    Arriving on the vote stage creates a draft package server-side
+    (``ensure_election_package_on_entry``), so the first call moves *that*
+    package on — which is how a real package reaches a ballot — rather than
+    inserting a second row beside it. Inserting one would leave two packages
+    sharing a second-resolution ``created_at``, and which one the gate graded
+    would be a coin toss. A later call, with no untouched draft left, adds a
+    new package, as a second vote would.
+    """
+    existing = (
+        (
+            await db_session.execute(
+                select(ProspectElectionPackage).where(
+                    ProspectElectionPackage.prospect_id == prospect_id,
+                    ProspectElectionPackage.step_id == step_id,
+                    ProspectElectionPackage.status == "draft",
+                )
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if existing is not None:
+        existing.status = status
+        await db_session.flush()
+        return existing
+
     pkg = ProspectElectionPackage(
         id=_uid(),
         prospect_id=prospect_id,
@@ -298,6 +326,13 @@ class TestElectionVoteStageGate:
             svc, org_id, auto_transfer=False
         )
         prospect = await _prospect_on_the_vote(svc, org_id, pipeline.id)
+        # Arriving on the vote now creates a package; remove it to stand for
+        # an applicant who reached the stage before that, and so has none.
+        await db_session.execute(
+            ProspectElectionPackage.__table__.delete().where(
+                ProspectElectionPackage.prospect_id == prospect.id
+            )
+        )
 
         result = await svc.transfer_to_membership(prospect.id, org_id, admin_id)
 
