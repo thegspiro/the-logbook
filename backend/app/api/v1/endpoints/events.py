@@ -1412,8 +1412,8 @@ async def delete_event(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        # The lock is mapped on the raw error: sanitizing first capped a
-        # refusal that names many fields and replaced it with a generic one.
+        # Mapped on the raw error like every route, so the next refusal added
+        # here cannot be capped by the sanitizer; this one is short fixed text.
         raise attendance_lock_http_error(e) or HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
@@ -1533,8 +1533,8 @@ async def cancel_event(
 
         return _build_event_response(event)
     except ValueError as e:
-        # The lock is mapped on the raw error: sanitizing first capped a
-        # refusal that names many fields and replaced it with a generic one.
+        # Mapped on the raw error like every route, so the next refusal added
+        # here cannot be capped by the sanitizer; this one is short fixed text.
         raise attendance_lock_http_error(e) or HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )

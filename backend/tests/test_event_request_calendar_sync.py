@@ -372,10 +372,19 @@ async def test_a_finalized_entry_refuses_with_the_sentence(create_calendar_event
 
 
 @pytest.mark.asyncio
-async def test_any_other_refusal_to_move_the_entry_keeps_its_400():
-    error, db = await _reschedule_refused("Location not found")
+@pytest.mark.parametrize(
+    ("create_calendar_event", "status"), [(True, 400), (False, 409)]
+)
+async def test_any_other_refusal_to_move_the_entry_keeps_its_status(
+    create_calendar_event, status
+):
+    """update_event's refusal was a 400 and the no-new-entry branch's was a
+    409; a refusal that is not the attendance lock keeps whichever it had."""
+    error, db = await _reschedule_refused(
+        "Location not found", create_calendar_event=create_calendar_event
+    )
 
-    assert (error.status_code, error.detail) == (400, "Location not found")
+    assert (error.status_code, error.detail) == (status, "Location not found")
     db.commit.assert_not_awaited()
 
 

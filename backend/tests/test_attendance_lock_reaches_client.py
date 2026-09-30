@@ -10,8 +10,10 @@ refusal by hand and got it wrong in two ways:
   series cancel and delete, updating future occurrences, the cohort class
   routes, the event-request calendar moves, and the legacy session finalize.
 * Some sanitized the message *before* mapping it. ``safe_error_detail`` caps a
-  message at 300 characters, and a refusal naming every field the edit form
-  sends is longer, so the member was told "An unexpected error occurred".
+  message at 300 characters, and some refusals run past that: an edit that
+  also sets ``custom_category`` or the actual times, or a series edit through
+  update-future with its "(N of M occurrences …)" suffix. The member was told
+  "An unexpected error occurred".
 
 Every route now maps the raw error through ``attendance_lock_http_error``
 first. DB and services mocked; no MySQL.
@@ -52,6 +54,11 @@ SHORT = attendance_locked_error("cancelling the event")
 LONG = attendance_locked_error(
     "changing " + ", ".join(sorted(ATTENDANCE_SENSITIVE_UPDATE_FIELDS))
 )
+# Errors that are not the lock and that the sanitizer must still replace.
+UNSAFE = [
+    "x" * 301,
+    "(pymysql.err.OperationalError) SELECT * FROM events WHERE id = %s",
+]
 
 
 def _sentence(refusal):
@@ -203,6 +210,24 @@ class TestEventRoutes:
         assert error.status_code == 400, route
         assert error.detail == "Cannot update a cancelled event", route
 
+    @pytest.mark.parametrize("message", UNSAFE, ids=["long", "sql"])
+    @pytest.mark.parametrize(
+        ("route", "method", "call"),
+        _event_route_calls(),
+        ids=[c[0] for c in _event_route_calls()],
+    )
+    async def test_any_other_refusal_is_still_sanitized(
+        self, route, method, call, message
+    ):
+        """Mapping the raw error first must not let anything else through
+        unsanitized."""
+        with patch.object(
+            EventService, method, AsyncMock(side_effect=ValueError(message))
+        ):
+            error = await _refused(call(MagicMock()))
+
+        assert (error.status_code, error.detail) == (400, _GENERIC_ERROR), route
+
     async def test_cancelling_an_unknown_event_is_a_404_not_a_500(self):
         """The handler's own 404 was caught by its blanket ``except Exception``
         and reported as a server error."""
@@ -264,11 +289,9 @@ class TestTheLegacySessionFinalize:
             )
 
     async def test_a_refusal_is_a_409_with_the_sentence(self):
-        error = await self._finalize(
-            attendance_locked_error("finalizing attendance again")
-        )
-        assert error.status_code == 409
-        assert not error.detail.startswith(ATTENDANCE_LOCKED_PREFIX)
+        refusal = attendance_locked_error("finalizing attendance again")
+        error = await self._finalize(refusal)
+        assert (error.status_code, error.detail) == (409, _sentence(refusal))
 
     @pytest.mark.parametrize(
         "message",
@@ -380,39 +403,71 @@ class TestCohortRoutes:
             "Class not found",
         ), route
 
+    @pytest.mark.parametrize("message", UNSAFE, ids=["long", "sql"])
+    @pytest.mark.parametrize(
+        ("route", "method", "other_status", "call"),
+        _cohort_route_calls(),
+        ids=[c[0] for c in _cohort_route_calls()],
+    )
+    async def test_any_other_error_is_still_sanitized(
+        self, route, method, other_status, call, message
+    ):
+        service = MagicMock()
+        setattr(service, method, AsyncMock(side_effect=ValueError(message)))
+        with patch.object(
+            course_cohorts, "CourseCohortService", return_value=service
+        ), patch.object(course_cohorts, "log_audit_event", AsyncMock()):
+            error = await _refused(call())
+
+        assert (error.status_code, error.detail) == (
+            other_status,
+            _GENERIC_ERROR,
+        ), route
+
 
 class TestNothingSanitizesARefusalFirst:
     """The shape that turned a long refusal into a generic error: sanitizing
     the message and *then* mapping it. ``safe_error_detail`` caps the length,
     so by the time the mapper looks, a long refusal is gone.
 
-    Exact rather than heuristic: it flags only a lock mapper whose argument
-    is itself a sanitizer call, which is never correct.
+    No false positives: it flags only a lock mapper with a sanitizer call
+    somewhere inside an argument, which is never correct. It does not catch
+    everything — a message sanitized into a variable first gets past it.
     """
 
-    MAPPERS = {"_event_error", "_session_error", "attendance_lock_http_error"}
+    MAPPERS = {
+        "_event_error",
+        "_session_error",
+        "attendance_lock_http_error",
+        "attendance_lock_reason",
+    }
     SANITIZERS = {"safe_error_detail", "sanitize_error_message"}
+    API = Path(__file__).resolve().parents[1] / "app" / "api"
 
     @staticmethod
     def _name(func):
         return getattr(func, "id", None) or getattr(func, "attr", None)
 
+    @classmethod
+    def _offenders(cls, tree):
+        lines = []
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call) and cls._name(node.func) in cls.MAPPERS):
+                continue
+            values = [*node.args, *(kw.value for kw in node.keywords)]
+            if any(
+                isinstance(inner, ast.Call) and cls._name(inner.func) in cls.SANITIZERS
+                for value in values
+                for inner in ast.walk(value)
+            ):
+                lines.append(node.lineno)
+        return lines
+
     def test_no_route_maps_a_sanitized_message(self):
-        api = Path(__file__).resolve().parents[1] / "app" / "api"
         offenders = []
-        for path in sorted(api.rglob("*.py")):
+        for path in sorted(self.API.rglob("*.py")):
             tree = ast.parse(path.read_text(encoding="utf-8"))
-            for node in ast.walk(tree):
-                if not (
-                    isinstance(node, ast.Call) and self._name(node.func) in self.MAPPERS
-                ):
-                    continue
-                for arg in node.args:
-                    if (
-                        isinstance(arg, ast.Call)
-                        and self._name(arg.func) in self.SANITIZERS
-                    ):
-                        offenders.append(f"{path.name}:{node.lineno}")
+            offenders += [f"{path.name}:{n}" for n in self._offenders(tree)]
 
         assert not offenders, (
             "Map the raw error first — attendance_lock_http_error(e) or "
@@ -423,10 +478,31 @@ class TestNothingSanitizesARefusalFirst:
 
     def test_the_check_still_sees_the_mappers(self):
         """A check that stopped finding calls would pass forever."""
-        api = Path(__file__).resolve().parents[1] / "app" / "api"
         seen = set()
-        for path in api.rglob("*.py"):
+        for path in self.API.rglob("*.py"):
             for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
                 if isinstance(node, ast.Call) and self._name(node.func) in self.MAPPERS:
                     seen.add(self._name(node.func))
         assert seen == self.MAPPERS
+
+    @pytest.mark.parametrize(
+        "source",
+        [
+            "_event_error(safe_error_detail(e))",
+            "_event_error(error=safe_error_detail(e))",
+            "_session_error(sanitize_error_message(err))",
+            "attendance_lock_http_error(error=sanitize_error_message(err))",
+            "attendance_lock_http_error(ValueError(safe_error_detail(e)))",
+            "attendance_lock_reason(safe_error_detail(ValueError(err)))",
+        ],
+    )
+    def test_the_check_flags_a_sanitized_argument(self, source):
+        """A misspelled or dropped name in either set would pass everything."""
+        assert self._offenders(ast.parse(source)) == [1]
+
+    def test_the_check_leaves_the_correct_shape_alone(self):
+        source = (
+            "attendance_lock_http_error(e) or "
+            "HTTPException(status_code=400, detail=safe_error_detail(e))"
+        )
+        assert self._offenders(ast.parse(source)) == []
