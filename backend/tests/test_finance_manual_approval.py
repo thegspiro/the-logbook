@@ -372,7 +372,7 @@ class TestDenyRequestSchema:
 @pytest.mark.unit
 class TestErrorMapping:
     @pytest.mark.parametrize(
-        "exc, status",
+        ("exc", "status"),
         [
             (FinanceEntityNotFoundError("Purchase request not found"), 404),
             (ManualApprovalConflictError("not waiting"), 409),
