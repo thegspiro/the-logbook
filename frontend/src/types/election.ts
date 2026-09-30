@@ -525,7 +525,7 @@ export interface BallotSubmissionResponse {
 
 export interface VoterOverride {
   user_id: string;
-  user_name?: string;
+  member_name?: string | null;
   reason: string;
   overridden_by: string;
   overridden_by_name?: string;

@@ -103,7 +103,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 
 | #   | Activity                                                              | Acts as            | Starts at                                          | Status |
 | --- | --------------------------------------------------------------------- | ------------------ | -------------------------------------------------- | ------ |
-| W50 | An election: create, nominate, vote by ballot link, close, results    | secretary → member | `/elections`, `/ballot`                            | ⬜     |
+| W50 | An election: create, nominate, vote by ballot link, close, results    | secretary → member | `/elections`, `/ballot`                            | ✅     |
 | W51 | Meeting minutes: draft, approve, publish                              | secretary          | `/minutes`                                         | ⬜     |
 | W52 | Action items: assign, work, close                                     | secretary → member | `/action-items`                                    | ⬜     |
 | W53 | Documents: folders, upload, who can see what                          | secretary, member  | `/documents`                                       | ⬜     |
@@ -180,6 +180,30 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W50 — An election: create, nominate, vote by ballot link, close, results — 2026-09-30
+
+Driven as: `secretary` at 1280×900, `member` at 390×844, and a signed-out
+voter on `/ballot` at 390×844, with a minted token standing in for the email
+(email is off here). Held: an empty create refused; seven double-clicks acted
+once; a pending nomination kept off the ballot; the link asked before casting,
+gave a receipt, and refused reuse, a bad token and no token; `member` refused
+every manage call. Fixed: W50-1 (LOW — a click on Add after typing a position
+was eaten by a click-away layer), W50-2 (LOW — start and end time pickers
+shared names), W50-3 (LOW — a plurality election read "Simple Majority"),
+W50-4 (MED — only the selected election tab was reachable by keyboard), W50-5
+(LOW — the stepper read as bare numbers on a phone), W50-6 (MED — a voter
+override needed a user ID, and was listed by it), W50-7 (LOW — the candidate
+form, ballot builder and attendance list named nothing), W50-8 (LOW — the
+ballot-email reason was a hover title, and the send claimed a summary emailed
+with email off). Flagged: W50-9 (MED — a member checked in after opening
+cannot vote), W50-10 (MED — an election closed early hides its results until
+the scheduled end), W50-11 (LOW — a positions-only election cannot email
+ballots). Open: W50-12, W50-13 (NIT). Gate: typecheck, lint, the election
+suites, flake8 and black clean; the election and ballot pytests pass.
+**Rotation stopped here:** W50-9 and W50-10 are decisions about who may vote
+and who may see results, which the rotation's instructions reserve for the
+owner. Next, once they are decided: W51.
 
 ### W49 — Facilities: a facility, its maintenance, inspections and settings — 2026-09-30
 
