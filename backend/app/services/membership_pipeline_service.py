@@ -2173,6 +2173,13 @@ class MembershipPipelineService:
         ``step_id``. Re-deriving "which package counts" differently here would
         let the drawer read "was not elected" beside an action that works.
         """
+        status = await self._latest_election_package_status(prospect)
+        return self._ELECTION_BLOCK_REASON.get(str(status or ""))
+
+    async def _latest_election_package_status(
+        self, prospect: ProspectiveMember
+    ) -> Optional[str]:
+        """Status of the package the drawer shows, or None when there is none."""
         result = await self.db.execute(
             select(ProspectElectionPackage.status)
             .where(ProspectElectionPackage.prospect_id == prospect.id)
@@ -2180,7 +2187,7 @@ class MembershipPipelineService:
             .limit(1)
         )
         status = result.scalars().first()
-        return self._ELECTION_BLOCK_REASON.get(str(status or ""))
+        return str(status) if status is not None else None
 
     async def _assert_election_decided(self, prospect: ProspectiveMember) -> None:
         """Refuse an advance off an election stage the vote has not cleared.
@@ -2196,6 +2203,19 @@ class MembershipPipelineService:
         reason = await self._election_block_reason(prospect)
         if reason:
             raise ValueError(f"This applicant {reason}")
+        # The department's rule: no package, no advance. Entering the stage
+        # creates one (ensure_election_package_on_entry), so this refuses only
+        # an applicant who reached the stage before that existed, or whose
+        # package was deleted -- the drawer's Create Package fixes either.
+        # Deliberately checked here and not in _election_block_reason: that
+        # read also gates transfer on every stage, and an applicant in a
+        # pipeline with no vote at all never has a package.
+        if await self._latest_election_package_status(prospect) is None:
+            raise ValueError(
+                "This applicant has no election package for this vote. Create "
+                "one from the applicant's Election Package section, then "
+                "advance once the vote is recorded."
+            )
 
     async def _assert_meeting_attended(
         self,

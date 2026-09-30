@@ -16,8 +16,10 @@ shape that only works against an ``AsyncMock`` cannot pass.
 
 Only the two states that reached a ballot are graded. "draft" and "ready" must
 keep advancing: a department that holds its vote at a meeting and records the
-outcome by hand never assigns a package, and gating those states would refuse
-every one of those advances.
+outcome by hand never assigns a package to a ballot, and gating those states
+would refuse every one of those advances. Having no package at all is refused:
+arriving on the stage creates one, so its absence means the vote was never set
+up.
 """
 
 import uuid
@@ -110,6 +112,14 @@ async def _prospect_on_the_vote(svc, org_id, pipeline_id):
             "email": f"a-{_uid()[:8]}@example.com",
             "pipeline_id": pipeline_id,
         },
+    )
+
+
+async def _remove_packages(db_session, prospect_id):
+    await db_session.execute(
+        ProspectElectionPackage.__table__.delete().where(
+            ProspectElectionPackage.prospect_id == prospect_id
+        )
     )
 
 
@@ -245,21 +255,25 @@ class TestElectionVoteStageGate:
 
         assert str(moved.current_step_id) != str(vote.id)
 
-    async def test_a_stage_with_no_package_at_all_advances(
+    async def test_a_stage_with_no_package_at_all_refuses_the_advance(
         self, db_session: AsyncSession, org_and_admin
     ):
-        """The off-platform vote — held at a meeting, recorded by hand. This
-        is the backward-compatible case the gate must not break."""
+        """The department's rule: no package, no advance. Arriving on the vote
+        creates one, so this stands for an applicant who reached the stage
+        before that did, or whose package was deleted."""
         org_id, admin_id = org_and_admin
         svc = MembershipPipelineService(db_session)
         pipeline, vote = await _election_stage_pipeline(
             svc, org_id, auto_transfer=False
         )
         prospect = await _prospect_on_the_vote(svc, org_id, pipeline.id)
+        await _remove_packages(db_session, prospect.id)
 
-        moved = await svc.advance_prospect(prospect.id, org_id, admin_id)
+        with pytest.raises(ValueError, match="no election package"):
+            await svc.advance_prospect(prospect.id, org_id, admin_id)
 
-        assert str(moved.current_step_id) != str(vote.id)
+        after = await svc.get_prospect(prospect.id, org_id)
+        assert str(after.current_step_id) == str(vote.id)
 
     @pytest.mark.parametrize(
         ("package_status", "fragment"),
@@ -315,24 +329,38 @@ class TestElectionVoteStageGate:
         assert after.status == ProspectStatus.TRANSFERRED
         assert after.transferred_user_id is not None
 
-    async def test_manual_transfer_unaffected_with_no_election_package(
+    async def test_manual_transfer_on_the_vote_refuses_with_no_package(
         self, db_session: AsyncSession, org_and_admin
     ):
-        """A pipeline that never uses the election feature must transfer
-        exactly as it always has."""
+        """Convert grades the stage the applicant is on with the same gate
+        Advance uses, so it is not a way around the no-package rule."""
         org_id, admin_id = org_and_admin
         svc = MembershipPipelineService(db_session)
         pipeline, _vote = await _election_stage_pipeline(
             svc, org_id, auto_transfer=False
         )
         prospect = await _prospect_on_the_vote(svc, org_id, pipeline.id)
-        # Arriving on the vote now creates a package; remove it to stand for
-        # an applicant who reached the stage before that, and so has none.
-        await db_session.execute(
-            ProspectElectionPackage.__table__.delete().where(
-                ProspectElectionPackage.prospect_id == prospect.id
-            )
+        await _remove_packages(db_session, prospect.id)
+
+        result = await svc.transfer_to_membership(prospect.id, org_id, admin_id)
+
+        assert result is not None
+        assert result["success"] is False
+        assert "no election package" in result["message"]
+
+    async def test_a_pipeline_with_no_vote_transfers_without_a_package(
+        self, db_session: AsyncSession, org_and_admin
+    ):
+        """A pipeline that never uses the election feature must transfer
+        exactly as it always has: the rule belongs to the vote stage, not to
+        every conversion."""
+        org_id, admin_id = org_and_admin
+        svc = MembershipPipelineService(db_session)
+        pipeline = await svc.create_pipeline(organization_id=org_id, name="Plain")
+        await svc.add_step(
+            pipeline.id, org_id, {"name": "Onboarding", "required": False}
         )
+        prospect = await _prospect_on_the_vote(svc, org_id, pipeline.id)
 
         result = await svc.transfer_to_membership(prospect.id, org_id, admin_id)
 

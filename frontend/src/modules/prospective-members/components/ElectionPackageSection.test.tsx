@@ -92,7 +92,7 @@ describe('ElectionPackageSection with no package', () => {
 
     expect(await screen.findByRole('button', { name: /create package/i })).toBeInTheDocument();
     expect(screen.queryByText(/auto-generated/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/cannot be put on a ballot yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/cannot be put on a ballot or advanced past this stage yet/i)).toBeInTheDocument();
   });
 
   it('creates the package for the stage the applicant is on and shows it', async () => {
