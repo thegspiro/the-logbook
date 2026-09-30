@@ -446,6 +446,29 @@ def _assert_open(prospect: ProspectiveMember, action: str) -> None:
     raise ValueError(f"This applicant is {reason} and cannot be {action}.{remedy}")
 
 
+TARGET_ROLE_SET_BY_KEY = "target_role_set_by"
+
+
+def _with_target_role_setter(
+    metadata: Dict[str, Any], target_role_id: Any, set_by: Optional[str]
+) -> Dict[str, Any]:
+    """``metadata`` with the target-role setter recorded by the server.
+
+    Automatic conversion applies a stored target role only while the member
+    who chose it may grant it (see ``_target_role_setter_may_grant``), so the
+    record of who chose it must not be writable by anyone else. Client metadata
+    reaches ``create_prospect`` verbatim -- a public form submission's answers
+    land at its top level -- so any incoming value is discarded and the key is
+    rewritten on every write of ``target_role_id``, the only way that column is
+    set.
+    """
+    result = copy.deepcopy(metadata)
+    result.pop(TARGET_ROLE_SET_BY_KEY, None)
+    if target_role_id and set_by:
+        result[TARGET_ROLE_SET_BY_KEY] = str(set_by)
+    return result
+
+
 class MembershipPipelineService:
     """Service for membership pipeline management"""
 
@@ -1676,7 +1699,11 @@ class MembershipPipelineService:
             target_role_id=data.get("target_role_id"),
             current_step_id=first_step_id,
             status=ProspectStatus.ACTIVE,
-            metadata_=data.get("metadata_", {}),
+            metadata_=_with_target_role_setter(
+                data.get("metadata_") or {},
+                data.get("target_role_id"),
+                created_by,
+            ),
             form_submission_id=data.get("form_submission_id"),
             notes=data.get("notes"),
             status_token=secrets.token_urlsafe(32),
@@ -1813,6 +1840,20 @@ class MembershipPipelineService:
                 allow_none=True,
                 label="target role",
             )
+            # Only a change re-records who chose the role. The applicant drawer
+            # re-sends target_role_id on every save, and re-recording then
+            # would hand the choice to whoever last edited a phone number --
+            # who may not be able to grant it -- and silently drop the role at
+            # automatic conversion. Reassigned, not mutated: metadata_ is a
+            # plain JSON column (pitfall #12).
+            new_role = data.get("target_role_id")
+            current_role = prospect.target_role_id
+            if (str(new_role) if new_role else None) != (
+                str(current_role) if current_role else None
+            ):
+                prospect.metadata_ = _with_target_role_setter(
+                    prospect.metadata_ or {}, new_role, updated_by
+                )
 
         # TRANSFERRED is derived, not chosen (see _apply_status_change) — the
         # dedicated status endpoint refuses to set or clear it. This generic
@@ -3820,6 +3861,49 @@ class MembershipPipelineService:
             initial_password=initial_password,
         )
 
+    async def _target_role_setter_may_grant(self, prospect: ProspectiveMember) -> bool:
+        """Whether the member who chose ``prospect.target_role_id`` may grant it.
+
+        The same ceiling ``_enforce_role_grant_ceiling`` applies to a person
+        assigning a role directly: every permission the role carries must be
+        within the setter's own effective permissions. Checked now rather than
+        only when the role was saved, so a setter who has since lost authority
+        (or left) no longer vouches for it. A role saved before the setter was
+        recorded has nobody to vouch for it and is not applied.
+        """
+        setter_id = (prospect.metadata_ or {}).get(TARGET_ROLE_SET_BY_KEY)
+        if not setter_id or not prospect.target_role_id:
+            return False
+
+        from app.api.dependencies import _collect_user_permissions
+        from app.core.permissions import permission_matches
+        from app.models.user import Role
+
+        setter = (
+            await self.db.execute(
+                select(User)
+                .where(
+                    User.id == str(setter_id),
+                    User.organization_id == prospect.organization_id,
+                    User.is_active,
+                )
+                .options(selectinload(User.positions))
+            )
+        ).scalar_one_or_none()
+        role = (
+            await self.db.execute(
+                select(Role).where(
+                    Role.id == str(prospect.target_role_id),
+                    Role.organization_id == prospect.organization_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if setter is None or role is None:
+            return False
+
+        granted = _collect_user_permissions(setter)
+        return all(permission_matches(p, granted) for p in role.permissions or [])
+
     async def _do_transfer(
         self,
         prospect: ProspectiveMember,
@@ -4094,8 +4178,33 @@ class MembershipPipelineService:
         # Already validated in-org: create_prospect and update_prospect assert
         # target_role_id belongs to the organization before storing it, and the
         # query below re-filters on organization_id regardless.
+        #
+        # SEC: the fallback is applied only while whoever chose the role still
+        # holds every permission it grants. An explicit role_ids is checked
+        # against the converting caller at the /transfer endpoint, which also
+        # passes the stored role explicitly there; this fallback is otherwise
+        # reached only by automatic conversion, where no one's authority is
+        # checked at the moment of conversion. Without this, anyone able to
+        # store a target role could have an administrator account minted on
+        # auto-transfer.
         if not role_ids and prospect.target_role_id:
-            role_ids = [str(prospect.target_role_id)]
+            if await self._target_role_setter_may_grant(prospect):
+                role_ids = [str(prospect.target_role_id)]
+            else:
+                await self._log_activity(
+                    prospect_id=prospect.id,
+                    action="target_role_not_applied",
+                    details={
+                        "target_role_id": str(prospect.target_role_id),
+                        "reason": (
+                            "The member who chose this position no longer holds "
+                            "every permission it grants, or who chose it was not "
+                            "recorded. Assign the position to the new member "
+                            "manually."
+                        ),
+                    },
+                    performed_by=transferred_by,
+                )
 
         assigned: List[Any] = []
         if role_ids:

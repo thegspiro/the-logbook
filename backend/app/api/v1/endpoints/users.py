@@ -835,6 +835,9 @@ async def _enforce_role_grant_ceiling(
     roles: list[Role],
     db: AsyncSession,
     ip_address: str | None,
+    *,
+    report: bool = True,
+    detail: str | None = None,
 ) -> None:
     """Prevent privilege escalation through role assignment.
 
@@ -849,17 +852,21 @@ async def _enforce_role_grant_ceiling(
 
     A blocked attempt is reported to security monitoring (a CRITICAL alert), so
     a user probing for an escalation path is visible even though it's denied.
+    ``report=False`` refuses without the alert, for a role the caller did not
+    choose -- one someone else stored on the record they are acting on.
     """
     caller_perms = _collect_user_permissions(current_user)
     for role in roles:
         for perm in role.permissions or []:
             if not _has_permission(perm, caller_perms):
-                await report_privilege_escalation_attempt(
-                    db, str(current_user.id), f"role:{role.id}", ip_address
-                )
+                if report:
+                    await report_privilege_escalation_attempt(
+                        db, str(current_user.id), f"role:{role.id}", ip_address
+                    )
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail=(
+                    detail=detail
+                    or (
                         "You cannot assign a role that grants permissions "
                         "beyond your own."
                     ),
