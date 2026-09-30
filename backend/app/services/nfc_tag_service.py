@@ -172,6 +172,18 @@ class NfcTagService:
             )
         ).scalar_one_or_none()
 
+        if existing and existing.status in _TERMINAL_CARD_STATUSES:
+            # Reissuing a revoked or lost card is a new registration, not a
+            # reactivation of the old one: the old row stays terminal (so the
+            # lifecycle guard in update_tag still holds) and stays on the
+            # previous holder's record as history. It only gives up its claim
+            # on the (organization_id, uid_hash) unique slot, by rehashing to a
+            # value no card read can produce — hash_tag_uid always hashes the
+            # installation pepper first, this never does.
+            existing.uid_hash = _retired_uid_hash(existing)
+            await self.db.flush()
+            existing = None
+
         if existing:
             # Naming the current holder would let anyone with card-issuing
             # rights turn a pile of found cards into a staff directory, so the
@@ -179,8 +191,9 @@ class NfcTagService:
             if existing.user_id == str(user_id):
                 raise ValueError("This card is already registered to this member.")
             raise ValueError(
-                "This card is already registered to another member. "
-                "Revoke the existing registration before reissuing it."
+                "This card is already registered to another member and is still "
+                "in use. Mark that registration lost or revoked, then register "
+                "the card again."
             )
 
         tag = NfcTag(
@@ -730,6 +743,16 @@ class NfcTagService:
             "member_name": names.get(tag.user_id),
             "issued_by_name": names.get(tag.issued_by) if tag.issued_by else None,
         }
+
+
+def _retired_uid_hash(tag: NfcTag) -> str:
+    """Tombstone hash for a terminal card whose serial is being reissued.
+
+    Keyed on the row id so two retirements of the same serial cannot collide
+    on the unique constraint, and never equal to any ``hash_tag_uid`` output
+    because that one always starts from the installation's pepper.
+    """
+    return hashlib.sha256(f"retired:{tag.id}:{tag.uid_hash}".encode()).hexdigest()
 
 
 def _as_utc(value: datetime) -> datetime:

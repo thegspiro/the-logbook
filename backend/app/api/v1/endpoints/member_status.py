@@ -313,12 +313,20 @@ async def change_member_status(
             detail=f"Invalid status '{request.new_status}'. Valid values: {valid}",
         )
 
-    # Load the target member
+    # Load the target member, locked. The status check and the service-stint
+    # write below are a read-then-write (Pitfall #27): two officers dropping
+    # the same member at once would both read "active", both close a stint,
+    # and the member's service would be counted twice. A locking read, with
+    # populate_existing, so the request that waits reads the status the first
+    # one committed -- and stops at the "already" check -- rather than the
+    # snapshot or identity-map copy from before it.
     result = await db.execute(
         select(User)
         .where(User.id == str(user_id))
         .where(User.organization_id == current_user.organization_id)
         .where(User.deleted_at.is_(None))
+        .with_for_update()
+        .execution_options(populate_existing=True)
         .options(selectinload(User.roles))
     )
     member = ensure_found(result.scalar_one_or_none(), "Member")
