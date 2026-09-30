@@ -171,9 +171,9 @@ def render_certified_results_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> 
 
     # ── Results per position ─────────────────────────────────────────
     for position in results.get("results_by_position", []):
-        story.append(
-            Paragraph(f"Results — {_esc(position.get('position'))}", section_style)
-        )
+        # A ballot item's position is its id; its title is what the reader knows.
+        contest = position.get("label") or position.get("position")
+        story.append(Paragraph(f"Results — {_esc(contest)}", section_style))
         rows = [["Candidate", "Votes", "%", "Outcome"]]
         for cand in position.get("candidates", []):
             if cand.get("is_winner"):

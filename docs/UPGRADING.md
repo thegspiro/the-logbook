@@ -262,6 +262,29 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Close any election that is OPEN before you upgrade (2026-09-30)
+
+Do not upgrade over an election whose status is **Open**. Close it first, or
+wait until it has closed, and do not open a new one until the upgrade is
+done.
+
+This release changes how a vote on a **ballot-item** election (a motion, an
+Approve/Deny question, an officer seat set up as a ballot item rather than a
+plain position) is stored and recognised as a duplicate. A vote cast from the
+signed-in ballot before the upgrade carries no position; one cast after it
+carries the ballot item's id, and the emailed-link route keys the same vote by
+a hash of that id. The two shapes do not match each other, so a member who
+voted in-app before the upgrade could vote once more on the same item
+afterwards — from the app, from their emailed link, or through a proxy — and
+both votes would count. Turnout on that election may also count such a member
+twice.
+
+Votes already stored are not rewritten: a closed election's tally is a
+certified record and is left exactly as it was. An election that is still in
+**Draft** or **Nominations** has no votes and is unaffected. Only an election
+that is accepting votes across the deploy is exposed, which is why the
+instruction is simply to close it, or not to upgrade until it has closed.
+
 ### Recurring events keep their local time, and series edits stop moving dates (2026-09-28)
 
 A new recurring series is now laid out in the department's own time: a

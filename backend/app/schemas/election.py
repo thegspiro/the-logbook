@@ -914,6 +914,9 @@ class PositionResults(BaseModel):
     """Results for a specific position"""
 
     position: str
+    # Set for a ballot-item contest, whose ``position`` is the item's id;
+    # the screen, email and certified PDF show this instead.
+    label: Optional[str] = None
     total_votes: int
     candidates: List[CandidateResult]
     is_tie: bool = False

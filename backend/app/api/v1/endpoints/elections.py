@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -1208,6 +1208,44 @@ async def update_election(
                 detail="Percentage quorum cannot exceed 100",
             )
 
+    # A nominee keeps a position string the election no longer lists: the
+    # ballot and results are built from election.positions, so the candidate
+    # silently vanishes from both while still sitting on the candidate list,
+    # and the member never learns their nomination evaporated. Refuse to
+    # shrink the set past a nominee; adding positions is always fine.
+    if "positions" in update_data:
+        new_positions = set(update_data["positions"] or [])
+        nominated = (
+            (
+                await db.execute(
+                    select(Candidate.position)
+                    .where(Candidate.election_id == election.id)
+                    .where(Candidate.position.is_not(None))
+                    .distinct()
+                )
+            )
+            .scalars()
+            .all()
+        )
+        # A ballot-item candidate is keyed by its item (position, title or
+        # id), not by election.positions, so it is never orphaned by this
+        # list changing; without this exclusion any PATCH carrying positions
+        # on a ballot-item election reported every item candidate.
+        item_positions: set = set()
+        for item in election.ballot_items or []:
+            item_positions.update(ballot_item_candidate_positions(item))
+        orphaned = sorted(
+            p for p in nominated if p not in new_positions and p not in item_positions
+        )
+        if orphaned:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Remove or reassign nominees for "
+                    f"{', '.join(orphaned)} before dropping the position"
+                ),
+            )
+
     for field, value in update_data.items():
         if field in ALLOWED_ELECTION_UPDATE_FIELDS:
             setattr(election, field, value)
@@ -1263,6 +1301,32 @@ async def delete_election(
     election_status = election.status.value
     reason = delete_data.reason if delete_data else None
     notifications_sent = 0
+
+    # ``parent_election_id`` is ondelete=RESTRICT with no ORM cascade, so the
+    # delete below would fail at commit with MySQL 1451 and surface as a 500
+    # — after the leadership alert had already gone out and the audit row
+    # been written for a deletion that never happened. Refuse up front, before
+    # either side effect, and name the runoffs so the officer can act on it.
+    runoff_children = (
+        (
+            await db.execute(
+                select(Election.id)
+                .where(Election.parent_election_id == str(election_id))
+                .where(Election.organization_id == str(current_user.organization_id))
+                .where(Election.is_runoff.is_(True))
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if runoff_children:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This election has runoff election(s) that must be deleted "
+                f"first: {', '.join(runoff_children)}"
+            ),
+        )
 
     # Non-draft elections require a reason and trigger leadership alerts
     if election.status != ElectionStatus.DRAFT:
@@ -1340,6 +1404,23 @@ async def delete_election(
     )
 
 
+def _service_error_status(error: str) -> int:
+    """The status a service's ``(result, error)`` string maps to.
+
+    The service layer reports a missing election as the string
+    ``"Election not found"`` rather than raising, and several lifecycle
+    endpoints used to answer every such string with 400. The frontend reads
+    the status, so a deleted election read as "bad request" on Open and
+    Rollback while every by-id GET said 404. One definition, so the string
+    comparison cannot drift between call sites (Pitfall #29).
+    """
+    return (
+        status.HTTP_404_NOT_FOUND
+        if "not found" in error.lower()
+        else status.HTTP_400_BAD_REQUEST
+    )
+
+
 @router.post("/{election_id}/open", response_model=ElectionResponse)
 async def open_election(
     election_id: UUID,
@@ -1358,7 +1439,7 @@ async def open_election(
     )
 
     if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+        raise HTTPException(status_code=_service_error_status(error), detail=error)
 
     return await _build_election_response(db, election)
 
@@ -1921,7 +2002,7 @@ async def rollback_election(
     )
 
     if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+        raise HTTPException(status_code=_service_error_status(error), detail=error)
 
     return ElectionRollbackResponse(
         success=True,
@@ -1966,6 +2047,27 @@ async def list_candidates(
         or user_has_permission(current_user, "elections.manage")
     )
     return await service.list_candidates(election_id, accepted_only=not include_pending)
+
+
+# Candidate fields that change what a cast ballot refers to; see update_candidate.
+CANDIDATE_IDENTITY_FIELDS = frozenset({"name", "position", "accepted"})
+
+
+async def _active_vote_count(db: AsyncSession, candidate_id: UUID) -> int:
+    """Votes still standing for a candidate — the one definition update and
+    delete both consult, so the two can never disagree on "has votes".
+
+    Test ballots are excluded: they never enter a tally, so a rehearsal
+    with a test token must not freeze the candidate list before a real
+    voter has spoken.
+    """
+    votes_result = await db.execute(
+        select(func.count(Vote.id))
+        .where(Vote.candidate_id == str(candidate_id))
+        .where(Vote.deleted_at.is_(None))
+        .where(Vote.is_test.is_(False))
+    )
+    return votes_result.scalar() or 0
 
 
 @router.post(
@@ -2100,8 +2202,52 @@ async def update_candidate(
             status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found"
         )
 
-    # Update fields
+    # Same lifecycle rule as create_candidate: once the polls have closed the
+    # candidate list is part of the certified result and must not change.
+    if election.status == ElectionStatus.CLOSED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot edit candidates in a closed election",
+        )
+
+    # Keyed on update_data rather than the schema attribute so an explicit
+    # null is validated too (exclude_unset keeps "omitted" distinct from
+    # "cleared", per CLAUDE.md pitfall 1).
     update_data = candidate_update.model_dump(exclude_unset=True)
+    if "position" in update_data and election.positions:
+        if update_data["position"] not in election.positions:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Position '{update_data['position']}' is not defined for "
+                    f"this election. Valid positions: {', '.join(election.positions)}"
+                ),
+            )
+
+    # Vote signatures embed candidate_id only, so renaming or re-positioning a
+    # candidate who already has votes changes what the ballots mean while
+    # verify_vote_integrity keeps reporting them untampered; a position move
+    # also drops those votes out of their contest in the tally. Freeze the
+    # identity fields once a vote exists; statement, photo and ordering stay
+    # editable.
+    # Compared by value, not by key: the edit form always resubmits the name
+    # and position it was seeded with, so keying on presence would refuse a
+    # statement-only edit during any election with a vote.
+    identity_edits = {
+        field
+        for field in update_data.keys() & CANDIDATE_IDENTITY_FIELDS
+        if update_data[field] != getattr(candidate, field)
+    }
+    if identity_edits and await _active_vote_count(db, candidate_id) > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Cannot change a candidate's name, position or acceptance "
+                "once votes have been cast"
+            ),
+        )
+
+    previous = {field: getattr(candidate, field) for field in CANDIDATE_IDENTITY_FIELDS}
     for field, value in update_data.items():
         setattr(candidate, field, value)
 
@@ -2120,6 +2266,7 @@ async def update_candidate(
             "candidate_id": str(candidate_id),
             "candidate_name": candidate.name,
             "updated_fields": list(update_data.keys()),
+            "previous": previous,
         },
         user_id=str(current_user.id),
     )
@@ -2164,15 +2311,7 @@ async def delete_candidate(
             status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found"
         )
 
-    # Check for active (non-deleted) votes
-    votes_result = await db.execute(
-        select(func.count(Vote.id))
-        .where(Vote.candidate_id == str(candidate_id))
-        .where(Vote.deleted_at.is_(None))
-    )
-    vote_count = votes_result.scalar() or 0
-
-    if vote_count > 0:
+    if await _active_vote_count(db, candidate_id) > 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot delete candidate with existing votes",
@@ -2355,7 +2494,7 @@ async def cast_bulk_votes(
 async def get_results(
     election_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("elections.view")),
 ):
     """
     Get election results
@@ -2364,7 +2503,7 @@ async def get_results(
     - Election is closed, OR
     - results_visible_immediately is True
 
-    **Authentication required**
+    **Requires permission: elections.view**
     """
     service = ElectionService(db)
     try:
@@ -2439,6 +2578,18 @@ async def send_ballot_emails(
     if not election:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
+        )
+
+    # A closed or cancelled election can never take a vote again, so a ballot
+    # sent for one mints dead tokens and mails members a link that answers
+    # "Election is closed". Pre-open sends stay allowed for now: the token
+    # lookup deliberately tolerates tokens minted before opening, and the
+    # /test-ballot preview relies on the same service, so the gate lives here
+    # rather than in the service.
+    if election.status in (ElectionStatus.CLOSED, ElectionStatus.CANCELLED):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Ballot emails cannot be sent for a {election.status.value} election",
         )
 
     # Build base ballot URL pointing to the frontend ballot page.
@@ -2852,7 +3003,7 @@ async def verify_vote_integrity(
 async def soft_delete_vote(
     election_id: UUID,
     vote_id: UUID,
-    reason: str,
+    reason: str = Query(..., min_length=3, max_length=500),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("elections.manage")),
 ):
@@ -2865,10 +3016,23 @@ async def soft_delete_vote(
     **Authentication required**
     **Requires permission: elections.manage**
     """
+    # The reason is the only explanation the forensics report will ever
+    # carry for this deletion; whitespace satisfies min_length but says
+    # nothing.
+    if not reason.strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="A reason is required to void a vote",
+        )
+
     service = ElectionService(db)
     try:
         vote = await service.soft_delete_vote(
-            vote_id, current_user.id, reason, current_user.organization_id
+            vote_id,
+            current_user.id,
+            reason,
+            current_user.organization_id,
+            election_id=election_id,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -2974,16 +3138,26 @@ async def check_in_attendee(
     **Authentication required**
     **Requires permission: elections.manage**
     """
+    # AttendeeCheckIn.user_id is a plain string, so a mistyped id from the
+    # attendance form used to escape here as an unhandled ValueError (500).
+    try:
+        user_id = UUID(check_in.user_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="user_id must be a UUID",
+        )
+
     service = ElectionService(db)
     attendee, error = await service.check_in_attendee(
         election_id=election_id,
         organization_id=current_user.organization_id,
-        user_id=UUID(check_in.user_id),
+        user_id=user_id,
         checked_in_by=current_user.id,
     )
 
     if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+        raise HTTPException(status_code=_service_error_status(error), detail=error)
 
     # Get updated total
     attendees = await service.get_attendees(election_id, current_user.organization_id)
@@ -3022,7 +3196,7 @@ async def remove_attendee(
     )
 
     if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+        raise HTTPException(status_code=_service_error_status(error), detail=error)
 
     return {"success": True, "message": "Attendee removed"}
 
