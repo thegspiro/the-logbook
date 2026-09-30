@@ -98,6 +98,10 @@ export interface Event {
   /** The caller's own RSVP, so the modal can open prefilled rather than
    * resetting and silently discarding what they had entered. */
   user_rsvp?: UserRSVP | null;
+
+  /** When self check-in closes, as the backend's check-in window defines it.
+   * Later than end_datetime for a "window" event with minutes after. */
+  check_in_closes_at?: string | null;
 }
 
 /** The current user's own RSVP, echoed back on the event detail response.

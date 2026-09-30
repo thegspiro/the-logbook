@@ -1822,4 +1822,72 @@ describe('EventDetailPage', () => {
       expect(screen.getByText('RSVP Required')).toBeInTheDocument();
     });
   });
+
+  describe('Calendar and check-in QR actions', () => {
+    const minutesFromNow = (minutes: number) => new Date(Date.now() + minutes * 60_000).toISOString();
+
+    beforeEach(() => {
+      vi.mocked(eventService.getEvent).mockReset();
+      vi.mocked(eventService.getEventRSVPs).mockReset();
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
+      vi.mocked(eventService.getEventStats).mockReset();
+    });
+
+    it('offers both on an upcoming event', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({ ...mockEvent, check_in_closes_at: mockEvent.end_datetime });
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByRole('button', { name: /Add to Calendar/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /View QR Code/ })).toBeInTheDocument();
+    });
+
+    it('offers neither once the event is over and check-in has closed', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        start_datetime: '2020-04-15T18:00:00Z',
+        end_datetime: '2020-04-15T20:00:00Z',
+        rsvp_deadline: undefined,
+        check_in_closes_at: '2020-04-15T20:00:00Z',
+      });
+
+      renderWithRouter(<EventDetailPage />);
+
+      await screen.findByRole('heading', { level: 1 });
+      expect(screen.queryByRole('button', { name: /Add to Calendar/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /View QR Code/ })).not.toBeInTheDocument();
+    });
+
+    // A "window" event keeps accepting check-ins after its scheduled end, so
+    // the QR code outlives the calendar button until the backend's close.
+    it('keeps the QR code while check-in is still open past the scheduled end', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        start_datetime: minutesFromNow(-120),
+        end_datetime: minutesFromNow(-5),
+        rsvp_deadline: undefined,
+        check_in_window_type: 'window',
+        check_in_minutes_after: 15,
+        check_in_closes_at: minutesFromNow(10),
+      });
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByRole('button', { name: /View QR Code/ })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Add to Calendar/ })).not.toBeInTheDocument();
+    });
+
+    it('hides the QR code once attendance is finalized', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        check_in_closes_at: mockEvent.end_datetime,
+        attendance_finalized_at: '2026-01-21T10:00:00Z',
+      });
+
+      renderWithRouter(<EventDetailPage />);
+
+      await screen.findByRole('heading', { level: 1 });
+      expect(screen.queryByRole('button', { name: /View QR Code/ })).not.toBeInTheDocument();
+    });
+  });
 });

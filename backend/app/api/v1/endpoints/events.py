@@ -255,6 +255,7 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
         updated_by=event.updated_by,
         created_at=event.created_at,
         updated_at=event.updated_at,
+        check_in_closes_at=EventService._get_check_in_window(event)[1],
         **extra_fields,
     )
 

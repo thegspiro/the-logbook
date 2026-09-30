@@ -853,6 +853,12 @@ export const EventDetailPage: React.FC = () => {
     !isPastEvent &&
     !isAttendanceFinalized &&
     (!event.rsvp_deadline || new Date(event.rsvp_deadline) > new Date());
+  // The QR code exists to check in, so it goes when checking in stops being
+  // possible. The close comes from the backend's window rather than the
+  // scheduled end: a "window" event accepts check-ins for a while after it.
+  // Payloads predating the field fall back to the event being over.
+  const checkInClosed = event.check_in_closes_at ? new Date(event.check_in_closes_at) <= new Date() : isEventOver;
+  const showCheckInQrCode = !event.is_cancelled && !isAttendanceFinalized && !checkInClosed;
 
   // RSVP deadline countdown
   const rsvpCountdown = (() => {
@@ -1007,33 +1013,37 @@ export const EventDetailPage: React.FC = () => {
                     {rsvpCountdown.text}
                   </span>
                 )}
-                <button
-                  onClick={() => void navigate(`/events/${eventId}/qr-code`)}
-                  className="btn-secondary inline-flex items-center border-blue-300 text-sm font-medium text-blue-700 shadow-xs hover:bg-blue-500/20 dark:text-blue-400"
-                >
-                  <svg
-                    className="mr-2 h-5 w-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
+                {showCheckInQrCode && (
+                  <button
+                    onClick={() => void navigate(`/events/${eventId}/qr-code`)}
+                    className="btn-secondary inline-flex items-center border-blue-300 text-sm font-medium text-blue-700 shadow-xs hover:bg-blue-500/20 dark:text-blue-400"
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"
-                    />
-                  </svg>
-                  View QR Code
-                </button>
-                <button
-                  onClick={() => downloadICSFile(event)}
-                  className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors"
-                >
-                  <CalendarPlus className="h-4 w-4" />
-                  Add to Calendar
-                </button>
+                    <svg
+                      className="mr-2 h-5 w-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"
+                      />
+                    </svg>
+                    View QR Code
+                  </button>
+                )}
+                {!isEventOver && (
+                  <button
+                    onClick={() => downloadICSFile(event)}
+                    className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors"
+                  >
+                    <CalendarPlus className="h-4 w-4" />
+                    Add to Calendar
+                  </button>
+                )}
                 {/* Outside the canManage group on purpose: events.reopen_attendance
                     is deliberately independent of events.manage, so a role that
                     holds only the recovery grant still gets the control the

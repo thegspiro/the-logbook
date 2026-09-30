@@ -512,6 +512,13 @@ class EventResponse(EventBase, UTCResponseBase):
     # here — this is not the roster other members see.
     user_rsvp: Optional["UserRSVPSummary"] = None
 
+    # When self check-in stops being accepted, derived by
+    # EventService._get_check_in_window exactly as on EventListItem. The detail
+    # screen hides the check-in QR code past this point; it is not the
+    # scheduled end, because a "window" event keeps accepting check-ins for
+    # check_in_minutes_after beyond it.
+    check_in_closes_at: Optional[datetime] = None
+
     model_config = _response_config
 
 
