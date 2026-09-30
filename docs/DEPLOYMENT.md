@@ -285,6 +285,56 @@ If you have your own SSL certificates:
    sudo systemctl reload nginx
    ```
 
+### Docker Compose `production` profile
+
+`docker compose --profile production up -d` adds an nginx container that
+terminates TLS on port 443, redirects port 80 to HTTPS, and proxies to the
+`frontend` and `backend` services. It reads `infrastructure/nginx/docker.conf`;
+the `nginx.conf` beside it, and `scripts/setup-ssl.sh` above, are for nginx
+installed on the host and are not used here.
+
+The container reads its certificate from `infrastructure/nginx/ssl/`, as
+`fullchain.pem` and `privkey.pem`, and **will not start without both**. Both
+names are covered by `.gitignore`, so a key placed there cannot be committed.
+Run the commands below from the repository root.
+
+1. **Start with a temporary self-signed certificate.** This gets nginx running
+   so it can answer Let's Encrypt's challenge. It is also all you need to try
+   the profile out, if the browser warning is acceptable:
+
+   ```bash
+   mkdir -p infrastructure/nginx/ssl infrastructure/nginx/certbot
+   openssl req -x509 -newkey rsa:2048 -nodes -days 7 -subj "/CN=localhost" \
+     -keyout infrastructure/nginx/ssl/privkey.pem \
+     -out infrastructure/nginx/ssl/fullchain.pem
+   docker compose --profile production up -d
+   ```
+
+2. **Issue the real certificate.** Certbot writes its challenge into
+   `infrastructure/nginx/certbot/`, which the container serves on port 80. The
+   `--deploy-hook` copies the result over the temporary certificate and reloads
+   nginx. Certbot saves the hook and runs it again after every renewal, so
+   renewals need no further steps and no downtime:
+
+   ```bash
+   DOMAIN=logbook.yourdept.org
+   sudo certbot certonly --webroot -w "$PWD/infrastructure/nginx/certbot" -d "$DOMAIN" \
+     --deploy-hook "cp -L /etc/letsencrypt/live/$DOMAIN/fullchain.pem /etc/letsencrypt/live/$DOMAIN/privkey.pem $PWD/infrastructure/nginx/ssl/ && docker exec intranet-nginx nginx -s reload"
+   ```
+
+   `cp -L` matters: the files under `live/` are symlinks into
+   `/etc/letsencrypt/archive/`, which the container cannot see.
+
+3. **Point the application at the HTTPS address.** Set `FRONTEND_URL` and
+   `ALLOWED_ORIGINS` in `.env` to `https://logbook.yourdept.org`, then
+   `docker compose --profile production up -d` again.
+
+Port 80 redirects to the same host on port 443, so publish HTTPS on 443
+(`NGINX_HTTPS_PORT` is `443` by default). The access-log exclusions, the 60 MB
+upload limit and the rate limits match the host configuration;
+`backend/tests/test_nginx_config_consistency.py` keeps the parts that must
+agree with the backend in step.
+
 ---
 
 ## Security Checklist
