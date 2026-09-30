@@ -341,31 +341,34 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   fetchPendingApprovals: async () => {
     try {
       const pendingApprovals = await approvalService.getPending();
-      set({ pendingApprovals });
+      set({ pendingApprovals, error: null });
     } catch (err) {
       set({ error: handleStoreError(err, 'Failed to load pending approvals'), isLoading: false });
     }
   },
 
+  // A decision rejects to its caller instead of landing in `error`: the dialog
+  // that made it has to stay open and name the API's reason (a self-approval
+  // refusal, a step that moved on), and the page-level banner `error` feeds is
+  // shared with whatever that page loaded. Refreshing the list afterwards is
+  // best-effort — the decision itself has already been recorded.
   approveStep: async (stepRecordId, notes) => {
-    set({ isLoading: true, error: null });
+    await approvalService.approve(stepRecordId, notes);
     try {
-      await approvalService.approve(stepRecordId, notes);
       const pendingApprovals = await approvalService.getPending();
-      set({ pendingApprovals, isLoading: false });
+      set({ pendingApprovals });
     } catch (err) {
-      set({ error: handleStoreError(err, 'Failed to approve'), isLoading: false });
+      set({ error: handleStoreError(err, 'Failed to refresh pending approvals') });
     }
   },
 
   denyStep: async (stepRecordId, notes) => {
-    set({ isLoading: true, error: null });
+    await approvalService.deny(stepRecordId, notes);
     try {
-      await approvalService.deny(stepRecordId, notes);
       const pendingApprovals = await approvalService.getPending();
-      set({ pendingApprovals, isLoading: false });
+      set({ pendingApprovals });
     } catch (err) {
-      set({ error: handleStoreError(err, 'Failed to deny'), isLoading: false });
+      set({ error: handleStoreError(err, 'Failed to refresh pending approvals') });
     }
   },
 
