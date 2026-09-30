@@ -166,6 +166,31 @@ describe('MyEquipmentPage', () => {
     expect(gearNames).toEqual(['Work Gloves', 'Turnout Coat', 'Thermal Camera']);
   });
 
+  it('tells the member what happens after they notify a return', async () => {
+    mockGetUserInventory.mockResolvedValue(fullInv);
+    const user = userEvent.setup();
+    renderWithRouter(<MyEquipmentPage />);
+    await screen.findByText('Turnout Coat');
+
+    await user.click(screen.getByRole('button', { name: 'Notify quartermaster of return: Turnout Coat' }));
+
+    expect(
+      await screen.findByText(/Hand the item in as usual; it stays on your list until they confirm they have it/)
+    ).toBeInTheDocument();
+  });
+
+  it('counts a single item in the singular', async () => {
+    mockGetUserInventory.mockResolvedValue({
+      ...fullInv,
+      issued_items: [],
+      active_checkouts: [],
+      permanent_assignments: fullInv.permanent_assignments.slice(0, 1),
+    });
+    renderWithRouter(<MyEquipmentPage />);
+
+    expect(await screen.findByText('(1 item)')).toBeInTheDocument();
+  });
+
   it('submits a return request for an assignment row', async () => {
     mockGetUserInventory.mockResolvedValue(fullInv);
     const user = userEvent.setup();
