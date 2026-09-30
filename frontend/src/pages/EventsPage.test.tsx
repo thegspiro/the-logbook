@@ -616,9 +616,18 @@ describe('EventsPage', () => {
   describe('Quick RSVP refresh', () => {
     // Pitfall #28: this block installs the mocks it depends on rather than
     // inheriting whatever a previous block configured.
+    // The shared fixtures are fixed dates that have since passed, and the card
+    // withholds RSVP controls on an ended event, so this block needs events
+    // that are still ahead of the real clock.
+    const upcomingEvents: EventListItem[] = mockEvents.map((event, i) => ({
+      ...event,
+      start_datetime: new Date(Date.now() + (i + 1) * 86_400_000).toISOString(),
+      end_datetime: new Date(Date.now() + (i + 1) * 86_400_000 + 3_600_000).toISOString(),
+    }));
+
     beforeEach(() => {
       vi.mocked(eventService.getEvents).mockReset();
-      vi.mocked(eventService.getEvents).mockResolvedValue(mockEvents);
+      vi.mocked(eventService.getEvents).mockResolvedValue(upcomingEvents);
       vi.mocked(eventService.createOrUpdateRSVP).mockReset();
       vi.mocked(eventService.createOrUpdateRSVP).mockResolvedValue({ status: 'going' } as never);
     });

@@ -1937,6 +1937,30 @@ describe('Dashboard', () => {
       expect(screen.queryByRole('button', { name: /^going$/i })).not.toBeInTheDocument();
     });
 
+    it('falls back to a link once the event has ended', async () => {
+      // An open tab outlives the end_after filter the list was fetched with,
+      // and the API refuses every RSVP to an event that has ended.
+      mockGetEvents.mockResolvedValue([
+        {
+          id: 'evt-1',
+          title: 'Ladder Ops Drill',
+          event_type: 'training',
+          // Seconds ago, so it still falls on today's local date and stays
+          // inside the timeline window while having already ended.
+          start_datetime: new Date(Date.now() - 2_000).toISOString(),
+          end_datetime: new Date(Date.now() - 1_000).toISOString(),
+          requires_rsvp: false,
+          is_mandatory: false,
+          is_cancelled: false,
+        },
+      ]);
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByRole('button', { name: /^open$/i })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^going$/i })).not.toBeInTheDocument();
+    });
+
     it('falls back to a link when the event does not accept "going"', async () => {
       // The row only submits `going`; on a maybe-only event the API rejects it
       // deterministically, so the member is better served by the link.

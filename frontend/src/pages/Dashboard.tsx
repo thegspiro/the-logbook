@@ -61,7 +61,13 @@ import { signOffService } from '../modules/prospective-members/services/api';
 import type { PendingSignOff } from '../modules/prospective-members/types';
 import { endOfReportingDayUTC, startOfReportingDayUTC } from '../modules/admin-hours/utils/reportingRange';
 import { getErrorMessage } from '../utils/errorHandling';
-import { getProgressBarColor, getEventTypeLabel, getRSVPStatusLabel, getRSVPStatusColor } from '../utils/eventHelpers';
+import {
+  getProgressBarColor,
+  getEventTypeLabel,
+  getRSVPStatusLabel,
+  getRSVPStatusColor,
+  isRsvpClosed,
+} from '../utils/eventHelpers';
 import { requirementTarget } from '../utils/pipelineProgress';
 import { formatHours } from '../utils/hoursFormatting';
 import { useTimezone } from '../hooks/useTimezone';
@@ -1625,7 +1631,7 @@ const Dashboard: React.FC = () => {
                 {getRSVPStatusLabel(evt.user_rsvp_status)}
               </span>
             ) : evt.is_cancelled ||
-              (evt.rsvp_deadline && new Date(evt.rsvp_deadline) <= new Date()) ||
+              isRsvpClosed(evt) ||
               // This row only submits `going`, so an event that does not accept
               // it has nothing here that can succeed — the API rejects the
               // request deterministically against allowed_rsvp_statuses.
@@ -1641,8 +1647,8 @@ const Dashboard: React.FC = () => {
               /* Inline, matching the open-shift row above: a member answers
                  where they are instead of navigating to the detail page and
                  back. requires_rsvp is not consulted — it says a response is
-                 expected, not that one is accepted. A passed rsvp_deadline is
-                 consulted, above: the API rejects those, and a prominent
+                 expected, not that one is accepted. A passed rsvp_deadline or end
+                 time is consulted, above: the API rejects those, and a prominent
                  dashboard button that can never succeed is worse than a link. */
               <div className="flex shrink-0 items-center gap-2">
                 <button
