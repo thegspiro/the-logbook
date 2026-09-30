@@ -16,7 +16,7 @@ from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.error_codes import catalog_entries
-from app.core.error_reporting import sanitize_path
+from app.core.error_reporting import is_excluded_client_path, sanitize_path
 from app.core.security import is_rate_limited
 from app.core.security_middleware import get_client_ip
 from app.core.utils import utc_isoformat
@@ -166,6 +166,15 @@ async def log_error(
             detail="Too many error reports. Please try again later.",
             headers={"Retry-After": str(ERROR_LOG_RATE_WINDOW_SECONDS)},
         )
+
+    # A report about the anonymous side of the suggestion box would store the
+    # member who sent it against the route and the second (see
+    # EXCLUDED_PATH_PREFIXES). Current clients never send one; this also
+    # covers a build cached before they stopped. Discarded quietly, as a 2xx,
+    # so the client neither retries it nor reports the refusal.
+    path = data.context.get("path")
+    if isinstance(path, str) and is_excluded_client_path(path):
+        return {"status": "discarded", "id": None}
 
     error = ErrorLog(
         organization_id=current_user.organization_id,

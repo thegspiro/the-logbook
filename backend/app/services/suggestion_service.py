@@ -24,6 +24,13 @@ Anonymity invariants — every one is load-bearing, and the tests in
   never persisted or logged.
 * Screenshots are decoded and re-encoded, which drops EXIF (GPS position,
   device serial) and the client's filename, either of which can name a person.
+* No request log records a submission or follow-up: an access line would hold
+  the exact second and the client IP. ``UNLOGGED_PATH`` in
+  ``app.core.logging`` and the bundled nginx configs carry the route pattern,
+  so a new anonymous-side route must be added to all three. Nor is a failure
+  on these routes filed to ``error_logs``, which would store the caller's
+  ``user_id`` (``is_excluded_path`` / ``is_excluded_client_path`` in
+  ``app.core.error_reporting``, and the frontend's ``reportApiError``).
 """
 
 import asyncio

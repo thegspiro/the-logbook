@@ -16,6 +16,7 @@ from app.core.error_reporting import (
     MAX_ERROR_TYPE_LENGTH,
     build_error_type,
     extract_request_identity,
+    is_excluded_client_path,
     is_excluded_path,
     persist_error_log,
     sanitize_path,
@@ -271,3 +272,69 @@ class TestIsExcludedPath:
     def test_other_paths_are_not_excluded(self):
         assert not is_excluded_path("/api/v1/events")
         assert not is_excluded_path("/api/v1/users/errors-report")
+
+    def test_the_anonymous_suggestion_routes_are_excluded(self):
+        """A row would carry the submitter's user_id against the route and the
+        second, on a page administrators read."""
+        assert is_excluded_path("/api/v1/suggestions/boxes/b1/submissions")
+        assert is_excluded_path("/api/v1/suggestions/follow-up/lookup")
+        assert is_excluded_path("/api/v1/suggestions/follow-up/messages")
+
+    def test_the_named_suggestion_routes_are_not_excluded(self):
+        assert not is_excluded_path("/api/v1/suggestions/mine/s1/messages")
+        assert not is_excluded_path("/api/v1/suggestions/review/s1")
+
+
+class TestIsExcludedClientPath:
+    @pytest.mark.parametrize(
+        "path",
+        [
+            # What the frontend actually sends: the service's own path,
+            # relative to the /api/v1 baseURL.
+            "/suggestions/boxes/b1/submissions",
+            "/suggestions/follow-up/lookup",
+            "/api/v1/suggestions/boxes/b1/submissions",
+            "https://logbook.example.org/api/v1/suggestions/boxes/b1/submissions",
+            "/errors/log",
+        ],
+    )
+    def test_excluded(self, path):
+        assert is_excluded_client_path(path)
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/suggestions/mine/s1/messages",
+            "/events/1",
+            "https://logbook.example.org/api/v1/events",
+        ],
+    )
+    def test_not_excluded(self, path):
+        assert not is_excluded_client_path(path)
+
+
+class TestPersistErrorLogSkipsAnonymousSuggestions:
+    async def test_an_identified_failure_is_not_written(self, monkeypatch):
+        """The request carries a valid identity, so only the path exclusion
+        stands between it and a row naming the member."""
+        import app.core.database as database_module
+
+        database = Mock()
+        monkeypatch.setattr(database_module, "database_manager", database)
+
+        token = create_access_token({"sub": "user-1", "org_id": "org-1"})
+        request = make_request(cookies={"access_token": token})
+        request.url.path = "/api/v1/suggestions/boxes/b1/submissions"
+        request.url.query = ""
+        request.method = "POST"
+
+        written = await persist_error_log(
+            request=request,
+            error_type="BACKEND_HTTP_500",
+            error_message="Failed to submit",
+            user_message="boom",
+            troubleshooting_steps=[],
+        )
+
+        assert written is False
+        database.get_session.assert_not_called()

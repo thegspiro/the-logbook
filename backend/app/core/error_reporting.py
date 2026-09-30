@@ -11,12 +11,13 @@ import re
 import traceback
 from collections.abc import Mapping
 from typing import Any
-from urllib.parse import parse_qs, urlencode
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 from fastapi import Request
 from loguru import logger
 
 from app.core.config import settings
+from app.core.logging import is_unlogged_path
 
 # Query parameters that may carry credentials or PHI-adjacent values. Their
 # values are replaced before the URL is persisted, since error logs are
@@ -65,6 +66,10 @@ MAX_TRACEBACK_LENGTH = 4000
 # writing a log row about a failing log writer recurses until one of the two
 # runs out of database connections.
 EXCLUDED_PATH_PREFIXES = ("/api/v1/errors",)
+# Nor may a failure on the anonymous side of the suggestion box (UNLOGGED_PATH):
+# an error_logs row carries the caller's user_id, the route and the exact time,
+# and the Error Monitoring page shows all three — a failed anonymous
+# submission would be filed under the member who made it.
 
 
 def sanitize_query_params(query_string: str) -> str:
@@ -124,7 +129,21 @@ def format_traceback(exc: BaseException) -> str | None:
 
 def is_excluded_path(path: str) -> bool:
     """True when failures on this path must not be persisted (see above)."""
-    return path.startswith(EXCLUDED_PATH_PREFIXES)
+    return path.startswith(EXCLUDED_PATH_PREFIXES) or is_unlogged_path(path)
+
+
+def is_excluded_client_path(path: str) -> bool:
+    """``is_excluded_path`` for the ``path`` a frontend report carries.
+
+    The frontend reports a request path as the service wrote it, relative to
+    its axios ``baseURL`` of ``/api/v1`` (``/suggestions/boxes/…``), or as a
+    full URL when a caller passed one. Both are brought back to the server's
+    own form before matching.
+    """
+    bare = urlsplit(path).path
+    if not bare.startswith("/api/"):
+        bare = "/api/v1" + bare
+    return is_excluded_path(bare)
 
 
 def extract_request_identity(request: Request) -> tuple[str | None, str | None]:

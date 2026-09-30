@@ -359,6 +359,35 @@ describe('reportApiError', () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['a 500 on a submission', { status: 500 }, '/suggestions/boxes/b1/submissions'],
+    [
+      'a timeout on a submission',
+      { code: 'ECONNABORTED', message: 'timeout of 60000ms exceeded' },
+      '/suggestions/boxes/b1/submissions',
+    ],
+    ['a network failure on a submission', { message: 'Network Error' }, '/suggestions/boxes/b1/submissions'],
+    ['a 500 on a follow-up lookup', { status: 500 }, '/suggestions/follow-up/lookup'],
+    ['a 500 on a follow-up reply', { status: 500 }, '/suggestions/follow-up/messages'],
+  ] as const)('never reports %s, which would name the anonymous submitter', async (_label, failure, url) => {
+    reportApiError(axiosError({ ...failure, config: { url, method: 'post', baseURL: '/api/v1' } }));
+    reportApiError(
+      axiosError({ ...failure, config: { url: `https://logbook.example.org/api/v1${url}`, method: 'post' } })
+    );
+    await settle();
+
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('still reports failures on the named and reviewer suggestion routes', async () => {
+    reportApiError(
+      axiosError({ status: 500, config: { url: '/suggestions/mine/s1/messages', method: 'post', baseURL: '/api/v1' } })
+    );
+    await settle();
+
+    expect(sentBody()['context']).toMatchObject({ path: '/suggestions/mine/s1/messages' });
+  });
+
   it('drops the query string, which can carry member data', async () => {
     reportApiError(
       axiosError({

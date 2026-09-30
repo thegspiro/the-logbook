@@ -16,7 +16,13 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { suggestionsService } from '../services/suggestionsService';
 import type { SubmissionReceipt, SuggestionBoxPublic } from '../types/suggestions';
 
+// Mirrors the backend's screenshot rules in suggestion_service.py
+// (ALLOWED_SCREENSHOT_MIME, MAX_SCREENSHOT_BYTES, SCREENSHOT_MAX_DIMENSIONS),
+// which are what actually refuse or resize a file; these only describe them.
 const MAX_SCREENSHOTS = 5;
+const MAX_SCREENSHOT_MB = 10;
+const SCREENSHOT_MAX_EDGE_PX = 2560;
+const SCREENSHOT_ACCEPT = 'image/png,image/jpeg,image/webp,image/gif';
 const MAX_TITLE_LENGTH = 200;
 const MAX_DETAILS_LENGTH = 10000;
 
@@ -246,11 +252,15 @@ const SuggestionSubmitForm: React.FC<SuggestionSubmitFormProps> = ({ onSubmitted
 
             <div>
               <span className="form-label">Screenshots (optional, up to {MAX_SCREENSHOTS})</span>
+              <p className="text-theme-text-muted mb-2 text-xs">
+                PNG, JPEG, WebP or GIF, up to {MAX_SCREENSHOT_MB} MB each. Larger images are scaled down to{' '}
+                {SCREENSHOT_MAX_EDGE_PX} pixels on the longest side, and animated GIFs keep only their first frame.
+              </p>
               <FileDropzone
                 key={dropzoneKey}
-                accept="image/png,image/jpeg,image/webp,image/gif"
+                accept={SCREENSHOT_ACCEPT}
                 multiple
-                maxSizeMB={10}
+                maxSizeMB={MAX_SCREENSHOT_MB}
                 label="Drop screenshots here or click to browse"
                 onFilesSelected={setScreenshots}
               />
