@@ -144,3 +144,67 @@ class TestAnonymousVoteAuditSecrecy(TestElectionSetup):
         rows = await _vote_cast_rows(db_session, data["election_id"])
         assert len(rows) == 1
         assert rows[0][0] == data["user1_id"]
+
+
+class TestAnonymousVoidedVoteForensics(TestElectionSetup):
+    """W50-2: the forensics ``deleted_votes`` records must not carry the
+    voided vote's ``candidate_id`` on an anonymous election. The audit log
+    pairs ``vote_id`` with a user (the officer who voided it, and on rows
+    written before ``_audit_voter`` the voter), so the choice beside the same
+    ``vote_id`` names a voter's ballot in two reads."""
+
+    async def _cast_and_void(self, db_session: AsyncSession, data):
+        svc = ElectionService(db_session)
+        vote, err = await svc.cast_vote(
+            user_id=uuid.UUID(data["user1_id"]),
+            election_id=uuid.UUID(data["election_id"]),
+            candidate_id=uuid.UUID(data["candidate_a_id"]),
+            position="Chief",
+            organization_id=uuid.UUID(data["org_id"]),
+        )
+        assert err is None
+        voided = await svc.soft_delete_vote(
+            vote_id=uuid.UUID(str(vote.id)),
+            deleted_by=uuid.UUID(data["user2_id"]),
+            reason="duplicate ballot",
+            organization_id=uuid.UUID(data["org_id"]),
+            election_id=uuid.UUID(data["election_id"]),
+        )
+        assert voided is not None
+        forensics = await svc.get_election_forensics(
+            uuid.UUID(data["election_id"]), uuid.UUID(data["org_id"])
+        )
+        records = forensics["deleted_votes"]["records"]
+        assert len(records) == 1
+        assert records[0]["vote_id"] == str(vote.id)
+        return records[0]
+
+    async def test_anonymous_voided_vote_hides_candidate(
+        self, db_session: AsyncSession, setup_election
+    ):
+        data = setup_election
+        record = await self._cast_and_void(db_session, data)
+        assert record.get("candidate_id") is None, (
+            "forensics names the voided vote's candidate "
+            f"({record['candidate_id']}) on an anonymous election; joined "
+            "with the audit log's vote_id it reveals the voter's choice"
+        )
+        assert data["candidate_a_id"] not in json.dumps(record)
+        # The void itself is still reported in full.
+        assert record["deleted_by"] == data["user2_id"]
+        assert record["deletion_reason"] == "duplicate ballot"
+        assert record["position"] == "Chief"
+
+    async def test_public_ballot_voided_vote_keeps_candidate(
+        self, db_session: AsyncSession, setup_election
+    ):
+        """Boundary: a public-ballot election reports the choice -- voter_id
+        is on the vote row anyway, so hiding it would protect nothing."""
+        data = setup_election
+        await db_session.execute(
+            text("UPDATE elections SET anonymous_voting = 0 WHERE id = :id"),
+            {"id": data["election_id"]},
+        )
+        await db_session.flush()
+        record = await self._cast_and_void(db_session, data)
+        assert record["candidate_id"] == data["candidate_a_id"]

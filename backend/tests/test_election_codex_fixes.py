@@ -86,6 +86,7 @@ class TestTokenSubmissionLocking:
             id=str(uuid4()),
             election_id=locked_election.id,
             used=False,
+            superseded_at=None,
             expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
         )
         db = SimpleNamespace(
@@ -372,6 +373,8 @@ class TestTokenVoteNullPositionDedup:
             eligible_item_ids=None,
             used=False,
             used_at=None,
+            superseded_at=None,
+            access_count=0,
         )
         defaults.update(overrides)
         return SimpleNamespace(**defaults)

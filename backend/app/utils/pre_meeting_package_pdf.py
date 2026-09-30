@@ -130,6 +130,59 @@ def _candidates_for_item(
     ]
 
 
+def summarize_item_eligibility(
+    ballot_items: List[Dict[str, Any]],
+    roster_members: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Fold the roster's per-member ``item_eligibility`` into one row per
+    ballot item.
+
+    The election-level counts answer "who receives a ballot at all", and a
+    member blocked on a single attendance-gated item still receives one — so
+    those counts read "Not eligible 0" while most of the room cannot vote on
+    that item. The per-item rows are what make that visible. They consume the
+    roster's own verdicts rather than re-checking attendance or tiers here
+    (Pitfall #29): the roster is the one place eligibility is decided.
+    """
+    by_item: Dict[str, Dict[str, Any]] = {}
+    for item in ballot_items:
+        item_id = item.get("id") or ""
+        by_item[item_id] = {
+            "ballot_item_id": item_id,
+            "title": item.get("title") or "",
+            "eligible_count": 0,
+            "eligible_by_override": 0,
+            "blocked_count": 0,
+            "blocked_reasons": {},
+            "blocked_members": [],
+        }
+    for member in roster_members:
+        for verdict in member.get("item_eligibility") or []:
+            row = by_item.get(verdict.get("ballot_item_id") or "")
+            if row is None:
+                continue
+            if verdict.get("eligible"):
+                row["eligible_count"] += 1
+                if member.get("has_override"):
+                    row["eligible_by_override"] += 1
+                continue
+            reason = verdict.get("reason") or "Not eligible"
+            row["blocked_count"] += 1
+            row["blocked_reasons"][reason] = row["blocked_reasons"].get(reason, 0) + 1
+            row["blocked_members"].append(
+                {"full_name": member.get("full_name") or "", "reason": reason}
+            )
+    summary: List[Dict[str, Any]] = []
+    for row in by_item.values():
+        reasons = row.pop("blocked_reasons")
+        row["blocked_reasons"] = [
+            {"reason": reason, "count": count}
+            for reason, count in sorted(reasons.items(), key=lambda kv: -kv[1])
+        ]
+        summary.append(row)
+    return summary
+
+
 def render_pre_meeting_package_pdf(
     data: Dict[str, Any],
     meta: Dict[str, Any],
@@ -141,7 +194,8 @@ def render_pre_meeting_package_pdf(
       ``election`` (dict of display fields), optional ``meeting`` dict,
       ``ballot_items`` (ordered dicts), ``candidates`` (accepted, ordered),
       ``roster`` (summary counts + ``eligible`` / ``ineligible`` /
-      ``overrides`` lists).
+      ``overrides`` lists, plus ``items`` from
+      :func:`summarize_item_eligibility`).
     *meta*: ``org_name``, ``generated_at`` (datetime, org-local).
     """
     buf = BytesIO()
@@ -354,6 +408,35 @@ def render_pre_meeting_package_pdf(
     ]
     story.append(_plain_table(summary_rows, [2.6 * inch, 1.4 * inch]))
 
+    # ---- Per-item eligibility ----
+    # The counts above are election-level ("receives a ballot"); an
+    # attendance- or tier-gated item can still block most of the room, and
+    # nothing above would say so.
+    item_summary: List[Dict[str, Any]] = roster.get("items") or []
+    any_item_blocked = any(row.get("blocked_count") for row in item_summary)
+    if item_summary:
+        story.append(Paragraph("Eligibility by Ballot Item", item_title_style))
+        rows = [["Ballot Item", "Eligible", "Not eligible", "Why not"]]
+        for row in item_summary:
+            eligible_text = str(row.get("eligible_count", 0))
+            if row.get("eligible_by_override"):
+                eligible_text += f" ({row['eligible_by_override']} by override)"
+            why = "; ".join(
+                f"{_esc(r.get('reason'))}: {r.get('count', 0)}"
+                for r in row.get("blocked_reasons") or []
+            )
+            rows.append(
+                [
+                    Paragraph(_esc(row.get("title")), cell_style),
+                    eligible_text,
+                    str(row.get("blocked_count", 0)),
+                    Paragraph(why or "—", cell_style),
+                ]
+            )
+        story.append(
+            _styled_table(rows, [2.6 * inch, 1.1 * inch, 0.9 * inch, 2.4 * inch])
+        )
+
     story.append(Paragraph(f"Eligible Voters ({len(eligible)})", item_title_style))
     if eligible:
         rows: List[List[Any]] = [["Member", "Membership Type", ""]]
@@ -391,10 +474,40 @@ def render_pre_meeting_package_pdf(
                     ]
                 )
             story.append(_styled_table(rows, [2.4 * inch, 4.6 * inch]))
+        elif any_item_blocked:
+            story.append(
+                Paragraph(
+                    "None — every active member receives a ballot; the members "
+                    "blocked on individual items are listed below.",
+                    body_style,
+                )
+            )
         else:
             story.append(
                 Paragraph("None — every active member is eligible.", body_style)
             )
+
+        # Who is blocked on each item, and why — leadership detail, like the
+        # per-member reasons above.
+        for row in item_summary:
+            blocked = row.get("blocked_members") or []
+            if not blocked:
+                continue
+            story.append(
+                Paragraph(
+                    f"Not eligible for {_esc(row.get('title'))} ({len(blocked)})",
+                    item_title_style,
+                )
+            )
+            rows = [["Member", "Reason"]]
+            for member in blocked:
+                rows.append(
+                    [
+                        Paragraph(_esc(member.get("full_name")), cell_style),
+                        Paragraph(_esc(member.get("reason")), cell_style),
+                    ]
+                )
+            story.append(_styled_table(rows, [2.4 * inch, 4.6 * inch]))
 
         overrides: List[Dict[str, Any]] = roster.get("overrides") or []
         if overrides:

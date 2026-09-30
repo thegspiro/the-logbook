@@ -134,6 +134,12 @@ async def _ballot_read_rate_limit(
     )
 
 
+def _already_voted_detail(position: Optional[str]) -> str:
+    if position:
+        return f"You have already voted on: {position}"
+    return "You have already voted in this election"
+
+
 async def _ballot_vote_rate_limit(
     request: Request,
 ) -> None:
@@ -193,6 +199,7 @@ async def _build_election_response(
     ) = await ElectionService(db).get_vote_totals(
         election, UUID(str(election.organization_id))
     )
+    response.closed_by_name = await ElectionService(db).closed_by_name(election)
     if election.meeting:
         response.meeting_title = election.meeting.title
         response.meeting_type = (
@@ -521,6 +528,9 @@ class BallotLookupResponse(BaseModel):
 
     election: BallotElectionResponse
     candidates: list[CandidateResponse] = []
+    # True for a token minted by send-test-ballot: the page shows a TEST
+    # BALLOT banner so a preview is never mistaken for the real thing.
+    is_test: bool = False
 
 
 @router.post("/ballot/lookup", response_model=BallotLookupResponse)
@@ -649,6 +659,7 @@ async def lookup_ballot_by_token(
     return BallotLookupResponse(
         election=response,
         candidates=[CandidateResponse.model_validate(c) for c in candidates],
+        is_test=bool(voting_token.is_test),
     )
 
 
@@ -740,12 +751,20 @@ async def submit_ballot_with_token(
     """
     token = ballot.token
     service = ElectionService(db)
-    result, error = await service.submit_ballot_with_token(
-        token=token,
-        votes=[v.model_dump() for v in ballot.votes],
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-    )
+    try:
+        result, error = await service.submit_ballot_with_token(
+            token=token,
+            votes=[v.model_dump() for v in ballot.votes],
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+        )
+    except IntegrityError:
+        # Backstop for a constraint the service did not anticipate (W50-6).
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This ballot has already been submitted",
+        )
 
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
@@ -769,7 +788,10 @@ class ElectionSettingsUpdate(BaseModel):
     default_allow_write_ins: Optional[bool] = None
     default_quorum_type: Optional[str] = None
     default_quorum_value: Optional[int] = None
-    max_proxies_per_person: Optional[int] = None
+    # The settings screen's 1-10 range was advisory only: the browser flagged
+    # rangeOverflow and the API still stored 111 behind "All changes saved".
+    # 0 would silently refuse every delegation, so the floor is 1.
+    max_proxies_per_person: Optional[int] = Field(None, ge=1, le=10)
     proxy_voting_enabled: Optional[bool] = None
     nominations_enabled: Optional[bool] = None
     paper_ballots_enabled: Optional[bool] = None
@@ -1301,6 +1323,7 @@ async def delete_election(
     election_status = election.status.value
     reason = delete_data.reason if delete_data else None
     notifications_sent = 0
+    vote_count = 0
 
     # ``parent_election_id`` is ondelete=RESTRICT with no ORM cascade, so the
     # delete below would fail at commit with MySQL 1451 and surface as a 500
@@ -1344,15 +1367,46 @@ async def delete_election(
         )
         vote_count = votes_result.scalar() or 0
 
-        # Notify all leadership members before deletion
-        service = ElectionService(db)
-        notifications_sent = await service._notify_leadership_of_deletion(
-            election=election,
-            performed_by=current_user.id,
-            organization_id=current_user.organization_id,
-            reason=reason,
-            vote_count=vote_count,
+    # The leadership alert and the audit row come after the commit, not
+    # before: a delete that fails at commit (W50-1 — every tokened election,
+    # via the un-cascaded voting_tokens backref) used to send "permanently
+    # deleted" to the chief and record it with critical severity while the
+    # election, its votes and its results were all still there.
+    await db.delete(election)
+    try:
+        await db.commit()
+    except IntegrityError as e:
+        await db.rollback()
+        logger.error(
+            f"Election delete refused by the database | id={election_id} "
+            f"by={current_user.id}: {e}"
         )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This election is still referenced by other records and "
+                "could not be deleted"
+            ),
+        )
+
+    if election_status != "draft":
+        # The delete is committed; a failure here (template lookup, render,
+        # provider) must not cost the critical audit row or turn a done
+        # deletion into a 500.
+        try:
+            notifications_sent = await service._notify_leadership_of_deletion(
+                election=election,
+                performed_by=current_user.id,
+                organization_id=current_user.organization_id,
+                reason=reason,
+                vote_count=vote_count,
+            )
+        except Exception as e:
+            notifications_sent = 0
+            logger.error(
+                f"Failed to send election deletion notifications (non-blocking) "
+                f"| election={election_id} error={e}"
+            )
 
         logger.critical(
             f"NON-DRAFT ELECTION DELETED | id={election_id} title={election_title!r} "
@@ -1388,8 +1442,6 @@ async def delete_election(
             event_data={"election_id": str(election_id), "title": election_title},
             user_id=str(current_user.id),
         )
-
-    await db.delete(election)
     await db.commit()
 
     if election_status == "draft":
@@ -1458,7 +1510,7 @@ async def close_election(
     """
     service = ElectionService(db)
     election, error = await service.close_election(
-        election_id, current_user.organization_id
+        election_id, current_user.organization_id, closed_by=current_user.id
     )
 
     if error:
@@ -2388,16 +2440,26 @@ async def cast_vote(
         )
 
     service = ElectionService(db)
-    new_vote, error = await service.cast_vote(
-        user_id=current_user.id,
-        election_id=election_id,
-        candidate_id=vote.candidate_id,
-        position=vote.position,
-        organization_id=current_user.organization_id,
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        vote_rank=vote.vote_rank,
-    )
+    try:
+        new_vote, error = await service.cast_vote(
+            user_id=current_user.id,
+            election_id=election_id,
+            candidate_id=vote.candidate_id,
+            position=vote.position,
+            organization_id=current_user.organization_id,
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            vote_rank=vote.vote_rank,
+        )
+    except IntegrityError:
+        # The service answers a dedup-hash collision itself; this is the
+        # backstop so a constraint the service did not anticipate reads as
+        # "already voted" rather than a 500 (W50-6).
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_already_voted_detail(vote.position),
+        )
 
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
@@ -2580,13 +2642,14 @@ async def send_ballot_emails(
             status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
         )
 
-    # A closed or cancelled election can never take a vote again, so a ballot
-    # sent for one mints dead tokens and mails members a link that answers
-    # "Election is closed". Pre-open sends stay allowed for now: the token
-    # lookup deliberately tolerates tokens minted before opening, and the
-    # /test-ballot preview relies on the same service, so the gate lives here
-    # rather than in the service.
-    if election.status in (ElectionStatus.CLOSED, ElectionStatus.CANCELLED):
+    # Only an OPEN election can take a vote, so a live ballot sent in any
+    # other status mails members a "Vote Now" link that answers "Election is
+    # draft" / "Election is closed" — and a draft is still editable, so the
+    # ballot they were mailed may not even be the one that opens. A closed or
+    # cancelled one also mints dead tokens. The gate lives here rather than in
+    # the service because /send-test-ballot (is_test=True, sender only) uses
+    # the same service and is exactly how a draft is previewed before opening.
+    if election.status != ElectionStatus.OPEN:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Ballot emails cannot be sent for a {election.status.value} election",
@@ -2665,10 +2728,7 @@ async def send_ballot_emails(
     if failed_count > 0:
         parts.append(f"{failed_count} failed")
     if skipped_count > 0:
-        parts.append(
-            f"{skipped_count} skipped (did not meet ballot item requirements "
-            f"— see skipped details for per-member reasons)"
-        )
+        parts.append(ElectionService.summarize_skipped(skipped_details))
     if email_data.send_eligibility_summary and total_attempted > 0:
         parts.append("eligibility summary emailed to you")
 
@@ -2922,7 +2982,12 @@ async def remind_non_voters(
     if reminded == 0 and failed == 0 and skipped == 0:
         message = "Everyone eligible has already voted — no reminders needed"
     else:
-        message = f"Reminder sent to {reminded} non-voter(s)"
+        parts = [f"Reminder sent to {reminded} non-voter(s)"]
+        if failed > 0:
+            parts.append(f"{failed} failed")
+        if skipped > 0:
+            parts.append(ElectionService.summarize_skipped(skipped_details))
+        message = ". ".join(parts)
     return {
         "success": failed == 0,
         "recipients_count": reminded,
@@ -3893,7 +3958,8 @@ async def send_test_ballot(
                 election_id=election_id,
                 organization_id=current_user.organization_id,
                 recipient_user_ids=[current_user.id],
-                subject=f"[TEST] Ballot: {election.title}",
+                # No subject override: the send keeps the department's own
+                # template subject and prefixes it "[TEST]" (W50-18).
                 message="This is a TEST ballot. Votes cast will not count toward real results.",
                 base_ballot_url=base_ballot_url,
                 # Flag the issued token as a test ballot so votes cast with it
@@ -4050,22 +4116,51 @@ async def verify_vote_receipt(
 
     **No authentication required**
     """
+    # Voided rows are fetched too: a voter whose ballot an officer voided
+    # was otherwise told no such vote existed, which reads as a bogus
+    # receipt rather than the sanctioned action it was (W50-54).
     result = await db.execute(
         select(Vote)
         .where(Vote.election_id == str(election_id))
         .where(Vote.receipt_hash == receipt)
-        .where(Vote.deleted_at.is_(None))
     )
     vote = result.scalar_one_or_none()
 
     if not vote:
         return {
             "verified": False,
+            "counted": False,
             "message": "No matching vote found for this receipt",
+        }
+
+    if vote.deleted_at is not None:
+        return {
+            "verified": False,
+            "counted": False,
+            "voided": True,
+            "message": "This vote was voided by an officer",
+            "voted_at": vote.voted_at.isoformat(),
+            "position": vote.position,
+        }
+
+    # A test-ballot vote is stored (so its receipt verifies) but excluded
+    # from every tally, and the receipt must say so rather than promise a
+    # count the results will never show (W50-18).
+    if vote.is_test:
+        return {
+            "verified": True,
+            "counted": False,
+            "message": (
+                "This was a test vote. It was recorded but is not counted "
+                "toward the election results."
+            ),
+            "voted_at": vote.voted_at.isoformat(),
+            "position": vote.position,
         }
 
     return {
         "verified": True,
+        "counted": True,
         "message": "Your vote has been recorded and is counted",
         "voted_at": vote.voted_at.isoformat(),
         "position": vote.position,

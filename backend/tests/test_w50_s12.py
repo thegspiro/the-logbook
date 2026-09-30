@@ -22,13 +22,16 @@ import json
 import uuid
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.endpoints.elections import ElectionSettingsUpdate
 from app.services.election_service import ElectionService
 from tests.test_election_voting_flow import TestElectionSetup
 
-pytestmark = [pytest.mark.integration]
+# Marked per class rather than at module level: the schema-bounds tests need
+# no database and must stay in the unit job (Pitfall 30b).
 
 
 async def _enable_proxy_voting(
@@ -143,6 +146,7 @@ async def _vote_rows(db_session: AsyncSession, election_id: str) -> int:
     return int(result.scalar_one())
 
 
+@pytest.mark.integration
 class TestProxyVoteParity(TestElectionSetup):
     async def test_approval_proxy_can_approve_second_candidate(
         self, db_session: AsyncSession, setup_election
@@ -203,6 +207,7 @@ class TestProxyVoteParity(TestElectionSetup):
         assert vote is None
 
 
+@pytest.mark.integration
 class TestProxyVoteResolvesTheItemLikeCastVote(TestElectionSetup):
     """The proxy route used to hash and compare the raw client position, so
     on a ballot-item election a member's own vote (stored under the item id)
@@ -257,6 +262,7 @@ class TestProxyVoteResolvesTheItemLikeCastVote(TestElectionSetup):
         assert await _vote_rows(db_session, data["election_id"]) == 1
 
 
+@pytest.mark.integration
 class TestMaxProxiesPerPerson(TestElectionSetup):
     async def test_second_delegation_to_same_proxy_is_refused(
         self, db_session: AsyncSession, setup_election
@@ -274,3 +280,23 @@ class TestMaxProxiesPerPerson(TestElectionSetup):
             "proxy for a second delegating member"
         )
         assert record is None
+
+
+@pytest.mark.unit
+class TestMaxProxiesPerPersonBounds:
+    """W50-49: the settings API accepted any integer for the cap — 111 was
+    saved behind "All changes saved" and 0 would refuse every delegation."""
+
+    @pytest.mark.parametrize("value", [0, -1, 11, 111])
+    def test_out_of_range_cap_is_rejected(self, value):
+        with pytest.raises(ValidationError, match="max_proxies_per_person"):
+            ElectionSettingsUpdate.model_validate({"max_proxies_per_person": value})
+
+    @pytest.mark.parametrize("value", [1, 10])
+    def test_in_range_cap_is_accepted(self, value):
+        update = ElectionSettingsUpdate.model_validate(
+            {"max_proxies_per_person": value}
+        )
+        assert update.model_dump(exclude_unset=True) == {
+            "max_proxies_per_person": value
+        }

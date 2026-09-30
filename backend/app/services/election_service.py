@@ -65,7 +65,16 @@ from app.services.email_template_service import (
     EmailTemplateService,
 )
 from app.services.email_theme import TABLE_STYLE, TD_STYLE, TH_STYLE
-from app.utils.org_timezone import resolve_scheduling_timezone, to_local
+from app.utils.org_timezone import (
+    ZONED_DATE_TIME_FORMAT,
+    format_in_org_timezone,
+    resolve_scheduling_timezone,
+    to_local,
+)
+
+# What a member sees when they open the link a reminder replaced. Not
+# "expired": the election is still open and their newer email works.
+SUPERSEDED_TOKEN_MESSAGE = "This link was replaced by a newer ballot email"
 
 # " - Runoff Round 2" and friends, only at the very end of a title.
 # The shipped (subject, html, text) of each leadership alert, used when the
@@ -102,6 +111,13 @@ def _runoff_base_title(election) -> str:
     same election.
     """
     return _RUNOFF_SUFFIX.sub("", election.title or "").strip()
+
+
+def _join_names(names: List[str]) -> str:
+    """Join names as ``A and B`` / ``A, B and C`` for the runoff description."""
+    if len(names) <= 1:
+        return "".join(names)
+    return f"{', '.join(names[:-1])} and {names[-1]}"
 
 
 def ballot_item_candidate_positions(item: Dict) -> Set[str]:
@@ -355,6 +371,16 @@ def _token_eligibility_error(
                 )
 
     return None
+
+
+def round_percentage(value: float) -> float:
+    """The one rounding every percentage the module reports goes through.
+
+    Turnout was printed as 9.5% / 10% / 9.52% on a single page because each
+    site chose its own precision (W50-65). Two decimals is the contract the
+    frontend renders as-is; a caller that wants fewer must not re-round.
+    """
+    return round(float(value), 2)
 
 
 class ElectionService:
@@ -1628,6 +1654,16 @@ class ElectionService:
         # Update election's chain hash pointer
         election.last_chain_hash = vote.chain_hash
 
+        # Read off the election BEFORE the commit attempt: a failed commit
+        # rolls the session back, which expires every loaded instance, and
+        # touching ``election`` in the except branch below then lazy-loads
+        # under asyncio and raises MissingGreenlet — the "duplicate" answer
+        # became a 500 instead of the 400 the caller expects (W50-6).
+        anonymous = election.anonymous_voting
+        audit_user = self._audit_voter(election, user_id)
+        audit_ip = self._audit_ip(election, ip_address)
+        election_org_id = str(election.organization_id)
+
         # SECURITY: Database-level unique constraint on vote_dedup_hash
         # prevents double-voting even if race condition bypasses application checks
         if not commit:
@@ -1658,19 +1694,19 @@ class ElectionService:
             await self.db.rollback()
             logger.warning(
                 "Double-vote attempt blocked by DB constraint | "
-                f"election={election_id} position={effective_position} anonymous={election.anonymous_voting}"
+                f"election={election_id} position={effective_position} anonymous={anonymous}"
             )
             await self._audit(
                 "vote_double_attempt",
                 {
                     "election_id": str(election_id),
                     "position": effective_position,
-                    "anonymous": election.anonymous_voting,
+                    "anonymous": anonymous,
                 },
                 severity="warning",
-                user_id=self._audit_voter(election, user_id),
-                ip_address=self._audit_ip(election, ip_address),
-                organization_id=str(election.organization_id),
+                user_id=audit_user,
+                ip_address=audit_ip,
+                organization_id=election_org_id,
             )
             if effective_position:
                 return (
@@ -2007,12 +2043,25 @@ class ElectionService:
         ).hexdigest()
 
     async def verify_vote_integrity(
-        self, election_id: UUID, organization_id: UUID
+        self,
+        election_id: UUID,
+        organization_id: UUID,
+        *,
+        audit: bool = True,
     ) -> Dict:
         """Verify the cryptographic integrity of all votes in an election.
 
         Returns a summary with total votes checked, valid count, and any
-        tampered vote IDs.
+        tampered vote IDs. ``total_votes`` is every signed row in the chain —
+        test ballots and pending paper batches included, because they are
+        chained too — and is broken down into ``counted_votes``,
+        ``pending_paper_votes`` and ``test_votes`` so a reader can reconcile
+        it against the tally, which counts only the first (W50-65).
+
+        ``audit=False`` runs the check without writing a
+        ``vote_integrity_check`` audit row: the forensics report embeds this
+        check on every read, and a critical row per page load buried the
+        one the officer's Run Check wrote.
         """
         result = await self.db.execute(
             select(Election)
@@ -2031,6 +2080,10 @@ class ElectionService:
         all_votes = votes_result.scalars().all()
 
         total = len(all_votes)
+        test_votes = sum(1 for v in all_votes if v.is_test)
+        real_votes = [v for v in all_votes if not v.is_test]
+        counted_votes = len(await self._exclude_unattested(election_id, real_votes))
+        pending_paper_votes = len(real_votes) - counted_votes
         valid = 0
         tampered = []
         unsigned = 0
@@ -2099,23 +2152,27 @@ class ElectionService:
                 f"Vote integrity check PASS | election={election_id} total={total}"
             )
 
-        await self._audit(
-            "vote_integrity_check",
-            {
-                "election_id": str(election_id),
-                "total_votes": total,
-                "valid_signatures": valid,
-                "tampered_votes": len(tampered),
-                "chain_verified": not chain_broken,
-                "chain_break_at": chain_break_at,
-                "integrity_status": integrity_status,
-            },
-            severity="critical" if (tampered or chain_broken) else "info",
-        )
+        if audit:
+            await self._audit(
+                "vote_integrity_check",
+                {
+                    "election_id": str(election_id),
+                    "total_votes": total,
+                    "valid_signatures": valid,
+                    "tampered_votes": len(tampered),
+                    "chain_verified": not chain_broken,
+                    "chain_break_at": chain_break_at,
+                    "integrity_status": integrity_status,
+                },
+                severity="critical" if (tampered or chain_broken) else "info",
+            )
 
         return {
             "election_id": str(election_id),
             "total_votes": total,
+            "counted_votes": counted_votes,
+            "pending_paper_votes": pending_paper_votes,
+            "test_votes": test_votes,
             "valid_signatures": valid,
             "unsigned_votes": unsigned,
             "tampered_votes": len(tampered),
@@ -2157,6 +2214,12 @@ class ElectionService:
         vote.deleted_at = datetime.now(timezone.utc)
         vote.deleted_by = str(deleted_by)
         vote.deletion_reason = reason
+        # The UNIQUE dedup hash exists to stop a second ballot from the same
+        # voter. A voided ballot is not a ballot, so its hash must not keep
+        # blocking the replacement vote the officer voided it to allow
+        # (W50-6). The signature and chain hash do not cover this column, so
+        # clearing it leaves integrity verification intact.
+        vote.vote_dedup_hash = None
         await self.db.commit()
         await self.db.refresh(vote)
 
@@ -2203,8 +2266,13 @@ class ElectionService:
         if not election:
             return None
 
-        # 1. Vote integrity
-        integrity = await self.verify_vote_integrity(election_id, organization_id)
+        # 1. Vote integrity. Not audited here: this report is read on every
+        # visit to the panel, and a `vote_integrity_check` row per read (at
+        # critical severity after a sanctioned void) drowned the one row the
+        # officer's own Run Check wrote (W50-65).
+        integrity = await self.verify_vote_integrity(
+            election_id, organization_id, audit=False
+        )
 
         # 2. Soft-deleted votes
         deleted_result = await self.db.execute(
@@ -2214,17 +2282,32 @@ class ElectionService:
         )
         deleted_votes = deleted_result.scalars().all()
 
+        # W50-2: on an anonymous ballot the voided vote's choice must not be
+        # reported. The audit log pairs vote_id with the officer who voided it
+        # and, on rows written before ``_audit_voter`` existed, with the voter
+        # who cast it -- so a candidate_id beside that vote_id would name a
+        # voter's choice in two reads. Anonymous elections report the void
+        # (that it happened, when, why) without the choice.
+        reveal_choice = not election.anonymous_voting
         deleted_records = [
             {
                 "vote_id": str(v.id),
-                "candidate_id": str(v.candidate_id),
+                "candidate_id": str(v.candidate_id) if reveal_choice else None,
                 "position": v.position,
                 "deleted_at": v.deleted_at.isoformat() if v.deleted_at else None,
                 "deleted_by": v.deleted_by,
                 "deletion_reason": v.deletion_reason,
+                # A voided paper batch voids one row per tallied ballot; the
+                # batch id lets the panel report it as one batch rather than
+                # as N "voided votes" (W50-65).
+                "is_manual": bool(v.is_manual),
+                "manual_batch_id": v.manual_batch_id,
             }
             for v in deleted_votes
         ]
+        voided_paper_batches = {
+            v.manual_batch_id for v in deleted_votes if v.manual_batch_id
+        }
 
         # 3. Voting token access logs
         token_result = await self.db.execute(
@@ -2232,11 +2315,31 @@ class ElectionService:
         )
         tokens = token_result.scalars().all()
 
+        # Issued = used + superseded + expired + live. "Unused" alone read a
+        # reminder's retired links as ballots still out (W50-65).
+        now_utc = datetime.now(timezone.utc)
+        total_used = sum(1 for t in tokens if t.used)
+        total_superseded = sum(
+            1 for t in tokens if not t.used and t.superseded_at is not None
+        )
+        total_expired = sum(
+            1
+            for t in tokens
+            if not t.used
+            and t.superseded_at is None
+            and t.expires_at is not None
+            and self._ensure_utc(t.expires_at) <= now_utc
+        )
+        total_live = len(tokens) - total_used - total_superseded - total_expired
+
         token_records = [
             {
                 "token_id": str(t.id),
                 "used": t.used,
                 "used_at": t.used_at.isoformat() if t.used_at else None,
+                "superseded_at": (
+                    t.superseded_at.isoformat() if t.superseded_at else None
+                ),
                 "first_accessed_at": (
                     t.first_accessed_at.isoformat() if t.first_accessed_at else None
                 ),
@@ -2352,12 +2455,16 @@ class ElectionService:
             "vote_integrity": integrity,
             "deleted_votes": {
                 "count": len(deleted_records),
+                "paper_batch_count": len(voided_paper_batches),
                 "records": deleted_records,
             },
             "rollback_history": election.rollback_history or [],
             "voting_tokens": {
                 "total_issued": len(token_records),
-                "total_used": sum(1 for t in token_records if t["used"]),
+                "total_used": total_used,
+                "total_superseded": total_superseded,
+                "total_expired": total_expired,
+                "total_live": total_live,
                 "records": token_records,
             },
             "audit_log": {
@@ -2375,6 +2482,7 @@ class ElectionService:
                 "proxy_votes": proxy_vote_records,
             },
             "voting_timeline": voting_timeline,
+            "voting_timeline_timezone": getattr(org_tz, "key", None) or str(org_tz),
         }
 
     async def get_vote_totals(
@@ -2409,7 +2517,7 @@ class ElectionService:
         )
         eligible = await self._count_eligible_voters(election, organization_id)
         turnout = (voters / eligible * 100) if eligible > 0 else 0.0
-        return len(all_votes), voters, round(turnout, 2)
+        return len(all_votes), voters, round_percentage(turnout)
 
     @staticmethod
     def _count_ballots_cast(
@@ -2835,14 +2943,16 @@ class ElectionService:
             recorded_ballots,
         )
 
-        # Check quorum
-        quorum_met = True
+        # Check quorum. Stays None for quorum_type "none": there is no bar
+        # to clear, so neither "met" nor "not met" is true (W50-48).
+        quorum_met: Optional[bool] = None
         quorum_detail = None
         if election.quorum_type == "percentage" and election.quorum_value:
             quorum_met = voter_turnout >= election.quorum_value
             quorum_detail = (
                 f"Quorum requires {election.quorum_value}% turnout. "
-                f"Actual: {round(voter_turnout, 1)}% ({unique_voters}/{total_eligible})."
+                f"Actual: {round_percentage(voter_turnout)}% "
+                f"({unique_voters}/{total_eligible})."
             )
             if not quorum_met:
                 quorum_detail += " Quorum NOT met — results are advisory only."
@@ -2872,7 +2982,7 @@ class ElectionService:
             status=election.status.value,
             total_votes=len(all_votes),
             total_eligible_voters=total_eligible,
-            voter_turnout_percentage=round(voter_turnout, 2),
+            voter_turnout_percentage=round_percentage(voter_turnout),
             results_by_position=results_by_position,
             overall_results=overall_results,
             quorum_met=quorum_met,
@@ -2962,7 +3072,7 @@ class ElectionService:
                     candidate_name=candidate.name,
                     position=candidate.position,
                     vote_count=vote_count,
-                    percentage=round(percentage, 2),
+                    percentage=round_percentage(percentage),
                     is_winner=False,
                 )
             )
@@ -2975,15 +3085,22 @@ class ElectionService:
                 max_votes = results[0].vote_count
                 tied_top = [r for r in results if r.vote_count == max_votes]
                 policy = getattr(election, "tie_policy", None) or "co_winners"
-                if len(tied_top) > 1 and policy != "co_winners":
-                    # Unresolved tie: no winner is declared here — the
-                    # tie_policy (runoff / revote / chair_decides) governs
-                    # resolution, and results flag the tie explicitly.
+                if len(tied_top) > 1:
+                    # A tie is a fact of the count whatever the policy does
+                    # with it, so it is flagged either way: the report, the
+                    # certified PDF and the results screen each have to say
+                    # "tie" rather than print two 50% rows that look like a
+                    # decided race (W50-32). Only co_winners also declares
+                    # the tied candidates elected; under runoff / revote /
+                    # chair_decides no winner is declared here and the
+                    # policy governs resolution.
                     for result in tied_top:
                         result.is_tied = True
+                    if policy == "co_winners":
+                        for result in tied_top:
+                            result.is_winner = True
                 else:
-                    for result in tied_top:
-                        result.is_winner = True
+                    tied_top[0].is_winner = True
 
         elif victory_condition == "majority":
             # Strictly more than half. Use integer math: floor(n/2)+1 is the
@@ -3108,7 +3225,7 @@ class ElectionService:
                     candidate_name=candidate.name,
                     position=candidate.position,
                     vote_count=vote_count,
-                    percentage=round(percentage, 2),
+                    percentage=round_percentage(percentage),
                     is_winner=(cid == winner_id),
                 )
             )
@@ -3190,7 +3307,7 @@ class ElectionService:
             total_votes_cast=len(all_votes),
             total_eligible_voters=total_eligible,
             total_voters=unique_voters,
-            voter_turnout_percentage=round(voter_turnout, 2),
+            voter_turnout_percentage=round_percentage(voter_turnout),
             votes_by_position=votes_by_position,
             manual_votes=manual_votes,
             electronic_votes=len(all_votes) - manual_votes,
@@ -3353,22 +3470,16 @@ class ElectionService:
         for token_id, voter_hash in prior_tokens_result.all():
             prior_token_ids_by_hash.setdefault(voter_hash, []).append(token_id)
 
-        # Close time in the department's timezone, not UTC.
+        # Close time in the department's timezone, and in the same format
+        # the ballot template prints its own "Voting closes" line — the two
+        # sit a paragraph apart in the same mail.
         org_result = await self.db.execute(
             select(Organization).where(Organization.id == str(organization_id))
         )
         organization = org_result.scalar_one_or_none()
-        try:
-            from zoneinfo import ZoneInfo
-
-            org_tz = ZoneInfo(
-                (organization.timezone if organization else None) or "UTC"
-            )
-        except Exception:
-            from zoneinfo import ZoneInfo
-
-            org_tz = ZoneInfo("UTC")
-        end_local = self._ensure_utc(election.end_date).astimezone(org_tz)
+        end_local = format_in_org_timezone(
+            self._ensure_utc(election.end_date), organization, ZONED_DATE_TIME_FORMAT
+        )
 
         sent, failed, skipped, skipped_details, sent_user_ids = (
             await self.send_ballot_emails(
@@ -3379,10 +3490,10 @@ class ElectionService:
                 message=message
                 or (
                     "This is a reminder that you have not yet voted in "
-                    f"{election.title}. Voting closes at "
-                    f"{end_local:%Y-%m-%d %H:%M %Z}."
+                    f"{election.title}. Voting closes at {end_local}."
                 ),
                 base_ballot_url=base_ballot_url,
+                is_reminder=True,
             )
         )
 
@@ -3400,7 +3511,10 @@ class ElectionService:
             await self.db.execute(
                 sa_update(VotingToken)
                 .where(VotingToken.id.in_(expire_ids))
-                .values(expires_at=now.replace(microsecond=0))
+                .values(
+                    expires_at=now.replace(microsecond=0),
+                    superseded_at=now.replace(microsecond=0),
+                )
             )
             expired_count = len(expire_ids)
 
@@ -3436,6 +3550,23 @@ class ElectionService:
             user_id=user_id,
         )
         return sent, failed, skipped, skipped_details
+
+    async def closed_by_name(self, election: Election) -> Optional[str]:
+        """Display name of the officer who closed ``election``, or None for
+        an automatic (lifecycle) close or a since-deleted account."""
+        if not election.closed_by:
+            return None
+        result = await self.db.execute(
+            select(User.first_name, User.last_name).where(
+                User.id == str(election.closed_by),
+                User.organization_id == str(election.organization_id),
+            )
+        )
+        row = result.one_or_none()
+        if row is None:
+            return None
+        first, last = row
+        return f"{first or ''} {last or ''}".strip() or None
 
     async def _org_local_time(self, organization, dt) -> str:
         """Format an aware datetime in the organization's timezone."""
@@ -3979,7 +4110,10 @@ class ElectionService:
         # cap = eligible voters × votes each voter may legitimately cast
         # for the position (approval: one per accepted candidate; else
         # max_votes_per_position). Existing non-test, non-deleted votes
-        # count toward the cap.
+        # count toward the cap — but only those results would count: a
+        # pending batch is an unconfirmed claim (W50-40), and letting it
+        # occupy the cap refuses every ordinary batch keyed in after an
+        # over-count override until the officers attest or void it.
         if not allow_over_count:
             new_by_position: Dict[str, int] = {}
             for entry in entries:
@@ -4017,6 +4151,7 @@ class ElectionService:
                         .where(Vote.election_id == str(election_id))
                         .where(Vote.deleted_at.is_(None))
                         .where(Vote.is_test.is_(False))
+                        .where(self._is_attested_vote(election_id))
                         .where(Vote.position.in_(list(new_by_position.keys())))
                         .group_by(Vote.position)
                     )
@@ -4062,6 +4197,7 @@ class ElectionService:
             status="pending" if required_attestations > 0 else "confirmed",
             required_attestations=required_attestations,
             ballots_cast=ballots_cast,
+            over_count_override=allow_over_count,
             created_at=now,
             confirmed_at=None if required_attestations > 0 else now,
         )
@@ -4318,13 +4454,15 @@ class ElectionService:
             )
 
         user_ids = {b.recorded_by for b in batches if b.recorded_by}
+        user_ids.update(b.voided_by for b in batches if b.voided_by)
         for b in batches:
             user_ids.update(a.attested_by for a in b.attestations if a.attested_by)
         names: Dict[str, str] = {}
         if user_ids:
             users_result = await self.db.execute(
                 select(User.id, User.first_name, User.last_name).where(
-                    User.id.in_(list(user_ids))
+                    User.id.in_(list(user_ids)),
+                    User.organization_id == str(organization_id),
                 )
             )
             for uid, first, last in users_result.all():
@@ -4342,7 +4480,12 @@ class ElectionService:
                     "recorded_at": b.created_at,
                     "notes": b.notes,
                     "ballots_cast": b.ballots_cast,
+                    "over_count_override": bool(b.over_count_override),
                     "required_attestations": b.required_attestations or 0,
+                    "voided_by": b.voided_by,
+                    "voided_by_name": names.get(b.voided_by or ""),
+                    "voided_at": b.voided_at,
+                    "void_reason": b.void_reason,
                     "attestations": [
                         {
                             "user_id": a.attested_by,
@@ -4441,6 +4584,9 @@ class ElectionService:
 
         if batch is not None:
             batch.status = "voided"
+            batch.voided_by = str(deleted_by)
+            batch.voided_at = now
+            batch.void_reason = reason
         await self.db.commit()
 
         logger.warning(
@@ -4518,7 +4664,12 @@ class ElectionService:
             anonymous_voting=source.anonymous_voting,
             allow_write_ins=source.allow_write_ins,
             max_votes_per_position=source.max_votes_per_position,
-            results_visible_immediately=source.results_visible_immediately,
+            # Not copied: this is the ONLY field the update endpoint lets an
+            # officer change on a CLOSED election, which is how results get
+            # published after the fact. That makes it a post-close decision
+            # about the source's tally, not ballot setup — carrying it over
+            # would let the draft show a results tab before a vote is cast.
+            results_visible_immediately=False,
             eligible_voters=copy.deepcopy(source.eligible_voters),
             voting_method=source.voting_method,
             victory_condition=source.victory_condition,
@@ -4671,7 +4822,20 @@ class ElectionService:
                 "Printable ballots are only available before the election " "closes",
                 "",
             )
-        if not election.positions:
+        # An approval item (a motion, a membership vote) is a contest in
+        # its own right: the electronic ballot offers Approve / Deny for
+        # it, so the paper ballot must carry the same question or the
+        # in-room voter cannot answer it at all (W50-8). Its Approve/Deny
+        # option rows only materialise once a vote is cast, so the item
+        # is read from the ballot definition, not from the candidates.
+        approval_items = [
+            item
+            for item in (election.ballot_items or [])
+            if isinstance(item, dict)
+            and item.get("vote_type") == "approval"
+            and item.get("title")
+        ]
+        if not election.positions and not approval_items:
             return (
                 None,
                 "Printable ballots require a positional election",
@@ -4691,11 +4855,11 @@ class ElectionService:
             .order_by(Candidate.position, Candidate.display_order)
         )
         candidates = list(candidates_result.scalars().all())
-        if not candidates:
+        if not candidates and not approval_items:
             return None, "The election has no accepted candidates yet", ""
 
         positions = []
-        for position in election.positions:
+        for position in election.positions or []:
             positions.append(
                 {
                     "name": position,
@@ -4713,6 +4877,10 @@ class ElectionService:
                 "allow_write_ins": bool(election.allow_write_ins),
             },
             "positions": positions,
+            "approval_items": [
+                {"title": item["title"], "description": item.get("description")}
+                for item in approval_items
+            ],
         }
         meta = {
             "org_name": organization.name if organization else "",
@@ -4766,8 +4934,13 @@ class ElectionService:
         data = {
             "election": {
                 "title": election.title,
+                # closed_at is NULL only on elections closed before the
+                # column existed; their scheduled end is the best record.
                 "closed_display": await self._org_local_time(
-                    organization, election.end_date
+                    organization, election.closed_at or election.end_date
+                ),
+                "closed_by_display": (
+                    await self.closed_by_name(election) or "automatic close"
                 ),
                 "voting_method": election.voting_method,
                 "victory_condition": election.victory_condition,
@@ -5080,6 +5253,58 @@ class ElectionService:
         # strictly per-election, and the parent's salt is destroyed at close.
         # Without a salt of its own, an anonymous runoff's voter hashes would
         # be keyed with "" and be pre-computable from user ids (SEC-12).
+        # Say why the round is being re-run. A plurality tie is not a missed
+        # threshold, and a description claiming "the required votes" were not
+        # reached, on a 1-1 tie under most_votes, is wrong on the ballot every
+        # voter reads (W50-34). The tie flags are consumed from the results,
+        # never re-derived (pitfall 29).
+        if configured_positions:
+            tied_ids = {
+                str(c.candidate_id)
+                for pr in results.results_by_position
+                if pr.position in unresolved_positions
+                for c in pr.candidates
+                if c.is_tied
+            }
+        else:
+            tied_ids = {
+                str(c.candidate_id) for c in results.overall_results if c.is_tied
+            }
+        # Ballot order, not tally order: tied rows sort equal, so the tally
+        # would name them in whatever order the rows were scanned.
+        tied_names = [c.name for c in all_candidates if str(c.id) in tied_ids]
+        base_title = _runoff_base_title(election)
+        if tied_names:
+            runoff_description = (
+                f"Runoff election for {base_title}. The previous round ended "
+                f"in a tie between {_join_names(tied_names)}."
+            )
+        else:
+            runoff_description = (
+                f"Runoff election for {base_title}. No candidate received the "
+                f"required votes in the previous round."
+            )
+
+        # The child carries only the candidate-selection items for the seats
+        # it re-runs. Without them a runoff of an item-based ballot has no
+        # ballot at all: the results pass keys each contest by its item, and
+        # the "Send Ballot Emails" gate refuses an election with neither
+        # items nor positions, so the runoff could never be mailed (W50-34).
+        # Approval items (a budget, a bylaw amendment) are decided in one
+        # round and are not copied; nor is the package link a clone strips,
+        # for the same reason (see clone_election).
+        advancing_positions = {c.position for c in advancing_candidates}
+        runoff_ballot_items = []
+        for item in copy.deepcopy(election.ballot_items or []):
+            if not isinstance(item, dict):
+                continue
+            if item.get("vote_type") != "candidate_selection":
+                continue
+            if not ballot_item_candidate_positions(item) & advancing_positions:
+                continue
+            item.pop("prospect_package_id", None)
+            runoff_ballot_items.append(item)
+
         runoff_start = datetime.now(timezone.utc) + timedelta(
             hours=1
         )  # Default; open_election clamps a future start to "now" on open
@@ -5094,7 +5319,7 @@ class ElectionService:
                 f"{_runoff_base_title(election)} - "
                 f"Runoff Round {election.runoff_round + 1}"
             ),
-            description=f"Runoff election for {election.title}. No candidate received the required votes in the previous round.",
+            description=runoff_description,
             election_type=election.election_type,
             # Only the unresolved seats are re-run; a fresh list, never the
             # parent's JSON value (pitfall 12).
@@ -5103,6 +5328,7 @@ class ElectionService:
                 if configured_positions
                 else copy.deepcopy(election.positions)
             ),
+            ballot_items=runoff_ballot_items or None,
             position_eligibility=copy.deepcopy(election.position_eligibility),
             start_date=runoff_start,
             end_date=runoff_end,
@@ -5124,6 +5350,11 @@ class ElectionService:
             quorum_type=election.quorum_type,
             quorum_value=election.quorum_value,
             enable_runoffs=election.enable_runoffs,
+            # Without this the child falls back to the column default,
+            # co_winners, so a re-tie in the runoff declared both candidates
+            # elected and never reached round 2 — the opposite of what the
+            # parent's "runoff" policy promised (W50-34).
+            tie_policy=getattr(election, "tie_policy", None) or "co_winners",
             runoff_type=election.runoff_type,
             max_runoff_rounds=election.max_runoff_rounds,
             is_runoff=True,
@@ -5158,9 +5389,16 @@ class ElectionService:
         return runoff_election
 
     async def close_election(
-        self, election_id: UUID, organization_id: UUID
+        self,
+        election_id: UUID,
+        organization_id: UUID,
+        closed_by: Optional[UUID] = None,
     ) -> Tuple[Optional[Election], Optional[str]]:
-        """Close an election and finalize results, creating runoff if needed"""
+        """Close an election and finalize results, creating runoff if needed.
+
+        ``closed_by`` is the officer who pressed Close; the lifecycle task
+        passes nothing, which is how an automatic close is told apart.
+        """
         # SELECT ... FOR UPDATE prevents concurrent close_election calls from
         # both reading the election as OPEN and creating duplicate runoffs.
         result = await self.db.execute(
@@ -5185,6 +5423,10 @@ class ElectionService:
             )
 
         election.status = ElectionStatus.CLOSED
+        # The certified PDF, the report and the cards all dated the close to
+        # end_date, which an early close leaves untouched (W50-14).
+        election.closed_at = datetime.now(timezone.utc)
+        election.closed_by = str(closed_by) if closed_by else None
         # SEC: Destroy the per-election anonymity salt so voter hashes can
         # never be reversed back to user IDs, even with full DB access.
         election.voter_anonymity_salt = None
@@ -5215,9 +5457,12 @@ class ElectionService:
             {
                 "election_id": str(election_id),
                 "title": election.title,
+                "closed_at": election.closed_at.isoformat(),
+                "automatic": closed_by is None,
                 "anonymity_salt_destroyed": True,
                 "ip_metadata_purged": ip_metadata_purged,
             },
+            user_id=str(closed_by) if closed_by else None,
         )
 
         # Paper-ballot batches that never received their required officer
@@ -5264,7 +5509,7 @@ class ElectionService:
             if tied_positions:
                 policy = getattr(election, "tie_policy", None) or "co_winners"
                 logger.warning(
-                    f"Election closed with unresolved tie(s) | "
+                    f"Election closed with tie(s) | "
                     f"election={election_id} positions={tied_positions} "
                     f"policy={policy}"
                 )
@@ -5293,14 +5538,20 @@ class ElectionService:
                 logger.info(
                     f"Runoff created | parent={election_id} runoff={runoff.id} round={runoff.runoff_round}"
                 )
-                await self._audit(
-                    "runoff_election_created",
-                    {
-                        "parent_election_id": str(election_id),
-                        "runoff_election_id": str(runoff.id),
-                        "runoff_round": runoff.runoff_round,
-                    },
-                )
+                # get_election_forensics selects audit rows by
+                # event_data.election_id, so the row is written once under
+                # the parent and mirrored under the runoff: without the key
+                # the event appeared in neither election's forensics.
+                runoff_event = {
+                    "parent_election_id": str(election_id),
+                    "runoff_election_id": str(runoff.id),
+                    "runoff_round": runoff.runoff_round,
+                }
+                for scoped_id in (election_id, runoff.id):
+                    await self._audit(
+                        "runoff_election_created",
+                        {"election_id": str(scoped_id), **runoff_event},
+                    )
 
         # Sync linked membership pipeline packages with vote outcomes
         try:
@@ -5462,6 +5713,10 @@ class ElectionService:
         # Best-effort: a roster failure leaves the snapshot NULL, which is
         # the documented legacy behavior (live evaluation).
         try:
+            # The roster honours an existing snapshot, so a stale one left by
+            # a rolled-back open must be cleared first or this freeze would
+            # only ever narrow the previous one.
+            election.eligible_roster_snapshot = None
             roster = await self.get_eligibility_roster(election_id, organization_id)
             election.eligible_roster_snapshot = [
                 m["user_id"]
@@ -5596,10 +5851,19 @@ class ElectionService:
                     tokens_invalidated = invalidate_result.rowcount or 0
             to_status = "open"
             new_status = ElectionStatus.OPEN
+            # The reopened election has not closed yet; the eventual re-close
+            # stamps its own instant and officer.
+            election.closed_at = None
+            election.closed_by = None
         elif election.status == ElectionStatus.OPEN:
             # Rollback from open to draft
             to_status = "draft"
             new_status = ElectionStatus.DRAFT
+            # A draft has no frozen roll. The roster gate keys on the snapshot
+            # rather than on status, so leaving the earlier open's roll here
+            # would report members who joined since as off a roll that no
+            # longer exists (the next open freezes a fresh one).
+            election.eligible_roster_snapshot = None
         else:
             return None, 0, f"Cannot rollback election with status {from_status}"
 
@@ -5664,6 +5928,8 @@ class ElectionService:
                 from_status=from_status,
                 to_status=to_status,
                 reason=reason,
+                tokens_invalidated=tokens_invalidated,
+                ballots_must_be_resent=salt_regenerated,
             )
         except Exception as e:
             logger.error(
@@ -5818,6 +6084,8 @@ class ElectionService:
         from_status: str,
         to_status: str,
         reason: str,
+        tokens_invalidated: int = 0,
+        ballots_must_be_resent: bool = False,
     ) -> int:
         """
         Send email notifications to leadership about election rollback.
@@ -5826,6 +6094,25 @@ class ElectionService:
 
         Returns: Number of notifications sent
         """
+        # The template used to carry a fixed "votes after the stage returned
+        # to no longer count" line. A rollback deletes no vote on any path
+        # (W50-37), and the only thing it can invalidate is the issued ballot
+        # links, on a zero-vote reopen that re-minted the anonymity salt — so
+        # the sentence is composed from what this rollback actually did.
+        effect = "All recorded votes remain counted; this rollback discarded none."
+        if ballots_must_be_resent:
+            links = "link" if tokens_invalidated == 1 else "links"
+            effect += (
+                f" {tokens_invalidated} issued ballot {links} "
+                f"{'was' if tokens_invalidated == 1 else 'were'} invalidated: "
+                "every ballot email already sent is dead, and ballots must be "
+                "sent again."
+            )
+        else:
+            effect += (
+                " No issued ballot links were invalidated, so ballots do not "
+                "need to be sent again."
+            )
         return await self._notify_leadership(
             election=election,
             performed_by=performed_by,
@@ -5835,6 +6122,9 @@ class ElectionService:
             extra_context={
                 "previous_stage": _stage_label(from_status),
                 "current_stage": _stage_label(to_status),
+                "tokens_invalidated": str(tokens_invalidated),
+                "ballots_must_be_resent": "Yes" if ballots_must_be_resent else "No",
+                "rollback_effect": effect,
             },
             skip_performer=True,
             log_label="rollback notification",
@@ -6381,9 +6671,14 @@ class ElectionService:
         message: Optional[str] = None,
         base_ballot_url: Optional[str] = None,
         is_test: bool = False,
+        is_reminder: bool = False,
     ) -> Tuple[int, int, int, List[Dict], List[str]]:
         """
         Send ballot notification emails to eligible voters with unique voting links.
+
+        ``subject`` replaces the template's subject line for this send;
+        ``is_reminder`` marks a follow-up to a ballot already sent, which
+        leaves the election's "ballots sent" stamp alone.
 
         Members with zero eligible ballot items are skipped (not sent
         an empty ballot). A per-member reason is included in ``skipped_details``.
@@ -6562,7 +6857,7 @@ class ElectionService:
                 and str(recipient.id) not in override_ids
             ):
                 skipped_count += 1
-                reason = "Not on the voter roll frozen when the election opened"
+                reason = self.NOT_ON_FROZEN_ROLL
                 skipped_details.append(
                     {
                         "user_id": str(recipient.id),
@@ -6813,6 +7108,19 @@ class ElectionService:
                         template=ballot_template,
                     )
                 )
+                # A caller's subject wins over the template's: a reminder
+                # titled "Ballot Available" read as a first notice, and the
+                # subject typed into the resend dialog never reached the mail
+                # at all (W50-27).
+                if subject:
+                    subj = subject
+                # A test ballot must be told apart from the real one in the
+                # inbox, whatever template the department configured: the
+                # body's one TEST line is easy to miss, and the secretary
+                # otherwise reads their own preview as the member send
+                # (W50-18).
+                if is_test and not subj.startswith("[TEST]"):
+                    subj = f"[TEST] {subj}"
                 # build_batch_message, not build_message: the pair the latter
                 # returns is MIME only, which the Cloudflare backend cannot
                 # send — a Cloudflare department's ballots all failed on it.
@@ -6872,15 +7180,29 @@ class ElectionService:
         # what this decided (Resend / Remind Non-Voters unlock on it), and an
         # SMTP outage that rejected every message has sent nothing. An earlier
         # successful batch keeps its stamp through a fully-failed resend.
-        if success_count > 0:
+        # A test send stamps nothing: the detail page reads email_sent as
+        # "members have ballots" and offers Resend with a warning about
+        # regenerating their tokens, and email_recipients feeds the report's
+        # "received a ballot" roster — none of which a secretary's own
+        # preview is (W50-18). A reminder leaves the stamp alone too: the
+        # detail page shows it beside "Resend Ballot Emails" as when the
+        # ballots went out, and a reminder has its own reminder_sent_at
+        # (W50-27).
+        if success_count > 0 and not is_test and not is_reminder:
             election.email_sent = True
             election.email_sent_at = datetime.now(timezone.utc)
         # Merge rather than replace: a reminder re-send targets only the
         # non-voters, and replacing would erase the original recipients'
         # "ballot sent" record.
-        election.email_recipients = sorted(
-            set(election.email_recipients or []) | set(sent_user_ids)
-        )
+        if not is_test:
+            election.email_recipients = sorted(
+                set(election.email_recipients or []) | set(sent_user_ids)
+            )
+            election.email_skipped_details = self._merge_skipped_details(
+                election.email_skipped_details,
+                election.email_recipients,
+                skipped_details,
+            )
 
         # Commit all voting tokens and election updates
         await self.db.commit()
@@ -6899,6 +7221,7 @@ class ElectionService:
                 "recipients": success_count,
                 "failed": failed_count,
                 "skipped_empty_ballot": skipped_count,
+                "is_test": is_test,
             },
         )
 
@@ -6968,8 +7291,25 @@ class ElectionService:
             election_id, organization_id, _internal_bypass_visibility=True
         )
 
+        # A tied race is reported with what the close did about it: the
+        # runoff child, when one was created, already exists by the time
+        # the report is built (see close_election).
+        runoff_created = False
+        if results and any(pr.is_tie for pr in results.results_by_position):
+            runoff_created = (
+                await self.db.execute(
+                    select(Election.id)
+                    .where(Election.parent_election_id == str(election_id))
+                    .where(Election.organization_id == str(organization_id))
+                    .where(Election.is_runoff.is_(True))
+                    .limit(1)
+                )
+            ).scalar_one_or_none() is not None
+
         # Build results HTML/text
-        results_html, results_text = self._build_results_tables(results)
+        results_html, results_text = self._build_results_tables(
+            results, runoff_created=runoff_created
+        )
 
         # Determine eligible voters count and build turnout info
         total_eligible = 0
@@ -6982,15 +7322,15 @@ class ElectionService:
             total_eligible = results.total_eligible_voters
             total_votes = results.total_votes
             turnout = results.voter_turnout_percentage
-            quorum_status = "Quorum Met" if results.quorum_met else "Quorum NOT Met"
+            quorum_status = self._quorum_status_text(results)
             quorum_detail = results.quorum_detail or ""
 
         # Build ballot recipients list and skipped voters list
-        ballot_recipients_html, ballot_recipients_text = (
+        ballot_recipients_html, ballot_recipients_text, ballot_recipients_count = (
             await self._build_ballot_recipient_lists(election, organization_id)
         )
-        skipped_html, skipped_text = await self._build_skipped_voter_lists(
-            election, organization_id
+        skipped_html, skipped_text, skipped_count = self._build_skipped_voter_lists(
+            election
         )
 
         # Determine report recipients (election creator + leadership)
@@ -7041,6 +7381,8 @@ class ElectionService:
             election_type=election.election_type or "General",
             start_date=_fmt_dt(election.start_date),
             end_date=_fmt_dt(election.end_date),
+            closed_at=_fmt_dt(election.closed_at or election.end_date),
+            closed_by=await self.closed_by_name(election) or "Automatic close",
             total_eligible_voters=total_eligible,
             total_votes_cast=total_votes,
             voter_turnout_percentage=turnout,
@@ -7050,8 +7392,10 @@ class ElectionService:
             results_text=results_text,
             ballot_recipients_html=ballot_recipients_html,
             ballot_recipients_text=ballot_recipients_text,
+            ballot_recipients_count=ballot_recipients_count,
             skipped_voters_html=skipped_html,
             skipped_voters_text=skipped_text,
+            skipped_voters_count=skipped_count,
             db=self.db,
             organization_id=str(organization_id),
         )
@@ -7144,7 +7488,10 @@ class ElectionService:
         Returns: (pdf_buffer, error, filename)
         """
         from app.models.meeting import Meeting
-        from app.utils.pre_meeting_package_pdf import render_pre_meeting_package_pdf
+        from app.utils.pre_meeting_package_pdf import (
+            render_pre_meeting_package_pdf,
+            summarize_item_eligibility,
+        )
 
         election = await self.get_election(election_id, organization_id)
         if not election:
@@ -7280,6 +7627,9 @@ class ElectionService:
                 "eligible": eligible,
                 "ineligible": ineligible,
                 "overrides": overrides,
+                "items": summarize_item_eligibility(
+                    election.ballot_items or [], roster_members
+                ),
             },
         }
         meta = {
@@ -7599,7 +7949,45 @@ class ElectionService:
             )
             return False, "Failed to send eligibility summary email"
 
-    def _build_results_tables(self, results) -> Tuple[str, str]:
+    @staticmethod
+    def _tie_outcome_line(tie_policy: Optional[str], runoff_created: bool) -> str:
+        """The one line a tied race gets in the close report.
+
+        Two 50% rows do not tell the secretary whether the seat is decided;
+        the tie policy does, and for a runoff whether the round was in fact
+        created (runoffs disabled, or the round cap reached, leave the seat
+        open with nothing scheduled).
+        """
+        policy = tie_policy or "co_winners"
+        if policy == "co_winners":
+            return "Tie \u2014 co-winners per the election's tie policy"
+        if policy == "runoff":
+            if runoff_created:
+                return "Tie \u2014 no winner declared; runoff round created"
+            return (
+                "Tie \u2014 no winner declared; the tie policy calls for a "
+                "runoff round, but none was created"
+            )
+        if policy == "revote":
+            return "Tie \u2014 no winner declared; resolved by a revote at the meeting"
+        if policy == "chair_decides":
+            return "Tie \u2014 no winner declared; resolved by the chair per the bylaws"
+        return f"Tie \u2014 no winner declared; tie policy: {policy}"
+
+    @staticmethod
+    def _quorum_status_text(results: ElectionResults) -> str:
+        """The one-line quorum verdict the close report prints.
+
+        Shared with the certified PDF's wording so the two records cannot
+        disagree about an election that has no quorum rule (W50-48).
+        """
+        if results.quorum_met is None:
+            return "No quorum requirement"
+        return "Quorum Met" if results.quorum_met else "Quorum NOT Met"
+
+    def _build_results_tables(
+        self, results, runoff_created: bool = False
+    ) -> Tuple[str, str]:
         """Build HTML and plain-text tables of election results."""
         if not results or not results.results_by_position:
             return (
@@ -7629,7 +8017,18 @@ class ElectionService:
             for candidate in pos_result.candidates:
                 name = html.escape(candidate.candidate_name)
                 pct = f"{candidate.percentage:.1f}%"
-                result_label = "\u2705 Elected" if candidate.is_winner else "\u2014"
+                if candidate.is_winner and candidate.is_tied:
+                    result_label = "\u2705 Elected (tie \u2014 co-winner)"
+                    winner_text = " \u2014 ELECTED (tie \u2014 co-winner)"
+                elif candidate.is_winner:
+                    result_label = "\u2705 Elected"
+                    winner_text = " \u2014 ELECTED"
+                elif candidate.is_tied:
+                    result_label = "\u26a0\ufe0f Tied"
+                    winner_text = " \u2014 TIED"
+                else:
+                    result_label = "\u2014"
+                    winner_text = ""
                 rows.append(
                     f'<tr><td style="{TD_STYLE}">{position}</td>'
                     f'<td style="{TD_STYLE}">{name}</td>'
@@ -7637,36 +8036,105 @@ class ElectionService:
                     f'<td style="{TD_STYLE}text-align:center;">{pct}</td>'
                     f'<td style="{TD_STYLE}text-align:center;">{result_label}</td></tr>'
                 )
-                winner_text = " — ELECTED" if candidate.is_winner else ""
                 text_parts.append(
                     f"  {candidate.candidate_name} — {candidate.vote_count} votes ({pct}){winner_text}"
                 )
+            if pos_result.is_tie:
+                outcome = self._tie_outcome_line(
+                    getattr(results, "tie_policy", None), runoff_created
+                )
+                rows.append(
+                    f'<tr><td style="{TD_STYLE}" colspan="5">'
+                    f"<strong>{html.escape(outcome)}</strong></td></tr>"
+                )
+                text_parts.append(f"  {outcome}")
 
         rows.append("</table>")
         return "\n".join(rows), "\n".join(text_parts)
 
+    BALLOTS_NOT_EMAILED = "Ballots were not emailed for this election."
+    # One string for the send, the reminder and the roster: the report
+    # prints the reason the send recorded, and the roster must say the same
+    # thing before the send that the send will say after it (W50-55).
+    NOT_ON_FROZEN_ROLL = "Not on the voter roll frozen when the election opened"
+
+    @staticmethod
+    def summarize_skipped(skipped_details: List[Dict]) -> str:
+        """The skipped clause of a send/reminder summary, e.g.
+        ``"2 skipped (1: Not checked in for meeting; 1: Not on the voter
+        roll frozen when the election opened)"``.
+
+        Built from the reasons the send actually recorded rather than a
+        fixed "did not meet ballot item requirements" — that sentence named
+        an item rule for a member who was skipped for not being on the
+        frozen roll (W50-55). Returns "" when nothing was skipped.
+        """
+        if not skipped_details:
+            return ""
+        counts: Dict[str, int] = {}
+        for detail in skipped_details:
+            reason = detail.get("reason") or "No reason recorded"
+            counts[reason] = counts.get(reason, 0) + 1
+        if len(counts) == 1:
+            (reason,) = counts
+            return f"{len(skipped_details)} skipped ({reason})"
+        # Most common first, then alphabetical so the sentence is stable.
+        by_reason = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+        breakdown = "; ".join(f"{n}: {reason}" for reason, n in by_reason)
+        return f"{len(skipped_details)} skipped ({breakdown})"
+
+    @staticmethod
+    def _merge_skipped_details(
+        prior: Optional[List[Dict]],
+        recipient_ids: List[str],
+        skipped_details: List[Dict],
+    ) -> List[Dict]:
+        """Fold one send's skip list into the election's record of it.
+
+        Mirrors the email_recipients merge above it: a reminder targets only
+        the non-voters, so replacing the list would forget everyone the
+        first send skipped. A member is never on both lists — a ballot that
+        did go out (this send or an earlier one) settles the question, and a
+        member skipped again keeps the latest reason.
+        """
+        received = {str(uid) for uid in recipient_ids}
+        merged: Dict[str, Dict] = {
+            str(d["user_id"]): d
+            for d in (prior or [])
+            if str(d.get("user_id")) not in received
+        }
+        for detail in skipped_details:
+            if str(detail["user_id"]) not in received:
+                merged[str(detail["user_id"])] = detail
+        return sorted(
+            merged.values(), key=lambda d: (d.get("name") or "", d["user_id"])
+        )
+
     async def _build_ballot_recipient_lists(
         self, election: Election, organization_id: str
-    ) -> Tuple[str, str]:
-        """Build HTML and text lists of members who received ballots."""
-        recipient_ids = election.email_recipients or []
-        if not recipient_ids:
-            return (
-                "<p><em>No ballot emails were sent.</em></p>",
-                "No ballot emails were sent.",
-            )
+    ) -> Tuple[str, str, int]:
+        """Build HTML and text lists of members who received ballots.
 
-        users_result = await self.db.execute(
-            select(User)
-            .where(User.id.in_([str(uid) for uid in recipient_ids]))
-            .where(User.organization_id == organization_id)
-        )
-        users = users_result.scalars().all()
+        Returns (html, text, count); the count is the length of the list
+        printed, so the heading can never disagree with the names under it.
+        """
+        recipient_ids = election.email_recipients or []
+        users = []
+        if recipient_ids:
+            # The report passes a UUID; bound as-is it matches no row, and
+            # every report then read "no ballot emails were sent" (W50-33).
+            users_result = await self.db.execute(
+                select(User)
+                .where(User.id.in_([str(uid) for uid in recipient_ids]))
+                .where(User.organization_id == str(organization_id))
+            )
+            users = users_result.scalars().all()
 
         if not users:
             return (
-                "<p><em>No ballot emails were sent.</em></p>",
-                "No ballot emails were sent.",
+                f"<p><em>{self.BALLOTS_NOT_EMAILED}</em></p>",
+                self.BALLOTS_NOT_EMAILED,
+                0,
             )
 
         html_items = []
@@ -7680,31 +8148,33 @@ class ElectionService:
         return (
             f"<ul>{''.join(html_items)}</ul>",
             "\n".join(text_items),
+            len(users),
         )
 
-    async def _build_skipped_voter_lists(
-        self, election: Election, organization_id: str
-    ) -> Tuple[str, str]:
-        """Build HTML and text lists of members who did NOT receive ballots, with reasons."""
-        recipient_ids = set(str(uid) for uid in (election.email_recipients or []))
+    def _build_skipped_voter_lists(self, election: Election) -> Tuple[str, str, int]:
+        """Build HTML and text lists of members who did NOT receive ballots.
 
-        # Get all active users in the org
-        users_result = await self.db.execute(
-            select(User)
-            .where(User.organization_id == organization_id)
-            .where(User.is_active.is_(True))
-            .options(selectinload(User.roles))
-        )
-        all_active = users_result.scalars().all()
-
-        # Find users who didn't get a ballot
-        skipped_users = [u for u in all_active if str(u.id) not in recipient_ids]
-
-        if not skipped_users:
+        Reads only what the send recorded (email_skipped_details), never a
+        fresh eligibility pass: a reason derived at close time describes the
+        member now, not the decision the send made, and the diff against
+        every active member it replaced listed people the send never
+        considered at all (W50-33).
+        """
+        if not election.email_recipients:
             return (
-                "<p><em>All active members received ballots.</em></p>",
-                "All active members received ballots.",
+                f"<p><em>{self.BALLOTS_NOT_EMAILED}</em></p>",
+                self.BALLOTS_NOT_EMAILED,
+                0,
             )
+
+        skipped = election.email_skipped_details
+        if skipped is None:
+            # Ballots went out before the skip list was recorded.
+            note = "No record of skipped members was kept for this send."
+            return f"<p><em>{note}</em></p>", note, 0
+        if not skipped:
+            note = "No members were skipped."
+            return f"<p><em>{note}</em></p>", note, 0
 
         html_rows = [
             f'<table style="{TABLE_STYLE}"><tr>'
@@ -7713,39 +8183,17 @@ class ElectionService:
             "</tr>"
         ]
         text_items = []
-
-        for user in sorted(skipped_users, key=lambda u: u.full_name or u.username):
-            reason = await self._get_ineligibility_reason_for_user(
-                user=user,
-                election=election,
-                organization_id=organization_id,
-            )
-            if not reason:
-                # Check if they were in the eligible list at all
-                eligible_list = election.eligible_voters
-                if eligible_list and str(user.id) not in [
-                    str(v) for v in eligible_list
-                ]:
-                    reason = (
-                        "Not in the eligible voters list — this election "
-                        "is restricted to specific members"
-                    )
-                else:
-                    reason = (
-                        "No eligible ballot items — member's role type and "
-                        "attendance status did not match any item requirements"
-                    )
-
-            name = html.escape(user.full_name or user.username)
-            safe_reason = html.escape(reason)
+        for detail in sorted(skipped, key=lambda d: d.get("name") or ""):
+            name = detail.get("name") or "Unknown member"
+            reason = detail.get("reason") or "No reason recorded"
             html_rows.append(
-                f'<tr><td style="{TD_STYLE}">{name}</td>'
-                f'<td style="{TD_STYLE}">{safe_reason}</td></tr>'
+                f'<tr><td style="{TD_STYLE}">{html.escape(name)}</td>'
+                f'<td style="{TD_STYLE}">{html.escape(reason)}</td></tr>'
             )
-            text_items.append(f"  - {user.full_name or user.username}: {reason}")
+            text_items.append(f"  - {name}: {reason}")
 
         html_rows.append("</table>")
-        return "\n".join(html_rows), "\n".join(text_items)
+        return "\n".join(html_rows), "\n".join(text_items), len(skipped)
 
     async def has_user_voted(
         self, user_id: UUID, election_id: UUID, election: Optional[Election] = None
@@ -7786,6 +8234,12 @@ class ElectionService:
         if not voting_token:
             return None, None, "Invalid voting token"
 
+        # A link a reminder retired is also expired, so this must come
+        # first: "expired" reads as voting being over, and the member's
+        # newer email still holds a working link (W50-27).
+        if voting_token.superseded_at is not None:
+            return None, None, SUPERSEDED_TOKEN_MESSAGE
+
         # Check if token has expired
         token_exp = self._ensure_utc(voting_token.expires_at)
         if datetime.now(timezone.utc) > token_exp:
@@ -7795,11 +8249,15 @@ class ElectionService:
         if voting_token.used:
             return None, None, "This ballot has already been fully submitted"
 
-        # Update access tracking
+        # Record the first open only. ``access_count`` is incremented on a
+        # successful submit, not here: every ballot page load and every
+        # refused submit re-enters this lookup, so a member whose ballot
+        # was rejected six times read as seven "accesses" in forensics and
+        # a single successful ballot was indistinguishable from a replayed
+        # link (W50-54).
         if not voting_token.first_accessed_at:
             voting_token.first_accessed_at = datetime.now(timezone.utc)
-        voting_token.access_count += 1
-        await self.db.commit()
+            await self.db.commit()
 
         # Get the election
         election_result = await self.db.execute(
@@ -7810,6 +8268,25 @@ class ElectionService:
         if not election:
             return None, None, "Election not found"
 
+        # Check if election is still open. This runs before the frozen-roll
+        # compare: closing destroys the anonymity salt, so after close every
+        # token's hash fails the roll check and a member who did vote was
+        # told they were never on the roll (W50-44).
+        now = datetime.now(timezone.utc)
+        start = self._ensure_utc(election.start_date)
+        end = self._ensure_utc(election.end_date)
+        if election.status == ElectionStatus.CLOSED:
+            return None, None, "Voting has closed"
+
+        if election.status != ElectionStatus.OPEN:
+            return None, None, f"Election is {election.status.value}"
+
+        if start and now < start:
+            return None, None, "Voting has not started yet"
+
+        if end and now > end:
+            return None, None, "Voting has ended"
+
         # Defense in depth for tokens issued before the roll was frozen (or
         # by an older application node): a credential cannot bypass the same
         # frozen-roll boundary enforced by authenticated voting. Test tokens
@@ -7819,6 +8296,21 @@ class ElectionService:
         if not voting_token.is_test and not self._token_voter_is_on_frozen_roll(
             election, voting_token
         ):
+            if election.voter_anonymity_salt is None:
+                # An open election with no salt was closed and reopened: the
+                # close destroyed the salt this link's hash was keyed to, so
+                # the compare cannot say whether the holder is on the roll —
+                # only that the link predates the reopen and a re-sent
+                # ballot is the way back in.
+                return (
+                    None,
+                    None,
+                    (
+                        "This election was closed and reopened, so this "
+                        "ballot link is no longer valid. Ask your secretary "
+                        "for a new ballot link."
+                    ),
+                )
             return (
                 None,
                 None,
@@ -7827,19 +8319,6 @@ class ElectionService:
                     "election opened"
                 ),
             )
-
-        # Check if election is still open
-        now = datetime.now(timezone.utc)
-        start = self._ensure_utc(election.start_date)
-        end = self._ensure_utc(election.end_date)
-        if election.status != ElectionStatus.OPEN:
-            return None, None, f"Election is {election.status.value}"
-
-        if start and now < start:
-            return None, None, "Voting has not started yet"
-
-        if end and now > end:
-            return None, None, "Voting has ended"
 
         return election, voting_token, None
 
@@ -7886,6 +8365,8 @@ class ElectionService:
             return None, None, "Invalid voting token"
         if locked_token.used:
             return None, None, "This ballot has already been fully submitted"
+        if locked_token.superseded_at is not None:
+            return None, None, SUPERSEDED_TOKEN_MESSAGE
 
         now = datetime.now(timezone.utc)
         if now > self._ensure_utc(locked_token.expires_at):
@@ -8184,6 +8665,13 @@ class ElectionService:
                     voting_token.used = True
                     voting_token.used_at = datetime.now(timezone.utc)
 
+        voting_token.access_count += 1
+
+        # Snapshot before the commit: rollback expires ``election`` and a
+        # lazy load in the except branch raises MissingGreenlet (W50-6).
+        election_id_str = str(election.id)
+        audit_ip = self._audit_ip(election, ip_address)
+
         # SECURITY: Database-level unique constraint on vote_dedup_hash
         # prevents double-voting even if race condition bypasses application checks
         try:
@@ -8192,16 +8680,16 @@ class ElectionService:
         except IntegrityError:
             await self.db.rollback()
             logger.warning(
-                f"Token double-vote attempt blocked | election={election.id} position={position}"
+                f"Token double-vote attempt blocked | election={election_id_str} position={position}"
             )
             await self._audit(
                 "vote_double_attempt_token",
                 {
-                    "election_id": str(election.id),
+                    "election_id": election_id_str,
                     "position": position,
                 },
                 severity="warning",
-                ip_address=self._audit_ip(election, ip_address),
+                ip_address=audit_ip,
             )
             if position:
                 return (
@@ -8658,6 +9146,7 @@ class ElectionService:
         # Mark token as fully used
         voting_token.used = True
         voting_token.used_at = datetime.now(timezone.utc)
+        voting_token.access_count += 1
         voting_token.positions_voted = [
             v.get("ballot_item_id")
             for v in votes
@@ -8666,20 +9155,27 @@ class ElectionService:
             or v.get("rankings")
         ]
 
+        # Snapshot before the commit: rollback expires ``election`` and a
+        # lazy load in the except branch raises MissingGreenlet (W50-6).
+        election_id_str = str(election.id)
+        audit_ip = self._audit_ip(election, ip_address)
+
         # Commit all votes atomically
         try:
             await self.db.commit()
         except IntegrityError:
             await self.db.rollback()
-            logger.warning(f"Ballot double-submission blocked | election={election.id}")
+            logger.warning(
+                f"Ballot double-submission blocked | election={election_id_str}"
+            )
             await self._audit(
                 "vote_double_attempt_token",
                 {
-                    "election_id": str(election.id),
+                    "election_id": election_id_str,
                     "type": "bulk_ballot_submission",
                 },
                 severity="warning",
-                ip_address=self._audit_ip(election, ip_address),
+                ip_address=audit_ip,
             )
             return None, "This ballot has already been submitted"
 
@@ -8687,13 +9183,21 @@ class ElectionService:
             f"Ballot submitted | election={election.id} "
             f"votes={len(created_votes)} abstentions={abstentions}"
         )
+        audit_data = {
+            "election_id": str(election.id),
+            "votes_cast": len(created_votes),
+            "abstentions": abstentions,
+        }
+        # The vote ids are what an officer needs to void one of these votes
+        # from the forensics panel, which is the only place a token ballot
+        # is visible. On an anonymous ballot they stay out: one row listing
+        # every vote of a ballot ties the voter's choices together, which
+        # the per-vote rows exist to prevent (W50-54).
+        if not election.anonymous_voting:
+            audit_data["vote_ids"] = [str(v.id) for v in created_votes]
         await self._audit(
             "ballot_submitted_token",
-            {
-                "election_id": str(election.id),
-                "votes_cast": len(created_votes),
-                "abstentions": abstentions,
-            },
+            audit_data,
             ip_address=self._audit_ip(election, ip_address),
         )
 
@@ -8782,6 +9286,17 @@ class ElectionService:
 
         ballot_items = election.ballot_items or []
         override_user_ids = {o.get("user_id") for o in (election.voter_overrides or [])}
+
+        # The roll frozen at open. None means the election has not opened
+        # (or predates the freeze) and eligibility is evaluated live — which
+        # is also what open_election reads to build the snapshot. Once it
+        # exists, send_ballot_emails skips anyone not on it who holds no
+        # override, so the roster must not promise them a ballot (W50-55).
+        frozen_roster = getattr(election, "eligible_roster_snapshot", None)
+        frozen_roster_ids = (
+            {str(uid) for uid in frozen_roster} if frozen_roster is not None else None
+        )
+        ballot_recipient_ids = {str(uid) for uid in (election.email_recipients or [])}
 
         # Membership tier definitions for the positional (no-ballot-items)
         # eligibility path below
@@ -8896,6 +9411,18 @@ class ElectionService:
                 eligible_count > 0 or has_override or positional_eligible
             ) and in_eligible_list
 
+            # A member outside a restricted voter list is never handed to
+            # the send, so that reason stays; everyone else the send would
+            # turn away at the frozen roll gets the reason the send records.
+            if (
+                frozen_roster_ids is not None
+                and not has_override
+                and in_eligible_list
+                and user_id not in frozen_roster_ids
+            ):
+                will_receive_ballot = False
+                overall_reason = self.NOT_ON_FROZEN_ROLL
+
             member_type = getattr(user, "membership_type", None) or "active"
             roster.append(
                 {
@@ -8907,6 +9434,7 @@ class ElectionService:
                     "has_voted": has_voted,
                     "is_attending": is_attending,
                     "will_receive_ballot": will_receive_ballot,
+                    "ballot_sent": user_id in ballot_recipient_ids,
                     "eligible_item_count": eligible_count if will_receive_ballot else 0,
                     "total_item_count": len(ballot_items),
                     "ineligibility_reason": overall_reason,
@@ -8931,5 +9459,7 @@ class ElectionService:
             "total_ineligible": len(roster) - total_eligible,
             "total_voted": total_voted,
             "total_overrides": total_overrides,
+            "total_ballots_sent": sum(1 for r in roster if r["ballot_sent"]),
+            "email_sent_at": election.email_sent_at,
             "roster": roster,
         }

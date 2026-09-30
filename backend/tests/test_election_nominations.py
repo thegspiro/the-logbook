@@ -771,6 +771,63 @@ class TestHardening(TestNominationSetup):
         assert recorded == 3
         assert batch is not None
 
+    async def test_pending_batch_does_not_occupy_plausibility_cap(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        """W50-40: a pending (unattested) over-count batch does not count
+        toward the cap, so an ordinary batch keyed in afterwards is accepted
+        without the override; once the batch is confirmed it does count."""
+        org_id, user1_id, user2_id = setup_org_and_users
+        election_id, cid = await self._open_election_with_candidate(
+            db_session, org_id, user1_id
+        )
+        svc = ElectionService(db_session)
+
+        # Default attestation setting (2): the override batch stays pending.
+        recorded, over_batch, err = await svc.record_manual_ballots(
+            election_id=uuid.UUID(election_id),
+            organization_id=uuid.UUID(org_id),
+            recorded_by=user1_id,
+            entries=[{"candidate_id": cid, "count": 40}],
+            allow_over_count=True,
+        )
+        assert err is None, err
+        assert recorded == 40
+
+        # Two eligible members, one vote each: a single ballot is plausible
+        # on its own and must not be refused because of the pending claim.
+        recorded, batch, err = await svc.record_manual_ballots(
+            election_id=uuid.UUID(election_id),
+            organization_id=uuid.UUID(org_id),
+            recorded_by=user1_id,
+            entries=[{"candidate_id": cid, "count": 1}],
+        )
+        assert err is None, err
+        assert recorded == 1
+        assert batch is not None
+
+        # Confirm the over-count batch directly: the test is about what the
+        # cap reads, not the attestation flow (covered by TestAttestations).
+        await db_session.execute(
+            text(
+                "UPDATE manual_ballot_batches SET status = 'confirmed', "
+                "confirmed_at = NOW() WHERE id = :bid"
+            ),
+            {"bid": over_batch},
+        )
+        await db_session.flush()
+
+        # Confirmed, those 40 ballots now fill the cap and the guard fires.
+        recorded, batch, err = await svc.record_manual_ballots(
+            election_id=uuid.UUID(election_id),
+            organization_id=uuid.UUID(org_id),
+            recorded_by=user2_id,
+            entries=[{"candidate_id": cid, "count": 1}],
+        )
+        assert recorded == 0
+        assert batch is None
+        assert "eligible" in err
+
     async def test_attested_ballot_count_guard_and_override(
         self, db_session: AsyncSession, setup_org_and_users
     ):
@@ -949,6 +1006,10 @@ class TestHardening(TestNominationSetup):
         live = [t for t in tokens if t.expires_at.replace(tzinfo=timezone.utc) > now]
         # Exactly one live token per member — the reminder's.
         assert len(live) == 2
+        # The retired ones are marked as replaced, not merely expired, so the
+        # ballot page can say a newer email holds the working link (W50-27).
+        assert all(t.superseded_at is None for t in live)
+        assert all(t.superseded_at is not None for t in tokens if t not in live)
 
     async def test_nominee_notification_sent(
         self, db_session: AsyncSession, setup_org_and_users
@@ -1369,3 +1430,73 @@ class TestAttestations(TestNominationSetup):
         assert len(entry["attestations"]) == 1
         assert entry["attestations"][0]["user_id"] == user2_id
         assert entry["attestations"][0]["name"] == "Bob Baker"
+        # An ordinary batch carries no over-count mark and no void trail
+        assert entry["over_count_override"] is False
+        assert entry["voided_by"] is None
+        assert entry["voided_at"] is None
+        assert entry["void_reason"] is None
+
+    async def test_list_batches_shows_void_trail_and_over_count_mark(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        """W50-66: a voided card names who voided it, when and why, and a
+        batch recorded past the plausibility guard is marked as such so the
+        attesting officers know what they are confirming."""
+        org_id, user1_id, user2_id = setup_org_and_users
+        election_id, cid = await self._open_election_with_candidate(
+            db_session, org_id, user1_id
+        )
+        svc = ElectionService(db_session)
+
+        # Two eligible members, one vote each -> 3 ballots needs the override
+        _r, over_batch_id, err = await svc.record_manual_ballots(
+            election_id=uuid.UUID(election_id),
+            organization_id=uuid.UUID(org_id),
+            recorded_by=user1_id,
+            entries=[{"candidate_id": cid, "count": 3}],
+            allow_over_count=True,
+        )
+        assert err is None, err
+
+        _r, plain_batch_id, err = await svc.record_manual_ballots(
+            election_id=uuid.UUID(election_id),
+            organization_id=uuid.UUID(org_id),
+            recorded_by=user1_id,
+            entries=[{"candidate_id": cid, "count": 1}],
+        )
+        assert err is None, err
+
+        before = datetime.now(timezone.utc).replace(microsecond=0)
+        voided, err = await svc.void_manual_ballot_batch(
+            election_id=uuid.UUID(election_id),
+            organization_id=uuid.UUID(org_id),
+            batch_id=plain_batch_id,
+            deleted_by=user2_id,
+            reason="Wrong column tallied",
+        )
+        assert err is None, err
+        assert voided == 1
+
+        batches = {
+            b["batch_id"]: b
+            for b in await svc.list_manual_ballot_batches(
+                uuid.UUID(election_id), uuid.UUID(org_id)
+            )
+        }
+
+        over = batches[over_batch_id]
+        assert over["status"] == "pending"
+        assert over["over_count_override"] is True
+        assert over["voided_by"] is None
+
+        plain = batches[plain_batch_id]
+        assert plain["status"] == "voided"
+        assert plain["over_count_override"] is False
+        assert plain["voided_by"] == user2_id
+        assert plain["voided_by_name"] == "Bob Baker"
+        assert plain["void_reason"] == "Wrong column tallied"
+        voided_at = plain["voided_at"]
+        assert voided_at is not None
+        if voided_at.tzinfo is None:
+            voided_at = voided_at.replace(tzinfo=timezone.utc)
+        assert voided_at >= before

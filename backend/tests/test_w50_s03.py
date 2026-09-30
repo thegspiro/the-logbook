@@ -11,8 +11,13 @@ ballot email can vote once in the app and once by link, and
 ``get_non_voters`` (keyed on ``voter_id`` for named elections) still lists
 the member who voted by link.
 
+The same blindness reached every reader keyed on ``voter_id`` alone: the
+eligibility roster showed the link voter as not having voted, the reminder
+(which reads ``get_non_voters``) mailed them "you have not yet voted", and
+``get_election_stats.total_voters`` left them out of turnout.
+
 These tests fail on the current code and pass once the two paths share a
-duplicate check.
+duplicate check and every reader matches on either identity column.
 """
 
 import secrets
@@ -126,6 +131,7 @@ async def named_election(db_session: AsyncSession):
     return {
         "org_id": org_id,
         "voter_id": voter_id,
+        "rival_id": rival_id,
         "election_id": election_id,
         "candidate_a_id": candidate_a_id,
         "candidate_b_id": candidate_b_id,
@@ -217,3 +223,80 @@ class TestNamedElectionDoubleVote:
         assert second is None, "the app cast a second Chief vote after the link"
         assert err2, "a second vote for Chief must be refused with a reason"
         assert await _counted_votes(db_session, data["election_id"]) == 1
+
+
+class TestTokenVoterIsCountedEverywhere:
+    """W50-3: a link vote in a named election reaches every turnout reader."""
+
+    async def _cast_by_link(self, db_session: AsyncSession, data: dict) -> None:
+        svc = ElectionService(db_session)
+        raw_token = await _issue_token(db_session, data)
+        vote, err = await svc.cast_vote_with_token(
+            token=raw_token,
+            candidate_id=uuid.UUID(data["candidate_b_id"]),
+            position="Chief",
+        )
+        assert err is None, err
+        assert vote is not None
+        assert vote.voter_id is None, "the link path must not store the id"
+
+    async def test_token_voter_is_not_a_non_voter(
+        self, db_session: AsyncSession, named_election
+    ):
+        data = named_election
+        await self._cast_by_link(db_session, data)
+
+        non_voters = await ElectionService(db_session).get_non_voters(
+            uuid.UUID(data["election_id"]), uuid.UUID(data["org_id"])
+        )
+        listed = {nv["id"] for nv in non_voters}
+        assert data["voter_id"] not in listed, "link voter would be reminded"
+        assert data["rival_id"] in listed, "a member who has not voted is missing"
+
+    async def test_token_voter_has_voted_on_roster(
+        self, db_session: AsyncSession, named_election
+    ):
+        data = named_election
+        await self._cast_by_link(db_session, data)
+
+        roster = await ElectionService(db_session).get_eligibility_roster(
+            uuid.UUID(data["election_id"]), uuid.UUID(data["org_id"])
+        )
+        by_id = {r["user_id"]: r for r in roster["roster"]}
+        assert by_id[data["voter_id"]]["has_voted"] is True
+        assert by_id[data["rival_id"]]["has_voted"] is False
+        assert roster["total_voted"] == 1
+
+    async def test_token_voter_counts_in_turnout(
+        self, db_session: AsyncSession, named_election
+    ):
+        data = named_election
+        await self._cast_by_link(db_session, data)
+
+        svc = ElectionService(db_session)
+        stats = await svc.get_election_stats(
+            uuid.UUID(data["election_id"]), uuid.UUID(data["org_id"])
+        )
+        assert stats is not None
+        assert stats.total_votes_cast == 1
+        assert stats.total_voters == 1, "link voter dropped from turnout"
+
+        # The rival votes in the app: two people, two ballots — not one
+        # voter with two rows, and not three.
+        vote, err = await svc.cast_vote(
+            user_id=uuid.UUID(data["rival_id"]),
+            election_id=uuid.UUID(data["election_id"]),
+            candidate_id=uuid.UUID(data["candidate_a_id"]),
+            position="Chief",
+            organization_id=uuid.UUID(data["org_id"]),
+        )
+        assert err is None, err
+        assert vote is not None
+
+        stats = await svc.get_election_stats(
+            uuid.UUID(data["election_id"]), uuid.UUID(data["org_id"])
+        )
+        assert stats is not None
+        assert stats.total_votes_cast == 2
+        assert stats.total_voters == 2
+        assert stats.voter_turnout_percentage == 100.0

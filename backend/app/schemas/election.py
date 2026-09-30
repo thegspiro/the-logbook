@@ -54,6 +54,19 @@ def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
     return value
 
 
+def _empty_roster_means_everyone(
+    values: Optional[List[UUID]],
+) -> Optional[List[UUID]]:
+    # W50-41: the stored list is read two ways — in-app eligibility checks
+    # ``is not None`` (an empty list bars every member) while the ballot
+    # mailer, token voting and eligible-count paths test truthiness (an empty
+    # list means "all members"). A form that clears the picker sends ``[]``;
+    # settle it to the one value every reader agrees on before it is stored.
+    if values is not None and len(values) == 0:
+        return None
+    return values
+
+
 # Ballot Item Schemas
 
 
@@ -373,6 +386,13 @@ class ElectionBase(BaseModel):
         # (a 500) instead of returning a 422.
         return _as_utc(v)
 
+    @field_validator("eligible_voters")
+    @classmethod
+    def normalize_eligible_voters(
+        cls, values: Optional[List[UUID]]
+    ) -> Optional[List[UUID]]:
+        return _empty_roster_means_everyone(values)
+
     @field_validator("positions")
     @classmethod
     def validate_positions(cls, values: Optional[List[str]]) -> Optional[List[str]]:
@@ -486,6 +506,13 @@ class ElectionUpdate(BaseModel):
         # and against stored values; a naive/aware mix raised TypeError (500).
         return _as_utc(v)
 
+    @field_validator("eligible_voters")
+    @classmethod
+    def normalize_eligible_voters(
+        cls, values: Optional[List[UUID]]
+    ) -> Optional[List[UUID]]:
+        return _empty_roster_means_everyone(values)
+
     @field_validator("positions")
     @classmethod
     def validate_positions(cls, values: Optional[List[str]]) -> Optional[List[str]]:
@@ -550,6 +577,12 @@ class ElectionResponse(UTCResponseBase):
     tie_policy: str = "co_winners"
     status: str
     created_by: Optional[UUID] = None
+    # Actual close, distinct from the scheduled end_date. closed_by is None
+    # for a lifecycle (automatic) close; closed_by_name is resolved by the
+    # endpoint so a card can print the officer without a second request.
+    closed_at: Optional[datetime] = None
+    closed_by: Optional[UUID] = None
+    closed_by_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -579,6 +612,7 @@ class ElectionListResponse(UTCResponseBase):
     election_type: str
     start_date: datetime
     end_date: datetime
+    closed_at: Optional[datetime] = None
     status: str
     positions: Optional[List[str]] = None
     total_votes: Optional[int] = None
@@ -620,14 +654,20 @@ class BallotElectionResponse(UTCResponseBase):
 
 # Candidate Schemas
 
+CANDIDATE_STATEMENT_MAX_LENGTH = 5000
+
 
 class CandidateBase(BaseModel):
     """Base candidate schema"""
 
     name: str = Field(..., min_length=1, max_length=200)
     position: Optional[str] = Field(None, max_length=100)
+    # The column is TEXT, so without a bound a nominee can file 60 000 chars
+    # that every ballot, preview and package then renders in full (W50-67).
     statement: Optional[str] = Field(
-        None, description="Candidate's statement or platform"
+        None,
+        max_length=CANDIDATE_STATEMENT_MAX_LENGTH,
+        description="Candidate's statement or platform",
     )
     photo_url: Optional[str] = Field(None, max_length=500)
     display_order: int = Field(
@@ -650,7 +690,7 @@ class CandidateUpdate(BaseModel):
 
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     position: Optional[str] = Field(None, max_length=100)
-    statement: Optional[str] = None
+    statement: Optional[str] = Field(None, max_length=CANDIDATE_STATEMENT_MAX_LENGTH)
     photo_url: Optional[str] = Field(None, max_length=500)
     accepted: Optional[bool] = None
     display_order: Optional[int] = None
@@ -746,7 +786,15 @@ class ManualBallotBatchInfo(BaseModel):
     # Physical ballots the recorder attested for the batch; None on batches
     # recorded before the count existed (turnout falls back to the estimate).
     ballots_cast: Optional[int] = None
+    # The recorder overrode the plausibility guard; attesting officers are
+    # confirming an implausible count and the card must say so (W50-66).
+    over_count_override: bool = False
     required_attestations: int = 0
+    # Set only when status is "voided".
+    voided_by: Optional[str] = None
+    voided_by_name: Optional[str] = None
+    voided_at: Optional[datetime] = None
+    void_reason: Optional[str] = None
     attestations: List[ManualBallotAttestationInfo] = []
     totals: List[ManualBallotBatchTotal] = []
     total_ballots: int = 0
@@ -904,9 +952,10 @@ class CandidateResult(BaseModel):
     vote_count: int
     percentage: float
     is_winner: bool
-    # True when this candidate is part of an unresolved top-count tie
-    # (tie_policy other than co_winners): no winner is declared and the
-    # tie is resolved per the election's policy.
+    # True when this candidate is part of a top-count tie under most_votes,
+    # whatever the tie_policy does with it: under co_winners the tied
+    # candidates are also winners; under runoff / revote / chair_decides no
+    # winner is declared and the tie is resolved per the policy.
     is_tied: bool = False
 
 
@@ -933,7 +982,10 @@ class ElectionResults(BaseModel):
     voter_turnout_percentage: float
     results_by_position: List[PositionResults]
     overall_results: List[CandidateResult]
-    quorum_met: bool = True
+    # None means the election has no quorum rule at all (quorum_type
+    # "none"), so no surface can honestly say "met" — a default of True
+    # certified a quorum on every election, including 0-vote ones (W50-48).
+    quorum_met: Optional[bool] = None
     quorum_detail: Optional[str] = None
     tie_policy: Optional[str] = None
 
@@ -1460,6 +1512,11 @@ class VoteIntegrityResponse(BaseModel):
 
     election_id: str
     total_votes: int
+    # total_votes = counted + pending paper + test: every chained row is
+    # checked, but only counted_votes appear in the tally (W50-65)
+    counted_votes: int = 0
+    pending_paper_votes: int = 0
+    test_votes: int = 0
     valid_signatures: int
     unsigned_votes: int
     tampered_votes: int
@@ -1481,17 +1538,24 @@ class DeletedVoteRecord(BaseModel):
     """A single soft-deleted vote in the forensics report"""
 
     vote_id: str
-    candidate_id: str
+    # None on an anonymous election: the choice would join to the voter
+    # through the audit log's vote_id (W50-2)
+    candidate_id: Optional[str] = None
     position: Optional[str] = None
     deleted_at: Optional[str] = None
     deleted_by: Optional[str] = None
     deletion_reason: Optional[str] = None
+    is_manual: bool = False
+    manual_batch_id: Optional[str] = None
 
 
 class DeletedVotesSummary(BaseModel):
     """Deleted votes section of forensics report"""
 
     count: int
+    # Distinct voided paper batches among ``records`` — a voided batch is
+    # one action, not ``count`` voided votes (W50-65)
+    paper_batch_count: int = 0
     records: List[DeletedVoteRecord]
 
 
@@ -1501,6 +1565,7 @@ class TokenAccessRecord(BaseModel):
     token_id: str
     used: bool
     used_at: Optional[str] = None
+    superseded_at: Optional[str] = None
     first_accessed_at: Optional[str] = None
     access_count: int = 0
     positions_voted: Optional[List[str]] = None
@@ -1513,6 +1578,10 @@ class VotingTokensSummary(BaseModel):
 
     total_issued: int
     total_used: int
+    # issued = used + superseded + expired + live (W50-65)
+    total_superseded: int = 0
+    total_expired: int = 0
+    total_live: int = 0
     records: List[TokenAccessRecord]
 
 
@@ -1586,6 +1655,8 @@ class ForensicsResponse(BaseModel):
     anomaly_detection: Optional[AnomalyDetection] = None
     proxy_voting: Optional[ProxyVotingSummary] = None
     voting_timeline: Optional[Dict[str, int]] = None
+    # IANA zone the timeline's hour buckets are keyed in
+    voting_timeline_timezone: Optional[str] = None
 
 
 class AttendeeListResponse(BaseModel):
@@ -1673,6 +1744,15 @@ class VoteReceiptResponse(BaseModel):
     """Response for vote receipt verification"""
 
     verified: bool
+    # A test-ballot receipt verifies (the vote exists) but is never counted;
+    # the two are reported separately so the page does not have to parse
+    # the message to tell them apart.
+    counted: bool = False
+    # A voided vote's receipt still matches a row, and the voter deserves to
+    # hear that an officer voided it rather than that no such vote exists
+    # (W50-54). Reported as its own flag so the page can say so without
+    # parsing the message.
+    voided: bool = False
     message: str
     voted_at: Optional[str] = None
     position: Optional[str] = None
@@ -1701,6 +1781,8 @@ class RosterMember(BaseModel):
     has_voted: bool
     is_attending: bool
     will_receive_ballot: bool
+    # True once a live send or reminder delivered this member a ballot
+    ballot_sent: bool = False
     eligible_item_count: int
     total_item_count: int
     ineligibility_reason: Optional[str] = None
@@ -1718,4 +1800,6 @@ class EligibilityRosterResponse(BaseModel):
     total_ineligible: int
     total_voted: int
     total_overrides: int
+    total_ballots_sent: int = 0
+    email_sent_at: Optional[datetime] = None
     roster: List[RosterMember]

@@ -9,6 +9,7 @@
 - ``open`` / ``rollback`` answer 404, not 400, for an unknown election.
 - ``PATCH`` refuses to drop a position that already has a nominee, so no
   candidate is orphaned off the ballot.
+- A candidate ``statement`` is bounded on create and update (W50-67).
 """
 
 import json
@@ -18,6 +19,7 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,7 +31,14 @@ from app.api.v1.endpoints.elections import (
     update_election,
 )
 from app.models.election import Candidate, Vote
-from app.schemas.election import AttendeeCheckIn, ElectionRollback, ElectionUpdate
+from app.schemas.election import (
+    CANDIDATE_STATEMENT_MAX_LENGTH,
+    AttendeeCheckIn,
+    CandidateCreate,
+    CandidateUpdate,
+    ElectionRollback,
+    ElectionUpdate,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -281,3 +290,28 @@ class TestPatchCannotOrphanNominees:
             current_user=org,
         )
         assert updated.positions == ["Chief", "Captain"]
+
+
+class TestCandidateStatementIsBounded:
+    """W50-67: the column is TEXT, so the schema is the only bound."""
+
+    def test_create_rejects_an_oversized_statement(self):
+        too_long = "x" * (CANDIDATE_STATEMENT_MAX_LENGTH + 1)
+        with pytest.raises(ValidationError):
+            CandidateCreate(
+                name="Nominee", election_id=uuid.uuid4(), statement=too_long
+            )
+
+    def test_update_rejects_an_oversized_statement(self):
+        with pytest.raises(ValidationError):
+            CandidateUpdate(statement="x" * (CANDIDATE_STATEMENT_MAX_LENGTH + 1))
+
+    def test_statement_at_the_limit_is_accepted(self):
+        at_limit = "x" * CANDIDATE_STATEMENT_MAX_LENGTH
+        assert (
+            CandidateCreate(
+                name="Nominee", election_id=uuid.uuid4(), statement=at_limit
+            ).statement
+            == at_limit
+        )
+        assert CandidateUpdate(statement=at_limit).statement == at_limit

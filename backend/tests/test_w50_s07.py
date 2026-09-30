@@ -183,3 +183,52 @@ async def test_deleting_a_parent_with_a_runoff_is_refused_before_side_effects(
     notify.assert_not_awaited()
     audit.assert_not_awaited()
     assert await _runoff_children(db_session, data["election_id"]) == 1
+
+
+async def _runoff_created_election_ids(db_session: AsyncSession) -> set:
+    """`election_id` on every runoff_election_created row, as forensics sees it."""
+    result = await db_session.execute(
+        text(
+            "SELECT JSON_UNQUOTE(JSON_EXTRACT(event_data, '$.election_id')) "
+            "FROM audit_logs WHERE event_type = 'runoff_election_created'"
+        )
+    )
+    return {row[0] for row in result.all()}
+
+
+async def test_runoff_created_audit_row_is_scoped_to_both_elections(
+    db_session: AsyncSession, runoff_parent
+):
+    """W50-71: get_election_forensics filters audit rows on
+    event_data.election_id, so the runoff_election_created event must carry
+    the parent's id and be mirrored under the runoff — otherwise it appears
+    in neither election's forensics report."""
+    data = runoff_parent
+    runoff_id = (
+        await db_session.execute(
+            text(
+                "SELECT id FROM elections "
+                "WHERE parent_election_id = :id AND is_runoff = 1"
+            ),
+            {"id": data["election_id"]},
+        )
+    ).scalar()
+    assert runoff_id is not None
+
+    scoped_ids = await _runoff_created_election_ids(db_session)
+    assert data["election_id"] in scoped_ids
+    assert runoff_id in scoped_ids
+
+    svc = ElectionService(db_session)
+    for election_id in (data["election_id"], runoff_id):
+        report = await svc.get_election_forensics(
+            uuid.UUID(election_id), uuid.UUID(data["org_id"])
+        )
+        events = [
+            e
+            for e in report["audit_log"]["entries"]
+            if e["event_type"] == "runoff_election_created"
+        ]
+        assert len(events) == 1, election_id
+        assert events[0]["event_data"]["runoff_election_id"] == runoff_id
+        assert events[0]["event_data"]["parent_election_id"] == data["election_id"]

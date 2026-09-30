@@ -9,7 +9,10 @@ all-failed send, which starts the 60-minute cooldown against a retry and
 permanently disarms the automatic pre-close reminder (it fires only while
 ``reminder_sent_at`` is NULL). And ``POST /{id}/send-ballot`` has no status
 precondition: a CLOSED election accepts a send, mints live-looking voting
-tokens and answers with a success message.
+tokens and answers with a success message — and (W50-35) so does a DRAFT or
+NOMINATIONS one, mailing every member a "Vote Now" link that answers
+"Election is draft". Only the sender-only ``/send-test-ballot`` preview may
+go out before opening.
 """
 
 import secrets
@@ -177,10 +180,15 @@ async def test_nobody_to_remind_still_starts_the_cooldown(db_session: AsyncSessi
     assert election.reminder_sent_at is not None
 
 
-async def test_send_ballot_endpoint_refuses_a_closed_election(
-    db_session: AsyncSession,
+@pytest.mark.parametrize(
+    "election_status", ["closed", "cancelled", "draft", "nominations"]
+)
+async def test_send_ballot_endpoint_refuses_an_election_that_is_not_open(
+    db_session: AsyncSession, election_status: str
 ):
-    data = await _make_election(db_session, status="closed")
+    # W50-35: a draft/nominations send mailed the whole department a "Vote
+    # Now" link that answered "Election is draft"; only OPEN may send live.
+    data = await _make_election(db_session, status=election_status)
     send_batch = AsyncMock(side_effect=lambda b: [True] * len(b))
 
     with patch(SEND_BATCH, new=send_batch), pytest.raises(HTTPException) as exc:
@@ -195,7 +203,9 @@ async def test_send_ballot_endpoint_refuses_a_closed_election(
         )
 
     assert exc.value.status_code == 400
-    assert send_batch.await_count == 0, "no ballot may leave for a closed election"
+    assert (
+        send_batch.await_count == 0
+    ), f"no live ballot may leave for a {election_status} election"
     tokens = (
         await db_session.execute(
             text("SELECT COUNT(*) FROM voting_tokens WHERE election_id = :eid"),

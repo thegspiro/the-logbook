@@ -70,6 +70,17 @@ def _styled_table(data: List[List[Any]], col_widths: List[float]) -> Table:
     return Table(data, colWidths=col_widths, repeatRows=1, style=TableStyle(style))
 
 
+def _quorum_cell(results: Dict[str, Any]) -> str:
+    """Quorum row text. ``quorum_met`` is None when the election has no
+    quorum rule, and that must not print as "Met" (W50-48)."""
+    if results.get("quorum_detail"):
+        return _esc(results["quorum_detail"])
+    met = results.get("quorum_met")
+    if met is None:
+        return "No quorum requirement"
+    return "Met" if met else "NOT MET"
+
+
 def render_certified_results_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesIO:
     """Render the certified results, returning a BytesIO at position 0.
 
@@ -122,7 +133,8 @@ def render_certified_results_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> 
             sub_style,
         ),
         Paragraph(
-            f"Election closed {_esc(election.get('closed_display'))} · "
+            f"Election closed {_esc(election.get('closed_display'))} "
+            f"by {_esc(election.get('closed_by_display'))} · "
             f"Generated {_esc(meta.get('generated_at'))}",
             sub_style,
         ),
@@ -143,14 +155,7 @@ def render_certified_results_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> 
             "Electronic / paper votes",
             f"{stats.get('electronic_votes', 0)} / {stats.get('manual_votes', 0)}",
         ],
-        [
-            "Quorum",
-            (
-                _esc(results.get("quorum_detail"))
-                if results.get("quorum_detail")
-                else ("Met" if results.get("quorum_met", True) else "NOT MET")
-            ),
-        ],
+        ["Quorum", _quorum_cell(results)],
     ]
     story.append(
         Table(
@@ -196,9 +201,10 @@ def render_certified_results_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> 
         if position.get("is_tie"):
             policy = data.get("election", {}).get("tie_policy") or "co_winners"
             story.append(Spacer(1, 3))
+            heading = "TIE" if policy == "co_winners" else "UNRESOLVED TIE"
             story.append(
                 Paragraph(
-                    f"UNRESOLVED TIE for {_esc(position.get('position'))} — "
+                    f"{heading} for {_esc(position.get('position'))} — "
                     f"{_TIE_POLICY_LABELS.get(policy, policy)}.",
                     warn_style,
                 )
@@ -233,12 +239,28 @@ def render_certified_results_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> 
     # ── Integrity verification ───────────────────────────────────────
     story.append(Paragraph("Integrity Verification", section_style))
     status = integrity.get("integrity_status") or integrity.get("error") or "—"
+    checked = integrity.get("total_votes", integrity.get("total", 0))
+    # The chain holds test ballots and pending paper batches beside counted
+    # votes; "13 votes checked" over a tally of 11 read as a discrepancy
+    # unless the extra rows are named (W50-65).
+    extras = [
+        f"{integrity[key]} {label}"
+        for key, label in (
+            ("pending_paper_votes", "pending paper"),
+            ("test_votes", "test"),
+        )
+        if integrity.get(key)
+    ]
+    breakdown = ""
+    if extras:
+        breakdown = f": {integrity.get('counted_votes', 0)} counted, " + ", ".join(
+            extras
+        )
     story.append(
         Paragraph(
             f"Cryptographic vote-signature and chain verification: "
             f"<b>{_esc(status)}</b> "
-            f"({integrity.get('total_votes', integrity.get('total', 0))} "
-            f"votes checked).",
+            f"({checked} votes checked{breakdown}).",
             styles["Normal"],
         )
     )

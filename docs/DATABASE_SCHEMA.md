@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**285 tables · 4690 columns · 923 foreign keys**
+**285 tables · 4698 columns · 925 foreign keys**
 
 ---
 
@@ -157,12 +157,12 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`candidates`](#candidates) | `Candidate` | 15 | Candidate model for election candidates |
-| [`elections`](#elections) | `Election` | 49 | Election model for managing elections within an organization |
+| [`elections`](#elections) | `Election` | 52 | Election model for managing elections within an organization |
 | [`manual_ballot_attestations`](#manual_ballot_attestations) | `ManualBallotAttestation` | 5 | One officer's confirmation that a paper-tally batch matches the |
-| [`manual_ballot_batches`](#manual_ballot_batches) | `ManualBallotBatch` | 10 | One paper-tally entry — the set of manual votes sharing a batch id. |
+| [`manual_ballot_batches`](#manual_ballot_batches) | `ManualBallotBatch` | 14 | One paper-tally entry — the set of manual votes sharing a batch id. |
 | [`saved_ballot_templates`](#saved_ballot_templates) | `SavedBallotTemplate` | 11 | Organization-scoped, reusable snapshot of a structured ballot. |
 | [`votes`](#votes) | `Vote` | 25 | Vote model for recording votes |
-| [`voting_tokens`](#voting_tokens) | `VotingToken` | 15 | Voting token model for secure anonymous ballot access |
+| [`voting_tokens`](#voting_tokens) | `VotingToken` | 16 | Voting token model for secure anonymous ballot access |
 
 ### Email Templates
 
@@ -2132,6 +2132,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `email_sent` | BOOL | no |  | `0` |  |
 | `email_sent_at` | DATETIME | yes |  |  |  |
 | `email_recipients` | JSON | yes |  |  |  |
+| `email_skipped_details` | JSON | yes |  |  |  |
 | `meeting_date` | DATETIME | yes |  |  |  |
 | `meeting_id` | VARCHAR(36) | yes | FK |  | → `meetings.id` ON DELETE SET NULL |
 | `event_id` | VARCHAR(36) | yes | FK |  | → `events.id` ON DELETE SET NULL |
@@ -2141,6 +2142,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `reminder_hours_before_close` | INTEGER | yes |  |  |  |
 | `reminder_sent_at` | DATETIME | yes |  |  |  |
 | `nomination_deadline` | DATETIME | yes |  |  |  |
+| `closed_at` | DATETIME | yes |  |  |  |
+| `closed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `status` | ENUM(`draft`, `nominations`, `open`, `closed`, `cancelled`) | no | IDX | `'draft'` |  |
 | `anonymous_voting` | BOOL | no |  | `True` |  |
 | `allow_write_ins` | BOOL | no |  | `False` |  |
@@ -2215,8 +2218,12 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `status` | VARCHAR(20) | no |  | `pending` |  |
 | `required_attestations` | INTEGER | no |  | `0` |  |
 | `ballots_cast` | INTEGER | yes |  |  |  |
+| `over_count_override` | BOOL | no |  | `0` |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `confirmed_at` | DATETIME | yes |  |  |  |
+| `voided_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `voided_at` | DATETIME | yes |  |  |  |
+| `void_reason` | TEXT | yes |  |  |  |
 
 **Indexes**
 
@@ -2321,6 +2328,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `eligible_positions` | JSON | yes |  |  |  |
 | `first_accessed_at` | DATETIME | yes |  |  |  |
 | `access_count` | INTEGER | no |  | `0` |  |
+| `superseded_at` | DATETIME | yes |  |  |  |
 | `positions_voted` | JSON | yes |  |  |  |
 
 **Indexes**
@@ -9920,7 +9928,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (338 references)
+### → `users` (340 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9997,6 +10005,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `driver_exceptions` | `user_id` | CASCADE | no |
 | `dues_payments` | `recorded_by` | SET NULL | yes |
 | `dues_schedules` | `created_by` | RESTRICT | no |
+| `elections` | `closed_by` | SET NULL | yes |
 | `elections` | `created_by` | SET NULL | yes |
 | `email_attachments` | `uploaded_by` | SET NULL | yes |
 | `email_templates` | `created_by` | SET NULL | yes |
@@ -10107,6 +10116,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `maintenance_records` | `performed_by` | RESTRICT | yes |
 | `manual_ballot_attestations` | `attested_by` | SET NULL | yes |
 | `manual_ballot_batches` | `recorded_by` | SET NULL | yes |
+| `manual_ballot_batches` | `voided_by` | SET NULL | yes |
 | `mcp_service_keys` | `created_by` | SET NULL | yes |
 | `mcp_service_keys` | `revoked_by` | SET NULL | yes |
 | `meeting_action_items` | `assigned_to` | RESTRICT | yes |
