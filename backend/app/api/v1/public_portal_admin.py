@@ -14,7 +14,7 @@ from sqlalchemy import and_, case, desc, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user
+from app.api.dependencies import require_permission
 from app.core.database import get_db
 from app.core.public_portal_fields import PUBLIC_PORTAL_FIELDS
 from app.core.public_portal_security import generate_api_key, hash_api_key
@@ -52,12 +52,15 @@ router = APIRouter(prefix="/public-portal", tags=["public-portal-admin"])
 
 @router.get("/config", response_model=PublicPortalConfigResponse)
 async def get_portal_config(
-    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+    current_user: User = Depends(require_permission("settings.manage")),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get public portal configuration for the organization.
 
     Returns the current configuration or creates a default one if none exists.
+
+    **Requires permission: settings.manage**
     """
     # Get or create config
     result = await db.execute(
@@ -87,13 +90,15 @@ async def get_portal_config(
 @router.post("/config", response_model=PublicPortalConfigResponse)
 async def create_portal_config(
     config_data: PublicPortalConfigCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("settings.manage")),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Create or update public portal configuration.
 
     This endpoint enables the public portal and sets its configuration.
+
+    **Requires permission: settings.manage**
     """
     # Check if config already exists
     result = await db.execute(
@@ -139,13 +144,15 @@ async def create_portal_config(
 @router.patch("/config", response_model=PublicPortalConfigResponse)
 async def update_portal_config(
     config_update: PublicPortalConfigUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("settings.manage")),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Update public portal configuration.
 
     Only updates fields that are provided (partial update).
+
+    **Requires permission: settings.manage**
     """
     result = await db.execute(
         select(PublicPortalConfig).where(
@@ -190,7 +197,7 @@ async def update_portal_config(
 
 @router.get("/api-keys", response_model=list[PublicPortalAPIKeyResponse])
 async def list_api_keys(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("settings.manage")),
     db: AsyncSession = Depends(get_db),
     include_inactive: bool = Query(False, description="Include revoked keys"),
 ):
@@ -198,6 +205,8 @@ async def list_api_keys(
     List all API keys for the organization.
 
     Does not return the actual API key values (only prefixes).
+
+    **Requires permission: settings.manage**
     """
     query = select(PublicPortalAPIKey).where(
         PublicPortalAPIKey.organization_id == str(current_user.organization_id)
@@ -217,13 +226,15 @@ async def list_api_keys(
 @router.post("/api-keys", response_model=PublicPortalAPIKeyCreatedResponse)
 async def create_api_key(
     key_data: PublicPortalAPIKeyCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("settings.manage")),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Create a new API key for public portal access.
 
     The full API key is returned only once - save it securely!
+
+    **Requires permission: settings.manage**
     """
     # Get portal config
     result = await db.execute(
@@ -285,13 +296,15 @@ async def create_api_key(
 async def update_api_key(
     key_id: str,
     key_update: PublicPortalAPIKeyUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("settings.manage")),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Update an API key's settings.
 
     Can update name, rate limit, expiration, or revoke the key.
+
+    **Requires permission: settings.manage**
     """
     result = await db.execute(
         select(PublicPortalAPIKey).where(
@@ -329,13 +342,15 @@ async def update_api_key(
 @router.delete("/api-keys/{key_id}")
 async def revoke_api_key(
     key_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("settings.manage")),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Revoke (deactivate) an API key.
 
     The key is not deleted but marked as inactive.
+
+    **Requires permission: settings.manage**
     """
     result = await db.execute(
         select(PublicPortalAPIKey).where(
@@ -367,7 +382,7 @@ async def revoke_api_key(
 
 @router.get("/access-logs", response_model=list[PublicPortalAccessLogResponse])
 async def get_access_logs(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("settings.manage")),
     db: AsyncSession = Depends(get_db),
     api_key_id: str | None = Query(None),
     ip_address: str | None = Query(None),
@@ -383,6 +398,8 @@ async def get_access_logs(
     Get access logs for the public portal.
 
     Supports filtering by various criteria.
+
+    **Requires permission: settings.manage**
     """
     query = select(PublicPortalAccessLog).where(
         PublicPortalAccessLog.organization_id == str(current_user.organization_id)
@@ -438,7 +455,8 @@ def _as_int(value: Any) -> int:
 
 @router.get("/usage-stats", response_model=PublicPortalUsageStats)
 async def get_usage_stats(
-    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+    current_user: User = Depends(require_permission("settings.manage")),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get usage statistics for the public portal.
@@ -454,6 +472,8 @@ async def get_usage_stats(
     Cut-offs are passed as datetimes, not ``.isoformat()`` strings. Both work
     — MySQL coerces the string — but only one of them says so without relying
     on the coercion.
+
+    **Requires permission: settings.manage**
     """
     org_id = str(current_user.organization_id)
     now = datetime.now(timezone.utc)
@@ -664,7 +684,7 @@ async def _ensure_catalogue_rows(db: AsyncSession, organization_id: str) -> None
 
 @router.get("/whitelist", response_model=list[PublicPortalDataWhitelistResponse])
 async def get_data_whitelist(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("settings.manage")),
     db: AsyncSession = Depends(get_db),
     category: str | None = Query(None, description="Filter by category"),
 ):
@@ -672,6 +692,8 @@ async def get_data_whitelist(
     Get the data whitelist configuration.
 
     Shows which data fields are enabled for public access.
+
+    **Requires permission: settings.manage**
     """
     await _ensure_catalogue_rows(db, str(current_user.organization_id))
 
@@ -694,13 +716,15 @@ async def get_data_whitelist(
 @router.post("/whitelist", response_model=PublicPortalDataWhitelistResponse)
 async def create_whitelist_entry(
     entry_data: PublicPortalDataWhitelistCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("settings.manage")),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Add a new field to the data whitelist.
 
     Controls what data can be exposed through the public API.
+
+    **Requires permission: settings.manage**
     """
     # Get config
     result = await db.execute(
@@ -756,11 +780,13 @@ async def create_whitelist_entry(
 async def update_whitelist_entry(
     whitelist_id: str,
     entry_update: PublicPortalDataWhitelistUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("settings.manage")),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Update a whitelist entry (enable/disable a field).
+
+    **Requires permission: settings.manage**
     """
     result = await db.execute(
         select(PublicPortalDataWhitelist).where(
@@ -790,13 +816,15 @@ async def update_whitelist_entry(
 @router.post("/whitelist/bulk-update")
 async def bulk_update_whitelist(
     bulk_update: PublicPortalDataWhitelistBulkUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("settings.manage")),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Bulk update whitelist entries.
 
     Allows enabling/disabling multiple fields at once.
+
+    **Requires permission: settings.manage**
     """
     updated_count = 0
 
