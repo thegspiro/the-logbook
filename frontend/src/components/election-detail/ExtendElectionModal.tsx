@@ -38,9 +38,10 @@ const ExtendElectionModal: React.FC<ExtendElectionModalProps> = ({
   };
 
   const extendToEndOfDay = () => {
-    const currentEnd = new Date(currentEndDate);
-    currentEnd.setHours(23, 59, 0, 0);
-    setNewEndDate(formatForDateTimeInput(currentEnd, timezone));
+    // End of the department's day, not the browser's: take the calendar date
+    // as rendered in the org zone and pin 23:59 to it.
+    const currentDay = formatForDateTimeInput(currentEndDate, timezone).split('T')[0] ?? '';
+    setNewEndDate(`${currentDay}T23:59`);
   };
 
   return (

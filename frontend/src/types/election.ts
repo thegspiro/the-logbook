@@ -170,9 +170,10 @@ export interface ElectionUpdate {
   positions?: string[];
   ballot_items?: BallotItem[];
   position_eligibility?: { [position: string]: PositionEligibility };
-  meeting_date?: string | undefined;
-  meeting_id?: string | undefined;
-  event_id?: string | undefined;
+  // null clears the link on PATCH (exclude_unset); an omitted key leaves it alone
+  meeting_date?: string | null | undefined;
+  meeting_id?: string | null | undefined;
+  event_id?: string | null | undefined;
   start_date?: string;
   end_date?: string;
   // NOTE: status is intentionally excluded — use /open, /close, /rollback endpoints
@@ -227,8 +228,8 @@ export interface CandidateCreate {
 
 export interface CandidateUpdate {
   name?: string | undefined;
-  position?: string | undefined;
-  statement?: string | undefined;
+  position?: string | null | undefined;
+  statement?: string | null | undefined;
   photo_url?: string;
   accepted?: boolean;
   display_order?: number;
@@ -293,6 +294,9 @@ export interface CandidateResult {
 
 export interface PositionResults {
   position: string;
+  // Set for a ballot-item contest, whose `position` is the item's id; show
+  // this instead of the id wherever the contest is named
+  label?: string | null;
   total_votes: number;
   candidates: CandidateResult[];
   is_tie?: boolean;

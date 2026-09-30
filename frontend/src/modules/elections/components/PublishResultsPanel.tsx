@@ -3,8 +3,8 @@
  *
  * Streamlined secretary interface for publishing election results.
  * Provides clear visual feedback about result availability, a one-click
- * publish toggle, and the ability to send result report emails to
- * leadership or all members.
+ * publish toggle once voting has closed, and the ability to email the
+ * results report to the election secretary.
  */
 
 import React, { useState } from 'react';
@@ -113,30 +113,38 @@ export const PublishResultsPanel: React.FC<PublishResultsPanelProps> = ({ electi
               </p>
             </div>
           </div>
-          <button
-            onClick={() => void handleToggleVisibility()}
-            disabled={updatingVisibility}
-            aria-pressed={resultsPublished}
-            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
-              resultsPublished
-                ? 'bg-theme-surface text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover border'
-                : 'bg-green-700 text-white hover:bg-green-800'
-            }`}
-          >
-            {updatingVisibility ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : resultsPublished ? (
-              <span className="flex items-center gap-1.5">
-                <Lock className="h-3.5 w-3.5" />
-                Hide Results
-              </span>
-            ) : (
-              <span className="flex items-center gap-1.5">
-                <Eye className="h-3.5 w-3.5" />
-                Publish Results
-              </span>
-            )}
-          </button>
+          {/* The backend only accepts `results_visible_immediately` on a CLOSED
+              election — while voting is open PATCH allows `end_date` alone, so
+              live counts cannot invite strategic voting. Offering the toggle
+              earlier would only ever produce an error toast. */}
+          {isClosed ? (
+            <button
+              onClick={() => void handleToggleVisibility()}
+              disabled={updatingVisibility}
+              aria-pressed={resultsPublished}
+              className={`rounded-md px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
+                resultsPublished
+                  ? 'bg-theme-surface text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover border'
+                  : 'bg-green-700 text-white hover:bg-green-800'
+              }`}
+            >
+              {updatingVisibility ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : resultsPublished ? (
+                <span className="flex items-center gap-1.5">
+                  <Lock className="h-3.5 w-3.5" />
+                  Hide Results
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5">
+                  <Eye className="h-3.5 w-3.5" />
+                  Publish Results
+                </span>
+              )}
+            </button>
+          ) : (
+            <p className="text-theme-text-muted shrink-0 text-xs">Results can be published once voting closes</p>
+          )}
         </div>
 
         {/* Email report (only when closed) */}
@@ -146,7 +154,7 @@ export const PublishResultsPanel: React.FC<PublishResultsPanelProps> = ({ electi
               <Mail className="text-theme-text-muted h-5 w-5" />
               <div>
                 <p className="text-theme-text-primary text-sm font-medium">Email Results Report</p>
-                <p className="text-theme-text-muted text-xs">Send final results to all eligible voters by email</p>
+                <p className="text-theme-text-muted text-xs">Email the results report to the election secretary</p>
               </div>
             </div>
             <button

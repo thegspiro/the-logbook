@@ -174,8 +174,10 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
         </div>
       </div>
 
-      {/* Quorum Status */}
-      {results.quorum_met !== undefined && (
+      {/* Quorum Status — gated on the election's configured rule, not on
+          `results.quorum_met`, which the backend defaults to true (and
+          leaves true) for an election with no quorum at all. */}
+      {election.quorum_type && election.quorum_type !== 'none' && (
         <div
           className={`rounded-lg border p-4 ${
             results.quorum_met ? 'border-green-500/30 bg-green-500/10' : 'border-red-500/30 bg-red-500/10'
@@ -238,31 +240,34 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
       {results.results_by_position && results.results_by_position.length > 0 && (
         <div className="space-y-4">
           <h3 className="text-theme-text-primary text-lg font-medium">Results by Position</h3>
-          {results.results_by_position.map((positionResult) => (
-            <div key={positionResult.position} className="bg-theme-surface rounded-lg p-6 backdrop-blur-xs">
-              <div className="mb-4 flex items-center justify-between">
-                <h4 className="text-md text-theme-text-primary font-semibold">{positionResult.position}</h4>
-                <span className="text-theme-text-muted text-sm">
-                  {positionResult.total_votes} {positionResult.total_votes === 1 ? 'vote' : 'votes'}
-                </span>
-              </div>
-
-              {positionResult.is_tie && (
-                <div className="mb-4 rounded-md border border-amber-500/30 bg-amber-500/10 p-3" role="alert">
-                  <p className="text-sm text-amber-700 dark:text-amber-300">
-                    Unresolved tie for {positionResult.position} — no winner is declared.{' '}
-                    {TIE_POLICY_LABELS[results.tie_policy ?? 'co_winners']}
-                  </p>
+          {results.results_by_position.map((positionResult) => {
+            const contestName = positionResult.label || positionResult.position;
+            return (
+              <div key={positionResult.position} className="bg-theme-surface rounded-lg p-6 backdrop-blur-xs">
+                <div className="mb-4 flex items-center justify-between">
+                  <h4 className="text-md text-theme-text-primary font-semibold">{contestName}</h4>
+                  <span className="text-theme-text-muted text-sm">
+                    {positionResult.total_votes} {positionResult.total_votes === 1 ? 'vote' : 'votes'}
+                  </span>
                 </div>
-              )}
 
-              <div className="space-y-3">
-                {(positionResult.candidates || []).map((candidate) => (
-                  <CandidateResultCard key={candidate.candidate_id} candidate={candidate} />
-                ))}
+                {positionResult.is_tie && (
+                  <div className="mb-4 rounded-md border border-amber-500/30 bg-amber-500/10 p-3" role="alert">
+                    <p className="text-sm text-amber-700 dark:text-amber-300">
+                      Unresolved tie for {contestName} — no winner is declared.{' '}
+                      {TIE_POLICY_LABELS[results.tie_policy ?? 'co_winners']}
+                    </p>
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  {(positionResult.candidates || []).map((candidate) => (
+                    <CandidateResultCard key={candidate.candidate_id} candidate={candidate} />
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

@@ -26,7 +26,7 @@ interface ElectionWorkflowTabsProps {
   election: Election;
   canManage: boolean;
   activeTab: string;
-  onTabChange: (tabId: string) => void;
+  onTabChange: (tabId: string, options?: { replace?: boolean }) => void;
 }
 
 export const ElectionWorkflowTabs: React.FC<ElectionWorkflowTabsProps> = ({
@@ -111,10 +111,12 @@ export const ElectionWorkflowTabs: React.FC<ElectionWorkflowTabsProps> = ({
   // Sync the corrected tab back to the parent: the parent renders the panels
   // off its own activeTab state, so without this a non-manager (whose visible
   // tab set excludes the parent's default 'ballot') would see a highlighted
-  // tab with no panel rendered beneath it.
+  // tab with no panel rendered beneath it. The correction replaces rather
+  // than pushes: a pushed entry would make Back return to the forbidden tab,
+  // which re-triggers this effect — a loop the user cannot escape.
   useEffect(() => {
     if (validActiveTab !== activeTab) {
-      onTabChange(validActiveTab);
+      onTabChange(validActiveTab, { replace: true });
     }
   }, [validActiveTab, activeTab, onTabChange]);
 
