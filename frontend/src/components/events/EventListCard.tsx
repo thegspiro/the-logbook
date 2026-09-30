@@ -35,6 +35,7 @@ import {
   getRSVPStatusColor,
   getRSVPStatusLabel,
   isRosterFull,
+  isRsvpClosed,
 } from '../../utils/eventHelpers';
 import { formatAbsoluteDate } from '../../hooks/useRelativeTime';
 import { formatDateCustom, formatTime } from '../../utils/dateFormatting';
@@ -102,10 +103,14 @@ const EventListCardBase: React.FC<EventListCardProps> = ({
   // The same reasoning covers allowed_rsvp_statuses: this card only ever
   // submits going / not_going, so on an event that accepts neither there is
   // nothing here that can succeed and the member is better served by the link.
+  // Time closes it too: once the event has ended or its RSVP deadline has
+  // passed the API refuses every answer, including leaving the waitlist, and
+  // an attendance record after the fact is a manager's job on the detail page.
+  const rsvpClosed = isRsvpClosed(event, now);
   const allowedStatuses = event.allowed_rsvp_statuses ?? [RSVPStatusEnum.GOING, RSVPStatusEnum.NOT_GOING];
   const canAnswerGoing = allowedStatuses.includes(RSVPStatusEnum.GOING);
   const canAnswerNotGoing = allowedStatuses.includes(RSVPStatusEnum.NOT_GOING);
-  const rsvpAvailable = !event.is_cancelled && !event.is_draft && (canAnswerGoing || canAnswerNotGoing);
+  const rsvpAvailable = !event.is_cancelled && !event.is_draft && !rsvpClosed && (canAnswerGoing || canAnswerNotGoing);
   const showRsvpPair = rsvpAvailable && (!event.user_rsvp_status || isChangingRsvp);
 
   const stripMeta = ((): string | null => {
@@ -343,7 +348,7 @@ const EventListCardBase: React.FC<EventListCardProps> = ({
           <Link to={`/events/${event.id}`} className={`btn-secondary ${FOOTER_BUTTON_CLASS}`}>
             View attendance
           </Link>
-        ) : urgency === 'waitlisted' ? (
+        ) : urgency === 'waitlisted' && !rsvpClosed ? (
           <button
             type="button"
             onClick={() => onQuickRSVP(event.id, 'not_going')}

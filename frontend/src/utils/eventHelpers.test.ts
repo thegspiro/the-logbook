@@ -6,6 +6,7 @@ import {
   getRSVPStatusColor,
   getExpirationStatus,
   getProgressBarColor,
+  isRsvpClosed,
 } from './eventHelpers';
 import type { RSVPStatus } from '../types/event';
 
@@ -304,6 +305,36 @@ describe('eventHelpers', () => {
 
     it('handles percentages over 100 by returning green', () => {
       expect(getProgressBarColor(150)).toBe('bg-green-500');
+    });
+  });
+
+  describe('isRsvpClosed', () => {
+    const NOW = new Date('2026-09-02T18:00:00.000Z');
+    const future = '2026-09-03T18:00:00.000Z';
+    const past = '2026-09-02T17:00:00.000Z';
+
+    it('is open for an upcoming event with no deadline', () => {
+      expect(isRsvpClosed({ end_datetime: future }, NOW)).toBe(false);
+    });
+
+    it('is closed once the event has ended', () => {
+      expect(isRsvpClosed({ end_datetime: past }, NOW)).toBe(true);
+    });
+
+    it('is closed once the RSVP deadline has passed', () => {
+      expect(isRsvpClosed({ end_datetime: future, rsvp_deadline: past }, NOW)).toBe(true);
+    });
+
+    it('is closed exactly at the deadline', () => {
+      expect(isRsvpClosed({ end_datetime: future, rsvp_deadline: NOW.toISOString() }, NOW)).toBe(true);
+    });
+
+    it('is open before a future deadline', () => {
+      expect(isRsvpClosed({ end_datetime: future, rsvp_deadline: future }, NOW)).toBe(false);
+    });
+
+    it('leaves an unparseable date to the server', () => {
+      expect(isRsvpClosed({ end_datetime: 'not-a-date', rsvp_deadline: 'nope' }, NOW)).toBe(false);
     });
   });
 });
