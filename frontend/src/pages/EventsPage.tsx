@@ -570,10 +570,10 @@ export const EventsPage: React.FC = () => {
 
   // The empty card's default copy and its only action are both invitations to
   // create an event, so a member looking at a genuinely empty Upcoming list
-  // gets a blank panel rather than a prompt to do something they cannot. An
-  // empty result that follows from a search, a filter or the Past toggle is
-  // still reported to everyone — that is feedback on what they asked for, not
-  // an invitation.
+  // gets an explanation of what will appear there (below) instead of a prompt
+  // to do something they cannot. An empty result that follows from a search, a
+  // filter or the Past toggle is still reported to everyone — that is feedback
+  // on what they asked for, not an invitation.
   const listIsNarrowed = searchQuery !== '' || typeFilter !== 'all' || showPastEvents || showMyEventsOnly;
   const showEmptyState = canManage || listIsNarrowed;
 
@@ -1132,10 +1132,10 @@ export const EventsPage: React.FC = () => {
         {viewMode === 'calendar' ? (
           <CalendarView events={sortedEvents} timezone={tz} />
         ) : paginatedEvents.length === 0 ? (
-          showEmptyState && (
+          showEmptyState ? (
             <EmptyState
               icon={Calendar}
-              title="No events found"
+              title={listIsNarrowed ? 'No events found' : 'No upcoming events yet'}
               description={
                 searchQuery
                   ? `No events matching "${searchQuery}".`
@@ -1165,6 +1165,20 @@ export const EventsPage: React.FC = () => {
               }
               className="bg-theme-surface-secondary rounded-lg"
             />
+          ) : (
+            <EmptyState
+              icon={Calendar}
+              title="No upcoming events yet"
+              description="Meetings, training sessions and other department events show up here once they are scheduled. Open one to RSVP, add it to your calendar, and check in when you arrive."
+              className="bg-theme-surface-secondary rounded-lg"
+            >
+              <Link
+                to="/learning/events"
+                className="mobile-touch-target mt-2 text-sm font-medium text-red-800 hover:underline dark:text-red-300"
+              >
+                Take the short walkthrough in the Learning Center
+              </Link>
+            </EmptyState>
           )
         ) : (
           <>

@@ -1111,6 +1111,47 @@ class TestCalendarRefusalsReachTheCoordinator:
         db.commit.assert_not_awaited()
         shift.assert_not_awaited()
 
+    @pytest.mark.asyncio
+    async def test_postponing_a_finalized_entry_reads_as_a_sentence(self):
+        """A finalized event refuses the move too. The coordinator reads the
+        reason, never the service's internal marker for it."""
+        from app.api.v1.endpoints.event_requests import postpone_request
+        from app.schemas.event_request import EventRequestPostpone
+        from app.services.event_service import (
+            ATTENDANCE_LOCKED_PREFIX,
+            attendance_locked_error,
+        )
+
+        refusal = attendance_locked_error("changing end_datetime, start_datetime")
+        _event_request, db, start = self._request_and_db(None)
+
+        with (
+            patch(
+                "app.api.v1.endpoints.event_requests.sync_calendar_event_date",
+                AsyncMock(return_value=refusal),
+            ),
+            patch(
+                "app.api.v1.endpoints.event_requests.sync_staffing_shift_date",
+                AsyncMock(),
+            ) as shift,
+            patch(
+                "app.api.v1.endpoints.event_requests._send_request_notification",
+                AsyncMock(),
+            ),
+            pytest.raises(HTTPException) as exc,
+        ):
+            await postpone_request(
+                request_id="req-1",
+                data=EventRequestPostpone(new_event_date=start),
+                db=db,
+                current_user=SimpleNamespace(id="user-1", organization_id=ORG_ID),
+            )
+
+        assert exc.value.status_code == 409
+        assert exc.value.detail == refusal[len(ATTENDANCE_LOCKED_PREFIX) :]
+        db.commit.assert_not_awaited()
+        shift.assert_not_awaited()
+
 
 class TestAnEmptyOutreachTypeListIsPreserved:
     """An explicitly empty list is a configuration, not an absence. Falling back

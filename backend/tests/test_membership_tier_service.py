@@ -72,6 +72,23 @@ class TestResolveTier:
 
 
 class TestMeetingAttendancePct:
+    @pytest.fixture(autouse=True)
+    def _fixed_today(self, monkeypatch):
+        # The window ends at the department's today; pin it so these dates
+        # stay inside the look-back however long the suite lives.
+        monkeypatch.setattr(
+            "app.services.membership_tier_service.resolve_org_today",
+            AsyncMock(return_value=date(2026, 9, 1)),
+        )
+
+    def _db(self, *results):
+        # First execute is the member lookup; None means no member row, so no
+        # service-stint query follows and the window is the plain look-back.
+        db = MagicMock()
+        no_member = MagicMock(scalar_one_or_none=MagicMock(return_value=None))
+        db.execute = AsyncMock(side_effect=[no_member, *results])
+        return db
+
     def _scalars(self, items):
         r = MagicMock()
         r.scalars.return_value.all.return_value = items
@@ -81,8 +98,7 @@ class TestMeetingAttendancePct:
         return MagicMock(all=MagicMock(return_value=rows))
 
     async def test_no_meetings_returns_100(self):
-        db = MagicMock()
-        db.execute = AsyncMock(return_value=self._rows([]))
+        db = self._db(self._rows([]))
         pct = await MembershipTierService(db).get_meeting_attendance_pct("u", "o")
         assert pct == 100.0
 
@@ -93,14 +109,11 @@ class TestMeetingAttendancePct:
             ("m3", date(2026, 3, 1)),
             ("m4", date(2026, 4, 1)),
         ]
-        db = MagicMock()
-        db.execute = AsyncMock(
-            side_effect=[
-                self._rows(meetings),  # all meetings (id, date)
-                self._rows([]),  # waived meeting ids
-                self._scalars([]),  # no leaves
-                self._rows([("m1",), ("m2",), ("m3",)]),  # present at 3
-            ]
+        db = self._db(
+            self._rows(meetings),  # all meetings (id, date)
+            self._rows([]),  # waived meeting ids
+            self._scalars([]),  # no leaves
+            self._rows([("m1",), ("m2",), ("m3",)]),  # present at 3
         )
         pct = await MembershipTierService(db).get_meeting_attendance_pct("u", "o")
         assert pct == 75.0
@@ -109,14 +122,11 @@ class TestMeetingAttendancePct:
         # A permanent leave (end_date=None) must be treated as open-ended.
         leave = SimpleNamespace(start_date=date(2026, 5, 1), end_date=None)
         meetings = [("m_jun", date(2026, 6, 1)), ("m_apr", date(2026, 4, 1))]
-        db = MagicMock()
-        db.execute = AsyncMock(
-            side_effect=[
-                self._rows(meetings),
-                self._rows([]),  # no waivers
-                self._scalars([leave]),
-                self._rows([("m_apr",)]),  # present at the April meeting
-            ]
+        db = self._db(
+            self._rows(meetings),
+            self._rows([]),  # no waivers
+            self._scalars([leave]),
+            self._rows([("m_apr",)]),  # present at the April meeting
         )
         pct = await MembershipTierService(db).get_meeting_attendance_pct("u", "o")
         # June falls inside the open-ended leave: 1 eligible (April), 1 attended.
@@ -125,14 +135,11 @@ class TestMeetingAttendancePct:
     async def test_all_meetings_on_leave_returns_100(self):
         leave = SimpleNamespace(start_date=date(2026, 1, 1), end_date=None)
         meetings = [("m1", date(2026, 2, 1)), ("m2", date(2026, 3, 1))]
-        db = MagicMock()
-        db.execute = AsyncMock(
-            side_effect=[
-                self._rows(meetings),
-                self._rows([]),
-                self._scalars([leave]),
-                self._rows([]),
-            ]
+        db = self._db(
+            self._rows(meetings),
+            self._rows([]),
+            self._scalars([leave]),
+            self._rows([]),
         )
         pct = await MembershipTierService(db).get_meeting_attendance_pct("u", "o")
         assert pct == 100.0
@@ -148,14 +155,11 @@ class TestMeetingAttendancePct:
             ("m3", date(2026, 8, 1)),
         ]
         leave = SimpleNamespace(start_date=date(2026, 6, 1), end_date=date(2026, 6, 30))
-        db = MagicMock()
-        db.execute = AsyncMock(
-            side_effect=[
-                self._rows(meetings),
-                self._rows([("m1",)]),  # m1 waived
-                self._scalars([leave]),  # leave also covers m1 only
-                self._rows([("m2",)]),  # present at m2
-            ]
+        db = self._db(
+            self._rows(meetings),
+            self._rows([("m1",)]),  # m1 waived
+            self._scalars([leave]),  # leave also covers m1 only
+            self._rows([("m2",)]),  # present at m2
         )
         pct = await MembershipTierService(db).get_meeting_attendance_pct("u", "o")
         # excluded = {m1}; eligible = {m2, m3}; attended within eligible = {m2}.
@@ -168,14 +172,11 @@ class TestMeetingAttendancePct:
         # set, capping the result.
         meetings = [("m1", date(2026, 6, 1)), ("m2", date(2026, 7, 1))]
         leave = SimpleNamespace(start_date=date(2026, 6, 1), end_date=date(2026, 6, 30))
-        db = MagicMock()
-        db.execute = AsyncMock(
-            side_effect=[
-                self._rows(meetings),
-                self._rows([]),  # no waivers
-                self._scalars([leave]),  # covers m1
-                self._rows([("m1",), ("m2",)]),  # present at both
-            ]
+        db = self._db(
+            self._rows(meetings),
+            self._rows([]),  # no waivers
+            self._scalars([leave]),  # covers m1
+            self._rows([("m1",), ("m2",)]),  # present at both
         )
         pct = await MembershipTierService(db).get_meeting_attendance_pct("u", "o")
         # eligible = {m2}; m1 (during leave) does not count -> 1/1.

@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.api.attendance_lock import attendance_lock_http_error
 from app.api.dependencies import (
     PaginationParams,
     get_current_user,
@@ -1174,7 +1175,9 @@ async def schedule_request(
                     updated_by=current_user.id,
                 )
             except ValueError as e:
-                raise HTTPException(status_code=400, detail=safe_error_detail(e))
+                raise attendance_lock_http_error(e) or HTTPException(
+                    status_code=400, detail=safe_error_detail(e)
+                )
             event_id = existing_event.id
         else:
             from app.schemas.event import EventCreate
@@ -1215,7 +1218,7 @@ async def schedule_request(
             db, event_request, current_user.id, location_id=data.location_id
         )
         if refusal:
-            raise HTTPException(
+            raise attendance_lock_http_error(refusal) or HTTPException(
                 status_code=409, detail=safe_error_detail(ValueError(refusal))
             )
 
@@ -1355,7 +1358,7 @@ async def postpone_request(
         # committed at this point, so raising here leaves the request untouched.
         refusal = await sync_calendar_event_date(db, event_request, current_user.id)
         if refusal:
-            raise HTTPException(
+            raise attendance_lock_http_error(refusal) or HTTPException(
                 status_code=409, detail=safe_error_detail(ValueError(refusal))
             )
         await sync_staffing_shift_date(db, event_request, org, current_user.id)

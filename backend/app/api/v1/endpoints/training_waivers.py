@@ -147,9 +147,12 @@ async def list_training_waivers(
     if user_id:
         query = query.where(TrainingWaiver.user_id == user_id)
     if active_only:
-        query = query.where(TrainingWaiver.active == True)  # noqa: E712
+        query = query.where(TrainingWaiver.active.is_(True))
 
-    query = query.order_by(TrainingWaiver.start_date.desc())
+    # The id breaks start_date ties so the order is total: the waiver screen
+    # reads every page, and a tie that sorted differently on the next request
+    # would repeat one waiver and skip another at the page boundary.
+    query = query.order_by(TrainingWaiver.start_date.desc(), TrainingWaiver.id)
     query = query.offset(pagination.skip).limit(pagination.limit)
     result = await db.execute(query)
     waivers = result.scalars().all()
