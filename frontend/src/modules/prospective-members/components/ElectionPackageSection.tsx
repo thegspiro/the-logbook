@@ -384,8 +384,8 @@ const ElectionPackageSection: React.FC<ElectionPackageSectionProps> = ({ applica
       ) : (
         <div className="space-y-2">
           <p className="text-theme-text-muted text-xs">
-            This applicant has no election package, so they cannot be put on a ballot yet. Applicants who reach this
-            stage now get one automatically; create one for an applicant who was already here.
+            This applicant has no election package, so they cannot be put on a ballot or advanced past this stage yet.
+            Applicants who reach this stage now get one automatically; create one for an applicant who was already here.
           </p>
           <button
             type="button"

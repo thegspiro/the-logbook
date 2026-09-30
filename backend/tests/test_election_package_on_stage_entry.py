@@ -18,7 +18,7 @@ import pytest
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.membership_pipeline import ProspectElectionPackage
+from app.models.membership_pipeline import ProspectElectionPackage, ProspectiveMember
 from app.services.membership_pipeline_service import MembershipPipelineService
 
 pytestmark = [pytest.mark.integration]
@@ -180,21 +180,29 @@ class TestEnteringAVoteStageCreatesThePackage:
             svc, org_id, ["election_vote", "checkbox", "checkbox"]
         )
         p = await _prospect(svc, org_id, pipeline.id)
+        prospect_id, vote_id, next_id = str(p.id), str(steps[0].id), str(steps[1].id)
         # Created on the vote stage: that is itself an entry.
         assert await _package_count(db_session, p.id) == 1
+        # Stand for an applicant placed past the vote with no package. Moved
+        # directly: an Advance off the vote now refuses one with no package.
         await db_session.execute(
             ProspectElectionPackage.__table__.delete().where(
                 ProspectElectionPackage.prospect_id == p.id
             )
         )
-        await svc.advance_prospect(p.id, org_id, admin_id)
-        assert await _package_count(db_session, p.id) == 0
+        await db_session.execute(
+            ProspectiveMember.__table__.update()
+            .where(ProspectiveMember.id == prospect_id)
+            .values(current_step_id=next_id)
+        )
+        db_session.expire_all()
+        assert await _package_count(db_session, prospect_id) == 0
 
-        await svc.regress_prospect(p.id, org_id, admin_id)
+        await svc.regress_prospect(prospect_id, org_id, admin_id)
 
-        packages = await _packages(db_session, p.id)
+        packages = await _packages(db_session, prospect_id)
         assert len(packages) == 1
-        assert str(packages[0].step_id) == str(steps[0].id)
+        assert str(packages[0].step_id) == vote_id
 
     async def test_a_vote_first_stage_gets_a_package_on_create(
         self, db_session: AsyncSession, org_and_admin
