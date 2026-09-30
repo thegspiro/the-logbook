@@ -361,7 +361,9 @@ describe('ReorderRequestsPage — opened from the attention queue', () => {
     renderWithRouter(<ReorderRequestsPage />);
 
     const dialog = await screen.findByRole('dialog', { name: 'Receive stock' });
-    expect(within(dialog).getByRole('spinbutton', { name: 'Quantity received *' })).toHaveValue(4);
+    // The dialog opens before its effect seeds the outstanding quantity, so a
+    // loaded run can catch it between the two with the field still empty.
+    await waitFor(() => expect(within(dialog).getByRole('spinbutton', { name: 'Quantity received *' })).toHaveValue(4));
     expect(within(dialog).getByRole('textbox', { name: 'Storage location *' })).toBeRequired();
     expect(within(dialog).getByRole('spinbutton', { name: 'Unit cost ($) *' })).toBeRequired();
     expect(within(dialog).getByRole('button', { name: 'Receive stock' })).toBeEnabled();

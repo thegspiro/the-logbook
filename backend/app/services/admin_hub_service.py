@@ -1454,6 +1454,16 @@ async def _scheduling_closeout_backlog(ctx: MetricContext) -> tuple[int, Optiona
 async def _scheduling_needs_closeout(ctx: MetricContext) -> tuple[str, str]:
     count, age = await _scheduling_closeout_backlog(ctx)
     if not count:
+        # "Every shift closed out" is an assurance only when a shift exists;
+        # on a department that has scheduled nothing it reads as work done.
+        any_shift = await _scalar(
+            ctx.db,
+            select(func.count(Shift.id)).where(
+                Shift.organization_id == ctx.organization_id
+            ),
+        )
+        if not any_shift:
+            return _fmt_int(0), "no shifts scheduled yet"
         return _fmt_int(0), "every shift closed out"
     return _fmt_int(count), _waiting_phrase(age) or "all ended today"
 

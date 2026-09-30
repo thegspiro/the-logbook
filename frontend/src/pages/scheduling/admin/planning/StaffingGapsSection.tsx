@@ -261,7 +261,17 @@ const StaffingGapsSection: React.FC = () => {
         </div>
       )}
 
-      {!loading && !failed && !rangeReversed && !truncated && gaps.length === 0 && (
+      {/* "Every shift has its crew" is only an assurance when there were
+          shifts to check. With none, the range is empty, not covered. */}
+      {!loading && !failed && !rangeReversed && !truncated && shifts.length === 0 && (
+        <EmptyState
+          icon={CalendarRange}
+          title="No shifts are scheduled in this range"
+          description="Staffing gaps are listed here once there are shifts to check. Put shifts on the calendar from a shift template or a pattern, or widen the dates above."
+        />
+      )}
+
+      {!loading && !failed && !rangeReversed && !truncated && shifts.length > 0 && gaps.length === 0 && (
         <EmptyState
           icon={CalendarRange}
           title="Every shift in this range has the crew it asks for"
