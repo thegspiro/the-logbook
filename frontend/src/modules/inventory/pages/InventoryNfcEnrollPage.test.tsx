@@ -81,6 +81,17 @@ describe('InventoryNfcEnrollPage', () => {
     scanner.onTag = null;
   });
 
+  // The switch needs the department-settings grant, so a quartermaster told
+  // to "turn it on" followed the link to Access Denied.
+  it('says who can turn NFC on when it is off', async () => {
+    service.getNfcSettings.mockResolvedValue({ enabled: false });
+    renderWithRouter(<InventoryNfcEnrollPage />);
+
+    const notice = await screen.findByText(/NFC tag tracking is turned off/);
+    expect(notice).toHaveTextContent(/An administrator can turn it on under NFC Tags/);
+    expect(screen.getByRole('link', { name: 'NFC Tags' })).toHaveAttribute('href', '/inventory/admin/nfc');
+  });
+
   it('writes a link to the current item, then moves to the next', async () => {
     const user = userEvent.setup();
     renderWithRouter(<InventoryNfcEnrollPage />);
