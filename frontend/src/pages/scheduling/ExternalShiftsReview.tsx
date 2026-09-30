@@ -13,9 +13,11 @@ import { AlertCircle, Loader2, RotateCcw, XCircle } from 'lucide-react';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import type { ExternalShiftEntry, ExternalShiftStatus } from '../../modules/scheduling/services/api';
 import { PromptDialog } from '../../components/ux/PromptDialog';
+import { useTimezone } from '../../hooks/useTimezone';
 import { formatCalendarDate } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { formatHours } from '../../utils/hoursFormatting';
+import { externalShiftTimeRange } from './externalShiftTimes';
 
 interface ExternalShiftsReviewProps {
   /** YYYY-MM-DD, inclusive. */
@@ -35,6 +37,7 @@ export const ExternalShiftsReview: React.FC<ExternalShiftsReviewProps> = ({
   canManage,
   onChanged,
 }) => {
+  const tz = useTimezone();
   const [entries, setEntries] = useState<ExternalShiftEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -171,6 +174,7 @@ export const ExternalShiftsReview: React.FC<ExternalShiftsReviewProps> = ({
               {entries.map((entry) => {
                 const rejected = entry.status === 'rejected';
                 const detail = [entry.apparatus_name, entry.role].filter(Boolean).join(' · ');
+                const times = externalShiftTimeRange(entry, tz);
                 return (
                   <tr key={entry.id} className="border-theme-surface-border hover:bg-theme-surface-hover border-b">
                     <td className="rwd-table-lead text-theme-text-primary px-4 py-3 font-medium" data-label="Member">
@@ -178,6 +182,7 @@ export const ExternalShiftsReview: React.FC<ExternalShiftsReviewProps> = ({
                     </td>
                     <td className="text-theme-text-secondary px-4 py-3" data-label="Date">
                       {formatCalendarDate(entry.shift_date)}
+                      {times && <p className="text-theme-text-muted text-xs">{times}</p>}
                     </td>
                     <td className="px-4 py-3" data-label="Department & apparatus">
                       <p className="text-theme-text-primary">{entry.agency_name}</p>

@@ -4,15 +4,44 @@ Schemas for shift hours a member worked outside the department's schedule.
 Snake_case on the wire, matching the rest of ``/api/v1/scheduling``.
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.external_shift_hours import MAX_EXTERNAL_SHIFT_MINUTES
+from app.schemas.base import UTCResponseBase
 
 _MAX_HOURS = MAX_EXTERNAL_SHIFT_MINUTES / 60
+
+
+def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
+    """Read an offset-less datetime as UTC and convert an aware one to it.
+
+    Mixing the two in one comparison raises ``TypeError``, which Pydantic does
+    not turn into a 422; and the driver stores an aware value by its wall
+    clock, dropping the offset, so it must reach the model already in UTC.
+    """
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _check_span(start_at: Optional[datetime], end_at: Optional[datetime]) -> None:
+    if (start_at is None) != (end_at is None):
+        raise ValueError("Send both a start and an end time")
+    if start_at is None or end_at is None:
+        return
+    if end_at <= start_at:
+        raise ValueError("The shift must end after it starts")
+    if (end_at - start_at).total_seconds() > MAX_EXTERNAL_SHIFT_MINUTES * 60:
+        raise ValueError(
+            f"One entry can cover at most {int(_MAX_HOURS)} hours; "
+            "log a longer stretch as the shifts it was"
+        )
 
 
 def _strip_optional(value: Optional[str]) -> Optional[str]:
@@ -23,8 +52,15 @@ def _strip_optional(value: Optional[str]) -> Optional[str]:
 
 
 class ExternalShiftHoursCreate(BaseModel):
-    shift_date: date
-    hours: float = Field(..., gt=0, le=_MAX_HOURS)
+    """A shift is given either by its start and end, from which the date and
+    hours are derived, or — as clients written before the times existed
+    still send — by a date and an hours figure. Never both, so there is no
+    question of which one the entry counts by."""
+
+    shift_date: Optional[date] = None
+    hours: Optional[float] = Field(None, gt=0, le=_MAX_HOURS)
+    start_at: Optional[datetime] = None
+    end_at: Optional[datetime] = None
     # A unit from the officer-maintained list; the agency is the unit's.
     external_apparatus_id: UUID
     role: Optional[str] = Field(None, max_length=100)
@@ -35,13 +71,34 @@ class ExternalShiftHoursCreate(BaseModel):
     def _blank_is_absent(cls, value: Optional[str]) -> Optional[str]:
         return _strip_optional(value)
 
+    @field_validator("start_at", "end_at")
+    @classmethod
+    def _utc(cls, value: Optional[datetime]) -> Optional[datetime]:
+        return _as_utc(value)
+
+    @model_validator(mode="after")
+    def _one_way_of_giving_the_shift(self) -> "ExternalShiftHoursCreate":
+        _check_span(self.start_at, self.end_at)
+        if self.start_at is not None:
+            if self.shift_date is not None or self.hours is not None:
+                raise ValueError(
+                    "Send either start and end times, or a date and hours, not both"
+                )
+        elif self.shift_date is None or self.hours is None:
+            raise ValueError("Send the shift's start and end times")
+        return self
+
 
 class ExternalShiftHoursUpdate(BaseModel):
     """Partial update. An explicit null clears an optional field; a null for
-    the date, hours or apparatus is refused as a 400."""
+    the date, hours, times or apparatus is refused as a 400.
+
+    The start and end travel together, and not beside a date or hours."""
 
     shift_date: Optional[date] = None
     hours: Optional[float] = Field(None, gt=0, le=_MAX_HOURS)
+    start_at: Optional[datetime] = None
+    end_at: Optional[datetime] = None
     external_apparatus_id: Optional[UUID] = None
     role: Optional[str] = Field(None, max_length=100)
     notes: Optional[str] = Field(None, max_length=2000)
@@ -50,6 +107,17 @@ class ExternalShiftHoursUpdate(BaseModel):
     @classmethod
     def _blank_is_absent(cls, value: Optional[str]) -> Optional[str]:
         return _strip_optional(value)
+
+    @field_validator("start_at", "end_at")
+    @classmethod
+    def _utc(cls, value: Optional[datetime]) -> Optional[datetime]:
+        return _as_utc(value)
+
+    @model_validator(mode="after")
+    def _times_are_a_valid_pair(self) -> "ExternalShiftHoursUpdate":
+        if self.start_at is not None and self.end_at is not None:
+            _check_span(self.start_at, self.end_at)
+        return self
 
 
 class ExternalShiftHoursReject(BaseModel):
@@ -64,7 +132,7 @@ class ExternalShiftHoursReject(BaseModel):
         return stripped
 
 
-class ExternalShiftHoursResponse(BaseModel):
+class ExternalShiftHoursResponse(UTCResponseBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
@@ -72,6 +140,8 @@ class ExternalShiftHoursResponse(BaseModel):
     member_name: Optional[str] = None
     shift_date: date
     hours: float
+    start_at: Optional[datetime] = None
+    end_at: Optional[datetime] = None
     external_apparatus_id: Optional[str] = None
     agency_name: str
     apparatus_name: str

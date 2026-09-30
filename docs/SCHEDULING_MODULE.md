@@ -514,6 +514,18 @@ department's list**, with position and notes optional. An entry counts from
 the moment it is saved, and an officer who rejects one takes it out of every
 total below.
 
+**A shift is given by its start and end.** The form takes a start and an end,
+with **+12** and **+24** buttons for the standard tours, and sends `start_at` /
+`end_at` as UTC instants. The server derives the entry's `shift_date` (the
+start's calendar date in the department's timezone, so a 19:00 night shift
+counts on the day it began) and its hours, and keeps both times; they appear on
+the member's list and the officer's review. The older shape, `shift_date` plus
+`hours`, is still accepted, but never beside the times (422). Entries logged
+before the times were kept have `start_at` / `end_at` null and open in the
+edit form on their date and hours, with the option to give them times.
+Correcting the date or hours alone clears any recorded times, since they would
+then describe a different shift from the one that counts.
+
 **The apparatus list** is kept under Scheduling → Settings → Outside
 Apparatus (`/scheduling/admin/settings/outside-apparatus`): departments, and
 the units at each. Members can only pick an active unit of an active

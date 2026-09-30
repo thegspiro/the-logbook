@@ -500,6 +500,12 @@ export interface ExternalShiftEntry {
   /** YYYY-MM-DD, a calendar date rather than an instant. */
   shift_date: string;
   hours: number;
+  /**
+   * UTC instants the shift began and ended. Null on entries logged as a date
+   * and hours, from which ``shift_date`` and ``hours`` are otherwise derived.
+   */
+  start_at: string | null;
+  end_at: string | null;
   /** Null once the unit has been deleted from the list. */
   external_apparatus_id: string | null;
   /** Names as they were when the shift was logged. */
@@ -521,9 +527,15 @@ export interface ExternalShiftList {
   total: number;
 }
 
+/**
+ * A shift is given by its start and end (UTC), or by a date and hours — never
+ * both. The server derives the date and hours from the times.
+ */
 export interface ExternalShiftCreate {
-  shift_date: string;
-  hours: number;
+  start_at?: string | undefined;
+  end_at?: string | undefined;
+  shift_date?: string | undefined;
+  hours?: number | undefined;
   /** A unit from the officer-maintained list; the agency is the unit's. */
   external_apparatus_id: string;
   role?: string | undefined;
@@ -532,6 +544,10 @@ export interface ExternalShiftCreate {
 
 /** Omit a key to leave it alone; `null` clears an optional field. */
 export interface ExternalShiftUpdate {
+  /** Sent together, and never beside `shift_date` or `hours`. */
+  start_at?: string;
+  end_at?: string;
+  /** Correcting either on its own clears any recorded times. */
   shift_date?: string;
   hours?: number;
   external_apparatus_id?: string;
