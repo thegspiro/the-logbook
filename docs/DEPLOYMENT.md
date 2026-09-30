@@ -308,10 +308,11 @@ but leaves port 3000 published. Use it only when something outside this stack
 still has to reach the frontend on that port.
 
 The update command, `git pull && docker compose up -d --build`, reads
-`COMPOSE_FILE` and keeps the proxy file. The installers (`install.sh`,
-`scripts/universal-install.sh`) do not: they always pass the base and
-production files with `-f`. Re-running one on this setup brings the frontend
-back on port 3000, so run `docker compose up -d` again after it.
+`COMPOSE_FILE` and keeps the proxy file. So do the installers (`install.sh`,
+`scripts/universal-install.sh`): when `.env` pins it, they add it to the
+compose files they always pass. If the certificate is missing, they stop
+before building anything, because nginx would not start and the install
+would have no way in.
 
 The container reads its certificate from `infrastructure/nginx/ssl/`, as
 `fullchain.pem` and `privkey.pem`, and **will not start without both**. Both
