@@ -42,6 +42,7 @@ from app.schemas.finance import (
     ExportRequest,
     FiscalYearCreate,
     FiscalYearUpdate,
+    ManualDenyRequest,
     MemberDuesPayment,
     MemberDuesUnwaive,
     MemberDuesWaive,
@@ -136,6 +137,7 @@ SNAKE_BODIES: dict[type[BaseModel], dict] = {
         "is_active": False,
     },
     ApprovalActionRequest: {"notes": "Looks fine"},
+    ManualDenyRequest: {"reason": "No budget left this quarter"},
     PurchaseRequestCreate: {
         "fiscal_year_id": "fy-1",
         "budget_id": "budget-1",

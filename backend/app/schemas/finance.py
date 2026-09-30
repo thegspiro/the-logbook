@@ -413,6 +413,8 @@ class UnroutedApprovalResponse(UTCResponseBase):
 class ManualDenyRequest(BaseModel):
     """Deny a request that has no approval steps. A reason is required."""
 
+    model_config = _REQUEST_CONFIG
+
     reason: str = Field(..., min_length=1, max_length=5000)
 
     @field_validator("reason")
