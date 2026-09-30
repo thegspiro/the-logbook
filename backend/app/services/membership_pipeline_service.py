@@ -6036,30 +6036,82 @@ class MembershipPipelineService:
         prospect_ids: Optional[List[str]] = None,
         purged_by: Optional[str] = None,
     ) -> int:
-        """Delete withdrawn/inactive prospects from a pipeline"""
+        """Permanently delete inactive prospects from a pipeline.
+
+        Only ``INACTIVE`` applications are purged: this backs the Inactive
+        Applications tab, and matching WITHDRAWN here instead is what made the
+        tab's Purge button delete nothing while reporting success. Ids outside
+        the pipeline, or not inactive, are left alone; the returned count says
+        how many were actually deleted.
+
+        Uploaded documents are removed from disk first, the same way
+        ``delete_prospect_document`` does it. The row delete below cascades to
+        ``prospect_documents`` in the database but not to the files, so without
+        this every purged applicant's ID photos and background checks stayed on
+        the server. A file that exists but cannot be removed raises before any
+        row is deleted, so a retry can finish the job; files already removed by
+        then are treated as gone on the retry.
+        """
         pipeline = await self.get_pipeline(pipeline_id, organization_id)
         if not pipeline:
             return 0
 
         conditions = [
             ProspectiveMember.pipeline_id == pipeline_id,
-            ProspectiveMember.status == ProspectStatus.WITHDRAWN,
+            ProspectiveMember.organization_id == organization_id,
+            ProspectiveMember.status == ProspectStatus.INACTIVE,
         ]
         if prospect_ids:
             conditions.append(ProspectiveMember.id.in_(prospect_ids))
 
-        # Count first
-        count_query = select(func.count(ProspectiveMember.id)).where(and_(*conditions))
-        result = await self.db.execute(count_query)
-        count = result.scalar() or 0
+        # Locked so an applicant reactivated mid-purge is either purged before
+        # the reactivation or not at all.
+        ids = list(
+            (
+                await self.db.execute(
+                    select(ProspectiveMember.id)
+                    .where(and_(*conditions))
+                    .with_for_update()
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if not ids:
+            return 0
 
-        if count > 0:
-            # Delete (cascade will handle related records)
-            del_query = delete(ProspectiveMember).where(and_(*conditions))
-            await self.db.execute(del_query)
-            await self.db.commit()
+        paths = (
+            (
+                await self.db.execute(
+                    select(ProspectDocument.file_path).where(
+                        ProspectDocument.prospect_id.in_(ids)
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        import os
 
-        return count
+        for stored_path in paths:
+            if stored_path and os.path.exists(stored_path):
+                try:
+                    await asyncio.to_thread(os.remove, stored_path)
+                except OSError as exc:
+                    logger.error(
+                        f"Failed to remove prospect document file {stored_path}: {exc}"
+                    )
+                    raise ValueError(
+                        "Could not delete an applicant's document file, so "
+                        "nothing was purged; please try again"
+                    ) from exc
+
+        # Cascade handles the dependent rows.
+        await self.db.execute(
+            delete(ProspectiveMember).where(ProspectiveMember.id.in_(ids))
+        )
+        await self.db.commit()
+        return len(ids)
 
     # =========================================================================
     # Document Management

@@ -476,6 +476,25 @@ named ("N modules you did not enable are hidden") with a control to reveal
 them, so a department that cannot find Inventory learns it is off rather than
 concluding the permission does not exist.
 
+## Prospective Members — Purge Is Manual; Auto-Purge Is Not Wired (2026-09-30)
+
+**Purge Selected** on the Inactive Applications tab permanently deletes the
+selected applications that are still `inactive`, with their uploaded documents,
+and records the purge in the audit log. Until this date it matched `withdrawn`
+instead, so it deleted nothing while the page reported success. Withdrawn,
+rejected and on-hold applications are never purged; the owner chose to keep the
+button to exactly what its tab lists.
+
+**Open: the pipeline's Auto-Purge setting has no reader.** The settings page
+stores `auto_purge_enabled` and `purge_days_after_inactive`, and the user guide
+(`docs/training/15-prospective-members.md`) says inactive applicants are
+deleted after the grace period, but no scheduled task reads either value --
+nothing is ever purged automatically (CLAUDE.md pitfall #19). Wiring it means a
+nightly job calling `purge_inactive_prospects` per pipeline for applications
+inactive longer than the grace period, which needs the date an application went
+inactive (`deactivated_at`) and a decision on notifying coordinators first.
+Until then, departments purge from the Inactive tab.
+
 ## Email Link Address — How a Change Reaches Every Worker (2026-09-25)
 
 An address saved on **Settings → Email** is applied to `settings.FRONTEND_URL`
