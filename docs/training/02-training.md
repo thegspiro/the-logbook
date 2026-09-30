@@ -90,10 +90,17 @@ Navigate to **Training > My Training** to view your personal training dashboard.
 
 This page shows:
 
-- **Summary Stats** - Total hours, courses completed, active enrollments, certifications
-- **Active Program Enrollments** - Programs you are enrolled in with progress bars
-- **Requirement Progress** - Your progress toward department training requirements
-- **Recent Training Records** - Your latest completed training entries
+- **Summary Stats** - **Completed Courses**, **Completed Hours** (when your
+  department shows hours) and **Required Training**. Required Training is the
+  share of your required training you have met, with "X of Y requirements met"
+  beneath it, or **None assigned** when your department has not assigned you
+  any required training yet
+- **Training Requirements** - Your progress toward department training requirements
+- **Certifications** - Your certifications and when they expire
+- **Pipeline Progress** - One card per program you are enrolled in, headed by
+  the program's name: your status, overall percentage, each requirement by name
+  with its percentage, and a **View full progress** link
+- **Training History** - Your completed training entries
 - **Skills Tests** _(2026-08-08)_ - Your own official and practice skills-test
   results, each opening a read-only scorecard. Previously these lived on the
   examiner's device and had to be read over their shoulder. What appears here —
@@ -101,6 +108,15 @@ This page shows:
   [Who Sees a Result](./09-skills-testing.md#who-sees-a-result--disclosure-settings-2026-08-08).
 
 ![My Training page with stat cards and the personal training record list](./images/02-01-my-training.png)
+
+A member with nothing on record yet sees **Nothing is on your training record
+yet** instead of the empty sections. It explains the three ways training reaches
+the page — attending a department training, submitting training done elsewhere,
+and taking a skills test — and offers **Submit External Training** and a link to
+the Learning Center walkthrough.
+
+> **Screenshot needed:**
+> _[Member with no training records (a newly added member) at /training/my-training: the "Nothing is on your training record yet" panel with its three numbered ways, the Submit External Training button and the Learning Center link, plus the Required Training card reading "None assigned". Use a demo member; no real names.]_
 
 > **Hint:** The visibility of sections on this page is controlled by your department's Training Module Configuration. Your officers may choose to show or hide certain sections for regular members.
 
@@ -141,9 +157,25 @@ rebuilt; the certificate now attaches inline.**]**
 **After Submission:**
 
 - Your record enters a **Pending Review** state.
-- An officer with `training.manage` permission will review and approve or reject it.
-- You will receive a notification when the decision is made.
+- An officer with `training.manage` permission will approve it, return it for revision, or reject it.
+- You get an in-app notification, with a **View My Submissions** button, when
+  the outcome differs from what you sent: the officer does not approve it,
+  approves it with different hours, credit hours or training type (each change
+  listed as before → after), sends it back for changes, or later reverses the
+  approval. A plain approval sends nothing — the record simply shows as
+  approved. Withdrawing a submission clears its notices.
 - Approved records are added to your training history and count toward requirements.
+
+A submission sent back for changes appears at the top of **Submit Training**
+with the officer's note and "Returned _date_ · Your hours are not counted yet".
+The date is your department's calendar day. Press **Fix and Resubmit** to
+correct it and send it back, or **Withdraw** to drop it.
+
+> **Screenshot needed:**
+> _[Member at /training/submit with one of their submissions in revision_requested state and a reviewer note: the returned-submission notice at the top of Submit Training showing the officer's note, "Returned <date> · Your hours are not counted yet", and the Fix and Resubmit and Withdraw buttons. Demo data only.]_
+
+> **Screenshot needed:**
+> _[Member (the submitter) at /notifications?tab=inbox: a "Training submission approved with changes — <course>" notice expanded, showing a "• Hours: 3 → 2" line, the officer's notes and the View My Submissions button. Demo data only.]_
 
 > **Hint:** If you are submitting for a certification, make sure to upload the certificate document. This helps officers verify and approve your record faster.
 
@@ -169,7 +201,14 @@ this way; see
 
 ![Course Library showing course cards grouped by category](./images/02-04-course-library.png)
 
-**Officers** can create new courses from the **Training Admin > Officer Dashboard** or directly from the course management area.
+**Officers** add courses with **Add Course** under **Training Admin > Setup >
+Course Library**. To clear a value later, edit the course, empty the field
+(instructor, expiry, hours and so on) and press **Update Course**.
+
+The trash icon on a course card **deactivates** the course: it stops being
+offered for new training records and leaves the library, which lists active
+courses only. There is currently no way to reactivate it from the app (see
+[KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md)), so deactivate deliberately.
 
 Courses that are made up of several classes — a recruit school, a five-night EMT refresher — show a class count and a **Manage classes** action. See [Multi-Class Courses & Cohorts](#multi-class-courses--cohorts).
 
@@ -192,7 +231,7 @@ There are two pieces:
 2. Find the course (create it first if it doesn't exist — this is the _container_ course, e.g. "Recruit School").
 3. Click **Manage classes**.
 4. Click **Add class** and fill in:
-   - **Course taught** — the catalog course this class covers, e.g. "SCBA Operations". This is required: it's what supplies the class's credit hours, certification settings and categories. If it doesn't exist yet, click **+** to create it without leaving the builder.
+   - **Course taught** — the catalog course this class covers, e.g. "SCBA Operations". This is required: it's what supplies the class's credit hours, certification settings and categories. If it doesn't exist yet, click **+** (**Create a new course**): the course form opens over the syllabus, and the course you create is picked as this class's course.
    - **Title** _(optional)_ — defaults to the course name. Use it when the same course appears twice ("SCBA — night evolution").
    - **Section** _(optional)_ — groups classes, e.g. "Orientation & Safety". Sections become phases if you generate a pipeline.
    - **Day** — how many days after the course start this class happens. Day 1 is the first day.
@@ -246,6 +285,12 @@ status, credit hours, instructor, how many members are signed up, and an
 | **Create missing events** | Appears if a class has no event — because scheduling it failed, or someone deleted the event. Safe to click any time; it only fills gaps. |
 
 The **Roster** tab lists each member with their progress through the pipeline, a link to their full progression, and a **Remove** action.
+
+> **Pick the full roster before you press Generate.** Members join a cohort's
+> roster only when you generate it. The Roster tab has no add control, so a
+> member who joins the course late cannot be added from the app, even though an
+> empty roster's prompt says "Add members…" — see
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md).
 
 > **Students cannot open a cohort at all yet** _(2026-08-12)_. Cohort pages are
 > officer-only. A member who follows a cohort link, or types the URL, gets
@@ -318,6 +363,11 @@ Training programs are structured multi-phase curricula (e.g., "Probationary Fire
 - **Phases** - Ordered stages of the program
 - **Requirements** - Training requirements linked to each phase
 - **Milestones** - Key checkpoints in the program
+
+Any member can open a program to read its phases, requirements and milestones.
+The **Enrolled** count and **Enrollments** tab appear only for officers holding
+`training.view_all` or `training.manage`, and **Duplicate** only for
+`training.manage`.
 
 ### Viewing Your Enrollment
 
@@ -2753,9 +2803,9 @@ were an invitation to a 403 or to the access-denied page.
 
 ### Course Library
 
-**Add, Edit, Delete and Manage classes now require `training.manage`.** Every
-write behind those four — create, update (which is how "Deactivate" is
-implemented) and the syllabus builder — already did.
+**Add, Edit, Deactivate (the trash icon) and Manage classes now require
+`training.manage`.** Every write behind those four — create, update (which is
+how "Deactivate" is implemented) and the syllabus builder — already did.
 
 The gate is on the page content rather than the route, because the same page is
 mounted inside the training admin hub where the officer does hold the grant.
@@ -2775,10 +2825,11 @@ mounted inside the training admin hub where the officer does hold the grant.
 - **The Requirements and Templates tabs are gone for members.** Both are
   manager-only views, so the whole tab strip is hidden and a member sees the
   Programs list on its own.
-- **With no programs to show, a member sees an empty panel** rather than a card
-  whose only content is a prompt to create the thing they cannot create. A
-  search that matched nothing still reports "No programs found" to everyone —
-  that is feedback on the term they typed.
+- **With no programs to show, a member sees an explanation** — "Your department
+  has not published any training programs yet", with a line on what a program
+  is — rather than a card whose only content is a prompt to create the thing
+  they cannot create. A search that matched nothing still reports "No programs
+  found" to everyone — that is feedback on the term they typed.
 
 The lists themselves stay readable throughout. It is the write controls that are
 withheld.
