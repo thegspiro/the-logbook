@@ -90,20 +90,20 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W44 | NFC: tag in bulk, put away, shelf audit, items not seen                      | quartermaster               | `/inventory/admin/nfc/*`, `/inventory/shelf-audit`         | ✅     |
 | W45 | The self-service kiosk                                                       | member                      | `/inventory/kiosk`                                         | ✅     |
 | W46 | Equipment checks: build a checklist, perform a check, fleet board, check log | scheduling_officer → member | `/inventory/admin/checklists`, `/inventory/checklists`     | ✅     |
-| W47 | Medical supplies                                                             | quartermaster               | `/medical-supplies`                                        | ⬜     |
+| W47 | Medical supplies                                                             | quartermaster               | `/medical-supplies`                                        | ✅     |
 
 ## Tier 7 — Apparatus and facilities
 
 | #   | Activity                                                          | Acts as | Starts at                                | Status |
 | --- | ----------------------------------------------------------------- | ------- | ---------------------------------------- | ------ |
-| W48 | Add an apparatus, edit it, read its detail, print its labels      | admin   | `/apparatus`, `/apparatus/new`           | ⬜     |
-| W49 | Facilities: a facility, its maintenance, inspections and settings | admin   | `/facilities`, `/facilities/maintenance` | ⬜     |
+| W48 | Add an apparatus, edit it, read its detail, print its labels      | admin   | `/apparatus`, `/apparatus/new`           | ✅     |
+| W49 | Facilities: a facility, its maintenance, inspections and settings | admin   | `/facilities`, `/facilities/maintenance` | ✅     |
 
 ## Tier 8 — Governance and communication
 
 | #   | Activity                                                              | Acts as            | Starts at                                          | Status |
 | --- | --------------------------------------------------------------------- | ------------------ | -------------------------------------------------- | ------ |
-| W50 | An election: create, nominate, vote by ballot link, close, results    | secretary → member | `/elections`, `/ballot`                            | ⬜     |
+| W50 | An election: create, nominate, vote by ballot link, close, results    | secretary → member | `/elections`, `/ballot`                            | ✅     |
 | W51 | Meeting minutes: draft, approve, publish                              | secretary          | `/minutes`                                         | ⬜     |
 | W52 | Action items: assign, work, close                                     | secretary → member | `/action-items`                                    | ⬜     |
 | W53 | Documents: folders, upload, who can see what                          | secretary, member  | `/documents`                                       | ⬜     |
@@ -156,11 +156,11 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   the list under it, which also carries clearances, requests and returns;
   "Issued to members" counts pool issuances only, so permanently assigned
   items read "0, held by 0 members" (W15).
-- **Facilities, reports and inventory activities** — four `DialogPanel`
-  dialogs have no `role` on the panel or a wrapper: the facilities lookup
-  editor, the report viewer, and InventoryScanModal's confirm and
-  custody-transfer dialogs (W14-2). The inventory pair sits inside another
-  modal; check its tests' dialog queries when changing it.
+- **Reports and inventory activities** — three `DialogPanel` dialogs have no
+  `role` on the panel or a wrapper: the report viewer, and
+  InventoryScanModal's confirm and custody-transfer dialogs (W14-2). The
+  inventory pair sits inside another modal; check its tests' dialog queries
+  when changing it.
 - **Any run touching the app shell** — while a password change is required
   (first sign-in, admin reset), the shell and shared hooks fire ~17 requests
   the server refuses with 403, including `POST /errors/log`, so errors from
@@ -172,9 +172,6 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   … Powered by The Logbook · End-to-end encrypted · Self-hosted ·
   HIPAA-aware") prints under the apparatus check-in sheet and the shift
   report (W37-3).
-- **W48** — the basic apparatus form (`/apparatus-basic` → Add Apparatus)
-  names none of its fields: unit number, name, type, crew size and every
-  position select are placeholders or nothing (W30).
 - **W79** — tap targets under 44px on the onboarding Modules, Ranks &
   Positions and Apparatus steps at 390px wide (W01-13), and the sign-in
   screen's "Forgot your password?", Privacy and Terms links (W02-5), and
@@ -188,6 +185,88 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W50 — An election: create, nominate, vote by ballot link, close, results — 2026-09-30
+
+Driven as: `secretary` at 1280×900, `member` at 390×844, and a signed-out
+voter on `/ballot` at 390×844, with a minted token standing in for the email
+(email is off here). Held: an empty create refused; seven double-clicks acted
+once; a pending nomination kept off the ballot; the link asked before casting,
+gave a receipt, and refused reuse, a bad token and no token; `member` refused
+every manage call. Fixed: W50-1 (LOW — a click on Add after typing a position
+was eaten by a click-away layer), W50-2 (LOW — start and end time pickers
+shared names), W50-3 (LOW — a plurality election read "Simple Majority"),
+W50-4 (MED — only the selected election tab was reachable by keyboard), W50-5
+(LOW — the stepper read as bare numbers on a phone), W50-6 (MED — a voter
+override needed a user ID, and was listed by it), W50-7 (LOW — the candidate
+form, ballot builder and attendance list named nothing), W50-8 (LOW — the
+ballot-email reason was a hover title, and the send claimed a summary emailed
+with email off). Flagged: W50-9 (MED — a member checked in after opening
+cannot vote), W50-10 (MED — an election closed early hides its results until
+the scheduled end), W50-11 (LOW — a positions-only election cannot email
+ballots). Open: W50-12, W50-13 (NIT). Gate: typecheck, lint, the election
+suites, flake8 and black clean; the election and ballot pytests pass.
+**Rotation stopped here:** W50-9 and W50-10 are decisions about who may vote
+and who may see results, which the rotation's instructions reserve for the
+owner. Next, once they are decided: W51.
+
+### W49 — Facilities: a facility, its maintenance, inspections and settings — 2026-09-30
+
+Driven as: `admin` at 1280×900 and 390×844, with `member` refused on four
+pages and every call at 390×844. Held: double-clicked saves made one facility,
+one maintenance record and one inspection; the records reached the
+facility-wide pages and the dashboard; edits send `null` for a cleared field;
+no page scrolled sideways on a phone. Fixed: W49-1 (LOW — an email that is not
+one was accepted; the forms now refuse it, the server is left open), W49-2
+(MED — the overview edit form named none of its 21 fields), W49-3 (LOW — the
+section navigation had no current state), W49-4 (LOW — the four maintenance and
+inspection dialogs named nothing), W49-5 (LOW — filter strips showed state by
+colour alone), W49-6 (LOW — the lookup editor had no dialog role; the facilities
+part of the W14-2 lead, removed). Gate: typecheck, lint and the facilities
+suite clean; no backend change. Next: W50.
+
+### W48 — Add an apparatus, edit it, read its detail, print its labels — 2026-09-30
+
+Driven as: `admin` at 1280×900 and 390×844, with `member` refused on five
+pages and every call. Held: an empty submit saved nothing; a double-clicked
+Add made one apparatus; the registration date read as a calendar date; the
+labels page printed E-2. Fixed: W48-1 (MED — the add/edit form named almost
+none of its 40 fields), W48-2 (LOW — required-field errors not tied to their
+fields), W48-3 (LOW — an unchosen fuel type was stored as diesel), W48-4 (LOW —
+clearing a field on edit kept the old value), W48-5 (LOW — every row's actions
+shared one name), W48-6 (LOW — the detail page scrolled sideways on a phone),
+W48-7 (LOW — the basic apparatus form named nothing; the W30 lead, removed).
+Open: W48-8 (NIT). Gate: typecheck, lint, the apparatus and scheduling suites
+and the apparatus pytests clean. Next: W49.
+
+### W47 — Medical supplies — 2026-09-30
+
+Driven as: `quartermaster` at 1280×900, with `member` read-only at 390×844.
+Held: a blank name and a negative threshold were refused; double-clicked
+Create category, Add supply and Record delivery each acted once; the expired
+lot was left out of on hand; a cleared reorder point saved as a clear; retire
+confirmed first; the member saw no write controls and got 403 on every write.
+Fixed: W47-1 (LOW — the item page called expired units ready), W47-2 (LOW —
+every lot's controls had one name), W47-3 (LOW — delivery lines repeated one
+set of field names), W47-4 (LOW — a retired supply's lots stayed on the
+expiring tab, in the counts and, read from code, in the expiry alert), W47-5
+(LOW — the add-supply notice named the categories page without linking it).
+Flagged: W47-6 (MED — the dashboard counts a lot-stocked category as empty).
+Open: W47-7, W47-8 (NIT). Gate: typecheck, lint, the inventory and
+medical-supplies suites and the touched pytests clean. Next: W48.
+
+### W46 (second pass) — Equipment checks — 2026-09-30
+
+A second session drove W46 before the first run's file reached `main`; the two
+were reconciled on merge and this pass's ids renumbered into
+`W46-equipment-checks.md` ("A second pass"). Driven as: `chief` building,
+`member` performing at 390×844, `quartermaster` refused the builder. Its fixes
+overlapped W46-6, W46-7, W46-8 and W46-10 and were kept where they add to
+them: the member's log links back to "My checklists". Resolved: W46-14 (the
+owner granted the quartermaster `inventory.check_manage`, migration
+`f73b449bdb8b`). Flagged: W46-19 (MED — the log counts a checklist missed
+before it existed), W46-20 (LOW — basic apparatus cannot be pinned to a
+checklist). Next: W47.
 
 ### W46 — Equipment checks: build a checklist, perform a check, fleet board, check log — 2026-09-30
 

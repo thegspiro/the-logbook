@@ -155,7 +155,6 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
   };
 
   const today = getTodayLocalDate(tz);
-  const totalReady = lots.reduce((sum, l) => sum + l.quantity, 0);
 
   const daysLeft = (lot: InventoryLot): number | null => {
     if (!lot.expiration_date) return null;
@@ -173,6 +172,13 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
     return 'ok';
   };
 
+  // An expired lot is not ready stock: the server skips it when it issues or
+  // swaps, and Medical Supplies leaves it out of on-hand. Counting it here made
+  // this panel disagree with that page about the same item.
+  const totalReady = lots.reduce((sum, l) => (expiryState(l) === 'expired' ? sum : sum + l.quantity), 0);
+  const totalExpired = lots.reduce((sum, l) => (expiryState(l) === 'expired' ? sum + l.quantity : sum), 0);
+  const lotName = (lot: InventoryLot): string => (lot.lot_number ? `lot ${lot.lot_number}` : 'unnumbered lot');
+
   const daysLeftLabel = (d: number): string => (d < 0 ? `${Math.abs(d)}d ago` : d === 0 ? 'today' : `${d}d left`);
 
   if (loading) {
@@ -189,6 +195,7 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
         <div className="text-theme-text-muted text-sm">
           <span className="text-theme-text-primary font-semibold">{totalReady}</span> ready unit
           {totalReady !== 1 ? 's' : ''} across {lots.length} lot{lots.length !== 1 ? 's' : ''}
+          {totalExpired > 0 && ` · ${totalExpired} expired`}
         </div>
         {canManage && !showForm && (
           <button
@@ -327,7 +334,7 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
-                        aria-label="Decrease quantity"
+                        aria-label={`Decrease ${lotName(lot)}`}
                         onClick={() => void adjustQuantity(lot.id, -1)}
                         className="btn-icon"
                       >
@@ -336,7 +343,7 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
                       <span className="text-theme-text-primary w-8 text-center font-semibold">{lot.quantity}</span>
                       <button
                         type="button"
-                        aria-label="Increase quantity"
+                        aria-label={`Increase ${lotName(lot)}`}
                         onClick={() => void adjustQuantity(lot.id, 1)}
                         className="btn-icon"
                       >
@@ -349,7 +356,7 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
                   {canManage && (
                     <button
                       type="button"
-                      aria-label="Delete lot"
+                      aria-label={`Delete ${lotName(lot)}`}
                       onClick={() => void handleDelete(lot)}
                       className="rounded p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
                     >

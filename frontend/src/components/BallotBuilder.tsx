@@ -338,8 +338,11 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {/* Title */}
               <div className="sm:col-span-2">
-                <label className={labelClass}>Title</label>
+                <label htmlFor={`ballot-item-title-${item.id}`} className={labelClass}>
+                  Title
+                </label>
                 <input
+                  id={`ballot-item-title-${item.id}`}
                   type="text"
                   className={inputClass}
                   value={item.title}
@@ -350,8 +353,11 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
 
               {/* Description */}
               <div className="sm:col-span-2">
-                <label className={labelClass}>Description</label>
+                <label htmlFor={`ballot-item-description-${item.id}`} className={labelClass}>
+                  Description
+                </label>
                 <textarea
+                  id={`ballot-item-description-${item.id}`}
                   className={inputClass}
                   rows={2}
                   value={item.description ?? ''}
@@ -367,8 +373,11 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
 
               {/* Item Type */}
               <div>
-                <label className={labelClass}>Item Type</label>
+                <label htmlFor={`ballot-item-item-type-${item.id}`} className={labelClass}>
+                  Item Type
+                </label>
                 <select
+                  id={`ballot-item-item-type-${item.id}`}
                   className={selectClass}
                   value={item.type}
                   onChange={(e) => onUpdateItem(item.id, { type: e.target.value })}
@@ -382,8 +391,11 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
 
               {/* Vote Type */}
               <div>
-                <label className={labelClass}>Vote Type</label>
+                <label htmlFor={`ballot-item-vote-type-${item.id}`} className={labelClass}>
+                  Vote Type
+                </label>
                 <select
+                  id={`ballot-item-vote-type-${item.id}`}
                   className={selectClass}
                   value={item.vote_type}
                   onChange={(e) => onUpdateItem(item.id, { vote_type: e.target.value })}
@@ -396,8 +408,11 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
 
               {/* Who Can Vote */}
               <div>
-                <label className={labelClass}>Who Can Vote</label>
+                <label htmlFor={`ballot-item-who-can-vote-${item.id}`} className={labelClass}>
+                  Who Can Vote
+                </label>
                 <select
+                  id={`ballot-item-who-can-vote-${item.id}`}
                   className={selectClass}
                   value={item.eligible_voter_types.join(',')}
                   onChange={(e) =>
@@ -473,8 +488,11 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
               {hasOverride ? (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
-                    <label className={labelClass}>Victory Condition</label>
+                    <label htmlFor={`ballot-item-victory-condition-${item.id}`} className={labelClass}>
+                      Victory Condition
+                    </label>
                     <select
+                      id={`ballot-item-victory-condition-${item.id}`}
                       className={selectClass}
                       value={item.victory_condition ?? VC.MOST_VOTES}
                       onChange={(e) => {
@@ -502,8 +520,11 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
                   </div>
                   {(item.victory_condition === VC.SUPERMAJORITY || item.victory_condition === VC.THRESHOLD) && (
                     <div>
-                      <label className={labelClass}>Percentage</label>
+                      <label htmlFor={`ballot-item-percentage-${item.id}`} className={labelClass}>
+                        Percentage
+                      </label>
                       <input
+                        id={`ballot-item-percentage-${item.id}`}
                         type="number"
                         className={inputClass}
                         min={1}
@@ -982,7 +1003,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
                       <p className="text-theme-text-muted mb-3 text-xs">{selectedTemplate.description}</p>
                       <div className="space-y-3">
                         <div>
-                          <label className={labelClass}>
+                          <label htmlFor="ballot-template-name" className={labelClass}>
                             {selectedTemplate.type === BallotItemType.MEMBERSHIP_APPROVAL
                               ? 'Member Name'
                               : selectedTemplate.type === BallotItemType.OFFICER_ELECTION
@@ -994,6 +1015,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
                           election.positions.length > 0 ? (
                             <>
                               <select
+                                id="ballot-template-name"
                                 value={templateNameInput}
                                 onChange={(e) => setTemplateNameInput(e.target.value)}
                                 className={selectClass}
@@ -1014,6 +1036,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
                             </>
                           ) : (
                             <input
+                              id="ballot-template-name"
                               type="text"
                               value={templateNameInput}
                               onChange={(e) => setTemplateNameInput(e.target.value)}
@@ -1118,7 +1141,9 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
           <Vote className="text-theme-text-muted/50 mb-3 h-12 w-12" />
           <h4 className="text-theme-text-secondary text-lg font-medium">No ballot items yet</h4>
           <p className="text-theme-text-muted mt-1 max-w-md text-sm">
-            Add items from a template or create custom ones to build your ballot.
+            {isLocked
+              ? 'The ballot cannot be changed once voting has opened. Without ballot items, members vote in the app and no ballot emails can be sent.'
+              : 'Add items from a template or create custom ones to build your ballot. Ballot emails need at least one item; without one, members vote in the app.'}
           </p>
           {!isLocked && (
             <div className="mt-4 flex gap-3">
@@ -1204,8 +1229,11 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
               </h4>
               <div className="space-y-3">
                 <div>
-                  <label className={labelClass}>Title *</label>
+                  <label htmlFor="ballot-custom-title" className={labelClass}>
+                    Title *
+                  </label>
                   <input
+                    id="ballot-custom-title"
                     type="text"
                     value={customForm.title || ''}
                     onChange={(e) => setCustomForm((prev) => ({ ...prev, title: e.target.value }))}
@@ -1216,8 +1244,11 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
                 </div>
 
                 <div>
-                  <label className={labelClass}>Description</label>
+                  <label htmlFor="ballot-custom-description" className={labelClass}>
+                    Description
+                  </label>
                   <textarea
+                    id="ballot-custom-description"
                     value={customForm.description || ''}
                     onChange={(e) =>
                       setCustomForm((prev) => ({
@@ -1233,8 +1264,11 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
 
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
-                    <label className={labelClass}>Item Type</label>
+                    <label htmlFor="ballot-custom-item-type" className={labelClass}>
+                      Item Type
+                    </label>
                     <select
+                      id="ballot-custom-item-type"
                       value={customForm.type}
                       onChange={(e) =>
                         setCustomForm((prev) => ({
@@ -1251,8 +1285,11 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
                   </div>
 
                   <div>
-                    <label className={labelClass}>Vote Type</label>
+                    <label htmlFor="ballot-custom-vote-type" className={labelClass}>
+                      Vote Type
+                    </label>
                     <select
+                      id="ballot-custom-vote-type"
                       value={customForm.vote_type}
                       onChange={(e) =>
                         setCustomForm((prev) => ({
@@ -1270,10 +1307,13 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
 
                 {customForm.vote_type === VoteType.CANDIDATE_SELECTION && (
                   <div>
-                    <label className={labelClass}>Position</label>
+                    <label htmlFor="ballot-custom-position" className={labelClass}>
+                      Position
+                    </label>
                     {election.positions && election.positions.length > 0 ? (
                       <>
                         <select
+                          id="ballot-custom-position"
                           value={customForm.position || ''}
                           onChange={(e) =>
                             setCustomForm((prev) => ({
@@ -1298,6 +1338,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
                       </>
                     ) : (
                       <input
+                        id="ballot-custom-position"
                         type="text"
                         value={customForm.position || ''}
                         onChange={(e) =>
@@ -1317,8 +1358,11 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
                 )}
 
                 <div>
-                  <label className={labelClass}>Who Can Vote</label>
+                  <label htmlFor="ballot-custom-who-can-vote" className={labelClass}>
+                    Who Can Vote
+                  </label>
                   <select
+                    id="ballot-custom-who-can-vote"
                     value={customForm.eligible_voter_types?.join(',') || 'all'}
                     onChange={(e) =>
                       setCustomForm((prev) => ({

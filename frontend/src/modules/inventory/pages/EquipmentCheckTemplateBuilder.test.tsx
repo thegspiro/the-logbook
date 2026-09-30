@@ -24,6 +24,7 @@ const {
   toastError,
   getApparatusOptions,
 } = vi.hoisted(() => ({
+  getApparatusOptions: vi.fn(),
   getTemplate: vi.fn(),
   updateCheckItem: vi.fn(),
   addCheckItem: vi.fn(),
@@ -203,6 +204,13 @@ const mockViewport = (width: keyof typeof VIEWPORT_WIDTHS) => {
     dispatchEvent: vi.fn(),
   }));
 };
+
+// Every block starts from no apparatus on record; a test that needs units
+// states them (CLAUDE.md pitfall 28).
+beforeEach(() => {
+  getApparatusOptions.mockReset();
+  getApparatusOptions.mockResolvedValue({ options: [], source: 'default' });
+});
 
 describe('EquipmentCheckTemplateBuilder responsive actions', () => {
   beforeEach(() => {
@@ -1699,6 +1707,27 @@ describe('EquipmentCheckTemplateBuilder narrow widths and assistive tech', () =>
     expect(await screen.findByRole('button', { name: 'Details' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save draft' })).toBeInTheDocument();
     expect(screen.getByLabelText('Tools')).toBeInTheDocument();
+  });
+
+  // dnd-kit's sortable attributes (role="button", tabindex, aria-disabled) were
+  // spread on each whole location and item row, so a screen reader met every
+  // row as one button, and an unsaved location's name and item boxes as
+  // disabled. They belong on the drag handle, which carries the listeners.
+  it('keeps the sortable attributes on the drag handles, not the rows', async () => {
+    mockViewport('laptop');
+    renderBuilder();
+
+    const locationHandles = await screen.findAllByRole('button', {
+      name: 'Drag to reorder compartment among siblings',
+    });
+    for (const handle of locationHandles) expect(handle).toHaveAttribute('aria-roledescription', 'sortable');
+    const itemHandle = await screen.findByRole('button', { name: 'Drag Radio to reorder' });
+    expect(itemHandle).toHaveAttribute('aria-roledescription', 'sortable');
+
+    for (const button of screen.getAllByRole('button')) {
+      expect(within(button).queryByRole('textbox')).toBeNull();
+      expect(within(button).queryAllByRole('button')).toHaveLength(0);
+    }
   });
 
   it('locks the page and takes focus while the details drawer is open', async () => {

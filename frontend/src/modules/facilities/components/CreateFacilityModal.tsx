@@ -7,6 +7,7 @@ import { useDialog } from '../../../hooks/useDialog';
 import { X, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFacilitiesStore } from '../store/facilitiesStore';
+import { organizationEmailError } from '../../../utils/organizationProfile';
 import type { FacilityCreate } from '../../../services/facilitiesServices';
 import type { Facility, FacilityType, FacilityStatus } from '../types';
 
@@ -37,12 +38,16 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
   });
 
   const setField = (field: string, value: string) => setFormData((prev) => ({ ...prev, [field]: value }));
+  // The modal submits from a button rather than a form, so type="email" is
+  // never checked by the browser, and the server accepts any string.
+  const emailError = organizationEmailError(formData.email);
 
   const handleCreate = async () => {
     if (!formData.name.trim()) {
       toast.error('Facility name is required');
       return;
     }
+    if (emailError) return;
     setIsCreating(true);
     try {
       // Use || to coerce empty strings to undefined (not ?? — see CLAUDE.md pitfall #1)
@@ -207,7 +212,14 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
                 onChange={(e) => setField('email', e.target.value)}
                 placeholder="station@example.com"
                 className={inputCls}
+                aria-invalid={Boolean(emailError)}
+                aria-describedby={emailError ? 'facility-email-error' : undefined}
               />
+              {emailError && (
+                <p id="facility-email-error" className="mt-1 text-xs text-red-700 dark:text-red-400">
+                  {emailError}
+                </p>
+              )}
             </div>
           </div>
 
@@ -280,7 +292,7 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
             onClick={() => {
               void handleCreate();
             }}
-            disabled={isCreating || !formData.name.trim()}
+            disabled={isCreating || !formData.name.trim() || Boolean(emailError)}
             className="btn-primary flex items-center gap-2 px-5"
           >
             {isCreating && <Loader2 className="h-4 w-4 animate-spin" />}

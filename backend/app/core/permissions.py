@@ -2086,6 +2086,11 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             INVENTORY_VIEW_MEDICAL.name,
             INVENTORY_MANAGE_MEDICAL.name,
             STOREFRONT_MANAGE.name,
+            # Building the apparatus checklists the stock above is carried on.
+            # Authoring only: reading check results stays with check_view,
+            # which the checklist screens already hide rather than refuse.
+            # Written to stored rows by 20260930 (add_quartermaster_check_manage).
+            INVENTORY_CHECK_MANAGE.name,
             COMPLIANCE_VIEW.name,
             APPARATUS_VIEW.name,
             FACILITIES_VIEW.name,

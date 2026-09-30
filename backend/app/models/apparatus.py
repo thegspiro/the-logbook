@@ -419,10 +419,10 @@ class Apparatus(Base):
     )  # For fire apparatus (e.g., Pierce, E-ONE)
     color = Column(String(50), nullable=True)
 
-    # Fuel
+    # Fuel. No default: the add form leaves it unset until the officer picks
+    # one, and a default recorded every such apparatus as diesel.
     fuel_type = Column(
         Enum(FuelType, values_callable=lambda x: [e.value for e in x]),
-        default=FuelType.DIESEL,
         nullable=True,
     )
     fuel_capacity_gallons = Column(Numeric(10, 2), nullable=True)

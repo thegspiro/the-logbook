@@ -326,3 +326,40 @@ Left in the review database for later runs:
 | black --check / isort    | clean                                                                                                     |
 | frontend tests (touched) | `modules/inventory`: 100 files, 1530 passed                                                               |
 | backend tests (touched)  | `test_equipment_check*`, `test_equipment_readiness_service`, shift-template and ISO readiness: 404 passed |
+
+## A second pass — 2026-09-30
+
+A second session drove W46 before this file merged, as `chief`, `member` and
+`quartermaster`. Its fixes overlapped this run's W46-6, W46-7, W46-8 and W46-10;
+the two were reconciled when both branches reached `main`, keeping this file's
+numbering. What it added:
+
+### W46-14 — decision — The seeded Quartermaster builds checklists — ✅ RESOLVED
+
+The owner decided the quartermaster builds the apparatus checklists. The
+registry now seeds `inventory.check_manage` on the position, and migration
+`f73b449bdb8b` writes it onto stored system quartermaster rows that still hold
+`inventory.manage` and do not already cover checklist management. Authoring
+only: reading results stays with `inventory.check_view`. Covered by
+`test_quartermaster_check_manage_grant.py`, and verified by upgrading,
+downgrading and re-upgrading the review database.
+
+### W46-19 — MED — The log and fleet board count a checklist missed on days before it existed — 🚩 FLAGGED
+
+**Did:** `chief`, published an Engine-type checklist at 9:54 PM on 9/29
+(department time), then opened the fleet board and the log.
+**Saw:** E-1 "Needs attention — 1 check missed". The log's 9/28 cell was
+"missed" against a checklist created the next day. `EquipmentReadinessService`
+pairs today's active templates with every shift in its look-back window, so a
+new or re-scoped checklist starts every rig with misses already recorded.
+**Where:** `backend/app/services/equipment_readiness_service.py`, `_build_occasions` / `_load_templates`.
+**Flagged:** the bound is a definition to choose: from creation, from the last
+publish (not recorded), or from when the apparatus assignment changed. Mirrored
+into `docs/KNOWN_LIMITATIONS.md`.
+
+### W46-20 — LOW — A basic-apparatus department cannot pin a checklist to one unit — 🚩 FLAGGED
+
+The schema half of W46-8: the template's apparatus reference is a foreign key
+to `apparatus.id`. Per-unit checklists for `basic_apparatus` need a polymorphic
+reference like the one `utils/apparatus_ref` resolves for shifts. Mirrored into
+`KNOWN_LIMITATIONS.md`.

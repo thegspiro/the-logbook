@@ -4,7 +4,7 @@
  * Form for creating or editing apparatus.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Truck, Save, ArrowLeft, Plus, X } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -16,6 +16,15 @@ import { ensureShiftSettingsLoaded } from '@/modules/scheduling/services/shiftSe
 import { useApparatusStore } from '../store/apparatusStore';
 import { apparatusService, evocLevelService } from '../services/api';
 import type { ApparatusCreate, ApparatusUpdate, EvocLevel, FuelType } from '../types';
+
+/** Columns the server stores as NOT NULL; an emptied one is refused by
+ * validation or keeps its value, never sent as null. */
+const REQUIRED_ON_UPDATE: ReadonlySet<keyof ApparatusUpdate> = new Set<keyof ApparatusUpdate>([
+  'unitNumber',
+  'apparatusTypeId',
+  'statusId',
+  'minStaffing',
+]);
 
 const CREW_POSITION_CODES = [
   'officer',
@@ -77,6 +86,7 @@ export const ApparatusFormPage: React.FC = () => {
   const [evocLevels, setEvocLevels] = useState<EvocLevel[]>([]);
 
   // Form state
+  const clearedNumbers = useRef(new Set<string>());
   const [formData, setFormData] = useState<ApparatusCreate>({
     unitNumber: '',
     name: '',
@@ -222,6 +232,10 @@ export const ApparatusFormPage: React.FC = () => {
       processedValue = (e.target as HTMLInputElement).checked;
     } else if (type === 'number') {
       processedValue = value === '' ? undefined : parseFloat(value);
+      // A cleared number is stored as undefined, which looks the same as a
+      // value that was never set; remember it so an edit can send the clear.
+      if (value === '') clearedNumbers.current.add(name);
+      else clearedNumbers.current.delete(name);
     }
 
     setFormData((prev) => ({
@@ -300,7 +314,18 @@ export const ApparatusFormPage: React.FC = () => {
       });
 
       if (isEditing && id) {
-        await apparatusService.updateApparatus(id, cleanedData);
+        // The server applies an update with exclude_unset, so an omitted key
+        // means "leave it": an emptied field has to go as an explicit null or
+        // the old value survives behind the success toast (CLAUDE.md pitfall 1).
+        // Required columns stay omitted, as before.
+        const update: ApparatusUpdate = { ...cleanedData };
+        (Object.keys(formData) as Array<keyof ApparatusUpdate>).forEach((key) => {
+          if (REQUIRED_ON_UPDATE.has(key)) return;
+          if (formData[key] === '' || clearedNumbers.current.has(key)) {
+            update[key] = null;
+          }
+        });
+        await apparatusService.updateApparatus(id, update);
         toast.success('Apparatus updated');
       } else {
         await apparatusService.createApparatus(cleanedData as ApparatusCreate);
@@ -372,10 +397,11 @@ export const ApparatusFormPage: React.FC = () => {
             <h2 className="text-theme-text-primary mb-6 font-bold">Basic Information</h2>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">
+                <label htmlFor="apparatus-unitNumber" className="text-theme-text-secondary mb-1 block text-sm">
                   Unit Number <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <input
+                  id="apparatus-unitNumber"
                   autoCapitalize="none"
                   autoCorrect="off"
                   spellCheck={false}
@@ -384,15 +410,22 @@ export const ApparatusFormPage: React.FC = () => {
                   value={formData.unitNumber}
                   onChange={handleChange}
                   className={`form-input ${errors.unitNumber ? 'border-red-500' : 'border-theme-input-border'}`}
+                  aria-invalid={Boolean(errors.unitNumber)}
+                  aria-describedby={errors.unitNumber ? 'apparatus-unitNumber-error' : undefined}
                   placeholder="E-1"
                 />
                 {errors.unitNumber && (
-                  <p className="mt-1 text-xs text-red-700 dark:text-red-400">{errors.unitNumber}</p>
+                  <p id="apparatus-unitNumber-error" className="mt-1 text-xs text-red-700 dark:text-red-400">
+                    {errors.unitNumber}
+                  </p>
                 )}
               </div>
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">Name/Nickname</label>
+                <label htmlFor="apparatus-name" className="text-theme-text-secondary mb-1 block text-sm">
+                  Name/Nickname
+                </label>
                 <input
+                  id="apparatus-name"
                   type="text"
                   name="name"
                   value={formData.name}
@@ -402,14 +435,17 @@ export const ApparatusFormPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">
+                <label htmlFor="apparatus-apparatusTypeId" className="text-theme-text-secondary mb-1 block text-sm">
                   Apparatus Type <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <select
+                  id="apparatus-apparatusTypeId"
                   name="apparatusTypeId"
                   value={formData.apparatusTypeId}
                   onChange={handleChange}
                   className={`form-input ${errors.apparatusTypeId ? 'border-red-500' : 'border-theme-input-border'}`}
+                  aria-invalid={Boolean(errors.apparatusTypeId)}
+                  aria-describedby={errors.apparatusTypeId ? 'apparatus-apparatusTypeId-error' : undefined}
                 >
                   <option value="">Select Type</option>
                   {types.map((type) => (
@@ -419,18 +455,23 @@ export const ApparatusFormPage: React.FC = () => {
                   ))}
                 </select>
                 {errors.apparatusTypeId && (
-                  <p className="mt-1 text-xs text-red-700 dark:text-red-400">{errors.apparatusTypeId}</p>
+                  <p id="apparatus-apparatusTypeId-error" className="mt-1 text-xs text-red-700 dark:text-red-400">
+                    {errors.apparatusTypeId}
+                  </p>
                 )}
               </div>
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">
+                <label htmlFor="apparatus-statusId" className="text-theme-text-secondary mb-1 block text-sm">
                   Status <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <select
+                  id="apparatus-statusId"
                   name="statusId"
                   value={formData.statusId}
                   onChange={handleChange}
                   className={`form-input ${errors.statusId ? 'border-red-500' : 'border-theme-input-border'}`}
+                  aria-invalid={Boolean(errors.statusId)}
+                  aria-describedby={errors.statusId ? 'apparatus-statusId-error' : undefined}
                 >
                   <option value="">Select Status</option>
                   {statuses
@@ -441,11 +482,18 @@ export const ApparatusFormPage: React.FC = () => {
                       </option>
                     ))}
                 </select>
-                {errors.statusId && <p className="mt-1 text-xs text-red-700 dark:text-red-400">{errors.statusId}</p>}
+                {errors.statusId && (
+                  <p id="apparatus-statusId-error" className="mt-1 text-xs text-red-700 dark:text-red-400">
+                    {errors.statusId}
+                  </p>
+                )}
               </div>
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">VIN</label>
+                <label htmlFor="apparatus-vin" className="text-theme-text-secondary mb-1 block text-sm">
+                  VIN
+                </label>
                 <input
+                  id="apparatus-vin"
                   autoCapitalize="none"
                   autoCorrect="off"
                   spellCheck={false}
@@ -458,8 +506,11 @@ export const ApparatusFormPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">Radio ID</label>
+                <label htmlFor="apparatus-radioId" className="text-theme-text-secondary mb-1 block text-sm">
+                  Radio ID
+                </label>
                 <input
+                  id="apparatus-radioId"
                   type="text"
                   name="radioId"
                   value={formData.radioId}
@@ -476,8 +527,11 @@ export const ApparatusFormPage: React.FC = () => {
             <h2 className="text-theme-text-primary mb-6 font-bold">Vehicle Details</h2>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">Year</label>
+                <label htmlFor="apparatus-year" className="text-theme-text-secondary mb-1 block text-sm">
+                  Year
+                </label>
                 <input
+                  id="apparatus-year"
                   type="number"
                   name="year"
                   value={formData.year ?? ''}
@@ -489,8 +543,11 @@ export const ApparatusFormPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">Make</label>
+                <label htmlFor="apparatus-make" className="text-theme-text-secondary mb-1 block text-sm">
+                  Make
+                </label>
                 <input
+                  id="apparatus-make"
                   type="text"
                   name="make"
                   value={formData.make}
@@ -500,8 +557,11 @@ export const ApparatusFormPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">Model</label>
+                <label htmlFor="apparatus-model" className="text-theme-text-secondary mb-1 block text-sm">
+                  Model
+                </label>
                 <input
+                  id="apparatus-model"
                   type="text"
                   name="model"
                   value={formData.model}
@@ -511,8 +571,11 @@ export const ApparatusFormPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">Body Manufacturer</label>
+                <label htmlFor="apparatus-bodyManufacturer" className="text-theme-text-secondary mb-1 block text-sm">
+                  Body Manufacturer
+                </label>
                 <input
+                  id="apparatus-bodyManufacturer"
                   type="text"
                   name="bodyManufacturer"
                   value={formData.bodyManufacturer}
@@ -522,8 +585,11 @@ export const ApparatusFormPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">License Plate</label>
+                <label htmlFor="apparatus-licensePlate" className="text-theme-text-secondary mb-1 block text-sm">
+                  License Plate
+                </label>
                 <input
+                  id="apparatus-licensePlate"
                   autoCapitalize="none"
                   autoCorrect="off"
                   spellCheck={false}
@@ -535,8 +601,11 @@ export const ApparatusFormPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">License State</label>
+                <label htmlFor="apparatus-licenseState" className="text-theme-text-secondary mb-1 block text-sm">
+                  License State
+                </label>
                 <input
+                  id="apparatus-licenseState"
                   autoCapitalize="none"
                   autoCorrect="off"
                   spellCheck={false}
@@ -550,8 +619,11 @@ export const ApparatusFormPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">Color</label>
+                <label htmlFor="apparatus-color" className="text-theme-text-secondary mb-1 block text-sm">
+                  Color
+                </label>
                 <input
+                  id="apparatus-color"
                   type="text"
                   name="color"
                   value={formData.color}
@@ -561,8 +633,11 @@ export const ApparatusFormPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">Asset Tag</label>
+                <label htmlFor="apparatus-assetTag" className="text-theme-text-secondary mb-1 block text-sm">
+                  Asset Tag
+                </label>
                 <input
+                  id="apparatus-assetTag"
                   autoCapitalize="none"
                   autoCorrect="off"
                   spellCheck={false}
@@ -581,10 +656,11 @@ export const ApparatusFormPage: React.FC = () => {
             <h2 className="text-theme-text-primary mb-6 font-bold">Staffing & Specifications</h2>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">
+                <label htmlFor="apparatus-minStaffing" className="text-theme-text-secondary mb-1 block text-sm">
                   Minimum Staffing <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <input
+                  id="apparatus-minStaffing"
                   type="number"
                   name="minStaffing"
                   value={formData.minStaffing ?? 1}
@@ -599,8 +675,14 @@ export const ApparatusFormPage: React.FC = () => {
               </div>
               {evocLevels.length > 0 && (
                 <div>
-                  <label className="text-theme-text-secondary mb-1 block text-sm">Required EVOC Level</label>
+                  <label
+                    htmlFor="apparatus-requiredEvocLevelId"
+                    className="text-theme-text-secondary mb-1 block text-sm"
+                  >
+                    Required EVOC Level
+                  </label>
                   <select
+                    id="apparatus-requiredEvocLevelId"
                     name="requiredEvocLevelId"
                     value={formData.requiredEvocLevelId ?? ''}
                     onChange={handleChange}
@@ -617,8 +699,11 @@ export const ApparatusFormPage: React.FC = () => {
                 </div>
               )}
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">Seating Capacity</label>
+                <label htmlFor="apparatus-seatingCapacity" className="text-theme-text-secondary mb-1 block text-sm">
+                  Seating Capacity
+                </label>
                 <input
+                  id="apparatus-seatingCapacity"
                   type="number"
                   name="seatingCapacity"
                   value={formData.seatingCapacity ?? ''}
@@ -685,8 +770,11 @@ export const ApparatusFormPage: React.FC = () => {
                 </p>
               </div>
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">GVWR (lbs)</label>
+                <label htmlFor="apparatus-gvwr" className="text-theme-text-secondary mb-1 block text-sm">
+                  GVWR (lbs)
+                </label>
                 <input
+                  id="apparatus-gvwr"
                   type="number"
                   name="gvwr"
                   value={formData.gvwr ?? ''}
@@ -695,8 +783,16 @@ export const ApparatusFormPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">Fuel Type</label>
-                <select name="fuelType" value={formData.fuelType ?? ''} onChange={handleChange} className="form-input">
+                <label htmlFor="apparatus-fuelType" className="text-theme-text-secondary mb-1 block text-sm">
+                  Fuel Type
+                </label>
+                <select
+                  id="apparatus-fuelType"
+                  name="fuelType"
+                  value={formData.fuelType ?? ''}
+                  onChange={handleChange}
+                  className="form-input"
+                >
                   <option value="">Select Fuel Type</option>
                   {fuelTypes.map((ft) => (
                     <option key={ft} value={ft}>
@@ -706,8 +802,11 @@ export const ApparatusFormPage: React.FC = () => {
                 </select>
               </div>
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">Fuel Capacity (gal)</label>
+                <label htmlFor="apparatus-fuelCapacityGallons" className="text-theme-text-secondary mb-1 block text-sm">
+                  Fuel Capacity (gal)
+                </label>
                 <input
+                  id="apparatus-fuelCapacityGallons"
                   type="number"
                   name="fuelCapacityGallons"
                   value={formData.fuelCapacityGallons ?? ''}
@@ -716,8 +815,11 @@ export const ApparatusFormPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">Pump Capacity (GPM)</label>
+                <label htmlFor="apparatus-pumpCapacityGpm" className="text-theme-text-secondary mb-1 block text-sm">
+                  Pump Capacity (GPM)
+                </label>
                 <input
+                  id="apparatus-pumpCapacityGpm"
                   type="number"
                   name="pumpCapacityGpm"
                   value={formData.pumpCapacityGpm ?? ''}
@@ -726,8 +828,11 @@ export const ApparatusFormPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">Water Tank (gal)</label>
+                <label htmlFor="apparatus-tankCapacityGallons" className="text-theme-text-secondary mb-1 block text-sm">
+                  Water Tank (gal)
+                </label>
                 <input
+                  id="apparatus-tankCapacityGallons"
                   type="number"
                   name="tankCapacityGallons"
                   value={formData.tankCapacityGallons ?? ''}
@@ -736,8 +841,11 @@ export const ApparatusFormPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">Foam Tank (gal)</label>
+                <label htmlFor="apparatus-foamCapacityGallons" className="text-theme-text-secondary mb-1 block text-sm">
+                  Foam Tank (gal)
+                </label>
                 <input
+                  id="apparatus-foamCapacityGallons"
                   type="number"
                   name="foamCapacityGallons"
                   value={formData.foamCapacityGallons ?? ''}
@@ -746,8 +854,11 @@ export const ApparatusFormPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">Ladder Length (ft)</label>
+                <label htmlFor="apparatus-ladderLengthFeet" className="text-theme-text-secondary mb-1 block text-sm">
+                  Ladder Length (ft)
+                </label>
                 <input
+                  id="apparatus-ladderLengthFeet"
                   type="number"
                   name="ladderLengthFeet"
                   value={formData.ladderLengthFeet ?? ''}
@@ -763,8 +874,11 @@ export const ApparatusFormPage: React.FC = () => {
             <h2 className="text-theme-text-primary mb-6 font-bold">Usage Tracking</h2>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">Current Mileage</label>
+                <label htmlFor="apparatus-currentMileage" className="text-theme-text-secondary mb-1 block text-sm">
+                  Current Mileage
+                </label>
                 <input
+                  id="apparatus-currentMileage"
                   type="number"
                   name="currentMileage"
                   value={formData.currentMileage ?? ''}
@@ -773,8 +887,11 @@ export const ApparatusFormPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">Current Hours</label>
+                <label htmlFor="apparatus-currentHours" className="text-theme-text-secondary mb-1 block text-sm">
+                  Current Hours
+                </label>
                 <input
+                  id="apparatus-currentHours"
                   type="number"
                   name="currentHours"
                   value={formData.currentHours ?? ''}
@@ -790,8 +907,11 @@ export const ApparatusFormPage: React.FC = () => {
             <h2 className="text-theme-text-primary mb-6 font-bold">Purchase Information</h2>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">Purchase Date</label>
+                <label htmlFor="apparatus-purchaseDate" className="text-theme-text-secondary mb-1 block text-sm">
+                  Purchase Date
+                </label>
                 <input
+                  id="apparatus-purchaseDate"
                   type="date"
                   name="purchaseDate"
                   value={formData.purchaseDate}
@@ -800,8 +920,11 @@ export const ApparatusFormPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">Purchase Price</label>
+                <label htmlFor="apparatus-purchasePrice" className="text-theme-text-secondary mb-1 block text-sm">
+                  Purchase Price
+                </label>
                 <input
+                  id="apparatus-purchasePrice"
                   type="number"
                   name="purchasePrice"
                   value={formData.purchasePrice ?? ''}
@@ -811,8 +934,11 @@ export const ApparatusFormPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">Vendor</label>
+                <label htmlFor="apparatus-purchaseVendor" className="text-theme-text-secondary mb-1 block text-sm">
+                  Vendor
+                </label>
                 <input
+                  id="apparatus-purchaseVendor"
                   type="text"
                   name="purchaseVendor"
                   value={formData.purchaseVendor}
@@ -821,8 +947,11 @@ export const ApparatusFormPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">In Service Date</label>
+                <label htmlFor="apparatus-inServiceDate" className="text-theme-text-secondary mb-1 block text-sm">
+                  In Service Date
+                </label>
                 <input
+                  id="apparatus-inServiceDate"
                   type="date"
                   name="inServiceDate"
                   value={formData.inServiceDate}
@@ -850,8 +979,14 @@ export const ApparatusFormPage: React.FC = () => {
               {formData.isFinanced && (
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
                   <div>
-                    <label className="text-theme-text-secondary mb-1 block text-sm">Financing Company</label>
+                    <label
+                      htmlFor="apparatus-financingCompany"
+                      className="text-theme-text-secondary mb-1 block text-sm"
+                    >
+                      Financing Company
+                    </label>
                     <input
+                      id="apparatus-financingCompany"
                       type="text"
                       name="financingCompany"
                       value={formData.financingCompany}
@@ -860,8 +995,11 @@ export const ApparatusFormPage: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="text-theme-text-secondary mb-1 block text-sm">Monthly Payment</label>
+                    <label htmlFor="apparatus-monthlyPayment" className="text-theme-text-secondary mb-1 block text-sm">
+                      Monthly Payment
+                    </label>
                     <input
+                      id="apparatus-monthlyPayment"
                       type="number"
                       name="monthlyPayment"
                       value={formData.monthlyPayment ?? ''}
@@ -871,8 +1009,14 @@ export const ApparatusFormPage: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="text-theme-text-secondary mb-1 block text-sm">Financing End Date</label>
+                    <label
+                      htmlFor="apparatus-financingEndDate"
+                      className="text-theme-text-secondary mb-1 block text-sm"
+                    >
+                      Financing End Date
+                    </label>
                     <input
+                      id="apparatus-financingEndDate"
                       type="date"
                       name="financingEndDate"
                       value={formData.financingEndDate}
@@ -890,8 +1034,14 @@ export const ApparatusFormPage: React.FC = () => {
             <h2 className="text-theme-text-primary mb-6 font-bold">Expiration Dates</h2>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">Registration Expiration</label>
+                <label
+                  htmlFor="apparatus-registrationExpiration"
+                  className="text-theme-text-secondary mb-1 block text-sm"
+                >
+                  Registration Expiration
+                </label>
                 <input
+                  id="apparatus-registrationExpiration"
                   type="date"
                   name="registrationExpiration"
                   value={formData.registrationExpiration}
@@ -900,8 +1050,14 @@ export const ApparatusFormPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">Inspection Expiration</label>
+                <label
+                  htmlFor="apparatus-inspectionExpiration"
+                  className="text-theme-text-secondary mb-1 block text-sm"
+                >
+                  Inspection Expiration
+                </label>
                 <input
+                  id="apparatus-inspectionExpiration"
                   type="date"
                   name="inspectionExpiration"
                   value={formData.inspectionExpiration}
@@ -910,8 +1066,11 @@ export const ApparatusFormPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">Insurance Expiration</label>
+                <label htmlFor="apparatus-insuranceExpiration" className="text-theme-text-secondary mb-1 block text-sm">
+                  Insurance Expiration
+                </label>
                 <input
+                  id="apparatus-insuranceExpiration"
                   type="date"
                   name="insuranceExpiration"
                   value={formData.insuranceExpiration}
@@ -920,8 +1079,11 @@ export const ApparatusFormPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">Warranty Expiration</label>
+                <label htmlFor="apparatus-warrantyExpiration" className="text-theme-text-secondary mb-1 block text-sm">
+                  Warranty Expiration
+                </label>
                 <input
+                  id="apparatus-warrantyExpiration"
                   type="date"
                   name="warrantyExpiration"
                   value={formData.warrantyExpiration}
@@ -955,8 +1117,11 @@ export const ApparatusFormPage: React.FC = () => {
             <h2 className="text-theme-text-primary mb-6 font-bold">Notes</h2>
             <div className="space-y-4">
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">Description</label>
+                <label htmlFor="apparatus-description" className="text-theme-text-secondary mb-1 block text-sm">
+                  Description
+                </label>
                 <textarea
+                  id="apparatus-description"
                   name="description"
                   value={formData.description}
                   onChange={handleChange}
@@ -966,8 +1131,11 @@ export const ApparatusFormPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm">Additional Notes</label>
+                <label htmlFor="apparatus-notes" className="text-theme-text-secondary mb-1 block text-sm">
+                  Additional Notes
+                </label>
                 <textarea
+                  id="apparatus-notes"
                   name="notes"
                   value={formData.notes}
                   onChange={handleChange}

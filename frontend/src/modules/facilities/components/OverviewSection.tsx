@@ -14,6 +14,7 @@ import { inputCls, labelCls } from '../constants';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, formatNumber } from '../../../utils/dateFormatting';
 import { blankToNull, numberOrNull } from '@/utils/formValues';
+import { organizationEmailError } from '@/utils/organizationProfile';
 import { getErrorMessage } from '@/utils/errorHandling';
 
 interface Props {
@@ -112,12 +113,20 @@ export default function OverviewSection({ facility, facilityTypes, facilityStatu
     setIsEditing(true);
   };
 
+  // The server accepts any string here, so a mistyped address is caught
+  // before it is saved rather than shown back on the overview.
+  const emailError = isEditing ? organizationEmailError(String(editData.email ?? '')) : null;
+
   const handleSave = async () => {
     for (const [field, message] of Object.entries(REQUIRED_FIELDS)) {
       if (!String(editData[field] ?? '').trim()) {
         toast.error(message);
         return;
       }
+    }
+    if (emailError) {
+      toast.error(emailError);
+      return;
     }
     setIsSaving(true);
     try {
@@ -294,16 +303,28 @@ interface EditModeProps {
 }
 
 function OverviewEditMode({ ed, setEd, facilityTypes, facilityStatuses }: EditModeProps) {
+  const emailError = organizationEmailError(ed('email'));
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
-          <label className={labelCls}>Name *</label>
-          <input type="text" value={ed('name')} onChange={(e) => setEd('name', e.target.value)} className={inputCls} />
+          <label htmlFor="facility-edit-name" className={labelCls}>
+            Name *
+          </label>
+          <input
+            id="facility-edit-name"
+            type="text"
+            value={ed('name')}
+            onChange={(e) => setEd('name', e.target.value)}
+            className={inputCls}
+          />
         </div>
         <div>
-          <label className={labelCls}>Facility Number</label>
+          <label htmlFor="facility-edit-facility-number" className={labelCls}>
+            Facility Number
+          </label>
           <input
+            id="facility-edit-facility-number"
             type="text"
             value={ed('facility_number')}
             onChange={(e) => setEd('facility_number', e.target.value)}
@@ -315,8 +336,11 @@ function OverviewEditMode({ ed, setEd, facilityTypes, facilityStatuses }: EditMo
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
-          <label className={labelCls}>Type *</label>
+          <label htmlFor="facility-edit-facility-type-id" className={labelCls}>
+            Type *
+          </label>
           <select
+            id="facility-edit-facility-type-id"
             value={ed('facility_type_id')}
             onChange={(e) => setEd('facility_type_id', e.target.value)}
             className={inputCls}
@@ -330,8 +354,15 @@ function OverviewEditMode({ ed, setEd, facilityTypes, facilityStatuses }: EditMo
           </select>
         </div>
         <div>
-          <label className={labelCls}>Status *</label>
-          <select value={ed('status_id')} onChange={(e) => setEd('status_id', e.target.value)} className={inputCls}>
+          <label htmlFor="facility-edit-status-id" className={labelCls}>
+            Status *
+          </label>
+          <select
+            id="facility-edit-status-id"
+            value={ed('status_id')}
+            onChange={(e) => setEd('status_id', e.target.value)}
+            className={inputCls}
+          >
             <option value="">Select status...</option>
             {facilityStatuses.map((s) => (
               <option key={s.id} value={s.id}>
@@ -343,8 +374,11 @@ function OverviewEditMode({ ed, setEd, facilityTypes, facilityStatuses }: EditMo
       </div>
 
       <div>
-        <label className={labelCls}>Address Line 1</label>
+        <label htmlFor="facility-edit-address-line1" className={labelCls}>
+          Address Line 1
+        </label>
         <input
+          id="facility-edit-address-line1"
           type="text"
           value={ed('address_line1')}
           onChange={(e) => setEd('address_line1', e.target.value)}
@@ -352,8 +386,11 @@ function OverviewEditMode({ ed, setEd, facilityTypes, facilityStatuses }: EditMo
         />
       </div>
       <div>
-        <label className={labelCls}>Address Line 2</label>
+        <label htmlFor="facility-edit-address-line2" className={labelCls}>
+          Address Line 2
+        </label>
         <input
+          id="facility-edit-address-line2"
           type="text"
           value={ed('address_line2')}
           onChange={(e) => setEd('address_line2', e.target.value)}
@@ -363,12 +400,23 @@ function OverviewEditMode({ ed, setEd, facilityTypes, facilityStatuses }: EditMo
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div>
-          <label className={labelCls}>City</label>
-          <input type="text" value={ed('city')} onChange={(e) => setEd('city', e.target.value)} className={inputCls} />
+          <label htmlFor="facility-edit-city" className={labelCls}>
+            City
+          </label>
+          <input
+            id="facility-edit-city"
+            type="text"
+            value={ed('city')}
+            onChange={(e) => setEd('city', e.target.value)}
+            className={inputCls}
+          />
         </div>
         <div>
-          <label className={labelCls}>State</label>
+          <label htmlFor="facility-edit-state" className={labelCls}>
+            State
+          </label>
           <input
+            id="facility-edit-state"
             type="text"
             value={ed('state')}
             onChange={(e) => setEd('state', e.target.value)}
@@ -376,8 +424,11 @@ function OverviewEditMode({ ed, setEd, facilityTypes, facilityStatuses }: EditMo
           />
         </div>
         <div>
-          <label className={labelCls}>Zip Code</label>
+          <label htmlFor="facility-edit-zip-code" className={labelCls}>
+            Zip Code
+          </label>
           <input
+            id="facility-edit-zip-code"
             type="text"
             inputMode="numeric"
             autoComplete="postal-code"
@@ -387,8 +438,11 @@ function OverviewEditMode({ ed, setEd, facilityTypes, facilityStatuses }: EditMo
           />
         </div>
         <div>
-          <label className={labelCls}>County</label>
+          <label htmlFor="facility-edit-county" className={labelCls}>
+            County
+          </label>
           <input
+            id="facility-edit-county"
             type="text"
             value={ed('county')}
             onChange={(e) => setEd('county', e.target.value)}
@@ -399,8 +453,11 @@ function OverviewEditMode({ ed, setEd, facilityTypes, facilityStatuses }: EditMo
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div>
-          <label className={labelCls}>Phone</label>
+          <label htmlFor="facility-edit-phone" className={labelCls}>
+            Phone
+          </label>
           <input
+            id="facility-edit-phone"
             type="text"
             value={ed('phone')}
             onChange={(e) => setEd('phone', e.target.value)}
@@ -408,24 +465,45 @@ function OverviewEditMode({ ed, setEd, facilityTypes, facilityStatuses }: EditMo
           />
         </div>
         <div>
-          <label className={labelCls}>Fax</label>
-          <input type="text" value={ed('fax')} onChange={(e) => setEd('fax', e.target.value)} className={inputCls} />
+          <label htmlFor="facility-edit-fax" className={labelCls}>
+            Fax
+          </label>
+          <input
+            id="facility-edit-fax"
+            type="text"
+            value={ed('fax')}
+            onChange={(e) => setEd('fax', e.target.value)}
+            className={inputCls}
+          />
         </div>
         <div>
-          <label className={labelCls}>Email</label>
+          <label htmlFor="facility-edit-email" className={labelCls}>
+            Email
+          </label>
           <input
+            id="facility-edit-email"
             type="text"
             value={ed('email')}
             onChange={(e) => setEd('email', e.target.value)}
             className={inputCls}
+            aria-invalid={Boolean(emailError)}
+            aria-describedby={emailError ? 'facility-edit-email-error' : undefined}
           />
+          {emailError && (
+            <p id="facility-edit-email-error" className="mt-1 text-xs text-red-700 dark:text-red-400">
+              {emailError}
+            </p>
+          )}
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <div>
-          <label className={labelCls}>Year Built</label>
+          <label htmlFor="facility-edit-year-built" className={labelCls}>
+            Year Built
+          </label>
           <input
+            id="facility-edit-year-built"
             type="number"
             value={ed('year_built')}
             onChange={(e) => setEd('year_built', e.target.value)}
@@ -433,8 +511,11 @@ function OverviewEditMode({ ed, setEd, facilityTypes, facilityStatuses }: EditMo
           />
         </div>
         <div>
-          <label className={labelCls}>Sq. Footage</label>
+          <label htmlFor="facility-edit-square-footage" className={labelCls}>
+            Sq. Footage
+          </label>
           <input
+            id="facility-edit-square-footage"
             type="number"
             value={ed('square_footage')}
             onChange={(e) => setEd('square_footage', e.target.value)}
@@ -442,8 +523,11 @@ function OverviewEditMode({ ed, setEd, facilityTypes, facilityStatuses }: EditMo
           />
         </div>
         <div>
-          <label className={labelCls}>Floors</label>
+          <label htmlFor="facility-edit-num-floors" className={labelCls}>
+            Floors
+          </label>
           <input
+            id="facility-edit-num-floors"
             type="number"
             value={ed('num_floors')}
             onChange={(e) => setEd('num_floors', e.target.value)}
@@ -451,8 +535,11 @@ function OverviewEditMode({ ed, setEd, facilityTypes, facilityStatuses }: EditMo
           />
         </div>
         <div>
-          <label className={labelCls}>Apparatus Bays</label>
+          <label htmlFor="facility-edit-num-bays" className={labelCls}>
+            Apparatus Bays
+          </label>
           <input
+            id="facility-edit-num-bays"
             type="number"
             value={ed('num_bays')}
             onChange={(e) => setEd('num_bays', e.target.value)}
@@ -460,8 +547,11 @@ function OverviewEditMode({ ed, setEd, facilityTypes, facilityStatuses }: EditMo
           />
         </div>
         <div>
-          <label className={labelCls}>Max Occupancy</label>
+          <label htmlFor="facility-edit-max-occupancy" className={labelCls}>
+            Max Occupancy
+          </label>
           <input
+            id="facility-edit-max-occupancy"
             type="number"
             value={ed('max_occupancy')}
             onChange={(e) => setEd('max_occupancy', e.target.value)}
@@ -469,8 +559,11 @@ function OverviewEditMode({ ed, setEd, facilityTypes, facilityStatuses }: EditMo
           />
         </div>
         <div>
-          <label className={labelCls}>Sleeping Quarters</label>
+          <label htmlFor="facility-edit-sleeping-quarters" className={labelCls}>
+            Sleeping Quarters
+          </label>
           <input
+            id="facility-edit-sleeping-quarters"
             type="number"
             value={ed('sleeping_quarters')}
             onChange={(e) => setEd('sleeping_quarters', e.target.value)}
@@ -480,8 +573,11 @@ function OverviewEditMode({ ed, setEd, facilityTypes, facilityStatuses }: EditMo
       </div>
 
       <div>
-        <label className={labelCls}>Description</label>
+        <label htmlFor="facility-edit-description" className={labelCls}>
+          Description
+        </label>
         <textarea
+          id="facility-edit-description"
           value={ed('description')}
           onChange={(e) => setEd('description', e.target.value)}
           rows={2}
@@ -489,8 +585,11 @@ function OverviewEditMode({ ed, setEd, facilityTypes, facilityStatuses }: EditMo
         />
       </div>
       <div>
-        <label className={labelCls}>Notes</label>
+        <label htmlFor="facility-edit-notes" className={labelCls}>
+          Notes
+        </label>
         <textarea
+          id="facility-edit-notes"
           value={ed('notes')}
           onChange={(e) => setEd('notes', e.target.value)}
           rows={2}

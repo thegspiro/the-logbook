@@ -38,7 +38,9 @@ export const ApparatusDetailHeader: React.FC<ApparatusDetailHeaderProps> = ({
   return (
     <header className="bg-theme-surface-secondary border-theme-surface-border border-b px-6 py-4 backdrop-blur-xs">
       <div className="mx-auto max-w-7xl">
-        <div className="flex items-center justify-between">
+        {/* Wraps below 640px: unwrapped, Edit and Archive ran 85px past a
+            390px screen and the page scrolled sideways. */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center space-x-4">
             <button
               onClick={() => void navigate('/apparatus')}
@@ -73,7 +75,7 @@ export const ApparatusDetailHeader: React.FC<ApparatusDetailHeaderProps> = ({
             </div>
           </div>
           {(canEdit || (canManage && !isArchived)) && (
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-wrap items-center gap-2">
               {canEdit && (
                 <button
                   onClick={() => void navigate(`/apparatus/${id}/edit`)}

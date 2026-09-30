@@ -1081,6 +1081,11 @@ describe('MedicalSuppliesPage', () => {
 
       expect(await screen.findByText(/No medical supply categories exist yet/i)).toBeInTheDocument();
       expect(screen.queryByText(/could not be loaded/i)).not.toBeInTheDocument();
+      // The page it names is otherwise reached only by a tag icon with no visible label.
+      expect(screen.getByRole('link', { name: 'Medical Supply Categories' })).toHaveAttribute(
+        'href',
+        '/medical-supplies/categories'
+      );
     });
 
     it('retires an item failure once the filter it belonged to is no longer on screen', async () => {

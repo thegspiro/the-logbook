@@ -253,6 +253,8 @@ function LookupDialog({
         <DialogPanel
           onClose={onClose}
           className="card modal-panel-scroll w-full max-w-md space-y-4 p-5"
+          role="dialog"
+          aria-modal="true"
           aria-labelledby="lookup-title"
         >
           <form className="space-y-4" onSubmit={(event) => void submit(event)}>
