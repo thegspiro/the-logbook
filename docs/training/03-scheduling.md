@@ -3143,9 +3143,16 @@ removed**: on the shift, on approved leave, not cleared for the position, or
 working a tour that abuts this one. Least-loaded first.
 
 **The member you offered a seat to can now accept it.** Until this release a
-one-way offer could not be completed by anyone — manager review reads a named
-target as "there must be a shift to trade back", and rejects the request when
-there isn't one, which is the shape every one-way offer has.
+one-way offer could not be completed by anyone — manager review read a named
+target as "there must be a shift to trade back", and rejected the request when
+there wasn't one, which is the shape every one-way offer has. A duty officer
+can now approve the offer too, which hands the seat to the member named; on the
+Requests tab it reads "→ Offered to _name_".
+
+- **A request goes away when its seat does.** If you leave a shift — withdraw,
+  decline, take approved time off, go on leave, or an officer removes or
+  reassigns you — any pending swap or offer for that seat is cancelled, and you
+  and the member it was offered to are both told.
 
 - **You cannot give up a seat while your own offer of it stands.** Withdraw
   first — releasing or re-offering it would leave the first recipient holding
