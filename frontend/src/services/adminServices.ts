@@ -19,6 +19,28 @@ import type { LeaveOfAbsenceResponse, TrainingWaiverResponse } from './facilitie
 import type { PlatformAnalytics } from '../types/platformAnalytics';
 import { asArray } from '../utils/asArray';
 
+/**
+ * The largest page the list endpoints serve (`PaginationParams`' cap). Their
+ * default is 100, and the waiver screen reconciles every leave against the
+ * training waiver it created — a leave missing from a truncated first page
+ * turned its linked waiver into an apparently standalone one, and
+ * deactivating that deleted the waiver while the hidden leave stayed active.
+ */
+export const LIST_ALL_PAGE_SIZE = 1000;
+
+async function getAllPages<T>(url: string, params: Record<string, unknown> | undefined): Promise<T[]> {
+  const all: T[] = [];
+  let page: T[];
+  do {
+    const response = await api.get<T[]>(url, {
+      params: { ...params, skip: all.length, limit: LIST_ALL_PAGE_SIZE },
+    });
+    page = asArray(response.data);
+    all.push(...page);
+  } while (page.length === LIST_ALL_PAGE_SIZE);
+  return all;
+}
+
 export const securityService = {
   async getStatus(): Promise<SecurityStatus> {
     const response = await api.get<SecurityStatus>('/security/status');
@@ -813,8 +835,7 @@ export const memberStatusService = {
 
   // Leave of Absence
   async listLeavesOfAbsence(params?: { user_id?: string; active_only?: boolean }): Promise<LeaveOfAbsenceResponse[]> {
-    const response = await api.get<LeaveOfAbsenceResponse[]>('/users/leaves-of-absence', { params });
-    return asArray(response.data);
+    return getAllPages<LeaveOfAbsenceResponse>('/users/leaves-of-absence', params);
   },
 
   async getMemberLeaves(userId: string, activeOnly = true): Promise<LeaveOfAbsenceResponse[]> {
@@ -862,8 +883,7 @@ export const memberStatusService = {
 
   // Training Waivers
   async listTrainingWaivers(params?: { user_id?: string; active_only?: boolean }): Promise<TrainingWaiverResponse[]> {
-    const response = await api.get<TrainingWaiverResponse[]>('/training/waivers', { params });
-    return asArray(response.data);
+    return getAllPages<TrainingWaiverResponse>('/training/waivers', params);
   },
 
   async createTrainingWaiver(data: {

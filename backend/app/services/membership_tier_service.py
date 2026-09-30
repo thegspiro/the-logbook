@@ -5,8 +5,19 @@ Handles tier auto-advancement based on years of service and provides
 meeting attendance calculation for voting eligibility.
 """
 
+from dataclasses import dataclass
 from datetime import date, datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import (
+    AbstractSet,
+    Any,
+    Dict,
+    FrozenSet,
+    Iterable,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+)
 
 from dateutil.relativedelta import relativedelta
 from loguru import logger
@@ -15,14 +26,124 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import log_audit_event
 from app.models.meeting import Meeting, MeetingAttendee
-from app.models.user import MemberLeaveOfAbsence, Organization, User, UserStatus
+from app.models.user import (
+    MemberLeaveOfAbsence,
+    MemberServicePeriod,
+    Organization,
+    User,
+    UserStatus,
+)
 from app.services.member_service_history_service import (
     MemberServiceHistoryService,
     summarize,
     whole_years,
 )
 from app.utils.membership import is_administrative
-from app.utils.org_timezone import scheduling_timezone, today_in
+from app.utils.org_timezone import resolve_org_today, scheduling_timezone, today_in
+
+
+def current_stint_start(
+    member: Any, periods: Sequence[MemberServicePeriod]
+) -> Optional[date]:
+    """The day the member's current stint of membership began, if known.
+
+    That is the start of their latest recorded stint (a NULL start being the
+    hire date), or ``hire_date`` for a member who has never separated and so
+    has no stints recorded. The latest stint is taken whatever its
+    ``counts_toward_service`` flag: that flag decides whether earlier years
+    count toward tenure, but the gap before the current stint is time the
+    member was not in the department either way, and they cannot be expected
+    to have attended meetings held during it.
+    """
+    hire_date = getattr(member, "hire_date", None) if member is not None else None
+    starts = [p.start_date or hire_date for p in periods]
+    known = [s for s in starts if s is not None]
+    if known:
+        return max(known)
+    return hire_date
+
+
+def attendance_window(
+    member: Any,
+    periods: Sequence[MemberServicePeriod],
+    period_months: int,
+    today: date,
+) -> Tuple[date, date]:
+    """Inclusive date range of the meetings a member is judged on.
+
+    Starts at the later of the look-back cutoff and the start of the member's
+    current stint, so a recent hire or a reinstated member is not charged with
+    meetings held before they (re)joined. Ends at ``today`` -- the
+    department's date, which the caller resolves -- so a meeting already
+    scheduled for next week is not an absence before it has happened.
+    """
+    cutoff = today - relativedelta(months=period_months)
+    stint_start = current_stint_start(member, periods)
+    start = max(cutoff, stint_start) if stint_start else cutoff
+    return start, today
+
+
+@dataclass(frozen=True)
+class AttendanceTally:
+    """One member's meetings inside their attendance window, classified."""
+
+    in_window: FrozenSet[str]
+    waived: FrozenSet[str]
+    on_leave: FrozenSet[str]
+    eligible: FrozenSet[str]
+    attended: FrozenSet[str]
+
+    @property
+    def pct(self) -> float:
+        # No eligible meetings -- none held, or all waived/on leave -- must not
+        # read as a failing attendance record.
+        if not self.eligible:
+            return 100.0
+        return round((len(self.attended) / len(self.eligible)) * 100, 1)
+
+
+def tally_attendance(
+    meetings: Iterable[Tuple[str, date]],
+    window: Tuple[date, date],
+    waived_ids: AbstractSet[str],
+    present_ids: AbstractSet[str],
+    leaves: Sequence[Any],
+) -> AttendanceTally:
+    """Classify ``meetings`` for voting-eligibility attendance.
+
+    Shared by the ballot check and the secretary's attendance dashboard so the
+    two can never disagree on whether a member may vote (pitfall #29).
+
+    Works from meeting-id sets so a meeting that is both waived and inside a
+    leave is excluded exactly once -- subtracting a waived count and an
+    on-leave count separately double-excluded it and could push the
+    percentage above 100%. Attendance is counted only within the eligible set
+    for the same reason: a member marked present at a meeting during their
+    leave must not count toward the percentage.
+    """
+    start, end = window
+    dated = [(mid, md) for mid, md in meetings if start <= md <= end]
+    in_window = frozenset(mid for mid, _ in dated)
+
+    on_leave = set()
+    for mid, md in dated:
+        for leave in leaves:
+            # end_date is None for permanent leave — treat as open-ended.
+            if leave.start_date <= md and (
+                leave.end_date is None or md <= leave.end_date
+            ):
+                on_leave.add(mid)
+                break
+
+    waived = in_window & frozenset(waived_ids)
+    eligible = in_window - waived - on_leave
+    return AttendanceTally(
+        in_window=in_window,
+        waived=waived,
+        on_leave=frozenset(on_leave),
+        eligible=eligible,
+        attended=eligible & frozenset(present_ids),
+    )
 
 
 class MembershipTierService:
@@ -44,87 +165,79 @@ class MembershipTierService:
         """
         Calculate a member's meeting attendance percentage over a look-back
         period.  Attendance = (meetings marked present / eligible meetings) * 100.
+        Only meetings inside ``attendance_window`` count -- none from before the
+        member's current stint began, and none that have not happened yet.
         Waived meetings and meetings that fall within an active Leave of Absence
         are excluded from both numerator and denominator so they don't penalise
         the member's percentage.
         Returns 100.0 if no eligible meetings occurred.
         """
-        cutoff = datetime.now(timezone.utc) - relativedelta(months=period_months)
-
-        org_meetings_subq = select(Meeting.id).where(
-            Meeting.organization_id == organization_id,
-            Meeting.meeting_date >= cutoff.date(),
+        today = await resolve_org_today(self.db, organization_id)
+        member_result = await self.db.execute(
+            select(User).where(
+                User.id == str(user_id),
+                User.organization_id == str(organization_id),
+            )
+        )
+        member = member_result.scalar_one_or_none()
+        periods = (
+            await MemberServiceHistoryService(self.db).list_periods(
+                organization_id, user_id
+            )
+            if member is not None
+            else []
+        )
+        window_start, window_end = attendance_window(
+            member, periods, period_months, today
         )
 
-        # All meetings in the look-back window as (id, date). Working from a set
-        # of meeting ids keeps each meeting counted once even when it is both
-        # waived and inside a leave period — subtracting a waived count and an
-        # on-leave count separately double-excluded such meetings and could push
-        # the percentage above 100%.
+        window_meetings_subq = select(Meeting.id).where(
+            Meeting.organization_id == organization_id,
+            Meeting.meeting_date >= window_start,
+            Meeting.meeting_date <= window_end,
+        )
         meetings_result = await self.db.execute(
             select(Meeting.id, Meeting.meeting_date).where(
                 Meeting.organization_id == organization_id,
-                Meeting.meeting_date >= cutoff.date(),
+                Meeting.meeting_date >= window_start,
+                Meeting.meeting_date <= window_end,
             )
         )
-        meetings = meetings_result.all()
-        total_meetings = len(meetings)
-        if total_meetings == 0:
+        meetings = [(row[0], row[1]) for row in meetings_result.all()]
+        if not meetings:
             return 100.0  # No meetings held — don't penalise
 
-        all_ids = {row[0] for row in meetings}
-
-        # Meetings this user has a waiver for (excluded from the denominator).
         waived_result = await self.db.execute(
             select(MeetingAttendee.meeting_id).where(
                 MeetingAttendee.user_id == user_id,
                 MeetingAttendee.waiver_reason.isnot(None),
-                MeetingAttendee.meeting_id.in_(org_meetings_subq),
+                MeetingAttendee.meeting_id.in_(window_meetings_subq),
             )
         )
-        excluded_ids = {row[0] for row in waived_result.all()}
+        waived_ids = {row[0] for row in waived_result.all()}
 
-        # Meetings inside an active Leave of Absence are also excluded. Adding to
-        # the same set means a meeting that is both waived and on-leave is
-        # removed exactly once.
         leave_result = await self.db.execute(
             select(MemberLeaveOfAbsence).where(
                 MemberLeaveOfAbsence.organization_id == organization_id,
                 MemberLeaveOfAbsence.user_id == user_id,
-                MemberLeaveOfAbsence.active == True,  # noqa: E712
+                MemberLeaveOfAbsence.active.is_(True),
             )
         )
         leaves = list(leave_result.scalars().all())
-        if leaves:
-            for mid, md in meetings:
-                for leave in leaves:
-                    # end_date is None for permanent leave — treat as open-ended.
-                    if leave.start_date <= md and (
-                        leave.end_date is None or md <= leave.end_date
-                    ):
-                        excluded_ids.add(mid)
-                        break
 
-        eligible_ids = all_ids - excluded_ids
-        if not eligible_ids:
-            return 100.0  # All meetings waived/on-leave — don't penalise
-
-        # Count attendance only within the eligible set so the numerator can
-        # never exceed the denominator — e.g. a member marked present at a
-        # meeting that fell during their leave must not count toward the
-        # percentage.
         attended_result = await self.db.execute(
             select(MeetingAttendee.meeting_id).where(
                 MeetingAttendee.user_id == user_id,
                 MeetingAttendee.present.is_(True),
                 MeetingAttendee.waiver_reason.is_(None),
-                MeetingAttendee.meeting_id.in_(org_meetings_subq),
+                MeetingAttendee.meeting_id.in_(window_meetings_subq),
             )
         )
         present_ids = {row[0] for row in attended_result.all()}
-        attended = len(present_ids & eligible_ids)
 
-        return round((attended / len(eligible_ids)) * 100, 1)
+        return tally_attendance(
+            meetings, (window_start, window_end), waived_ids, present_ids, leaves
+        ).pct
 
     # ------------------------------------------------------------------
     # Tier resolution helpers
