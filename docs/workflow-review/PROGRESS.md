@@ -90,7 +90,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W44 | NFC: tag in bulk, put away, shelf audit, items not seen                      | quartermaster          | `/inventory/admin/nfc/*`, `/inventory/shelf-audit`         | ✅     |
 | W45 | The self-service kiosk                                                       | member                 | `/inventory/kiosk`                                         | ✅     |
 | W46 | Equipment checks: build a checklist, perform a check, fleet board, check log | quartermaster → member | `/inventory/admin/checklists`, `/inventory/checklists`     | ✅     |
-| W47 | Medical supplies                                                             | quartermaster          | `/medical-supplies`                                        | ⬜     |
+| W47 | Medical supplies                                                             | quartermaster          | `/medical-supplies`                                        | ✅     |
 
 ## Tier 7 — Apparatus and facilities
 
@@ -183,6 +183,22 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W47 — Medical supplies — 2026-09-30
+
+Driven as: `quartermaster` at 1280×900, with `member` read-only at 390×844.
+Held: a blank name and a negative threshold were refused; double-clicked
+Create category, Add supply and Record delivery each acted once; the expired
+lot was left out of on hand; a cleared reorder point saved as a clear; retire
+confirmed first; the member saw no write controls and got 403 on every write.
+Fixed: W47-1 (LOW — the item page called expired units ready), W47-2 (LOW —
+every lot's controls had one name), W47-3 (LOW — delivery lines repeated one
+set of field names), W47-4 (LOW — a retired supply's lots stayed on the
+expiring tab, in the counts and, read from code, in the expiry alert), W47-5
+(LOW — the add-supply notice named the categories page without linking it).
+Flagged: W47-6 (MED — the dashboard counts a lot-stocked category as empty).
+Open: W47-7, W47-8 (NIT). Gate: typecheck, lint, the inventory and
+medical-supplies suites and the touched pytests clean. Next: W48.
 
 ### W46 — Equipment checks: build, perform, fleet board, check log — 2026-09-30
 

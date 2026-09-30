@@ -8260,6 +8260,10 @@ class InventoryService:
         ``item_types`` narrows the result to one domain so the medical-supply
         page reports its own expiring stock and not the whole department's.
         ``today`` is the department's date, resolved from the org if omitted.
+
+        A retired item's lots are left out, as the dashboard's expiring count
+        already leaves them: the item is off every list, so the lots could
+        be neither acted on from here nor told apart from live stock.
         """
         if today is None:
             today = await resolve_org_today(self.db, organization_id)
@@ -8269,6 +8273,7 @@ class InventoryService:
             .join(InventoryItem, InventoryItem.id == InventoryLot.inventory_item_id)
             .where(
                 InventoryLot.organization_id == organization_id,
+                InventoryItem.active.is_(True),
                 InventoryLot.quantity > 0,
                 InventoryLot.expiration_date.isnot(None),
                 InventoryLot.expiration_date <= cutoff,
