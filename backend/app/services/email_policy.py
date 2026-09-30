@@ -180,6 +180,7 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
         includes=(
             "Reminders before events",
             "An event series you created is ending",
+            "The answer to an attendance request you made",
         ),
         rationale="The events calendar and the bell carry the same dates.",
         legacy_preference="event_reminders",
@@ -259,6 +260,7 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
         audience=_O,
         includes=(
             "Attendance to validate after an event",
+            "A member asked to be marked present at your event",
             "An event request was assigned to you",
         ),
         rationale="The task also waits in the bell and on the event.",

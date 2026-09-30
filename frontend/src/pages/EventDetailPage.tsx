@@ -72,6 +72,8 @@ import EventDeleteConfirmModal from '../components/event-detail/EventDeleteConfi
 import EventSaveTemplateModal from '../components/event-detail/EventSaveTemplateModal';
 import TrainingSessionLinkageCard from '../components/event-detail/TrainingSessionLinkageCard';
 import EventProspectsCard from '../components/event-detail/EventProspectsCard';
+import EventAttendancePetitionPrompt from '../components/event-detail/EventAttendancePetitionPrompt';
+import EventAttendancePetitionsCard from '../components/event-detail/EventAttendancePetitionsCard';
 import { buildCsv, downloadCsv } from '../utils/csv';
 
 /**
@@ -241,7 +243,7 @@ export const EventDetailPage: React.FC = () => {
   const actionsMenuRef = useRef<HTMLDivElement>(null);
   const reminderMenuRef = useRef<HTMLDivElement>(null);
 
-  const { checkPermission } = useAuthStore();
+  const { checkPermission, user: currentUser } = useAuthStore();
   const tz = useTimezone();
   const canManage = checkPermission('events.manage');
   // Deliberately a separate grant from events.manage: whoever closed the event
@@ -859,6 +861,13 @@ export const EventDetailPage: React.FC = () => {
   // Payloads predating the field fall back to the event being over.
   const checkInClosed = event.check_in_closes_at ? new Date(event.check_in_closes_at) <= new Date() : isEventOver;
   const showCheckInQrCode = !event.is_cancelled && !isAttendanceFinalized && !checkInClosed;
+  // Asking to be marked present opens where checking in closes. The member's
+  // own eligibility (the 30-day window, already present) is the server's call;
+  // the page only decides whether to ask.
+  const attendancePetitionsOpen = checkInClosed && !event.is_cancelled && !event.is_draft;
+  // The organizer need not hold events.manage to decide their own event's
+  // requests; the API grants the same pair.
+  const canReviewAttendancePetitions = canManage || (Boolean(currentUser?.id) && currentUser?.id === event.created_by);
 
   // RSVP deadline countdown
   const rsvpCountdown = (() => {
@@ -1593,6 +1602,25 @@ export const EventDetailPage: React.FC = () => {
             {/* The training details the credit is filed under, and the approval
                 it waits on. With no session it says what the credit falls back
                 to, to those who can change that or approve it. */}
+            {attendancePetitionsOpen && <EventAttendancePetitionPrompt eventId={event.id} timezone={tz} />}
+
+            {attendancePetitionsOpen && canReviewAttendancePetitions && (
+              <EventAttendancePetitionsCard
+                eventId={event.id}
+                defaultCheckIn={event.actual_start_time ?? event.start_datetime}
+                defaultCheckOut={event.actual_end_time ?? event.end_datetime}
+                attendanceFinalized={isAttendanceFinalized}
+                timezone={tz}
+                onApproved={() => {
+                  void fetchAttendees();
+                  if (canManage) {
+                    void fetchRSVPs();
+                    void fetchStats();
+                  }
+                }}
+              />
+            )}
+
             {isTrainingEvent && (
               <TrainingSessionLinkageCard
                 eventId={event.id}

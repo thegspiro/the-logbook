@@ -205,6 +205,16 @@ export const RSVPStatus = {
 export type RSVPStatus = (typeof RSVPStatus)[keyof typeof RSVPStatus];
 
 // ============================================
+// Attendance Petition Status
+// ============================================
+export const AttendancePetitionStatus = {
+  PENDING: 'pending',
+  APPROVED: 'approved',
+  REJECTED: 'rejected',
+} as const;
+export type AttendancePetitionStatus = (typeof AttendancePetitionStatus)[keyof typeof AttendancePetitionStatus];
+
+// ============================================
 // Event Types
 // ============================================
 export const EventType = {
