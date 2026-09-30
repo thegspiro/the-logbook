@@ -5300,6 +5300,32 @@ ones skipped.
   scheduled start. Fixing it needs the backend to report the credited check-in
   on the RSVP (pitfall #29) rather than the dialog re-deriving it.
 
+## Events — Attendance-Lock Refusals (2026-09-30)
+
+A write refused because an event's attendance is finalized now reaches the
+client as a sentence and a 409 on every route
+(`app/api/attendance_lock.py`). Eleven routes sent the internal
+`ATTENDANCE_LOCKED::` marker, or replaced a long refusal with a generic error.
+Found while fixing that, and left as they are:
+
+- **Cohort shift and cancel are not atomic.** `shift_remaining` and
+  `cancel_cohort` update or cancel class events one at a time, and each commits.
+  When a class whose attendance is finalized refuses, the classes before it stay
+  moved or cancelled while the request reports the refusal.
+- **The legacy `POST /training/sessions/{id}/finalize` can report "Training
+  session not found" after the event's finalize has committed** (no approval
+  id came back, or the approval row is missing). The route keeps its 400 for
+  that rather than a 404, so a caller is not told nothing happened. No screen
+  calls the route.
+- **The event request screen hides the reason.** `EventRequestsTab` shows the
+  server's text on a failed schedule only when it mentions a double-booked
+  room, and a failed postpone as "Failed to postpone request", so a coordinator
+  never reads that the event's attendance is closed.
+- **A finalized event cannot be edited from the edit form at all.** The form
+  always sends the schedule and check-in fields, and the lock is decided by
+  which fields are present, not by which ones changed. So a title fix on a
+  finalized event is refused. The member now at least reads why.
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area
