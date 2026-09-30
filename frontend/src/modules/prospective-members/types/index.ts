@@ -9,7 +9,7 @@
 // =============================================================================
 
 // Import enum types from the canonical source and re-export
-import type { StageType, ApplicantStatus, VotingMethod, VictoryCondition } from '../../../constants/enums';
+import type { StageType, ApplicantStatus, VotingMethod, VictoryCondition, MemberClass } from '../../../constants/enums';
 import {
   VotingMethod as VotingMethodValues,
   VictoryCondition as VictoryConditionValues,
@@ -412,6 +412,25 @@ export interface PipelineStageUpdate {
 // Pipeline
 // =============================================================================
 
+/** The starting statuses a pipeline may convert applicants into. */
+export type ConversionStatus = 'probationary' | 'regular';
+
+/** What an applicant becomes as a member: class and starting status. */
+export interface ConversionOutcome {
+  member_class: MemberClass;
+  member_status: ConversionStatus;
+}
+
+/**
+ * What each applicant track becomes on conversion. The track is the
+ * applicant's target membership type: administrative, or else operational.
+ * The server always sends the effective outcomes, defaults filled in.
+ */
+export interface PipelineConversionConfig {
+  operational: ConversionOutcome;
+  administrative: ConversionOutcome;
+}
+
 export interface Pipeline {
   id: string;
   organization_id: string;
@@ -421,6 +440,7 @@ export interface Pipeline {
   is_template: boolean;
   is_default: boolean;
   inactivity_config: InactivityConfig;
+  conversion_config: PipelineConversionConfig;
   public_status_enabled: boolean;
   public_show_future_stages: boolean;
   report_stage_groups?: ReportStageGroup[] | undefined;
@@ -445,6 +465,7 @@ export interface PipelineUpdate {
   is_default?: boolean | undefined;
   is_template?: boolean | undefined;
   inactivity_config?: InactivityConfig | undefined;
+  conversion_config?: PipelineConversionConfig | undefined;
   public_status_enabled?: boolean | undefined;
   public_show_future_stages?: boolean | undefined;
 }
@@ -656,6 +677,9 @@ export interface AdvanceStageRequest {
 
 export interface ConvertApplicantRequest {
   target_membership_type: TargetMembershipType;
+  /** The new member's class and starting status, pre-filled from the pipeline. */
+  member_class: MemberClass;
+  member_status: ConversionStatus;
   target_role_id?: string | undefined;
   send_welcome_email: boolean;
   /** An initial password the coordinator chose; omitted for a generated one. */
@@ -961,6 +985,7 @@ export interface BackendPipelineResponse {
   is_active: boolean;
   auto_transfer_on_approval: boolean;
   inactivity_config: Record<string, unknown> | null;
+  conversion_config: PipelineConversionConfig;
   public_status_enabled: boolean;
   public_show_future_stages: boolean;
   report_stage_groups: ReportStageGroup[] | null;
