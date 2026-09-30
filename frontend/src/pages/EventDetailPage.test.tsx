@@ -37,6 +37,11 @@ vi.mock('../services/api', () => ({
     finalizeAttendance: vi.fn(),
     reopenAttendance: vi.fn(),
     endEvent: vi.fn(),
+    getMyAttendancePetition: vi.fn(),
+    submitAttendancePetition: vi.fn(),
+    getAttendancePetitions: vi.fn(),
+    approveAttendancePetition: vi.fn(),
+    rejectAttendancePetition: vi.fn(),
   },
 }));
 
@@ -174,6 +179,12 @@ describe('EventDetailPage', () => {
     // implementations but not the mock itself, so without this the member
     // roster fetch resolves undefined in blocks that never mention it.
     vi.mocked(eventService.getEventAttendees).mockResolvedValue([]);
+    // Past events ask for the member's attendance-request standing, and the
+    // organizer's view for the list; neither is under test outside its block.
+    vi.mocked(eventService.getMyAttendancePetition).mockReset();
+    vi.mocked(eventService.getMyAttendancePetition).mockResolvedValue({ petition: null, can_request: false });
+    vi.mocked(eventService.getAttendancePetitions).mockReset();
+    vi.mocked(eventService.getAttendancePetitions).mockResolvedValue([]);
     vi.mocked(electionService.getElectionsByEvent).mockReset();
     vi.mocked(electionService.getElectionsByEvent).mockResolvedValue([]);
     vi.mocked(applicantService.getApplicants).mockReset();
@@ -1820,6 +1831,135 @@ describe('EventDetailPage', () => {
       expect(screen.getAllByText('Capacity')).toHaveLength(1);
       expect(screen.getByRole('heading', { name: 'Event Information' })).toBeInTheDocument();
       expect(screen.getByText('RSVP Required')).toBeInTheDocument();
+    });
+  });
+
+  describe('Calendar and check-in QR actions', () => {
+    const minutesFromNow = (minutes: number) => new Date(Date.now() + minutes * 60_000).toISOString();
+
+    beforeEach(() => {
+      vi.mocked(eventService.getEvent).mockReset();
+      vi.mocked(eventService.getEventRSVPs).mockReset();
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
+      vi.mocked(eventService.getEventStats).mockReset();
+    });
+
+    it('offers both on an upcoming event', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({ ...mockEvent, check_in_closes_at: mockEvent.end_datetime });
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByRole('button', { name: /Add to Calendar/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /View QR Code/ })).toBeInTheDocument();
+    });
+
+    it('offers neither once the event is over and check-in has closed', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        start_datetime: '2020-04-15T18:00:00Z',
+        end_datetime: '2020-04-15T20:00:00Z',
+        rsvp_deadline: undefined,
+        check_in_closes_at: '2020-04-15T20:00:00Z',
+      });
+
+      renderWithRouter(<EventDetailPage />);
+
+      await screen.findByRole('heading', { level: 1 });
+      expect(screen.queryByRole('button', { name: /Add to Calendar/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /View QR Code/ })).not.toBeInTheDocument();
+    });
+
+    // A "window" event keeps accepting check-ins after its scheduled end, so
+    // the QR code outlives the calendar button until the backend's close.
+    it('keeps the QR code while check-in is still open past the scheduled end', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        start_datetime: minutesFromNow(-120),
+        end_datetime: minutesFromNow(-5),
+        rsvp_deadline: undefined,
+        check_in_window_type: 'window',
+        check_in_minutes_after: 15,
+        check_in_closes_at: minutesFromNow(10),
+      });
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByRole('button', { name: /View QR Code/ })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Add to Calendar/ })).not.toBeInTheDocument();
+    });
+
+    it('hides the QR code once attendance is finalized', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        check_in_closes_at: mockEvent.end_datetime,
+        attendance_finalized_at: '2026-01-21T10:00:00Z',
+      });
+
+      renderWithRouter(<EventDetailPage />);
+
+      await screen.findByRole('heading', { level: 1 });
+      expect(screen.queryByRole('button', { name: /View QR Code/ })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Attendance requests', () => {
+    const pastEvent: Event = {
+      ...mockEvent,
+      start_datetime: '2020-04-15T18:00:00Z',
+      end_datetime: '2020-04-15T20:00:00Z',
+      rsvp_deadline: undefined,
+      check_in_closes_at: '2020-04-15T20:00:00Z',
+      created_by: 'organizer-1',
+    };
+
+    beforeEach(() => {
+      vi.mocked(eventService.getEvent).mockReset();
+      vi.mocked(eventService.getEventRSVPs).mockReset();
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
+      vi.mocked(eventService.getEventStats).mockReset();
+      vi.mocked(eventService.getMyAttendancePetition).mockReset();
+      vi.mocked(eventService.getMyAttendancePetition).mockResolvedValue({ petition: null, can_request: true });
+      vi.mocked(eventService.getAttendancePetitions).mockReset();
+      vi.mocked(eventService.getAttendancePetitions).mockResolvedValue([]);
+    });
+
+    it('offers a member the request once check-in has closed', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue(pastEvent);
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByRole('button', { name: /I was there/ })).toBeInTheDocument();
+      expect(eventService.getAttendancePetitions).not.toHaveBeenCalled();
+    });
+
+    it('does not ask while check-in is still open', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({ ...mockEvent, check_in_closes_at: mockEvent.end_datetime });
+
+      renderWithRouter(<EventDetailPage />);
+
+      await screen.findByRole('heading', { level: 1 });
+      expect(eventService.getMyAttendancePetition).not.toHaveBeenCalled();
+    });
+
+    it('shows the organizer the requests without events.manage', async () => {
+      mockAuthState.user = { id: 'organizer-1', permissions: [] } as unknown as CurrentUser;
+      vi.mocked(eventService.getEvent).mockResolvedValue(pastEvent);
+      vi.mocked(eventService.getAttendancePetitions).mockResolvedValue([
+        {
+          id: 'pet-1',
+          event_id: 'evt-1',
+          user_id: 'user-2',
+          user_name: 'Sam Member',
+          status: 'pending',
+          reason: 'Phone died at the door',
+          created_at: '2020-04-15T21:00:00Z',
+        },
+      ]);
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByRole('heading', { name: 'Attendance Requests' })).toBeInTheDocument();
+      expect(screen.getByText('Phone died at the door')).toBeInTheDocument();
     });
   });
 });

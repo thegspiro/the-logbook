@@ -512,6 +512,13 @@ class EventResponse(EventBase, UTCResponseBase):
     # here — this is not the roster other members see.
     user_rsvp: Optional["UserRSVPSummary"] = None
 
+    # When self check-in stops being accepted, derived by
+    # EventService._get_check_in_window exactly as on EventListItem. The detail
+    # screen hides the check-in QR code past this point; it is not the
+    # scheduled end, because a "window" event keeps accepting check-ins for
+    # check_in_minutes_after beyond it.
+    check_in_closes_at: Optional[datetime] = None
+
     model_config = _response_config
 
 
@@ -1429,3 +1436,89 @@ class EligibleMemberResponse(BaseModel):
     # roster (Pydantic response validation fails the entry, not just omits
     # the field).
     email: Optional[str] = None
+
+
+# Attendance petitions
+
+
+def _strip_required_text(value: str) -> str:
+    stripped = (value or "").strip()
+    if not stripped:
+        raise ValueError("must not be blank")
+    return stripped
+
+
+class AttendancePetitionCreate(BaseModel):
+    """A member asking to be recorded as present at an event that is over."""
+
+    reason: str = Field(..., min_length=1, max_length=1000)
+    # Optional: a member who was there all along leaves them blank, and the
+    # reviewer starts from the scheduled times.
+    requested_check_in_at: Optional[datetime] = None
+    requested_check_out_at: Optional[datetime] = None
+
+    _strip_reason = field_validator("reason")(_strip_required_text)
+
+    @model_validator(mode="after")
+    def _times_in_order(self) -> "AttendancePetitionCreate":
+        if (
+            self.requested_check_in_at
+            and self.requested_check_out_at
+            and self.requested_check_out_at <= self.requested_check_in_at
+        ):
+            raise ValueError("Departure time must be after arrival time")
+        return self
+
+
+class AttendancePetitionApprove(BaseModel):
+    """The reviewer's confirmed times. Required: they decide the credit."""
+
+    check_in_at: datetime
+    check_out_at: datetime
+    review_note: Optional[str] = Field(None, max_length=1000)
+
+    @model_validator(mode="after")
+    def _times_in_order(self) -> "AttendancePetitionApprove":
+        if self.check_out_at <= self.check_in_at:
+            raise ValueError("Check-out time must be after check-in time")
+        return self
+
+
+class AttendancePetitionReject(BaseModel):
+    """A rejection says why: the member cannot ask again, so the reason is
+    the only thing they are told."""
+
+    review_note: str = Field(..., min_length=1, max_length=1000)
+
+    _strip_note = field_validator("review_note")(_strip_required_text)
+
+
+class AttendancePetitionResponse(UTCResponseBase):
+    id: UUID
+    event_id: UUID
+    user_id: UUID
+    user_name: Optional[str] = None
+    status: str
+    reason: str
+    requested_check_in_at: Optional[datetime] = None
+    requested_check_out_at: Optional[datetime] = None
+    reviewed_by: Optional[UUID] = None
+    reviewed_by_name: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+    review_note: Optional[str] = None
+    created_at: datetime
+
+    model_config = _response_config
+
+
+class MyAttendancePetitionResponse(BaseModel):
+    """The caller's own petition, and whether they may make one.
+
+    ``can_request`` is decided on the server (check-in closed, within the
+    window, not already present, no earlier request) so the screen offers the
+    button exactly when the request would be accepted.
+    """
+
+    petition: Optional[AttendancePetitionResponse] = None
+    can_request: bool = False
+    unavailable_reason: Optional[str] = None
