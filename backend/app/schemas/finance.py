@@ -58,6 +58,20 @@ _RESPONSE_CONFIG = ConfigDict(
     populate_by_name=True,
 )
 
+# The Finance pages build request bodies from the camelCase response types, so
+# every request schema takes a camelCase alias alongside the field name — without
+# it a create 422'd on "missing" required fields and an update silently dropped
+# every multi-word key (a cleared budgetId acknowledged the save and changed
+# nothing). populate_by_name keeps snake_case callers working (the approval-chain
+# page, the public token-approval page). loc_by_alias=False keeps 422 field names
+# snake_case, exactly as they were before the alias. Dumps stay by field name, so
+# services receive snake_case keys; do not dump these with by_alias=True.
+_REQUEST_CONFIG = ConfigDict(
+    alias_generator=to_camel,
+    populate_by_name=True,
+    loc_by_alias=False,
+)
+
 
 # ============================================
 # Fiscal Year Schemas
@@ -67,6 +81,8 @@ _RESPONSE_CONFIG = ConfigDict(
 class FiscalYearCreate(BaseModel):
     """Create a new fiscal year"""
 
+    model_config = _REQUEST_CONFIG
+
     name: str = Field(..., min_length=1, max_length=100)
     start_date: datetime
     end_date: datetime
@@ -74,6 +90,8 @@ class FiscalYearCreate(BaseModel):
 
 class FiscalYearUpdate(BaseModel):
     """Update a fiscal year"""
+
+    model_config = _REQUEST_CONFIG
 
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     start_date: Optional[datetime] = None
@@ -105,6 +123,8 @@ class FiscalYearResponse(UTCResponseBase):
 class BudgetCategoryCreate(BaseModel):
     """Create a budget category"""
 
+    model_config = _REQUEST_CONFIG
+
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     parent_category_id: Optional[str] = None
@@ -114,6 +134,8 @@ class BudgetCategoryCreate(BaseModel):
 
 class BudgetCategoryUpdate(BaseModel):
     """Update a budget category"""
+
+    model_config = _REQUEST_CONFIG
 
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
@@ -148,6 +170,8 @@ class BudgetCategoryResponse(UTCResponseBase):
 class BudgetCreate(BaseModel):
     """Create a budget line"""
 
+    model_config = _REQUEST_CONFIG
+
     fiscal_year_id: str
     category_id: str
     amount_budgeted: Decimal = Field(..., ge=0, decimal_places=2)
@@ -157,6 +181,8 @@ class BudgetCreate(BaseModel):
 
 class BudgetUpdate(BaseModel):
     """Update a budget line"""
+
+    model_config = _REQUEST_CONFIG
 
     amount_budgeted: Optional[Decimal] = Field(None, ge=0, decimal_places=2)
     notes: Optional[str] = None
@@ -203,6 +229,8 @@ class BudgetSummaryResponse(BaseModel):
 class ApprovalChainStepCreate(BaseModel):
     """Create a step in an approval chain"""
 
+    model_config = _REQUEST_CONFIG
+
     _check_step_type = field_validator("step_type")(
         _enum_check(_STEP_TYPES, "step_type")
     )
@@ -224,6 +252,8 @@ class ApprovalChainStepCreate(BaseModel):
 
 class ApprovalChainStepUpdate(BaseModel):
     """Update a step in an approval chain"""
+
+    model_config = _REQUEST_CONFIG
 
     _check_step_type = field_validator("step_type")(
         _enum_check(_STEP_TYPES, "step_type")
@@ -267,6 +297,8 @@ class ApprovalChainStepResponse(UTCResponseBase):
 class ApprovalChainCreate(BaseModel):
     """Create an approval chain"""
 
+    model_config = _REQUEST_CONFIG
+
     _check_applies_to = field_validator("applies_to")(
         _enum_check(_APPLIES_TO, "applies_to")
     )
@@ -283,6 +315,8 @@ class ApprovalChainCreate(BaseModel):
 
 class ApprovalChainUpdate(BaseModel):
     """Update an approval chain"""
+
+    model_config = _REQUEST_CONFIG
 
     _check_applies_to = field_validator("applies_to")(
         _enum_check(_APPLIES_TO, "applies_to")
@@ -342,6 +376,8 @@ class ApprovalStepRecordResponse(UTCResponseBase):
 class ApprovalActionRequest(BaseModel):
     """Request to approve or deny a step"""
 
+    model_config = _REQUEST_CONFIG
+
     notes: Optional[str] = None
 
 
@@ -396,6 +432,8 @@ class ManualDenyRequest(BaseModel):
 class PurchaseRequestCreate(BaseModel):
     """Create a purchase request"""
 
+    model_config = _REQUEST_CONFIG
+
     _check_priority = field_validator("priority")(_enum_check(_PRIORITIES, "priority"))
 
     fiscal_year_id: str
@@ -412,6 +450,8 @@ class PurchaseRequestCreate(BaseModel):
 
 class PurchaseRequestUpdate(BaseModel):
     """Update a purchase request"""
+
+    model_config = _REQUEST_CONFIG
 
     _check_priority = field_validator("priority")(_enum_check(_PRIORITIES, "priority"))
 
@@ -469,7 +509,13 @@ class PurchaseRequestResponse(UTCResponseBase):
 class ExpenseLineItemCreate(BaseModel):
     """Create an expense line item"""
 
-    _check_expense_type = field_validator("expense_type")(
+    model_config = _REQUEST_CONFIG
+
+    # mode="before": the field is typed as the enum, so an after-validator
+    # received an ExpenseType and handed back a plain lowercased str, which
+    # the serializer then warned about on every dump. Normalizing first lets
+    # the enum type coerce the result.
+    _check_expense_type = field_validator("expense_type", mode="before")(
         _enum_check(_EXPENSE_TYPES, "expense_type")
     )
 
@@ -506,6 +552,8 @@ class ExpenseLineItemResponse(UTCResponseBase):
 class ExpenseReportCreate(BaseModel):
     """Create an expense report"""
 
+    model_config = _REQUEST_CONFIG
+
     fiscal_year_id: str
     title: str = Field(..., min_length=1, max_length=300)
     description: Optional[str] = None
@@ -515,6 +563,8 @@ class ExpenseReportCreate(BaseModel):
 
 class ExpenseReportUpdate(BaseModel):
     """Update an expense report"""
+
+    model_config = _REQUEST_CONFIG
 
     title: Optional[str] = Field(None, min_length=1, max_length=300)
     description: Optional[str] = None
@@ -555,6 +605,8 @@ class ExpenseReportResponse(UTCResponseBase):
 class CheckRequestCreate(BaseModel):
     """Create a check request"""
 
+    model_config = _REQUEST_CONFIG
+
     fiscal_year_id: str
     budget_id: Optional[str] = None
     payee_name: str = Field(..., min_length=1, max_length=300)
@@ -567,6 +619,8 @@ class CheckRequestCreate(BaseModel):
 
 class CheckRequestUpdate(BaseModel):
     """Update a check request"""
+
+    model_config = _REQUEST_CONFIG
 
     budget_id: Optional[str] = None
     payee_name: Optional[str] = Field(None, min_length=1, max_length=300)
@@ -615,6 +669,8 @@ class CheckRequestResponse(UTCResponseBase):
 class DuesScheduleCreate(BaseModel):
     """Create a dues schedule"""
 
+    model_config = _REQUEST_CONFIG
+
     _check_frequency = field_validator("frequency")(
         _enum_check(_DUES_FREQUENCIES, "frequency")
     )
@@ -632,6 +688,8 @@ class DuesScheduleCreate(BaseModel):
 
 class DuesScheduleUpdate(BaseModel):
     """Update a dues schedule"""
+
+    model_config = _REQUEST_CONFIG
 
     _check_frequency = field_validator("frequency")(
         _enum_check(_DUES_FREQUENCIES, "frequency")
@@ -717,6 +775,8 @@ class DuesPaymentResponse(UTCResponseBase):
 class MemberDuesPayment(BaseModel):
     """Record a dues payment"""
 
+    model_config = _REQUEST_CONFIG
+
     amount_paid: Decimal = Field(..., gt=0, decimal_places=2)
     payment_method: Optional[str] = None
     transaction_reference: Optional[str] = None
@@ -726,11 +786,15 @@ class MemberDuesPayment(BaseModel):
 class MemberDuesWaive(BaseModel):
     """Waive a member's dues"""
 
+    model_config = _REQUEST_CONFIG
+
     reason: str = Field(..., min_length=1)
 
 
 class MemberDuesUnwaive(BaseModel):
     """Reverse a waiver on a member's dues"""
+
+    model_config = _REQUEST_CONFIG
 
     # Keep an explicit explanation in the request so reversals are deliberate.
     # It is handled transiently and must not be copied into the immutable audit
@@ -761,6 +825,8 @@ class DuesSummaryResponse(BaseModel):
 class ExportMappingCreate(BaseModel):
     """Create an export mapping"""
 
+    model_config = _REQUEST_CONFIG
+
     _check_mapping_type = field_validator("mapping_type")(
         _enum_check(_MAPPING_TYPES, "mapping_type")
     )
@@ -773,6 +839,8 @@ class ExportMappingCreate(BaseModel):
 
 class ExportMappingUpdate(BaseModel):
     """Update an export mapping"""
+
+    model_config = _REQUEST_CONFIG
 
     _check_mapping_type = field_validator("mapping_type")(
         _enum_check(_MAPPING_TYPES, "mapping_type")
@@ -805,6 +873,8 @@ MAX_SYNCHRONOUS_EXPORT_RECORDS = 10_000
 
 class ExportRequest(BaseModel):
     """Request to generate an export"""
+
+    model_config = _REQUEST_CONFIG
 
     date_range_start: datetime
     date_range_end: datetime

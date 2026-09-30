@@ -285,11 +285,9 @@ export interface ApprovalChain {
   steps: ApprovalChainStep[];
 }
 
-// Approval-chain request bodies are snake_case. The backend's request schemas
-// (ApprovalChainCreate / ApprovalChainUpdate / ApprovalChainStepCreate /
-// ApprovalChainStepUpdate) carry no camelCase alias, unlike the responses, so a
-// camelCase key is not rejected there — it is silently ignored, or reported as
-// a missing required field.
+// Approval-chain request bodies are snake_case. The backend's Finance request
+// schemas accept either snake_case or camelCase keys (the other Finance pages
+// send camelCase); these stay snake_case, which the backend reads by field name.
 
 export interface ApprovalChainCreatePayload {
   name: string;
