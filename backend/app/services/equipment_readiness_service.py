@@ -150,6 +150,14 @@ class _Occasion:
     findings: List[str] = field(default_factory=list)
 
 
+def _counts_as_done(occasion: _Occasion) -> bool:
+    """True when the check for this occasion was submitted in full."""
+    if occasion.status in _COUNTS_AS_DONE:
+        return True
+    check = occasion.check
+    return check is not None and check.overall_status != "incomplete"
+
+
 def _worst(statuses: Sequence[str]) -> str:
     """The most severe of several outcomes, for collapsing a day into a cell."""
     if not statuses:
@@ -236,6 +244,7 @@ class EquipmentReadinessService:
         )
         supply = await self._supply_counts(organization_id, fleet, expiring_days, today)
         open_findings = await self._open_findings(organization_id, fleet, occasions)
+        configured = await self._configured_units(organization_id, fleet)
 
         by_unit: Dict[str, List[_Occasion]] = {key: [] for key in fleet}
         for occ in occasions:
@@ -248,7 +257,13 @@ class EquipmentReadinessService:
             findings = open_findings.get(key, {"failed": 0, "out_of_service": 0})
             records.append(
                 self._readiness_record(
-                    unit, unit_occasions, columns, counts, findings, today
+                    unit,
+                    unit_occasions,
+                    columns,
+                    counts,
+                    findings,
+                    today,
+                    configured=key in configured,
                 )
             )
 
@@ -329,6 +344,22 @@ class EquipmentReadinessService:
                 source="basic",
             )
             for row in basic_result.scalars().all()
+        }
+
+    async def _configured_units(
+        self, organization_id: str, fleet: Dict[str, FleetUnit]
+    ) -> Set[str]:
+        """Units an apparatus or type checklist reaches, due yet or not.
+
+        Checklists a shift template names are not counted: which unit they
+        reach depends on the shifts built from it, and claiming a checklist
+        applies to a rig that has none is the error this exists to remove.
+        """
+        by_apparatus, by_type, _ = await self._load_templates(organization_id)
+        return {
+            key
+            for key, unit in fleet.items()
+            if self._templates_for(unit, by_apparatus, by_type)
         }
 
     async def _load_templates(self, organization_id: str) -> Tuple[
@@ -792,9 +823,19 @@ class EquipmentReadinessService:
 
         Out-of-service and not-yet-due occasions leave the denominator rather
         than counting against the crew — see rule 2 in the module docstring.
+
+        ``out_of_service`` names two different things, and only one of them
+        leaves the denominator. A rig in the shop owed no check. A *submitted*
+        check that took an item out of service is also collapsed to that
+        status (``_status_for_check``), but that check happened — and found
+        the most serious thing a crew can find. Keying on the status alone
+        credited it as neither owed nor done, so the log read "Checks
+        completed —" over the one check that mattered most.
         """
-        owed = sum(1 for o in occasions if o.status not in _NOT_YET_OWED)
-        done = sum(1 for o in occasions if o.status in _COUNTS_AS_DONE)
+        owed = sum(
+            1 for o in occasions if o.check is not None or o.status not in _NOT_YET_OWED
+        )
+        done = sum(1 for o in occasions if _counts_as_done(o))
         return owed, done
 
     @staticmethod
@@ -953,6 +994,8 @@ class EquipmentReadinessService:
         supply: Dict[str, int],
         findings: Dict[str, int],
         today: date,
+        *,
+        configured: bool = False,
     ) -> Dict[str, Any]:
         """Build one fleet-board row, verdict included."""
         submitted = [o for o in occasions if o.check is not None]
@@ -980,7 +1023,13 @@ class EquipmentReadinessService:
 
         owed, done = self._rate_parts(occasions)
         readiness, reason = self._verdict(
-            unit, occasions, findings, overdue, due_today, partial is not None
+            unit,
+            occasions,
+            findings,
+            overdue,
+            due_today,
+            partial is not None,
+            configured=configured,
         )
 
         return {
@@ -1022,6 +1071,8 @@ class EquipmentReadinessService:
         overdue: int,
         due_today: int,
         has_partial: bool,
+        *,
+        configured: bool = False,
     ) -> Tuple[str, str]:
         """Decide the readiness pill and say why in one sentence.
 
@@ -1043,6 +1094,16 @@ class EquipmentReadinessService:
                 f"{count} {noun} marked out of service on the last check.",
             )
         if not occasions:
+            # No occasion in the window is not the same as no checklist. A
+            # department that has just published one and whose first shift is
+            # tomorrow was told nothing was configured — the moment it most
+            # needs to know the checklist reached the truck.
+            if configured:
+                return (
+                    READY_NO_CHECKS,
+                    "A checklist applies to this apparatus, but no shift on it "
+                    "has come due yet.",
+                )
             return READY_NO_CHECKS, "No check templates configured for this apparatus."
         if overdue > 0:
             noun = "check" if overdue == 1 else "checks"

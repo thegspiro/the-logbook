@@ -984,7 +984,10 @@ export const READINESS_LABELS: Record<Readiness, string> = {
   in_service: 'In service',
   attention: 'Needs attention',
   out_of_service: 'Out of service',
-  no_checks: 'No checks set up',
+  // Not "No checks set up": the pill also covers a rig a checklist applies to
+  // whose first shift has not come due, which is exactly what an officer sees
+  // right after publishing. The row's reason line says which case it is.
+  no_checks: 'No checks yet',
 };
 
 export interface CheckStripEntry {
