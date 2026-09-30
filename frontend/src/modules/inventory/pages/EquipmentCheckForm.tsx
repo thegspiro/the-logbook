@@ -1999,6 +1999,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           type="button"
           data-action="not_applicable"
           onClick={() => updateResultAndAdvance(item.id, { status: 'not_applicable' })}
+          aria-pressed={effectiveStatus === 'not_applicable'}
           className={`flex min-h-[48px] shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-3 text-sm font-medium transition-colors ${
             effectiveStatus === 'not_applicable'
               ? 'bg-theme-text-muted text-white dark:text-slate-950'
@@ -2020,6 +2021,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           type="button"
           data-action="out_of_service"
           onClick={() => updateResultAndAdvance(item.id, { status: 'out_of_service' })}
+          aria-pressed={effectiveStatus === 'out_of_service'}
           className={`flex min-h-[48px] shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-3 text-sm font-medium transition-colors ${
             effectiveStatus === 'out_of_service'
               ? 'bg-amber-800 text-white'
@@ -2032,12 +2034,15 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         </button>
       );
 
+    // Named after the item and marked pressed: every item's answers read
+    // "Pass" and "Fail", and the chosen one differed only by its colour.
     const passFailButtons = (
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-2" role="group" aria-label={item.name}>
         <button
           type="button"
           data-action="pass"
           onClick={() => updateResultAndAdvance(item.id, { status: 'pass' })}
+          aria-pressed={effectiveStatus === 'pass'}
           disabled={isExpired}
           className={`flex min-h-[48px] flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
             effectiveStatus === 'pass'
@@ -2045,20 +2050,21 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               : 'border-theme-surface-border text-theme-text-muted border hover:border-green-800 hover:text-green-800'
           } ${isExpired ? 'cursor-not-allowed opacity-50' : ''}`}
         >
-          <CheckCircle className="h-4 w-4" />
+          <CheckCircle className="h-4 w-4" aria-hidden="true" />
           Pass
         </button>
         <button
           type="button"
           data-action="fail"
           onClick={() => updateResultAndAdvance(item.id, { status: 'fail' })}
+          aria-pressed={effectiveStatus === 'fail'}
           className={`flex min-h-[48px] flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
             effectiveStatus === 'fail'
               ? 'bg-red-800 text-white'
               : 'border-theme-surface-border text-theme-text-muted border hover:border-red-800 hover:text-red-800'
           }`}
         >
-          <XCircle className="h-4 w-4" />
+          <XCircle className="h-4 w-4" aria-hidden="true" />
           Fail
         </button>
         {notApplicableButton}

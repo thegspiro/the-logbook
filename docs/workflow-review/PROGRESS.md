@@ -89,7 +89,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W43 | Storage areas, barcode labels and CSV import                                 | quartermaster          | `/inventory/storage-areas`, `/inventory/import`            | ✅     |
 | W44 | NFC: tag in bulk, put away, shelf audit, items not seen                      | quartermaster          | `/inventory/admin/nfc/*`, `/inventory/shelf-audit`         | ✅     |
 | W45 | The self-service kiosk                                                       | member                 | `/inventory/kiosk`                                         | ✅     |
-| W46 | Equipment checks: build a checklist, perform a check, fleet board, check log | quartermaster → member | `/inventory/admin/checklists`, `/inventory/checklists`     | ⬜     |
+| W46 | Equipment checks: build a checklist, perform a check, fleet board, check log | quartermaster → member | `/inventory/admin/checklists`, `/inventory/checklists`     | ✅     |
 | W47 | Medical supplies                                                             | quartermaster          | `/medical-supplies`                                        | ⬜     |
 
 ## Tier 7 — Apparatus and facilities
@@ -183,6 +183,24 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W46 — Equipment checks: build, perform, fleet board, check log — 2026-09-30
+
+Driven as: `chief` building (the seeded `quartermaster` is refused the
+builder — W46-5), `member` performing at 390×844, with `member` refused on the
+admin, fleet and reports pages and every template write. Held: a
+double-clicked Publish made one template and a double-clicked Submit one check
+with both results and the note; assigned by type, the checklist reached E-1 on
+the fleet board and log; reports named the member. Fixed: W46-1 (MED — every
+builder row was one disabled button to a screen reader), W46-2 (LOW — Pass/Fail
+named no item and showed the choice by colour), W46-3 (LOW — the builder offered
+basic apparatus the server always refuses), W46-7 (LOW — the member's log
+linked to the fleet board). Flagged: W46-4 (MED — the log counts a checklist
+missed before it existed), W46-5 (decision — the quartermaster cannot build
+checklists), W46-6 (LOW — basic apparatus cannot be pinned). Open: W46-8 (NIT).
+The template was set back to a draft afterwards. Gate: typecheck, lint and the
+inventory suites clean. **Rotation stopped here:** W46-5 is a permissions
+decision for the owner. Next, when resumed: W47.
 
 ### W45 — The self-service kiosk — 2026-09-30
 

@@ -423,10 +423,14 @@ const SortableItemWrapper: React.FC<SortableItemWrapperProps> = ({ id, children 
     zIndex: isDragging ? 10 : undefined,
   };
 
+  // dnd-kit's attributes (role="button", tabindex, aria-disabled and the
+  // keyboard instructions) go on the drag handle with the listeners, never on
+  // the row: spread on the row they turned every field inside it into part of
+  // one button, announced as disabled while the record was unsaved.
   return (
-    <div ref={setNodeRef} style={style} {...attributes}>
+    <div ref={setNodeRef} style={style}>
       {children({
-        listeners: listeners ?? undefined,
+        listeners: { ...attributes, ...listeners },
         setNodeRef,
         style,
         attributes,
@@ -641,7 +645,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const loadApparatusOptions = async () => {
       try {
         const result = await schedulingService.getApparatusOptions();
-        setApparatusOptions(result.options);
+        // A template's apparatus_id is a foreign key to the Apparatus module's
+        // own table. The options endpoint also serves onboarding's basic units
+        // and type defaults, which the server refuses as "Invalid apparatus";
+        // those departments pin a checklist by type instead.
+        setApparatusOptions(result.options.filter((option) => option.source === 'apparatus'));
       } catch {
         // Non-critical — dropdown will just be empty
       }
@@ -3969,7 +3977,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     dragHandleProps?: Record<string, unknown>,
     sortableRef?: React.Ref<HTMLDivElement>,
     sortableStyle?: React.CSSProperties,
-    sortableAttributes?: DraggableAttributes,
     depth = 0
   ) => {
     const key = comp.id ?? comp.clientKey;
@@ -3999,7 +4006,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           id={anchorId}
           ref={sortableRef}
           style={sortableStyle}
-          {...(sortableAttributes ?? {})}
           className={`bg-theme-surface-secondary border-theme-surface-border flex items-center gap-2.5 border-b px-4 py-2.5 ${
             isFlagged ? 'border-l-[3px] border-l-amber-500 bg-amber-500/[0.06]' : ''
           }`}
@@ -4075,7 +4081,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const selectedCount = getSelectedCount(idx);
 
     return (
-      <div key={key} ref={sortableRef} style={sortableStyle} {...(sortableAttributes ?? {})}>
+      <div key={key} ref={sortableRef} style={sortableStyle}>
         {/* Location row */}
         <div
           id={anchorId}
@@ -5659,7 +5665,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     return (
                       <SortableCompartmentWrapper key={id} id={id} disabled={!comp.id}>
                         {({ listeners: compListeners, setNodeRef, style, attributes }) =>
-                          renderCompartment(comp, idx, compListeners, setNodeRef, style, attributes, depth)
+                          // The sortable attributes ride with the listeners onto
+                          // the drag handle; see SortableItemWrapper.
+                          renderCompartment(comp, idx, { ...attributes, ...compListeners }, setNodeRef, style, depth)
                         }
                       </SortableCompartmentWrapper>
                     );
