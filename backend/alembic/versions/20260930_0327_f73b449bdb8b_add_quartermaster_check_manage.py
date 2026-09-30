@@ -1,6 +1,6 @@
 """Grant the seeded Quartermaster position inventory.check_manage.
 
-The owner's decision on workflow review W46-5: the quartermaster manages the
+The owner's decision on workflow review W46-14: the quartermaster manages the
 stock (medical supplies included, unless a department appoints an EMS supply
 officer), and the apparatus checklists are lists of that stock, so the
 quartermaster builds them too. The registry change in
@@ -41,7 +41,7 @@ migration chain (the initial ``roles`` table, renamed by 20260805_0008), so the
 guard is not load-bearing.
 
 Revision ID: f73b449bdb8b
-Revises: 601fdb28ab8c
+Revises: 0ff2dfd2e9a2
 Create Date: 2026-09-30 03:27:38.154120
 """
 
@@ -53,7 +53,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "f73b449bdb8b"
-down_revision: Union[str, None] = "601fdb28ab8c"
+down_revision: Union[str, None] = "0ff2dfd2e9a2"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

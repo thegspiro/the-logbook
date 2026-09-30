@@ -41,11 +41,18 @@ export const LEVEL_UNIT_PRESETS = ['psi', '%', 'gallons', 'liters', 'inches', 'f
 // Positions & apparatus types
 // ============================================================================
 
+/**
+ * Seat tokens a checklist can be limited to — the stored shift seat
+ * vocabulary (`ShiftPosition`), shown through `POSITION_LABELS` so the chip
+ * reads as the seat does on the schedule ("EMT", not "Ems"). Paramedic was
+ * missing, so a checklist could not be limited to the medic seat.
+ */
 export const POSITIONS = [
   'officer',
   'driver',
   'firefighter',
   'ems',
+  'paramedic',
   'captain',
   'lieutenant',
   'probationary',

@@ -170,8 +170,13 @@ class MemberLeaveService:
         if user_id:
             query = query.where(MemberLeaveOfAbsence.user_id == user_id)
         if active_only:
-            query = query.where(MemberLeaveOfAbsence.active == True)  # noqa: E712
-        query = query.order_by(MemberLeaveOfAbsence.start_date.desc())
+            query = query.where(MemberLeaveOfAbsence.active.is_(True))
+        # The id breaks start_date ties so the order is total: the list
+        # endpoint is read page by page, and a tie that sorted differently on
+        # the next request would repeat one leave and skip another.
+        query = query.order_by(
+            MemberLeaveOfAbsence.start_date.desc(), MemberLeaveOfAbsence.id
+        )
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -208,6 +213,7 @@ class MemberLeaveService:
             except ValueError:
                 kwargs["leave_type"] = LeaveType.OTHER
 
+        was_active = bool(leave.active)
         apply_updates(leave, kwargs)
 
         # Validate date order on the resulting record — the create path enforces
@@ -261,6 +267,19 @@ class MemberLeaveService:
                 await self._update_linked_waiver(
                     leave.linked_training_waiver_id, **waiver_updates
                 )
+
+        # The waiver exists because of the leave, so it follows the leave's
+        # active flag -- the same pairing deactivate_leave (the DELETE route)
+        # applies. Without this, a PATCH of active=false ended the leave and
+        # left the member excused from training for a leave nobody is on.
+        if (
+            "active" in kwargs
+            and bool(leave.active) != was_active
+            and leave.linked_training_waiver_id
+        ):
+            await self._update_linked_waiver(
+                leave.linked_training_waiver_id, active=bool(leave.active)
+            )
 
         leave.updated_at = datetime.now(timezone.utc)
         await self.db.commit()

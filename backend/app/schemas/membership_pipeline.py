@@ -833,6 +833,11 @@ class TransferProspectRequest(BaseModel):
     member_status: Optional[ConversionStatus] = Field(
         None, description="Starting status for the new member"
     )
+    notes: Optional[str] = Field(
+        None,
+        max_length=2000,
+        description="Coordinator's notes on the conversion, kept in the activity log",
+    )
 
     @model_validator(mode="after")
     def _class_and_status_together(self) -> "TransferProspectRequest":

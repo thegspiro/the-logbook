@@ -248,6 +248,14 @@ const EventQRCodePage: React.FC = () => {
             <p className="text-theme-text-muted text-sm">
               The QR code will appear here when the check-in window opens. This page refreshes automatically.
             </p>
+            {/* The "how it works" steps only render once the window is open,
+                and this is where a member lands from the event page days
+                early — wondering whether they are meant to show this code or
+                scan it. */}
+            <p className="text-theme-text-muted mt-2 text-sm">
+              This code is put on display at the event. When you arrive, scan it with your phone camera to check
+              yourself in.
+            </p>
           </div>
         )}
       </div>

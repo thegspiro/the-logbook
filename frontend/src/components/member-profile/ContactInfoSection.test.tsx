@@ -88,3 +88,36 @@ describe('ContactInfoSection notification preferences', () => {
     });
   });
 });
+
+describe('ContactInfoSection with nothing to show', () => {
+  const renderEmpty = (canEdit: boolean) =>
+    render(
+      <ContactInfoSection
+        user={{}}
+        canEdit={canEdit}
+        isEditing={false}
+        saving={false}
+        error={null}
+        editForm={editForm}
+        onEditClick={vi.fn()}
+        onCancelEdit={vi.fn()}
+        onSaveContact={vi.fn()}
+        onFormChange={vi.fn()}
+        onNotificationToggle={onNotificationToggle}
+        smsConsentGranted={null}
+      />
+    );
+
+  it('tells another member why no contact details appear', () => {
+    renderEmpty(false);
+    expect(
+      screen.getByText(/This member has not added any, or your department keeps them private/)
+    ).toBeInTheDocument();
+  });
+
+  it('keeps the short message for someone who can edit the record', () => {
+    renderEmpty(true);
+    expect(screen.getByText('No contact details shared.')).toBeInTheDocument();
+    expect(screen.queryByText(/your department keeps them private/)).not.toBeInTheDocument();
+  });
+});

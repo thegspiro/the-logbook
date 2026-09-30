@@ -55,7 +55,7 @@ import {
 import toast from 'react-hot-toast';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import type { DragEndEvent, DraggableAttributes } from '@dnd-kit/core';
+import type { DragEndEvent } from '@dnd-kit/core';
 import {
   SortableContext,
   sortableKeyboardCoordinates,
@@ -132,6 +132,7 @@ import {
 import { useOverlaySurface } from '../../../hooks/useOverlaySurface';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { formatItemSummary } from './itemSummary';
+import { POSITION_LABELS } from '../../../constants/enums';
 
 /** Sentinel anchor for blockers that live in the details drawer, not on a row. */
 const DETAILS_ANCHOR = '__details__';
@@ -405,13 +406,23 @@ function defaultTemplateForm(): TemplateFormState {
 
 interface SortableItemWrapperProps {
   id: string;
-  children: (opts: {
-    listeners: Record<string, unknown> | undefined;
-    setNodeRef: React.Ref<HTMLDivElement>;
-    style: React.CSSProperties;
-    attributes: DraggableAttributes;
-  }) => React.ReactNode;
+  children: (opts: { listeners: Record<string, unknown> | undefined }) => React.ReactNode;
 }
+
+/**
+ * The props that make a drag handle, for spreading on the handle alone.
+ *
+ * dnd-kit's attributes carry `role="button"`, `tabIndex`, `aria-disabled` and
+ * `aria-roledescription="sortable"`. Spread on the row they were written for,
+ * they turned a whole location — its name field, item box and every button —
+ * into one "button", whose children ARIA treats as presentational, so a
+ * screen reader could not reach the fields inside and every row cost an extra
+ * Tab stop. The handle is already the thing the listeners are on.
+ */
+const handleProps = (
+  attributes: Record<string, unknown>,
+  listeners: Record<string, unknown> | undefined
+): Record<string, unknown> => ({ ...attributes, ...(listeners ?? {}) });
 
 const SortableItemWrapper: React.FC<SortableItemWrapperProps> = ({ id, children }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -423,18 +434,9 @@ const SortableItemWrapper: React.FC<SortableItemWrapperProps> = ({ id, children 
     zIndex: isDragging ? 10 : undefined,
   };
 
-  // dnd-kit's attributes (role="button", tabindex, aria-disabled and the
-  // keyboard instructions) go on the drag handle with the listeners, never on
-  // the row: spread on the row they turned every field inside it into part of
-  // one button, announced as disabled while the record was unsaved.
   return (
     <div ref={setNodeRef} style={style}>
-      {children({
-        listeners: { ...attributes, ...listeners },
-        setNodeRef,
-        style,
-        attributes,
-      })}
+      {children({ listeners: handleProps({ ...attributes }, listeners) })}
     </div>
   );
 };
@@ -446,7 +448,6 @@ interface SortableCompartmentWrapperProps {
     listeners: Record<string, unknown> | undefined;
     setNodeRef: React.Ref<HTMLDivElement>;
     style: React.CSSProperties;
-    attributes: DraggableAttributes;
   }) => React.ReactNode;
 }
 
@@ -463,10 +464,9 @@ const SortableCompartmentWrapper: React.FC<SortableCompartmentWrapperProps> = ({
   return (
     <>
       {children({
-        listeners: listeners ?? undefined,
+        listeners: handleProps({ ...attributes }, listeners),
         setNodeRef,
         style,
-        attributes,
       })}
     </>
   );
@@ -645,11 +645,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const loadApparatusOptions = async () => {
       try {
         const result = await schedulingService.getApparatusOptions();
-        // A template's apparatus_id is a foreign key to the Apparatus module's
-        // own table. The options endpoint also serves onboarding's basic units
-        // and type defaults, which the server refuses as "Invalid apparatus";
-        // those departments pin a checklist by type instead.
-        setApparatusOptions(result.options.filter((option) => option.source === 'apparatus'));
+        // A checklist can name only a full Apparatus record (the column is a
+        // foreign key to apparatus.id). Basic apparatus and the onboarding
+        // defaults were offered too, and choosing one failed the save — so a
+        // department on basic apparatus writes checklists by type.
+        setApparatusOptions(result.source === 'apparatus' ? result.options : []);
       } catch {
         // Non-critical — dropdown will just be empty
       }
@@ -4908,7 +4908,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 {POSITIONS.map((pos) => (
                   <label
                     key={pos}
-                    className={`flex min-h-8.5 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[13px] capitalize transition-colors ${form.assignedPositions.includes(pos) ? 'border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300' : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary'}`}
+                    className={`flex min-h-8.5 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[13px] transition-colors ${form.assignedPositions.includes(pos) ? 'border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300' : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary'}`}
                   >
                     <input
                       type="checkbox"
@@ -4917,7 +4917,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                       onChange={() => togglePosition(pos)}
                     />
                     {form.assignedPositions.includes(pos) && <CheckCircle2 className="h-3.5 w-3.5" />}
-                    {pos}
+                    {POSITION_LABELS[pos] ?? pos}
                   </label>
                 ))}
               </div>
@@ -5664,10 +5664,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     const id = compartmentKey(comp, idx);
                     return (
                       <SortableCompartmentWrapper key={id} id={id} disabled={!comp.id}>
-                        {({ listeners: compListeners, setNodeRef, style, attributes }) =>
-                          // The sortable attributes ride with the listeners onto
-                          // the drag handle; see SortableItemWrapper.
-                          renderCompartment(comp, idx, { ...attributes, ...compListeners }, setNodeRef, style, depth)
+                        {({ listeners: compListeners, setNodeRef, style }) =>
+                          renderCompartment(comp, idx, compListeners, setNodeRef, style, depth)
                         }
                       </SortableCompartmentWrapper>
                     );

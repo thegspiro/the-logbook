@@ -1,0 +1,37 @@
+# ============================================
+# THE LOGBOOK — BUNDLED REVERSE PROXY
+# ============================================
+# Runs the app behind the nginx container (infrastructure/nginx/docker.conf)
+# as the only way in. Add it after the production override:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+#     -f docker-compose.proxy.yml up -d
+#
+# or pin all three in .env:
+#
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml:docker-compose.proxy.yml
+#
+# It does two things, and they belong together:
+#
+# - Starts the nginx service without `--profile production`, so the file
+#   cannot leave the frontend unpublished with nothing in front of it.
+# - Stops publishing the frontend port. The frontend container serves the app
+#   over plain HTTP, so a published port 3000 is a second way in that skips TLS
+#   and every rule in docker.conf. The production override already does this
+#   for the backend.
+#
+# Leave this file out when a proxy outside this stack reaches the frontend on
+# the host's port 3000 — a host-installed nginx (docs/deployment/aws.md) or a
+# proxy in another container — since it needs that port published.
+#
+# nginx will not start without a certificate in infrastructure/nginx/ssl/; see
+# "Docker Compose production profile" in docs/DEPLOYMENT.md. `!reset` needs
+# Docker Compose v2.24.4 or later, as the production override already does.
+# ============================================
+
+services:
+  nginx:
+    profiles: !reset []
+
+  frontend:
+    ports: !reset []

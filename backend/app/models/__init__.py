@@ -75,8 +75,10 @@ from app.models.email_template import (
 )
 from app.models.error_log import ErrorLog
 from app.models.event import (
+    AttendancePetitionStatus,
     CheckInWindowType,
     Event,
+    EventAttendancePetition,
     EventExternalAttendee,
     EventRSVP,
     EventType,
@@ -536,6 +538,8 @@ __all__ = [
     "Event",
     "EventRSVP",
     "EventExternalAttendee",
+    "EventAttendancePetition",
+    "AttendancePetitionStatus",
     "EventType",
     "RSVPStatus",
     "CheckInWindowType",

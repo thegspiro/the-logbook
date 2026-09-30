@@ -185,17 +185,18 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
         first_name: editFields.first_name,
         last_name: editFields.last_name,
         email: editFields.email,
-        phone: editFields.phone || undefined,
-        date_of_birth: editFields.date_of_birth || undefined,
+        // Update path: blankToNull, not `|| undefined`. Emptying a box or
+        // clearing the picker has to reach the backend as an explicit null,
+        // or the old value survives behind a success toast (CLAUDE.md
+        // pitfall #1). Name and email stay as typed: they are NOT NULL.
+        phone: blankToNull(editFields.phone),
+        date_of_birth: blankToNull(editFields.date_of_birth),
         address: {
-          street: editFields.address_street || undefined,
-          city: editFields.address_city || undefined,
-          state: editFields.address_state || undefined,
-          zip_code: editFields.address_zip || undefined,
+          street: blankToNull(editFields.address_street),
+          city: blankToNull(editFields.address_city),
+          state: blankToNull(editFields.address_state),
+          zip_code: blankToNull(editFields.address_zip),
         },
-        // Update path: blankToNull, not `|| undefined`. Clearing the picker
-        // has to reach the backend as an explicit null, or the old role
-        // survives behind a success toast (CLAUDE.md pitfall #1).
         target_role_id: blankToNull(editFields.target_role_id),
       });
       toast.success('Contact info updated');
@@ -489,7 +490,10 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         </span>
                       </div>
                     )}
-                    {applicant.address?.city && (
+                    {(applicant.address?.street ||
+                      applicant.address?.city ||
+                      applicant.address?.state ||
+                      applicant.address?.zip_code) && (
                       <div className="flex items-center gap-2 text-sm">
                         <MapPin className="text-theme-text-muted h-4 w-4" />
                         <span className="text-theme-text-secondary">
@@ -1061,6 +1065,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         const from = detailText(entry.details, 'from');
                         const to = detailText(entry.details, 'to');
                         const reason = detailText(entry.details, 'reason');
+                        const notes = detailText(entry.details, 'notes');
                         return (
                           <div key={entry.id} className="flex items-start gap-2 text-xs">
                             <div className="bg-theme-text-muted mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" />
@@ -1084,6 +1089,13 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                                   overwrite, so this is the only place it shows. */}
                               {reason && (
                                 <p className="text-theme-text-secondary mt-0.5 break-words italic">“{reason}”</p>
+                              )}
+                              {/* Notes the coordinator attached to the action —
+                                  the Convert dialog's notes live only here. */}
+                              {notes && (
+                                <p className="text-theme-text-secondary mt-0.5 break-words whitespace-pre-wrap">
+                                  {notes}
+                                </p>
                               )}
                             </div>
                           </div>

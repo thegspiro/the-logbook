@@ -1,4 +1,4 @@
-"""The seeded Quartermaster builds equipment checklists (workflow review W46-5).
+"""The seeded Quartermaster builds equipment checklists (workflow review W46-14).
 
 Two halves, because the grant reaches a department two ways: the registry
 seeds it at onboarding, and migration ``f73b449bdb8b`` writes it onto the

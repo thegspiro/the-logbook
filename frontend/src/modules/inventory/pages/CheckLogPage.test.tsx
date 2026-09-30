@@ -127,10 +127,17 @@ describe('CheckLogPage', () => {
     expect(screen.queryByRole('link', { name: /Fleet/ })).not.toBeInTheDocument();
   });
 
-  it('keeps the fleet link for the fleet-wide log', async () => {
+  // W46-6: the fleet board refuses a member, so the log must not offer it.
+  it('offers the way back to the fleet board only on the fleet scope', async () => {
+    mockGetCheckLog.mockResolvedValue(makeResponse({ scope: 'own', rows: [] }));
+    const { unmount } = renderWithRouter(<CheckLogPage />);
+    await screen.findByText('Checks you performed');
+    expect(screen.queryByRole('link', { name: /Fleet/ })).not.toBeInTheDocument();
+    unmount();
+
+    mockGetCheckLog.mockResolvedValue(makeResponse());
     renderWithRouter(<CheckLogPage />);
-    expect(await screen.findByRole('table')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Fleet/ })).toHaveAttribute('href', '/inventory/checklists');
+    expect(await screen.findByRole('link', { name: /Fleet/ })).toHaveAttribute('href', '/inventory/checklists');
   });
 
   it('shows a missed check as a row of its own', async () => {

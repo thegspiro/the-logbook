@@ -262,22 +262,27 @@ describe('EventsPage', () => {
 
       renderWithRouter(<EventsPage />);
 
+      // "Found" reads as a search that came back empty; nothing was searched.
       await waitFor(() => {
-        expect(screen.getByText('No events found')).toBeInTheDocument();
+        expect(screen.getByText('No upcoming events yet')).toBeInTheDocument();
         expect(screen.getByText('Get started by creating a new event.')).toBeInTheDocument();
       });
+      expect(screen.queryByText('No events found')).not.toBeInTheDocument();
     });
 
-    it('should leave the list blank for a member when there are no events at all', async () => {
+    it('explains an empty list to a member without offering to create', async () => {
       vi.mocked(eventService.getEvents).mockResolvedValue([]);
 
       renderWithRouter(<EventsPage />);
 
-      // The whole page is a skeleton while loading, so the Upcoming toggle
-      // appearing is what proves the loaded empty list rendered.
-      await screen.findByRole('button', { name: 'Upcoming' });
-      expect(screen.queryByText('No events found')).not.toBeInTheDocument();
+      expect(await screen.findByText('No upcoming events yet')).toBeInTheDocument();
+      expect(screen.getByText(/Open one to RSVP, add it to your calendar, and check in/)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /walkthrough in the Learning Center/ })).toHaveAttribute(
+        'href',
+        '/learning/events'
+      );
       expect(screen.queryByText('Get started by creating a new event.')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Create Event' })).not.toBeInTheDocument();
     });
 
     it('should still report an empty search result to a member', async () => {

@@ -563,6 +563,11 @@ describe('financeStore', () => {
   });
 
   describe('approveStep', () => {
+    beforeEach(() => {
+      mockApprovalApprove.mockReset();
+      mockApprovalGetPending.mockReset();
+    });
+
     it('should approve and refresh pending list', async () => {
       mockApprovalApprove.mockResolvedValue(undefined);
       mockApprovalGetPending.mockResolvedValue([]);
@@ -584,17 +589,32 @@ describe('financeStore', () => {
       expect(mockApprovalApprove).toHaveBeenCalledWith('step1', undefined);
     });
 
-    it('should handle error', async () => {
+    it('rejects to the caller when the approval fails', async () => {
       mockApprovalApprove.mockRejectedValue(new Error('Already processed'));
 
-      await getState().approveStep('step1');
+      await expect(getState().approveStep('step1')).rejects.toThrow('Already processed');
 
-      expect(getState().isLoading).toBe(false);
-      expect(getState().error).toBe('Already processed');
+      // Reported by the caller's dialog, not the page's shared error banner.
+      expect(getState().error).toBeNull();
+      expect(mockApprovalGetPending).not.toHaveBeenCalled();
+    });
+
+    it('keeps the decision when only the list refresh fails', async () => {
+      mockApprovalApprove.mockResolvedValue(undefined);
+      mockApprovalGetPending.mockRejectedValue(new Error('Network down'));
+
+      await expect(getState().approveStep('step1')).resolves.toBeUndefined();
+
+      expect(getState().error).toBe('Network down');
     });
   });
 
   describe('denyStep', () => {
+    beforeEach(() => {
+      mockApprovalDeny.mockReset();
+      mockApprovalGetPending.mockReset();
+    });
+
     it('should deny and refresh pending list', async () => {
       mockApprovalDeny.mockResolvedValue(undefined);
       mockApprovalGetPending.mockResolvedValue([]);
@@ -616,13 +636,23 @@ describe('financeStore', () => {
       expect(mockApprovalDeny).toHaveBeenCalledWith('step1', undefined);
     });
 
-    it('should handle error', async () => {
+    it('rejects to the caller when the denial fails', async () => {
       mockApprovalDeny.mockRejectedValue(new Error('Not authorized'));
 
-      await getState().denyStep('step1');
+      await expect(getState().denyStep('step1')).rejects.toThrow('Not authorized');
 
-      expect(getState().isLoading).toBe(false);
-      expect(getState().error).toBe('Not authorized');
+      // Reported by the caller's dialog, not the page's shared error banner.
+      expect(getState().error).toBeNull();
+      expect(mockApprovalGetPending).not.toHaveBeenCalled();
+    });
+
+    it('keeps the decision when only the list refresh fails', async () => {
+      mockApprovalDeny.mockResolvedValue(undefined);
+      mockApprovalGetPending.mockRejectedValue(new Error('Network down'));
+
+      await expect(getState().denyStep('step1')).resolves.toBeUndefined();
+
+      expect(getState().error).toBe('Network down');
     });
   });
 

@@ -753,7 +753,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
       <div className="space-y-4">
         <p className="text-theme-text-secondary text-sm">
           {mode === 'distribute'
-            ? 'Distribution is the umbrella action: each scanned item becomes an assignment, temporary loan, or issuance based on how it is tracked.'
+            ? 'Hand gear to this member. Find each item by scanning its label or typing its name, serial number or barcode, then choose how long they keep it.'
             : 'A return physically receives assigned or issued gear; a check-in closes a temporary loan.'}
         </p>
         {/* Member info */}
@@ -773,21 +773,40 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
             <div className="grid gap-2 sm:grid-cols-2">
               {(
                 [
-                  ['permanent_assignment', 'Ongoing assignment'],
-                  ['temporary_loan', 'Temporary loan'],
+                  [
+                    'permanent_assignment',
+                    'Ongoing assignment',
+                    'Theirs until they return it or leave, like turnouts.',
+                  ],
+                  ['temporary_loan', 'Temporary loan', 'Lent for a set time and due back on a date you choose.'],
                 ] as const
-              ).map(([value, label]) => (
+              ).map(([value, label, hint]) => (
                 <label
                   key={value}
                   className="border-theme-surface-border flex cursor-pointer gap-2 rounded-md border p-3"
                 >
+                  {/* Named by the short label and described by the hint, so a
+                      screen reader announces "Ongoing assignment" rather than
+                      the whole card as the option's name. */}
                   <input
                     type="radio"
                     name="distribution-operation"
                     checked={distributionOperation === value}
                     onChange={() => setDistributionOperation(value)}
+                    aria-labelledby={`distribution-${value}-label`}
+                    aria-describedby={`distribution-${value}-hint`}
                   />
-                  <span className="text-theme-text-primary text-sm font-medium">{label}</span>
+                  <span>
+                    <span
+                      id={`distribution-${value}-label`}
+                      className="text-theme-text-primary block text-sm font-medium"
+                    >
+                      {label}
+                    </span>
+                    <span id={`distribution-${value}-hint`} className="text-theme-text-muted block text-xs">
+                      {hint}
+                    </span>
+                  </span>
                 </label>
               ))}
             </div>
@@ -805,7 +824,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
               </label>
             )}
             <p className="text-theme-text-muted text-xs">
-              Quantity-tracked pool stock follows the pool issuance policy regardless of this choice.
+              Pool stock, counted by quantity like gloves or T-shirts, is issued from stock whichever you choose.
             </p>
           </fieldset>
         )}
@@ -1158,7 +1177,21 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
               )}
             </div>
 
-            {/* Submit */}
+            {/* Submit. The review button waits on the duration choice; saying
+                so is the difference between a blocked step and a broken one. */}
+            {scannedItems.length > 0 && mode === 'distribute' && !distributionOperation && (
+              <p className="text-theme-text-muted text-right text-sm" role="status">
+                Choose Ongoing assignment or Temporary loan above to continue.
+              </p>
+            )}
+            {scannedItems.length > 0 &&
+              mode === 'distribute' &&
+              distributionOperation === 'temporary_loan' &&
+              !expectedReturnAt && (
+                <p className="text-theme-text-muted text-right text-sm" role="status">
+                  Set the expected return date to continue.
+                </p>
+              )}
             {scannedItems.length > 0 && (
               <div className="border-theme-surface-border flex justify-end gap-3 border-t pt-2">
                 <button onClick={onClose} className="btn-secondary text-sm">

@@ -116,7 +116,16 @@ const ContactInfoSection: React.FC<ContactInfoSectionProps> = ({
 
       {!isEditing ? (
         <div className="space-y-3">
-          {visibleRows.length === 0 && <p className="text-theme-text-muted text-sm">No contact details shared.</p>}
+          {/* A member looking at someone else's profile cannot tell an empty
+              record from a hidden one, and the directory promised a way to
+              contact people, so the viewer is told both possibilities. */}
+          {visibleRows.length === 0 && (
+            <p className="text-theme-text-muted text-sm">
+              {canEdit
+                ? 'No contact details shared.'
+                : 'No contact details shared. This member has not added any, or your department keeps them private.'}
+            </p>
+          )}
           {visibleRows.map((row) => (
             <div key={row.field} className="flex items-start justify-between gap-4">
               <div className="min-w-0">
@@ -168,7 +177,7 @@ const ContactInfoSection: React.FC<ContactInfoSectionProps> = ({
             <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Phone</label>
             <input
               type="tel"
-              value={editForm.phone}
+              value={editForm.phone ?? ''}
               onChange={(e) => onFormChange('phone', e.target.value)}
               className="form-input px-3 text-sm"
             />
@@ -177,7 +186,7 @@ const ContactInfoSection: React.FC<ContactInfoSectionProps> = ({
             <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Mobile</label>
             <input
               type="tel"
-              value={editForm.mobile}
+              value={editForm.mobile ?? ''}
               onChange={(e) => onFormChange('mobile', e.target.value)}
               className="form-input px-3 text-sm"
             />

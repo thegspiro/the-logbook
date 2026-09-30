@@ -342,14 +342,17 @@ export function mapProspectToApplicant(data: BackendProspectResponse): Applicant
     email: data.email,
     phone: data.phone || undefined,
     date_of_birth: data.date_of_birth || undefined,
-    address: data.address_street
-      ? {
-          street: data.address_street || undefined,
-          city: data.address_city || undefined,
-          state: data.address_state || undefined,
-          zip_code: data.address_zip || undefined,
-        }
-      : undefined,
+    // Any one part is worth showing: an applicant who gave only a city (or a
+    // street with no city) still has an address on file.
+    address:
+      data.address_street || data.address_city || data.address_state || data.address_zip
+        ? {
+            street: data.address_street || undefined,
+            city: data.address_city || undefined,
+            state: data.address_state || undefined,
+            zip_code: data.address_zip || undefined,
+          }
+        : undefined,
     current_stage_id: data.current_step_id ?? '',
     current_stage_name: data.current_step?.name || undefined,
     current_stage_type: data.current_step?.step_type
@@ -1045,6 +1048,8 @@ export const applicantService = {
     if (data.station) payload.station = data.station;
     if (data.emergency_contacts?.length) payload.emergency_contacts = data.emergency_contacts;
     if (data.password) payload.password = data.password;
+    const notes = data.notes?.trim() || undefined;
+    if (notes) payload.notes = notes;
     const response = await api.post<{
       user_id: string;
       message?: string;

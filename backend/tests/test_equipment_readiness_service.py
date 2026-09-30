@@ -175,6 +175,29 @@ class TestCompletionRate:
         occasions = [make_occasion(date(2026, 8, 10), STATUS_PARTIAL)]
         assert EquipmentReadinessService._rate_parts(occasions) == (1, 0)
 
+    def test_a_submitted_check_that_took_an_item_out_of_service_is_done(self):
+        """W46-3: the crew did the check and found the worst thing a check can
+        find. Sharing the status with a rig in the shop must not drop it from
+        both halves of the rate."""
+        check = make_check(
+            status="fail", failed=1, items=(("out_of_service", "Thermal camera"),)
+        )
+        occasions = [
+            make_occasion(date(2026, 8, 16), STATUS_OUT_OF_SERVICE, check=check)
+        ]
+        assert EquipmentReadinessService._rate_parts(occasions) == (1, 1)
+
+    def test_an_unfinished_check_with_an_out_of_service_item_is_owed_not_done(
+        self,
+    ):
+        check = make_check(
+            status="incomplete", items=(("out_of_service", "Thermal camera"),)
+        )
+        occasions = [
+            make_occasion(date(2026, 8, 16), STATUS_OUT_OF_SERVICE, check=check)
+        ]
+        assert EquipmentReadinessService._rate_parts(occasions) == (1, 0)
+
 
 class TestAvailabilityReconstruction:
     """Rule 2's other half — availability comes from history, not current
@@ -621,7 +644,13 @@ class TestOpenFindings:
 class TestVerdict:
     @staticmethod
     def _verdict(
-        unit=None, occasions=None, findings=None, overdue=0, due=0, part=False
+        unit=None,
+        occasions=None,
+        findings=None,
+        overdue=0,
+        due=0,
+        part=False,
+        configured=False,
     ):
         return EquipmentReadinessService._verdict(
             unit or make_unit(),
@@ -630,6 +659,7 @@ class TestVerdict:
             overdue,
             due,
             part,
+            configured=configured,
         )
 
     def test_apparatus_status_takes_the_rig_off_the_road(self):
@@ -647,6 +677,33 @@ class TestVerdict:
         readiness, reason = self._verdict(occasions=[])
         assert readiness == READY_NO_CHECKS
         assert "No check templates" in reason
+
+    def test_a_checklist_with_nothing_due_yet_is_not_called_unconfigured(self):
+        """W46-4: just after publishing, before the first shift on the rig,
+        the board said no checklist was configured."""
+        readiness, reason = self._verdict(occasions=[], configured=True)
+        assert readiness == READY_NO_CHECKS
+        assert "No check templates" not in reason
+        assert reason == (
+            "A checklist applies to this apparatus, but no shift on it "
+            "has come due yet."
+        )
+
+    async def test_configured_units_follow_apparatus_and_type_templates(self, service):
+        engine = SimpleNamespace(apparatus_id=None, apparatus_type="Engine")
+        with patch.object(
+            service,
+            "_load_templates",
+            AsyncMock(return_value=({}, {"engine": [engine]}, {})),
+        ):
+            configured = await service._configured_units(
+                "org-1",
+                {
+                    "e1": make_unit(key="e1", full_id=None, type_slug="engine"),
+                    "b1": make_unit(key="b1", full_id=None, type_slug="brush"),
+                },
+            )
+        assert configured == {"e1"}
 
     def test_missed_check_needs_attention(self):
         readiness, reason = self._verdict(overdue=2)
@@ -678,6 +735,7 @@ class TestVerdict:
             {"unit": make_unit(status_available=False)},
             {"findings": {"failed": 0, "out_of_service": 1}},
             {"occasions": []},
+            {"occasions": [], "configured": True},
             {"overdue": 1},
             {"findings": {"failed": 1, "out_of_service": 0}},
             {"part": True},

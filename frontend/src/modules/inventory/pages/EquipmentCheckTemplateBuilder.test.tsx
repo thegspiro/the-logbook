@@ -41,6 +41,7 @@ const {
   updateEquipmentCheckTemplate: vi.fn(),
   toastSuccess: vi.fn(),
   toastError: vi.fn(),
+  getApparatusOptions: vi.fn().mockResolvedValue({ source: 'default', options: [] }),
 }));
 
 vi.mock('react-hot-toast', () => ({ default: { success: toastSuccess, error: toastError } }));
@@ -1729,29 +1730,6 @@ describe('EquipmentCheckTemplateBuilder narrow widths and assistive tech', () =>
     }
   });
 
-  // The template's apparatus_id is a foreign key to the Apparatus module's
-  // table, so a unit from onboarding's basic list was offered and then refused
-  // on save with "Invalid apparatus".
-  it('offers only units a checklist can be pinned to', async () => {
-    const user = userEvent.setup();
-    getApparatusOptions.mockResolvedValue({
-      source: 'apparatus',
-      options: [
-        { id: 'full-1', name: 'Engine 1', unit_number: 'E-1', apparatus_type: 'engine', source: 'apparatus' },
-        { id: 'basic-2', name: 'Engine 2', unit_number: 'E-2', apparatus_type: 'engine', source: 'basic' },
-      ],
-    });
-    mockViewport('laptop');
-    renderBuilder();
-
-    await user.click(await screen.findByRole('button', { name: 'Details' }));
-    const unit = within(screen.getByRole('dialog', { name: 'Template details' })).getByRole('combobox', {
-      name: 'Specific Apparatus',
-    });
-    await waitFor(() => expect(within(unit).getByRole('option', { name: 'E-1 — Engine 1' })).toBeInTheDocument());
-    expect(within(unit).queryByRole('option', { name: 'E-2 — Engine 2' })).toBeNull();
-  });
-
   it('locks the page and takes focus while the details drawer is open', async () => {
     const user = userEvent.setup();
     mockViewport('laptop');
@@ -2645,4 +2623,69 @@ describe('EquipmentCheckTemplateBuilder blocks a delete for the whole span of a 
     await confirm('Delete');
     await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('cab'));
   }, 10_000);
+});
+
+describe('EquipmentCheckTemplateBuilder details and rows (W46)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getApparatusOptions.mockReset();
+    getApparatusOptions.mockResolvedValue({ source: 'default', options: [] });
+    mockViewport('laptop');
+  });
+
+  const openDetails = async () => {
+    renderNewBuilder();
+    await screen.findByRole('button', { name: 'Details' });
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+  };
+
+  const specificOptions = async () => {
+    const select = await screen.findByLabelText('Specific Apparatus');
+    return within(select)
+      .getAllByRole('option')
+      .map((o) => o.textContent);
+  };
+
+  // W46-8: a basic apparatus was offered, and saving it failed — the column
+  // can only name a full Apparatus record.
+  it('offers no specific unit to a department on basic apparatus', async () => {
+    getApparatusOptions.mockResolvedValue({
+      source: 'basic',
+      options: [{ id: 'basic-1', name: 'Engine 1', unit_number: 'E1', apparatus_type: 'engine' }],
+    });
+    await openDetails();
+    await waitFor(() => expect(getApparatusOptions).toHaveBeenCalled());
+    expect(await specificOptions()).toEqual(['All of type (default)']);
+  });
+
+  it('offers full apparatus records as specific units', async () => {
+    getApparatusOptions.mockResolvedValue({
+      source: 'apparatus',
+      options: [{ id: 'app-1', name: 'Engine 1', unit_number: 'E1', apparatus_type: 'engine' }],
+    });
+    await openDetails();
+    await waitFor(async () => expect(await specificOptions()).toEqual(['All of type (default)', 'E1 — Engine 1']));
+  });
+
+  // W46-9: the chips printed the raw token ("Ems") and had no paramedic seat.
+  it('names seats as the schedule does, paramedic included', async () => {
+    await openDetails();
+    expect(screen.getByRole('checkbox', { name: 'EMT' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Paramedic' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Driver/Operator' })).toBeInTheDocument();
+  });
+
+  // W46-10: dnd-kit's role="button" sat on the whole location, so its fields
+  // were inside a button — presentational to a screen reader.
+  it('keeps the drag attributes on the handle, not the row with the fields', async () => {
+    renderNewBuilder();
+    await screen.findByRole('button', { name: 'Details' });
+    fireEvent.click(screen.getByRole('button', { name: /build from scratch/i }));
+
+    const name = await screen.findByLabelText('Location name');
+    expect(name.closest('[role="button"]')).toBeNull();
+    expect(name.closest('[aria-roledescription="sortable"]')).toBeNull();
+    const handle = screen.getByRole('button', { name: /Save before dragging this compartment/ });
+    expect(handle).toHaveAttribute('aria-roledescription', 'sortable');
+  });
 });

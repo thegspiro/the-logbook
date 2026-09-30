@@ -708,6 +708,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     placeholder="Any notes about this conversion..."
+                    maxLength={2000}
                     rows={2}
                     className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                   />

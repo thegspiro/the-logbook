@@ -16,6 +16,7 @@ import { formatDate, formatDateCustom } from '../../utils/dateFormatting';
 import { formatHours } from '../../utils/hoursFormatting';
 import type { TrainingRecord, ComplianceSummary, UserTrainingStats, ProgramEnrollment } from '../../types/training';
 import PrintPageStyles from '../../components/print/PrintPageStyles';
+import { isCertificationExpired } from '../../utils/certificationExpiry';
 
 const STATUS_LABELS: Record<string, string> = {
   completed: 'Completed',
@@ -223,9 +224,7 @@ const MemberTrainingPrintPage: React.FC = () => {
                         <td>{fmtDate(r.completion_date)}</td>
                         <td
                           className={
-                            r.expiration_date && new Date(r.expiration_date) < new Date()
-                              ? 'member-training-print__expired'
-                              : undefined
+                            isCertificationExpired(r.expiration_date, tz) ? 'member-training-print__expired' : undefined
                           }
                         >
                           {fmtDate(r.expiration_date)}

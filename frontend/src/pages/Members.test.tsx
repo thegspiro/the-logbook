@@ -62,6 +62,13 @@ vi.mock('../hooks/useTimezone', () => ({
   useTimezone: () => 'America/New_York',
 }));
 
+// The department's own rank names, as useRanks resolves them.
+vi.mock('../hooks/useRanks', () => ({
+  useRanks: () => ({
+    formatRank: (code: string | null | undefined) => (code === 'captain' ? 'Captain' : (code ?? '')),
+  }),
+}));
+
 // Import AFTER mocks
 import Members from './Members';
 
@@ -175,6 +182,25 @@ describe('Members roster — regular member (no members.manage)', () => {
     expect(columnLabels()).not.toContain('Hire Date');
     expect(columnLabels()).not.toContain('Actions');
     expect(screen.queryByText('12/6/2020')).not.toBeInTheDocument();
+  });
+
+  it("shows each member's rank so a newcomer can tell who is who", async () => {
+    installDefaults([]);
+    mockGetUsers.mockResolvedValue([makeMember({ rank: 'captain' }), ROSTER[1]]);
+    await renderRoster();
+
+    expect(columnLabels()).toContain('Rank');
+    expect(within(table()).getByText('Captain')).toBeInTheDocument();
+    expect(within(cards()).getByText('Captain')).toBeInTheDocument();
+  });
+
+  it('drops the member-number column when nobody has a number yet', async () => {
+    installDefaults([]);
+    mockGetUsers.mockResolvedValue(ROSTER.map((m) => ({ ...m, membership_number: undefined })));
+    await renderRoster();
+
+    expect(columnLabels()).not.toContain('Member #');
+    expect(columnLabels()).toEqual(expect.arrayContaining(['Member', 'Rank', 'Status']));
   });
 
   it('hides bulk selection and the CSV export', async () => {

@@ -28,6 +28,7 @@ from app.api.v1.endpoints import (
     email_templates,
     equipment_check,
     error_logs,
+    event_attendance_petitions,
     event_requests,
     events,
     external_shift_hours,
@@ -139,6 +140,9 @@ api_router = APIRouter(dependencies=[Depends(verify_csrf_token)])
 # Include route modules
 api_router.include_router(onboarding.router)
 api_router.include_router(events.router, prefix="/events", tags=["events"])
+api_router.include_router(
+    event_attendance_petitions.router, prefix="/events", tags=["events"]
+)
 api_router.include_router(event_requests.router, tags=["event-requests"])
 api_router.include_router(locations.router, prefix="/locations", tags=["locations"])
 api_router.include_router(roles.router, prefix="/roles", tags=["roles"])

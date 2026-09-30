@@ -560,23 +560,72 @@ class TestWithholdProfileVisibility:
 
         assert payload.profile_visibility is None
 
-    def test_profile_writes_hand_the_row_back_to_subject_and_managers(self):
+    async def test_profile_writes_hand_the_row_back_to_subject_and_managers(self):
         # The row itself, serialised by FastAPI as before — not a rebuilt
         # payload — so the write handlers stay indifferent to row shape.
         member = _member(SHARE_EVERYTHING)
-        assert _profile_response(member, _caller_with([]), is_self=True) is member
+        db = MagicMock()
         assert (
-            _profile_response(member, _caller_with(["members.manage"]), is_self=False)
+            await _profile_response(db, member, _caller_with([]), is_self=True)
+            is member
+        )
+        assert (
+            await _profile_response(
+                db, member, _caller_with(["members.manage"]), is_self=False
+            )
             is member
         )
 
-    def test_profile_writes_withhold_the_choice_from_a_users_edit_holder(self):
+    async def test_profile_writes_withhold_the_choice_from_a_users_edit_holder(self):
         member = _member(SHARE_EVERYTHING)
-        result = _profile_response(member, _caller_with(["users.edit"]), is_self=False)
+        with patch(
+            "app.api.v1.endpoints.users._load_contact_visibility",
+            new=AsyncMock(return_value=ALL_VISIBLE),
+        ):
+            result = await _profile_response(
+                MagicMock(), member, _caller_with(["users.edit"]), is_self=False
+            )
 
         assert isinstance(result, UserProfileResponse)
         assert result.profile_visibility is None
         assert result.address_street == "12 Ladder Lane"
+
+
+class TestProfileWritesRedactLikeTheRead:
+    """A write must not answer with what the read of the same profile withholds.
+
+    A ``users.edit`` holder without ``members.manage`` may save a colleague's
+    profile. The read redacts that colleague's date of birth, emergency
+    contacts and (by default) home address for them; before this the write
+    response handed all three back.
+    """
+
+    @pytest.mark.parametrize(
+        "permissions", [["users.edit"], ["users.edit", "users.view"]]
+    )
+    async def test_write_response_matches_the_read(self, permissions):
+        subject = _member()  # default choice: address and personal email hidden
+        caller = _caller(
+            user_id=str(uuid.uuid4()),
+            org_id=subject.organization_id,
+            permissions=[*permissions, "members.view"],
+        )
+
+        read = await _call_endpoint(subject, caller)
+        with patch(
+            "app.api.v1.endpoints.users._load_contact_visibility",
+            new=AsyncMock(return_value={}),
+        ):
+            written = await _profile_response(
+                MagicMock(), subject, caller, is_self=False
+            )
+
+        assert isinstance(written, UserProfileResponse)
+        assert written.date_of_birth is None
+        assert written.emergency_contacts == []
+        assert written.address_street is None
+        assert written.personal_email is None
+        assert written.model_dump() == read.model_dump()
 
 
 def _caller_with(permissions: list[str]) -> MagicMock:

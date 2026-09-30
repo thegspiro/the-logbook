@@ -378,6 +378,65 @@ export const eventService = {
   },
 
   /**
+   * The caller's own attendance request for an event, and whether they may
+   * make one now.
+   */
+  async getMyAttendancePetition(eventId: string): Promise<import('../types/event').MyAttendancePetition> {
+    const response = await api.get<import('../types/event').MyAttendancePetition>(
+      `/events/${eventId}/attendance-petitions/mine`
+    );
+    return response.data;
+  },
+
+  /**
+   * Ask to be marked present at an event the caller has no check-in for.
+   */
+  async submitAttendancePetition(
+    eventId: string,
+    data: import('../types/event').AttendancePetitionCreate
+  ): Promise<import('../types/event').AttendancePetition> {
+    const response = await api.post<import('../types/event').AttendancePetition>(
+      `/events/${eventId}/attendance-petitions`,
+      data
+    );
+    return response.data;
+  },
+
+  /**
+   * Every attendance request for an event (organizer or events.manage).
+   */
+  async getAttendancePetitions(eventId: string): Promise<import('../types/event').AttendancePetition[]> {
+    const response = await api.get<import('../types/event').AttendancePetition[]>(
+      `/events/${eventId}/attendance-petitions`
+    );
+    return asArray(response.data);
+  },
+
+  async approveAttendancePetition(
+    eventId: string,
+    petitionId: string,
+    data: import('../types/event').AttendancePetitionApprove
+  ): Promise<import('../types/event').AttendancePetition> {
+    const response = await api.post<import('../types/event').AttendancePetition>(
+      `/events/${eventId}/attendance-petitions/${petitionId}/approve`,
+      data
+    );
+    return response.data;
+  },
+
+  async rejectAttendancePetition(
+    eventId: string,
+    petitionId: string,
+    reviewNote: string
+  ): Promise<import('../types/event').AttendancePetition> {
+    const response = await api.post<import('../types/event').AttendancePetition>(
+      `/events/${eventId}/attendance-petitions/${petitionId}/reject`,
+      { review_note: reviewNote }
+    );
+    return response.data;
+  },
+
+  /**
    * Remove an attendee's RSVP from an event (manager action)
    */
   async removeAttendee(eventId: string, userId: string): Promise<void> {

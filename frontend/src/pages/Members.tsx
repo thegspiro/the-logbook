@@ -20,6 +20,7 @@ import { userService } from '../services/api';
 import { User } from '../types/user';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
+import { useRanks } from '../hooks/useRanks';
 import { useRegisterPullToRefresh } from '../hooks/useRegisterPullToRefresh';
 import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import { useAuthStore } from '../stores/authStore';
@@ -45,6 +46,7 @@ const Members: React.FC = () => {
   // mean nothing to a member looking someone up. A member without the grant
   // gets a directory; a coordinator gets the management table unchanged.
   const canManageMembers = checkPermission('members.manage');
+  const { formatRank } = useRanks();
   // Adding and importing answer to users.create, not members.manage. Both
   // buttons navigate to tabs on MembersAdminHub, which gates them on the same
   // grant and silently falls back to Manage when the tab is not openable -- so
@@ -198,6 +200,10 @@ const Members: React.FC = () => {
   }, [members, searchQuery, filterStatus, sortField, sortDirection, canManageMembers]);
 
   // Paginated subset (#11)
+  // A column of dashes tells a member nothing when the department has not
+  // numbered anyone yet. Officers keep it: they are the ones who fill it in.
+  const showMemberNumber = canManageMembers || members.some((m) => m.membership_number);
+
   const paginatedMembers = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
     return filteredMembers.slice(start, start + pageSize);
@@ -496,6 +502,9 @@ const Members: React.FC = () => {
                           {member.first_name} {member.last_name}
                         </Link>
                         {canManageMembers && <div className="text-theme-text-muted text-sm">@{member.username}</div>}
+                        {member.rank && (
+                          <div className="text-theme-text-secondary text-sm">{formatRank(member.rank)}</div>
+                        )}
                       </div>
                     </div>
                     <span
@@ -614,15 +623,23 @@ const Members: React.FC = () => {
                           onSort={handleSort}
                         />
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left">
-                        <SortableHeader
-                          label="Member #"
-                          field="membership_number"
-                          currentSort={sortField}
-                          currentDirection={sortDirection}
-                          onSort={handleSort}
-                        />
+                      <th
+                        scope="col"
+                        className="text-theme-text-secondary px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Rank
                       </th>
+                      {showMemberNumber && (
+                        <th scope="col" className="px-6 py-3 text-left">
+                          <SortableHeader
+                            label="Member #"
+                            field="membership_number"
+                            currentSort={sortField}
+                            currentDirection={sortDirection}
+                            onSort={handleSort}
+                          />
+                        </th>
+                      )}
                       {contactInfoEnabled.enabled && (
                         <th
                           scope="col"
@@ -700,12 +717,19 @@ const Members: React.FC = () => {
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {member.membership_number && (
-                            <div className="text-theme-text-primary font-mono text-sm">{member.membership_number}</div>
-                          )}
-                          {!member.membership_number && <div className="text-theme-text-muted">-</div>}
+                        <td className="text-theme-text-secondary px-6 py-4 text-sm whitespace-nowrap">
+                          {member.rank ? formatRank(member.rank) : <span className="text-theme-text-muted">-</span>}
                         </td>
+                        {showMemberNumber && (
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {member.membership_number && (
+                              <div className="text-theme-text-primary font-mono text-sm">
+                                {member.membership_number}
+                              </div>
+                            )}
+                            {!member.membership_number && <div className="text-theme-text-muted">-</div>}
+                          </td>
+                        )}
                         {contactInfoEnabled.enabled && (
                           <td className="px-6 py-4">
                             <div className="text-sm">

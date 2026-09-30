@@ -106,6 +106,16 @@ describe('AddMember', () => {
     expect(rankSelect()).toBeEnabled();
   });
 
+  it('explains how rank and position differ, since both carry access', async () => {
+    renderWithRouter(<AddMember />);
+    await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+    expect(rankSelect()).toHaveAccessibleDescription(/title in the chain of command/);
+    expect(screen.getByRole('combobox', { name: 'Position' })).toHaveAccessibleDescription(
+      /Positions decide most of what they can see and do/
+    );
+  });
+
   it('disables and explains the rank field once Administrative is chosen', async () => {
     const user = userEvent.setup();
     renderWithRouter(<AddMember />);
