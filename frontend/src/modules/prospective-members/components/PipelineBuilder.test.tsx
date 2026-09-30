@@ -214,4 +214,41 @@ describe('PipelineBuilder', () => {
       );
     });
   });
+
+  // The dialog builds a create-shaped payload, where a blank description is
+  // omitted. On an edit an omitted key means "leave it alone", so emptying the
+  // box was acknowledged with "Stage updated" and the old text came back.
+  it('sends an explicit null when the stage description is emptied', async () => {
+    const user = userEvent.setup();
+    mockUpdateStage.mockResolvedValue({ ...meetingStage, description: undefined });
+    renderInCard(buildPipeline([meetingStage]));
+
+    await user.click(screen.getByTitle('Edit stage'));
+    await screen.findByText('Edit Stage');
+
+    await user.clear(screen.getByLabelText(/description/i, { selector: '#stage-description' }));
+    await user.click(screen.getByRole('button', { name: 'Update Stage' }));
+
+    await waitFor(() => {
+      expect(mockUpdateStage).toHaveBeenCalledWith(
+        'pipeline-1',
+        'stage-1',
+        expect.objectContaining({ description: null })
+      );
+    });
+  });
+
+  it('still omits a blank description when adding a new stage', async () => {
+    const user = userEvent.setup();
+    mockAddStage.mockResolvedValue({ ...meetingStage, id: 'stage-new', sort_order: 1 });
+    renderInCard(buildPipeline([meetingStage]));
+
+    await user.click(screen.getByRole('button', { name: /add stage/i }));
+    await user.type(screen.getByLabelText(/stage name/i), 'Orientation');
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Add Stage' }));
+
+    await waitFor(() => {
+      expect(mockAddStage).toHaveBeenCalledWith('pipeline-1', expect.not.objectContaining({ description: null }));
+    });
+  });
 });

@@ -595,7 +595,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
     set({ isAdvancing: true, error: null });
     try {
       await applicantService.completeStep(id, stepId, notes);
-      await get().fetchApplicants();
+      await get().refreshPipelineView();
       const currentApplicant = get().currentApplicant;
       if (currentApplicant?.id === id) {
         await get().fetchApplicant(id);
@@ -653,7 +653,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
     set({ isResuming: true, error: null });
     try {
       await applicantService.resumeApplicant(id);
-      await get().fetchApplicants();
+      await get().refreshPipelineView();
       const currentApplicant = get().currentApplicant;
       if (currentApplicant?.id === id) {
         await get().fetchApplicant(id);

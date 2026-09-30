@@ -36,6 +36,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, formatDateTime } from '../../../utils/dateFormatting';
 import { getInitials } from '../utils';
+import { blankToNull } from '../../../utils/formValues';
 import type { Interview, InterviewRecommendation, StageHistoryEntry } from '../types';
 import { INTERVIEW_RECOMMENDATION_LABELS, INTERVIEW_RECOMMENDATION_COLORS, StepProgressStatus } from '../types';
 
@@ -266,18 +267,24 @@ const InterviewForm: React.FC<InterviewFormProps> = ({ applicantId, existingInte
       setIsSaving(true);
 
       try {
-        const payload = {
-          notes: notes || undefined,
-          recommendation: (recommendation as InterviewRecommendation) || undefined,
-          recommendation_notes: recommendationNotes || undefined,
-          interviewer_role: interviewerRole || undefined,
-        };
-
         if (isEditing) {
-          await updateInterview(existingInterview.id, payload);
+          // Update path: every field the form owns, blanks as an explicit
+          // null. Omitting a key tells the backend "leave it alone", so an
+          // emptied note used to come back after "Interview updated".
+          await updateInterview(existingInterview.id, {
+            notes: blankToNull(notes),
+            recommendation: recommendation || null,
+            recommendation_notes: blankToNull(recommendationNotes),
+            interviewer_role: blankToNull(interviewerRole),
+          });
           toast.success('Interview updated');
         } else {
-          await createInterview(applicantId, payload);
+          await createInterview(applicantId, {
+            notes: notes || undefined,
+            recommendation: recommendation || undefined,
+            recommendation_notes: recommendationNotes || undefined,
+            interviewer_role: interviewerRole || undefined,
+          });
           toast.success('Interview submitted');
           // Reset form after creating
           setNotes('');
