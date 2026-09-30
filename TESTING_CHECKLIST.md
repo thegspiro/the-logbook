@@ -975,7 +975,7 @@ Of the 35 recommendations in Section 22:
 | **IMP-22** | `xpack.security.enabled=true` is set in `docker-compose.yml` for the Elasticsearch service.                                                                                                                                                                                                     |
 | **IMP-34** | All heavy module routes use `lazyWithRetry()` for code-splitting within their route files (e.g., `elections/routes.tsx`, `facilities/routes.tsx`, `apparatus/routes.tsx`). Wrapped in `<Suspense>` for async loading.                                                                           |
 | **IMP-35** | All external links (verified across 8 files including `HelpLink.tsx`, `FormsPage.tsx`, `TrainingProgramsPage.tsx`, onboarding pages) include `rel="noopener noreferrer"`.                                                                                                                       |
-| **IMP-07** | Request body size is limited at the Nginx layer (`client_max_body_size 50M` in `infrastructure/nginx/nginx.conf:105`). Individual endpoints enforce stricter limits: documents at 50MB, email templates at 10MB, images per type.                                                               |
+| **IMP-07** | Request body size is limited at the Nginx layer (`client_max_body_size 60M` in both nginx configs, = `MAX_REQUEST_BODY_SIZE`). Individual endpoints enforce stricter limits: documents at 50MB, email templates at 10MB, images per type.                                                       |
 
 #### Partially Implemented
 

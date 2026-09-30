@@ -5,7 +5,7 @@ Provides a secretary/leadership view of member attendance status,
 meeting attendance percentages, waivers, and voting eligibility.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 from uuid import UUID
 
@@ -14,7 +14,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.meeting import Meeting, MeetingAttendee
 from app.models.user import MemberLeaveOfAbsence, Organization, User, UserStatus
+from app.services.member_service_history_service import MemberServiceHistoryService
+from app.services.membership_tier_service import attendance_window, tally_attendance
 from app.utils.org_scoping import assert_in_org
+from app.utils.org_timezone import scheduling_timezone, today_in
 
 
 class AttendanceDashboardService:
@@ -56,19 +59,23 @@ class AttendanceDashboardService:
         )
         members = list(member_result.scalars().all())
 
-        cutoff = datetime.now(timezone.utc) - timedelta(days=period_months * 30)
+        # Each member is judged on their own window (see attendance_window);
+        # this fetch spans the widest of them, the plain look-back, and is
+        # narrowed per member below.
+        today = today_in(scheduling_timezone(org))
+        cutoff, _ = attendance_window(None, [], period_months, today)
 
         # Fetch actual meetings (need dates for leave-of-absence cross-reference)
         meeting_query = select(Meeting).where(
             Meeting.organization_id == org_id,
-            Meeting.meeting_date >= cutoff.date(),
+            Meeting.meeting_date >= cutoff,
+            Meeting.meeting_date <= today,
         )
         if meeting_type:
             meeting_query = meeting_query.where(Meeting.meeting_type == meeting_type)
         meeting_result = await self.db.execute(meeting_query)
         meetings = list(meeting_result.scalars().all())
         total_meetings = len(meetings)
-        all_meeting_ids = {m.id for m in meetings}
         meeting_id_dates = [(m.id, m.meeting_date) for m in meetings]
 
         # Get all attendance records for the period
@@ -99,6 +106,10 @@ class AttendanceDashboardService:
             uid = str(leave.user_id)
             leaves_by_user.setdefault(uid, []).append(leave)
 
+        stints_by_user = await MemberServiceHistoryService(self.db).periods_by_user(
+            org_id, [m.id for m in members]
+        )
+
         # Index attendance by user_id
         attendance_by_user: Dict[str, List[MeetingAttendee]] = {}
         for att in all_attendance:
@@ -112,47 +123,21 @@ class AttendanceDashboardService:
             uid = str(member.id)
             records = attendance_by_user.get(uid, [])
 
-            # Work from meeting-id sets so a meeting that is both waived and
-            # inside a leave is excluded exactly once. Subtracting a waived
-            # count and an on-leave count separately double-excluded such
-            # meetings, shrinking the denominator and pushing the percentage
-            # above 100% — which then mis-decided voting eligibility below.
-            waived_ids = {r.meeting_id for r in records if r.waiver_reason}
-
-            on_leave_ids = set()
-            member_leaves = leaves_by_user.get(uid, [])
-            if member_leaves:
-                for mid, md in meeting_id_dates:
-                    for leave in member_leaves:
-                        # end_date is None for a permanent/open-ended leave —
-                        # treat it as still active so it doesn't raise on the
-                        # `md <= None` comparison and crash the dashboard.
-                        if leave.start_date <= md and (
-                            leave.end_date is None or md <= leave.end_date
-                        ):
-                            on_leave_ids.add(mid)
-                            break
-
-            excluded_ids = waived_ids | on_leave_ids
-            eligible_ids = all_meeting_ids - excluded_ids
-            eligible_meetings = len(eligible_ids)
-            waived = len(waived_ids)
-            on_leave_count = len(on_leave_ids)
-
-            # Count attendance only within the eligible set so a member marked
-            # present at a meeting that fell during their leave cannot push the
-            # percentage over 100%.
-            attended_ids = {
-                r.meeting_id for r in records if r.present and not r.waiver_reason
-            }
-            attended = len(attended_ids & eligible_ids)
-            absent = eligible_meetings - attended
-
-            pct = (
-                round((attended / eligible_meetings) * 100, 1)
-                if eligible_meetings > 0
-                else 100.0
+            tally = tally_attendance(
+                meeting_id_dates,
+                attendance_window(
+                    member, stints_by_user.get(uid, []), period_months, today
+                ),
+                waived_ids={r.meeting_id for r in records if r.waiver_reason},
+                present_ids={
+                    r.meeting_id for r in records if r.present and not r.waiver_reason
+                },
+                leaves=leaves_by_user.get(uid, []),
             )
+            eligible_meetings = len(tally.eligible)
+            attended = len(tally.attended)
+            absent = eligible_meetings - attended
+            pct = tally.pct
 
             # Tier and voting info
             member_tier_id = member.membership_type or "active"
@@ -189,10 +174,10 @@ class AttendanceDashboardService:
                     ),
                     "attendance_pct": pct,
                     "meetings_attended": attended,
-                    "meetings_waived": waived,
-                    "meetings_on_leave": on_leave_count,
+                    "meetings_waived": len(tally.waived),
+                    "meetings_on_leave": len(tally.on_leave),
                     "meetings_absent": max(0, absent),
-                    "total_meetings": total_meetings,
+                    "total_meetings": len(tally.in_window),
                     "eligible_meetings": eligible_meetings,
                     "voting_eligible": voting_eligible,
                     "voting_blocked_reason": voting_blocked_reason,

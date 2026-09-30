@@ -12,7 +12,7 @@
  * - Severity indicators (info, warning, critical)
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { userService } from '../services/api';
 import { formatDateTime } from '../utils/dateFormatting';
@@ -108,35 +108,43 @@ export const MemberAuditHistoryPage: React.FC = () => {
     [userId]
   );
 
+  // Loaded once per member, never per filter. This read is not free: the
+  // profile endpoint writes a "Member profile viewed" audit entry on every
+  // call, into the very history this page shows. Keying it on the filter as
+  // well wrote a fresh entry each time the officer changed the dropdown. The
+  // ref also holds it to one call under StrictMode, whose dev-only re-run of
+  // effects would otherwise record two views for one visit; it is compared on
+  // arrival so a response for a member navigated away from is dropped.
+  const requestedUserIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || requestedUserIdRef.current === userId) return;
+    requestedUserIdRef.current = userId;
 
-    const loadInitialData = async () => {
-      setLoading(true);
-      setError(null);
-
-      try {
-        const userData = await userService.getUserWithRoles(userId);
-        setUser(userData);
-      } catch (_err) {
+    setUser(null);
+    setLoading(true);
+    setError(null);
+    userService
+      .getUserWithRoles(userId)
+      .then((userData) => {
+        if (requestedUserIdRef.current === userId) setUser(userData);
+      })
+      .catch(() => {
+        if (requestedUserIdRef.current !== userId) return;
         setError('Unable to load member information.');
         setLoading(false);
-        return;
-      }
+      });
+  }, [userId]);
 
-      await fetchAuditHistory(1, eventTypeFilter, false);
-    };
-
-    void loadInitialData();
-  }, [userId, eventTypeFilter, fetchAuditHistory]);
-
+  // The history itself is fetched here alone. It used to be fetched by the
+  // effect above as well, so every visit read it twice.
+  const loadedUserId = user?.id;
   useEffect(() => {
-    if (!userId || !user) return;
+    if (!loadedUserId) return;
 
     setPage(1);
     setExpandedEntryIds(new Set());
     void fetchAuditHistory(1, eventTypeFilter, false);
-  }, [eventTypeFilter, fetchAuditHistory, user, userId]);
+  }, [eventTypeFilter, fetchAuditHistory, loadedUserId]);
 
   const handleLoadMore = () => {
     const nextPage = page + 1;

@@ -10,6 +10,7 @@ import { useParams, Link } from 'react-router';
 import { ArrowLeft, AlertTriangle, Receipt, Send, CheckCircle, Clock, XCircle, Ban } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
+import { ManualApprovalPanel } from '../components/ManualApprovalPanel';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
@@ -18,11 +19,13 @@ import { useTimezone } from '@/hooks/useTimezone';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import {
+  ApprovalEntityType,
   ExpenseReportStatus,
   EXPENSE_REPORT_STATUS_COLORS,
   APPROVAL_STEP_STATUS_COLORS,
   EXPENSE_TYPE_LABELS,
 } from '../types';
+import { ApprovalStepActions } from '../components/ApprovalStepActions';
 
 const STATUS_LABELS: Record<string, string> = {
   draft: 'Draft',
@@ -267,10 +270,25 @@ const ExpenseReportDetailPage: React.FC = () => {
         </div>
       )}
 
+      <ManualApprovalPanel
+        entityType={ApprovalEntityType.EXPENSE_REPORT}
+        entityId={er.id}
+        status={er.status}
+        approvalStepCount={er.approvalSteps.length}
+        requesterId={er.submittedBy}
+        onDecided={() => void fetchExpenseReport(er.id)}
+      />
+
       {/* Approval Timeline */}
       {er.approvalSteps.length > 0 && (
         <div className="card p-6">
           <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Approval Timeline</h2>
+          <ApprovalStepActions
+            isPendingApproval={er.status === ExpenseReportStatus.PENDING_APPROVAL}
+            steps={er.approvalSteps}
+            subject={`${er.title} (${er.reportNumber})`}
+            onDecided={() => void fetchExpenseReport(er.id)}
+          />
           <div className="space-y-0">
             {[...er.approvalSteps]
               .sort((a, b) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))

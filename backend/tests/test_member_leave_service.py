@@ -186,6 +186,39 @@ class TestUpdateLeaveWaiverSync:
         assert leave.end_date == date(2026, 9, 30)
         assert waiver.end_date == date(2026, 9, 30)
 
+    async def test_patching_inactive_deactivates_linked_waiver(self):
+        """PATCH active=false must end the waiver the leave created, in the
+        same commit -- as the DELETE route's deactivate_leave already does."""
+        waiver = SimpleNamespace(active=True, updated_at=None)
+        leave = self._existing_leave(exempt=False, waiver_id="w-1")
+        service, db = self._service(leave, waiver)
+
+        await service.update_leave("org", "leave-1", active=False)
+
+        assert leave.active is False
+        assert waiver.active is False
+        db.commit.assert_awaited_once()
+
+    async def test_patching_active_again_restores_linked_waiver(self):
+        waiver = SimpleNamespace(active=False, updated_at=None)
+        leave = self._existing_leave(exempt=False, waiver_id="w-1")
+        leave.active = False
+        service, _ = self._service(leave, waiver)
+
+        await service.update_leave("org", "leave-1", active=True)
+
+        assert leave.active is True
+        assert waiver.active is True
+
+    async def test_an_unchanged_active_flag_leaves_the_waiver_alone(self):
+        leave = self._existing_leave(exempt=False, waiver_id="w-1")
+        service, db = self._service(leave)
+
+        await service.update_leave("org", "leave-1", active=True, reason="x")
+
+        # Only get_leave ran: no waiver lookup at all.
+        assert db.execute.await_count == 1
+
     async def test_unknown_leave_returns_none(self):
         db = MagicMock()
         db.execute = AsyncMock(

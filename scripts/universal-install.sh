@@ -265,11 +265,7 @@ check_requirements() {
     log_info "Checking requirements..."
 
     # Check for curl or wget
-    if command -v curl &> /dev/null; then
-        DOWNLOADER="curl -fsSL"
-    elif command -v wget &> /dev/null; then
-        DOWNLOADER="wget -qO-"
-    else
+    if ! command -v curl &> /dev/null && ! command -v wget &> /dev/null; then
         log_error "curl or wget is required"
         exit 1
     fi
@@ -622,6 +618,47 @@ EOF
 # Docker Compose Selection
 # ============================================
 
+# True when the .env at $1 pins docker-compose.proxy.yml in COMPOSE_FILE: the
+# operator's opt-in to the bundled nginx as the only way in (see "Docker
+# Compose production profile" in docs/DEPLOYMENT.md). Read the way Compose
+# reads it: the last assignment wins, quotes and an inline comment are
+# stripped, and a commented-out line does not count. Kept identical in
+# install.sh and scripts/universal-install.sh; a test compares the two.
+env_pins_proxy_override() {
+    local env_file="$1" value entry
+    [[ -f "$env_file" ]] || return 1
+    value=$(sed -n 's/^[[:space:]]*COMPOSE_FILE=//p' "$env_file" | tail -n 1)
+    value="${value%$'\r'}"
+    value="${value%%[[:space:]]#*}"
+    value="${value#\"}"; value="${value%\"}"
+    value="${value#\'}"; value="${value%\'}"
+    local IFS=':'
+    for entry in $value; do
+        entry="${entry//[[:space:]]/}"
+        [[ "${entry##*/}" == "docker-compose.proxy.yml" ]] && return 0
+    done
+    return 1
+}
+
+# nginx refuses to start without these, and in proxy mode it is the only way
+# in, so a missing pair would leave an install nobody can reach.
+require_proxy_certificates() {
+    local ssl_dir="$INSTALL_DIR/infrastructure/nginx/ssl"
+    if [[ ! -f "$INSTALL_DIR/docker-compose.proxy.yml" ]]; then
+        log_error "Your .env pins docker-compose.proxy.yml, but this checkout has no such file."
+        return 1
+    fi
+    if [[ ! -s "$ssl_dir/fullchain.pem" || ! -s "$ssl_dir/privkey.pem" ]]; then
+        log_error "Your .env pins docker-compose.proxy.yml, which puts the bundled nginx"
+        log_error "in front of the app as the only way in, but $ssl_dir"
+        log_error "does not hold fullchain.pem and privkey.pem. nginx will not start"
+        log_error "without them. Nothing has been built or started. See \"Docker Compose"
+        log_error "production profile\" in docs/DEPLOYMENT.md, or remove the file from COMPOSE_FILE."
+        return 1
+    fi
+    return 0
+}
+
 select_compose_file() {
     # Every `docker compose` call below passes COMPOSE_FILE_ARGS (-f base -f
     # prod) rather than relying on COMPOSE_FILE from .env: CLI -f flags win over
@@ -648,6 +685,16 @@ select_compose_file() {
             COMPOSE_PROFILES="--profile with-search --profile with-s3"
             ;;
     esac
+
+    # The -f list above is authoritative and ignores COMPOSE_FILE, so an
+    # operator who opted into the bundled proxy there would otherwise get
+    # port 3000 published again by every re-run of this script.
+    PROXY_MODE=false
+    if env_pins_proxy_override "$INSTALL_DIR/.env"; then
+        require_proxy_certificates || exit 1
+        COMPOSE_FILE_ARGS+=(-f docker-compose.proxy.yml)
+        PROXY_MODE=true
+    fi
 
     log_info "Compose files: ${COMPOSE_FILE_ARGS[*]}, Profiles: ${COMPOSE_PROFILES:-none}"
 }
@@ -722,9 +769,12 @@ print_success_message() {
     echo -e "${GREEN}╚════════════════════════════════════════════════════════════╝${NC}"
     echo
     echo -e "${CYAN}Access your installation:${NC}"
-    echo -e "  Frontend:  ${GREEN}http://localhost:3000${NC}"
-    echo -e "  Backend:   ${GREEN}http://localhost:3001${NC}"
-    echo -e "  API Docs:  ${GREEN}http://localhost:3001/docs${NC}"
+    if [[ "$PROXY_MODE" == "true" ]]; then
+        echo -e "  Frontend:  ${GREEN}https://<your domain>${NC} (through the bundled nginx; port 3000 is not published)"
+    else
+        echo -e "  Frontend:  ${GREEN}http://localhost:3000${NC}"
+    fi
+    echo -e "  The backend and its API docs are not published in the production configuration."
     echo
     echo -e "${CYAN}Useful commands:${NC}"
     echo -e "  View logs:       ${YELLOW}docker compose logs -f${NC}"
