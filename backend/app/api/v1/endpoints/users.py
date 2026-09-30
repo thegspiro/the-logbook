@@ -76,6 +76,7 @@ from app.services.email_policy import (
     member_choice,
 )
 from app.services.email_service import welcome_email_can_send
+from app.services.member_service_history_service import MemberServiceHistoryService
 from app.services.operational_rank_service import (
     OperationalRankService,
     rank_not_configured_message,
@@ -1865,6 +1866,17 @@ async def update_user_profile(
             # is not asserting the rank, and leaving it would leave its default
             # permissions live on a member now outside the chain of command.
             update_data["rank"] = None
+
+        if "hire_date" in update_data and update_data["hire_date"] != user.hire_date:
+            try:
+                await MemberServiceHistoryService(db).check_hire_date_change(
+                    user, update_data["hire_date"]
+                )
+            except ValueError as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=safe_error_detail(e),
+                ) from e
 
     # Snapshot for the audit trail before `emergency_contacts` is popped below.
     # Taken from `update_data` rather than the raw payload because a move to the

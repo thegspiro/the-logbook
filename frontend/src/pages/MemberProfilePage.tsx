@@ -62,6 +62,7 @@ import { AnonymizeMemberModal } from '../components/AnonymizeMemberModal';
 import { RejoinServiceFields } from '../components/RejoinServiceFields';
 import { useRejoinServiceOptions } from '../hooks/useRejoinServiceOptions';
 import { ServiceHistorySection } from '../components/member-profile/ServiceHistorySection';
+import { isCertificationExpired, isCertificationExpiringSoon } from '../utils/certificationExpiry';
 import { blankToNull } from '../utils/formValues';
 
 // Types for inventory data
@@ -80,17 +81,12 @@ function isModuleEnabled(moduleId: string): boolean {
   return mod?.enabled ?? false;
 }
 
-function isExpiringSoon(record: TrainingRecord): boolean {
-  if (!record.expiration_date) return false;
-  const expDate = new Date(record.expiration_date);
-  const now = new Date();
-  const daysUntilExpiry = (expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
-  return daysUntilExpiry > 0 && daysUntilExpiry <= 90;
+function isExpiringSoon(record: TrainingRecord, tz: string): boolean {
+  return isCertificationExpiringSoon(record.expiration_date, tz);
 }
 
-function isExpired(record: TrainingRecord): boolean {
-  if (!record.expiration_date) return false;
-  return new Date(record.expiration_date) < new Date();
+function isExpired(record: TrainingRecord, tz: string): boolean {
+  return isCertificationExpired(record.expiration_date, tz);
 }
 
 export const MemberProfilePage: React.FC = () => {
@@ -1333,13 +1329,13 @@ export const MemberProfilePage: React.FC = () => {
                       <div className="flex items-center justify-between">
                         <span className="text-theme-text-secondary text-sm">Active Training</span>
                         <span className="text-theme-text-primary text-sm font-semibold">
-                          {trainings.filter((t) => t.status === 'completed' && !isExpired(t)).length}
+                          {trainings.filter((t) => t.status === 'completed' && !isExpired(t, tz)).length}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-theme-text-secondary text-sm">Expiring Soon</span>
                         <span className="text-sm font-semibold text-yellow-700 dark:text-yellow-400">
-                          {trainings.filter((t) => isExpiringSoon(t)).length}
+                          {trainings.filter((t) => isExpiringSoon(t, tz)).length}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
