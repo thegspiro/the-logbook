@@ -104,6 +104,17 @@ describe('ItemFormModal', () => {
     mockGetVendors.mockResolvedValue([]);
   });
 
+  it('explains what each tracking type means, following the choice', async () => {
+    const user = userEvent.setup();
+    render(<ItemFormModal {...baseProps} isOpen />);
+
+    const select = screen.getByRole('combobox', { name: 'Tracking Type' });
+    expect(select).toHaveAccessibleDescription(/Individual: one record per physical item/);
+
+    await user.selectOptions(select, 'pool');
+    expect(select).toHaveAccessibleDescription(/Pool: one record for a stock of identical items/);
+  });
+
   it('renders nothing when closed', () => {
     render(<ItemFormModal {...baseProps} isOpen={false} />);
     expect(screen.queryByText('Add Item')).not.toBeInTheDocument();

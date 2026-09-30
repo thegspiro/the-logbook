@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { formatDate } from '../../utils/dateFormatting';
 import { formatHours } from '../../utils/hoursFormatting';
 import type { TrainingRecord, ComplianceSummary } from '../../types/training';
+import { isCertificationExpired, isCertificationExpiringSoon } from '../../utils/certificationExpiry';
 
 interface TrainingSectionProps {
   userId: string;
@@ -29,17 +30,12 @@ function getTrainingStatusColor(status: string): string {
   }
 }
 
-function isExpiringSoon(record: TrainingRecord): boolean {
-  if (!record.expiration_date) return false;
-  const expDate = new Date(record.expiration_date);
-  const now = new Date();
-  const daysUntilExpiry = (expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
-  return daysUntilExpiry > 0 && daysUntilExpiry <= 90;
+function isExpiringSoon(record: TrainingRecord, tz: string): boolean {
+  return isCertificationExpiringSoon(record.expiration_date, tz);
 }
 
-function isExpired(record: TrainingRecord): boolean {
-  if (!record.expiration_date) return false;
-  return new Date(record.expiration_date) < new Date();
+function isExpired(record: TrainingRecord, tz: string): boolean {
+  return isCertificationExpired(record.expiration_date, tz);
 }
 
 const TrainingSection: React.FC<TrainingSectionProps> = ({
@@ -170,9 +166,9 @@ const TrainingSection: React.FC<TrainingSectionProps> = ({
                     {training.expiration_date && (
                       <span
                         className={
-                          isExpired(training)
+                          isExpired(training, tz)
                             ? 'text-red-700 dark:text-red-400'
-                            : isExpiringSoon(training)
+                            : isExpiringSoon(training, tz)
                               ? 'text-yellow-700 dark:text-yellow-400'
                               : ''
                         }
@@ -191,12 +187,12 @@ const TrainingSection: React.FC<TrainingSectionProps> = ({
                   >
                     {training.status.replace('_', ' ')}
                   </span>
-                  {isExpired(training) && (
+                  {isExpired(training, tz) && (
                     <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-800 dark:bg-red-500/20 dark:text-red-400">
                       expired
                     </span>
                   )}
-                  {!isExpired(training) && isExpiringSoon(training) && (
+                  {!isExpired(training, tz) && isExpiringSoon(training, tz) && (
                     <span className="rounded-full bg-yellow-100 px-2.5 py-1 text-xs font-medium text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400">
                       expiring soon
                     </span>

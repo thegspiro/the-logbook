@@ -76,6 +76,7 @@ from app.services.email_policy import (
     member_choice,
 )
 from app.services.email_service import welcome_email_can_send
+from app.services.member_service_history_service import MemberServiceHistoryService
 from app.services.operational_rank_service import (
     OperationalRankService,
     rank_not_configured_message,
@@ -696,15 +697,50 @@ def _withhold_profile_visibility(
     payload.profile_visibility = None
 
 
-def _profile_response(
-    user: User, current_user: User, is_self: bool
+async def _redact_profile_for_viewer(
+    db: AsyncSession,
+    payload: UserProfileResponse,
+    user: User,
+    current_user: User,
+    is_self: bool,
+) -> None:
+    """Blank, in place, what ``current_user`` may not see of ``user``'s profile.
+
+    The one rule for every route that serialises ``UserProfileResponse`` — the
+    profile read and both profile writes. A write answering with fields the
+    read withholds would make the read's redaction advisory: a ``users.edit``
+    holder without ``members.manage`` could save a colleague's profile
+    unchanged and read back the date of birth, emergency contacts and home
+    address the profile page redacts for them.
+
+    The subject and members-managers are exempt, as on the read. Those are
+    also exactly the viewers ``_withhold_profile_visibility`` leaves the
+    ``profile_visibility`` object for, and ``MemberProfilePage`` reads its
+    presence as "this record arrived unredacted" to decide whether to show
+    restricted-PII sections and edit forms. Keep the two exemptions identical.
+    """
+    user_permissions = _collect_user_permissions(current_user)
+    is_admin = _has_permission("members.manage", user_permissions)
+    if not (is_admin or is_self):
+        visibility = await _load_contact_visibility(db, current_user, is_admin)
+        _clear_hidden_contact_fields(
+            payload, visibility, resolve_profile_visibility(user)
+        )
+        _clear_leadership_only_fields(payload)
+        if not _has_permission("users.view", user_permissions):
+            _clear_directory_only_profile_metadata(payload)
+    _withhold_profile_visibility(payload, current_user, is_self)
+
+
+async def _profile_response(
+    db: AsyncSession, user: User, current_user: User, is_self: bool
 ) -> User | UserProfileResponse:
     """What a profile write returns.
 
     The subject and members-managers get the row itself, which FastAPI
     serialises through ``UserProfileResponse`` exactly as before. Anyone else
-    — a ``users.edit`` holder editing a colleague — gets a payload with the
-    subject's visibility choice withheld, on the same terms as the read.
+    — a ``users.edit`` holder editing a colleague — gets the payload redacted
+    by ``_redact_profile_for_viewer``, on exactly the terms of the read.
     Serialising only on that path keeps the write handlers indifferent to how
     complete the row object is, which their unit tests rely on.
     """
@@ -713,7 +749,7 @@ def _profile_response(
     ):
         return user
     payload = UserProfileResponse.model_validate(user)
-    payload.profile_visibility = None
+    await _redact_profile_for_viewer(db, payload, user, current_user, is_self)
     return payload
 
 
@@ -1462,15 +1498,7 @@ async def get_user_with_roles(
     # its own profile through here and writes the fields back, so redacting for
     # self would blank a member's own address and phone on their next save.
     payload = UserProfileResponse.model_validate(user)
-    if not (is_admin or is_self):
-        visibility = await _load_contact_visibility(db, current_user, is_admin)
-        _clear_hidden_contact_fields(
-            payload, visibility, resolve_profile_visibility(user)
-        )
-        _clear_leadership_only_fields(payload)
-        if not _has_permission("users.view", user_permissions):
-            _clear_directory_only_profile_metadata(payload)
-    _withhold_profile_visibility(payload, current_user, is_self)
+    await _redact_profile_for_viewer(db, payload, user, current_user, is_self)
 
     return payload
 
@@ -1615,8 +1643,8 @@ async def update_contact_info(
         username=current_user.username,
     )
 
-    return _profile_response(
-        user, current_user, is_self=str(current_user.id) == str(user_id)
+    return await _profile_response(
+        db, user, current_user, is_self=str(current_user.id) == str(user_id)
     )
 
 
@@ -1839,6 +1867,17 @@ async def update_user_profile(
             # permissions live on a member now outside the chain of command.
             update_data["rank"] = None
 
+        if "hire_date" in update_data and update_data["hire_date"] != user.hire_date:
+            try:
+                await MemberServiceHistoryService(db).check_hire_date_change(
+                    user, update_data["hire_date"]
+                )
+            except ValueError as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=safe_error_detail(e),
+                ) from e
+
     # Snapshot for the audit trail before `emergency_contacts` is popped below.
     # Taken from `update_data` rather than the raw payload because a move to the
     # administrative class clears the member's rank without the client having
@@ -1921,7 +1960,7 @@ async def update_user_profile(
         username=current_user.username,
     )
 
-    return _profile_response(user, current_user, is_self)
+    return await _profile_response(db, user, current_user, is_self)
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**285 tables · 4698 columns · 925 foreign keys**
+**286 tables · 4711 columns · 929 foreign keys**
 
 ---
 
@@ -200,6 +200,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
+| [`event_attendance_petitions`](#event_attendance_petitions) | `EventAttendancePetition` | 13 | A member's request to be recorded as present at an event that is over. |
 | [`event_external_attendees`](#event_external_attendees) | `EventExternalAttendee` | 17 | External (non-member) attendee at an event. |
 | [`event_rsvps`](#event_rsvps) | `EventRSVP` | 21 | Event RSVP model for tracking attendance |
 | [`event_templates`](#event_templates) | `EventTemplate` | 29 | Event Template model for reusable event configurations |
@@ -2610,6 +2611,34 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - UNIQUE `ix_event_requests_status_token` (`status_token`)
 
 ## Events
+
+### `event_attendance_petitions`
+
+**EventAttendancePetition** · `app/models/event.py`
+
+> A member's request to be recorded as present at an event that is over. The member missed the check-in window (no signal, a dead phone, forgot to scan) and asks the organizer to vouch for them. Nothing is credited by the request itself: approval writes a manager override onto the member's RSVP, and the event's normal finalize is what turns that into training records or admin hours. That keeps one path for credit, and is why approval is refused while attendance is finalized — reopening is the deliberate step that lets credited records change. One per member per event, so a rejection is the answer rather than the start of a resubmission loop.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `event_id` | VARCHAR(36) | no | FK, UQ-IDX |  | → `events.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
+| `status` | ENUM(`pending`, `approved`, `rejected`) | no |  | `pending` |  |
+| `reason` | TEXT | no |  |  |  |
+| `requested_check_in_at` | DATETIME | yes |  |  |  |
+| `requested_check_out_at` | DATETIME | yes |  |  |  |
+| `reviewed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `reviewed_at` | DATETIME | yes |  |  |  |
+| `review_note` | TEXT | yes |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- UNIQUE `ix_event_attendance_petitions_event_user` (`event_id`, `user_id`)
+- `ix_event_attendance_petitions_organization_id` (`organization_id`)
+- `ix_event_attendance_petitions_user_id` (`user_id`)
 
 ### `event_external_attendees`
 
@@ -9928,7 +9957,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (340 references)
+### → `users` (342 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10015,6 +10044,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `equipment_requests` | `fulfilled_by` | SET NULL | yes |
 | `equipment_requests` | `requester_id` | CASCADE | no |
 | `equipment_requests` | `reviewed_by` | SET NULL | yes |
+| `event_attendance_petitions` | `reviewed_by` | SET NULL | yes |
+| `event_attendance_petitions` | `user_id` | CASCADE | no |
 | `event_external_attendees` | `created_by` | SET NULL | yes |
 | `event_external_attendees` | `updated_by` | SET NULL | yes |
 | `event_hour_mappings` | `created_by` | RESTRICT | yes |
@@ -10273,7 +10304,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (231 references)
+### → `organizations` (232 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10331,6 +10362,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `equipment_check_templates` | `organization_id` | CASCADE | no |
 | `equipment_kits` | `organization_id` | CASCADE | no |
 | `equipment_requests` | `organization_id` | CASCADE | no |
+| `event_attendance_petitions` | `organization_id` | CASCADE | no |
 | `event_external_attendees` | `organization_id` | CASCADE | no |
 | `event_hour_mappings` | `organization_id` | CASCADE | no |
 | `event_request_email_templates` | `organization_id` | CASCADE | no |
@@ -10579,13 +10611,14 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `locations` | `facility_id` | SET NULL | yes |
 | `purchase_requests` | `facility_id` | SET NULL | yes |
 
-### → `events` (15 references)
+### → `events` (16 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `admin_hours_entries` | `source_event_id` | SET NULL | yes |
 | `course_cohort_classes` | `event_id` | SET NULL | yes |
 | `elections` | `event_id` | SET NULL | yes |
+| `event_attendance_petitions` | `event_id` | CASCADE | no |
 | `event_external_attendees` | `event_id` | CASCADE | no |
 | `event_requests` | `event_id` | SET NULL | yes |
 | `event_rsvps` | `event_id` | CASCADE | no |

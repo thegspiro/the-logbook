@@ -1323,9 +1323,12 @@ wildcard, i.e. the IT administrator.
 
 That produced two states, and the second is the one that stranded records:
 
-- With no chain configured, `submit_purchase_request` takes the
-  `if chain and chain.steps:` branch and skips approval entirely, so requests
-  quietly bypassed the workflow rather than failing visibly.
+- With no chain configured (or a chain with no steps), `submit_purchase_request`
+  and its expense-report and check-request siblings put the request in
+  `pending_approval` with **no approval steps**, and no endpoint could move it.
+  _(2026-09-30: a `finance.approve` holder other than the requester can now
+  approve or deny such a request from its detail page —
+  `POST /finance/approvals/manual/{entity_type}/{entity_id}/approve` / `deny`.)_
 - Configure a chain — which required the same unreachable settings screen — and
   every submitted request landed in `pending_approval` with nobody able to
   action it.
@@ -5351,6 +5354,42 @@ Found while fixing that, and left as they are:
   "this and all future events" save through update-future (about 355
   characters with the series suffix), showed the generic error instead; those
   now show the sentence too.
+
+## Equipment Checks — Basic Apparatus, and Checks Filed Ahead of Their Shift (2026-09-30)
+
+Found driving W46 (`docs/workflow-review/W46-equipment-checks.md`). Each
+needs a decision rather than a patch:
+
+- **W46-11 — A check on a basic apparatus is stored with no apparatus.**
+  - `submit_check` keeps only a full `apparatus.id` in
+    `shift_equipment_checks.apparatus_id`, and its comment still describes the
+    foreign key `20260808_0003` dropped. So a department that runs on basic
+    apparatus gets "No apparatus data available" under Apparatus Compliance,
+    and nothing in the reports' apparatus filters.
+  - The fleet board and check log are unaffected: they key by the shift's
+    apparatus.
+  - A checklist also cannot name a basic apparatus (`equipment_check_templates.apparatus_id`
+    is still a foreign key), so such departments write checklists by type.
+    Since W46-8 the builder offers only that.
+  - The options:
+    - store the shift's id as the model now documents, and teach the report
+      readers both tables, with a backfill from `shifts` for existing rows;
+    - or resolve reports through the shift.
+- **W46-12 — A check can be filed before its shift's date and is then invisible
+  to officers.**
+  - My Checklists offers shifts from today onward, and the server accepts a
+    check for any of them.
+  - The fleet board and log read shifts dated today or earlier. A failed check
+    filed the evening before a morning shift does not appear until the date
+    turns.
+  - Either refuse checks ahead of the shift, or let the readiness window reach
+    the next shift's start.
+- **W46-13 — Fail and Out of service carry no required note.** An item marked
+  out of service takes the rig off the fleet board with no reason recorded.
+- **W46-14 — The seeded Quartermaster holds no `inventory.check_*` grant.**
+  Authoring sits with the Apparatus and Scheduling Officers and line officers.
+  Changing it is a seeded-grant change and needs a migration (CLAUDE.md
+  pitfall 23).
 
 ## Process
 

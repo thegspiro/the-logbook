@@ -146,6 +146,9 @@ const UNCACHEABLE_SUBSTRINGS = [
   // cached copy would stay readable for 90s after an organizer restricts the
   // event's attendee visibility.
   '/rsvp-history', // per-member attendance/decline history (PII) — not matched by '/rsvps'
+  '/attendance-petitions', // members' requests to be marked present: names and
+  // their free-text reasons (PII), and a pending/decided state that a 30s-stale
+  // copy would misreport right after the organizer acts on it.
   '/eligible-members', // returns member first/last name + email (PII)
   '/external-attendees', // external attendee PII
   '/check-in-monitoring', // live attendee/location check-in data (PII)

@@ -235,11 +235,11 @@ class MemberServiceHistoryService:
     # ------------------------------------------------------------------
 
     async def list_periods(
-        self, organization_id: str, user_id: str
+        self, organization_id: str, user_id: str, *, for_update: bool = False
     ) -> List[MemberServicePeriod]:
         # A NULL start is the hire date, the earliest stint, and MySQL sorts
         # NULL first on ASC -- so the natural order is chronological.
-        result = await self.db.execute(
+        query = (
             select(MemberServicePeriod)
             .where(
                 MemberServicePeriod.organization_id == str(organization_id),
@@ -250,6 +250,11 @@ class MemberServiceHistoryService:
                 MemberServicePeriod.created_at.asc(),
             )
         )
+        if for_update:
+            # populate_existing so a stint already in the identity map is
+            # refreshed from the locked read rather than served stale.
+            query = query.with_for_update().execution_options(populate_existing=True)
+        result = await self.db.execute(query)
         return list(result.scalars().all())
 
     async def periods_by_user(
@@ -296,8 +301,16 @@ class MemberServiceHistoryService:
 
         Does not commit; the caller's status change and this write land
         together or not at all.
+
+        The caller must hold the member row's lock (Pitfall #27). The stints
+        are read with a locking read as well: under REPEATABLE READ a plain
+        SELECT answers from the transaction's first snapshot, so a second
+        drop that waited on the member lock would still see no stints and
+        write a second stint from hire -- counting the service twice.
         """
-        periods = await self.list_periods(member.organization_id, member.id)
+        periods = await self.list_periods(
+            member.organization_id, member.id, for_update=True
+        )
         open_periods = [p for p in periods if p.end_date is None]
         if open_periods:
             current = open_periods[-1]
@@ -403,6 +416,40 @@ class MemberServiceHistoryService:
     # ------------------------------------------------------------------
     # Officer edits
     # ------------------------------------------------------------------
+
+    async def check_hire_date_change(
+        self, member: User, new_hire_date: Optional[date]
+    ) -> None:
+        """Refuse a hire-date edit that would empty the stint starting on it.
+
+        A stint stored with a NULL start begins on whatever ``hire_date`` says
+        at read time, so moving the hire date moves that stint's start with it
+        -- and ``_days`` floors a stint that ends before it starts at zero. A
+        hire date moved onto or past the stint's recorded end would therefore
+        wipe that service out with no error anywhere. Refused rather than
+        adjusted: the officer either mistyped the date, or the stint's own end
+        is what is wrong, and only they know which -- the Service History
+        editor is where the stint's dates are corrected.
+
+        Raises ValueError (-> 400). Does not write.
+        """
+        periods = await self.list_periods(member.organization_id, member.id)
+        for p in periods:
+            if p.start_date is not None:
+                continue
+            if new_hire_date is None:
+                raise ValueError(
+                    "This member's service history has a stint that starts on "
+                    "their hire date, so the hire date cannot be cleared. Give "
+                    "that stint its own start date in Service History first."
+                )
+            if p.end_date is not None and new_hire_date >= p.end_date:
+                raise ValueError(
+                    "This member's service history has a stint that starts on "
+                    f"their hire date and ends {p.end_date.isoformat()}, so the "
+                    "hire date must be before that. Correct the stint in "
+                    "Service History if its end date is what is wrong."
+                )
 
     async def replace_periods(
         self,
