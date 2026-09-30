@@ -30,6 +30,7 @@ from pydantic import BaseModel
 from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.attendance_lock import attendance_lock_http_error
 from app.api.dependencies import (
     get_current_user,
     require_permission,
@@ -92,12 +93,12 @@ from app.schemas.event import (
 from app.schemas.organization import MembershipTierSettings
 from app.services.documents_service import DocumentsService
 from app.services.event_service import (
-    ATTENDANCE_LOCKED_PREFIX,
     BULK_ADD_MAX_SIZE,
     DEFAULT_ALLOWED_RSVP_STATUSES,
     PHASE_GATE_PREFIX,
     EventService,
     FinalizeOutcome,
+    attendance_lock_reason,
     resolve_attendee_visibility,
 )
 from app.services.guest_check_in_service import GuestCheckInService
@@ -123,12 +124,9 @@ def _event_error(
     with the request, the event is closed. The sentinel prefix is stripped so
     the client shows the sentence and not the marker.
     """
-    if error.startswith(ATTENDANCE_LOCKED_PREFIX):
-        return HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=error[len(ATTENDANCE_LOCKED_PREFIX) :],
-        )
-    return HTTPException(status_code=default_status, detail=error)
+    return attendance_lock_http_error(error) or HTTPException(
+        status_code=default_status, detail=error
+    )
 
 
 def _training_credit_fields(outcome: Optional[FinalizeOutcome]) -> Dict[str, Any]:
@@ -1277,7 +1275,11 @@ async def update_event(
 
         return _build_event_response(event)
     except ValueError as e:
-        raise _event_error(safe_error_detail(e))
+        # The lock is mapped on the raw error: sanitizing first capped a
+        # refusal that names many fields and replaced it with a generic one.
+        raise attendance_lock_http_error(e) or HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
 
 @router.patch("/{event_id}/update-future")
@@ -1329,7 +1331,7 @@ async def update_future_events(
             "updated_count": updated_count,
         }
     except ValueError as e:
-        raise HTTPException(
+        raise attendance_lock_http_error(e) or HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
     except HTTPException:
@@ -1410,7 +1412,11 @@ async def delete_event(
             organization_id=current_user.organization_id,
         )
     except ValueError as e:
-        raise _event_error(safe_error_detail(e))
+        # Mapped on the raw error like every route, so the next refusal added
+        # here cannot be capped by the sanitizer; this one is short fixed text.
+        raise attendance_lock_http_error(e) or HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     if not success:
         raise HTTPException(
@@ -1472,7 +1478,7 @@ async def delete_event_series(
             username=current_user.username,
         )
     except ValueError as e:
-        raise HTTPException(
+        raise attendance_lock_http_error(e) or HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
     except HTTPException:
@@ -1527,7 +1533,13 @@ async def cancel_event(
 
         return _build_event_response(event)
     except ValueError as e:
-        raise _event_error(safe_error_detail(e))
+        # Mapped on the raw error like every route, so the next refusal added
+        # here cannot be capped by the sanitizer; this one is short fixed text.
+        raise attendance_lock_http_error(e) or HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -1588,7 +1600,7 @@ async def cancel_event_series(
             cancelled_count=cancelled_count,
         )
     except ValueError as e:
-        raise HTTPException(
+        raise attendance_lock_http_error(e) or HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
     except HTTPException:
@@ -2038,7 +2050,14 @@ async def bulk_add_attendees(
             notes=None,
         )
         if error:
-            errors.append({"user_id": str(user_id), "error": error})
+            # A finalize can land between the up-front lock check and this
+            # row; the row reports the sentence, never the internal marker.
+            errors.append(
+                {
+                    "user_id": str(user_id),
+                    "error": attendance_lock_reason(error) or error,
+                }
+            )
         else:
             created_count += 1
 

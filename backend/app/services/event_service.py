@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from datetime import date, datetime, timedelta
 from datetime import timezone as dt_timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -206,13 +206,34 @@ def attendance_is_settled(event: Event, now: datetime) -> bool:
 
 
 def attendance_locked_error(action: str) -> str:
-    """Build the sentinel-prefixed refusal for a write blocked by the lock."""
+    """Build the sentinel-prefixed refusal for a write blocked by the lock.
+
+    The sentence reaches the client verbatim — ``attendance_lock_reason``
+    strips the prefix and nothing else, and the refusal bypasses
+    ``safe_error_detail``'s length cap so that a refusal naming many fields
+    is not replaced by a generic error. So ``action`` must be built only from
+    fixed text, field names and counts, never from anything a caller sent.
+    """
     return (
         ATTENDANCE_LOCKED_PREFIX
         + f"Attendance for this event has been finalized, so {action} is no "
         "longer available. A department leader can reopen attendance to make "
         "corrections."
     )
+
+
+def attendance_lock_reason(error: Union[str, BaseException]) -> Optional[str]:
+    """The sentence a member should read for a lock refusal, else None.
+
+    The inverse of ``attendance_locked_error``: the prefix is an internal
+    marker that tells the endpoint layer to answer 409, and it must never
+    reach a client. Accepts the raw string a service returned or the
+    exception it raised.
+    """
+    message = str(error)
+    if not message.startswith(ATTENDANCE_LOCKED_PREFIX):
+        return None
+    return message[len(ATTENDANCE_LOCKED_PREFIX) :]
 
 
 @dataclass
