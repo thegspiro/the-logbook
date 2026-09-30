@@ -151,7 +151,8 @@ server {
 
     access_log /var/log/nginx/access.log combined if=$access_loggable;
 
-    client_max_body_size 50M;
+    # The backend's own ceiling (MAX_REQUEST_BODY_SIZE)
+    client_max_body_size 60M;
 
     location / {
         proxy_pass http://localhost:3000;

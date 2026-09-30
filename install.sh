@@ -412,6 +412,47 @@ EOF
     print_warning "Please review and update .env file with your specific settings"
 }
 
+# True when the .env at $1 pins docker-compose.proxy.yml in COMPOSE_FILE: the
+# operator's opt-in to the bundled nginx as the only way in (see "Docker
+# Compose production profile" in docs/DEPLOYMENT.md). Read the way Compose
+# reads it: the last assignment wins, quotes and an inline comment are
+# stripped, and a commented-out line does not count. Kept identical in
+# install.sh and scripts/universal-install.sh; a test compares the two.
+env_pins_proxy_override() {
+    local env_file="$1" value entry
+    [[ -f "$env_file" ]] || return 1
+    value=$(sed -n 's/^[[:space:]]*COMPOSE_FILE=//p' "$env_file" | tail -n 1)
+    value="${value%$'\r'}"
+    value="${value%%[[:space:]]#*}"
+    value="${value#\"}"; value="${value%\"}"
+    value="${value#\'}"; value="${value%\'}"
+    local IFS=':'
+    for entry in $value; do
+        entry="${entry//[[:space:]]/}"
+        [[ "${entry##*/}" == "docker-compose.proxy.yml" ]] && return 0
+    done
+    return 1
+}
+
+# nginx refuses to start without these, and in proxy mode it is the only way
+# in, so a missing pair would leave an install nobody can reach.
+require_proxy_certificates() {
+    local ssl_dir="$SCRIPT_DIR/infrastructure/nginx/ssl"
+    if [[ ! -f "$SCRIPT_DIR/docker-compose.proxy.yml" ]]; then
+        print_error "Your .env pins docker-compose.proxy.yml, but this checkout has no such file."
+        return 1
+    fi
+    if [[ ! -s "$ssl_dir/fullchain.pem" || ! -s "$ssl_dir/privkey.pem" ]]; then
+        print_error "Your .env pins docker-compose.proxy.yml, which puts the bundled nginx"
+        print_error "in front of the app as the only way in, but $ssl_dir"
+        print_error "does not hold fullchain.pem and privkey.pem. nginx will not start"
+        print_error "without them. Nothing has been built or started. See \"Docker Compose"
+        print_error "production profile\" in docs/DEPLOYMENT.md, or remove the file from COMPOSE_FILE."
+        return 1
+    fi
+    return 0
+}
+
 docker_deployment() {
     print_header "Docker Deployment"
 
@@ -430,6 +471,16 @@ docker_deployment() {
     # HTTPS/TLS for a hardened install.
     local COMPOSE_FILES="-f docker-compose.yml -f docker-compose.prod.yml"
 
+    # These -f flags ignore COMPOSE_FILE, so an operator who opted into the
+    # bundled proxy there would otherwise get port 3000 published again by
+    # every re-run of this script.
+    local proxy_mode=false
+    if env_pins_proxy_override "$SCRIPT_DIR/.env"; then
+        require_proxy_certificates || exit 1
+        COMPOSE_FILES="$COMPOSE_FILES -f docker-compose.proxy.yml"
+        proxy_mode=true
+    fi
+
     # Build images
     docker compose $COMPOSE_FILES build
 
@@ -447,7 +498,12 @@ docker_deployment() {
     docker compose $COMPOSE_FILES exec -T backend alembic upgrade head
 
     print_success "Installation complete!"
-    print_info "Access the application at: http://localhost:3000"
+    if [[ "$proxy_mode" == "true" ]]; then
+        print_info "Access the application at your HTTPS address, through the bundled"
+        print_info "nginx (port 3000 is not published)."
+    else
+        print_info "Access the application at: http://localhost:3000"
+    fi
     print_info "(The backend sits behind the frontend/reverse proxy and is not"
     print_info " published to the host in the production configuration.)"
 
