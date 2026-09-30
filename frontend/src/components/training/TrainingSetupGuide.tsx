@@ -78,7 +78,7 @@ export const TrainingSetupGuide: React.FC<TrainingSetupGuideProps> = ({ stats })
               {!step.done && (
                 <Link
                   to={step.href}
-                  className="mt-2 inline-block text-sm font-medium text-red-700 hover:underline dark:text-red-400"
+                  className="mobile-touch-target mt-1 text-sm font-medium text-red-700 hover:underline dark:text-red-400"
                 >
                   {step.action} →
                 </Link>

@@ -1247,7 +1247,10 @@ const MyTrainingPage: React.FC = () => {
                   <button onClick={() => void navigate('/training/submit')} className="btn-primary text-sm font-medium">
                     Submit External Training
                   </button>
-                  <Link to="/learning/training" className="text-sm text-red-700 hover:underline dark:text-red-400">
+                  <Link
+                    to="/learning/training"
+                    className="mobile-touch-target text-sm text-red-700 hover:underline dark:text-red-400"
+                  >
                     Take the short walkthrough in the Learning Center
                   </Link>
                 </div>
