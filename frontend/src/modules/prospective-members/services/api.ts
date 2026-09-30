@@ -720,22 +720,27 @@ export const applicantService = {
   },
 
   async createApplicant(data: ApplicantCreate): Promise<Applicant> {
-    // Map frontend applicant create to backend prospect create
+    // Map frontend applicant create to backend prospect create. A create
+    // payload omits a blank optional field rather than sending '' -- an empty
+    // date_of_birth is a 422 on a date field (CLAUDE.md pitfall #1).
     const payload: Record<string, unknown> = {
       first_name: data.first_name,
       last_name: data.last_name,
       email: data.email,
-      phone: data.phone,
-      date_of_birth: data.date_of_birth,
+      phone: data.phone?.trim() || undefined,
+      date_of_birth: data.date_of_birth || undefined,
       pipeline_id: data.pipeline_id,
       desired_membership_type: data.target_membership_type,
-      notes: data.notes,
+      // The add form collects it; before this it was dropped here, so the
+      // applicant was stored with no target role and converted without one.
+      target_role_id: data.target_role_id || undefined,
+      notes: data.notes?.trim() || undefined,
     };
     if (data.address) {
-      payload.address_street = data.address.street;
-      payload.address_city = data.address.city;
-      payload.address_state = data.address.state;
-      payload.address_zip = data.address.zip_code;
+      payload.address_street = data.address.street?.trim() || undefined;
+      payload.address_city = data.address.city?.trim() || undefined;
+      payload.address_state = data.address.state?.trim() || undefined;
+      payload.address_zip = data.address.zip_code?.trim() || undefined;
     }
     const response = await api.post<BackendProspectResponse>('/prospective-members/prospects', payload);
     return mapProspectToApplicant(response.data);
