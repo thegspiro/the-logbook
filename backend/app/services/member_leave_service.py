@@ -170,8 +170,13 @@ class MemberLeaveService:
         if user_id:
             query = query.where(MemberLeaveOfAbsence.user_id == user_id)
         if active_only:
-            query = query.where(MemberLeaveOfAbsence.active == True)  # noqa: E712
-        query = query.order_by(MemberLeaveOfAbsence.start_date.desc())
+            query = query.where(MemberLeaveOfAbsence.active.is_(True))
+        # The id breaks start_date ties so the order is total: the list
+        # endpoint is read page by page, and a tie that sorted differently on
+        # the next request would repeat one leave and skip another.
+        query = query.order_by(
+            MemberLeaveOfAbsence.start_date.desc(), MemberLeaveOfAbsence.id
+        )
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
