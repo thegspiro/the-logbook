@@ -94,7 +94,7 @@ export const SchedulingSetupGuide: React.FC = () => {
               {!step.done && (
                 <Link
                   to={step.href}
-                  className="mobile-touch-target mt-1 text-sm font-medium text-red-700 hover:underline dark:text-red-400"
+                  className="mobile-touch-target mt-1 text-sm font-medium text-red-800 hover:underline dark:text-red-300"
                 >
                   {step.action} →
                 </Link>
