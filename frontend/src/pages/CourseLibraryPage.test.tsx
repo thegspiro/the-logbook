@@ -98,10 +98,11 @@ describe('CourseLibraryPage management controls', () => {
       expect(screen.queryByRole('button', { name: 'Manage classes for Fire Officer I' })).not.toBeInTheDocument();
     });
 
-    it('hides the empty-state call to action when the catalog is empty', async () => {
+    it('explains the empty catalog without the call to action', async () => {
       mockGetCourses.mockResolvedValue([]);
       renderWithRouter(<CourseLibraryPage />);
-      expect(await screen.findByText('No courses in your library yet')).toBeInTheDocument();
+      expect(await screen.findByText('Your department has not added any courses yet')).toBeInTheDocument();
+      expect(screen.getByText(/Once a training officer adds them/)).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /add your first course/i })).not.toBeInTheDocument();
     });
 

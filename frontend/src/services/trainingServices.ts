@@ -111,6 +111,12 @@ export interface TrainingDashboardSummary {
   stats: {
     total_members: number;
     tracked_members: number;
+    /** Active requirements the department has defined; at zero the percentage is vacuous. */
+    active_requirements: number;
+    /** Setup progress, read by the dashboard's getting-started guide. */
+    active_courses: number;
+    training_sessions: number;
+    active_programs: number;
     compliant_members: number;
     compliance_percentage: number;
     expiring_count: number;

@@ -29,18 +29,29 @@ const Row = ({ children }: React.PropsWithChildren) => (
   <div className="bg-theme-input-bg/50 mb-2 flex items-center justify-between rounded-sm p-3 text-sm">{children}</div>
 );
 
-export const ComplianceOverviewWidget = ({ data }: { data: TrainingDashboardSummary }) => (
-  <Card
-    title="Department Compliance"
-    icon={CheckCircle}
-    href="/training/admin?page=dashboard&tab=compliance&status=noncompliant"
-  >
-    <div className="text-theme-text-primary text-3xl font-bold">{data.stats.compliance_percentage}%</div>
-    <p className="text-theme-text-muted text-sm">
-      {data.stats.compliant_members} of {data.stats.tracked_members} active, non-exempt members
-    </p>
-  </Card>
-);
+// With no requirements defined every member is trivially compliant, and a 100%
+// on a department that has set nothing up reads as "all current".
+export const ComplianceOverviewWidget = ({ data }: { data: TrainingDashboardSummary }) =>
+  data.stats.active_requirements === 0 ? (
+    <Card title="Department Compliance" icon={CheckCircle} href="/training/admin?page=setup&tab=requirements">
+      <div className="text-theme-text-primary text-3xl font-bold">Not set up</div>
+      <p className="text-theme-text-muted text-sm">
+        No training requirements exist yet, so there is nothing to measure members against. Add one under Setup →
+        Requirements.
+      </p>
+    </Card>
+  ) : (
+    <Card
+      title="Department Compliance"
+      icon={CheckCircle}
+      href="/training/admin?page=dashboard&tab=compliance&status=noncompliant"
+    >
+      <div className="text-theme-text-primary text-3xl font-bold">{data.stats.compliance_percentage}%</div>
+      <p className="text-theme-text-muted text-sm">
+        {data.stats.compliant_members} of {data.stats.tracked_members} active, non-exempt members
+      </p>
+    </Card>
+  );
 export const UpcomingExpirationsWidget = ({ data, days = 90 }: { data: TrainingDashboardSummary; days?: number }) => (
   <Card
     title="Upcoming Expirations"

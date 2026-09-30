@@ -92,7 +92,10 @@ from app.services.scheduling_service import (
     closeout_backlog_halves,
     open_ended_cushion_hours,
 )
-from app.services.training_compliance import compute_org_compliance_pct
+from app.services.training_compliance import (
+    compute_org_compliance_pct,
+    count_active_requirements,
+)
 from app.utils.org_timezone import scheduling_timezone
 
 #: The always-on fourth slot. Reported by every module, chosen by none.
@@ -607,6 +610,10 @@ async def _members_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
 
 
 async def _training_compliance(ctx: MetricContext) -> tuple[str, str]:
+    # With nothing required, the percentage is a vacuous 100% that tells a new
+    # training officer the department is fully current.
+    if await count_active_requirements(ctx.db, ctx.organization_id) == 0:
+        return UNKNOWN_VALUE, "no requirements set up yet"
     pct = await compute_org_compliance_pct(ctx.db, ctx.organization_id)
     active = await _scalar(
         ctx.db,
