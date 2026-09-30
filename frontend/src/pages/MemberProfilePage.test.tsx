@@ -33,7 +33,10 @@ vi.mock('react-router', async () => {
 vi.mock('../stores/authStore', () => ({
   useAuthStore: () => ({
     user: { id: VIEWER_ID },
-    checkPermission: (permission: string) => grantedPermissions.includes(permission),
+    // Honours module wildcards as the real store does, so a `users.*` grant
+    // reaches every `users.<action>` check the page makes.
+    checkPermission: (permission: string) =>
+      grantedPermissions.includes(permission) || grantedPermissions.includes(`${permission.split('.')[0] ?? ''}.*`),
   }),
 }));
 
@@ -752,5 +755,64 @@ describe('MemberProfilePage editing', () => {
       await screen.findByText('Emergency contact 1 needs a name, a relationship and a phone number.')
     ).toBeInTheDocument();
     expect(updateUserProfile).not.toHaveBeenCalled();
+  });
+});
+
+// The page used to gate every edit control on `users.update`, a permission
+// that does not exist, and showed restricted-PII sections to whoever passed
+// that local guess (a `users.*` holder did). Edit controls and restricted-PII
+// display now follow the record the backend returned: only the member and
+// members-managers receive it unredacted, and only they get forms seeded
+// from it.
+describe('MemberProfilePage edit and restricted-PII gates on a colleague', () => {
+  const fullColleague: UserWithRoles = {
+    ...redactedColleague,
+    email: 'jdoe@example.com',
+    phone: '555-0100',
+    address_street: '12 Ladder Lane',
+    emergency_contacts: [{ name: 'Pat Doe', relationship: 'Spouse', phone: '555-0142', is_primary: true }],
+    profile_visibility: shareNothing,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    routeUserId = TARGET_ID;
+    grantedPermissions = [];
+    getUserWithRoles.mockReset();
+    getUserWithRoles.mockResolvedValue(redactedColleague);
+    checkContactInfoEnabled.mockReset();
+    checkContactInfoEnabled.mockResolvedValue({ enabled: true, show_email: true, show_phone: true, show_mobile: true });
+    getEnabledModules.mockReset();
+    getEnabledModules.mockResolvedValue({ enabled_modules: [] });
+    getMemberLeaves.mockReset();
+    getMemberLeaves.mockResolvedValue([]);
+  });
+
+  it.each([['users.edit'], ['users.*']])(
+    'gives a %s holder neither edit controls nor restricted-PII sections on a redacted record',
+    async (permission) => {
+      grantedPermissions = [permission, 'users.view'];
+      renderWithRouter(<MemberProfilePage />);
+
+      await screen.findByRole('heading', { name: 'Contact Information' });
+      expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Upload photo' })).not.toBeInTheDocument();
+      // An empty section would claim "no contacts on file"; the backend
+      // withheld them, so there is no section.
+      expect(screen.queryByRole('heading', { name: 'Emergency Contacts' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Address' })).not.toBeInTheDocument();
+    }
+  );
+
+  it('gives a members-manager every edit control on the full record', async () => {
+    grantedPermissions = ['members.manage'];
+    getUserWithRoles.mockResolvedValue(fullColleague);
+    renderWithRouter(<MemberProfilePage />);
+
+    expect(await screen.findByRole('heading', { name: 'Emergency Contacts' })).toBeInTheDocument();
+    expect(screen.getByText('Pat Doe')).toBeInTheDocument();
+    // Contact, Address and Emergency Contacts.
+    expect(screen.getAllByRole('button', { name: 'Edit' })).toHaveLength(3);
+    expect(screen.getByRole('button', { name: 'Upload photo' })).toBeInTheDocument();
   });
 });

@@ -285,6 +285,77 @@ If you have your own SSL certificates:
    sudo systemctl reload nginx
    ```
 
+### Docker Compose `production` profile
+
+The stack can run behind its own nginx container, which terminates TLS on port
+443, redirects port 80 to HTTPS, and proxies to the `frontend` and `backend`
+services. It reads `infrastructure/nginx/docker.conf`; the `nginx.conf` beside
+it, and `scripts/setup-ssl.sh` above, are for nginx installed on the host and
+are not used here.
+
+Turn it on with `docker-compose.proxy.yml`, after the production override. Pin
+the three files in `.env` so every later `docker compose` command uses them:
+
+```bash
+COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml:docker-compose.proxy.yml
+```
+
+That file starts nginx and **stops publishing the frontend's port 3000**, so
+nginx is the only way in. Port 3000 serves the app over plain HTTP, so a
+published one would be a second entrance that skips TLS and every rule in
+`docker.conf`. `docker compose --profile production up -d` also starts nginx
+but leaves port 3000 published. Use it only when something outside this stack
+still has to reach the frontend on that port.
+
+The update command, `git pull && docker compose up -d --build`, reads
+`COMPOSE_FILE` and keeps the proxy file. So do the installers (`install.sh`,
+`scripts/universal-install.sh`): when `.env` pins it, they add it to the
+compose files they always pass. If the certificate is missing, they stop
+before building anything, because nginx would not start and the install
+would have no way in.
+
+The container reads its certificate from `infrastructure/nginx/ssl/`, as
+`fullchain.pem` and `privkey.pem`, and **will not start without both**. Both
+names are covered by `.gitignore`, so a key placed there cannot be committed.
+Run the commands below from the repository root.
+
+1. **Start with a temporary self-signed certificate.** This gets nginx running
+   so it can answer Let's Encrypt's challenge. It is also all you need to try
+   the setup out, if the browser warning is acceptable:
+
+   ```bash
+   mkdir -p infrastructure/nginx/ssl infrastructure/nginx/certbot
+   openssl req -x509 -newkey rsa:2048 -nodes -days 7 -subj "/CN=localhost" \
+     -keyout infrastructure/nginx/ssl/privkey.pem \
+     -out infrastructure/nginx/ssl/fullchain.pem
+   docker compose up -d
+   ```
+
+2. **Issue the real certificate.** Certbot writes its challenge into
+   `infrastructure/nginx/certbot/`, which the container serves on port 80. The
+   `--deploy-hook` copies the result over the temporary certificate and reloads
+   nginx. Certbot saves the hook and runs it again after every renewal, so
+   renewals need no further steps and no downtime:
+
+   ```bash
+   DOMAIN=logbook.yourdept.org
+   sudo certbot certonly --webroot -w "$PWD/infrastructure/nginx/certbot" -d "$DOMAIN" \
+     --deploy-hook "cp -L /etc/letsencrypt/live/$DOMAIN/fullchain.pem /etc/letsencrypt/live/$DOMAIN/privkey.pem $PWD/infrastructure/nginx/ssl/ && docker exec intranet-nginx nginx -s reload"
+   ```
+
+   `cp -L` matters: the files under `live/` are symlinks into
+   `/etc/letsencrypt/archive/`, which the container cannot see.
+
+3. **Point the application at the HTTPS address.** Set `FRONTEND_URL` and
+   `ALLOWED_ORIGINS` in `.env` to `https://logbook.yourdept.org`, then
+   `docker compose up -d` again.
+
+Port 80 redirects to the same host on port 443, so publish HTTPS on 443
+(`NGINX_HTTPS_PORT` is `443` by default). The access-log exclusions, the 60 MB
+upload limit and the rate limits match the host configuration;
+`backend/tests/test_nginx_config_consistency.py` keeps the parts that must
+agree with the backend in step.
+
 ---
 
 ## Security Checklist

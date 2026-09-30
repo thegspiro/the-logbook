@@ -286,7 +286,9 @@ const MyEquipmentPage: React.FC = () => {
             <div className="flex items-center gap-3">
               <Package className="text-theme-text-primary h-6 w-6" />
               <h1 className="text-theme-text-primary text-2xl font-bold">My Issued Gear</h1>
-              <span className="text-theme-text-muted text-sm">({totalItems} items)</span>
+              <span className="text-theme-text-muted text-sm">
+                ({totalItems} {totalItems === 1 ? 'item' : 'items'})
+              </span>
             </div>
             <p className="text-theme-text-muted mt-1 text-sm">
               The department equipment you are responsible for, and your requests for more.
@@ -625,6 +627,10 @@ const MyEquipmentPage: React.FC = () => {
           size="sm"
         >
           <div className="space-y-4">
+            <p className="text-theme-text-muted text-sm">
+              This tells the quartermaster you are bringing it back. Hand the item in as usual; it stays on your list
+              until they confirm they have it.
+            </p>
             <div>
               <label htmlFor="return-condition" className={labelClass}>
                 Condition

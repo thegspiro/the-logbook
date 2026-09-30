@@ -18,6 +18,7 @@ import { Breadcrumbs } from '../components/ux/Breadcrumbs';
 import { EmptyState } from '../components/ux';
 import { GraduationCap, Download, Paperclip, Upload, X } from 'lucide-react';
 import { formatDate } from '../utils/dateFormatting';
+import { isCertificationExpired, isCertificationExpiringSoon } from '../utils/certificationExpiry';
 import { formatHours, sumHoursToQuarter } from '../utils/hoursFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
 import { getTrainingPeriodWindow, TRAINING_PERIOD_LABELS, TrainingExportPeriod } from '../utils/trainingPeriods';
@@ -217,19 +218,6 @@ export const MemberTrainingHistoryPage: React.FC = () => {
     }
   };
 
-  const isExpired = (record: TrainingRecord): boolean => {
-    if (!record.expiration_date) return false;
-    return new Date(record.expiration_date) < new Date();
-  };
-
-  const isExpiringSoon = (record: TrainingRecord): boolean => {
-    if (!record.expiration_date) return false;
-    const expDate = new Date(record.expiration_date);
-    const now = new Date();
-    const daysUntilExpiry = (expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
-    return daysUntilExpiry > 0 && daysUntilExpiry <= 90;
-  };
-
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed':
@@ -265,8 +253,9 @@ export const MemberTrainingHistoryPage: React.FC = () => {
     // Apply status filter
     if (filterStatus !== 'all') {
       result = result.filter((t) => {
-        if (filterStatus === 'expired') return isExpired(t);
-        if (filterStatus === 'expiring_soon') return isExpiringSoon(t) && !isExpired(t);
+        if (filterStatus === 'expired') return isCertificationExpired(t.expiration_date, tz);
+        if (filterStatus === 'expiring_soon')
+          return isCertificationExpiringSoon(t.expiration_date, tz) && !isCertificationExpired(t.expiration_date, tz);
         return t.status === filterStatus;
       });
     }
@@ -297,14 +286,16 @@ export const MemberTrainingHistoryPage: React.FC = () => {
     });
 
     return result;
-  }, [trainings, filterStatus, sortField, sortOrder, searchQuery]);
+  }, [trainings, filterStatus, sortField, sortOrder, searchQuery, tz]);
 
   // Calculate statistics
   const stats = useMemo(() => {
     const completed = trainings.filter((t) => t.status === 'completed');
     const totalHours = sumHoursToQuarter(completed.map((t) => t.hours_completed));
-    const expiringSoon = trainings.filter((t) => isExpiringSoon(t) && !isExpired(t));
-    const expired = trainings.filter((t) => isExpired(t));
+    const expiringSoon = trainings.filter(
+      (t) => isCertificationExpiringSoon(t.expiration_date, tz) && !isCertificationExpired(t.expiration_date, tz)
+    );
+    const expired = trainings.filter((t) => isCertificationExpired(t.expiration_date, tz));
     const scheduled = trainings.filter((t) => t.status === 'scheduled');
 
     return {
@@ -315,7 +306,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
       expired: expired.length,
       scheduled: scheduled.length,
     };
-  }, [trainings]);
+  }, [trainings, tz]);
 
   if (loading) {
     return (
@@ -574,9 +565,9 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                       <td data-label="Expires" className="px-6 py-4 text-sm">
                         <span
                           className={
-                            isExpired(training)
+                            isCertificationExpired(training.expiration_date, tz)
                               ? 'text-red-700 dark:text-red-400'
-                              : isExpiringSoon(training)
+                              : isCertificationExpiringSoon(training.expiration_date, tz)
                                 ? 'text-yellow-700 dark:text-yellow-400'
                                 : 'text-theme-text-secondary'
                           }
@@ -593,16 +584,17 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                           >
                             {training.status.replace('_', ' ')}
                           </span>
-                          {isExpired(training) && (
+                          {isCertificationExpired(training.expiration_date, tz) && (
                             <span className="inline-flex w-fit rounded-full bg-red-500/10 px-2 py-1 text-xs font-medium text-red-700 dark:bg-red-500/20 dark:text-red-400">
                               expired
                             </span>
                           )}
-                          {!isExpired(training) && isExpiringSoon(training) && (
-                            <span className="inline-flex w-fit rounded-full bg-yellow-500/10 px-2 py-1 text-xs font-medium text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400">
-                              expiring soon
-                            </span>
-                          )}
+                          {!isCertificationExpired(training.expiration_date, tz) &&
+                            isCertificationExpiringSoon(training.expiration_date, tz) && (
+                              <span className="inline-flex w-fit rounded-full bg-yellow-500/10 px-2 py-1 text-xs font-medium text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400">
+                                expiring soon
+                              </span>
+                            )}
                         </div>
                       </td>
                       <td data-label="Files" className="px-6 py-4">

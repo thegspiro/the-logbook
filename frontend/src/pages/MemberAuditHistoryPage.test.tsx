@@ -7,17 +7,20 @@
  *  - each entry carries its time as well as its date
  */
 
+import { StrictMode } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 
 const mockGetHistory = vi.fn();
+const mockGetUserWithRoles = vi.fn();
 
 vi.mock('../services/userServices', () => ({
   userService: {
     getMemberAuditHistory: (...args: unknown[]) => mockGetHistory(...args) as unknown,
-    getUserWithRoles: vi.fn().mockResolvedValue({ id: 'user-1', full_name: 'Emeka Adeyemi' }),
+    getUserWithRoles: (...args: unknown[]) => mockGetUserWithRoles(...args) as unknown,
   },
 }));
 
@@ -50,7 +53,10 @@ const entry = {
 describe('MemberAuditHistoryPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetHistory.mockReset();
     mockGetHistory.mockResolvedValue([entry]);
+    mockGetUserWithRoles.mockReset();
+    mockGetUserWithRoles.mockResolvedValue({ id: 'user-1', full_name: 'Emeka Adeyemi' });
   });
 
   // A sign-in is not a member-management event, so this endpoint never returns
@@ -92,5 +98,47 @@ describe('MemberAuditHistoryPage', () => {
 
     expect(await screen.findByText('Member profile updated: rank')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /expand details/i })).not.toBeInTheDocument();
+  });
+
+  // Reading the member's profile writes a "Member profile viewed" entry into
+  // this very history, so every extra read is an extra row. A visit used to
+  // read the history twice, and re-read the profile on every filter change.
+  describe('load count', () => {
+    it('reads the profile and the history once for a visit', async () => {
+      renderWithRouter(<MemberAuditHistoryPage />);
+
+      await screen.findByText('Member profile updated: rank');
+      expect(mockGetUserWithRoles).toHaveBeenCalledTimes(1);
+      expect(mockGetHistory).toHaveBeenCalledTimes(1);
+      expect(mockGetHistory).toHaveBeenCalledWith('user-1', 1, undefined);
+    });
+
+    // StrictMode outermost: nested inside renderWithRouter's wrapper, React
+    // does not re-run the mount effects, and the test would pass for nothing.
+    // main.tsx mounts the app this way, so this is the dev-server visit.
+    it('reads the profile once under StrictMode', async () => {
+      render(
+        <StrictMode>
+          <MemoryRouter>
+            <MemberAuditHistoryPage />
+          </MemoryRouter>
+        </StrictMode>
+      );
+
+      await screen.findByText('Member profile updated: rank');
+      expect(mockGetUserWithRoles).toHaveBeenCalledTimes(1);
+    });
+
+    it('re-reads only the history when the filter changes', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<MemberAuditHistoryPage />);
+      await screen.findByText('Member profile updated: rank');
+
+      await user.selectOptions(screen.getByLabelText(/filter/i), 'status_change');
+
+      await waitFor(() => expect(mockGetHistory).toHaveBeenCalledWith('user-1', 1, 'status_change'));
+      expect(mockGetHistory).toHaveBeenCalledTimes(2);
+      expect(mockGetUserWithRoles).toHaveBeenCalledTimes(1);
+    });
   });
 });

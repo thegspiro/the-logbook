@@ -253,6 +253,38 @@ describe('InventorySetupPage', () => {
     });
   });
 
+  it('saves ticked categories when Continue is pressed instead of Add', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<InventorySetupPage />);
+    await screen.findByRole('heading', { name: 'Rooms' });
+
+    await advance(user, 2);
+    await screen.findByRole('heading', { name: 'Categories' });
+    await user.click(screen.getByRole('checkbox'));
+    await user.click(screen.getByRole('button', { name: /^Continue/ }));
+
+    await waitFor(() => {
+      expect(mockApplyCategoryPresets).toHaveBeenCalledWith(['turnout_gear']);
+    });
+    expect(await screen.findByRole('heading', { name: 'First items' })).toBeInTheDocument();
+  });
+
+  it('stays on the categories step when saving the ticked ones fails', async () => {
+    mockApplyCategoryPresets.mockRejectedValue(new Error('offline'));
+    const user = userEvent.setup();
+    renderWithRouter(<InventorySetupPage />);
+    await screen.findByRole('heading', { name: 'Rooms' });
+
+    await advance(user, 2);
+    await screen.findByRole('heading', { name: 'Categories' });
+    await user.click(screen.getByRole('checkbox'));
+    await user.click(screen.getByRole('button', { name: /^Continue/ }));
+
+    await waitFor(() => expect(mockApplyCategoryPresets).toHaveBeenCalled());
+    expect(screen.getByRole('heading', { name: 'Categories' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox')).toBeChecked();
+  });
+
   it('carries the chosen room, storage area, and category into the item form', async () => {
     mockGetLocations.mockResolvedValue([makeRoom('room-1', 'Gear Room')]);
     mockGetStorageAreas.mockResolvedValue([makeArea()]);

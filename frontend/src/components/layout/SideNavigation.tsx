@@ -1016,8 +1016,15 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                 canScrollUp ? 'opacity-100' : 'opacity-0'
               }`}
             />
+            {/* Phones only. Mobile browsers draw overlay scrollbars that stay
+                hidden until a scroll starts, so without this a long drawer gives
+                no sign that anything sits below the fold. A desktop sidebar
+                already shows a permanent scrollbar, and the pill floating over
+                the last rows there only covers them. `md` is the same breakpoint
+                at which this panel stops being the mobile drawer. */}
             <div
-              className={`from-theme-nav-bg via-theme-nav-bg/80 pointer-events-none absolute inset-x-0 bottom-0 flex h-16 items-end justify-center bg-linear-to-t to-transparent pb-1 transition-opacity duration-200 ${
+              data-testid="side-nav-scroll-hint"
+              className={`from-theme-nav-bg via-theme-nav-bg/80 pointer-events-none absolute inset-x-0 bottom-0 flex h-16 items-end justify-center bg-linear-to-t to-transparent pb-1 transition-opacity duration-200 md:hidden ${
                 canScrollDown ? 'opacity-100' : 'opacity-0'
               }`}
             >

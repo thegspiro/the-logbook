@@ -98,6 +98,22 @@ describe('pipelineService stage mapping', () => {
     expect(payload).not.toHaveProperty('inactivity_timeout_days');
   });
 
+  // PipelineBuilder turns an emptied description into null; the mapper must
+  // carry it rather than drop it, and must still omit a key nobody set.
+  it('sends an explicit null when the description is cleared', async () => {
+    await pipelineService.updateStage('pipeline-1', 'step-1', stageUpdate({ description: null }));
+
+    const payload = mockPut.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(payload).toHaveProperty('description', null);
+  });
+
+  it('omits the description when the caller did not touch it', async () => {
+    await pipelineService.updateStage('pipeline-1', 'step-1', stageUpdate());
+
+    const payload = mockPut.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty('description');
+  });
+
   it('carries a stored timeout override back to the stage', async () => {
     mockPut.mockResolvedValue({ data: backendStep({ inactivity_timeout_days: 45 }) });
 

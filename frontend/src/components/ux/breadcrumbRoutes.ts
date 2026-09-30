@@ -111,6 +111,9 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   '/training': {},
 
   // ── Sections within a module ───────────────────────────────────────────
+  // An ancestor only because the public tokenized approval page sits beneath
+  // it; gated like the in-app Approvals route.
+  '/finance/approvals': { permissions: ['finance.approve'] },
   '/finance/budgets': { permissions: ['finance.view'] },
   '/finance/check-requests': { permissions: ['finance.view'] },
   // Registered for its label: the segment is "expenses" while the page's own

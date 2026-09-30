@@ -63,6 +63,7 @@ import { AnonymizeMemberModal } from '../components/AnonymizeMemberModal';
 import { RejoinServiceFields } from '../components/RejoinServiceFields';
 import { useRejoinServiceOptions } from '../hooks/useRejoinServiceOptions';
 import { ServiceHistorySection } from '../components/member-profile/ServiceHistorySection';
+import { isCertificationExpired, isCertificationExpiringSoon } from '../utils/certificationExpiry';
 import { blankToNull } from '../utils/formValues';
 
 // Types for inventory data
@@ -81,17 +82,12 @@ function isModuleEnabled(moduleId: string): boolean {
   return mod?.enabled ?? false;
 }
 
-function isExpiringSoon(record: TrainingRecord): boolean {
-  if (!record.expiration_date) return false;
-  const expDate = new Date(record.expiration_date);
-  const now = new Date();
-  const daysUntilExpiry = (expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
-  return daysUntilExpiry > 0 && daysUntilExpiry <= 90;
+function isExpiringSoon(record: TrainingRecord, tz: string): boolean {
+  return isCertificationExpiringSoon(record.expiration_date, tz);
 }
 
-function isExpired(record: TrainingRecord): boolean {
-  if (!record.expiration_date) return false;
-  return new Date(record.expiration_date) < new Date();
+function isExpired(record: TrainingRecord, tz: string): boolean {
+  return isCertificationExpired(record.expiration_date, tz);
 }
 
 export const MemberProfilePage: React.FC = () => {
@@ -642,16 +638,31 @@ export const MemberProfilePage: React.FC = () => {
     }
   };
 
-  // Check if current user can edit this profile (self or admin)
-  const isAdmin = checkPermission('users.update') || checkPermission('members.manage');
   const canManageIdCards = checkPermission('members.manage_id_cards');
   const canViewIdCard = canViewMemberIdCard(currentUser?.id, userId, checkPermission);
-  const canEdit = currentUser?.id === userId || isAdmin;
-  // Emergency contacts are leadership-only server-side (members.manage or the
-  // member themselves). Mirror that gate here so everyone else sees no section
-  // at all — a rendered-but-empty section reads as "none on file", which is a
-  // different and wrong statement about the member.
-  const canViewRestrictedPii = canEdit;
+  // Whether the backend handed this viewer the unredacted record. It decides
+  // that in `_redact_profile_for_viewer` (users.py): the member themselves
+  // always, a colleague's only for members.manage — and marks the colleague
+  // case by including `profile_visibility`, which it nulls for exactly the
+  // viewers it redacts for. Read from the payload rather than re-derived from
+  // local permissions (CLAUDE.md pitfall #29).
+  const receivedFullRecord = isSelf || user?.profile_visibility != null;
+  // Emergency contacts and date of birth are cleared for everyone else, so
+  // those viewers see no section at all — a rendered-but-empty section reads
+  // as "none on file", which is a different and wrong statement about the
+  // member.
+  const canViewRestrictedPii = receivedFullRecord;
+  // Contact, address and emergency-contact edits go to PATCH
+  // /users/{id}/contact-info and /profile, which accept the member, users.edit
+  // or members.manage. They are also gated on the full record because every
+  // form is seeded from what is on screen: on a redacted record a hidden phone,
+  // address or contact list reads as blank, and an update sends blanks as
+  // null, so saving would erase what the editor was never shown. A users.edit
+  // holder without members.manage therefore gets no edit controls on a
+  // colleague's profile.
+  const canEdit = receivedFullRecord && (isSelf || canManageMembers || checkPermission('users.edit'));
+  // POST/DELETE /users/{id}/photo accept only the member or members.manage.
+  const canEditPhoto = isSelf || canManageMembers;
 
   // Which "who can see this" marker a viewer gets. The member flips switches;
   // a members-manager sees a read-only badge (they see every field anyway,
@@ -680,7 +691,7 @@ export const MemberProfilePage: React.FC = () => {
     user?.address_zip ||
     (user?.address_country && user.address_country !== 'USA')
   );
-  const showAddressCard = canEdit || hasAddressData;
+  const showAddressCard = receivedFullRecord || hasAddressData;
 
   // The left column is per-viewer: training, admin hours, ID cards and gear
   // are all hidden from a plain colleague, and a `lg:col-span-2` ghost would
@@ -772,7 +783,7 @@ export const MemberProfilePage: React.FC = () => {
                       </span>
                     </div>
                   )}
-                  {canEdit && (
+                  {canEditPhoto && (
                     <div className="absolute inset-0 flex cursor-pointer items-center justify-center rounded-full bg-black/50 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
                       <input
                         ref={fileInputRef}
@@ -796,7 +807,7 @@ export const MemberProfilePage: React.FC = () => {
                       )}
                     </div>
                   )}
-                  {canEdit && user.photo_url && (
+                  {canEditPhoto && user.photo_url && (
                     <button
                       onClick={() => {
                         void handlePhotoRemove();
@@ -1322,13 +1333,13 @@ export const MemberProfilePage: React.FC = () => {
                       <div className="flex items-center justify-between">
                         <span className="text-theme-text-secondary text-sm">Active Training</span>
                         <span className="text-theme-text-primary text-sm font-semibold">
-                          {trainings.filter((t) => t.status === 'completed' && !isExpired(t)).length}
+                          {trainings.filter((t) => t.status === 'completed' && !isExpired(t, tz)).length}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-theme-text-secondary text-sm">Expiring Soon</span>
                         <span className="text-sm font-semibold text-yellow-700 dark:text-yellow-400">
-                          {trainings.filter((t) => isExpiringSoon(t)).length}
+                          {trainings.filter((t) => isExpiringSoon(t, tz)).length}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">

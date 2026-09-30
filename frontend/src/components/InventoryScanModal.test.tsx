@@ -217,6 +217,36 @@ describe('InventoryScanModal distributing', () => {
     expect(screen.getByRole('spinbutton', { name: 'Quantity of Nitrile Gloves' })).toHaveValue(1);
   });
 
+  // The review button used to wait silently on the duration choice, which a
+  // new quartermaster read as the dialog being broken.
+  it('says what is still needed while the review step is blocked', async () => {
+    const user = userEvent.setup();
+    await addGloves(user);
+
+    expect(screen.getByRole('button', { name: /Review 1 Item/ })).toBeDisabled();
+    expect(screen.getByText('Choose Ongoing assignment or Temporary loan above to continue.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('radio', { name: 'Temporary loan' }));
+    expect(screen.queryByText(/Choose Ongoing assignment or Temporary loan/)).not.toBeInTheDocument();
+    expect(screen.getByText('Set the expected return date to continue.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('radio', { name: 'Ongoing assignment' }));
+    expect(screen.queryByText(/to continue\./)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Review 1 Item/ })).toBeEnabled();
+  });
+
+  it('describes each duration option without folding the hint into its name', async () => {
+    const user = userEvent.setup();
+    await addGloves(user);
+
+    expect(screen.getByRole('radio', { name: 'Ongoing assignment' })).toHaveAccessibleDescription(
+      /Theirs until they return it or leave/
+    );
+    expect(screen.getByRole('radio', { name: 'Temporary loan' })).toHaveAccessibleDescription(
+      /due back on a date you choose/
+    );
+  });
+
   // The return time was typed in the department's clock but read in the
   // browser's, and its minimum was UTC: in Central time the earliest return
   // a quartermaster could pick was five hours away.

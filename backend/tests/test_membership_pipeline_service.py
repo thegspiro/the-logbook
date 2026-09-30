@@ -808,7 +808,7 @@ class TestStatusStopsProgression:
                 completed_by="u1",
             )
 
-        mock_advance.assert_called_once_with(prospect, "s1")
+        mock_advance.assert_called_once_with(prospect, "s1", entered_by="u1")
 
 
 class TestElectionVoteGate:
@@ -823,8 +823,8 @@ class TestElectionVoteGate:
 
     Only the two states that reached a ballot are graded. "draft" and "ready"
     still advance: a department that votes at a meeting and records the
-    outcome by hand never assigns a package, and gating those would refuse
-    every one of those advances.
+    outcome by hand never assigns a package to a ballot, and gating those
+    would refuse every one of those advances. No package at all is refused.
     """
 
     @staticmethod
@@ -874,11 +874,15 @@ class TestElectionVoteGate:
         service = self._service(package_status)
         await service._validate_step_completion(self._prospect(), self._step())
 
-    async def test_a_stage_with_no_package_at_all_advances(self):
-        """The off-platform vote: recorded by hand, no package ever created.
-        This is the backward-compatible case the gate must not break."""
+    @pytest.mark.parametrize("automated", [False, True])
+    async def test_a_stage_with_no_package_at_all_is_refused(self, automated):
+        """The department's rule: no package, no advance. Arriving on the
+        stage creates one, so none means the vote was never set up."""
         service = self._service(None)
-        await service._validate_step_completion(self._prospect(), self._step())
+        with pytest.raises(ValueError, match="no election package"):
+            await service._validate_step_completion(
+                self._prospect(), self._step(), automated=automated
+            )
 
     async def test_complete_step_refuses_a_final_election_stage_and_converts_nobody(
         self,

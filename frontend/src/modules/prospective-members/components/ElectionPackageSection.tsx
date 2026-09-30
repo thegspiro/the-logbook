@@ -14,6 +14,7 @@ import { isSafeUrl } from '../utils';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { formatDateTime } from '../../../utils/dateFormatting';
 import { blankToNull } from '../../../utils/formValues';
+import { getErrorMessage } from '../../../utils/errorHandling';
 import { ElectionStatus } from '../../../constants/enums';
 import { electionService } from '../../../services/electionService';
 import type { ElectionListItem } from '../../../types/election';
@@ -28,6 +29,7 @@ const ElectionPackageSection: React.FC<ElectionPackageSectionProps> = ({ applica
 
   const {
     fetchElectionPackage,
+    createElectionPackage,
     updateElectionPackage,
     submitElectionPackage,
     assignPackageToElection,
@@ -38,6 +40,7 @@ const ElectionPackageSection: React.FC<ElectionPackageSectionProps> = ({ applica
   const [pkgNotes, setPkgNotes] = useState('');
   const [pkgStatement, setPkgStatement] = useState('');
   const [isSubmittingPackage, setIsSubmittingPackage] = useState(false);
+  const [isCreatingPackage, setIsCreatingPackage] = useState(false);
 
   const [showElectionPicker, setShowElectionPicker] = useState(false);
   const [draftElections, setDraftElections] = useState<ElectionListItem[]>([]);
@@ -45,10 +48,12 @@ const ElectionPackageSection: React.FC<ElectionPackageSectionProps> = ({ applica
   const [selectedElectionId, setSelectedElectionId] = useState('');
   const [isAssigningToElection, setIsAssigningToElection] = useState(false);
 
-  // Load election package when component mounts or applicant changes
+  // Reloaded on a stage change too: moving between two consecutive vote
+  // stages keeps this section mounted, and the server has just created the
+  // new stage's package.
   useEffect(() => {
     void fetchElectionPackage(applicant.id);
-  }, [applicant.id, fetchElectionPackage]);
+  }, [applicant.id, applicant.current_stage_id, fetchElectionPackage]);
 
   // Sync package fields to local state when package loads
   useEffect(() => {
@@ -60,6 +65,24 @@ const ElectionPackageSection: React.FC<ElectionPackageSectionProps> = ({ applica
       setPkgStatement('');
     }
   }, [currentElectionPackage]);
+
+  const handleCreatePackage = async () => {
+    setIsCreatingPackage(true);
+    try {
+      await createElectionPackage(applicant.id, {
+        applicant_id: applicant.id,
+        pipeline_id: applicant.pipeline_id,
+        stage_id: applicant.current_stage_id,
+      });
+      toast.success('Election package created');
+    } catch (error: unknown) {
+      // The server's refusal (a closed application, or a stage that changed
+      // under the request) is what tells the coordinator what to do next.
+      toast.error(getErrorMessage(error, 'Failed to create election package'));
+    } finally {
+      setIsCreatingPackage(false);
+    }
+  };
 
   const handleSavePackage = async () => {
     if (!currentElectionPackage) return;
@@ -359,9 +382,24 @@ const ElectionPackageSection: React.FC<ElectionPackageSectionProps> = ({ applica
           )}
         </div>
       ) : (
-        <p className="text-theme-text-muted text-xs">
-          No election package has been created yet. It will be auto-generated when the applicant reaches this stage.
-        </p>
+        <div className="space-y-2">
+          <p className="text-theme-text-muted text-xs">
+            This applicant has no election package, so they cannot be put on a ballot or advanced past this stage yet.
+            Applicants who reach this stage now get one automatically; create one for an applicant who was already here.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              void handleCreatePackage();
+            }}
+            disabled={isCreatingPackage}
+            className="flex items-center gap-1 rounded-lg bg-purple-600 px-3 py-1.5 text-xs text-white transition-colors hover:bg-purple-700 disabled:opacity-50"
+          >
+            {isCreatingPackage && <Loader2 className="h-3 w-3 animate-spin" />}
+            <Vote className="h-3 w-3" />
+            Create Package
+          </button>
+        </div>
       )}
     </div>
   );

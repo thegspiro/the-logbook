@@ -49,6 +49,8 @@ describe('ChecklistsAdminPage related links', () => {
     expect(screen.queryByRole('link', { name: /Check reports/i })).toBeNull();
     expect(screen.queryByRole('link', { name: /Expiring on apparatus/i })).toBeNull();
     expect(screen.queryByRole('link', { name: /Checklist settings/i })).toBeNull();
+    expect(screen.queryByRole('link', { name: /Fleet readiness/i })).toBeNull();
+    expect(screen.queryByRole('link', { name: /Check log/i })).toBeNull();
     // The page itself still renders — only the shortcuts are gated.
     expect(screen.getByTestId('template-list')).toBeInTheDocument();
   });
@@ -88,5 +90,23 @@ describe('ChecklistsAdminPage related links', () => {
 
     expect(screen.queryByRole('link', { name: /Check reports/i })).toBeNull();
     expect(screen.getByRole('link', { name: /Expiring on apparatus/i })).toBeInTheDocument();
+  });
+
+  // W46-5: the hub card promises fleet readiness and the check log, and this
+  // page linked to neither.
+  it('links to the fleet board and check log for the grants their routes admit', () => {
+    grant('inventory.check_manage', 'inventory.check_view');
+    renderWithRouter(<ChecklistsAdminPage />);
+
+    expect(screen.getByRole('link', { name: /Fleet readiness/i })).toHaveAttribute('href', '/inventory/checklists');
+    expect(screen.getByRole('link', { name: /Check log/i })).toHaveAttribute('href', '/inventory/checklists/log');
+  });
+
+  it('opens the fleet board to a scheduling officer without check_view', () => {
+    grant('inventory.check_manage', 'scheduling.manage');
+    renderWithRouter(<ChecklistsAdminPage />);
+
+    expect(screen.getByRole('link', { name: /Fleet readiness/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Check log/i })).toBeInTheDocument();
   });
 });

@@ -21,10 +21,12 @@ import {
   PiggyBank,
   BarChart3,
   ShieldCheck,
+  ClipboardCheck,
 } from 'lucide-react';
 import { useFinanceStore } from '../store/financeStore';
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { Skeleton } from '@/components/ux/Skeleton';
+import { useAuthStore } from '@/stores/authStore';
 
 // =============================================================================
 // KPI Card Component
@@ -162,6 +164,9 @@ const DashboardSkeleton: React.FC = () => (
 
 const FinanceDashboardPage: React.FC = () => {
   const { dashboard, isLoading, error, fetchDashboard } = useFinanceStore();
+  // /finance/approvals is gated on finance.approve, which finance.view does not
+  // imply; linking a viewer without it there would only open Access Denied.
+  const canApprove = useAuthStore((s) => s.checkPermission('finance.approve'));
 
   useEffect(() => {
     void fetchDashboard();
@@ -222,6 +227,7 @@ const FinanceDashboardPage: React.FC = () => {
           value={String(dashboard?.pendingApprovalsCount ?? 0)}
           icon={<Clock className="h-5 w-5 text-yellow-600" />}
           iconBgClass="bg-yellow-100 dark:bg-yellow-500/20"
+          {...(canApprove ? { linkTo: '/finance/approvals' } : {})}
         />
         <KpiCard
           label="Dues Collection"
@@ -280,6 +286,14 @@ const FinanceDashboardPage: React.FC = () => {
       <div>
         <h2 className="text-theme-text-primary mb-3 text-sm font-semibold">Quick Links</h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {canApprove && (
+            <QuickLinkCard
+              to="/finance/approvals"
+              icon={<ClipboardCheck className="h-5 w-5" />}
+              title="Approvals"
+              description="Approve or deny requests waiting on a step"
+            />
+          )}
           <QuickLinkCard
             to="/finance/budgets"
             icon={<BarChart3 className="h-5 w-5" />}

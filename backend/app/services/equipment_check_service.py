@@ -127,6 +127,15 @@ class EquipmentCheckService:
         if data.get("is_active"):
             self._validate_publishable_data(data, compartments_data)
 
+        # Same guard as update_template. Without it a foreign org's apparatus id
+        # was stored (the FK accepts any apparatus row) and its name read back
+        # in the checklist listings, and a basic_apparatus id — which the
+        # builder offered — failed the FK and surfaced as a 500.
+        if data.get("apparatus_id") and not await is_in_org(
+            self.db, Apparatus, data["apparatus_id"], organization_id
+        ):
+            raise ValueError("Invalid apparatus")
+
         template = EquipmentCheckTemplate(
             id=generate_uuid(),
             organization_id=organization_id,

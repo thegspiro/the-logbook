@@ -289,7 +289,7 @@ class TestInterviewUpdateAutoAdvance:
         )
 
         await svc.update_interview(
-            interview.id, org, interviewer, recommendation="recommend"
+            interview.id, org, interviewer, {"recommendation": "recommend"}
         )
 
         updated = await svc.get_prospect(prospect.id, org)
@@ -308,7 +308,7 @@ class TestInterviewUpdateAutoAdvance:
         )
 
         await svc.update_interview(
-            interview.id, org, interviewer, recommendation="do_not_recommend"
+            interview.id, org, interviewer, {"recommendation": "do_not_recommend"}
         )
 
         assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
@@ -340,7 +340,7 @@ class TestInterviewUpdateAutoAdvance:
         )
 
         await svc.update_interview(
-            interview.id, org, interviewer, recommendation="recommend"
+            interview.id, org, interviewer, {"recommendation": "recommend"}
         )
 
         assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
@@ -353,7 +353,7 @@ class TestInterviewUpdateAutoAdvance:
         )
 
         await svc.update_interview(
-            interview.id, org, interviewer, recommendation="recommend"
+            interview.id, org, interviewer, {"recommendation": "recommend"}
         )
 
         assert await _current_step_id(svc, prospect.id, org) == str(gate.id)

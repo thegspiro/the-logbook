@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   getDocuments: vi.fn(),
   getActivity: vi.fn(),
   getLinkedEvents: vi.fn(),
+  updateApplicant: vi.fn(),
+  getRoles: vi.fn(),
 }));
 
 vi.mock('../store/prospectiveMembersStore', () => ({
@@ -29,9 +31,16 @@ vi.mock('../services/api', () => ({
   applicantService: {
     getDocuments: (...a: unknown[]) => mocks.getDocuments(...a) as unknown,
     getActivity: (...a: unknown[]) => mocks.getActivity(...a) as unknown,
+    updateApplicant: (...a: unknown[]) => mocks.updateApplicant(...a) as unknown,
   },
   eventLinkService: {
     getLinkedEvents: (...a: unknown[]) => mocks.getLinkedEvents(...a) as unknown,
+  },
+}));
+
+vi.mock('../../../services/api', () => ({
+  roleService: {
+    getRoles: (...a: unknown[]) => mocks.getRoles(...a) as unknown,
   },
 }));
 
@@ -243,5 +252,88 @@ describe('ApplicantDetailDrawer activity log', () => {
 
     expect(await screen.findByText(/prospect advanced/)).toBeInTheDocument();
     expect(screen.getByText(/prospect status changed/)).toBeInTheDocument();
+  });
+});
+
+describe('ApplicantDetailDrawer conversion notes', () => {
+  // The Convert dialog's notes are recorded on the transfer's activity entry
+  // and nowhere else, so the log has to show them.
+  it('shows the notes recorded with a conversion', async () => {
+    mocks.getActivity.mockResolvedValue([
+      {
+        id: 'act-9',
+        prospect_id: 'app-1',
+        action: 'transferred_to_membership',
+        details: { user_id: 'u-9', username: 'rbishop', notes: 'Cleared by the chief on 9/28.' },
+        performed_by: 'u-1',
+        performer_name: 'Dana Cole',
+        created_at: '2026-09-28T14:00:00Z',
+      },
+    ]);
+    renderDrawer();
+    await screen.findByText('Stage History');
+
+    await userEvent.click(screen.getByText('Activity Log'));
+
+    expect(await screen.findByText('Cleared by the chief on 9/28.')).toBeInTheDocument();
+  });
+});
+
+describe('ApplicantDetailDrawer address', () => {
+  // The drawer showed an address only when it had a city, so an applicant who
+  // gave a street and ZIP but no city appeared to have no address at all.
+  it('shows an address that has a street but no city', async () => {
+    renderDrawer({ address: { street: '1 Main St', zip_code: '62701' } });
+    await screen.findByText('Stage History');
+
+    expect(screen.getByText('1 Main St, 62701')).toBeInTheDocument();
+  });
+
+  it('shows an address that has only a city', async () => {
+    renderDrawer({ address: { city: 'Springfield' } });
+    await screen.findByText('Stage History');
+
+    expect(screen.getByText('Springfield')).toBeInTheDocument();
+  });
+});
+
+describe('ApplicantDetailDrawer contact edit', () => {
+  beforeEach(() => {
+    mocks.updateApplicant.mockReset();
+    mocks.updateApplicant.mockResolvedValue({});
+    mocks.getRoles.mockReset();
+    mocks.getRoles.mockResolvedValue([]);
+  });
+
+  // An edit is an update: the backend reads an omitted key as "leave it
+  // alone", so `|| undefined` on an emptied box kept the old phone number,
+  // birth date and address behind a "Contact info updated" toast.
+  it('sends null for every optional contact field the user empties', async () => {
+    const user = userEvent.setup();
+    renderDrawer({
+      phone: '555-0100',
+      date_of_birth: '1990-04-02',
+      address: { street: '1 Main St', city: 'Springfield', state: 'IL', zip_code: '62701' },
+    });
+    await screen.findByText('Stage History');
+
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    for (const label of ['Phone number', 'Date of birth', 'Street address', 'City', 'State', 'ZIP code']) {
+      await user.clear(screen.getByLabelText(label));
+    }
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(mocks.updateApplicant).toHaveBeenCalledWith(
+      'app-1',
+      expect.objectContaining({
+        first_name: 'Riley',
+        last_name: 'Bishop',
+        email: 'riley.bishop@example.org',
+        phone: null,
+        date_of_birth: null,
+        address: { street: null, city: null, state: null, zip_code: null },
+        target_role_id: null,
+      })
+    );
   });
 });

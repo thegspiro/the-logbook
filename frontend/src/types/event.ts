@@ -3,8 +3,8 @@
  */
 
 // Import enum types from the canonical source and re-export
-import type { EventType, RSVPStatus } from '../constants/enums';
-export type { EventType, RSVPStatus };
+import type { AttendancePetitionStatus, EventType, RSVPStatus } from '../constants/enums';
+export type { AttendancePetitionStatus, EventType, RSVPStatus };
 
 export interface Event {
   id: string;
@@ -98,6 +98,47 @@ export interface Event {
   /** The caller's own RSVP, so the modal can open prefilled rather than
    * resetting and silently discarding what they had entered. */
   user_rsvp?: UserRSVP | null;
+
+  /** When self check-in closes, as the backend's check-in window defines it.
+   * Later than end_datetime for a "window" event with minutes after. */
+  check_in_closes_at?: string | null;
+}
+
+/** A member's request to be marked present at an event that is over. */
+export interface AttendancePetition {
+  id: string;
+  event_id: string;
+  user_id: string;
+  user_name?: string | null;
+  status: AttendancePetitionStatus;
+  reason: string;
+  requested_check_in_at?: string | null;
+  requested_check_out_at?: string | null;
+  reviewed_by?: string | null;
+  reviewed_by_name?: string | null;
+  reviewed_at?: string | null;
+  review_note?: string | null;
+  created_at: string;
+}
+
+/** The caller's own request, and whether the server would accept one now.
+ * `can_request` is the server's decision; the screen does not re-derive it. */
+export interface MyAttendancePetition {
+  petition: AttendancePetition | null;
+  can_request: boolean;
+  unavailable_reason?: string | null;
+}
+
+export interface AttendancePetitionCreate {
+  reason: string;
+  requested_check_in_at?: string | undefined;
+  requested_check_out_at?: string | undefined;
+}
+
+export interface AttendancePetitionApprove {
+  check_in_at: string;
+  check_out_at: string;
+  review_note?: string | undefined;
 }
 
 /** The current user's own RSVP, echoed back on the event detail response.

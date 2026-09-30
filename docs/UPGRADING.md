@@ -134,6 +134,35 @@ _is_ the upgrade. Before it:
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
 
+### The `production` profile's nginx needs a certificate in `infrastructure/nginx/ssl/` (2026-09-30)
+
+Only deployments started with `--profile production` are affected. That
+profile's nginx container used to mount `infrastructure/nginx/nginx.conf`,
+which is a host-nginx site file: it has no `events`/`http` blocks, proxies to
+`127.0.0.1`, and reads Let's Encrypt paths for a placeholder domain. As shipped
+the container could not start, so a working deployment is running a local
+edit of that file or of `docker-compose.yml`.
+
+The container now mounts its own `infrastructure/nginx/docker.conf` and reads
+`fullchain.pem` and `privkey.pem` from `infrastructure/nginx/ssl/`. **Without
+both files it will not start**, and it logs:
+
+```
+[emerg] cannot load certificate "/etc/nginx/ssl/fullchain.pem"
+```
+
+**The fix:** put the certificate and key there, then bring the profile up
+again. "Docker Compose `production` profile" in `docs/DEPLOYMENT.md` covers
+issuing one with Let's Encrypt, including renewal. If you had edited
+`nginx.conf` or the compose file to make the old setup work, move your
+certificate paths to that directory instead. Your edited `nginx.conf` is no
+longer read by the container. Git will report a conflict on a locally edited
+`docker-compose.yml`; take the incoming `volumes:` list for the `nginx`
+service.
+
+Nothing changes for installs that run nginx on the host
+(`scripts/setup-ssl.sh`, `docs/deployment/aws.md`) or no proxy at all.
+
 ### `FRONTEND_URL` must be a public address (2026-09-25)
 
 A production backend now **refuses to start** while `FRONTEND_URL` points at
