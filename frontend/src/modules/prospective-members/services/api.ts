@@ -200,6 +200,7 @@ function mapPipelineResponse(data: BackendPipelineResponse): Pipeline {
     is_template: data.is_template ?? false,
     is_default: data.is_default ?? false,
     inactivity_config: inactivityConfig,
+    conversion_config: data.conversion_config,
     public_status_enabled: data.public_status_enabled ?? false,
     public_show_future_stages: data.public_show_future_stages ?? true,
     report_stage_groups: data.report_stage_groups ?? undefined,
@@ -538,6 +539,7 @@ export const pipelineService = {
     if (data.is_default !== undefined) payload.is_default = data.is_default;
     if (data.is_template !== undefined) payload.is_template = data.is_template;
     if (data.inactivity_config !== undefined) payload.inactivity_config = data.inactivity_config;
+    if (data.conversion_config !== undefined) payload.conversion_config = data.conversion_config;
     if (data.public_status_enabled !== undefined) payload.public_status_enabled = data.public_status_enabled;
     if (data.public_show_future_stages !== undefined)
       payload.public_show_future_stages = data.public_show_future_stages;
@@ -1022,13 +1024,12 @@ export const applicantService = {
   },
 
   async convertToMember(applicantId: string, data: ConvertApplicantRequest): Promise<ConvertApplicantResponse> {
-    // Backend uses /transfer endpoint with different payload shape.
-    // Map 'regular' → 'probationary' since all regular members start as probationary.
-    const backendMembershipType =
-      data.target_membership_type === 'regular' ? 'probationary' : data.target_membership_type;
+    // Class and status rather than the legacy membership_type: the pair can
+    // say "probationary administrative", which the single value cannot.
     const payload: Record<string, unknown> = {
       send_welcome_email: data.send_welcome_email,
-      membership_type: backendMembershipType,
+      member_class: data.member_class,
+      member_status: data.member_status,
     };
     if (data.target_role_id) {
       payload.role_ids = [data.target_role_id];

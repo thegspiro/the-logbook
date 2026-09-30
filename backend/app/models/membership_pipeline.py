@@ -118,6 +118,10 @@ class MembershipPipeline(Base):
     is_active = Column(Boolean, default=True, index=True)
     auto_transfer_on_approval = Column(Boolean, default=False)
     inactivity_config = Column(JSON, default=dict)
+    # What an applicant becomes on conversion, per applicant track. NULL means
+    # not configured: conversion uses DEFAULT_CONVERSION_OUTCOMES in
+    # app.schemas.membership_pipeline. Shape: PipelineConversionConfig.
+    conversion_config = Column(JSON, nullable=True)
     public_status_enabled = Column(Boolean, default=False)
     # Off: the public status page lists only completed stages, and withholds
     # the stage total — a count alone tells the applicant how much is left.

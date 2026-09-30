@@ -40,6 +40,7 @@ import { STAGE_TYPE_ICONS, STAGE_TYPE_COLORS } from '../constants';
 import { pipelineService } from '../services/api';
 import { PipelineBuilder } from '../components/PipelineBuilder';
 import { ReportStageGroupsEditor } from '../components/ReportStageGroupsEditor';
+import { ConversionOutcomesCard } from '../components/ConversionOutcomesCard';
 import { ConfirmDialog } from '../../../components/ux/ConfirmDialog';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { blankToNull } from '../../../utils/formValues';
@@ -960,6 +961,8 @@ export const PipelineSettingsPage: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              <ConversionOutcomesCard pipeline={currentPipeline} onSaved={setCurrentPipeline} />
 
               {/* Public Status Page Settings */}
               <div className="card bg-theme-input-bg p-5">

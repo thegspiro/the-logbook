@@ -243,6 +243,9 @@ async def create_pipeline(
             is_active=data.is_active,
             auto_transfer_on_approval=data.auto_transfer_on_approval,
             inactivity_config=data.inactivity_config,
+            conversion_config=(
+                data.conversion_config.model_dump() if data.conversion_config else None
+            ),
             steps=steps,
             created_by=current_user.id,
         )
@@ -1800,6 +1803,8 @@ async def transfer_prospect(
             [ec for ec in data.emergency_contacts] if data.emergency_contacts else None
         ),
         membership_type=data.membership_type,
+        member_class=data.member_class,
+        member_status=data.member_status,
     )
     if not result:
         raise HTTPException(
