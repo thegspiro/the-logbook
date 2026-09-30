@@ -52,7 +52,10 @@ async def _make_position(db: AsyncSession, org_id: str, name: str) -> str:
 
 
 async def _make_prospect(
-    svc: MembershipPipelineService, org_id: str, **extra
+    svc: MembershipPipelineService,
+    org_id: str,
+    created_by: str | None = None,
+    **extra,
 ) -> object:
     data = {
         "first_name": "Devon",
@@ -60,7 +63,9 @@ async def _make_prospect(
         "email": f"devon-{_uid()[:8]}@example.org",
     }
     data.update(extra)
-    return await svc.create_prospect(organization_id=org_id, data=data)
+    return await svc.create_prospect(
+        organization_id=org_id, data=data, created_by=created_by
+    )
 
 
 class TestTargetRoleIsOrgScoped:
@@ -277,7 +282,12 @@ class TestTransferAppliesTheTargetRole:
         org_id, admin_id = setup_org_and_admin
         role_id = await _make_position(db_session, org_id, "Safety Officer")
         svc = MembershipPipelineService(db_session)
-        prospect = await _make_prospect(svc, org_id, target_role_id=role_id)
+        # Recorded as chosen by the admin: the fallback applies a stored role
+        # only while whoever chose it may grant it (test_prospect_target_role_
+        # ceiling.py covers the refusals).
+        prospect = await _make_prospect(
+            svc, org_id, created_by=admin_id, target_role_id=role_id
+        )
 
         result = await svc.transfer_to_membership(str(prospect.id), org_id, admin_id)
 
@@ -329,7 +339,9 @@ class TestTransferAppliesTheTargetRole:
         org_id, admin_id = setup_org_and_admin
         role_id = await _make_position(db_session, org_id, "Engineer")
         svc = MembershipPipelineService(db_session)
-        prospect = await _make_prospect(svc, org_id, target_role_id=role_id)
+        prospect = await _make_prospect(
+            svc, org_id, created_by=admin_id, target_role_id=role_id
+        )
         loaded = await svc.get_prospect(str(prospect.id), org_id)
 
         transfer = await svc._do_transfer(loaded, admin_id)

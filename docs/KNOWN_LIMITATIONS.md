@@ -5139,6 +5139,17 @@ application's own target role otherwise, which also reaches the automatic path
 at `_complete_step` — that one passes no roles at all and so could never have
 honoured the applicant's role.
 
+**Choosing a target role is granting it (MP-31, 2026-09-30).** Saving one is
+held to the saver's own permissions, manual conversion to the converting
+member's, and automatic conversion applies it only while whoever chose it is
+still active and holds every permission it grants. **Accepted:** a target role
+saved before 2026-09-30 has no recorded chooser, so automatic conversion gives
+that applicant the default position and logs that a leader must assign the
+role. Converting manually applies it as normal. To have it applied
+automatically, clear the role on the applicant and choose it again: only a
+change records who chose it, because the applicant drawer re-sends the stored
+role on every save.
+
 **Two further defects surfaced while closing this**, both fixed here:
 
 - `new_user.roles = roles` in `_do_transfer` was a lazy load on a persistent

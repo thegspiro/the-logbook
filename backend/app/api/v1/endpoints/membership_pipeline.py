@@ -1022,11 +1022,41 @@ async def check_existing_members_for_prospect(
     }
 
 
+async def _enforce_target_role_ceiling(
+    current_user: User,
+    target_role_id: UUID | None,
+    db: AsyncSession,
+    request: Request,
+) -> None:
+    """Refuse storing a target role that grants more than the caller holds.
+
+    The stored role becomes the new member's position at conversion, so
+    choosing it is granting it (see _target_role_setter_may_grant, which
+    re-checks the chooser at automatic conversion). An id outside the org is
+    left for the service's in-org check to refuse with a 400.
+    """
+    if not target_role_id:
+        return
+    role = (
+        await db.execute(
+            select(Role).where(
+                Role.id == str(target_role_id),
+                Role.organization_id == str(current_user.organization_id),
+            )
+        )
+    ).scalar_one_or_none()
+    if role is not None:
+        await _enforce_role_grant_ceiling(
+            current_user, [role], db, get_client_ip(request)
+        )
+
+
 @router.post(
     "/prospects", response_model=ProspectResponse, status_code=status.HTTP_201_CREATED
 )
 async def create_prospect(
     data: ProspectCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("members.create", "prospective_members.manage")
@@ -1042,6 +1072,8 @@ async def create_prospect(
     **Requires permission: members.create or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
+
+    await _enforce_target_role_ceiling(current_user, data.target_role_id, db, request)
 
     # Check for existing members (especially archived) before creating
     matches = await service.check_existing_members(
@@ -1129,6 +1161,7 @@ async def get_prospect(
 async def update_prospect(
     prospect_id: UUID,
     data: ProspectUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("members.manage", "prospective_members.manage")
@@ -1140,6 +1173,20 @@ async def update_prospect(
     **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
+    if data.target_role_id is not None:
+        # Only a change is checked: the applicant drawer re-sends the stored
+        # role on every save, and a coordinator editing a phone number on an
+        # applicant whose position the Chief chose is not granting anything.
+        # The service likewise re-records who chose the role only on a change.
+        existing = await service.get_prospect(
+            str(prospect_id), str(current_user.organization_id)
+        )
+        if existing is not None and str(existing.target_role_id or "") != str(
+            data.target_role_id
+        ):
+            await _enforce_target_role_ceiling(
+                current_user, data.target_role_id, db, request
+            )
     try:
         prospect = await service.update_prospect(
             str(prospect_id),
@@ -1697,6 +1744,43 @@ async def transfer_prospect(
         await _enforce_role_grant_ceiling(
             current_user, list(requested_roles), db, get_client_ip(request)
         )
+        effective_role_ids = [str(rid) for rid in data.role_ids]
+    elif prospect.target_role_id:
+        # SEC: with no role_ids the applicant's stored target role is what the
+        # new member receives, so it is held to the same ceiling. Passed on
+        # explicitly so the service never falls back to it on this path: its
+        # fallback vouches by who *stored* the role, which is the automatic
+        # path's check, not this caller's. No alert: this caller did not choose
+        # the role, and converting an applicant whose position a Chief chose is
+        # an ordinary request, not an escalation attempt.
+        target_role = (
+            await db.execute(
+                select(Role).where(
+                    Role.id == str(prospect.target_role_id),
+                    Role.organization_id == str(current_user.organization_id),
+                )
+            )
+        ).scalar_one_or_none()
+        if target_role is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="The applicant's target position no longer exists",
+            )
+        await _enforce_role_grant_ceiling(
+            current_user,
+            [target_role],
+            db,
+            get_client_ip(request),
+            report=False,
+            detail=(
+                "This applicant's target position grants permissions beyond "
+                "your own. Choose positions you can grant, or ask someone who "
+                "holds them to convert this applicant."
+            ),
+        )
+        effective_role_ids = [str(target_role.id)]
+    else:
+        effective_role_ids = None
 
     result = await service.transfer_to_membership(
         prospect_id=str(prospect_id),
@@ -1706,7 +1790,7 @@ async def transfer_prospect(
         membership_id=data.membership_id,
         rank=canonical_rank,
         station=data.station,
-        role_ids=[str(rid) for rid in data.role_ids] if data.role_ids else None,
+        role_ids=effective_role_ids,
         send_welcome_email=data.send_welcome_email,
         initial_password=data.password,
         department_email=data.department_email,
