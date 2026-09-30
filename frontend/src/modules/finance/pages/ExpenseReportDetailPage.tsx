@@ -23,6 +23,7 @@ import {
   APPROVAL_STEP_STATUS_COLORS,
   EXPENSE_TYPE_LABELS,
 } from '../types';
+import { ApprovalStepActions } from '../components/ApprovalStepActions';
 
 const STATUS_LABELS: Record<string, string> = {
   draft: 'Draft',
@@ -271,6 +272,12 @@ const ExpenseReportDetailPage: React.FC = () => {
       {er.approvalSteps.length > 0 && (
         <div className="card p-6">
           <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Approval Timeline</h2>
+          <ApprovalStepActions
+            isPendingApproval={er.status === ExpenseReportStatus.PENDING_APPROVAL}
+            steps={er.approvalSteps}
+            subject={`${er.title} (${er.reportNumber})`}
+            onDecided={() => void fetchExpenseReport(er.id)}
+          />
           <div className="space-y-0">
             {[...er.approvalSteps]
               .sort((a, b) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))

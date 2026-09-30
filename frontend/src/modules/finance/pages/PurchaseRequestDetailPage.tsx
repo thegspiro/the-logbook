@@ -32,6 +32,7 @@ import { useTimezone } from '@/hooks/useTimezone';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { PurchaseRequestStatus, PURCHASE_REQUEST_STATUS_COLORS, APPROVAL_STEP_STATUS_COLORS } from '../types';
+import { ApprovalStepActions } from '../components/ApprovalStepActions';
 
 // =============================================================================
 // Status Labels
@@ -462,6 +463,12 @@ const PurchaseRequestDetailPage: React.FC = () => {
       {/* Approval Timeline */}
       <div className="card p-6">
         <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Approval Timeline</h2>
+        <ApprovalStepActions
+          isPendingApproval={pr.status === PurchaseRequestStatus.PENDING_APPROVAL}
+          steps={pr.approvalSteps}
+          subject={`${pr.title} (${pr.requestNumber})`}
+          onDecided={() => void fetchPurchaseRequest(pr.id)}
+        />
         <ApprovalTimeline isDraft={pr.status === PurchaseRequestStatus.DRAFT} steps={pr.approvalSteps} />
       </div>
     </div>
