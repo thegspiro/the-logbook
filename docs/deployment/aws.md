@@ -138,9 +138,18 @@ docker compose ps
 sudo apt install -y nginx
 
 sudo tee /etc/nginx/sites-available/logbook > /dev/null << 'EOF'
+# Anonymous suggestion-box submissions and follow-ups are never access-logged:
+# a line holding the client IP and the exact second would identify the member.
+map $request_uri $access_loggable {
+    "~^/api/v1/suggestions/(boxes/[^/?]+/submissions(\?|$)|follow-up/)" 0;
+    default 1;
+}
+
 server {
     listen 80;
     server_name logbook.yourdomain.com;
+
+    access_log /var/log/nginx/access.log combined if=$access_loggable;
 
     client_max_body_size 50M;
 

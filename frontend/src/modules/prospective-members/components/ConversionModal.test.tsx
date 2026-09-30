@@ -15,10 +15,14 @@ import type { Applicant } from '../types';
 const mockConvertToMember = vi.fn();
 const mockGetWelcomeEmailAvailability = vi.fn();
 const mockRefreshPipelineView = vi.fn();
+const mockGetPipeline = vi.fn();
 
 vi.mock('../services/api', () => ({
   applicantService: {
     convertToMember: (...args: unknown[]) => mockConvertToMember(...args) as unknown,
+  },
+  pipelineService: {
+    getPipeline: (...args: unknown[]) => mockGetPipeline(...args) as unknown,
   },
 }));
 vi.mock('../../../services/api', () => ({
@@ -26,8 +30,16 @@ vi.mock('../../../services/api', () => ({
     getWelcomeEmailAvailability: (...args: unknown[]) => mockGetWelcomeEmailAvailability(...args) as unknown,
   },
 }));
+// The pipeline on screen, whose conversion rule pre-fills class and status.
+const currentPipeline = {
+  id: 'pipe-1',
+  conversion_config: {
+    operational: { member_class: 'operational', member_status: 'probationary' },
+    administrative: { member_class: 'administrative', member_status: 'probationary' },
+  },
+};
 vi.mock('../store/prospectiveMembersStore', () => ({
-  useProspectiveMembersStore: () => ({ refreshPipelineView: mockRefreshPipelineView }),
+  useProspectiveMembersStore: () => ({ refreshPipelineView: mockRefreshPipelineView, currentPipeline }),
 }));
 vi.mock('./TargetRolePicker', () => ({ default: () => null }));
 vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
@@ -37,6 +49,7 @@ import { ConversionModal } from './ConversionModal';
 
 const applicant = {
   id: 'p1',
+  pipeline_id: 'pipe-1',
   first_name: 'Devon',
   last_name: 'Marsh',
   email: 'devon@example.org',
@@ -190,4 +203,72 @@ it('no longer reads "Step 3 of 2" once the conversion is done', async () => {
 
   await screen.findByText('Conversion Complete');
   expect(screen.queryByText(/step 3 of 2/i)).not.toBeInTheDocument();
+});
+
+describe('what the applicant becomes', () => {
+  // Pre-filled from the pipeline's conversion rule for the applicant's track,
+  // the same rule automatic conversion applies.
+  const openFor = async (user: ReturnType<typeof userEvent.setup>, overrides: Partial<Applicant>) => {
+    render(<ConversionModal isOpen onClose={vi.fn()} applicant={{ ...applicant, ...overrides }} />);
+    await user.click(screen.getByRole('button', { name: /continue/i }));
+  };
+  const classSelect = () => screen.getByRole('combobox', { name: 'Member class' });
+  const statusSelect = () => screen.getByRole('combobox', { name: 'Starting status' });
+
+  beforeEach(() => {
+    mockGetPipeline.mockReset();
+  });
+
+  it("starts from the pipeline's rule for an administrative applicant", async () => {
+    const user = userEvent.setup();
+    await openFor(user, { target_membership_type: 'administrative' });
+
+    expect(classSelect()).toHaveValue('administrative');
+    expect(statusSelect()).toHaveValue('probationary');
+
+    await user.click(convert());
+
+    await waitFor(() => expect(mockConvertToMember).toHaveBeenCalled());
+    const payload = mockConvertToMember.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(payload).toMatchObject({ member_class: 'administrative', member_status: 'probationary' });
+  });
+
+  it('can be changed for this one applicant', async () => {
+    const user = userEvent.setup();
+    await openFor(user, { target_membership_type: 'regular' });
+    expect(classSelect()).toHaveValue('operational');
+
+    await user.selectOptions(classSelect(), 'social');
+    await user.selectOptions(statusSelect(), 'regular');
+    await user.click(convert());
+
+    await waitFor(() => expect(mockConvertToMember).toHaveBeenCalled());
+    const payload = mockConvertToMember.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(payload).toMatchObject({ member_class: 'social', member_status: 'regular' });
+  });
+
+  it("reads another pipeline's rule from the server", async () => {
+    mockGetPipeline.mockResolvedValue({
+      id: 'pipe-2',
+      conversion_config: {
+        operational: { member_class: 'operational', member_status: 'regular' },
+        administrative: { member_class: 'administrative', member_status: 'regular' },
+      },
+    });
+    const user = userEvent.setup();
+    await openFor(user, { pipeline_id: 'pipe-2', target_membership_type: 'regular' });
+
+    await waitFor(() => expect(statusSelect()).toHaveValue('regular'));
+    expect(mockGetPipeline).toHaveBeenCalledWith('pipe-2');
+  });
+
+  it('waits for a choice when the rule cannot be read', async () => {
+    mockGetPipeline.mockRejectedValue(new Error('offline'));
+    const user = userEvent.setup();
+    await openFor(user, { pipeline_id: 'pipe-2' });
+
+    await waitFor(() => expect(mockGetPipeline).toHaveBeenCalled());
+    expect(classSelect()).toHaveValue('');
+    expect(convert()).toBeDisabled();
+  });
 });
