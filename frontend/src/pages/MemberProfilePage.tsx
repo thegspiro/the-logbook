@@ -56,6 +56,7 @@ import ContactInfoSection from '../components/member-profile/ContactInfoSection'
 import EmergencyContactsSection from '../components/member-profile/EmergencyContactsSection';
 import { VisibilityControl } from '../components/member-profile/VisibilityControl';
 import { useOverlaySurface } from '../hooks/useOverlaySurface';
+import { canViewMemberIdCard } from '../utils/memberIdCardAccess';
 import { MemberIdCardsPanel } from '../modules/membership/components/MemberIdCardsPanel';
 import { ReactivateMemberModal } from '../components/ReactivateMemberModal';
 import { AnonymizeMemberModal } from '../components/AnonymizeMemberModal';
@@ -644,6 +645,7 @@ export const MemberProfilePage: React.FC = () => {
   // Check if current user can edit this profile (self or admin)
   const isAdmin = checkPermission('users.update') || checkPermission('members.manage');
   const canManageIdCards = checkPermission('members.manage_id_cards');
+  const canViewIdCard = canViewMemberIdCard(currentUser?.id, userId, checkPermission);
   const canEdit = currentUser?.id === userId || isAdmin;
   // Emergency contacts are leadership-only server-side (members.manage or the
   // member themselves). Mirror that gate here so everyone else sees no section
@@ -835,13 +837,15 @@ export const MemberProfilePage: React.FC = () => {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Link
-                  to={`/members/${userId}/id-card`}
-                  className="touch-target-phone inline-flex items-center gap-1.5 rounded-lg border border-blue-300 px-3 py-1 text-sm font-medium text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 dark:border-blue-500/40 dark:text-blue-400 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
-                >
-                  <CreditCard className="h-4 w-4" />
-                  ID Card
-                </Link>
+                {canViewIdCard && (
+                  <Link
+                    to={`/members/${userId}/id-card`}
+                    className="touch-target-phone inline-flex items-center gap-1.5 rounded-lg border border-blue-300 px-3 py-1 text-sm font-medium text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 dark:border-blue-500/40 dark:text-blue-400 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
+                  >
+                    <CreditCard className="h-4 w-4" />
+                    ID Card
+                  </Link>
+                )}
                 {canManageMembers ? (
                   <button
                     type="button"
