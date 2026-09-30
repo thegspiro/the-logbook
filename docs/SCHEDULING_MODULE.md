@@ -394,6 +394,27 @@ The board shows both sides: the offerer sees "Offered to T. Nguyen — still
 yours until they accept" with a withdraw button, and the recipient sees the
 offer on the day it belongs to with Take/Decline.
 
+**Officer approval of an offer** _(2026-09-30)_ — manager review now handles
+the one-way shape too. Approving a request with a target and no requested shift
+hands the seat to the target, under the same live-state checks as any other
+approval; a training seat is refused, as on the member's own accept. The Requests
+tab labels these "→ Offered to _name_" rather than "Open swap", and the target
+is notified when an officer approves any swap they are part of. Before this,
+every such approval failed with "Requested assignment was removed after this
+request was submitted", whether or not anything had been removed.
+
+**A swap is withdrawn with its seat** _(2026-09-30)_ — a swap names its seats
+by (shift, member), not by assignment id, so removing the assignment used to
+leave the request pending until an officer approved it and was refused. Now
+every path that takes a seat away cancels the pending swaps naming it and tells
+both members: a withdrawal or officer removal, a decline, an officer
+reassigning or cancelling the seat, cancelling the shift (which also cancels
+moves _into_ it), approved time off, a leave, and an approved swap or accepted
+offer (the offerer's other requests for the same seat). The cancellation runs
+as its own transaction after the removal commits — inside it, the locks would
+be taken in the opposite order to `review_swap_request` and could deadlock
+against a concurrent review, and review re-checks the seat under lock anyway.
+
 **Expiry** _(2026-08-23)_ — a pending offer holds the seat with the member who
 made it, so left alone it survives the shift itself: the offerer believes they
 are covered, the duty officer sees a name that will not turn up, and nobody is

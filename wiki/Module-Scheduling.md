@@ -137,10 +137,15 @@ refuses participants by design, and is limited to a one-way targeted offer:
 accepting is the offerer withdrawing and the accepter signing up, in one step,
 both already unprivileged.
 
-**This closed a request nobody could complete.** Manager review reads a set
-`target_user_id` as "there must be an assignment to trade back" and rejects the
-request when there is no requesting shift — which is exactly the shape a
-one-way offer has.
+**This closed a request nobody could complete.** Manager review read a set
+`target_user_id` as "there must be an assignment to trade back" and rejected
+the request when there was no requesting shift — which is exactly the shape a
+one-way offer has. Since 2026-09-30 manager review also approves that shape,
+handing the seat to the target.
+
+A pending swap is cancelled, and both members told, when the seat it names goes
+away — withdrawal, removal, decline, reassignment, shift cancellation, approved
+time off, leave, or another approved swap of the same seat.
 
 `swap_offer_expiry` is a daily sweep closing offers still pending the day
 before the shift, notifying both members and the duty officer. A pending offer

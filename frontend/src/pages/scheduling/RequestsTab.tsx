@@ -356,6 +356,13 @@ export const RequestsTab: React.FC = () => {
                             </>
                           ) : req.requesting_shift_id ? (
                             <> {' \u2192 '} Requested shift (details unavailable)</>
+                          ) : req.target_user_id ? (
+                            // A one-way offer of the seat to a named member —
+                            // what the board's give-up flow creates. Approving
+                            // it hands the seat to them.
+                            <>
+                              {' \u2192 '} Offered to {req.target_user_name || 'a member'}
+                            </>
                           ) : (
                             <> {' \u2192 '} Open swap</>
                           )}
