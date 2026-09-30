@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
@@ -9,6 +9,7 @@ const mockBulkAdvance = vi.fn();
 const mockRefreshPipelineView = vi.fn();
 const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
+const mockPurge = vi.fn();
 
 vi.mock('../services/api', () => ({
   applicantService: {
@@ -70,7 +71,7 @@ const storeState = {
   viewMode: 'table',
   activeTab: 'active',
   detailDrawerOpen: false,
-  inactiveApplicants: [],
+  inactiveApplicants: [] as ApplicantListItem[],
   inactiveTotalApplicants: 0,
   inactiveCurrentPage: 1,
   inactiveTotalPages: 1,
@@ -110,7 +111,7 @@ const storeState = {
   fetchRejectedApplicants: vi.fn(),
   fetchConvertedApplicants: vi.fn(),
   reactivateApplicant: vi.fn(),
-  purgeInactiveApplicants: vi.fn(),
+  purgeInactiveApplicants: (...a: unknown[]) => mockPurge(...a) as unknown,
   setFilters: vi.fn(),
   setViewMode: vi.fn(),
   setActiveTab: vi.fn(),
@@ -186,6 +187,66 @@ describe('ProspectiveMembersPage table-view bulk actions', () => {
     await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Network down'));
     expect(mockRefreshPipelineView).not.toHaveBeenCalled();
     expect(screen.getByText('2 selected')).toBeInTheDocument();
+  });
+});
+
+describe('ProspectiveMembersPage — purging inactive applications', () => {
+  // The Inactive tab's Purge once toasted the size of the selection whatever
+  // the server did -- and the server matched a different status, so it deleted
+  // nothing. The toast must say what the server actually deleted.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockPurge.mockReset();
+    storeState.activeTab = 'inactive';
+    storeState.inactiveApplicants = [row('i1', 'Riley', 'Bishop'), row('i2', 'Sam', 'Ortega')];
+  });
+  afterEach(() => {
+    storeState.activeTab = 'active';
+    storeState.inactiveApplicants = [];
+  });
+
+  const purgeBoth = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(screen.getByRole('checkbox', { name: 'Select Riley Bishop' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Select Sam Ortega' }));
+    await user.click(screen.getByRole('button', { name: /Purge Selected/ }));
+    await user.click(screen.getByRole('button', { name: /Permanently Delete/ }));
+  };
+
+  it('reports the number the server deleted', async () => {
+    mockPurge.mockResolvedValue(2);
+    const user = userEvent.setup();
+    renderWithRouter(<ProspectiveMembersPage />);
+
+    await purgeBoth(user);
+
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith('Purged 2 application(s)'));
+    expect(mockPurge).toHaveBeenCalledWith(['i1', 'i2']);
+  });
+
+  it('says so when fewer were deleted than were selected', async () => {
+    mockPurge.mockResolvedValue(1);
+    const user = userEvent.setup();
+    renderWithRouter(<ProspectiveMembersPage />);
+
+    await purgeBoth(user);
+
+    await waitFor(() =>
+      expect(mockToastError).toHaveBeenCalledWith(
+        'Purged 1 of 2 application(s). The rest are no longer inactive and were kept.'
+      )
+    );
+    expect(mockToastSuccess).not.toHaveBeenCalled();
+  });
+
+  it('reports a failure instead of success', async () => {
+    mockPurge.mockRejectedValue(new Error('Could not delete a file'));
+    const user = userEvent.setup();
+    renderWithRouter(<ProspectiveMembersPage />);
+
+    await purgeBoth(user);
+
+    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Could not delete a file'));
+    expect(mockToastSuccess).not.toHaveBeenCalled();
   });
 });
 
