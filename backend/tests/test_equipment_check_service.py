@@ -191,6 +191,43 @@ class TestUpdateTemplateApparatusValidation:
         assert result is None
 
 
+class TestCreateTemplateApparatusValidation:
+    """W46-1: create_template stored whatever apparatus_id it was given. A
+    basic_apparatus id (offered by the builder) failed the FK as a 500, and a
+    foreign org's apparatus id was stored and its name read back."""
+
+    async def test_foreign_or_basic_apparatus_rejected(self, service, mock_db):
+        with patch(
+            "app.services.equipment_check_service.is_in_org",
+            new_callable=AsyncMock,
+            return_value=False,
+        ):
+            with pytest.raises(ValueError, match="Invalid apparatus"):
+                await service.create_template(
+                    "org-1",
+                    "user-1",
+                    {"name": "E1 only", "apparatus_id": "not-an-apparatus-row"},
+                )
+        mock_db.add.assert_not_called()
+        mock_db.commit.assert_not_awaited()
+
+    async def test_type_level_template_skips_validation(self, service, mock_db):
+        with (
+            patch(
+                "app.services.equipment_check_service.is_in_org",
+                new_callable=AsyncMock,
+            ) as mock_in_org,
+            patch.object(
+                service, "get_template", new_callable=AsyncMock, return_value=None
+            ),
+        ):
+            await service.create_template(
+                "org-1", "user-1", {"name": "Engines", "apparatus_type": "engine"}
+            )
+        mock_in_org.assert_not_awaited()
+        mock_db.add.assert_called_once()
+
+
 class TestTemplatePublicationValidation:
     @pytest.mark.parametrize(
         ("compartments", "message"),

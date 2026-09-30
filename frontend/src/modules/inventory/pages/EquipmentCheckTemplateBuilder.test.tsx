@@ -22,6 +22,7 @@ const {
   updateEquipmentCheckTemplate,
   toastSuccess,
   toastError,
+  getApparatusOptions,
 } = vi.hoisted(() => ({
   getTemplate: vi.fn(),
   updateCheckItem: vi.fn(),
@@ -39,13 +40,14 @@ const {
   updateEquipmentCheckTemplate: vi.fn(),
   toastSuccess: vi.fn(),
   toastError: vi.fn(),
+  getApparatusOptions: vi.fn().mockResolvedValue({ source: 'default', options: [] }),
 }));
 
 vi.mock('react-hot-toast', () => ({ default: { success: toastSuccess, error: toastError } }));
 
 vi.mock('@/modules/scheduling', () => ({
   schedulingService: {
-    getApparatusOptions: vi.fn().mockResolvedValue({ options: [] }),
+    getApparatusOptions: (...args: unknown[]) => getApparatusOptions(...args) as unknown,
   },
 }));
 
@@ -2592,4 +2594,69 @@ describe('EquipmentCheckTemplateBuilder blocks a delete for the whole span of a 
     await confirm('Delete');
     await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('cab'));
   }, 10_000);
+});
+
+describe('EquipmentCheckTemplateBuilder details and rows (W46)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getApparatusOptions.mockReset();
+    getApparatusOptions.mockResolvedValue({ source: 'default', options: [] });
+    mockViewport('laptop');
+  });
+
+  const openDetails = async () => {
+    renderNewBuilder();
+    await screen.findByRole('button', { name: 'Details' });
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+  };
+
+  const specificOptions = async () => {
+    const select = await screen.findByLabelText('Specific Apparatus');
+    return within(select)
+      .getAllByRole('option')
+      .map((o) => o.textContent);
+  };
+
+  // W46-8: a basic apparatus was offered, and saving it failed — the column
+  // can only name a full Apparatus record.
+  it('offers no specific unit to a department on basic apparatus', async () => {
+    getApparatusOptions.mockResolvedValue({
+      source: 'basic',
+      options: [{ id: 'basic-1', name: 'Engine 1', unit_number: 'E1', apparatus_type: 'engine' }],
+    });
+    await openDetails();
+    await waitFor(() => expect(getApparatusOptions).toHaveBeenCalled());
+    expect(await specificOptions()).toEqual(['All of type (default)']);
+  });
+
+  it('offers full apparatus records as specific units', async () => {
+    getApparatusOptions.mockResolvedValue({
+      source: 'apparatus',
+      options: [{ id: 'app-1', name: 'Engine 1', unit_number: 'E1', apparatus_type: 'engine' }],
+    });
+    await openDetails();
+    await waitFor(async () => expect(await specificOptions()).toEqual(['All of type (default)', 'E1 — Engine 1']));
+  });
+
+  // W46-9: the chips printed the raw token ("Ems") and had no paramedic seat.
+  it('names seats as the schedule does, paramedic included', async () => {
+    await openDetails();
+    expect(screen.getByRole('checkbox', { name: 'EMT' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Paramedic' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Driver/Operator' })).toBeInTheDocument();
+  });
+
+  // W46-10: dnd-kit's role="button" sat on the whole location, so its fields
+  // were inside a button — presentational to a screen reader.
+  it('keeps the drag attributes on the handle, not the row with the fields', async () => {
+    renderNewBuilder();
+    await screen.findByRole('button', { name: 'Details' });
+    fireEvent.click(screen.getByRole('button', { name: /build from scratch/i }));
+
+    const name = await screen.findByLabelText('Location name');
+    expect(name.closest('[role="button"]')).toBeNull();
+    expect(name.closest('[aria-roledescription="sortable"]')).toBeNull();
+    const handle = screen.getByRole('button', { name: /Save before dragging this compartment/ });
+    expect(handle).toHaveAttribute('aria-roledescription', 'sortable');
+  });
 });

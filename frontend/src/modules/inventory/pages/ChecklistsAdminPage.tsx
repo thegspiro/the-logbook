@@ -14,7 +14,7 @@
 
 import React from 'react';
 import { Link } from 'react-router';
-import { BarChart3, Clock, SlidersHorizontal } from 'lucide-react';
+import { BarChart3, ClipboardList, Clock, SlidersHorizontal, Truck } from 'lucide-react';
 import { useAuthStore } from '../../../stores/authStore';
 import { EquipmentCheckTemplateList } from '../components/EquipmentCheckTemplateList';
 import { Breadcrumbs } from '../../../components/ux';
@@ -39,6 +39,24 @@ interface RelatedLink {
 }
 
 const RELATED: RelatedLink[] = [
+  // The Inventory Administration card for this page promises "fleet readiness
+  // and the check log", and this was the only screen on the authoring side
+  // with no way to either — the officer who had just published a checklist
+  // had to leave through the navigation to see whether crews were running it.
+  {
+    label: 'Fleet readiness',
+    description: 'Each apparatus, its last check, and anything it is due or owes',
+    path: '/inventory/checklists',
+    icon: Truck,
+    anyPermission: ['inventory.check_view', 'scheduling.manage'],
+  },
+  {
+    label: 'Check log',
+    description: 'Every expected check, including the ones that did not happen',
+    path: '/inventory/checklists/log',
+    icon: ClipboardList,
+    anyPermission: ['inventory.check_submit', 'inventory.check_view', 'scheduling.manage'],
+  },
   {
     label: 'Check reports',
     description: 'Compliance, failures and item trends across completed checks',

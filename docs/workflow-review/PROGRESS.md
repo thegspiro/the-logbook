@@ -79,18 +79,18 @@ build on each other's data, so run them in order unless a row says otherwise.
 
 ## Tier 6 — Inventory and equipment
 
-| #   | Activity                                                                     | Acts as                | Starts at                                                  | Status |
-| --- | ---------------------------------------------------------------------------- | ---------------------- | ---------------------------------------------------------- | ------ |
-| W38 | Set up inventory: categories, then add items of each tracking kind           | quartermaster          | `/inventory/admin/setup`, `/inventory/admin/items`         | ✅     |
-| W39 | Issue equipment to a member, the member sees it, return it                   | quartermaster → member | `/inventory/admin/members`, `/inventory/my-equipment`      | ✅     |
-| W40 | Pool items, checkouts, kits and variant groups                               | quartermaster          | `/inventory/admin/pool`, `/inventory/checkouts`            | ✅     |
-| W41 | A member's request, return, write-off and reorder, and the approvals         | member → quartermaster | `/inventory/admin/requests`, `/inventory/admin/returns`    | ✅     |
-| W42 | Maintenance records, vendors, charges and issuance allowances                | quartermaster          | `/inventory/admin/maintenance`, `/inventory/admin/charges` | ✅     |
-| W43 | Storage areas, barcode labels and CSV import                                 | quartermaster          | `/inventory/storage-areas`, `/inventory/import`            | ✅     |
-| W44 | NFC: tag in bulk, put away, shelf audit, items not seen                      | quartermaster          | `/inventory/admin/nfc/*`, `/inventory/shelf-audit`         | ✅     |
-| W45 | The self-service kiosk                                                       | member                 | `/inventory/kiosk`                                         | ✅     |
-| W46 | Equipment checks: build a checklist, perform a check, fleet board, check log | quartermaster → member | `/inventory/admin/checklists`, `/inventory/checklists`     | ⬜     |
-| W47 | Medical supplies                                                             | quartermaster          | `/medical-supplies`                                        | ⬜     |
+| #   | Activity                                                                     | Acts as                     | Starts at                                                  | Status |
+| --- | ---------------------------------------------------------------------------- | --------------------------- | ---------------------------------------------------------- | ------ |
+| W38 | Set up inventory: categories, then add items of each tracking kind           | quartermaster               | `/inventory/admin/setup`, `/inventory/admin/items`         | ✅     |
+| W39 | Issue equipment to a member, the member sees it, return it                   | quartermaster → member      | `/inventory/admin/members`, `/inventory/my-equipment`      | ✅     |
+| W40 | Pool items, checkouts, kits and variant groups                               | quartermaster               | `/inventory/admin/pool`, `/inventory/checkouts`            | ✅     |
+| W41 | A member's request, return, write-off and reorder, and the approvals         | member → quartermaster      | `/inventory/admin/requests`, `/inventory/admin/returns`    | ✅     |
+| W42 | Maintenance records, vendors, charges and issuance allowances                | quartermaster               | `/inventory/admin/maintenance`, `/inventory/admin/charges` | ✅     |
+| W43 | Storage areas, barcode labels and CSV import                                 | quartermaster               | `/inventory/storage-areas`, `/inventory/import`            | ✅     |
+| W44 | NFC: tag in bulk, put away, shelf audit, items not seen                      | quartermaster               | `/inventory/admin/nfc/*`, `/inventory/shelf-audit`         | ✅     |
+| W45 | The self-service kiosk                                                       | member                      | `/inventory/kiosk`                                         | ✅     |
+| W46 | Equipment checks: build a checklist, perform a check, fleet board, check log | scheduling_officer → member | `/inventory/admin/checklists`, `/inventory/checklists`     | ✅     |
+| W47 | Medical supplies                                                             | quartermaster               | `/medical-supplies`                                        | ⬜     |
 
 ## Tier 7 — Apparatus and facilities
 
@@ -179,10 +179,52 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   Positions and Apparatus steps at 390px wide (W01-13), and the sign-in
   screen's "Forgot your password?", Privacy and Terms links (W02-5), and
   "Back to Login" on the forgot-password page (36px, W03).
+- **W79** — the checklist builder's header and chip controls are 30–40px tall
+  at 390×844, and its drag handles 20px (W46-18).
+- **W33 / W34** — the shift-assignment notice names the equipment checklists
+  but opens the schedule rather than My Checklists, and prints the shift date
+  as `2026-09-30` (W46-16).
 - **W75** — password sign-in, failure, lockout and sign-out never reach the
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W46 — Equipment checks: build a checklist, perform a check, fleet board, check log — 2026-09-30
+
+Driven as: `scheduling_officer` building and publishing an Engine checklist
+and reading the board, log and reports. Then `member` and `member2` performing
+checks on Engine 1 at 1280×900 and 390×844, with `member` refused. The seeded
+Quartermaster holds no checklist grant, so the row's role was corrected
+(W46-14). Fresh database: this container had no review database.
+
+Held: one template per double-clicked save, and one check per double-clicked
+submit. Draft resume, carried-over counts, and an out-of-service item taking
+the rig off the board, with its reason.
+
+Fixed:
+
+- W46-1 (MED — create stored any apparatus id: 500 for a basic one, stored for a foreign one).
+- W46-2 (MED — a filed check still offered Open checklist, then 409 at Submit).
+- W46-3 (MED — a check that took an item out of service counted as neither expected nor done).
+- W46-8 (MED — the builder offered basic apparatus it cannot save).
+- W46-4 (LOW — "No check templates configured" for a rig with one).
+- W46-5 (LOW — the admin page lacked the fleet and log links its hub card promises).
+- W46-6 (LOW — "← Fleet" shown to members it refuses).
+- W46-7 (LOW — answers told by colour only; unnamed count box).
+- W46-9 (LOW — raw seat tokens, no Paramedic).
+- W46-10 (LOW — each builder row exposed as one "button").
+
+Flagged:
+
+- W46-11 (MED — checks on basic apparatus stored with no apparatus; reports empty by truck).
+- W46-12 (MED — a check filed before its shift's date is off the board until then).
+- W46-13 (LOW — no note required on Fail/Out of service).
+- W46-14 (LOW — Quartermaster grants).
+
+Open: W46-15 (LOW), W46-16, W46-17, W46-18 (NIT).
+
+Gate: typecheck, lint, flake8, black, isort, the inventory suites and the
+equipment-check pytests clean. Next: W47.
 
 ### W45 — The self-service kiosk — 2026-09-30
 
