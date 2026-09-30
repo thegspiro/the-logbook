@@ -432,7 +432,7 @@ const MyEquipmentPage: React.FC = () => {
               </p>
               <Link
                 to="/learning/gear"
-                className="mobile-touch-target font-medium text-red-700 hover:underline dark:text-red-400"
+                className="mobile-touch-target font-medium text-red-800 hover:underline dark:text-red-300"
               >
                 Take the short walkthrough in the Learning Center
               </Link>
