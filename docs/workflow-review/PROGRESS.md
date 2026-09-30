@@ -86,7 +86,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W40 | Pool items, checkouts, kits and variant groups                               | quartermaster          | `/inventory/admin/pool`, `/inventory/checkouts`            | ✅     |
 | W41 | A member's request, return, write-off and reorder, and the approvals         | member → quartermaster | `/inventory/admin/requests`, `/inventory/admin/returns`    | ✅     |
 | W42 | Maintenance records, vendors, charges and issuance allowances                | quartermaster          | `/inventory/admin/maintenance`, `/inventory/admin/charges` | ✅     |
-| W43 | Storage areas, barcode labels and CSV import                                 | quartermaster          | `/inventory/storage-areas`, `/inventory/import`            | ⬜     |
+| W43 | Storage areas, barcode labels and CSV import                                 | quartermaster          | `/inventory/storage-areas`, `/inventory/import`            | ✅     |
 | W44 | NFC: tag in bulk, put away, shelf audit, items not seen                      | quartermaster          | `/inventory/admin/nfc/*`, `/inventory/shelf-audit`         | ⬜     |
 | W45 | The self-service kiosk                                                       | member                 | `/inventory/kiosk`                                         | ⬜     |
 | W46 | Equipment checks: build a checklist, perform a check, fleet board, check log | quartermaster → member | `/inventory/admin/checklists`, `/inventory/checklists`     | ⬜     |
@@ -183,6 +183,21 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W43 — Storage areas, barcode labels and CSV import — 2026-09-29
+
+Driven as: `quartermaster` at 1280×900, with `member` refused at 390×844.
+Held: a nested storage area was created once with its own barcode; label
+printing with nothing selected says so; the import reports each rejected row
+and the item export neutralises a formula-looking name; the member got 403 on
+every write and Access Denied on both pages. Fixed: W43-1 (HIGH — a negative
+quantity in an imported CSV was saved, and every item list including it then
+failed with a 500, taking down the Items page; the repair of already-stored
+rows is flagged), W43-2 (MED — deleting a storage area that held items hid
+their location, and the nested-area warning never showed), W43-3 (MED — the
+import could not be started without a mouse), W43-4 (LOW — unnamed expand
+toggles). Open: W43-5, W43-6 (NIT). Gate: typecheck, lint, flake8, black and
+the touched frontend and backend suites clean. Next: W44.
 
 ### W42 — Maintenance records, vendors, charges and issuance allowances — 2026-09-29
 
