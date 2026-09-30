@@ -268,23 +268,20 @@ const TreeRow: React.FC<TreeRowProps> = ({
             phone it drills in, which the whole name now does — so the glyph
             is decoration there rather than a second control with the same
             name, which would leave two "Open <area>" buttons per row. */}
-        {isDesktop ? (
+        {isDesktop && has ? (
           <button
+            type="button"
             onClick={() => onToggle(node.id)}
-            disabled={!has}
             className="text-theme-text-muted flex h-6 w-6 shrink-0 items-center justify-center"
-            aria-label={has ? (open ? 'Collapse' : 'Expand') : undefined}
+            aria-label={`${open ? 'Collapse' : 'Expand'} ${node.name}`}
+            aria-expanded={open}
           >
-            {has ? (
-              open ? (
-                <ChevronDown className="h-4 w-4" />
-              ) : (
-                <ChevronRight className="h-4 w-4" />
-              )
-            ) : (
-              <span className="h-4 w-4" />
-            )}
+            {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
           </button>
+        ) : isDesktop ? (
+          // Nothing nested, so nothing to toggle: a placeholder keeps the
+          // names aligned without an unnamed, disabled button in the tab order.
+          <span className="flex h-6 w-6 shrink-0" aria-hidden="true" />
         ) : (
           <span className="text-theme-text-muted flex h-6 w-6 shrink-0 items-center justify-center" aria-hidden="true">
             {has ? <ChevronRight className="h-4 w-4" /> : <span className="h-4 w-4" />}
@@ -754,6 +751,19 @@ const StorageAreasPage: React.FC = () => {
     }
   };
 
+  // Deleting only deactivates the area: its items keep pointing at it and
+  // their location reads "--" everywhere, and nested areas are left under a
+  // parent that no longer shows. The dialog already said "move them"; it now
+  // waits until that is done.
+  //
+  // Nested areas are counted from the list rather than read from the target:
+  // the row hands over the flat record, whose `children` is never populated,
+  // so the dialog's nested-area warning had never once been shown.
+  const nestedCount = deleteTarget
+    ? storageAreas.filter((area) => area.parent_id === deleteTarget.id && area.is_active).length
+    : 0;
+  const deleteBlocked = (deleteTarget?.item_count ?? 0) > 0 || nestedCount > 0;
+
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     setIsDeleting(true);
@@ -1205,7 +1215,7 @@ const StorageAreasPage: React.FC = () => {
             <button
               type="button"
               onClick={() => void confirmDelete()}
-              disabled={isDeleting}
+              disabled={isDeleting || deleteBlocked}
               className="btn-primary btn-md inline-flex items-center gap-2 disabled:opacity-50"
             >
               {isDeleting && <Loader2 className="h-4 w-4 animate-spin" />}Delete
@@ -1224,14 +1234,14 @@ const StorageAreasPage: React.FC = () => {
         <p className="text-theme-text-secondary text-sm">
           Delete <strong className="text-theme-text-primary">{deleteTarget?.name ?? ''}</strong>?
           {(deleteTarget?.item_count ?? 0) > 0 && (
-            <span className="mt-2 block text-red-600 dark:text-red-400">
+            <span className="mt-2 block text-red-700 dark:text-red-400">
               This area holds {deleteTarget?.item_count ?? 0} item{(deleteTarget?.item_count ?? 0) !== 1 ? 's' : ''}.
-              Move them to another storage area.
+              Move them to another storage area first.
             </span>
           )}
-          {(deleteTarget?.children?.length ?? 0) > 0 && (
-            <span className="mt-2 block text-amber-600 dark:text-amber-400">
-              This area has nested sub-areas that may also be affected.
+          {nestedCount > 0 && (
+            <span className="mt-2 block text-red-700 dark:text-red-400">
+              It has areas nested inside it. Move or delete those first.
             </span>
           )}
         </p>
