@@ -1249,7 +1249,7 @@ const MyTrainingPage: React.FC = () => {
                   </button>
                   <Link
                     to="/learning/training"
-                    className="mobile-touch-target text-sm text-red-700 hover:underline dark:text-red-400"
+                    className="mobile-touch-target text-sm text-red-800 hover:underline dark:text-red-300"
                   >
                     Take the short walkthrough in the Learning Center
                   </Link>
