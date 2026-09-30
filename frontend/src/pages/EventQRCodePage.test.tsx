@@ -216,6 +216,8 @@ describe('EventQRCodePage', () => {
       // A greyed-out code is still scannable, so no code may be rendered at all
       expect(screen.queryByTestId('qr-code')).not.toBeInTheDocument();
       expect(screen.getByText(/QR code hidden until check-in opens/)).toBeInTheDocument();
+      // The how-it-works steps are not shown yet, so say what the code is for.
+      expect(screen.getByText(/scan it with your phone camera to check yourself in/)).toBeInTheDocument();
     });
 
     it('should not show print button when check-in is invalid', async () => {
