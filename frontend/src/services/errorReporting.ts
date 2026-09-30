@@ -601,6 +601,18 @@ function requestPath(error: AxiosError): string {
 }
 
 /**
+ * The anonymous side of the suggestion box: submitting, and following up with
+ * a key. A report is filed from the member's own session, so it would record
+ * who sent the submission, to which box, and when — on a page administrators
+ * read. The backend refuses these reports too (is_excluded_client_path), which
+ * also covers builds cached before this existed. Keep in step with
+ * UNLOGGED_PATH in backend/app/core/logging.py. Unanchored: requestPath gives
+ * the service's own path (`/suggestions/…`, relative to the /api/v1 baseURL)
+ * or a full URL.
+ */
+const UNREPORTED_REQUEST = /\/suggestions\/(?:boxes\/[^/]+\/submissions$|follow-up\/)/;
+
+/**
  * Report a failed API request. Called from the response interceptors of every
  * axios instance, so every module's traffic is covered by construction.
  */
@@ -610,6 +622,7 @@ export function reportApiError(error: AxiosError): void {
   const path = requestPath(error);
   // Never report a failure of the reporting endpoint itself.
   if (path.includes('/errors')) return;
+  if (UNREPORTED_REQUEST.test(path)) return;
 
   const classified = classifyApiError(error);
   if (!classified) return;
