@@ -47,6 +47,10 @@ const pipeline = (overrides: Partial<Pipeline> = {}): Pipeline => ({
   is_template: false,
   is_default: true,
   inactivity_config: DEFAULT_INACTIVITY_CONFIG,
+  conversion_config: {
+    operational: { member_class: 'operational', member_status: 'probationary' },
+    administrative: { member_class: 'administrative', member_status: 'regular' },
+  },
   public_status_enabled: true,
   public_show_future_stages: true,
   stages: [],
