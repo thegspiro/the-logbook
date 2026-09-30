@@ -9,9 +9,11 @@
  * - Member status badge
  *
  * Accessible at /members/:userId/id-card. Any authenticated user can view
- * their own card; viewing another member's card requires users.view,
- * members.view, or members.manage (enforced by GET /users/:id/with-roles —
- * members.view is the directory permission every default position carries).
+ * their own card; another member's card is limited to members.manage or
+ * members.manage_id_cards (see utils/memberIdCardAccess.ts). The profile data
+ * the card reads is directory information served to any members.view holder,
+ * so the gate is here rather than on GET /users/:id/with-roles — what it
+ * withholds is the assembled, scannable badge.
  */
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
@@ -28,6 +30,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import { useRanks } from '../hooks/useRanks';
 import type { UserWithRoles } from '../types/role';
 import { isAdministrativeMember } from '../utils/membership';
+import { canViewMemberIdCard } from '../utils/memberIdCardAccess';
 
 const STATUS_COLORS: Record<string, string> = {
   active: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
@@ -44,7 +47,8 @@ function getStatusColor(status: string): string {
 
 export const MemberIdCardPage: React.FC = () => {
   const { userId } = useParams<{ userId: string }>();
-  const { user: currentUser } = useAuthStore();
+  const { user: currentUser, checkPermission } = useAuthStore();
+  const allowed = canViewMemberIdCard(currentUser?.id, userId, checkPermission);
   const { formatRank } = useRanks();
   const tz = useTimezone();
   const barcodeRef = useRef<SVGSVGElement>(null);
@@ -56,7 +60,10 @@ export const MemberIdCardPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
-    if (!userId) return;
+    if (!userId || !allowed) {
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
@@ -72,7 +79,7 @@ export const MemberIdCardPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [userId, allowed]);
 
   useEffect(() => {
     void fetchData();
@@ -109,6 +116,25 @@ export const MemberIdCardPage: React.FC = () => {
       org: currentUser.organization_id,
     });
   };
+
+  if (!allowed) {
+    return (
+      <div className="mx-auto max-w-md p-6">
+        <div className="card mb-4 p-4">
+          <p className="text-theme-text-primary">You can only view your own ID card.</p>
+          <p className="text-theme-text-secondary mt-1 text-sm">
+            To check a member in or verify their badge, use the badge scanner.
+          </p>
+        </div>
+        <Link
+          to={userId ? `/members/${userId}` : '/members'}
+          className="text-blue-600 hover:text-blue-800 dark:hover:text-blue-400"
+        >
+          &larr; Back to Profile
+        </Link>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

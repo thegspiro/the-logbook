@@ -337,6 +337,38 @@ describe('MemberProfilePage membership and privacy', () => {
     expect(screen.queryByRole('switch')).not.toBeInTheDocument();
   });
 
+  it('does not offer a colleague ID card to a plain member', async () => {
+    grantedPermissions = ['members.view', 'users.view'];
+    renderWithRouter(<MemberProfilePage />);
+
+    await screen.findByRole('heading', { name: 'jdoe' });
+    expect(screen.queryByRole('link', { name: 'ID Card' })).not.toBeInTheDocument();
+  });
+
+  it.each(['members.manage', 'members.manage_id_cards'])(
+    'offers a colleague ID card to a holder of %s',
+    async (permission) => {
+      grantedPermissions = [permission];
+      renderWithRouter(<MemberProfilePage />);
+
+      expect(await screen.findByRole('link', { name: 'ID Card' })).toHaveAttribute(
+        'href',
+        `/members/${TARGET_ID}/id-card`
+      );
+    }
+  );
+
+  it('offers every member their own ID card', async () => {
+    routeUserId = VIEWER_ID;
+    getUserWithRoles.mockResolvedValue({ ...redactedColleague, id: VIEWER_ID });
+    renderWithRouter(<MemberProfilePage />);
+
+    expect(await screen.findByRole('link', { name: 'ID Card' })).toHaveAttribute(
+      'href',
+      `/members/${VIEWER_ID}/id-card`
+    );
+  });
+
   it('shows an address the member chose to share', async () => {
     getUserWithRoles.mockResolvedValue({
       ...redactedColleague,
