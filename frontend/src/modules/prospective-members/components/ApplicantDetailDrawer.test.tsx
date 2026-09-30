@@ -255,6 +255,48 @@ describe('ApplicantDetailDrawer activity log', () => {
   });
 });
 
+describe('ApplicantDetailDrawer conversion notes', () => {
+  // The Convert dialog's notes are recorded on the transfer's activity entry
+  // and nowhere else, so the log has to show them.
+  it('shows the notes recorded with a conversion', async () => {
+    mocks.getActivity.mockResolvedValue([
+      {
+        id: 'act-9',
+        prospect_id: 'app-1',
+        action: 'transferred_to_membership',
+        details: { user_id: 'u-9', username: 'rbishop', notes: 'Cleared by the chief on 9/28.' },
+        performed_by: 'u-1',
+        performer_name: 'Dana Cole',
+        created_at: '2026-09-28T14:00:00Z',
+      },
+    ]);
+    renderDrawer();
+    await screen.findByText('Stage History');
+
+    await userEvent.click(screen.getByText('Activity Log'));
+
+    expect(await screen.findByText('Cleared by the chief on 9/28.')).toBeInTheDocument();
+  });
+});
+
+describe('ApplicantDetailDrawer address', () => {
+  // The drawer showed an address only when it had a city, so an applicant who
+  // gave a street and ZIP but no city appeared to have no address at all.
+  it('shows an address that has a street but no city', async () => {
+    renderDrawer({ address: { street: '1 Main St', zip_code: '62701' } });
+    await screen.findByText('Stage History');
+
+    expect(screen.getByText('1 Main St, 62701')).toBeInTheDocument();
+  });
+
+  it('shows an address that has only a city', async () => {
+    renderDrawer({ address: { city: 'Springfield' } });
+    await screen.findByText('Stage History');
+
+    expect(screen.getByText('Springfield')).toBeInTheDocument();
+  });
+});
+
 describe('ApplicantDetailDrawer contact edit', () => {
   beforeEach(() => {
     mocks.updateApplicant.mockReset();

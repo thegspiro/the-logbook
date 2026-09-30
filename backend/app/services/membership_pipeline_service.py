@@ -3863,6 +3863,7 @@ class MembershipPipelineService:
         initial_password: Optional[str] = None,
         member_class: Optional[str] = None,
         member_status: Optional[str] = None,
+        notes: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """Transfer a prospect to a full User record"""
         # Serialize on the prospect row: without the lock, two concurrent
@@ -3899,6 +3900,7 @@ class MembershipPipelineService:
             initial_password=initial_password,
             member_class=member_class,
             member_status=member_status,
+            notes=notes,
         )
 
     async def _target_role_setter_may_grant(self, prospect: ProspectiveMember) -> bool:
@@ -3983,6 +3985,7 @@ class MembershipPipelineService:
         completing_step_id: Optional[str] = None,
         member_class: Optional[str] = None,
         member_status: Optional[str] = None,
+        notes: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Internal method to perform the actual transfer.
 
@@ -4367,6 +4370,11 @@ class MembershipPipelineService:
         transfer_details: Dict[str, Any] = {"user_id": user_id, "username": username}
         if membership_id:
             transfer_details["membership_number"] = membership_id
+        # The Convert dialog's notes have nowhere else to live: the prospect is
+        # closed by this transfer, and its activity log is the record the
+        # coordinator's reasoning is read back from.
+        if notes and notes.strip():
+            transfer_details["notes"] = notes.strip()
 
         await self._log_activity(
             prospect_id=prospect.id,

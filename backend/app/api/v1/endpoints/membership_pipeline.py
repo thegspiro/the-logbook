@@ -1826,6 +1826,7 @@ async def transfer_prospect(
         membership_type=data.membership_type,
         member_class=data.member_class,
         member_status=data.member_status,
+        notes=data.notes,
     )
     if not result:
         raise HTTPException(

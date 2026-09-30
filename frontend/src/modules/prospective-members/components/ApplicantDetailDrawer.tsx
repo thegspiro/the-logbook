@@ -490,7 +490,10 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         </span>
                       </div>
                     )}
-                    {applicant.address?.city && (
+                    {(applicant.address?.street ||
+                      applicant.address?.city ||
+                      applicant.address?.state ||
+                      applicant.address?.zip_code) && (
                       <div className="flex items-center gap-2 text-sm">
                         <MapPin className="text-theme-text-muted h-4 w-4" />
                         <span className="text-theme-text-secondary">
@@ -1062,6 +1065,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         const from = detailText(entry.details, 'from');
                         const to = detailText(entry.details, 'to');
                         const reason = detailText(entry.details, 'reason');
+                        const notes = detailText(entry.details, 'notes');
                         return (
                           <div key={entry.id} className="flex items-start gap-2 text-xs">
                             <div className="bg-theme-text-muted mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" />
@@ -1085,6 +1089,13 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                                   overwrite, so this is the only place it shows. */}
                               {reason && (
                                 <p className="text-theme-text-secondary mt-0.5 break-words italic">“{reason}”</p>
+                              )}
+                              {/* Notes the coordinator attached to the action —
+                                  the Convert dialog's notes live only here. */}
+                              {notes && (
+                                <p className="text-theme-text-secondary mt-0.5 break-words whitespace-pre-wrap">
+                                  {notes}
+                                </p>
                               )}
                             </div>
                           </div>

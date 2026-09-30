@@ -40,13 +40,15 @@ const MODULE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 const ALLOWED = new Map<string, number>([
   // Table pagination: `onPageChange` on PipelineTable. Nothing else.
   ['pages/ProspectiveMembersPage.tsx', 1],
+  // The store's mutations are held to the same rule as every component:
+  // `resumeApplicant` refreshed the rows alone and left "Total Active" short
+  // by the applicant it had just resumed. What remains is not a mutation:
+  // `refreshPipelineView` itself, `fetchApplicants` re-requesting the last
+  // page after the list shrank, and `setFilters` / `clearFilters` /
+  // `setViewMode` / `setActiveTab` re-scoping the rows (`setFilters` recounts
+  // itself when a counted filter moves).
+  ['store/prospectiveMembersStore.ts', 6],
 ]);
-
-/**
- * The store owns both fetches and is where `refreshPipelineView` composes
- * them, so it necessarily names `fetchApplicants`.
- */
-const STORE = 'store/prospectiveMembersStore.ts';
 
 function sourceFiles(dir: string): string[] {
   const found: string[] = [];
@@ -69,7 +71,6 @@ describe('pipeline refresh integrity', () => {
 
     for (const file of sourceFiles(MODULE_ROOT)) {
       const relative = path.relative(MODULE_ROOT, file).split(path.sep).join('/');
-      if (relative === STORE) continue;
 
       const source = fs.readFileSync(file, 'utf8');
       // Strip comments so prose naming the old function does not trip this.
