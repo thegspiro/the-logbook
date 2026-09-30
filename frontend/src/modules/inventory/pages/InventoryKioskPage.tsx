@@ -34,7 +34,7 @@ import { ScanSuccessFlash } from '../../../components/ux/ScanSuccessFlash';
 import { Breadcrumbs } from '../../../components/ux';
 import { parseInventoryTagCode } from '../../../constants/nfc';
 import { formatDate } from '../../../utils/dateFormatting';
-import { getErrorMessage } from '../../../utils/errorHandling';
+import { getErrorMessage, toAppError } from '../../../utils/errorHandling';
 import { NFC_ID_CARDS_INTEGRATION, isIssuedCardCode, normalizeCardSerial } from '../../membership/constants/idCards';
 import { useInventoryNfcEnabled } from '../hooks/useInventoryNfcEnabled';
 import type { InventoryNfcResolveRequest, KioskIdentifyResponse, KioskPreviewResponse } from '../types/nfc';
@@ -124,22 +124,34 @@ export const InventoryKioskPage: React.FC = () => {
     try {
       await work();
     } catch (err: unknown) {
-      setMessage({ kind: 'error', text: getErrorMessage(err, 'That did not work. Try again.') });
+      // A 409 is the kiosk refusing a tap, with the reason worded for the
+      // member; the support code other errors carry is for IT, not for them.
+      const appError = toAppError(err);
+      setMessage({
+        kind: 'error',
+        text:
+          appError.status === 409 && appError.message
+            ? appError.message
+            : getErrorMessage(err, 'That did not work. Try again.'),
+      });
     } finally {
       busyRef.current = false;
       setBusy(false);
     }
   };
 
+  const greet = (card: InventoryNfcResolveRequest, me: KioskIdentifyResponse) => {
+    cardRef.current = card;
+    setMember(me);
+    setPending(null);
+    setMessage(null);
+    go('member');
+    signalScanSuccess();
+  };
+
   const identify = (card: InventoryNfcResolveRequest) =>
     run(async () => {
-      const me = await inventoryService.kioskIdentify(card);
-      cardRef.current = card;
-      setMember(me);
-      setPending(null);
-      setMessage(null);
-      go('member');
-      signalScanSuccess();
+      greet(card, await inventoryService.kioskIdentify(card));
     });
 
   const refreshMember = async () => {
@@ -170,7 +182,20 @@ export const InventoryKioskPage: React.FC = () => {
       return;
     }
     void run(async () => {
-      const preview = await inventoryService.kioskPreview({ card, item });
+      let preview: KioskPreviewResponse;
+      try {
+        preview = await inventoryService.kioskPreview({ card, item });
+      } catch (err: unknown) {
+        // A card issued by serial carries no code, so it cannot be told from an
+        // item's tag until the server has looked it up. When the item lookup
+        // refuses, it may be the next member's card: greet them if it is, and
+        // otherwise show why the item was refused.
+        const nextCard = readCard(tag);
+        const next = nextCard ? await inventoryService.kioskIdentify(nextCard).catch(() => null) : null;
+        if (!nextCard || !next) throw err;
+        greet(nextCard, next);
+        return;
+      }
       setPending({ preview, item });
       setMessage(null);
       go('confirm');
@@ -249,10 +274,17 @@ export const InventoryKioskPage: React.FC = () => {
         <h1 className="text-theme-text-primary text-2xl font-bold">Self-Service Kiosk</h1>
         <div className="alert-warning" role="status">
           The kiosk needs {!nfcEnabled ? 'NFC tag tracking' : 'NFC ID cards'} turned on.{' '}
+          {/* The switch takes the department-settings grant, which an officer
+              holding only inventory.kiosk lacks: "turn it on" sent them to
+              Access Denied. Worded as the other NFC screens are. */}
           {!nfcEnabled ? (
-            <Link to="/inventory/admin/nfc" className="underline">
-              Turn on NFC tags
-            </Link>
+            <>
+              An administrator can turn it on under{' '}
+              <Link to="/inventory/admin/nfc" className="underline">
+                NFC Tags
+              </Link>
+              .
+            </>
           ) : (
             'An administrator can connect NFC ID Cards under Settings → Integrations.'
           )}

@@ -39,6 +39,7 @@ from app.models.inventory import (
     ItemStatus,
     TrackingType,
 )
+from app.models.nfc_tag import NfcTagStatus
 from app.models.user import User
 from app.schemas.nfc_tag import NfcCheckInStatus
 from app.services.inventory_nfc_service import (
@@ -212,14 +213,21 @@ class InventoryKioskService:
     async def _member(
         self, organization_id: str, card: Sequence[Optional[str]]
     ) -> User:
-        _tag, user, refusal = await NfcTagService(self.db).resolve_tag(
+        tag, user, refusal = await NfcTagService(self.db).resolve_tag(
             organization_id, card
         )
         if refusal == NfcCheckInStatus.UNKNOWN_CARD:
             raise KioskRefusal("This card is not registered to a member.")
         if refusal == NfcCheckInStatus.CARD_INACTIVE:
+            # A suspension is temporary: the member needs an officer to lift
+            # it, not a replacement card. Worded per status as the check-in
+            # station is.
+            if tag is not None and tag.status == NfcTagStatus.SUSPENDED:
+                raise KioskRefusal("This card is suspended. Ask an officer.")
+            status_word = tag.status.value if tag is not None else "inactive"
             raise KioskRefusal(
-                "This card has been marked lost or replaced and no longer works."
+                f"This card has been marked {status_word} and no longer works. "
+                "Ask an officer to issue a replacement."
             )
         if refusal is not None or user is None:
             raise KioskRefusal(
