@@ -1461,7 +1461,9 @@ class IPLoggingMiddleware:
     """
     Middleware for logging all request IP addresses and geo information.
 
-    Provides comprehensive request logging for security auditing.
+    Provides comprehensive request logging for security auditing, except for
+    the anonymous suggestion-box routes (``UNLOGGED_PATH`` in
+    ``app.core.logging``), which are served but never logged.
     Also assigns a unique request ID (UUID4-hex) for log correlation,
     logs request method/path/status/duration at INFO level, and
     binds the request_id to the Loguru context for the duration of
@@ -1482,9 +1484,14 @@ class IPLoggingMiddleware:
         from loguru import logger
 
         from app.core.geoip import get_geoip_service
-        from app.core.logging import generate_request_id, request_id_ctx
+        from app.core.logging import (
+            generate_request_id,
+            is_unlogged_path,
+            request_id_ctx,
+        )
 
         request = Request(scope)
+        unlogged = is_unlogged_path(request.url.path)
 
         # Reuse an incoming request ID only if it matches the format we
         # generate (16 lowercase hex chars) — an unvalidated client-supplied
@@ -1514,12 +1521,13 @@ class IPLoggingMiddleware:
         request.state.request_id = request_id
 
         # Log incoming request at debug level
-        logger.debug(
-            f"Request: {request.method} {request.url.path} | "
-            f"IP: {client_ip} | "
-            f"Country: {geo_info.get('country_code', 'unknown')} | "
-            f"Request-ID: {request_id}"
-        )
+        if not unlogged:
+            logger.debug(
+                f"Request: {request.method} {request.url.path} | "
+                f"IP: {client_ip} | "
+                f"Country: {geo_info.get('country_code', 'unknown')} | "
+                f"Request-ID: {request_id}"
+            )
 
         # Track timing and response status
         start = time.monotonic()
@@ -1540,7 +1548,7 @@ class IPLoggingMiddleware:
 
         # Log completed request at INFO level (skip health checks to reduce noise)
         path = request.url.path
-        if path not in ("/health", "/health/detailed"):
+        if not unlogged and path not in ("/health", "/health/detailed"):
             logger.info(
                 f"{request.method} {path} → {response_status} "
                 f"({duration_ms:.0f}ms) [rid={request_id}]"

@@ -47,3 +47,24 @@ def test_sentry_log_sinks_disable_exception_variable_diagnostics(monkeypatch):
 
     assert len(sink_options) == 3
     assert all(options["diagnose"] is False for options in sink_options)
+
+
+def test_transaction_hook_tolerates_a_trimmed_span_list():
+    """Sentry replaces an over-long span list with an AnnotatedValue; the hook
+    passes the event through untouched."""
+    from sentry_sdk.utils import AnnotatedValue
+
+    event = {"spans": AnnotatedValue.removed_because_over_size_limit()}
+    assert logging_config._sentry_before_send_transaction(event, {}) is event
+
+
+def test_transaction_hook_redacts_span_query_credentials():
+    event = {
+        "spans": [
+            {"data": {"http.query": "key=abc&page=2"}},
+            {"data": None},
+            {},
+        ]
+    }
+    logging_config._sentry_before_send_transaction(event, {})
+    assert event["spans"][0]["data"]["http.query"] == "key=[REDACTED]&page=2"

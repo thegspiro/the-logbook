@@ -702,18 +702,36 @@ each of these against what is actually in the database and on disk.
 
 What the application cannot promise, and why each is left as it is:
 
-- **Someone with server access can still correlate by time.** The access log
-  records `POST /api/v1/suggestions/boxes/{id}/submissions` with a timestamp
-  (and the client IP at debug level), the reviewers' notification email is
-  sent — and logged to `message_history` — at submission time, their in-app
-  notification rows carry an exact `sent_at`, and session
-  activity is recorded on the member's row. None of these names the submitter
-  on its own, but together they can narrow one down for whoever can read the
-  server's logs and database. Closing it would mean batching notifications
-  into a delayed digest and scrubbing request logging for these routes; both
-  cost the reviewers timely notice and are a policy choice, not a fix. The
-  in-app guarantee — no reviewer, officer or administrator can find the author
-  through the application — holds.
+- **Request logging no longer records them (decided 2026-09-30).** The
+  submission and follow-up routes are written to no access log: the bundled
+  nginx configs drop the line (`$access_loggable` in `frontend/nginx.conf` and
+  `infrastructure/nginx/nginx.conf`) and raise the error log to `crit` for
+  them, and uvicorn's access log and `IPLoggingMiddleware` skip them
+  (`UNLOGGED_PATH` in `app/core/logging.py`, pinned by
+  `tests/test_unlogged_paths.py`). The cost is accepted: a failed or
+  rate-limited submission leaves no proxy-side trace, only the backend's own
+  error handling. **A proxy the operator runs in front of these is outside the
+  repository** — Unraid's SWAG or Nginx Proxy Manager, an AWS load balancer's
+  access logs, Cloudflare — and records the IP and the second unless it is
+  configured the same way. `docs/deployment/aws.md` shows how for the host
+  nginx it documents.
+- **Someone with server access can still correlate by time.** The reviewers'
+  notification email is sent — and logged to `message_history` — at
+  submission time, their in-app notification rows carry an exact `sent_at`,
+  and session activity is recorded on the member's row. None of these names
+  the submitter on its own, but together they can narrow one down for whoever
+  can read the server's database. Closing it would mean batching notifications
+  into a delayed digest, which costs the reviewers timely notice and is a
+  policy choice, not a fix.
+- **Open (2026-09-30): a failed submission is reported under the member's
+  name.** A 5xx on the submission or follow-up routes writes an `error_logs`
+  row carrying the caller's `user_id`, the route and the exact time
+  (`persist_error_log` in `app/core/error_reporting.py`), and the frontend's
+  `reportApiError` files a second one for a 5xx, a timeout or a network
+  failure, from the member's own session. Both appear on the Error Monitoring
+  page, so on a failed anonymous submission the in-app guarantee — no
+  reviewer, officer or administrator can find the author through the
+  application — does not hold. A successful submission is unaffected.
 - **A lost follow-up key cannot be recovered.** Nothing links the key to the
   member, which is the point. The submission itself survives; the member's
   ability to read replies and respond does not.
