@@ -768,6 +768,7 @@ const AddMember: React.FC = () => {
                 </label>
                 <select
                   id="add-rank"
+                  aria-describedby="add-rank-help"
                   value={formData.rank}
                   onChange={(e) => handleInputChange('rank', e.target.value)}
                   className="form-input"
@@ -780,7 +781,15 @@ const AddMember: React.FC = () => {
                     </option>
                   ))}
                 </select>
-                {isAdministrative && <p className="text-theme-text-muted mt-1 text-xs">{ADMINISTRATIVE_RANK_HINT}</p>}
+                {/* Rank and Position share names (Chief, Captain) and both
+                    carry access: a rank grants a few defaults of its own at
+                    runtime, a position most of the rest. A new officer picking
+                    the wrong one gives the new member the wrong access. */}
+                <p id="add-rank-help" className="text-theme-text-muted mt-1 text-xs">
+                  {isAdministrative
+                    ? ADMINISTRATIVE_RANK_HINT
+                    : 'Their title in the chain of command, such as Captain or Firefighter. A rank carries a few default permissions of its own.'}
+                </p>
               </div>
 
               <div>
@@ -789,6 +798,7 @@ const AddMember: React.FC = () => {
                 </label>
                 <select
                   id="add-role"
+                  aria-describedby="add-role-help"
                   value={formData.role}
                   onChange={(e) => handleInputChange('role', e.target.value)}
                   className="form-input"
@@ -800,6 +810,10 @@ const AddMember: React.FC = () => {
                     </option>
                   ))}
                 </select>
+                <p id="add-role-help" className="text-theme-text-muted mt-1 text-xs">
+                  The job they hold here, such as Secretary or Training Officer. Positions decide most of what they can
+                  see and do in The Logbook.
+                </p>
               </div>
 
               <div className="md:col-span-2">
