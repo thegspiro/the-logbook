@@ -299,8 +299,9 @@ const InventorySetupPage: React.FC = () => {
     setSelectedPresets(allPresetsSelected ? [] : selectablePresets.map((p) => p.key));
   };
 
-  const applyPresets = async () => {
-    if (selectedPresets.length === 0) return;
+  /** Resolves true when the ticked presets were saved (or none were ticked). */
+  const applyPresets = async (): Promise<boolean> => {
+    if (selectedPresets.length === 0) return true;
     setApplyingPresets(true);
     try {
       const result = await inventoryService.applyCategoryPresets(selectedPresets);
@@ -312,11 +313,22 @@ const InventorySetupPage: React.FC = () => {
       }
       setSelectedPresets([]);
       await loadAll();
+      return true;
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to add the categories'));
+      return false;
     } finally {
       setApplyingPresets(false);
     }
+  };
+
+  // Ticking categories and pressing Continue — the obvious next button —
+  // used to discard the ticks and mark the step done, leaving First items with
+  // an empty Category list. Continue now saves what is ticked first, and stays
+  // put if that fails so the choice is not lost. Skip still means skip.
+  const handleContinue = async () => {
+    if (step === 2 && selectedPresets.length > 0 && !(await applyPresets())) return;
+    goToStep(step + 1);
   };
 
   /* ---------- Step completion ---------- */
@@ -851,8 +863,9 @@ const InventorySetupPage: React.FC = () => {
             )}
             <button
               type="button"
-              onClick={() => goToStep(step + 1)}
-              className="btn-info btn-md order-1 inline-flex items-center justify-center gap-2 whitespace-nowrap sm:order-3"
+              onClick={() => void handleContinue()}
+              disabled={applyingPresets}
+              className="btn-info btn-md order-1 inline-flex items-center justify-center gap-2 whitespace-nowrap disabled:opacity-50 sm:order-3"
             >
               Continue
               <ArrowRight className="h-4 w-4" />

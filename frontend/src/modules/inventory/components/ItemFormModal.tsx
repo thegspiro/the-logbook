@@ -527,6 +527,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
               </label>
               <select
                 id="item-tracking_type"
+                aria-describedby="item-tracking_type-help"
                 className={inp}
                 value={f.tracking_type}
                 onChange={(e) => up('tracking_type', e.target.value)}
@@ -534,6 +535,11 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                 <option value="individual">Individual</option>
                 <option value="pool">Pool</option>
               </select>
+              <p id="item-tracking_type-help" className="text-theme-text-muted mt-1 text-xs">
+                {f.tracking_type === 'pool'
+                  ? 'Pool: one record for a stock of identical items, such as gloves or T-shirts, counted by quantity and handed out a few at a time.'
+                  : 'Individual: one record per physical item, such as a radio or an SCBA pack, tracked on its own, usually by serial number.'}
+              </p>
             </div>
           </div>
         </fieldset>
