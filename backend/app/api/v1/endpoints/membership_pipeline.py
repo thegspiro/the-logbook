@@ -2479,11 +2479,9 @@ async def update_interview(
             interview_id=str(interview_id),
             organization_id=current_user.organization_id,
             interviewer_id=current_user.id,
-            notes=data.notes,
-            recommendation=data.recommendation,
-            recommendation_notes=data.recommendation_notes,
-            interviewer_role=data.interviewer_role,
-            interview_date=data.interview_date,
+            # exclude_unset: an omitted key is "leave alone", an explicit null
+            # is "clear" -- the distinction apply_updates relies on.
+            updates=data.model_dump(exclude_unset=True),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

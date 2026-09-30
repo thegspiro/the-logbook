@@ -398,7 +398,8 @@ export interface PipelineStageCreate {
 
 export interface PipelineStageUpdate {
   name?: string | undefined;
-  description?: string | undefined;
+  /** `null` clears the description; omitting the key leaves it untouched. */
+  description?: string | null | undefined;
   stage_type?: StageType | undefined;
   config?: StageConfig | undefined;
   sort_order?: number | undefined;
@@ -618,14 +619,16 @@ export interface ApplicantUpdate {
   first_name?: string | undefined;
   last_name?: string | undefined;
   email?: string | undefined;
-  phone?: string | undefined;
-  date_of_birth?: string | undefined;
+  // The optional contact fields take `null` as "clear this": the backend
+  // dumps the payload with `exclude_unset`, so an omitted key is "no change".
+  phone?: string | null | undefined;
+  date_of_birth?: string | null | undefined;
   address?:
     | {
-        street?: string | undefined;
-        city?: string | undefined;
-        state?: string | undefined;
-        zip_code?: string | undefined;
+        street?: string | null | undefined;
+        city?: string | null | undefined;
+        state?: string | null | undefined;
+        zip_code?: string | null | undefined;
       }
     | undefined;
   target_membership_type?: TargetMembershipType | undefined;
@@ -1188,7 +1191,7 @@ export interface BackendStepCreatePayload {
 /** Payload shape sent to backend when updating a step. */
 export interface BackendStepUpdatePayload {
   name?: string | undefined;
-  description?: string | undefined;
+  description?: string | null | undefined;
   step_type?: string | undefined;
   action_type?: string | undefined;
   sort_order?: number | undefined;
@@ -1272,10 +1275,14 @@ export interface InterviewCreate {
   step_id?: string | undefined;
 }
 
+/**
+ * `null` clears a field and an omitted key leaves it untouched — the backend
+ * dumps this with `exclude_unset` and writes it through `apply_updates`.
+ */
 export interface InterviewUpdate {
-  notes?: string | undefined;
-  recommendation?: InterviewRecommendation | undefined;
-  recommendation_notes?: string | undefined;
-  interviewer_role?: string | undefined;
-  interview_date?: string | undefined;
+  notes?: string | null | undefined;
+  recommendation?: InterviewRecommendation | null | undefined;
+  recommendation_notes?: string | null | undefined;
+  interviewer_role?: string | null | undefined;
+  interview_date?: string | null | undefined;
 }

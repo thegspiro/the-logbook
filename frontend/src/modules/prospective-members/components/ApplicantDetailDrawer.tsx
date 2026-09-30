@@ -185,17 +185,18 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
         first_name: editFields.first_name,
         last_name: editFields.last_name,
         email: editFields.email,
-        phone: editFields.phone || undefined,
-        date_of_birth: editFields.date_of_birth || undefined,
+        // Update path: blankToNull, not `|| undefined`. Emptying a box or
+        // clearing the picker has to reach the backend as an explicit null,
+        // or the old value survives behind a success toast (CLAUDE.md
+        // pitfall #1). Name and email stay as typed: they are NOT NULL.
+        phone: blankToNull(editFields.phone),
+        date_of_birth: blankToNull(editFields.date_of_birth),
         address: {
-          street: editFields.address_street || undefined,
-          city: editFields.address_city || undefined,
-          state: editFields.address_state || undefined,
-          zip_code: editFields.address_zip || undefined,
+          street: blankToNull(editFields.address_street),
+          city: blankToNull(editFields.address_city),
+          state: blankToNull(editFields.address_state),
+          zip_code: blankToNull(editFields.address_zip),
         },
-        // Update path: blankToNull, not `|| undefined`. Clearing the picker
-        // has to reach the backend as an explicit null, or the old role
-        // survives behind a success toast (CLAUDE.md pitfall #1).
         target_role_id: blankToNull(editFields.target_role_id),
       });
       toast.success('Contact info updated');

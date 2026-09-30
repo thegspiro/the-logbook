@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   getDocuments: vi.fn(),
   getActivity: vi.fn(),
   getLinkedEvents: vi.fn(),
+  updateApplicant: vi.fn(),
+  getRoles: vi.fn(),
 }));
 
 vi.mock('../store/prospectiveMembersStore', () => ({
@@ -29,9 +31,16 @@ vi.mock('../services/api', () => ({
   applicantService: {
     getDocuments: (...a: unknown[]) => mocks.getDocuments(...a) as unknown,
     getActivity: (...a: unknown[]) => mocks.getActivity(...a) as unknown,
+    updateApplicant: (...a: unknown[]) => mocks.updateApplicant(...a) as unknown,
   },
   eventLinkService: {
     getLinkedEvents: (...a: unknown[]) => mocks.getLinkedEvents(...a) as unknown,
+  },
+}));
+
+vi.mock('../../../services/api', () => ({
+  roleService: {
+    getRoles: (...a: unknown[]) => mocks.getRoles(...a) as unknown,
   },
 }));
 
@@ -243,5 +252,46 @@ describe('ApplicantDetailDrawer activity log', () => {
 
     expect(await screen.findByText(/prospect advanced/)).toBeInTheDocument();
     expect(screen.getByText(/prospect status changed/)).toBeInTheDocument();
+  });
+});
+
+describe('ApplicantDetailDrawer contact edit', () => {
+  beforeEach(() => {
+    mocks.updateApplicant.mockReset();
+    mocks.updateApplicant.mockResolvedValue({});
+    mocks.getRoles.mockReset();
+    mocks.getRoles.mockResolvedValue([]);
+  });
+
+  // An edit is an update: the backend reads an omitted key as "leave it
+  // alone", so `|| undefined` on an emptied box kept the old phone number,
+  // birth date and address behind a "Contact info updated" toast.
+  it('sends null for every optional contact field the user empties', async () => {
+    const user = userEvent.setup();
+    renderDrawer({
+      phone: '555-0100',
+      date_of_birth: '1990-04-02',
+      address: { street: '1 Main St', city: 'Springfield', state: 'IL', zip_code: '62701' },
+    });
+    await screen.findByText('Stage History');
+
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    for (const label of ['Phone number', 'Date of birth', 'Street address', 'City', 'State', 'ZIP code']) {
+      await user.clear(screen.getByLabelText(label));
+    }
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(mocks.updateApplicant).toHaveBeenCalledWith(
+      'app-1',
+      expect.objectContaining({
+        first_name: 'Riley',
+        last_name: 'Bishop',
+        email: 'riley.bishop@example.org',
+        phone: null,
+        date_of_birth: null,
+        address: { street: null, city: null, state: null, zip_code: null },
+        target_role_id: null,
+      })
+    );
   });
 });
