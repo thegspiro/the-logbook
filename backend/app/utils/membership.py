@@ -166,6 +166,19 @@ ADMINISTRATIVE_RANK_MESSAGE = (
     "Move the member to an operational class first, or leave the rank blank."
 )
 
+# A deactivated (soft-deleted) member keeps their username and email, and the
+# org-scoped unique indexes on both count deleted rows. Checks that skipped
+# deleted rows let the insert fail instead, as a bare 500. Deactivated records
+# cannot be restored or reached from the roster yet (see KNOWN_LIMITATIONS), so
+# the message says what to do now rather than pointing at the record.
+DEACTIVATED_EMAIL_MESSAGE = (
+    "This email address belongs to a deactivated member record, so it cannot "
+    "be used for a new account. Use a different email address."
+)
+DEACTIVATED_USERNAME_MESSAGE = (
+    "This username belongs to a deactivated member record. Choose another."
+)
+
 
 def effective_member_class(
     member_class: Optional[str],
