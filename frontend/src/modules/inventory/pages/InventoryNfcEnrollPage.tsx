@@ -190,7 +190,10 @@ export const InventoryNfcEnrollPage: React.FC = () => {
 
       {!enabled ? (
         <div className="alert-warning" role="status">
-          NFC tag tracking is turned off for your department. Turn it on under{' '}
+          {/* The switch takes the department-settings grant, which a
+              quartermaster reaching this page usually lacks: "turn it on"
+              sent them to Access Denied. Worded as Put Away and Shelf Audit are. */}
+          NFC tag tracking is turned off for your department. An administrator can turn it on under{' '}
           <Link to="/inventory/admin/nfc" className="underline">
             NFC Tags
           </Link>{' '}

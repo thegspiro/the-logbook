@@ -87,7 +87,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W41 | A member's request, return, write-off and reorder, and the approvals         | member → quartermaster | `/inventory/admin/requests`, `/inventory/admin/returns`    | ✅     |
 | W42 | Maintenance records, vendors, charges and issuance allowances                | quartermaster          | `/inventory/admin/maintenance`, `/inventory/admin/charges` | ✅     |
 | W43 | Storage areas, barcode labels and CSV import                                 | quartermaster          | `/inventory/storage-areas`, `/inventory/import`            | ✅     |
-| W44 | NFC: tag in bulk, put away, shelf audit, items not seen                      | quartermaster          | `/inventory/admin/nfc/*`, `/inventory/shelf-audit`         | ⬜     |
+| W44 | NFC: tag in bulk, put away, shelf audit, items not seen                      | quartermaster          | `/inventory/admin/nfc/*`, `/inventory/shelf-audit`         | ✅     |
 | W45 | The self-service kiosk                                                       | member                 | `/inventory/kiosk`                                         | ⬜     |
 | W46 | Equipment checks: build a checklist, perform a check, fleet board, check log | quartermaster → member | `/inventory/admin/checklists`, `/inventory/checklists`     | ⬜     |
 | W47 | Medical supplies                                                             | quartermaster          | `/medical-supplies`                                        | ⬜     |
@@ -183,6 +183,18 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W44 — NFC: tag in bulk, put away, shelf audit, items not seen — 2026-09-30
+
+Driven as: `admin` → `quartermaster` at 1280×900, with `member` refused at
+390×844, through the typed-serial path every NFC screen offers (the review
+browser has no NFC reader). Held: the switch turned on once and survived a
+reload; each screen says plainly when the device cannot read tags; a tag was
+linked once; a shelf audit found an item recorded elsewhere and moved it once;
+put-away moved it back and the tap took it off Items Not Seen; the member got
+403 and Access Denied throughout. Fixed: W44-1 (LOW — Tag Items in Bulk sent
+the quartermaster to a settings page they cannot open). Open: W44-2, W44-3,
+W44-4 (NIT). Gate: typecheck, lint and the inventory suites clean. Next: W45.
 
 ### W43 — Storage areas, barcode labels and CSV import — 2026-09-29
 
