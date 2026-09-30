@@ -198,13 +198,14 @@ export default function FacilityDetailPage() {
                 <button
                   key={navSection.id}
                   onClick={() => setActiveSection(navSection.id)}
+                  aria-current={isActive ? 'true' : undefined}
                   className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                     isActive
                       ? 'bg-red-500/10 text-red-700 dark:text-red-400'
                       : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
                   }`}
                 >
-                  <Icon className="h-4 w-4" />
+                  <Icon className="h-4 w-4" aria-hidden="true" />
                   {navSection.label}
                 </button>
               );

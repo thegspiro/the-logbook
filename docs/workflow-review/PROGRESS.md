@@ -97,7 +97,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | #   | Activity                                                          | Acts as | Starts at                                | Status |
 | --- | ----------------------------------------------------------------- | ------- | ---------------------------------------- | ------ |
 | W48 | Add an apparatus, edit it, read its detail, print its labels      | admin   | `/apparatus`, `/apparatus/new`           | ✅     |
-| W49 | Facilities: a facility, its maintenance, inspections and settings | admin   | `/facilities`, `/facilities/maintenance` | ⬜     |
+| W49 | Facilities: a facility, its maintenance, inspections and settings | admin   | `/facilities`, `/facilities/maintenance` | ✅     |
 
 ## Tier 8 — Governance and communication
 
@@ -156,11 +156,11 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   the list under it, which also carries clearances, requests and returns;
   "Issued to members" counts pool issuances only, so permanently assigned
   items read "0, held by 0 members" (W15).
-- **Facilities, reports and inventory activities** — four `DialogPanel`
-  dialogs have no `role` on the panel or a wrapper: the facilities lookup
-  editor, the report viewer, and InventoryScanModal's confirm and
-  custody-transfer dialogs (W14-2). The inventory pair sits inside another
-  modal; check its tests' dialog queries when changing it.
+- **Reports and inventory activities** — three `DialogPanel` dialogs have no
+  `role` on the panel or a wrapper: the report viewer, and
+  InventoryScanModal's confirm and custody-transfer dialogs (W14-2). The
+  inventory pair sits inside another modal; check its tests' dialog queries
+  when changing it.
 - **Any run touching the app shell** — while a password change is required
   (first sign-in, admin reset), the shell and shared hooks fire ~17 requests
   the server refuses with 403, including `POST /errors/log`, so errors from
@@ -180,6 +180,21 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W49 — Facilities: a facility, its maintenance, inspections and settings — 2026-09-30
+
+Driven as: `admin` at 1280×900 and 390×844, with `member` refused on four
+pages and every call at 390×844. Held: double-clicked saves made one facility,
+one maintenance record and one inspection; the records reached the
+facility-wide pages and the dashboard; edits send `null` for a cleared field;
+no page scrolled sideways on a phone. Fixed: W49-1 (LOW — an email that is not
+one was accepted; the forms now refuse it, the server is left open), W49-2
+(MED — the overview edit form named none of its 21 fields), W49-3 (LOW — the
+section navigation had no current state), W49-4 (LOW — the four maintenance and
+inspection dialogs named nothing), W49-5 (LOW — filter strips showed state by
+colour alone), W49-6 (LOW — the lookup editor had no dialog role; the facilities
+part of the W14-2 lead, removed). Gate: typecheck, lint and the facilities
+suite clean; no backend change. Next: W50.
 
 ### W48 — Add an apparatus, edit it, read its detail, print its labels — 2026-09-30
 

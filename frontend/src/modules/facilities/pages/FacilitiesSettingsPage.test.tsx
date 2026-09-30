@@ -78,4 +78,12 @@ describe('FacilitiesSettingsPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Delete Annual Service' }));
     expect(await screen.findByText(/will no longer be offered when logging a maintenance record/)).toBeInTheDocument();
   });
+  // The lookup editor was an unnamed div: no dialog role, so its heading did
+  // not name anything and a screen reader never announced a dialog opening.
+  it('opens the lookup editor as a named dialog', async () => {
+    renderPage();
+    await userEvent.click(await screen.findByRole('button', { name: 'Add facility type' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Add facility type' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+  });
 });
