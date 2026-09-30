@@ -853,7 +853,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `model` | VARCHAR(100) | yes |  |  |  |
 | `body_manufacturer` | VARCHAR(100) | yes |  |  |  |
 | `color` | VARCHAR(50) | yes |  |  |  |
-| `fuel_type` | ENUM(`gasoline`, `diesel`, `electric`, `hybrid`, `propane`, `cng`, `other`) | yes |  | `'diesel'` |  |
+| `fuel_type` | ENUM(`gasoline`, `diesel`, `electric`, `hybrid`, `propane`, `cng`, `other`) | yes |  |  |  |
 | `fuel_capacity_gallons` | NUMERIC(10, 2) | yes |  |  |  |
 | `seating_capacity` | INTEGER | yes |  |  |  |
 | `gvwr` | INTEGER | yes |  |  |  |

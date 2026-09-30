@@ -12,7 +12,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 
 vi.mock('react-hot-toast', () => ({
@@ -22,8 +23,13 @@ vi.mock('react-hot-toast', () => ({
 let hasManagePermission = false;
 
 vi.mock('../stores/authStore', () => ({
-  useAuthStore: (selector: (s: { checkPermission: (p: string) => boolean }) => unknown) =>
-    selector({ checkPermission: (p: string) => (p === 'scheduling.manage' ? hasManagePermission : false) }),
+  useAuthStore: Object.assign(
+    (selector: (s: { checkPermission: (p: string) => boolean }) => unknown) =>
+      selector({ checkPermission: (p: string) => (p === 'scheduling.manage' ? hasManagePermission : false) }),
+    // Opening the dialog reads the department's crew positions, which are
+    // cached per organization (shiftSettingsApi reads the store directly).
+    { getState: () => ({ user: { organization_id: 'org-1' } }) }
+  ),
 }));
 
 const mockGetBasicApparatus = vi.fn();
@@ -84,8 +90,8 @@ describe('ApparatusBasicPage management controls', () => {
 
     it('hides the per-apparatus edit and delete actions', async () => {
       await renderPage();
-      expect(screen.queryByRole('button', { name: 'Edit apparatus' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Delete apparatus' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Edit / })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Delete / })).not.toBeInTheDocument();
     });
 
     it('explains the empty fleet instead of offering to add one', async () => {
@@ -114,14 +120,33 @@ describe('ApparatusBasicPage management controls', () => {
     it('shows Add Apparatus and the per-apparatus actions', async () => {
       await renderPage();
       expect(screen.getByRole('button', { name: /add apparatus/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Edit apparatus' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Delete apparatus' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Edit Engine 51' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Delete Engine 51' })).toBeInTheDocument();
     });
 
     it('offers the empty-state call to action', async () => {
       mockGetBasicApparatus.mockResolvedValue([]);
       renderWithRouter(<ApparatusBasicPage />);
       expect(await screen.findByRole('button', { name: /add first apparatus/i })).toBeInTheDocument();
+    });
+
+    // The form named nothing: the dialog had no name, the unit and name fields
+    // were known only by their placeholders, and the type, staffing and every
+    // seat select by nothing; each card's actions read "Edit apparatus".
+    it("names the dialog, its fields and each unit's actions", async () => {
+      const user = userEvent.setup();
+      await renderPage();
+      expect(screen.getByRole('button', { name: 'Edit Engine 51' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Delete Engine 51' })).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /add apparatus/i }));
+      const dialog = screen.getByRole('dialog', { name: 'Add Apparatus' });
+      expect(within(dialog).getByRole('textbox', { name: /^Unit Number/ })).toBeInTheDocument();
+      expect(within(dialog).getByRole('textbox', { name: /^Name/ })).toBeInTheDocument();
+      expect(within(dialog).getByRole('combobox', { name: 'Apparatus Type' })).toBeInTheDocument();
+      expect(within(dialog).getByRole('spinbutton', { name: 'Minimum Staffing' })).toBeInTheDocument();
+      expect(within(dialog).getByRole('combobox', { name: 'Crew position 2' })).toBeInTheDocument();
+      expect(within(dialog).getByRole('button', { name: 'Remove crew position 2' })).toBeInTheDocument();
     });
   });
 });

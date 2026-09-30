@@ -355,7 +355,9 @@ export interface ApparatusCreate {
   notes?: string | undefined;
 }
 
-export type ApparatusUpdate = Partial<ApparatusCreate>;
+/** Any field may be omitted (leave it) or, when the column allows it, sent as
+ * null (clear it): the server applies an update with exclude_unset. */
+export type ApparatusUpdate = { [K in keyof ApparatusCreate]?: ApparatusCreate[K] | null };
 
 export interface ApparatusStatusChange {
   statusId: string;

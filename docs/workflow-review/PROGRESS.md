@@ -96,7 +96,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 
 | #   | Activity                                                          | Acts as | Starts at                                | Status |
 | --- | ----------------------------------------------------------------- | ------- | ---------------------------------------- | ------ |
-| W48 | Add an apparatus, edit it, read its detail, print its labels      | admin   | `/apparatus`, `/apparatus/new`           | ⬜     |
+| W48 | Add an apparatus, edit it, read its detail, print its labels      | admin   | `/apparatus`, `/apparatus/new`           | ✅     |
 | W49 | Facilities: a facility, its maintenance, inspections and settings | admin   | `/facilities`, `/facilities/maintenance` | ⬜     |
 
 ## Tier 8 — Governance and communication
@@ -172,9 +172,6 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   … Powered by The Logbook · End-to-end encrypted · Self-hosted ·
   HIPAA-aware") prints under the apparatus check-in sheet and the shift
   report (W37-3).
-- **W48** — the basic apparatus form (`/apparatus-basic` → Add Apparatus)
-  names none of its fields: unit number, name, type, crew size and every
-  position select are placeholders or nothing (W30).
 - **W79** — tap targets under 44px on the onboarding Modules, Ranks &
   Positions and Apparatus steps at 390px wide (W01-13), and the sign-in
   screen's "Forgot your password?", Privacy and Terms links (W02-5), and
@@ -183,6 +180,20 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W48 — Add an apparatus, edit it, read its detail, print its labels — 2026-09-30
+
+Driven as: `admin` at 1280×900 and 390×844, with `member` refused on five
+pages and every call. Held: an empty submit saved nothing; a double-clicked
+Add made one apparatus; the registration date read as a calendar date; the
+labels page printed E-2. Fixed: W48-1 (MED — the add/edit form named almost
+none of its 40 fields), W48-2 (LOW — required-field errors not tied to their
+fields), W48-3 (LOW — an unchosen fuel type was stored as diesel), W48-4 (LOW —
+clearing a field on edit kept the old value), W48-5 (LOW — every row's actions
+shared one name), W48-6 (LOW — the detail page scrolled sideways on a phone),
+W48-7 (LOW — the basic apparatus form named nothing; the W30 lead, removed).
+Open: W48-8 (NIT). Gate: typecheck, lint, the apparatus and scheduling suites
+and the apparatus pytests clean. Next: W49.
 
 ### W47 — Medical supplies — 2026-09-30
 
