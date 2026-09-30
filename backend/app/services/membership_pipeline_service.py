@@ -58,7 +58,11 @@ from app.services.email_policy import (
     department_required_kinds,
     recipients_for,
 )
-from app.utils.membership import ADMINISTRATIVE_RANK_MESSAGE, is_administrative
+from app.utils.membership import (
+    ADMINISTRATIVE_RANK_MESSAGE,
+    DEACTIVATED_EMAIL_MESSAGE,
+    is_administrative,
+)
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org, is_in_org
 from app.utils.org_timezone import format_in_org_timezone
@@ -4121,7 +4125,6 @@ class MembershipPipelineService:
                 .where(
                     User.organization_id == prospect.organization_id,
                     User.username == username,
-                    User.deleted_at.is_(None),
                 )
             )
             if (existing.scalar() or 0) > 0:
@@ -4159,6 +4162,31 @@ class MembershipPipelineService:
             )
         primary_email = department_email or prospect.email
         personal_email = prospect.email if department_email else None
+
+        # The account email must be free across every member row, deactivated
+        # ones included -- the unique index counts them, and the duplicate
+        # check above deliberately ignores them (it also matches by name, and
+        # a deactivated namesake must not block a conversion). Without this a
+        # clash failed the insert as a bare 500.
+        holder = (
+            await self.db.execute(
+                select(User.deleted_at)
+                .where(
+                    User.organization_id == prospect.organization_id,
+                    User.email == primary_email,
+                )
+                .limit(1)
+            )
+        ).first()
+        if holder is not None:
+            return {
+                "success": False,
+                "message": (
+                    DEACTIVATED_EMAIL_MESSAGE
+                    if holder.deleted_at is not None
+                    else "A member already uses this email address"
+                ),
+            }
 
         # Records created before referred_by was validated on write may carry a
         # referrer from another org. Drop it rather than fail the transfer —
@@ -4985,6 +5013,8 @@ class MembershipPipelineService:
         base = f"{first[0]}{last}"
         candidate = base
 
+        # Deactivated members count: their usernames stay in the org-scoped
+        # unique index, so generating one of them fails the insert.
         max_attempts = 1000
         suffix = 0
         for _ in range(max_attempts):
@@ -4994,7 +5024,6 @@ class MembershipPipelineService:
                 .where(
                     User.organization_id == organization_id,
                     User.username == candidate,
-                    User.deleted_at.is_(None),
                 )
             )
             if (result.scalar() or 0) == 0:
@@ -5059,7 +5088,6 @@ class MembershipPipelineService:
                 .where(
                     User.organization_id == organization_id,
                     User.email == candidate,
-                    User.deleted_at.is_(None),
                 )
             )
             if (existing.scalar() or 0) == 0:

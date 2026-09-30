@@ -262,8 +262,9 @@ export interface MemberEmailChoices {
 
 export interface ContactInfoUpdate {
   email?: string | undefined;
-  phone?: string | undefined;
-  mobile?: string | undefined;
+  /** null clears the number; omitted leaves it alone. */
+  phone?: string | null | undefined;
+  mobile?: string | null | undefined;
   notification_preferences?: NotificationPreferences | undefined;
 }
 
@@ -281,7 +282,7 @@ export interface UserProfileUpdate {
   last_name?: string | undefined;
   phone?: string | undefined;
   mobile?: string | undefined;
-  personal_email?: string | undefined;
+  personal_email?: string | null | undefined;
   membership_number?: string | undefined;
   // `| null` on the two dates: this is an update payload, and the backend
   // rejects `''` for an `Optional[date]`. Clearing a date has to send an
@@ -291,11 +292,11 @@ export interface UserProfileUpdate {
   rank?: string | undefined;
   station?: string | undefined;
   platoon?: string | undefined;
-  address_street?: string | undefined;
-  address_city?: string | undefined;
-  address_state?: string | undefined;
-  address_zip?: string | undefined;
-  address_country?: string | undefined;
+  address_street?: string | null | undefined;
+  address_city?: string | null | undefined;
+  address_state?: string | null | undefined;
+  address_zip?: string | null | undefined;
+  address_country?: string | null | undefined;
   emergency_contacts?: EmergencyContact[] | undefined;
 }
 
