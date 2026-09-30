@@ -166,7 +166,8 @@ interface ProspectiveMembersState {
   fetchWithdrawnApplicants: (page?: number) => Promise<void>;
   fetchRejectedApplicants: (page?: number) => Promise<void>;
   fetchConvertedApplicants: (page?: number) => Promise<void>;
-  purgeInactiveApplicants: (applicantIds?: string[]) => Promise<void>;
+  /** Resolves with how many the server actually deleted; rejects on failure. */
+  purgeInactiveApplicants: (applicantIds?: string[]) => Promise<number>;
   updateInactivitySettings: (config: InactivityConfig) => Promise<void>;
 
   // Election package actions
@@ -883,22 +884,26 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
 
   purgeInactiveApplicants: async (applicantIds?: string[]) => {
     const state = get();
-    if (!state.currentPipeline) return;
+    // Thrown, not returned: a purge that quietly did nothing is exactly what
+    // let the page report "Purged N" for rows that were never deleted.
+    if (!state.currentPipeline) throw new Error('No pipeline is selected');
 
     set({ isPurging: true, error: null });
     try {
-      await applicantService.purgeInactiveApplicants(state.currentPipeline.id, {
+      const { purged_count } = await applicantService.purgeInactiveApplicants(state.currentPipeline.id, {
         applicant_ids: applicantIds,
         confirm: true,
       });
       await get().fetchInactiveApplicants();
       await get().fetchPipelineStats(state.currentPipeline.id);
       set({ isPurging: false });
+      return purged_count;
     } catch (error) {
       set({
         error: handleStoreError(error, 'Failed to purge inactive applicants'),
         isPurging: false,
       });
+      throw error;
     }
   },
 

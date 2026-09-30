@@ -606,6 +606,9 @@ class SchedulingSummary(BaseModel):
     shifts_scheduled_this_week: int
     shifts_scheduled_this_month: int
     hours_worked_this_month: float
+    # Setup progress, read by the administration hub's getting-started guide.
+    active_templates: int = 0
+    active_patterns: int = 0
 
 
 class MemberHoursMonth(BaseModel):

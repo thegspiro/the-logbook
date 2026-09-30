@@ -19,6 +19,7 @@ import {
   Archive,
   ArrowUpDown,
   Plus,
+  ListChecks,
   Package,
   PackagePlus,
   AlertTriangle,
@@ -974,6 +975,7 @@ const InventoryItemsPage: React.FC = () => {
   const [locSummary, setLocSummary] = useState<LocationInventorySummary[]>([]);
 
   const [loading, setLoading] = useState(true);
+  const [itemsLoadFailed, setItemsLoadFailed] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [search, setSearch] = useState('');
   const [fCat, setFCat] = useState('');
@@ -1138,8 +1140,10 @@ const InventoryItemsPage: React.FC = () => {
         // export taken from live state describes rows the file does not
         // contain.
         setLoadedParams(params);
+        setItemsLoadFailed(false);
         if (reset) setSkip(0);
       } catch (err: unknown) {
+        setItemsLoadFailed(true);
         toast.error(getErrorMessage(err, 'Failed to load items'));
       }
     },
@@ -2144,18 +2148,59 @@ const InventoryItemsPage: React.FC = () => {
       )}
 
       {/* Empty */}
-      {!loading && items.length === 0 && (
-        <EmptyState
-          icon={Package}
-          title="No items found"
-          description={
-            search || fCat || fStatus || fCond || fType || fLoc || fSize || fColor || fStyle || fLabel || vendorFilter
-              ? 'Try adjusting your filters.'
-              : 'Get started by adding your first inventory item.'
-          }
-          actions={canManage ? [{ label: 'Add Item', onClick: openAdd, icon: Plus }] : undefined}
-        />
-      )}
+      {/* Three different empties: a load that failed, a filter that matched
+          nothing, and a department that has no items at all. Only the last is
+          a fresh install, and there the Setup Guide comes before Add Item —
+          an item needs a category and a storage place to go into. */}
+      {!loading &&
+        items.length === 0 &&
+        (itemsLoadFailed ? (
+          <EmptyState
+            icon={Package}
+            title="The items did not load"
+            description="Check your connection and try again."
+            actions={[{ label: 'Retry', onClick: () => void loadItems(true), icon: RefreshCw }]}
+          />
+        ) : search ||
+          fCat ||
+          fStatus ||
+          fCond ||
+          fType ||
+          fLoc ||
+          fSize ||
+          fColor ||
+          fStyle ||
+          fLabel ||
+          vendorFilter ? (
+          <EmptyState
+            icon={Package}
+            title="No items found"
+            description="Try adjusting your filters."
+            actions={canManage ? [{ label: 'Add Item', onClick: openAdd, icon: Plus }] : undefined}
+          />
+        ) : (
+          <EmptyState
+            icon={Package}
+            title="Your department has no inventory items yet"
+            description={
+              canManage
+                ? 'New to inventory here? The Setup Guide walks through rooms, storage areas and categories in the order items need them, then adds your first items.'
+                : 'Items appear here once a quartermaster adds them.'
+            }
+            actions={
+              canManage
+                ? [
+                    {
+                      label: 'Open the Setup Guide',
+                      onClick: () => void navigate('/inventory/admin/setup'),
+                      icon: ListChecks,
+                    },
+                    { label: 'Add Item', onClick: openAdd, icon: Plus, variant: 'secondary' },
+                  ]
+                : undefined
+            }
+          />
+        ))}
 
       {/* Group-by — a view control, not a filter: it changes how rows are
           arranged, never which ones match, so it sits with Sort rather than in

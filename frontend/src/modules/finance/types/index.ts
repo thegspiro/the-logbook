@@ -285,6 +285,48 @@ export interface ApprovalChain {
   steps: ApprovalChainStep[];
 }
 
+// Approval-chain request bodies are snake_case. The backend's request schemas
+// (ApprovalChainCreate / ApprovalChainUpdate / ApprovalChainStepCreate /
+// ApprovalChainStepUpdate) carry no camelCase alias, unlike the responses, so a
+// camelCase key is not rejected there — it is silently ignored, or reported as
+// a missing required field.
+
+export interface ApprovalChainCreatePayload {
+  name: string;
+  description?: string | undefined;
+  applies_to: ApprovalEntityType;
+  min_amount?: string | undefined;
+  max_amount?: string | undefined;
+  budget_category_id?: string | undefined;
+  is_default?: boolean | undefined;
+}
+
+export interface ApprovalChainUpdatePayload {
+  name?: string;
+  description?: string | null;
+  is_active?: boolean;
+}
+
+export interface ApprovalChainStepCreatePayload {
+  step_order: number;
+  name: string;
+  step_type: ApprovalStepType;
+  approver_type?: ApproverType | undefined;
+  approver_value?: string | undefined;
+  allow_self_approval: boolean;
+  auto_approve_under?: string | undefined;
+}
+
+export interface ApprovalChainStepUpdatePayload {
+  step_order?: number;
+  name?: string;
+  step_type?: ApprovalStepType;
+  approver_type?: ApproverType | null;
+  approver_value?: string | null;
+  allow_self_approval?: boolean;
+  auto_approve_under?: string | null;
+}
+
 export interface ApprovalStepRecord {
   id: string;
   chainId: string;

@@ -88,7 +88,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W42 | Maintenance records, vendors, charges and issuance allowances                | quartermaster          | `/inventory/admin/maintenance`, `/inventory/admin/charges` | ✅     |
 | W43 | Storage areas, barcode labels and CSV import                                 | quartermaster          | `/inventory/storage-areas`, `/inventory/import`            | ✅     |
 | W44 | NFC: tag in bulk, put away, shelf audit, items not seen                      | quartermaster          | `/inventory/admin/nfc/*`, `/inventory/shelf-audit`         | ✅     |
-| W45 | The self-service kiosk                                                       | member                 | `/inventory/kiosk`                                         | ⬜     |
+| W45 | The self-service kiosk                                                       | member                 | `/inventory/kiosk`                                         | ✅     |
 | W46 | Equipment checks: build a checklist, perform a check, fleet board, check log | quartermaster → member | `/inventory/admin/checklists`, `/inventory/checklists`     | ⬜     |
 | W47 | Medical supplies                                                             | quartermaster          | `/medical-supplies`                                        | ⬜     |
 
@@ -183,6 +183,23 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W45 — The self-service kiosk — 2026-09-30
+
+Driven as: `admin` running the kiosk at 1024×768 and 390×844 for Jordan Avery
+and Alex Brooks, with `member` and `quartermaster` refused (the grant is seeded
+to no position by design). Taps came from a stand-in `NDEFReader` installed
+before the page loaded, since the review browser has no reader. Held: a
+double-clicked Borrow lent once to the card's holder, due in the loan period;
+an item on loan to someone else, a return by a non-holder and an unregistered
+card were refused; a damaged return needs a note, closed the loan once and put
+the item in maintenance; a minute without a tap forgot the member. Fixed:
+W45-1 (LOW — the next member's serial card was read as an item until Done),
+W45-2 (LOW — a suspended card was called lost or replaced), W45-3 (LOW —
+member-facing refusals ended in a support code), W45-4 (LOW — the NFC-off
+notice sent the kiosk officer to a settings page). Open: W45-5, W45-6 (NIT).
+Review cards revoked and NFC ID Cards deactivated afterwards. Gate:
+typecheck, lint, the inventory suites and the kiosk pytests clean. Next: W46.
 
 ### W44 — NFC: tag in bulk, put away, shelf audit, items not seen — 2026-09-30
 

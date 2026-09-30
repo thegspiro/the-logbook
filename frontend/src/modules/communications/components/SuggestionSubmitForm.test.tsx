@@ -82,6 +82,16 @@ describe('SuggestionSubmitForm', () => {
     expect(mockSubmit).toHaveBeenCalledWith('b1', expect.objectContaining({ anonymous: false }));
   });
 
+  it('states the screenshot restrictions the server enforces', async () => {
+    mockListBoxes.mockResolvedValue([box()]);
+    renderWithRouter(<SuggestionSubmitForm />);
+
+    expect(await screen.findByText(/PNG, JPEG, WebP or GIF, up to 10 MB each/)).toBeInTheDocument();
+    expect(screen.getByText(/scaled down to 2560 pixels/)).toBeInTheDocument();
+    expect(screen.getByText(/animated GIFs keep only their first frame/)).toBeInTheDocument();
+    expect(screen.getByText('Screenshots (optional, up to 5)')).toBeInTheDocument();
+  });
+
   it('says so when the department has no boxes', async () => {
     mockListBoxes.mockResolvedValue([]);
     renderWithRouter(<SuggestionSubmitForm />);

@@ -207,9 +207,10 @@ const TrainingProgramsPage: React.FC = () => {
   );
 
   // Both empty-state cards exist to offer the create action, so a member with
-  // nothing to see gets a blank panel rather than a prompt to build something
-  // they cannot. A search that matched nothing still reports back to everyone —
-  // that is feedback on the term they typed, not an invitation.
+  // nothing to see gets an explanation of what a program is (below) instead of
+  // a prompt to build something they cannot. A search that matched nothing
+  // still reports back to everyone — that is feedback on the term they typed,
+  // not an invitation.
   const showEmptyState = searchTerm !== '' || canManage;
 
   // A tabpanel must be owned by a tab. With the strip hidden the panel is just
@@ -426,6 +427,20 @@ const TrainingProgramsPage: React.FC = () => {
                       ))}
                     </div>
                   </section>
+                )}
+
+                {filteredPrograms.length === 0 && !showEmptyState && visibleTab === 'programs' && (
+                  <div className="bg-theme-surface-secondary rounded-lg px-6 py-12 text-center">
+                    <GraduationCap className="text-theme-text-secondary mx-auto mb-4 h-16 w-16" aria-hidden="true" />
+                    <h2 className="text-theme-text-primary text-lg font-semibold">
+                      Your department has not published any training programs yet
+                    </h2>
+                    <p className="text-theme-text-muted mx-auto mt-2 max-w-xl text-sm">
+                      A training program is a step-by-step path toward a role, such as becoming a driver or an interior
+                      firefighter. It lists the classes, hours and skills you need. When a training officer enrolls you
+                      in one, your progress also appears on My Training.
+                    </p>
+                  </div>
                 )}
 
                 <div className="grid gap-4">

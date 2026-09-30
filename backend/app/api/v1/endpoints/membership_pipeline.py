@@ -48,7 +48,7 @@ from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.security_middleware import get_client_ip
-from app.core.utils import safe_error_detail
+from app.core.utils import handle_service_errors, safe_error_detail
 from app.models.event import Event
 from app.models.membership_pipeline import ProspectStatus
 from app.models.user import Role, User
@@ -243,6 +243,9 @@ async def create_pipeline(
             is_active=data.is_active,
             auto_transfer_on_approval=data.auto_transfer_on_approval,
             inactivity_config=data.inactivity_config,
+            conversion_config=(
+                data.conversion_config.model_dump() if data.conversion_config else None
+            ),
             steps=steps,
             created_by=current_user.id,
         )
@@ -788,7 +791,11 @@ async def purge_inactive_prospects(
     ),
 ):
     """
-    Purge withdrawn/inactive prospects from a pipeline.
+    Permanently delete inactive prospects from a pipeline, with their files.
+
+    Only applications in the ``inactive`` status are deleted; any other id is
+    skipped, and ``purged_count`` is the number actually deleted. With no
+    ``prospect_ids``, every inactive application in the pipeline is purged.
 
     Requires `confirm: true` in the request body to execute.
 
@@ -804,15 +811,32 @@ async def purge_inactive_prospects(
     prospect_ids = (
         [str(pid) for pid in data.prospect_ids] if data.prospect_ids else None
     )
-    count = await service.purge_inactive_prospects(
-        pipeline_id=str(pipeline_id),
-        organization_id=current_user.organization_id,
-        prospect_ids=prospect_ids,
-        purged_by=current_user.id,
+    async with handle_service_errors("Failed to purge inactive applications"):
+        count = await service.purge_inactive_prospects(
+            pipeline_id=str(pipeline_id),
+            organization_id=current_user.organization_id,
+            prospect_ids=prospect_ids,
+            purged_by=current_user.id,
+        )
+
+    # Irreversible deletion of applicant PII, so it is recorded -- by count
+    # and the ids asked for, never the applicants' details.
+    await log_audit_event(
+        db=db,
+        event_type="membership_pipeline.prospects_purged",
+        event_category="membership",
+        severity="warning",
+        event_data={
+            "pipeline_id": str(pipeline_id),
+            "purged_count": count,
+            "requested_ids": prospect_ids,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
     )
     return PurgeInactiveResponse(
         purged_count=count,
-        message=f"Successfully purged {count} withdrawn prospect(s)",
+        message=f"Purged {count} inactive application(s)",
     )
 
 
@@ -1800,6 +1824,8 @@ async def transfer_prospect(
             [ec for ec in data.emergency_contacts] if data.emergency_contacts else None
         ),
         membership_type=data.membership_type,
+        member_class=data.member_class,
+        member_status=data.member_status,
     )
     if not result:
         raise HTTPException(

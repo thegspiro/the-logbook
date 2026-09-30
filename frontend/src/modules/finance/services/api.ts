@@ -7,6 +7,11 @@
 import { createApiClient } from '../../../utils/createApiClient';
 import type {
   ApprovalChain,
+  ApprovalChainCreatePayload,
+  ApprovalChainStep,
+  ApprovalChainStepCreatePayload,
+  ApprovalChainStepUpdatePayload,
+  ApprovalChainUpdatePayload,
   ApprovalEntityType,
   ApprovalStepRecord,
   Budget,
@@ -155,12 +160,12 @@ export const approvalChainService = {
     return response.data;
   },
 
-  async create(data: Partial<ApprovalChain>): Promise<ApprovalChain> {
+  async create(data: ApprovalChainCreatePayload): Promise<ApprovalChain> {
     const response = await api.post<ApprovalChain>('/finance/approval-chains', data);
     return response.data;
   },
 
-  async update(id: string, data: Partial<ApprovalChain>): Promise<ApprovalChain> {
+  async update(id: string, data: ApprovalChainUpdatePayload): Promise<ApprovalChain> {
     const response = await api.put<ApprovalChain>(`/finance/approval-chains/${id}`, data);
     return response.data;
   },
@@ -169,23 +174,13 @@ export const approvalChainService = {
     await api.delete(`/finance/approval-chains/${id}`);
   },
 
-  async addStep(
-    chainId: string,
-    data: Partial<ApprovalChain['steps'][number]>
-  ): Promise<ApprovalChain['steps'][number]> {
-    const response = await api.post<ApprovalChain['steps'][number]>(`/finance/approval-chains/${chainId}/steps`, data);
+  async addStep(chainId: string, data: ApprovalChainStepCreatePayload): Promise<ApprovalChainStep> {
+    const response = await api.post<ApprovalChainStep>(`/finance/approval-chains/${chainId}/steps`, data);
     return response.data;
   },
 
-  async updateStep(
-    chainId: string,
-    stepId: string,
-    data: Partial<ApprovalChain['steps'][number]>
-  ): Promise<ApprovalChain['steps'][number]> {
-    const response = await api.put<ApprovalChain['steps'][number]>(
-      `/finance/approval-chains/${chainId}/steps/${stepId}`,
-      data
-    );
+  async updateStep(chainId: string, stepId: string, data: ApprovalChainStepUpdatePayload): Promise<ApprovalChainStep> {
+    const response = await api.put<ApprovalChainStep>(`/finance/approval-chains/${chainId}/steps/${stepId}`, data);
     return response.data;
   },
 

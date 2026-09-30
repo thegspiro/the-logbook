@@ -43,6 +43,7 @@ from app.models.training import (
     SubmissionStatus,
     TrainingCategory,
     TrainingCourse,
+    TrainingProgram,
     TrainingRecord,
     TrainingRequirement,
     TrainingSession,
@@ -240,6 +241,37 @@ async def get_training_dashboard_summary(
         or 0
     )
 
+    # What the department has built so far. The dashboard's setup guide ticks
+    # its steps off these, so a fresh install is walked through courses,
+    # requirements, a first session and (optionally) a program.
+    active_courses = (
+        await db.scalar(
+            select(func.count(TrainingCourse.id)).where(
+                TrainingCourse.organization_id == org_id,
+                TrainingCourse.active.is_(True),
+            )
+        )
+        or 0
+    )
+    training_sessions = (
+        await db.scalar(
+            select(func.count(TrainingSession.id)).where(
+                TrainingSession.organization_id == org_id,
+            )
+        )
+        or 0
+    )
+    active_programs = (
+        await db.scalar(
+            select(func.count(TrainingProgram.id)).where(
+                TrainingProgram.organization_id == org_id,
+                TrainingProgram.active.is_(True),
+                TrainingProgram.is_template.is_(False),
+            )
+        )
+        or 0
+    )
+
     session_rows = (
         await db.execute(
             select(TrainingSession, Event)
@@ -294,6 +326,10 @@ async def get_training_dashboard_summary(
         "stats": {
             "total_members": tracked,
             "tracked_members": tracked,
+            "active_requirements": len(requirements),
+            "active_courses": active_courses,
+            "training_sessions": training_sessions,
+            "active_programs": active_programs,
             "compliant_members": compliant,
             "compliance_percentage": (
                 round(compliant / tracked * 100) if tracked else 100

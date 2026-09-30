@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Dict, List, Optional, Tuple
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -827,6 +827,23 @@ async def get_org_include_current_month(db: AsyncSession, org_id: str) -> bool:
     """
     config = await _load_compliance_config(db, org_id)
     return True if config is None else bool(config.include_current_month)
+
+
+async def count_active_requirements(db: AsyncSession, org_id: str) -> int:
+    """Number of active training requirements the organization has defined.
+
+    ``compute_org_compliance_pct`` reports 100 when this is zero, which is
+    arithmetically true and reads as "everyone is current" on a department
+    that has not set anything up. Screens showing that figure check this
+    first and say "not set up" instead.
+    """
+    count = await db.scalar(
+        select(func.count(TrainingRequirement.id)).where(
+            TrainingRequirement.organization_id == org_id,
+            TrainingRequirement.active.is_(True),
+        )
+    )
+    return int(count or 0)
 
 
 async def compute_org_compliance_pct(

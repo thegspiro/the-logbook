@@ -56,7 +56,10 @@ from app.services.apparatus_service import ApparatusService
 from app.services.dashboard_widget_service import PERIOD_LABELS, DashboardWidgetService
 from app.services.inventory_service import InventoryService
 from app.services.organization_service import OrganizationService
-from app.services.training_compliance import compute_org_compliance_pct
+from app.services.training_compliance import (
+    compute_org_compliance_pct,
+    count_active_requirements,
+)
 from app.utils.hours import hours_from_minutes
 from app.utils.org_timezone import local_date, resolve_org_today, scheduling_timezone
 
@@ -1020,10 +1023,13 @@ async def get_admin_summary(
     # Uses the same logic as the compliance-matrix endpoint: for each active
     # member, evaluate every active training requirement and compute the
     # percentage of members who are fully compliant.
+    # None (the tile is hidden) when nothing is required: a vacuous 100% would
+    # tell the administrator the department is fully current.
     training_pct: float | None = None
     if "training" in enabled:
         try:
-            training_pct = await compute_org_compliance_pct(db, org_id)
+            if await count_active_requirements(db, org_id):
+                training_pct = await compute_org_compliance_pct(db, org_id)
         except Exception as exc:
             logger.warning("admin-summary: training compliance query failed: {}", exc)
 

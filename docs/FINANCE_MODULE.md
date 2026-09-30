@@ -200,7 +200,7 @@ Any Trustee approves Step 2 → Step 3 fires automatically
 
 Pages:
 
-- **ApprovalChainsSettingsPage** — `/finance/settings/approval-chains` — CRUD for chains and their steps (drag-and-drop step reordering). Protected: `finance.manage`
+- **ApprovalChainsSettingsPage** — `/finance/settings/approval-chains` — create and delete chains; edit a chain's name, description and active flag; add, edit, delete and reorder (move up/down) its steps. Protected: `finance.configure_approvals`. As built, the step form offers what the backend reads: step type, approver type and value (positions, permissions and members from their lists when the viewer can load them), auto-approve threshold, and self-approval for Email approvers only. It does not offer `notification_emails`, `email_template_id` or `required`, because nothing reads them yet (CLAUDE.md pitfall #19); a notification step is marked SENT without sending email, and any `finance.approve` holder can act on any approval step whatever its named approver. Deleting a step cascades to every request's record of it, and nothing re-evaluates in-flight requests afterwards — the page's confirmation says so
 - **Approval queue widget** on FinanceDashboardPage — shows "You have 3 items awaiting your approval" with links to each
 
 Components:

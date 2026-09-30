@@ -774,6 +774,34 @@ class TestCalendarHelpers:
         assert summary["shifts_scheduled_this_month"] >= 1
         assert "hours_worked_this_month" in summary
 
+    async def test_summary_counts_active_templates_for_the_setup_guide(
+        self, db_session, setup_org_and_users
+    ):
+        org_id, user_id, _ = setup_org_and_users
+        svc = SchedulingService(db_session)
+
+        summary = await svc.get_summary(uuid.UUID(org_id))
+        assert summary["active_templates"] == 0
+        assert summary["active_patterns"] == 0
+
+        template, err = await svc.create_template(
+            uuid.UUID(org_id),
+            {
+                "name": "Day Shift",
+                "start_time_of_day": "07:00",
+                "end_time_of_day": "19:00",
+                "duration_hours": 12.0,
+            },
+            uuid.UUID(user_id),
+        )
+        assert err is None
+        assert (await svc.get_summary(uuid.UUID(org_id)))["active_templates"] == 1
+
+        await svc.update_template(
+            uuid.UUID(template.id), uuid.UUID(org_id), {"is_active": False}
+        )
+        assert (await svc.get_summary(uuid.UUID(org_id)))["active_templates"] == 0
+
 
 # ── Template Tests ───────────────────────────────────────────────────
 

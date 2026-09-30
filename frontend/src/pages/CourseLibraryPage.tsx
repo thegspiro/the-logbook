@@ -584,7 +584,8 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
                 <span>Course Library</span>
               </h1>
               <p className="text-theme-text-muted mt-1">
-                Organization-wide training course catalog ({courses.length} course{courses.length !== 1 ? 's' : ''})
+                The classes your department runs or recognizes ({courses.length} course{courses.length !== 1 ? 's' : ''}
+                )
               </p>
             </div>
           )}
@@ -690,8 +691,16 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
             <p className="text-theme-text-muted mb-2 text-lg">
               {searchTerm || filterType || filterCategory
                 ? 'No courses match your filters'
-                : 'No courses in your library yet'}
+                : canManage
+                  ? 'No courses in your library yet'
+                  : 'Your department has not added any courses yet'}
             </p>
+            {!canManage && !searchTerm && !filterType && !filterCategory && (
+              <p className="text-theme-text-muted mx-auto max-w-xl px-6 text-sm">
+                Once a training officer adds them, you can see here what each class covers and how many training hours
+                it counts for.
+              </p>
+            )}
             {canManage && !searchTerm && !filterType && !filterCategory && (
               <button
                 onClick={() => {
