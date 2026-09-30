@@ -7,6 +7,7 @@
 import { createApiClient } from '../../../utils/createApiClient';
 import type {
   ApprovalChain,
+  ApprovalEntityType,
   ApprovalStepRecord,
   Budget,
   BudgetCategory,
@@ -22,6 +23,7 @@ import type {
   PendingApproval,
   PurchaseRequest,
   MonetaryAmount,
+  UnroutedApproval,
 } from '../types';
 import { asArray } from '../../../utils/asArray';
 
@@ -225,6 +227,24 @@ export const approvalService = {
       notes: notes || undefined,
     });
     return response.data;
+  },
+
+  /** Requests waiting for approval that have no approval steps (no chain applied). */
+  async getUnrouted(): Promise<UnroutedApproval[]> {
+    const response = await api.get<UnroutedApproval[]>('/finance/approvals/unrouted');
+    return asArray(response.data);
+  },
+
+  /** Approve a request that has no approval steps. Refused (409) for one that has steps. */
+  async manualApprove(entityType: ApprovalEntityType, entityId: string, notes?: string): Promise<void> {
+    await api.post(`/finance/approvals/manual/${entityType}/${entityId}/approve`, {
+      notes: notes || undefined,
+    });
+  },
+
+  /** Deny a request that has no approval steps. The requester sees the reason. */
+  async manualDeny(entityType: ApprovalEntityType, entityId: string, reason: string): Promise<void> {
+    await api.post(`/finance/approvals/manual/${entityType}/${entityId}/deny`, { reason });
   },
 };
 

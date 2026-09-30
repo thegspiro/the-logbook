@@ -100,6 +100,14 @@ class BudgetLimitExceededError(Exception):
         super().__init__("Insufficient available budget")
 
 
+class FinanceEntityNotFoundError(ValueError):
+    """The request does not exist in the caller's organization (→ 404)."""
+
+
+class ManualApprovalConflictError(ValueError):
+    """The request cannot take a manual decision in its current state (→ 409)."""
+
+
 def _apply_payment_totals(dues: MemberDues) -> None:
     """Re-derive the aggregate columns on ``dues`` from its payment ledger.
 
@@ -1185,6 +1193,240 @@ class FinanceService:
                 }
             )
         return approvals
+
+    # ========================================
+    # Manual approval (no approval chain applies)
+    # ========================================
+
+    def _unrouted_mapping(self, entity_type: ApprovalEntityType):
+        """(model, pending status, label) for an approvable entity type."""
+        mapping = {
+            ApprovalEntityType.PURCHASE_REQUEST: (
+                PurchaseRequest,
+                PurchaseRequestStatus.PENDING_APPROVAL,
+                "Purchase request",
+            ),
+            ApprovalEntityType.EXPENSE_REPORT: (
+                ExpenseReport,
+                ExpenseReportStatus.PENDING_APPROVAL,
+                "Expense report",
+            ),
+            ApprovalEntityType.CHECK_REQUEST: (
+                CheckRequest,
+                CheckRequestStatus.PENDING_APPROVAL,
+                "Check request",
+            ),
+        }.get(entity_type)
+        if mapping is None:
+            raise ValueError(f"Invalid entity type: {entity_type}")
+        return mapping
+
+    @staticmethod
+    def _has_step_records(entity_type_value, entity_id_column):
+        """EXISTS any approval step record for this entity.
+
+        One predicate shared by the unrouted listing and the manual actions, so
+        the list can never offer a request the action would then refuse. It is
+        deliberately not joined to the chain: every record counts, whatever its
+        status, because a request that was routed through a chain is decided by
+        that chain — including one it denied — and never by the manual path.
+        """
+        return exists(
+            select(1).where(
+                ApprovalStepRecord.entity_type == entity_type_value,
+                ApprovalStepRecord.entity_id == entity_id_column,
+            )
+        )
+
+    async def _lock_unrouted_entity(
+        self, entity_type: ApprovalEntityType, entity_id: str, org_id: str
+    ):
+        """Fetch and lock a PENDING_APPROVAL entity that has no approval steps.
+
+        submit_* leaves a request in PENDING_APPROVAL with no step records when
+        no chain matches or the matching chain has no steps (and deleting a
+        chain or its steps cascades its records away, stranding a request the
+        same way). Nothing else can move such a request, so this is the only
+        way out of that state.
+        """
+        model, pending_status, label = self._unrouted_mapping(entity_type)
+        # Lock the entity row, as approve_step locks its record: two approvers
+        # acting at once would otherwise both pass the status check and the
+        # second approval would encumber the budget a second time.
+        result = await self.db.execute(
+            select(model)
+            .where(model.id == entity_id, model.organization_id == org_id)
+            .with_for_update()
+        )
+        entity = result.scalar_one_or_none()
+        if entity is None:
+            raise FinanceEntityNotFoundError(f"{label} not found")
+        if entity.status != pending_status:
+            raise ManualApprovalConflictError(
+                f"This {label.lower()} is not waiting for approval"
+            )
+        has_steps = await self.db.execute(
+            select(self._has_step_records(entity_type, entity_id))
+        )
+        if has_steps.scalar():
+            raise ManualApprovalConflictError(
+                "This request has approval steps; approve it through those steps"
+            )
+        return entity
+
+    async def manual_approve(
+        self,
+        entity_type: ApprovalEntityType,
+        entity_id: str,
+        approver_id: str,
+        *,
+        org_id: str,
+    ):
+        """Approve a request that no approval chain applies to.
+
+        Any finance.approve holder may act — the same rule approve_step applies
+        to chain steps. Approval notes have no column on the entity (its own
+        ``notes`` belong to the requester), so the endpoint records them in the
+        audit log instead.
+        """
+        entity = await self._lock_unrouted_entity(entity_type, entity_id, org_id)
+        # Same separation-of-duties control as approve_step (FIN-4): holding
+        # finance.approve does not let a treasurer approve their own request.
+        assert_different_person(
+            approver_id,
+            await self._entity_creator_id(entity_type, entity_id, org_id),
+            action="approve",
+            record=entity_type.value.replace("_", " "),
+        )
+        # Shared with the chain path so status, approved_by/approved_at and
+        # budget encumbrance are handled identically.
+        await self._finalize_approval(entity_type, entity_id, approver_id, org_id)
+        logger.info(
+            "{} {} manually approved by {}", entity_type.value, entity_id, approver_id
+        )
+        return entity
+
+    async def manual_deny(
+        self,
+        entity_type: ApprovalEntityType,
+        entity_id: str,
+        denier_id: str,
+        reason: str,
+        *,
+        org_id: str,
+    ):
+        """Deny a request that no approval chain applies to.
+
+        A reason is required: the step path can carry a denial in the step
+        record's notes, but here ``denial_reason`` is the only record the
+        requester sees of why. Self-denial is allowed, as in deny_step —
+        withdrawing your own request is not a conflict.
+        """
+        reason = (reason or "").strip()
+        if not reason:
+            raise ValueError("A reason is required to deny a request")
+        entity = await self._lock_unrouted_entity(entity_type, entity_id, org_id)
+        await self._finalize_denial(entity_type, entity_id, denier_id, reason, org_id)
+        logger.info(
+            "{} {} manually denied by {}", entity_type.value, entity_id, denier_id
+        )
+        return entity
+
+    async def get_unrouted_approvals(
+        self, org_id: str, *, skip: int = 0, limit: int = 100
+    ) -> list[dict]:
+        """Requests waiting for approval that have no approval steps.
+
+        The same row shape as get_pending_approvals, minus the step fields.
+        """
+        entities = union_all(
+            select(
+                PurchaseRequest.id.label("entity_id"),
+                literal(ApprovalEntityType.PURCHASE_REQUEST.value).label("entity_type"),
+                PurchaseRequest.title.label("title"),
+                PurchaseRequest.estimated_amount.label("amount"),
+                PurchaseRequest.requested_by.label("requester_id"),
+                PurchaseRequest.created_at.label("submitted_at"),
+            ).where(
+                PurchaseRequest.organization_id == org_id,
+                PurchaseRequest.status == PurchaseRequestStatus.PENDING_APPROVAL,
+                ~self._has_step_records(
+                    ApprovalEntityType.PURCHASE_REQUEST, PurchaseRequest.id
+                ),
+            ),
+            select(
+                ExpenseReport.id,
+                literal(ApprovalEntityType.EXPENSE_REPORT.value),
+                ExpenseReport.title,
+                ExpenseReport.total_amount,
+                ExpenseReport.submitted_by,
+                ExpenseReport.created_at,
+            ).where(
+                ExpenseReport.organization_id == org_id,
+                ExpenseReport.status == ExpenseReportStatus.PENDING_APPROVAL,
+                ~self._has_step_records(
+                    ApprovalEntityType.EXPENSE_REPORT, ExpenseReport.id
+                ),
+            ),
+            select(
+                CheckRequest.id,
+                literal(ApprovalEntityType.CHECK_REQUEST.value),
+                literal("Check to ") + CheckRequest.payee_name,
+                CheckRequest.amount,
+                CheckRequest.requested_by,
+                CheckRequest.created_at,
+            ).where(
+                CheckRequest.organization_id == org_id,
+                CheckRequest.status == CheckRequestStatus.PENDING_APPROVAL,
+                ~self._has_step_records(
+                    ApprovalEntityType.CHECK_REQUEST, CheckRequest.id
+                ),
+            ),
+        ).subquery("unrouted_entities")
+
+        result = await self.db.execute(
+            select(
+                entities.c.entity_type,
+                entities.c.entity_id,
+                entities.c.title,
+                entities.c.amount,
+                entities.c.submitted_at,
+                User.first_name,
+                User.last_name,
+                User.username,
+            )
+            .outerjoin(
+                User,
+                and_(
+                    User.id == entities.c.requester_id,
+                    User.organization_id == org_id,
+                    User.deleted_at.is_(None),
+                ),
+            )
+            .order_by(
+                entities.c.submitted_at.desc(),
+                entities.c.entity_type,
+                entities.c.entity_id,
+            )
+            .offset(skip)
+            .limit(limit)
+        )
+
+        rows = []
+        for row in result:
+            requester_name = " ".join(filter(None, (row.first_name, row.last_name)))
+            requester_name = requester_name.strip() or row.username or "Unknown"
+            rows.append(
+                {
+                    "entity_type": row.entity_type,
+                    "entity_id": row.entity_id,
+                    "entity_title": row.title,
+                    "entity_amount": row.amount,
+                    "requester_name": requester_name,
+                    "submitted_at": row.submitted_at,
+                }
+            )
+        return rows
 
     async def preview_approval_chain(
         self,

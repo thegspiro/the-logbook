@@ -142,7 +142,7 @@ Enums:
 1. Look up chains matching `applies_to` + `budget_category_id` + amount within `min_amount`/`max_amount` range
 2. If multiple match, use the most specific (category + amount > category only > amount only > default)
 3. If no chain matches, use the org's `is_default` chain
-4. If no default chain exists, single-step approval by anyone with `finance.approve`
+4. If no default chain exists (or the chain has no steps), the request waits in `pending_approval` with no approval steps, and anyone with `finance.approve` other than the requester approves or denies it directly from the request's detail page (`/finance/approvals/manual/...`)
 
 **Step progression:**
 
@@ -193,6 +193,8 @@ Any Trustee approves Step 2 → Step 3 fires automatically
 - `GET /finance/approvals/pending` (all pending approval steps for the current user across all entity types — powers the approval queue widget)
 - `POST /finance/approvals/{step_record_id}/approve`
 - `POST /finance/approvals/{step_record_id}/deny`
+- `GET /finance/approvals/unrouted` (requests in `pending_approval` that have no approval steps because no chain applied)
+- `POST /finance/approvals/manual/{entity_type}/{entity_id}/approve` (body `{notes?}`; notes go to the audit log) and `.../deny` (body `{reason}`, required) — only for a request with no approval steps; a request with steps returns 409
 
 ### Frontend
 
