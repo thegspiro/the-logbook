@@ -209,12 +209,16 @@ async def test_every_asset_module_off_queries_nothing_at_all():
 # handed the identical action-item descriptions back.
 
 
-async def _summary(enabled: list[str]):
+async def _summary(enabled: list[str], active_requirements: int = 1):
     db = MagicMock()
     db.execute = AsyncMock(return_value=SimpleNamespace(scalar=lambda: 0))
     modules_patch, _ = _patches(enabled, [])
     with (
         modules_patch,
+        patch(
+            "app.api.v1.endpoints.dashboard.count_active_requirements",
+            new=AsyncMock(return_value=active_requirements),
+        ),
         patch(
             "app.api.v1.endpoints.dashboard.compute_org_compliance_pct",
             new=AsyncMock(return_value=42.0),
@@ -244,6 +248,16 @@ async def test_admin_summary_reports_the_training_figure_when_the_module_is_on()
     summary = await _summary(ALL_MODULES)
 
     assert summary.training_completion_pct == 42.0
+    assert summary.recent_training_hours == 0.0
+
+
+async def test_admin_summary_withholds_a_vacuous_training_figure():
+    """No active requirements means every member is trivially compliant; a
+    100% tile on a department that has set nothing up reads as "all current",
+    so the figure is withheld and the frontend drops the card."""
+    summary = await _summary(ALL_MODULES, active_requirements=0)
+
+    assert summary.training_completion_pct is None
     assert summary.recent_training_hours == 0.0
 
 
