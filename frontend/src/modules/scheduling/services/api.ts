@@ -259,6 +259,9 @@ export interface SchedulingSummary {
   shifts_scheduled_this_week: number;
   shifts_scheduled_this_month: number;
   hours_worked_this_month: number;
+  /** Setup progress, read by the administration hub's getting-started guide. */
+  active_templates: number;
+  active_patterns: number;
 }
 
 /**
