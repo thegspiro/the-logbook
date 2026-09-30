@@ -112,9 +112,14 @@ describe('MyEquipmentPage', () => {
 
   it('shows empty section messaging when nothing is assigned', async () => {
     renderWithRouter(<MyEquipmentPage />);
-    expect(await screen.findByText('Nothing issued to you.')).toBeInTheDocument();
+    expect(await screen.findByText('Nothing has been issued to you yet.')).toBeInTheDocument();
+    expect(screen.getByText(/When the quartermaster hands you department gear/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /walkthrough in the Learning Center/ })).toHaveAttribute(
+      'href',
+      '/learning/gear'
+    );
     expect(screen.getByText('Issued to Me')).toBeInTheDocument();
-    expect(screen.getByText('No active temporary loans.')).toBeInTheDocument();
+    expect(screen.getByText(/A temporary loan is gear lent to you for a set time/)).toBeInTheDocument();
     expect(screen.getByText('Active Temporary Loans')).toBeInTheDocument();
     // Permanent assignments and pool issuances share one section; a member
     // holds both open-endedly, so nothing on this page splits them any more.
@@ -230,8 +235,8 @@ describe('MyEquipmentPage', () => {
     ]);
     renderWithRouter(<MyEquipmentPage />);
 
-    const tile = await screen.findByRole('group', { name: 'Pending' });
-    await waitFor(() => expect(tile).toHaveTextContent(/^2Pending$/));
+    const tile = await screen.findByRole('group', { name: 'Pending requests' });
+    await waitFor(() => expect(tile).toHaveTextContent(/^2Pending requests$/));
   });
 
   it('names the fields of the return notice', async () => {
@@ -277,8 +282,8 @@ describe('MyEquipmentPage', () => {
     await user.click(screen.getByRole('button', { name: 'Notify quartermaster of return: Turnout Coat' }));
     await user.click(screen.getByRole('button', { name: 'Submit' }));
 
-    const tile = screen.getByRole('group', { name: 'Pending' });
-    await waitFor(() => expect(tile).toHaveTextContent(/^1Pending$/));
+    const tile = screen.getByRole('group', { name: 'Pending requests' });
+    await waitFor(() => expect(tile).toHaveTextContent(/^1Pending requests$/));
   });
 
   // The picked date was sent as UTC midnight, which west of Greenwich is the

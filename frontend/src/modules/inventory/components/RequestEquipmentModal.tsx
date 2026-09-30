@@ -119,6 +119,7 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
   const [products, setProducts] = useState<RequestableProduct[]>([]);
   const [categories, setCategories] = useState<RequestableCategory[]>([]);
   const [loading, setLoading] = useState(false);
+  const [catalogFailed, setCatalogFailed] = useState(false);
 
   const [selected, setSelected] = useState<RequestableProduct | null>(null);
   const [selectedVariant, setSelectedVariant] = useState<string>('');
@@ -162,9 +163,11 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
       if (seq !== loadSeq.current) return;
       setProducts(data.products);
       setCategories(data.categories);
+      setCatalogFailed(false);
     } catch (err: unknown) {
       if (seq !== loadSeq.current) return;
       setProducts([]);
+      setCatalogFailed(true);
       toast.error(getErrorMessage(err, 'Failed to load the equipment catalog'));
     } finally {
       // Only the newest request owns the spinner; a superseded one clearing it
@@ -418,13 +421,31 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
           )}
 
           <div className="divide-theme-surface-border border-theme-surface-border max-h-72 divide-y overflow-y-auto rounded-md border">
-            {products.length === 0 && !loading && (
-              <EmptyState
-                icon={PackageSearch}
-                title="Nothing matches that"
-                description="Try a broader word, pick a category above, or describe what you need below."
-              />
-            )}
+            {/* With nothing typed and no category picked, an empty list means
+                the catalog itself is empty — "try a broader word" would send
+                the member looking for a search term that cannot help. A failed
+                load is neither, and says so. */}
+            {products.length === 0 &&
+              !loading &&
+              (catalogFailed ? (
+                <EmptyState
+                  icon={PackageSearch}
+                  title="The equipment list did not load"
+                  description="You can still describe what you need below, or close this and try again."
+                />
+              ) : search.trim() || categoryId ? (
+                <EmptyState
+                  icon={PackageSearch}
+                  title="Nothing matches that"
+                  description="Try a broader word, pick a category above, or describe what you need below."
+                />
+              ) : (
+                <EmptyState
+                  icon={PackageSearch}
+                  title="Your department has not listed any equipment yet"
+                  description="Describe what you need below and the quartermaster will see your request."
+                />
+              ))}
             {products.map((product) => (
               <button
                 key={product.key}
