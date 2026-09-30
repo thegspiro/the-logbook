@@ -194,3 +194,34 @@ class TestAssignUserRoles:
         assert db.execute.await_count == 3
         assert target.roles == [kept, added]
         assert response["roles"] == [kept, added]
+
+    async def test_only_added_positions_are_held_to_the_ceiling(self, monkeypatch):
+        """
+        The call replaces the whole set, so the list repeats positions the
+        member already holds. Checking those refused a coordinator adding a
+        position to the Chief -- and raised a CRITICAL escalation alert --
+        because the Chief's own position was still in the list.
+        """
+        ceiling = AsyncMock()
+        monkeypatch.setattr(users_endpoint, "_enforce_role_grant_ceiling", ceiling)
+        monkeypatch.setattr(users_endpoint, "get_client_ip", lambda request: "1.2.3.4")
+
+        chief = SimpleNamespace(id="role-chief", permissions=["*"], slug="chief")
+        driver = SimpleNamespace(id="role-driver", permissions=[], slug="driver")
+        target = _member(roles=[chief])
+        db = _db(
+            _result(scalar_one=target),
+            _result(scalars_all=[chief, driver]),
+            _result(scalar_one=target),
+        )
+
+        await users_endpoint.assign_user_roles(
+            user_id=target.id,
+            role_assignment=SimpleNamespace(role_ids=["role-chief", "role-driver"]),
+            request=MagicMock(),
+            db=db,
+            current_user=_member(id="coordinator-1"),
+        )
+
+        checked = ceiling.await_args.args[1]
+        assert checked == [driver]

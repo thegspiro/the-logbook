@@ -63,6 +63,7 @@ import { RejoinServiceFields } from '../components/RejoinServiceFields';
 import { useRejoinServiceOptions } from '../hooks/useRejoinServiceOptions';
 import { ServiceHistorySection } from '../components/member-profile/ServiceHistorySection';
 import { isCertificationExpired, isCertificationExpiringSoon } from '../utils/certificationExpiry';
+import { blankToNull } from '../utils/formValues';
 
 // Types for inventory data
 interface InventoryItem {
@@ -442,11 +443,14 @@ export const MemberProfilePage: React.FC = () => {
       setSaving(true);
       setError(null);
 
-      // Strip empty strings to undefined so Pydantic doesn't reject '' as an invalid EmailStr
+      // An update, so a cleared box is sent as null and the server clears it;
+      // omitting it (`|| undefined`) left the old number in place behind a
+      // success (CLAUDE.md pitfall #1, update half). Email stays omit-if-blank:
+      // the account email is required and cannot be cleared.
       const payload: ContactInfoUpdate = {
         email: editForm.email?.trim() || undefined,
-        phone: editForm.phone?.trim() || undefined,
-        mobile: editForm.mobile?.trim() || undefined,
+        phone: blankToNull(editForm.phone),
+        mobile: blankToNull(editForm.mobile),
         notification_preferences: editForm.notification_preferences,
       };
 
@@ -550,13 +554,15 @@ export const MemberProfilePage: React.FC = () => {
     try {
       setSavingAddress(true);
       setError(null);
+      // Every field the form owns, blanks as null, so removing an address or
+      // a personal email actually removes it (pitfall #1, update half).
       const updateData: UserProfileUpdate = {
-        address_street: addressForm.address_street || undefined,
-        address_city: addressForm.address_city || undefined,
-        address_state: addressForm.address_state || undefined,
-        address_zip: addressForm.address_zip || undefined,
-        address_country: addressForm.address_country || undefined,
-        personal_email: addressForm.personal_email || undefined,
+        address_street: blankToNull(addressForm.address_street),
+        address_city: blankToNull(addressForm.address_city),
+        address_state: blankToNull(addressForm.address_state),
+        address_zip: blankToNull(addressForm.address_zip),
+        address_country: blankToNull(addressForm.address_country),
+        personal_email: blankToNull(addressForm.personal_email),
       };
       const updated = await userService.updateUserProfile(userId, updateData);
       setUser(updated);
@@ -600,17 +606,27 @@ export const MemberProfilePage: React.FC = () => {
 
   const handleSaveEmergencyContacts = async () => {
     if (!user || !userId) return;
-    // Validate at least name and phone for each contact
-    const valid = contactsForm.every((c) => c.name.trim() && c.phone.trim());
-    if (!valid) {
-      setError('Each emergency contact must have a name and phone number.');
+    // Shaped as MemberAdminEditPage and UserSettingsPage already do it: the
+    // server requires a relationship and types email as EmailStr | None, so an
+    // untouched Email box ('') or a blank Relationship was a 422 that lost the
+    // whole save.
+    const contacts = contactsForm.map((c) => ({
+      name: c.name.trim(),
+      relationship: c.relationship.trim(),
+      phone: c.phone.trim(),
+      email: c.email?.trim() || undefined,
+      is_primary: c.is_primary,
+    }));
+    const incomplete = contacts.findIndex((c) => !c.name || !c.relationship || !c.phone);
+    if (incomplete >= 0) {
+      setError(`Emergency contact ${incomplete + 1} needs a name, a relationship and a phone number.`);
       return;
     }
     try {
       setSavingContacts(true);
       setError(null);
       const updated = await userService.updateUserProfile(userId, {
-        emergency_contacts: contactsForm,
+        emergency_contacts: contacts,
       });
       setUser(updated);
       setEditingContacts(false);

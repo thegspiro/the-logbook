@@ -168,7 +168,7 @@ const ContactInfoSection: React.FC<ContactInfoSectionProps> = ({
             <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Phone</label>
             <input
               type="tel"
-              value={editForm.phone}
+              value={editForm.phone ?? ''}
               onChange={(e) => onFormChange('phone', e.target.value)}
               className="form-input px-3 text-sm"
             />
@@ -177,7 +177,7 @@ const ContactInfoSection: React.FC<ContactInfoSectionProps> = ({
             <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Mobile</label>
             <input
               type="tel"
-              value={editForm.mobile}
+              value={editForm.mobile ?? ''}
               onChange={(e) => onFormChange('mobile', e.target.value)}
               className="form-input px-3 text-sm"
             />

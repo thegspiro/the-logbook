@@ -17,6 +17,16 @@ import pytest
 from app.services.attendance_dashboard_service import AttendanceDashboardService
 
 
+@pytest.fixture(autouse=True)
+def _fixed_today(monkeypatch):
+    # Attendance windows end at the department's today; pin it so the 2026
+    # meeting dates below stay inside the twelve-month look-back.
+    monkeypatch.setattr(
+        "app.services.attendance_dashboard_service.today_in",
+        lambda _tz: date(2026, 9, 1),
+    )
+
+
 def _one(obj):
     return MagicMock(scalar_one_or_none=MagicMock(return_value=obj))
 
@@ -63,13 +73,15 @@ def _leave(uid, start, end):
     return SimpleNamespace(user_id=uid, start_date=start, end_date=end)
 
 
-def _dash_db(org, members, meetings, attendance, leaves):
+def _dash_db(org, members, meetings, attendance, leaves, stints=()):
     # Mirrors get_dashboard's execute order: org, members, meetings,
-    # attendance (only if meetings), leaves.
+    # attendance (only if meetings), leaves, service stints (only if members).
     seq = [_one(org), _scalars(members), _scalars(meetings)]
     if meetings:
         seq.append(_scalars(attendance))
     seq.append(_scalars(leaves))
+    if members:
+        seq.append(_scalars(stints))
     db = MagicMock()
     db.execute = AsyncMock(side_effect=seq)
     return db

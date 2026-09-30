@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.api.attendance_lock import attendance_lock_http_error
 from app.api.dependencies import (
     PaginationParams,
     get_current_user,
@@ -35,7 +36,6 @@ from app.schemas.training_session import (
     TrainingSessionLinkageUpdate,
     TrainingSessionResponse,
 )
-from app.services.event_service import ATTENDANCE_LOCKED_PREFIX
 from app.services.training_session_service import (
     TRAINING_DETAILS_EXIST,
     TrainingSessionService,
@@ -51,11 +51,9 @@ def _session_error(error: str) -> HTTPException:
     are conflicts with the event's state, not bad requests; the lock's
     sentinel prefix is stripped so the client shows only the sentence.
     """
-    if error.startswith(ATTENDANCE_LOCKED_PREFIX):
-        return HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=error[len(ATTENDANCE_LOCKED_PREFIX) :],
-        )
+    locked = attendance_lock_http_error(error)
+    if locked is not None:
+        return locked
     if error == TRAINING_DETAILS_EXIST:
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error)
     if error in ("Event not found", "Training session not found"):
@@ -387,7 +385,13 @@ async def finalize_training_session(
     )
 
     if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+        # Only the lock refusal is remapped. Everything else keeps this
+        # route's 400: two of its "not found" returns come after the event's
+        # finalize has committed, and a 404 would tell the caller nothing
+        # happened.
+        raise attendance_lock_http_error(error) or HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=error
+        )
 
     await log_audit_event(
         db=db,
