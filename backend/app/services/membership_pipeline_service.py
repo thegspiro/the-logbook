@@ -7842,18 +7842,36 @@ class MembershipPipelineService:
             )
         return interview_loaded
 
+    # Identity and provenance of an interview: who conducted it, for whom and
+    # at which stage. None of these are editable after the fact, and none are
+    # in InterviewUpdate, but the skip list is what keeps a future schema
+    # field from quietly re-attributing an interview.
+    _INTERVIEW_PROTECTED_FIELDS = frozenset(
+        {
+            "id",
+            "prospect_id",
+            "pipeline_id",
+            "step_id",
+            "interviewer_id",
+            "created_at",
+            "updated_at",
+        }
+    )
+
     async def update_interview(
         self,
         interview_id: str,
         organization_id: str,
         interviewer_id: str,
-        notes: Optional[str] = None,
-        recommendation: Optional[str] = None,
-        recommendation_notes: Optional[str] = None,
-        interviewer_role: Optional[str] = None,
-        interview_date: Optional[datetime] = None,
+        updates: Dict[str, Any],
     ) -> Optional[ProspectInterview]:
-        """Update an interview. Only the original interviewer can update."""
+        """Update an interview. Only the original interviewer can update.
+
+        ``updates`` is ``InterviewUpdate.model_dump(exclude_unset=True)``: a
+        key that is absent is left alone, and a key present as None clears the
+        column (CLAUDE.md Pitfall #1). Skipping None here is what used to make
+        a cleared note come back behind a success toast.
+        """
         interview = await self.get_interview(interview_id, organization_id)
         if not interview:
             raise ValueError("Interview not found")
@@ -7861,19 +7879,15 @@ class MembershipPipelineService:
         if str(interview.interviewer_id) != str(interviewer_id):
             raise ValueError("Only the original interviewer can update this interview")
 
-        if notes is not None:
-            interview.notes = notes
+        updates = dict(updates)
+        recommendation = updates.get("recommendation")
         if recommendation is not None:
             try:
-                interview.recommendation = InterviewRecommendation(recommendation)
+                updates["recommendation"] = InterviewRecommendation(recommendation)
             except ValueError:
                 raise ValueError(f"Invalid recommendation: {recommendation}")
-        if recommendation_notes is not None:
-            interview.recommendation_notes = recommendation_notes
-        if interviewer_role is not None:
-            interview.interviewer_role = interviewer_role
-        if interview_date is not None:
-            interview.interview_date = interview_date
+
+        apply_updates(interview, updates, skip=self._INTERVIEW_PROTECTED_FIELDS)
 
         await self._log_activity(
             prospect_id=str(interview.prospect_id),
