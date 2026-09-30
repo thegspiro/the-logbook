@@ -25,9 +25,9 @@ import {
   Users,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import type { Applicant, TargetMembershipType, EmergencyContact } from '../types';
+import type { Applicant, ConversionStatus, EmergencyContact, PipelineConversionConfig } from '../types';
 import { StepProgressStatus } from '../types';
-import { applicantService } from '../services/api';
+import { applicantService, pipelineService } from '../services/api';
 import { userService } from '../../../services/api';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import TargetRolePicker from './TargetRolePicker';
@@ -35,6 +35,7 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, getTodayLocalDate } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { ADMINISTRATIVE_RANK_HINT } from '../../../utils/membership';
+import { MemberClass } from '../../../constants/enums';
 
 type PasswordDelivery = 'email' | 'set' | 'later';
 
@@ -88,13 +89,18 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
   const dialogRef = useDialog<HTMLDivElement>({ isOpen: isOpen, onClose });
 
   const tz = useTimezone();
-  const { refreshPipelineView } = useProspectiveMembersStore();
+  const { refreshPipelineView, currentPipeline } = useProspectiveMembersStore();
 
   // Wizard state
   const [step, setStep] = useState<1 | 2>(1);
 
   // Step 2 fields
-  const [membershipType, setMembershipType] = useState<TargetMembershipType>('regular');
+  // What the new member becomes. Pre-filled from the pipeline's conversion rule
+  // for the applicant's track -- the same rule automatic conversion applies --
+  // and changeable here for this one applicant. Empty until the rule is known:
+  // guessing a default here would be a second copy of the server's.
+  const [memberClass, setMemberClass] = useState<MemberClass | ''>('');
+  const [memberStatus, setMemberStatus] = useState<ConversionStatus | ''>('');
   const [rank, setRank] = useState('');
   const [station, setStation] = useState('');
   // Seeded from the application's own target role. The conversion is the last
@@ -133,7 +139,8 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
   useEffect(() => {
     if (applicant && isOpen) {
       setStep(1);
-      setMembershipType(applicant.target_membership_type || 'regular');
+      setMemberClass('');
+      setMemberStatus('');
       setRank('');
       setStation('');
       setTargetRoleId(applicant.target_role_id || '');
@@ -149,6 +156,32 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
       setConversionResult(null);
     }
   }, [applicant, isOpen, tz]);
+
+  useEffect(() => {
+    if (!applicant || !isOpen) return undefined;
+    let cancelled = false;
+    const track = applicant.target_membership_type === 'administrative' ? 'administrative' : 'operational';
+    const apply = (config: PipelineConversionConfig) => {
+      if (cancelled) return;
+      setMemberClass(config[track].member_class);
+      setMemberStatus(config[track].member_status);
+      // An administrative member holds no rank; see the class select below.
+      if (config[track].member_class === MemberClass.ADMINISTRATIVE) setRank('');
+    };
+    if (currentPipeline && currentPipeline.id === applicant.pipeline_id) {
+      apply(currentPipeline.conversion_config);
+    } else if (applicant.pipeline_id) {
+      pipelineService
+        .getPipeline(applicant.pipeline_id)
+        .then((pipeline) => apply(pipeline.conversion_config))
+        .catch(() => {
+          // Left unselected: the coordinator chooses, and Convert waits for it.
+        });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [applicant, isOpen, currentPipeline]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -177,9 +210,10 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
   const completedStages = applicant.stage_history.filter((s) => s.status === StepProgressStatus.COMPLETED).length;
   const totalStages = applicant.total_stages;
 
-  const isAdministrative = membershipType === 'administrative';
+  const isAdministrative = memberClass === MemberClass.ADMINISTRATIVE;
 
   const handleConvert = async () => {
+    if (!memberClass || !memberStatus) return;
     if (passwordDelivery === 'set') {
       if (initialPassword.length < 12) {
         setPasswordError('The password must be at least 12 characters.');
@@ -199,7 +233,9 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
       }
 
       const result = await applicantService.convertToMember(applicant.id, {
-        target_membership_type: membershipType,
+        target_membership_type: applicant.target_membership_type || 'regular',
+        member_class: memberClass,
+        member_status: memberStatus,
         target_role_id: targetRoleId || undefined,
         send_welcome_email: passwordDelivery === 'email',
         password: passwordDelivery === 'set' ? initialPassword : undefined,
@@ -216,7 +252,9 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
       // the list alone left the stat cards claiming the applicant was still
       // active, over a table that no longer showed them.
       await refreshPipelineView();
-      toast.success(`${applicant.first_name} ${applicant.last_name} converted to ${membershipType} member`);
+      toast.success(
+        `${applicant.first_name} ${applicant.last_name} converted to ${memberStatus} ${memberClass} member`
+      );
     } catch (err: unknown) {
       const message = getErrorMessage(err, 'Failed to convert applicant');
       toast.error(message);
@@ -403,41 +441,56 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
               <div className="space-y-4 p-6">
                 <h3 className="text-theme-text-primary text-sm font-semibold">Member Account Setup</h3>
 
-                {/* Membership Type */}
-                <div>
-                  <label className="text-theme-text-secondary mb-2 block text-sm font-medium">Membership Type</label>
-                  <div className="form-grid-2">
-                    <button
-                      onClick={() => setMembershipType('regular')}
-                      className={`rounded-lg border p-3 text-left transition-all ${
-                        membershipType === 'regular'
-                          ? 'border-red-500 bg-red-500/10'
-                          : 'border-theme-surface-border bg-theme-surface-hover hover:border-theme-surface-border'
-                      }`}
-                    >
-                      <p className="text-theme-text-primary text-sm font-medium">Regular Member</p>
-                      <p className="text-theme-text-muted mt-0.5 text-xs">Starts as probationary</p>
-                    </button>
-                    <button
-                      onClick={() => {
-                        setMembershipType('administrative');
+                {/* Member class and starting status */}
+                <div className="form-grid-2">
+                  <div>
+                    <label htmlFor="conv-class" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                      Member class
+                    </label>
+                    <select
+                      id="conv-class"
+                      value={memberClass}
+                      onChange={(e) => {
+                        const next = e.target.value as MemberClass | '';
+                        setMemberClass(next);
                         // An administrative member holds no operational rank,
                         // and the transfer refuses the pair. Both are chosen in
                         // this one step, so drop the rank as the class is
                         // picked rather than failing the conversion at the end.
-                        setRank('');
+                        if (next === MemberClass.ADMINISTRATIVE) setRank('');
                       }}
-                      className={`rounded-lg border p-3 text-left transition-all ${
-                        membershipType === 'administrative'
-                          ? 'border-red-500 bg-red-500/10'
-                          : 'border-theme-surface-border bg-theme-surface-hover hover:border-theme-surface-border'
-                      }`}
+                      className="form-input"
                     >
-                      <p className="text-theme-text-primary text-sm font-medium">Administrative</p>
-                      <p className="text-theme-text-muted mt-0.5 text-xs">Non-operational support role</p>
-                    </button>
+                      <option value="" disabled>
+                        Choose…
+                      </option>
+                      <option value={MemberClass.OPERATIONAL}>Operational</option>
+                      <option value={MemberClass.ADMINISTRATIVE}>Administrative</option>
+                      <option value={MemberClass.SOCIAL}>Social</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="conv-status" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                      Starting status
+                    </label>
+                    <select
+                      id="conv-status"
+                      value={memberStatus}
+                      onChange={(e) => setMemberStatus(e.target.value as ConversionStatus | '')}
+                      className="form-input"
+                    >
+                      <option value="" disabled>
+                        Choose…
+                      </option>
+                      <option value="probationary">Probationary</option>
+                      <option value="regular">Regular</option>
+                    </select>
                   </div>
                 </div>
+                <p className="text-theme-text-muted -mt-2 text-xs">
+                  Pre-filled from this pipeline&apos;s conversion settings. Changing it here affects this applicant
+                  only.
+                </p>
 
                 {/* Rank & Station */}
                 <div className="form-grid-2">
@@ -684,7 +737,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
                   onClick={() => {
                     void handleConvert();
                   }}
-                  disabled={isConverting}
+                  disabled={isConverting || !memberClass || !memberStatus}
                   className="flex items-center gap-2 rounded-lg bg-emerald-700 px-6 py-2 text-white transition-colors hover:bg-emerald-800 disabled:opacity-50"
                 >
                   {isConverting ? (
