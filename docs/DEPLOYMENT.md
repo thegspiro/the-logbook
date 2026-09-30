@@ -287,11 +287,31 @@ If you have your own SSL certificates:
 
 ### Docker Compose `production` profile
 
-`docker compose --profile production up -d` adds an nginx container that
-terminates TLS on port 443, redirects port 80 to HTTPS, and proxies to the
-`frontend` and `backend` services. It reads `infrastructure/nginx/docker.conf`;
-the `nginx.conf` beside it, and `scripts/setup-ssl.sh` above, are for nginx
-installed on the host and are not used here.
+The stack can run behind its own nginx container, which terminates TLS on port
+443, redirects port 80 to HTTPS, and proxies to the `frontend` and `backend`
+services. It reads `infrastructure/nginx/docker.conf`; the `nginx.conf` beside
+it, and `scripts/setup-ssl.sh` above, are for nginx installed on the host and
+are not used here.
+
+Turn it on with `docker-compose.proxy.yml`, after the production override. Pin
+the three files in `.env` so every later `docker compose` command uses them:
+
+```bash
+COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml:docker-compose.proxy.yml
+```
+
+That file starts nginx and **stops publishing the frontend's port 3000**, so
+nginx is the only way in. Port 3000 serves the app over plain HTTP, so a
+published one would be a second entrance that skips TLS and every rule in
+`docker.conf`. `docker compose --profile production up -d` also starts nginx
+but leaves port 3000 published. Use it only when something outside this stack
+still has to reach the frontend on that port.
+
+The update command, `git pull && docker compose up -d --build`, reads
+`COMPOSE_FILE` and keeps the proxy file. The installers (`install.sh`,
+`scripts/universal-install.sh`) do not: they always pass the base and
+production files with `-f`. Re-running one on this setup brings the frontend
+back on port 3000, so run `docker compose up -d` again after it.
 
 The container reads its certificate from `infrastructure/nginx/ssl/`, as
 `fullchain.pem` and `privkey.pem`, and **will not start without both**. Both
@@ -300,14 +320,14 @@ Run the commands below from the repository root.
 
 1. **Start with a temporary self-signed certificate.** This gets nginx running
    so it can answer Let's Encrypt's challenge. It is also all you need to try
-   the profile out, if the browser warning is acceptable:
+   the setup out, if the browser warning is acceptable:
 
    ```bash
    mkdir -p infrastructure/nginx/ssl infrastructure/nginx/certbot
    openssl req -x509 -newkey rsa:2048 -nodes -days 7 -subj "/CN=localhost" \
      -keyout infrastructure/nginx/ssl/privkey.pem \
      -out infrastructure/nginx/ssl/fullchain.pem
-   docker compose --profile production up -d
+   docker compose up -d
    ```
 
 2. **Issue the real certificate.** Certbot writes its challenge into
@@ -327,7 +347,7 @@ Run the commands below from the repository root.
 
 3. **Point the application at the HTTPS address.** Set `FRONTEND_URL` and
    `ALLOWED_ORIGINS` in `.env` to `https://logbook.yourdept.org`, then
-   `docker compose --profile production up -d` again.
+   `docker compose up -d` again.
 
 Port 80 redirects to the same host on port 443, so publish HTTPS on 443
 (`NGINX_HTTPS_PORT` is `443` by default). The access-log exclusions, the 60 MB
