@@ -11,6 +11,7 @@ import { ArrowLeft, AlertTriangle, FileCheck, CheckCircle, Clock, XCircle, Ban, 
 import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
 import { checkRequestService } from '../services/api';
+import { ManualApprovalPanel } from '../components/ManualApprovalPanel';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { PromptDialog } from '@/components/ux/PromptDialog';
@@ -19,7 +20,12 @@ import { formatDateTime } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { formatCurrency } from '@/utils/currencyFormatting';
-import { CheckRequestStatus, CHECK_REQUEST_STATUS_COLORS, APPROVAL_STEP_STATUS_COLORS } from '../types';
+import {
+  ApprovalEntityType,
+  CheckRequestStatus,
+  CHECK_REQUEST_STATUS_COLORS,
+  APPROVAL_STEP_STATUS_COLORS,
+} from '../types';
 import { ApprovalStepActions } from '../components/ApprovalStepActions';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -289,6 +295,15 @@ const CheckRequestDetailPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      <ManualApprovalPanel
+        entityType={ApprovalEntityType.CHECK_REQUEST}
+        entityId={cr.id}
+        status={cr.status}
+        approvalStepCount={cr.approvalSteps.length}
+        requesterId={cr.requestedBy}
+        onDecided={() => void fetchCheckRequest(cr.id)}
+      />
 
       {cr.approvalSteps.length > 0 && (
         <div className="card p-6">

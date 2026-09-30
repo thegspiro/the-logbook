@@ -1323,9 +1323,12 @@ wildcard, i.e. the IT administrator.
 
 That produced two states, and the second is the one that stranded records:
 
-- With no chain configured, `submit_purchase_request` takes the
-  `if chain and chain.steps:` branch and skips approval entirely, so requests
-  quietly bypassed the workflow rather than failing visibly.
+- With no chain configured (or a chain with no steps), `submit_purchase_request`
+  and its expense-report and check-request siblings put the request in
+  `pending_approval` with **no approval steps**, and no endpoint could move it.
+  _(2026-09-30: a `finance.approve` holder other than the requester can now
+  approve or deny such a request from its detail page —
+  `POST /finance/approvals/manual/{entity_type}/{entity_id}/approve` / `deny`.)_
 - Configure a chain — which required the same unreachable settings screen — and
   every submitted request landed in `pending_approval` with nobody able to
   action it.

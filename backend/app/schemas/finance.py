@@ -397,6 +397,35 @@ class PendingApprovalResponse(UTCResponseBase):
     submitted_at: datetime
 
 
+class UnroutedApprovalResponse(UTCResponseBase):
+    """A request waiting for approval that no approval chain applies to"""
+
+    model_config = _RESPONSE_CONFIG
+
+    entity_type: str
+    entity_id: str
+    entity_title: str
+    entity_amount: Decimal
+    requester_name: str
+    submitted_at: datetime
+
+
+class ManualDenyRequest(BaseModel):
+    """Deny a request that has no approval steps. A reason is required."""
+
+    model_config = _REQUEST_CONFIG
+
+    reason: str = Field(..., min_length=1, max_length=5000)
+
+    @field_validator("reason")
+    @classmethod
+    def _reason_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("A reason is required to deny a request")
+        return value
+
+
 # ============================================
 # Purchase Request Schemas
 # ============================================

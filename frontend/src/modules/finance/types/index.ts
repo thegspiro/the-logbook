@@ -353,6 +353,16 @@ export interface PendingApproval {
   submittedAt: string;
 }
 
+/** A request waiting for approval that no approval chain applies to, so it has no steps. */
+export interface UnroutedApproval {
+  entityType: ApprovalEntityType;
+  entityId: string;
+  entityTitle: string;
+  entityAmount: MonetaryAmount;
+  requesterName: string;
+  submittedAt: string;
+}
+
 export interface PurchaseRequest {
   id: string;
   organizationId: string;

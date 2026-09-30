@@ -10,6 +10,7 @@ import { useParams, Link } from 'react-router';
 import { ArrowLeft, AlertTriangle, Receipt, Send, CheckCircle, Clock, XCircle, Ban } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
+import { ManualApprovalPanel } from '../components/ManualApprovalPanel';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
@@ -18,6 +19,7 @@ import { useTimezone } from '@/hooks/useTimezone';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import {
+  ApprovalEntityType,
   ExpenseReportStatus,
   EXPENSE_REPORT_STATUS_COLORS,
   APPROVAL_STEP_STATUS_COLORS,
@@ -267,6 +269,15 @@ const ExpenseReportDetailPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      <ManualApprovalPanel
+        entityType={ApprovalEntityType.EXPENSE_REPORT}
+        entityId={er.id}
+        status={er.status}
+        approvalStepCount={er.approvalSteps.length}
+        requesterId={er.submittedBy}
+        onDecided={() => void fetchExpenseReport(er.id)}
+      />
 
       {/* Approval Timeline */}
       {er.approvalSteps.length > 0 && (
