@@ -119,11 +119,44 @@ describe('BottomNavigation', () => {
     const { unmount } = renderBar();
     expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument();
     unmount();
+    localStorage.clear();
 
     mockPermissions = new Set(['storefront.view']);
     renderBar();
     expect(screen.queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Schedule' })).toBeInTheDocument();
+  });
+
+  it("points Settings at the member's own account, not the organization's", async () => {
+    const user = userEvent.setup();
+    mockPermissions.add('settings.manage');
+    renderBar();
+    await user.click(screen.getByRole('button', { name: 'Settings' }));
+    expect(mockNavigate).toHaveBeenCalledWith('/account');
+    expect(JSON.parse(localStorage.getItem(BOTTOM_NAV_STORAGE_KEY) ?? '[]')).toEqual(['/events', '/account']);
+  });
+
+  it('offers Settings to a member without settings.manage who chose it', () => {
+    localStorage.setItem(BOTTOM_NAV_STORAGE_KEY, JSON.stringify(['/events', '/account']));
+    renderBar();
+    expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument();
+  });
+
+  // Administrators had '/settings' written to storage as their default before
+  // the tab was repointed; it must stay a Settings tab, not fall back to Schedule.
+  it('reads a stored /settings slot as the account Settings tab', async () => {
+    const user = userEvent.setup();
+    localStorage.setItem(BOTTOM_NAV_STORAGE_KEY, JSON.stringify(['/events', '/settings']));
+    renderBar();
+    expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual([
+      'Home',
+      'Events',
+      'Add',
+      'Settings',
+      'More',
+    ]);
+    await user.click(screen.getByRole('button', { name: 'Settings' }));
+    expect(mockNavigate).toHaveBeenCalledWith('/account');
   });
 
   // /store requires storefront.view, and a department seeded before the

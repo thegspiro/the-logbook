@@ -56,8 +56,18 @@ const TAB_CANDIDATES: TabDef[] = [
   { label: 'Members', path: '/members', icon: Users },
   { label: 'Documents', path: '/documents', icon: FileText },
   { label: 'Learning', path: '/learning', icon: BookOpen },
-  { label: 'Settings', path: '/settings', icon: Settings, permission: 'settings.manage' },
+  // The member's own settings, not the organization's: /settings needs
+  // settings.manage, which most members lack, and an officer who has it reaches
+  // it from More.
+  { label: 'Settings', path: '/account', icon: Settings },
 ];
+
+/**
+ * The Settings tab used to point at /settings, and administrators had that
+ * path written to storage as their default. Reading it through this map keeps
+ * the slot on Settings rather than letting it silently fall back to Schedule.
+ */
+const LEGACY_SLOT_PATHS: Record<string, string> = { '/settings': '/account' };
 
 export const BOTTOM_NAV_STORAGE_KEY = 'logbook.bottom-navigation.v1';
 
@@ -79,7 +89,9 @@ function readPreferredSlots(isAdministrator: boolean): string[][] {
   try {
     const value: unknown = JSON.parse(localStorage.getItem(BOTTOM_NAV_STORAGE_KEY) ?? 'null');
     if (Array.isArray(value)) {
-      const selected = value.slice(0, CONFIGURABLE_SLOTS).map((path) => (typeof path === 'string' ? path : ''));
+      const selected = value
+        .slice(0, CONFIGURABLE_SLOTS)
+        .map((path) => (typeof path === 'string' ? (LEGACY_SLOT_PATHS[path] ?? path) : ''));
       return DEFAULT_MEMBER_SLOTS.map((fallbacks, index) => [selected[index] ?? '', ...fallbacks]);
     }
   } catch {
@@ -88,7 +100,7 @@ function readPreferredSlots(isAdministrator: boolean): string[][] {
   const defaults = isAdministrator
     ? [
         ['/events', '/members'],
-        ['/settings', '/scheduling', '/training/my-training'],
+        ['/account', '/scheduling', '/training/my-training'],
       ]
     : DEFAULT_MEMBER_SLOTS;
   try {
