@@ -273,8 +273,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/events/admin',
     source: 'src/modules/events/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'settings tab and all nine of its sections, measured through the mobile presentation ratchet',
   },
   {
     path: '/events/:id/edit',

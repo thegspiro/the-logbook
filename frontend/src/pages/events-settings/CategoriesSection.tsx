@@ -50,7 +50,7 @@ const CategoriesSection: React.FC<CategoriesSectionProps> = ({
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-theme-text-primary text-lg font-semibold">Custom Event Categories</h3>
+        <h2 className="text-theme-text-primary text-lg font-semibold">Custom Event Categories</h2>
         <p className="text-theme-text-muted mt-1 text-sm">
           Create organization-specific event categories beyond the built-in types.
         </p>
@@ -63,19 +63,19 @@ const CategoriesSection: React.FC<CategoriesSectionProps> = ({
               key={cat.value}
               className="border-theme-surface-border flex items-center justify-between rounded-lg border p-3"
             >
-              <div className="flex items-center gap-3">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
                 <span
                   className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${cat.color}`}
                 >
                   {cat.label}
                 </span>
-                <span className="text-theme-text-muted font-mono text-xs">{cat.value}</span>
+                <span className="text-theme-text-muted min-w-0 font-mono text-xs break-all">{cat.value}</span>
               </div>
               <button
                 type="button"
                 onClick={() => onRemoveCategory(cat.value)}
                 disabled={saving}
-                className="text-theme-text-muted text-sm transition-colors hover:text-red-600 disabled:opacity-50 dark:hover:text-red-400"
+                className="text-theme-text-muted touch-target-phone shrink-0 text-sm transition-colors hover:text-red-600 disabled:opacity-50 dark:hover:text-red-400"
                 title={`Remove "${cat.label}"`}
               >
                 <Trash2 className="h-4 w-4" />
@@ -103,25 +103,34 @@ const CategoriesSection: React.FC<CategoriesSectionProps> = ({
             className="form-input placeholder-theme-text-muted text-sm"
           />
         </div>
-        <div className="w-36">
+        <div className="sm:w-36">
           <label htmlFor="new-category-color" className="text-theme-text-muted mb-1 block text-xs font-medium">
             <Palette className="mr-1 inline h-3 w-3" />
             Color
           </label>
+          {/* The dot stays 20px; the button around it is the 44px phone target.
+              Sizing the dot itself would turn nine swatches into a wall of
+              colour, and a smaller target is what made them hard to hit. */}
           <div className="flex flex-wrap items-center gap-1.5">
             {CATEGORY_COLOR_OPTIONS.map((opt) => (
               <button
                 key={opt.label}
                 type="button"
                 onClick={() => onNewCategoryColorChange(opt.value)}
-                className={`h-5 w-5 rounded-full ${opt.preview} transition-all ${
-                  newCategoryColor === opt.value
-                    ? 'ring-theme-focus-ring ring-2 ring-offset-2 dark:ring-offset-gray-800'
-                    : 'opacity-60 hover:opacity-100'
-                }`}
+                className="group touch-target-phone rounded-full"
                 title={opt.label}
                 aria-label={`Select ${opt.label} color`}
-              />
+                aria-pressed={newCategoryColor === opt.value}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`block h-5 w-5 rounded-full ${opt.preview} transition-all ${
+                    newCategoryColor === opt.value
+                      ? 'ring-theme-focus-ring ring-2 ring-offset-2 dark:ring-offset-gray-800'
+                      : 'opacity-60 group-hover:opacity-100'
+                  }`}
+                />
+              </button>
             ))}
           </div>
         </div>
