@@ -1368,3 +1368,549 @@ attachment`, `_load_submission_for_attachment`, the provider/mapping/
 No frontend file touched (zero-diff scope check); frontend `typecheck`/
 `lint` not run per CLAUDE.md's "Match the Verification to the Change"
 guidance for a pass with no frontend delta.
+
+---
+
+## Pass 6 (2026-10-02) — watchdog pickup
+
+**Prefix:** `TRX6` · **PR:** [#TBD](#) (filled in on merge)
+
+**Watchdog note:** the dedicated `/loop 30m /security-review` session had
+stalled for roughly 10 days with no open PR and no in-progress branch. A
+watchdog session picked up this feature directly (confirmed via the GitHub
+API: no open PR whose head branch starts with `claude/security-review-`
+existed at pickup time).
+
+### Scope check — this is not a zero-diff pass
+
+Unlike passes 3-5, real feature work landed in this feature's own files since
+pass 5's merge (`21470e693`, PR #2578, 2026-09-15). Thirteen commits touch one
+or more of the fifteen declared backend/schema artifacts:
+
+| Commit                                     | Touches (in this feature's scope)                                                           |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| `b46b31eef`                                | `external_training_service.py`                                                              |
+| `cbaf6ca32`                                | `external_training_service.py`, `schemas/training.py`                                       |
+| `f4a298940`                                | `external_training.py`, `external_training_service.py`, `schemas/training.py`               |
+| `10d16b5f9`                                | `external_training.py`, `external_training_service.py`, `schemas/training.py`               |
+| `ccef747b2` (landed via merge `32aae1790`) | `course_cohort_service.py`                                                                  |
+| `6fef97a15`                                | `training_submission_service.py`                                                            |
+| `149c83eff`                                | `training_submission_service.py`                                                            |
+| `106eed9c0` / `110b23d9b`                  | `training_program_service.py` (8 lines)                                                     |
+| `644d93a9a`                                | `schemas/training.py` (+ `models/training.py`, not in this feature's own scope — see below) |
+| `653b4906e` (landed via merge `f9897a4a2`) | `training_waivers.py`                                                                       |
+| `f00912e1b`                                | `course_cohorts.py`                                                                         |
+
+`2adfc33c6` and `9069e0674` touch no file in this feature's scope (confirmed
+by diffstat — the former is Feature 17's training-session-approval page and
+`/training/sessions/by-event/`'s own cache entry; the latter is a new Events
+feature, `event_attendance_petitions`, unrelated to training). Read every one
+of the thirteen commits' diffs in full (`git show <sha>`) rather than trusting
+the diffstat, per this pass's own brief. `training_enhancements.py`,
+`course_syllabus.py`, and their service files are untouched by any of the
+thirteen — confirmed by `git diff` against each file individually, not merely
+absent from the commit list above.
+
+**A procedural note on `ccef747b2`/`106eed9c0`'s true diffs.** Both are
+unreachable-looking root commits in this repo's history (`git rev-list
+--parents` shows no parent for either) — an artifact of a squash-merge
+workflow, not a sign of tampering (`git merge-base --is-ancestor` confirms
+both are genuine ancestors of `HEAD`). `git show` on a parentless commit
+diffs against an empty tree and prints the entire repository as "added",
+which is useless for review. The real diff was taken against each commit's
+actual merge (`git diff <merge-parent-1> <merge-parent-2> -- <paths>`):
+`32aae1790` (`ccef747b2`'s merge) and `f9897a4a2` (`653b4906e`'s merge,
+re-landed; see table above). Both real diffs, scoped to this feature's files,
+are reviewed below.
+
+### The external-sync cluster (`b46b31eef` → `cbaf6ca32` → `f4a298940` →
+
+`10d16b5f9`), reviewed against (a)-(d) from this pass's own brief
+
+This is a brand-new provider code path (TargetSolutions' own Training Records
+API, distinct from the Vector Solutions REST API both provider types
+previously shared) plus a scheduling rework (fixed-time-of-day syncs, then
+replaced by hourly pulls + a daily 30-day review). Read
+`external_training_service.py` in full (current state, not just the diffs)
+and all four commits' diffs end-to-end.
+
+**(a) Transport: still the hardened, SSRF-pinned client — no bespoke
+`httpx`/`requests` client introduced.** `ExternalTrainingSyncService.__init__`
+(`external_training_service.py:123-129`) is unchanged by any of the four
+commits: `httpx.AsyncClient(timeout=30.0, transport=SSRFSafeAsyncTransport(),
+follow_redirects=False, trust_env=False)`. Every new TargetSolutions method
+(`_target_solutions_report`, `_test_target_solutions_connection`,
+`_fetch_target_solutions_records`) calls `self.http_client.get(...)` — the one
+instance constructed in `__init__` — confirmed by grep for `http_client\b`
+(10 call sites now, up from pass 3's 8; all still on the one instance). TRX3-1's
+fix is intact and the new code goes through it, not around it.
+
+**(b) Credentials: a new write-only field (`api_secret`, required for this
+provider type), with its own discipline — because this provider's credentials
+cannot be header-based, they travel in the URL, and that gap is closed with a
+dedicated mechanism, not left open.** `api_key`/`api_secret` are stored
+encrypted (`encrypt_data`, pre-existing) and never returned raw (pre-existing
+`ExternalTrainingProviderResponse` field omission, TRX4-7's territory —
+unaffected, since neither field is in that schema). What's new: because the
+TargetSolutions Training Records API takes `key`/`secret` as query parameters
+with no header alternative, `cbaf6ca32` adds `app/core/logging.py`'s
+`redact_url_secrets`/`install_httpx_url_redaction` (read in full — see below)
+and applies it at every point a credential-bearing URL or its error could
+reach a log, a Sentry breadcrumb/span/event, or an officer-facing
+`sync_log.error_message`/`connection_error`. `schemas/training.py`'s
+`_reject_credentials_in_url` (new validator on `ExternalTrainingProviderBase`/
+`ExternalTrainingProviderUpdate`'s `api_base_url`) refuses a base URL
+containing a credential-shaped query parameter at write time, closing the
+"pasted the whole URL including `?key=...&secret=...`" mistake before it is
+ever stored in the plaintext `api_base_url` column. Read `app/core/logging.py`
+end to end: the regex (`key|secret|api_key|apikey|access_token|token|
+password`, case-insensitive) is applied to (1) httpx's own request-URL log
+line via a `logging.Filter` installed on the `httpx` logger,
+(2) `_sentry_before_breadcrumb`'s `http.query` field, (3) every Sentry error
+event's frame-local variables by key name (`_scrub_credentials`, recursive,
+also redacts any string value), and (4) `_sentry_before_send_transaction`'s
+span data — all four wired into `setup_sentry`'s `before_send`/
+`before_breadcrumb`/`before_send_transaction` hooks. `install_httpx_url_redaction`
+is also called at module import time in `external_training_service.py`
+(idempotent, guarded by a `isinstance` check against double-install) rather
+than only in `setup_logging()`, specifically because a Celery/background
+worker process may run this service without ever calling `setup_logging()` —
+read and confirmed this is exactly right for a scheduled-task caller
+(`scheduled_tasks.run_external_training_auto_sync`), which constructs the
+service directly. No regression found: this is new defense-in-depth for a new
+problem, not a weakening of TRX4-7/TRX4-8's existing `additional_headers`
+redaction (a different field, unaffected).
+
+**(c) The scheduled job: bounded, and not newly rate-limit-relevant.**
+`run_external_training_auto_sync` (`scheduled_tasks.py:5653`) is unchanged by
+this cluster except in spirit — it already queries only
+`auto_sync_enabled=True AND active=True AND connection_verified=True AND
+(next_sync_at IS NULL OR next_sync_at <= now)` providers, bounding the loop to
+the org's own configured provider count (not client-reachable, not
+attacker-influenceable; this is a cron tick, not an HTTP endpoint). The new
+`run_scheduled_sync`/`compute_next_sync_at`/review-ledger logic
+(`external_training_service.py`) decides per-provider whether this tick's
+sync is a cheap incremental pull or the heavier 30-day review, which if
+anything _reduces_ external-API load versus `f4a298940`'s superseded
+"re-check the last 30 days every incremental sync" design — read
+`10d16b5f9`'s own commit message and diff to confirm it is a genuine
+replacement, not an addition (the fixed-time-of-day `_schedule_fixed_time_sync`
+helper and its endpoint call sites were deleted in the same commit, confirmed
+by the diff in "Verified good" below). The manual `POST /sync` endpoint
+(`trigger_sync`, unchanged) still refuses a second sync while one is
+`PENDING`/`IN_PROGRESS` for the same provider (409) — pre-existing, not
+reviewed fresh here since no commit in this cluster touches it.
+
+**(d) No new unvalidated client-supplied FK or unscoped by-id query.**
+`_match_member_by_email` (new in `b46b31eef`, the "email-based member
+matching" the task brief flagged as TRX-1-shaped) was read with particular
+attention for exactly that shape:
+
+```python
+async def _match_member_by_email(
+    self, organization_id: str, email: str
+) -> Optional[str]:
+    result = await self.db.execute(
+        select(User.id)
+        .where(User.organization_id == organization_id)
+        .where(func.lower(func.trim(User.email)) == email)
+        .where(User.deleted_at.is_(None))
+        .limit(2)
+    )
+    ids = list(result.scalars().all())
+    if len(ids) != 1:
+        return None
+    return ids[0]
+```
+
+This is **not** TRX-1's shape: `organization_id` here is
+`provider.organization_id` — the server's own value for the row already
+loaded by an org-scoped query, never a client-supplied id — so the lookup is
+correctly confined to the syncing provider's own organization. There is no
+cross-org name/email leak: a match (or non-match) is visible only in that
+org's own `ExternalUserMapping`/`ExternalTrainingImport` rows, which this
+org's own officers already see. The function also fails closed on ambiguity
+(`limit(2)` + `len(ids) != 1`, so two same-email accounts in the org map
+neither) and excludes soft-deleted members — both read directly in the
+five-test guard file `test_external_training_target_solutions.py`
+(`test_never_matches_a_deleted_member`,
+`test_does_not_match_a_member_of_another_org`), run and passing. No new
+client-supplied FK is stored anywhere in this cluster: `provider.config`
+gained `review_time` (a string, validated — `ExternalProviderConfig
+.validate_review_time`, confirmed by reading the schema) and the
+superseded-then-removed `sync_times`; neither is a foreign-key reference.
+`source_event_id` (from the separate `644d93a9a`/`106eed9c0` work, below) is
+likewise never client-writable.
+
+**No finding in this cluster.** All four of the brief's specific concerns
+(transport reuse, credential discipline, scheduled-job boundedness, FK/by-id
+scoping) were checked against the real code and hold.
+
+### `training_program_service.py`'s `reverse_credits_for_source` (`106eed9c0`/`110b23d9b`) — org-scoping re-confirmed on the new parameter
+
+The only touch to this feature's own files from the
+"training-hours-calculation" merge (PR #2820) is an 8-line addition: an
+optional `user_id` narrows credit reversal to one member (a training session
+crediting a roster now lets removing one attendee reverse only that
+attendee's credit, rather than the whole session's). Read the full method
+(`training_program_service.py:3265-3300` plus its sibling
+`reverse_credits_for_source_except`, which already had the same shape): the
+new filter is `ProgramEnrollment.user_id == str(user_id)`, added to a query
+that already joins `RequirementProgressCredit` → `RequirementProgress` →
+`ProgramEnrollment` → `TrainingProgram` and filters
+`TrainingProgram.organization_id == str(organization_id)`. The new parameter
+narrows an already-org-scoped query further; it does not introduce a new
+unscoped path. No finding.
+
+The rest of that merge — `event_service.py`, `training_session_service.py`,
+`training_sessions.py`, `admin_hours_service.py`, `events.py`,
+`models/training.py`'s new `TrainingRecord.source_event_id` column — belongs
+to Feature 17 (Training core) and the Events/Admin Hours features, not this
+one's declared file list, per the same boundary passes 3-5 already drew for
+analogous cross-feature glob hits. Spot-checked anyway, since the brief
+specifically asked about Pitfall #29 and the schema change:
+
+- **Pitfall #29 (compliance re-derivation):** `source_event_id` is a linkage
+  key (which event's finalize wrote this record), not a compliance
+  computation — it carries no pass/fail judgment and nothing in this
+  feature's own six files reads it to decide anything. Grepped every use:
+  all are in `event_service.py`/`training_session_service.py`/
+  `admin_hours_service.py` (Feature 17/Events' own files), writing or
+  querying the column to find "the record this event's finalize already
+  wrote" for upsert purposes. This feature's own compliance-adjacent surface
+  (`training_waiver_service.fetch_org_waivers`, the submission-approval →
+  `TrainingRecord` path) is untouched and still does not duplicate
+  `classify_standing`/`certification_record_matches`, matching pass 5's own
+  finding on this exact question.
+- **Schema (checklist §7):** `source_event_id` is `String(36)`,
+  `ForeignKey("events.id", ondelete="SET NULL")`, **`nullable=True`**
+  (Pitfall #2 satisfied) with a unique `(source_event_id, user_id)` index.
+  `TrainingRecordResponse.source_event_id` is response-only — confirmed by
+  reading `TrainingRecordCreate`/`TrainingRecordUpdate`, neither of which
+  declares the field, so a client cannot set or retarget it. The migration
+  (`20260929_1413_2b15c5a8ba82`) guards every step
+  (`_has_column`/`_has_index`/`_foreign_keys_on`) against `create_all` having
+  already built any of them first (Pitfall #26), and the downgrade drops the
+  FK, then the index, then the column, in the MySQL-required order. Ran
+  `validate_migrations.py --strict`: single head, no duplicate ids. This is
+  outside this feature's own scope to claim credit for, but it is sound.
+
+### In-app notifications added to `training_submission_service.py` (`6fef97a15`, `149c83eff`)
+
+Two new notification flows, both inside this feature's own service file:
+officers are prompted when a self-reported submission enters review, and the
+submitter is told when an officer's decision changes or rejects what they
+sent. Read both commits' diffs and the resulting current code in full.
+
+- **Recipient scoping is org- and role-correct.** `_training_officers` joins
+  `User` → `user_roles` → `Role` filtered on `Role.slug ==
+ROLE_TRAINING_OFFICER AND Role.organization_id == organization_id AND
+User.organization_id == organization_id AND User.deleted_at IS NULL AND
+User.is_active` — every recipient is confined to the submission's own org,
+  matching the existing `TrainingSessionService._notify_training_officers`
+  email-recipient query the commit message says it mirrors (read that method
+  too, to confirm the match rather than take the commit message's word for
+  it: same four predicates).
+- **Separation of duties holds**, matching this feature's own established
+  `assert_different_person` pattern elsewhere: the submitter is always
+  excluded from their own review prompt (`skip = {submitted_by,
+str(triggered_by)}`), an officer deciding their own submission is never
+  sent the "officer decided" notice (`if submitted_by == str(officer_id):
+return`), and the officer who triggered a state change (submit, reverse)
+  is excluded from the prompt they just caused.
+- **Write-path is a SAVEPOINT that never raises past the submission's own
+  commit** (`_deliver_in_app`) — read for the specific failure mode this
+  matters for: a notification failure must not roll back or fail the
+  member's training save, and the docstring's own reasoning (a session-level
+  `rollback()` would expire the submission/current-user instances the
+  endpoint is about to serialize) was checked against how `db.begin_nested()`
+  actually behaves — correct, this is the same SAVEPOINT pattern
+  `NotificationsService.archive_related_notifications` already uses
+  elsewhere in this feature (confirmed, not merely similar in description).
+- **No PII beyond what the recipient is already entitled to see.** The
+  message bodies interpolate the submitter's name, course name, hours, and
+  (for the member-facing notice) the reviewing officer's name and their
+  free-text notes — all data the recipient already has access to by role
+  (an officer reviewing submissions org-wide, or a member reading their own
+  decision). `notification_metadata` carries only `submission_id` and
+  `submitted_by`/`decision` (ids, not free text), which is what
+  `archive_related_notifications`'s JSON-path match (`notification_metadata
+[resource_key].as_string() == str(resource_id)`, itself org-scoped on
+  `NotificationLog.organization_id`) needs.
+- **Rendering is not an XSS vector.** `NotificationCard.tsx` renders
+  `notification.message` as JSX text content (`{notification.message ||
+'No additional details.'}`), not `dangerouslySetInnerHTML` — confirmed by
+  reading the component, not assumed from the absence of the string in a
+  grep. React escapes it. The free-text reviewer notes an officer can type
+  into this message therefore cannot inject markup into a recipient's inbox.
+- **`notification_metadata` assignment is a fresh dict on insert**, not a
+  mutation of an existing JSON column's nested keys, so Pitfall #12 does not
+  apply to either new code path.
+
+No finding. Guard test coverage: `test_training_submission_notifications.py`
+(both commits combined) is `pytest.mark.integration` at module level and uses
+`db_session` — correctly marked per Pitfall #30b, confirmed by reading the
+module-level `pytestmark` line directly rather than assuming from the
+filename.
+
+### Smaller touches, reviewed and confirmed benign
+
+- **`training_waivers.py` (`653b4906e`):** `TrainingWaiver.active == True`
+  (flake8 `noqa: E712`) rewritten to `.is_(True)`, and an `id` tiebreaker
+  added to `list_training_waivers`'s `order_by` so offset-based pagination
+  cannot repeat or skip a waiver that shares a `start_date` with another —
+  a correctness fix for the Waiver Management page's own pagination (the
+  commit's primary fix, a voting-attendance window bug, is entirely outside
+  this feature, in `vote_service.py`/membership code). No security
+  implication; re-confirmed TRX-6's `assert_all_in_org` calls on
+  `requirement_ids` are untouched (both are above this diff's line range).
+- **`course_cohorts.py` (`f00912e1b`):** four routes
+  (`shift_cohort_classes`, `cancel_cohort`, `reschedule_cohort_class`,
+  `cancel_cohort_class`) gained `attendance_lock_http_error(e) or
+HTTPException(...)` ahead of their existing `safe_error_detail`-wrapped
+  fallback, so a refusal because the cohort class's attendance is already
+  finalized now reaches the client as a 409 with the server-built refusal
+  sentence instead of a 400/404 with a truncated or generic message. Read
+  `app/api/attendance_lock.py` (new, shared across eleven routes
+  repo-wide) and `event_service.py`'s `attendance_lock_reason`/
+  `attendance_locked_error`: the sentence is built server-side from field
+  names the refusing service already knows (never from unvalidated request
+  data, never raw exception text), so this is not a `safe_error_detail`
+  bypass in the sense the checklist's §5 item warns about — it is a
+  **different**, already-curated message routed around the sanitizer on
+  purpose, the same shape SEC-00 pass 4 already carved out an exception for
+  (custom domain exceptions with curated messages). TRX-4's own fix
+  (`_get_cohort_class` scoped to `cohort_id` before any mutation, so a
+  cross-cohort id fails closed pre-write) is unaffected — these four routes
+  still call it first; only the _shape_ of the error response for an
+  already-rejected mutation changed.
+- **`course_cohort_service.py` (`ccef747b2`, via merge `32aae1790`):**
+  `_cohort_counts`'s `end_date` (and the schedule-preview's `last_date`) now
+  computed via `local_date(start_utc/last_start, org_tz)` instead of a bare
+  `.date()` on the stored UTC value — an evening class's UTC timestamp could
+  already be the next calendar day. Display-only (a cohort's reported end
+  date), not an audit or security-relevant timestamp — no `log_audit_event`
+  call or permission decision reads this value. Confirmed by grepping every
+  caller of `_cohort_counts`/`get_cohort_detail`/`list_cohorts`/etc.: all
+  return it to the frontend for display, none feeds a compliance or access
+  decision.
+
+### Re-verification of all standing fixes and flags (TRX-1 through TRX4-8, TRX2-1, TRX3-1)
+
+Re-read the current code directly for each (not re-cited from the doc), since
+this is the first non-zero-diff pass since pass 2 and several of this
+feature's own files did change:
+
+- **TRX-1** — `training_program_service.py`'s `bulk_enroll_members`
+  prerequisite-error name lookup still filters `User.organization_id`
+  (confirmed; this pass's own `106eed9c0` touch is a different method,
+  `reverse_credits_for_source`, reviewed above).
+- **TRX-2 / TRX-5 / TRX-5b** — `update_provider`, `CourseCohortService.
+update_cohort`, and `CourseSyllabusService.update_class` all still route
+  through `apply_updates`. `update_provider`'s structure (SSRF guard →
+  `additional_headers` redaction-preservation → `apply_updates`) is
+  unchanged by the scheduling commits, which only remove the
+  `_schedule_fixed_time_sync` call sites (confirmed by reading the full
+  current function, reproduced in part above).
+- **TRX-3 / TRX2-1** — `get_effectiveness_evaluations` still calls
+  `can_view_officer_training_data` and confines non-officers to their own
+  `user_id`; `/training/effectiveness/evaluations` is still in
+  `UNCACHEABLE_PREFIXES`. `training_enhancements.py` is untouched by any of
+  the thirteen commits (confirmed by individual-file diff, not just the
+  commit-list table above).
+- **TRX-4** — `_get_cohort_class` still takes `cohort_id`, threaded into
+  both `reschedule_class`/`cancel_class` before any write; `f00912e1b`'s
+  change is purely to the error-response shape on an already-rejected
+  mutation (see above), not to the scoping check itself.
+- **TRX-6** — `training_waivers.py` still calls `assert_all_in_org` on
+  `requirement_ids` (create and update); `653b4906e`'s touch is 7 lines
+  below/unrelated to both call sites.
+- **TRX-7** — `training_submission_service.py` still calls `assert_in_org`
+  on `category_id` (create and update); both call sites are untouched by
+  `6fef97a15`/`149c83eff`, which add new methods rather than modify
+  `create_submission`/`update_submission`'s existing validation.
+- **TRX-8 / TRX-9 / TRX-10** — the four `_validate_references` methods
+  (Recertification, Instructor Qualification, Training Effectiveness,
+  Multi-Agency) and `XAPIService.ingest_statement`'s `_provider_validated`
+  flag are all still present and wired — `training_enhancements.py`'s
+  service module is entirely untouched this pass.
+- **TRX3-1** — `external_training_service.py`'s `SSRFSafeAsyncTransport`
+  construction in `__init__` is byte-identical across all four cluster
+  commits (confirmed above, in the "(a) Transport" discussion).
+- **TRX4-2 / TRX4-6** — the OR-gate
+  `require_permission("training.view_all", "training.manage")` is still on
+  all three instructor-qualification GET routes and `GET /multi-agency`
+  (re-confirmed by direct grep, 4 matches). Write-side POST/PATCH routes
+  are still `training.manage`-only.
+- **TRX4-4 / TRX4-5** — `'/training/multi-agency'` and the bare
+  `'/training/external/providers'` (no trailing slash) are both still in
+  `UNCACHEABLE_PREFIXES`; neither file this pass touched
+  (`external_training.py`, `external_training_service.py`) is the frontend
+  cache file, so this needed no re-grep of the cache list beyond confirming
+  it unchanged.
+- **TRX4-7 / TRX4-8** — `ExternalTrainingProviderResponse`'s
+  `field_validator("config", mode="after")` still redacts every
+  `additional_headers` value to `REDACTED_SECRET`, and `update_provider`'s
+  pre-update-`provider.config` capture + marker-replacement logic is
+  unchanged — reproduced and re-read in full above (the "(b) Credentials"
+  discussion quotes the surrounding code). This pass's own new credential
+  field (`api_secret`, required for Target Solutions) is a different field
+  from `additional_headers` and does not interact with this fix.
+
+**Independent route re-enumeration:** 18 + 5 + 29 + 16 + 14 + 6 = **88
+routes** (unchanged from passes 2-5). AST-based auth-dependency check
+(default-value scan for `get_current_user`/`require_permission`/
+`require_all_permissions`, not an annotation-only scan — corrected from a
+first draft of this pass's own check, which looked only at parameter
+annotations and produced 88 false "NO AUTH" hits before the defaults were
+included) confirms all 88 carry one. No new route since pass 2 (Pitfall #30a
+is n/a — nothing to register).
+
+### CLAUDE.md pitfall sweep (#1, #2, #9, #12, #14, #15, #20, #25, #27, #29, #30a, #30b)
+
+- **#1 (`||` vs `??`, `apply_updates`):** no new update-payload shape this
+  pass changes field semantics; `update_provider`'s existing `apply_updates`
+  call is unaffected. `review_time`/`site_id` are new `config` sub-fields
+  but `config` as a whole is still replaced-not-merged at the `apply_updates`
+  level with the pre-existing `additional_headers`-preservation carve-out —
+  no new field needed the same treatment (neither is a stored credential).
+- **#2 (`SET NULL` nullable):** `source_event_id` (reviewed above) is the
+  only new nullable-FK column touching this feature's scope this pass;
+  correctly `nullable=True`.
+- **#9 (unbounded trackers):** no new module-level or `self.*` tracking
+  dict/set in any of this pass's touched files; `run_external_training_auto_sync`'s
+  loop is a DB-bounded query result, not an in-memory cache.
+- **#12 (JSON mutation):** `notification_metadata` writes are fresh dicts on
+  insert (reviewed above); `provider.config` handling in `update_provider` is
+  unchanged (still goes through the existing redaction-preservation +
+  `apply_updates` path, which was already correct per TRX4-8).
+- **#14 (org-scoping, 14a/14b/14c):** `_match_member_by_email` reviewed in
+  detail above — org-scoped via the provider's own `organization_id`, not a
+  client-supplied value. No new client-supplied FK introduced anywhere in
+  the thirteen commits' touch of this feature's scope.
+- **#15 (CSV exports):** no CSV-exporting code touched this pass.
+- **#20 (JSON column canonical shape):** `provider.config`'s shape gained
+  `review_time` (string) and briefly `sync_times` (superseded, then
+  removed in the same cluster before ever shipping to `main` in a released
+  state — `10d16b5f9` deletes what `f4a298940` added). `review_time` has one
+  write-time validator (`ExternalProviderConfig.validate_review_time`) and
+  one read-time defensive parser (`parse_review_time`, falls back to unset
+  on anything malformed rather than raising in the scheduler loop) — this is
+  exactly the "validate on write, degrade gracefully on read" pattern
+  Pitfall #20 asks for, not a second untracked shape.
+- **#25 (LIKE patterns):** no `.like()`/`.ilike()` introduced; confirmed by
+  direct grep of all thirteen commits' diffs.
+- **#27 (capacity locking):** no capacity/quota concept touched; pass 5's
+  "no seat cap in this feature's own tables" finding still holds (the
+  `source_event_id` unique-per-event-per-user index is a dedup constraint,
+  not a capacity cap, and it belongs to Feature 17's/Events' own tables).
+- **#29 (compliance re-derivation):** reviewed in detail above for the
+  `source_event_id` linkage — no duplication of Feature 17's compliance
+  engine found anywhere in this pass's touched code.
+- **#30a (route registries):** no new route; n/a.
+- **#30b (integration marking):** `test_training_submission_notifications.py`
+  and `test_external_training_sync_schedule.py`/
+  `test_external_training_target_solutions.py` all correctly mark their
+  `db_session`-using tests `integration` (module-level `pytestmark` or
+  per-class decorator, confirmed by reading each file's marker placement
+  directly rather than assuming from naming convention).
+
+### Verified good ✅ (pass 6 additions)
+
+- **The external-sync cluster's new TargetSolutions code path reuses the
+  existing hardened transport, credential-encryption, and org-scoping
+  mechanisms rather than introducing parallel ones** — mechanism: direct
+  read of `__init__`, `_match_member_by_email`, and the new
+  `redact_url_secrets`/`_reject_credentials_in_url` additions, cross-checked
+  against the five/six-test guard files added alongside them, all passing.
+- **The scheduling rework (`f4a298940` → `10d16b5f9`) is a genuine
+  replacement, not an accumulation** — mechanism: `10d16b5f9`'s diff deletes
+  `_schedule_fixed_time_sync` and both its call sites in the same commit
+  that introduces the review-ledger approach, confirmed by reading the
+  removal hunks directly rather than assuming from the commit message.
+- **`training_program_service.py`'s new `user_id` narrowing on
+  `reverse_credits_for_source` is additive to an already-org-scoped query,
+  not a new unscoped path** — mechanism: the join chain to
+  `TrainingProgram.organization_id` is unchanged; only one more `.where()`
+  clause was added.
+- **Two new in-app notification flows in `training_submission_service.py`
+  are org-, role-, and separation-of-duties-correct, and render as escaped
+  text, not markup** — mechanism: `_training_officers`'s four-predicate
+  join matches the pre-existing email-recipient query it is documented to
+  mirror; `NotificationCard.tsx` interpolates `message` as JSX text.
+- **Route count (88), permission-OR-gates (4 matches), and all ten standing
+  fixes (TRX-1 through TRX4-8) hold unchanged** against the real,
+  non-trivial diff this pass reviewed — re-verified by direct code read in
+  every case listed above, not inferred from a zero-diff scope check (there
+  wasn't one this time).
+- **`docs/KNOWN_LIMITATIONS.md`'s two tracked items remain accurately
+  described and out of this pass's scope to fix**: the `enroll_member`
+  duplicate-active-enrollment race (still owned by Feature 17; nothing in
+  this pass's commits touches `TrainingProgramService.enroll_member` or
+  `CourseCohortService._add_members`/`_enroll_member`) and the
+  DNS-rebinding-TOCTOU entry's "seven remaining narrowed-not-closed sites"
+  (this feature's own site, `external_training_service.py`, remains closed
+  per TRX3-1 and correctly absent from that list; none of the four new
+  commits touches `create_integration_client()` or any of the seven other
+  integration services).
+
+## Flagged, not fixed
+
+Nothing new this pass. Both standing out-of-scope items (`enroll_member`'s
+race, the cross-cutting DNS-rebinding-TOCTOU entry) were re-confirmed above
+rather than re-derived, and remain exactly as `docs/KNOWN_LIMITATIONS.md`
+already describes them.
+
+## Findings
+
+**0 new findings this pass.** This was not a zero-diff re-verification like
+passes 3-5 — thirteen commits landed real feature work (a new external
+provider integration, a scheduling rework, two new notification flows, a new
+nullable FK column with its own guarded migration, and two small correctness
+fixes) — but every one of them already followed this feature's established
+security patterns (org-scoped queries, write-only/redacted credentials,
+`apply_updates`, guarded migrations, SAVEPOINT-isolated non-critical writes)
+on first landing, with its own guard-test coverage. All ten standing fixes
+(TRX-1 through TRX4-8) were re-verified against the real diff, not assumed
+from a zero-diff check.
+
+## Schema & migration notes
+
+One migration landed in this feature's scope since pass 5:
+`20260929_1413_2b15c5a8ba82_training_record_event_source.py` (reviewed in
+detail above) — guards every step against `create_all` pre-emption,
+`nullable=True` on its `SET NULL` FK, and a correct downgrade ordering.
+`validate_migrations.py --strict` reports 497 revisions (up from pass 5's
+444), single head, no duplicate ids.
+
+## Guard tests added
+
+None by this pass — every finding this pass could have produced was instead
+a re-confirmation that the landed code already matched this feature's
+established patterns, each already carrying its own guard-test coverage from
+the commit that introduced it (`test_external_training_target_solutions.py`,
+`test_external_training_sync_schedule.py`,
+`test_external_training_auto_sync_isolation.py`,
+`test_training_submission_notifications.py`,
+`test_training_record_source_migration.py`), all read and confirmed passing
+below.
+
+## Completion gate (pass 6)
+
+| Check                                                                                                             | Result                                                                                |
+| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                     | ✅ 0 violations                                                                       |
+| `black --check app/ tests/ alembic/`                                                                              | ✅ 1798 files unchanged                                                               |
+| `isort --check-only app/ tests/ alembic/`                                                                         | ✅ clean                                                                              |
+| `python3 scripts/validate_migrations.py --strict`                                                                 | ✅ 497 revisions, single head `f73b449bdb8b`                                          |
+| `pytest tests/ -q -k "training or cohort or syllabus or waiver or external or enhancement or submission or xapi"` | ✅ 1470 passed, 1 skipped (pre-existing optional-dependency skip)                     |
+| `pytest tests/` (full backend suite)                                                                              | ✅ 15307 passed, 21 skipped (pre-existing Docker/optional-dependency skips), 0 failed |
+| `cd frontend && npm run typecheck`                                                                                | ✅ 0 errors                                                                           |
+| `cd frontend && npm run lint`                                                                                     | ✅ 0 errors, 0 warnings                                                               |
+
+No frontend file in this feature's own established ten-file inventory needed
+a change this pass (the only frontend touches among the thirteen commits —
+`ExternalTrainingPage.tsx`/`.test.tsx`, already in that inventory — are part
+of the external-sync cluster's own UI form updates, reviewed above for banned
+patterns: clean); `typecheck`/`lint` were still run in full per this pass's
+own completion-gate instructions rather than skipped on that basis.
