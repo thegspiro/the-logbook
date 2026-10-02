@@ -862,6 +862,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         anyPermission: ['locations.manage', 'facilities.manage', 'apparatus.view'],
         module: 'facilities',
       },
+      { path: '/locations/:locationId/check-in', label: 'Room check-in (NFC tag landing)' },
     ],
   },
   {

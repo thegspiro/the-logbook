@@ -3,6 +3,7 @@ import {
   buildAdminHoursClockInUrl,
   buildEventCheckInUrl,
   buildInventoryTagUrl,
+  buildRoomCheckInUrl,
   buildShiftCheckInUrl,
   describeNfcError,
   generateInventoryTagCode,
@@ -130,6 +131,34 @@ describe('parseNfcTagPath — admin hours clock-in', () => {
   });
 });
 
+describe('parseNfcTagPath — room check-in', () => {
+  it('accepts a room check-in URL', () => {
+    expect(parseNfcTagPath(`${ORIGIN}/locations/room-7/check-in`, ORIGIN)).toEqual({
+      target: NfcTagTarget.ROOM_CHECK_IN,
+      path: '/locations/room-7/check-in',
+    });
+  });
+
+  it('drops a query string the room route does not name', () => {
+    expect(parseNfcTagPath(`${ORIGIN}/locations/room-7/check-in?next=//evil.com`, ORIGIN)?.path).toBe(
+      '/locations/room-7/check-in'
+    );
+  });
+
+  // The QR directory and the bare room record are management screens, not a
+  // check-in; a tag naming either is someone else's tag.
+  it('rejects the QR directory and other location routes', () => {
+    expect(parseNfcTagPath(`${ORIGIN}/locations/qr-codes`, ORIGIN)).toBeNull();
+    expect(parseNfcTagPath(`${ORIGIN}/locations/room-7`, ORIGIN)).toBeNull();
+    expect(parseNfcTagPath(`${ORIGIN}/locations`, ORIGIN)).toBeNull();
+  });
+
+  it('rejects an id outside the id pattern', () => {
+    expect(parseNfcTagPath(`${ORIGIN}/locations/${'a'.repeat(65)}/check-in`, ORIGIN)).toBeNull();
+    expect(parseNfcTagPath(`${ORIGIN}/locations/room%207/check-in`, ORIGIN)).toBeNull();
+  });
+});
+
 describe('parseNfcTagPath — shift check-in', () => {
   it('accepts an apparatus-keyed tag', () => {
     expect(parseNfcTagPath(`${ORIGIN}/scheduling/checkin?apparatus=eng-4`, ORIGIN)).toEqual({
@@ -249,6 +278,15 @@ describe('tag URL builders round-trip through the parser', () => {
     const url = buildShiftCheckInUrl({ apparatusId: 'eng-4' }, ORIGIN);
     expect(url).toBe(`${ORIGIN}/scheduling/checkin?apparatus=eng-4`);
     expect(parseNfcTagPath(url, ORIGIN)?.path).toBe('/scheduling/checkin?apparatus=eng-4');
+  });
+
+  it('builds and parses a room check-in URL', () => {
+    const url = buildRoomCheckInUrl('room-7', ORIGIN);
+    expect(url).toBe(`${ORIGIN}/locations/room-7/check-in`);
+    expect(parseNfcTagPath(url, ORIGIN)).toEqual({
+      target: NfcTagTarget.ROOM_CHECK_IN,
+      path: '/locations/room-7/check-in',
+    });
   });
 
   it('builds and parses a shift-keyed check-in URL', () => {

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -325,5 +325,57 @@ describe('RoomQRCodesPage', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Keep current code' }));
 
     expect(mockRegenerateDisplayCode).not.toHaveBeenCalled();
+  });
+});
+
+describe('RoomQRCodesPage — NFC tags', () => {
+  const written: unknown[] = [];
+
+  class FakeNDEFReader {
+    write(message: unknown) {
+      written.push(message);
+      return Promise.resolve();
+    }
+    scan() {
+      return Promise.resolve();
+    }
+    addEventListener() {}
+    removeEventListener() {}
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    written.length = 0;
+    useAuthStore.setState({ user: null });
+    (window as { NDEFReader?: unknown }).NDEFReader = FakeNDEFReader;
+    mockGetLocations.mockReset();
+    mockGetLocations.mockResolvedValue([
+      { ...baseLocation, id: 'room-4', name: 'Annex Hall', display_code: 'ANNEXCODE' },
+    ]);
+    mockGetEnabledModules.mockReset();
+    mockGetEnabledModules.mockResolvedValue({ enabled_modules: ['members', 'events'], configured: true });
+    mockGetApparatusList.mockReset();
+    mockGetApparatusList.mockResolvedValue({ ...mockApparatus, items: [] });
+  });
+
+  afterEach(() => {
+    delete (window as { NDEFReader?: unknown }).NDEFReader;
+  });
+
+  // The card's QR opens the public kiosk; the tag must name the room instead,
+  // because a tag is readable by anyone and must not carry the kiosk's code.
+  it("writes the room's check-in link, never the kiosk URL, onto a room tag", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    const button = await screen.findByRole('button', { name: /Write NFC tag/ });
+    await user.click(button);
+
+    await waitFor(() => {
+      expect(written).toHaveLength(1);
+    });
+    const payload = JSON.stringify(written[0]);
+    expect(payload).toContain(`${window.location.origin}/locations/room-4/check-in`);
+    expect(payload).not.toContain('ANNEXCODE');
   });
 });

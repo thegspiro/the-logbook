@@ -308,14 +308,17 @@ Requires `events.manage` permission. Tab-based admin interface.
 
 ## Locations (when Facilities module is off)
 
-| URL                   | Page                 | Permission                                                            |
-| --------------------- | -------------------- | --------------------------------------------------------------------- |
-| `/locations`          | Locations Management | Authenticated                                                         |
-| `/locations/qr-codes` | Check-In QR Codes    | `locations.manage` **OR** `facilities.manage` **OR** `apparatus.view` |
+| URL                               | Page                            | Permission                                                            |
+| --------------------------------- | ------------------------------- | --------------------------------------------------------------------- |
+| `/locations`                      | Locations Management            | Authenticated                                                         |
+| `/locations/qr-codes`             | Check-In QR Codes               | `locations.manage` **OR** `facilities.manage` **OR** `apparatus.view` |
+| `/locations/:locationId/check-in` | Room Check-In (NFC tag landing) | Authenticated                                                         |
 
 > Manages stations, addresses, and rooms for use by events, training, QR code check-in, and other modules. Each room gets a unique kiosk display code for tablet-based QR check-in. The Check-In QR Codes page is a printable directory of every kiosk QR code, grouped by station/facility (available in both Locations and Facilities modes), plus apparatus shift check-in codes when the Scheduling module is enabled.
 
 > **Name check:** the page's on-screen heading is **"Check-In QR Codes"** — that is what a reader will see and what the command palette calls it. "Room QR Codes" is the component's filename (`RoomQRCodesPage.tsx`) and appears in some engineering notes; it is not a user-facing label. Documentation should use the heading.
+
+> **Room check-in** _(2026-10-02)_ is where a room's NFC tag sends a member's phone. The tag names the room rather than an event, so one sticker by the door serves every event held there. The page reads `GET /locations/{id}/display` (org-scoped, signed in) and, with exactly one event in its check-in window, forwards to that event's `/events/:id/check-in`; with several it asks which one, because guessing would file attendance on the wrong event; with none it says so. It records nothing itself — the event's own check-in does, with all of its rules. Registered by the Facilities module but, like the event check-in page it forwards to, gated only on being signed in, so a room tag works in both Locations and Facilities modes.
 
 > **The QR directory is restricted, unlike the rest of Locations** _(corrected 2026-08-16)_. This page was previously listed here as Authenticated; it is not. The route is registered by the Facilities module (so it resolves in both Locations and Facilities modes) behind `locations.manage` **OR** `facilities.manage`. The restriction is the point: a kiosk display code is a check-in credential, so a bulk directory of every room's code is a different object from any one room's QR. Regenerating a display code invalidates the previous one, and codes are tenant-bound.
 
@@ -1382,6 +1385,7 @@ or with gloves on.
 | `/admin-hours/categories/:id/qr-code`   | that category's clock-in URL         | `NfcTagWriter`                                |
 | Shift detail panel → QR block           | `/scheduling/checkin?apparatus=<id>` | `NfcTagWriter`                                |
 | `/locations/qr-codes` (apparatus cards) | `/scheduling/checkin?apparatus=<id>` | `NfcTagWriteButton` (compact, toast feedback) |
+| `/locations/qr-codes` (room cards)      | `/locations/<id>/check-in`           | `NfcTagWriteButton` (compact, toast feedback) |
 
 ### Where the reader appears
 
@@ -1420,9 +1424,11 @@ reviewable in one place.
 > **`/display/:code` is deliberately not taggable.** It is a public,
 > unauthenticated kiosk screen keyed by a non-guessable code. Writing that code
 > to a tag anyone can read hands it to whoever walks past, and sending a member's
-> phone to a wall display is not a check-in. A test asserts it stays rejected,
-> and the same rule hides the **Write NFC tag** button on room kiosk cards while
-> showing it on the apparatus cards beside them.
+> phone to a wall display is not a check-in. A test asserts it stays rejected.
+> A room card's **Write NFC tag** button therefore writes the room's
+> `/locations/<id>/check-in` link rather than the kiosk URL its QR carries: the
+> room id is no secret, because that page requires a session and resolves the
+> room inside the member's own organization.
 
 > **Web NFC is Android-Chromium only, and requires a secure context.** The two
 > compact controls — **Tap Tag** and the `/locations/qr-codes` **Write NFC tag**

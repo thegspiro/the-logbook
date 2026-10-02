@@ -6,7 +6,9 @@
  * - Room kiosk codes, grouped by station/facility. Every location gets a
  *   `display_code` when created; its QR encodes the public kiosk URL
  *   `/display/{code}`. Admins with locations.edit/manage can rotate a
- *   leaked code — the old URL stops resolving immediately.
+ *   leaked code — the old URL stops resolving immediately. A room's NFC tag
+ *   is written with `/locations/{id}/check-in` instead: a tag is readable by
+ *   anyone who walks past, so it must not carry the kiosk's code.
  * - Apparatus shift check-in codes (when the Scheduling module is on and
  *   the viewer can see apparatus). Each QR encodes the permanent URL
  *   `/scheduling/checkin?apparatus={id}`, which resolves the apparatus's
@@ -48,7 +50,7 @@ import { copyToClipboard } from '../utils/clipboard';
 import { useAuthStore } from '../stores/authStore';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useEnabledModules } from '../hooks/useEnabledModules';
-import { buildShiftCheckInUrl } from '../constants/nfc';
+import { buildRoomCheckInUrl, buildShiftCheckInUrl } from '../constants/nfc';
 import { NfcTagWriteButton } from '../components/nfc/NfcTagWriteButton';
 
 /** Rasterize an inline QR SVG to a PNG download (white background for print/signage use). */
@@ -108,6 +110,7 @@ function QRCard({
   title,
   subtitle,
   url,
+  nfcUrl,
   icon,
   variant = 'card',
   onRegenerate,
@@ -116,6 +119,12 @@ function QRCard({
   /** Sign-variant context line, e.g. "Station 1 — Scan to check in" */
   subtitle?: string | undefined;
   url: string;
+  /**
+   * What a tag for this card should carry. Differs from `url` for rooms: the
+   * QR opens the public kiosk, but a tag must not carry the kiosk's code, so it
+   * names the room instead and the member signs in to check in.
+   */
+  nfcUrl: string;
   icon: QRCardIcon;
   variant?: QRCardVariant;
   onRegenerate?: (() => Promise<void>) | undefined;
@@ -196,7 +205,7 @@ function QRCard({
           <Download className="h-3 w-3" aria-hidden="true" />
           Download PNG
         </button>
-        <NfcTagWriteButton url={url} label={title} />
+        <NfcTagWriteButton url={nfcUrl} label={title} />
         {onRegenerate && (
           <button
             onClick={() => {
@@ -215,12 +224,19 @@ function QRCard({
   );
 }
 
-function locationCardProps(location: Location): { title: string; subtitle: string; url: string; icon: QRCardIcon } {
+function locationCardProps(location: Location): {
+  title: string;
+  subtitle: string;
+  url: string;
+  nfcUrl: string;
+  icon: QRCardIcon;
+} {
   const isStation = Boolean(location.address && !location.building && !location.room_number);
   return {
     title: `${location.name}${location.room_number ? ` #${location.room_number}` : ''}`,
     subtitle: `${location.building ? `${location.building} — ` : ''}Scan to check in`,
     url: `${window.location.origin}/display/${location.display_code}`,
+    nfcUrl: buildRoomCheckInUrl(location.id),
     icon: isStation ? 'station' : 'room',
   };
 }
@@ -229,12 +245,15 @@ function apparatusCardProps(apparatus: ApparatusListItem): {
   title: string;
   subtitle: string;
   url: string;
+  nfcUrl: string;
   icon: QRCardIcon;
 } {
+  const url = buildShiftCheckInUrl({ apparatusId: apparatus.id });
   return {
     title: `${apparatus.unitNumber}${apparatus.name ? ` — ${apparatus.name}` : ''}`,
     subtitle: 'Scan to check in or out of your shift',
-    url: buildShiftCheckInUrl({ apparatusId: apparatus.id }),
+    url,
+    nfcUrl: url,
     icon: 'apparatus',
   };
 }

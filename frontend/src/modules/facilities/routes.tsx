@@ -9,6 +9,7 @@
  *   /facilities/inspections  — Cross-facility inspections
  *   /locations               — Lightweight locations list (when Facilities module is off)
  *   /locations/qr-codes      — Printable directory of all room kiosk QR codes
+ *   /locations/:locationId/check-in — Where a room's NFC tag lands a member
  *   /apparatus-basic         — Lightweight apparatus view (when Apparatus module is off)
  *
  * Public routes (no auth):
@@ -31,6 +32,7 @@ const InspectionsListPage = lazyWithRetry(() => import('./pages/InspectionsListP
 const FacilitiesSettingsPage = lazyWithRetry(() => import('./pages/FacilitiesSettingsPage'));
 const LocationsPage = lazyWithRetry(() => import('../../pages/LocationsPage'));
 const RoomQRCodesPage = lazyWithRetry(() => import('../../pages/RoomQRCodesPage'));
+const RoomCheckInPage = lazyWithRetry(() => import('../../pages/RoomCheckInPage'));
 const ApparatusBasicPage = lazyWithRetry(() => import('../../pages/ApparatusBasicPage'));
 const LocationKioskPage = lazyWithRetry(() => import('../../pages/LocationKioskPage'));
 const GuestCheckInPage = lazyWithRetry(() => import('../../pages/GuestCheckInPage'));
@@ -145,6 +147,17 @@ export const getFacilitiesRoutes = () => (
           >
             <RoomQRCodesPage />
           </ProtectedRoute>
+        </Suspense>
+      }
+    />
+    {/* Authenticated only, like /events/:id/check-in it forwards to: any
+        member may check in, and a room tag must work in Locations mode as
+        well as Facilities mode, so neither module nor permission gates it. */}
+    <Route
+      path="/locations/:locationId/check-in"
+      element={
+        <Suspense fallback={null}>
+          <RoomCheckInPage />
         </Suspense>
       }
     />

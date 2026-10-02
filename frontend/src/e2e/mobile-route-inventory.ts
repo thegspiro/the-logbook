@@ -355,6 +355,13 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'fast route-level mobile presentation ratchet',
   },
   {
+    path: '/locations/:locationId/check-in',
+    source: 'src/modules/facilities/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'parameterized NFC tag landing; with one event open it redirects to /events/:id/check-in, which carries the workflow coverage, and its other states are a single centred message or a short list of full-width links',
+  },
+  {
     path: '/apparatus-basic',
     source: 'src/modules/facilities/routes.tsx',
     coverage: 'ratchet',
