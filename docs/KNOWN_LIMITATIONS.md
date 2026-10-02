@@ -5398,6 +5398,23 @@ needs a decision rather than a patch:
   seeded and backfilled by migration `f73b449bdb8b` — see "The seeded
   Quartermaster cannot build equipment checklists" above.
 
+## Forms — A Public Form Asks for Sign-In Only After It Is Filled In (2026-10-02)
+
+Found driving W60 (`docs/workflow-review/W60-forms.md`, W60-11). A new form
+defaults to `require_authentication = true` and `allow_multiple_submissions =
+true`. Making it public opens the link to anyone, but submitting still needs a
+signed-in member until an officer ticks "Allow submissions without signing in"
+in the Share dialog (which explains this). A visitor on `/f/<slug>` is not told
+until they press Submit. They then get "Authentication is required to submit
+this form." with no sign-in link, and their answers are lost.
+
+The options:
+
+- tell the visitor above the form, with a sign-in link that returns to
+  `/f/<slug>`;
+- or default new **public** forms to anonymous submission. That changes who
+  can submit, so it is the owner's call.
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area

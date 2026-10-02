@@ -53,9 +53,11 @@ import { CSS } from '@dnd-kit/utilities';
 import FieldEditor from './FieldEditor';
 import type { SiblingField } from './FieldEditor';
 import { formsService } from '../../services/api';
-import type { FormField, FormFieldCreate } from '../../services/api';
+import type { FormField, FormFieldCreate, FormFieldUpdate } from '../../services/api';
 import type { FieldDefinition } from './FieldRenderer';
 import { FieldType } from '../../constants/enums';
+import { useConfirm } from '../../contexts/ConfirmContext';
+import { getErrorMessage } from '../../utils/errorHandling';
 
 /** Field types that require at least one option to function. */
 const OPTION_FIELD_TYPES = new Set(['select', 'multiselect', 'checkbox', 'radio']);
@@ -266,6 +268,45 @@ const SortableFieldRow = ({
   );
 };
 
+/** Settings the field editor owns that may be left blank. */
+const CLEARABLE_FIELD_KEYS = [
+  'placeholder',
+  'help_text',
+  'default_value',
+  'min_length',
+  'max_length',
+  'min_value',
+  'max_value',
+  'validation_pattern',
+  'options',
+  'condition_field_id',
+  'condition_operator',
+  'condition_value',
+] as const;
+
+/**
+ * The editor leaves a blank setting out of what it returns. On an update the
+ * API reads an absent key as "leave alone", so every blank setting is sent as
+ * an explicit null — otherwise removing a condition, a placeholder or a limit
+ * reports success and changes nothing (CLAUDE.md pitfall 1).
+ */
+function toFieldUpdate(fieldData: FormFieldCreate): FormFieldUpdate {
+  const update: FormFieldUpdate = { ...fieldData, required: fieldData.required ?? false };
+  for (const key of CLEARABLE_FIELD_KEYS) {
+    if (fieldData[key] === undefined) update[key] = null;
+  }
+  return update;
+}
+
+/** The same clearing for a builder that is not connected to the API. */
+function clearedLocally(fieldData: FormFieldCreate): Partial<FieldDefinition> {
+  const cleared: Partial<FieldDefinition> = { ...fieldData, required: fieldData.required ?? false };
+  for (const key of CLEARABLE_FIELD_KEYS) {
+    if (fieldData[key] === undefined) cleared[key] = undefined;
+  }
+  return cleared;
+}
+
 const FormBuilder = ({
   formId,
   fields: externalFields,
@@ -283,6 +324,7 @@ const FormBuilder = ({
   const [previewMode, setPreviewMode] = useState(false);
 
   const isConnected = !!formId;
+  const { confirm } = useConfirm();
 
   // DnD sensors
   const sensors = useSensors(
@@ -337,6 +379,8 @@ const FormBuilder = ({
       required: field.required,
       min_length: field.min_length ?? undefined,
       max_length: field.max_length ?? undefined,
+      min_value: field.min_value ?? undefined,
+      max_value: field.max_value ?? undefined,
       validation_pattern: field.validation_pattern ?? undefined,
       options: field.options ?? undefined,
       condition_field_id: field.condition_field_id ?? undefined,
@@ -359,8 +403,15 @@ const FormBuilder = ({
       required: field.required,
       min_length: field.min_length ?? undefined,
       max_length: field.max_length ?? undefined,
+      min_value: field.min_value ?? undefined,
+      max_value: field.max_value ?? undefined,
       validation_pattern: field.validation_pattern ?? undefined,
       options: field.options ? [...field.options] : undefined,
+      // A copy of a follow-up question stays on the same branch; dropped, a
+      // required copy would be demanded of every submitter.
+      condition_field_id: field.condition_field_id ?? undefined,
+      condition_operator: field.condition_operator ?? undefined,
+      condition_value: field.condition_value ?? undefined,
       width: field.width,
       sort_order: field.sort_order + 1,
     };
@@ -402,14 +453,14 @@ const FormBuilder = ({
       try {
         setSaving(true);
         if (editingFieldId) {
-          await formsService.updateField(formId, editingFieldId, fieldData);
+          await formsService.updateField(formId, editingFieldId, toFieldUpdate(fieldData));
         } else {
           fieldData.sort_order = fields.length;
           await formsService.addField(formId, fieldData);
         }
         await loadFields();
-      } catch {
-        setError(editingFieldId ? 'Failed to update field.' : 'Failed to add field.');
+      } catch (err: unknown) {
+        setError(getErrorMessage(err, editingFieldId ? 'Failed to update field.' : 'Failed to add field.'));
         return;
       } finally {
         setSaving(false);
@@ -422,7 +473,7 @@ const FormBuilder = ({
         if (idx >= 0) {
           const existing = updated[idx];
           if (existing) {
-            updated[idx] = { ...existing, ...fieldData, id: existing.id };
+            updated[idx] = { ...existing, ...clearedLocally(fieldData), id: existing.id };
           }
         }
       } else {
@@ -449,6 +500,22 @@ const FormBuilder = ({
   const handleDeleteField = async (fieldId: string) => {
     setError(null);
 
+    const target = fields.find((f) => f.id === fieldId);
+    const followUps = fields.filter((f) => f.condition_field_id === fieldId);
+    const followUpNote =
+      followUps.length > 0
+        ? ` ${followUps.length === 1 ? 'One question branches' : `${followUps.length} questions branch`} from it (${followUps
+            .map((f) => `"${f.label}"`)
+            .join(', ')}); ${followUps.length === 1 ? 'it' : 'they'} will be shown to everyone instead.`
+        : '';
+    const confirmed = await confirm({
+      title: 'Delete this question?',
+      message: `"${target?.label ?? 'This question'}" will be removed from the form. Answers already submitted keep their value but lose this label.${followUpNote}`,
+      confirmLabel: 'Delete question',
+      cancelLabel: 'Keep it',
+    });
+    if (!confirmed) return;
+
     if (isConnected) {
       try {
         setSaving(true);
@@ -460,7 +527,14 @@ const FormBuilder = ({
         setSaving(false);
       }
     } else {
-      const updated = fields.filter((f) => f.id !== fieldId);
+      // Mirrors the API: a follow-up whose question is gone is shown to everyone.
+      const updated = fields
+        .filter((f) => f.id !== fieldId)
+        .map((f) =>
+          f.condition_field_id === fieldId
+            ? { ...f, condition_field_id: undefined, condition_operator: undefined, condition_value: undefined }
+            : f
+        );
       // Re-index sort orders
       updated.forEach((f, i) => {
         f.sort_order = i;
@@ -727,6 +801,7 @@ const FormBuilder = ({
                 label: f.label,
                 field_type: f.field_type,
                 options: f.options ?? undefined,
+                condition_field_id: f.condition_field_id ?? undefined,
               }) as SiblingField
           )}
           editingFieldId={editingFieldId ?? undefined}

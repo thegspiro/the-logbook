@@ -113,7 +113,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W57 | Email templates: edit, preview, restore                               | admin              | `/communications/email-templates`                  | ⬜     |
 | W58 | Suggestion boxes and suggestions                                      | member → admin     | `/suggestions`, `/communications/suggestion-boxes` | ⬜     |
 | W59 | Photo-use consent                                                     | member, admin      | `/communications/photo-use-consent`                | ⬜     |
-| W60 | Forms: build, publish a public form, submit it, read submissions      | admin → anonymous  | `/forms`, `/f/:slug`                               | ⬜     |
+| W60 | Forms: build, publish a public form, submit it, read submissions      | admin → anonymous  | `/forms`, `/f/:slug`                               | ✅     |
 
 ## Tier 9 — Money
 
@@ -183,8 +183,53 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   as `2026-09-30` (W46-16).
 - **W75** — password sign-in, failure, lockout and sign-out never reach the
   audit log, so the audit screen cannot show them (W02-3).
+- **Any forms or prospects run** — `scripts/clear_hidden_form_answers.py`
+  still judges each rule one level deep (`FormsService._is_field_visible`,
+  kept that way on purpose in W60). So answers stored before W60 under a
+  follow-up of a hidden question are not swept. Extending it to
+  `_visible_field_ids` changes what it deletes, so it needs its own review and
+  a dry run (W60-1).
 
 ## Log
+
+### W60 — Forms: build, publish a public form, submit it, read submissions — 2026-10-02
+
+Driven as: `admin` at 1280×900 building a branching form ("Volunteer Intake":
+yes/no → checkbox list → required card number), a signed-out visitor on the
+public link, and `member`. The public form and the field editor were repeated
+at 390×844 after the fixes. Fresh database.
+
+Held: a valid response saved and was listed in the department's timezone; a
+required question that is shown was enforced by the browser and the server;
+`member` was refused the page and the mutations.
+
+Fixed:
+
+- W60-1 (HIGH — a required follow-up of a closed branch stayed on screen and
+  required, in the preview, on the public page and on the server, so answering
+  "No" could not be submitted). Visibility now follows a branch through every
+  level, from one frontend helper and its backend twin.
+- W60-2 (MED — "contains EMT" matched an "AEMT" tick).
+- W60-3 (MED — removing a condition, or clearing a placeholder or limit,
+  reported success and saved nothing; pitfall 1).
+- W60-4 (MED — the builder allowed a cycle, which hid a whole required branch
+  from everyone; the editor and the API now refuse it, and the API also
+  refuses a parent from another form).
+- W60-5 (MED — a duplicated follow-up lost its condition).
+- W60-6 (MED — deleting a question took one tap and orphaned its follow-ups).
+- W60-7 (LOW — a number field reopened with blank limits).
+- W60-8 (MED — the in-app renderer named no field).
+- W60-9 (LOW — a rule with no value was accepted).
+- W60-10 (LOW — the field-type picker had no checked state).
+
+Flagged: W60-11 (MED — the public page asks for sign-in only after the form is
+filled in; in KNOWN_LIMITATIONS).
+
+Gate: typecheck, lint, flake8, black and isort are clean. 29 frontend forms
+tests and 369 backend forms tests pass, as does the full frontend suite (692 files,
+8907 tests).
+
+Next: W51.
 
 ### W50 — An election: create, nominate, vote by ballot link, close, results — 2026-09-30
 
