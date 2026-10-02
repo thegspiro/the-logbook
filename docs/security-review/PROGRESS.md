@@ -16,6 +16,51 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2862](https://github.com/thegspiro/the-logbook/pull/2862)** — branch `claude/security-review-feature18-pass6`, Feature 18
+(Training extended), pass 6. **Watchdog iteration:** the `/loop 30m
+/security-review` session had stalled for roughly 10 days with no open PR
+and no in-progress branch for Feature 18. Confirmed via the GitHub API before
+starting: no open PR whose head branch starts with `claude/security-review-`
+existed, and PR #2635 (Feature 17 pass 6, recorded below) is merged. This
+watchdog picked up Feature 18 directly, mirroring the Feature 12–17
+precedents below.
+
+**Not a zero-delta pass** — real feature work landed in this feature's own
+files since pass 5's merge (`21470e693`, PR #2578): thirteen commits touching
+a brand-new external-provider integration (TargetSolutions' own Training
+Records API, replacing a mistaken route through the Vector Solutions API),
+a scheduling rework (fixed-time-of-day syncs superseded by hourly pulls plus
+a daily 30-day review), two new in-app notification flows in
+`training_submission_service.py`, a new nullable `source_event_id` FK column
+on `TrainingRecord` with its own guarded migration, and two small correctness
+fixes (`training_waivers.py` pagination tiebreaker, `course_cohorts.py`'s
+attendance-lock error now a 409). Every commit's diff was read in full
+(`git show <sha>`) against all seven `CHECKLIST.md` dimensions and the
+relevant CLAUDE.md pitfalls, with particular attention to the external-sync
+cluster (transport reuse, credential handling, scheduled-job boundedness,
+org-scoped email-based member matching) per this pass's own brief.
+
+**0 fixed, 0 flagged, 0 new findings** — every piece of new code already
+followed this feature's established security patterns (the hardened
+`SSRFSafeAsyncTransport`, write-only/redacted credentials with a new
+query-string-credential redaction layer for the one provider whose API
+requires it, org-scoped member matching, `apply_updates`, guarded
+migrations, SAVEPOINT-isolated non-critical writes, JSX-escaped notification
+rendering) on first landing, each with its own guard-test coverage. All ten
+standing fixes (TRX-1 through TRX4-8) were re-verified against the real
+diff, not assumed from a zero-diff check — this pass's own route
+re-enumeration confirms 88/88 routes still carry an auth dependency and the
+permission OR-gates (TRX4-2/TRX4-6) are unchanged. Full completion gate:
+flake8/black/isort clean, `validate_migrations.py --strict` at 497 revisions
+(up from pass 5's 444)/single head, 1470 training-scoped backend tests passed
+plus the full 15307-test backend suite green, frontend typecheck/lint clean.
+Full write-up: [`TRX-18-training-extended.md`](./TRX-18-training-extended.md)'s
+**Pass 6** section. Rotation row 18 → ✅ (pending PR merge). Next: Feature 19
+(Skills testing).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 17, Training core, pass 6, PR #2635, merged), preserved for history</summary>
+
 **PR [#2635](https://github.com/thegspiro/the-logbook/pull/2635)** — branch `claude/security-review-tr-17-pass6`, Feature 17
 (Training core), pass 6. **Watchdog iteration:** the `/loop 30m
 /security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`) had produced
@@ -40,6 +85,8 @@ backend tests passed plus the full 12632-test backend suite green, frontend
 typecheck/lint clean (no frontend file touched this pass). Full write-up:
 [`TR-17-training-core.md`](./TR-17-training-core.md)'s **Pass 6** section.
 Rotation row 17 → ✅ (pending PR merge). Next: Feature 18 (Training extended).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 16, Events & requests, pass 6, PR #2630/#2631, merged), preserved for history</summary>
@@ -16860,7 +16907,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
-| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
+| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
@@ -16884,6 +16931,48 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-02 — Feature 18 (Training extended, pass 6) — 0 fixed, 0 flagged, 0 new findings — PR #2862 opened
+
+Watchdog pickup. The dedicated `/loop 30m /security-review` session had
+stalled for roughly 10 days with no open PR and no in-progress branch for
+Feature 18; confirmed via `list_pull_requests` (state=open) that no PR
+whose head branch starts with `claude/security-review-` existed, and that
+PR #2635 (Feature 17 pass 6) was merged, before proceeding.
+
+Unlike passes 2-5, this was **not** a zero-diff pass: thirteen commits had
+landed real feature work in this feature's own files since pass 5's merge
+(`21470e693`, PR #2578) — a brand-new TargetSolutions Training Records API
+integration (replacing a mistaken route through the Vector Solutions API
+both provider types previously shared), a scheduling rework (fixed-time-of-
+day syncs superseded by hourly pulls plus a daily 30-day review), two new
+in-app notification flows in `training_submission_service.py` (officers
+prompted when a submission awaits review, submitters told when a decision
+changes or rejects what they sent), a new nullable `source_event_id` FK on
+`TrainingRecord` with its own guarded migration, and two small correctness
+fixes (a waiver-list pagination tiebreaker, an attendance-lock refusal on
+four cohort routes now a 409 instead of a 400/404). Read every commit's
+diff in full against all seven `CHECKLIST.md` dimensions, with particular
+attention to the external-sync cluster per the task brief: transport reuse
+(still routes through the existing `SSRFSafeAsyncTransport`, no bespoke
+client), credential handling (a new query-string-credential redaction layer
+in `app/core/logging.py` for the one provider whose API has no header
+alternative, plus a schema validator rejecting a base URL that embeds a
+credential), scheduled-job boundedness (DB-row-bounded, not a new in-memory
+tracker), and the new email-based member matching (`_match_member_by_email`
+— org-scoped on the provider's own `organization_id`, not a client-supplied
+id, so it is not TRX-1's shape despite the surface similarity). All ten
+standing fixes (TRX-1 through TRX4-8) re-verified against the real diff.
+Independent route re-enumeration: 88/88 routes still carry an auth
+dependency; the TRX4-2/TRX4-6 permission OR-gates unchanged. **0 fixed, 0
+flagged, 0 new findings** — every piece of new code already followed this
+feature's established security patterns on first landing, each with its own
+guard-test coverage. Full completion gate: flake8/black/isort clean,
+`validate_migrations.py --strict` at 497 revisions (up from 444)/single
+head, 1470 training-scoped tests plus the full 15307-test backend suite
+passed, frontend typecheck/lint clean. Full write-up:
+`docs/security-review/TRX-18-training-extended.md` → Pass 6. Rotation row
+18 → ✅ (pending PR merge). Next: Feature 19 (Skills testing).
 
 ### 2026-09-17 — Feature 17 (Training core, pass 6) — 0 fixed, 0 flagged, 0 new findings — PR #2635 opened
 
