@@ -139,11 +139,18 @@ export const getFacilitiesRoutes = () => (
           {/* apparatus.view may enter for the apparatus shift check-in cards
               (permanent id-based URLs, no secret). Room kiosk codes are bearer
               credentials the backend redacts for non-managers, so those cards
-              simply don't render for apparatus-only viewers. */}
+              simply don't render for apparatus-only viewers. Either tag-writing
+              grant may enter too, to write its tags. */}
           <ProtectedRoute
             requiredModule="facilities"
             moduleLabel="Facilities"
-            requiredAnyPermission={['locations.manage', 'facilities.manage', 'apparatus.view']}
+            requiredAnyPermission={[
+              'locations.manage',
+              'facilities.manage',
+              'apparatus.view',
+              'locations.manage_nfc_tags',
+              'apparatus.manage_nfc_tags',
+            ]}
           >
             <RoomQRCodesPage />
           </ProtectedRoute>

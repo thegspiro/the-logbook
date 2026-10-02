@@ -343,10 +343,13 @@ describe('RoomQRCodesPage — NFC tags', () => {
     removeEventListener() {}
   }
 
+  const asViewer = (permissions: string[]) => {
+    useAuthStore.setState({ user: { permissions } as never });
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
     written.length = 0;
-    useAuthStore.setState({ user: null });
     (window as { NDEFReader?: unknown }).NDEFReader = FakeNDEFReader;
     mockGetLocations.mockReset();
     mockGetLocations.mockResolvedValue([
@@ -360,11 +363,13 @@ describe('RoomQRCodesPage — NFC tags', () => {
 
   afterEach(() => {
     delete (window as { NDEFReader?: unknown }).NDEFReader;
+    useAuthStore.setState({ user: null });
   });
 
   // The card's QR opens the public kiosk; the tag must name the room instead,
   // because a tag is readable by anyone and must not carry the kiosk's code.
   it("writes the room's check-in link, never the kiosk URL, onto a room tag", async () => {
+    asViewer(['facilities.manage', 'locations.manage_nfc_tags']);
     const user = userEvent.setup();
     renderPage();
 
@@ -377,5 +382,85 @@ describe('RoomQRCodesPage — NFC tags', () => {
     const payload = JSON.stringify(written[0]);
     expect(payload).toContain(`${window.location.origin}/locations/room-4/check-in`);
     expect(payload).not.toContain('ANNEXCODE');
+  });
+
+  // Managing locations shows the kiosk code; it does not make the holder the
+  // one who tags the room (the Meeting Hall Coordinator, say).
+  it('offers no room tag to a location manager without the tag grant', async () => {
+    asViewer(['locations.manage']);
+    renderPage();
+
+    expect(await screen.findByText('Annex Hall')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Write NFC tag/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Room NFC Tags' })).not.toBeInTheDocument();
+  });
+
+  describe('apparatus cards', () => {
+    beforeEach(() => {
+      mockGetLocations.mockResolvedValue([]);
+      mockGetEnabledModules.mockResolvedValue({ enabled_modules: ['members', 'scheduling'], configured: true });
+      mockGetApparatusList.mockResolvedValue({ ...mockApparatus, items: [mockApparatus.items[0]] });
+    });
+
+    it('shows an apparatus viewer the QR but not the tag writer', async () => {
+      asViewer(['apparatus.view']);
+      renderPage();
+
+      expect(await screen.findByText('E-3 — Engine 3')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Write NFC tag/ })).not.toBeInTheDocument();
+    });
+
+    it('offers the tag writer to a holder of apparatus.manage_nfc_tags', async () => {
+      asViewer(['apparatus.view', 'apparatus.manage_nfc_tags']);
+      renderPage();
+
+      expect(await screen.findByRole('button', { name: 'Write NFC tag' })).toHaveAttribute(
+        'title',
+        'Write this link to an NFC tag for E-3 — Engine 3'
+      );
+    });
+  });
+
+  describe('a room tag writer who cannot see kiosk codes', () => {
+    beforeEach(() => {
+      // What the backend sends a viewer without locations/facilities manage:
+      // the rooms, with their kiosk codes withheld.
+      mockGetLocations.mockResolvedValue([
+        { ...baseLocation, id: 'room-1', name: 'Training Room', building: 'Station 1', room_number: '101' },
+      ]);
+    });
+
+    it('lists the rooms to tag, without a kiosk QR code', async () => {
+      asViewer(['apparatus.view', 'locations.manage_nfc_tags']);
+      const user = userEvent.setup();
+      renderPage();
+
+      expect(await screen.findByRole('heading', { name: 'Room NFC Tags' })).toBeInTheDocument();
+      expect(screen.queryByText(/\/display\//)).not.toBeInTheDocument();
+
+      const button = screen.getByRole('button', { name: 'Write NFC tag' });
+      expect(button).toHaveAttribute('title', 'Write this link to an NFC tag for Training Room #101');
+      await user.click(button);
+      await waitFor(() => {
+        expect(written).toHaveLength(1);
+      });
+      expect(JSON.stringify(written[0])).toContain('/locations/room-1/check-in');
+    });
+
+    it('says where tags can be written on a device without NFC', async () => {
+      delete (window as { NDEFReader?: unknown }).NDEFReader;
+      asViewer(['apparatus.view', 'locations.manage_nfc_tags']);
+      renderPage();
+
+      expect(await screen.findByText(/open this page in Chrome on an Android phone/)).toBeInTheDocument();
+    });
+
+    it('does not list them to a viewer without the tag grant', async () => {
+      asViewer(['apparatus.view']);
+      renderPage();
+
+      expect(await screen.findByText('No QR codes yet')).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Room NFC Tags' })).not.toBeInTheDocument();
+    });
   });
 });

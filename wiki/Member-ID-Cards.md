@@ -14,7 +14,10 @@ a check-in station running at the door. Members tap and walk in.
 
 Member profile → **ID Cards**. An officer holding `members.manage_id_cards`
 binds a physical card to a member, labels it, and can later suspend it, report
-it lost, or revoke it.
+it lost, or revoke it. By default that is department leadership (President,
+Vice President, Chief, Deputy Chief, Assistant Chief), the Membership
+Coordinator and Assistant Membership Coordinator, the Secretary and Assistant
+Secretary, and Captains; a department changes it on the Positions screen.
 
 Cards ship blank, so **the tag's serial number is the credential** — there is
 nothing written onto the card to read instead.

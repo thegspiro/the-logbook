@@ -33,6 +33,7 @@ import {
   Download,
   LayoutGrid,
   Loader2,
+  Nfc,
   Printer,
   QrCode,
   RefreshCw,
@@ -50,7 +51,7 @@ import { copyToClipboard } from '../utils/clipboard';
 import { useAuthStore } from '../stores/authStore';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useEnabledModules } from '../hooks/useEnabledModules';
-import { buildRoomCheckInUrl, buildShiftCheckInUrl } from '../constants/nfc';
+import { buildRoomCheckInUrl, buildShiftCheckInUrl, isNfcSupported } from '../constants/nfc';
 import { NfcTagWriteButton } from '../components/nfc/NfcTagWriteButton';
 
 /** Rasterize an inline QR SVG to a PNG download (white background for print/signage use). */
@@ -120,11 +121,12 @@ function QRCard({
   subtitle?: string | undefined;
   url: string;
   /**
-   * What a tag for this card should carry. Differs from `url` for rooms: the
-   * QR opens the public kiosk, but a tag must not carry the kiosk's code, so it
-   * names the room instead and the member signs in to check in.
+   * What a tag for this card should carry, or undefined when the viewer may
+   * not write one. Differs from `url` for rooms: the QR opens the public
+   * kiosk, but a tag must not carry the kiosk's code, so it names the room
+   * instead and the member signs in to check in.
    */
-  nfcUrl: string;
+  nfcUrl?: string | undefined;
   icon: QRCardIcon;
   variant?: QRCardVariant;
   onRegenerate?: (() => Promise<void>) | undefined;
@@ -205,7 +207,7 @@ function QRCard({
           <Download className="h-3 w-3" aria-hidden="true" />
           Download PNG
         </button>
-        <NfcTagWriteButton url={nfcUrl} label={title} />
+        {nfcUrl && <NfcTagWriteButton url={nfcUrl} label={title} />}
         {onRegenerate && (
           <button
             onClick={() => {
@@ -228,32 +230,65 @@ function locationCardProps(location: Location): {
   title: string;
   subtitle: string;
   url: string;
-  nfcUrl: string;
   icon: QRCardIcon;
 } {
   const isStation = Boolean(location.address && !location.building && !location.room_number);
   return {
-    title: `${location.name}${location.room_number ? ` #${location.room_number}` : ''}`,
+    title: locationTitle(location),
     subtitle: `${location.building ? `${location.building} — ` : ''}Scan to check in`,
     url: `${window.location.origin}/display/${location.display_code}`,
-    nfcUrl: buildRoomCheckInUrl(location.id),
     icon: isStation ? 'station' : 'room',
   };
+}
+
+function locationTitle(location: Location): string {
+  return `${location.name}${location.room_number ? ` #${location.room_number}` : ''}`;
+}
+
+/**
+ * Rooms a tag writer can tag but that have no kiosk card on this page — every
+ * room, for a writer the backend withholds kiosk codes from (the Vice
+ * President), and rooms with no kiosk code for everyone else. A room's tag
+ * names the room, not the kiosk, so it never needed the code.
+ */
+function RoomTagList({ rooms }: { rooms: Location[] }) {
+  return (
+    <section className="no-print">
+      <h2 className="text-theme-text-primary mb-1 flex items-center gap-2 text-lg font-semibold">
+        <Nfc className="h-5 w-5 text-red-500" aria-hidden="true" />
+        Room NFC Tags
+      </h2>
+      <p className="text-theme-text-muted mb-3 text-sm">
+        Write a tag for a room&apos;s door. Tapping it checks a member into whatever event is open in that room.
+      </p>
+      {isNfcSupported() ? (
+        <ul className="card divide-theme-surface-border divide-y py-1">
+          {rooms.map((room) => (
+            <li key={room.id} className="flex items-center justify-between gap-3 py-1">
+              <span className="text-theme-text-primary min-w-0 text-sm break-words">{locationTitle(room)}</span>
+              <NfcTagWriteButton url={buildRoomCheckInUrl(room.id)} label={locationTitle(room)} />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-theme-text-muted text-sm">
+          To write a room tag, open this page in Chrome on an Android phone.
+        </p>
+      )}
+    </section>
+  );
 }
 
 function apparatusCardProps(apparatus: ApparatusListItem): {
   title: string;
   subtitle: string;
   url: string;
-  nfcUrl: string;
   icon: QRCardIcon;
 } {
-  const url = buildShiftCheckInUrl({ apparatusId: apparatus.id });
   return {
     title: `${apparatus.unitNumber}${apparatus.name ? ` — ${apparatus.name}` : ''}`,
     subtitle: 'Scan to check in or out of your shift',
-    url,
-    nfcUrl: url,
+    url: buildShiftCheckInUrl({ apparatusId: apparatus.id }),
     icon: 'apparatus',
   };
 }
@@ -270,6 +305,14 @@ export default function RoomQRCodesPage() {
   const [layout, setLayout] = useState<'grid' | 'signs'>('grid');
 
   const canManage = checkPermission('locations.edit') || checkPermission('locations.manage');
+  // Who may write which tag is the department's decision, not whoever can see
+  // the code: leadership and the Facilities Manager tag rooms, leadership and
+  // the Apparatus Officer tag apparatus.
+  const canWriteRoomTags = checkPermission('locations.manage_nfc_tags');
+  const canWriteApparatusTags = checkPermission('apparatus.manage_nfc_tags');
+  const roomTagUrl = (location: Location) => (canWriteRoomTags ? buildRoomCheckInUrl(location.id) : undefined);
+  const apparatusTagUrl = (a: ApparatusListItem) =>
+    canWriteApparatusTags ? buildShiftCheckInUrl({ apparatusId: a.id }) : undefined;
   const schedulingOn = isModuleOn('scheduling');
 
   // Both loads gate the page: rendering (and Print All) on locations alone
@@ -355,22 +398,20 @@ export default function RoomQRCodesPage() {
     }
   };
 
-  const hasAnyCodes = locations.some((l) => l.display_code) || apparatus.length > 0;
   const query = searchQuery.trim().toLowerCase();
-  const groups = groupByStation(
-    query
-      ? locations.filter(
-          (l) =>
-            l.name.toLowerCase().includes(query) ||
-            l.building?.toLowerCase().includes(query) ||
-            l.room_number?.toLowerCase().includes(query)
-        )
-      : locations
-  );
+  const matchesQuery = (l: Location) =>
+    !query ||
+    l.name.toLowerCase().includes(query) ||
+    Boolean(l.building?.toLowerCase().includes(query)) ||
+    Boolean(l.room_number?.toLowerCase().includes(query));
+  const groups = groupByStation(locations.filter(matchesQuery));
   const filteredApparatus = query
     ? apparatus.filter((a) => a.unitNumber.toLowerCase().includes(query) || a.name?.toLowerCase().includes(query))
     : apparatus;
-  const nothingMatches = groups.length === 0 && filteredApparatus.length === 0;
+  const tagOnlyRooms = canWriteRoomTags ? locations.filter((l) => !l.display_code && matchesQuery(l)) : [];
+  const hasAnyCodes =
+    locations.some((l) => l.display_code) || apparatus.length > 0 || (canWriteRoomTags && locations.length > 0);
+  const nothingMatches = groups.length === 0 && filteredApparatus.length === 0 && tagOnlyRooms.length === 0;
 
   return (
     <div className="space-y-6">
@@ -478,13 +519,15 @@ export default function RoomQRCodesPage() {
               <QRCard
                 key={location.id}
                 {...locationCardProps(location)}
+                nfcUrl={roomTagUrl(location)}
                 variant="sign"
                 onRegenerate={canManage ? () => handleRegenerate(location) : undefined}
               />
             ))}
           {filteredApparatus.map((a) => (
-            <QRCard key={a.id} {...apparatusCardProps(a)} variant="sign" />
+            <QRCard key={a.id} {...apparatusCardProps(a)} nfcUrl={apparatusTagUrl(a)} variant="sign" />
           ))}
+          {tagOnlyRooms.length > 0 && <RoomTagList rooms={tagOnlyRooms} />}
         </div>
       ) : (
         <div className="space-y-8">
@@ -499,6 +542,7 @@ export default function RoomQRCodesPage() {
                   <QRCard
                     key={location.id}
                     {...locationCardProps(location)}
+                    nfcUrl={roomTagUrl(location)}
                     onRegenerate={canManage ? () => handleRegenerate(location) : undefined}
                   />
                 ))}
@@ -517,11 +561,12 @@ export default function RoomQRCodesPage() {
               </p>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 print:grid-cols-2">
                 {filteredApparatus.map((a) => (
-                  <QRCard key={a.id} {...apparatusCardProps(a)} />
+                  <QRCard key={a.id} {...apparatusCardProps(a)} nfcUrl={apparatusTagUrl(a)} />
                 ))}
               </div>
             </section>
           )}
+          {tagOnlyRooms.length > 0 && <RoomTagList rooms={tagOnlyRooms} />}
         </div>
       )}
 

@@ -308,11 +308,11 @@ Requires `events.manage` permission. Tab-based admin interface.
 
 ## Locations (when Facilities module is off)
 
-| URL                               | Page                            | Permission                                                            |
-| --------------------------------- | ------------------------------- | --------------------------------------------------------------------- |
-| `/locations`                      | Locations Management            | Authenticated                                                         |
-| `/locations/qr-codes`             | Check-In QR Codes               | `locations.manage` **OR** `facilities.manage` **OR** `apparatus.view` |
-| `/locations/:locationId/check-in` | Room Check-In (NFC tag landing) | Authenticated                                                         |
+| URL                               | Page                            | Permission                                                                                                                                  |
+| --------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/locations`                      | Locations Management            | Authenticated                                                                                                                               |
+| `/locations/qr-codes`             | Check-In QR Codes               | `locations.manage` **OR** `facilities.manage` **OR** `apparatus.view` **OR** `locations.manage_nfc_tags` **OR** `apparatus.manage_nfc_tags` |
+| `/locations/:locationId/check-in` | Room Check-In (NFC tag landing) | Authenticated                                                                                                                               |
 
 > Manages stations, addresses, and rooms for use by events, training, QR code check-in, and other modules. Each room gets a unique kiosk display code for tablet-based QR check-in. The Check-In QR Codes page is a printable directory of every kiosk QR code, grouped by station/facility (available in both Locations and Facilities modes), plus apparatus shift check-in codes when the Scheduling module is enabled.
 
@@ -1386,6 +1386,21 @@ or with gloves on.
 | Shift detail panel → QR block           | `/scheduling/checkin?apparatus=<id>` | `NfcTagWriter`                                |
 | `/locations/qr-codes` (apparatus cards) | `/scheduling/checkin?apparatus=<id>` | `NfcTagWriteButton` (compact, toast feedback) |
 | `/locations/qr-codes` (room cards)      | `/locations/<id>/check-in`           | `NfcTagWriteButton` (compact, toast feedback) |
+
+> **Who writes which tag** _(2026-10-02)_. Each kind of tag has its own grant,
+> because seeing a code and being the officer who mounts its tag are different
+> jobs. Room tags take `locations.manage_nfc_tags` (leadership — President, Vice
+> President, Chief, Deputy Chief, Assistant Chief — and the Facilities Manager);
+> apparatus tags, on the QR directory and the shift panel alike, take
+> `apparatus.manage_nfc_tags` (leadership and the Apparatus Officer); member ID
+> cards stay on `members.manage_id_cards`. The two tag grants gate the writer in
+> the app only: writing a tag never reaches the server and the link carries no
+> secret, so a generic NFC app can write the same URL — and the member who taps
+> it still signs in and meets the check-in's own rules. A room-tag writer the
+> backend withholds kiosk codes from (the Vice President, by default) gets a
+> **Room NFC Tags** list on `/locations/qr-codes` instead of the kiosk cards, as
+> does any room without a kiosk code. Migration `5bed4c485d2f` writes these
+> grants onto existing departments' seeded positions.
 
 ### Where the reader appears
 
