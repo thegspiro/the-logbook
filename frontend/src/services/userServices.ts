@@ -287,6 +287,16 @@ export const userService = {
   },
 
   /**
+   * Replace the caller's phone bottom-bar tabs, or pass null to return the
+   * bar to its role-based defaults. Self-scoped like profile visibility. The
+   * current value is read from /auth/me, so there is no getter here.
+   */
+  async setMyBottomNavigation(slots: string[] | null): Promise<string[] | null> {
+    const response = await api.put<{ slots: string[] | null }>('/users/me/bottom-navigation', { slots });
+    return response.data.slots;
+  },
+
+  /**
    * Another member's consents, for staff editing that member's contact and
    * notification settings. Read-only on purpose — there is no admin write
    * counterpart, because consent recorded by somebody else is not consent.

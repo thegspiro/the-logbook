@@ -55,6 +55,7 @@ import { useRanks } from '../hooks/useRanks';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 import { SettingsLayout, type SettingsSection } from '../components/settings/SettingsLayout';
 import { SettingsToggle } from '../components/settings/SettingsToggle';
+import { BottomNavigationSettings } from '../components/settings/BottomNavigationSettings';
 
 type TabType = 'account' | 'password' | 'security' | 'privacy' | 'emergency' | 'appearance' | 'notifications' | 'app';
 
@@ -80,7 +81,7 @@ const SECTIONS: SettingsSection<TabType>[] = [
     description: 'What other members can see, and your privacy choices',
   },
   { key: 'emergency', label: 'Emergency Contacts', icon: Heart, description: 'Who the department calls for you' },
-  { key: 'appearance', label: 'Appearance', icon: Palette, description: 'Theme and display preferences' },
+  { key: 'appearance', label: 'Appearance', icon: Palette, description: 'Theme and phone navigation bar' },
   { key: 'notifications', label: 'Notifications', icon: Bell, description: 'How and when the department reaches you' },
   { key: 'app', label: 'App', icon: Smartphone, description: 'Installed version and update status' },
 ];
@@ -1391,6 +1392,10 @@ export const UserSettingsPage: React.FC = () => {
                     );
                   })}
                 </div>
+              </div>
+
+              <div className="border-theme-surface-border border-t pt-6">
+                <BottomNavigationSettings />
               </div>
             </div>
           )}
