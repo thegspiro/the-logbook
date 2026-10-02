@@ -1373,7 +1373,7 @@ guidance for a pass with no frontend delta.
 
 ## Pass 6 (2026-10-02) — watchdog pickup
 
-**Prefix:** `TRX6` · **PR:** [#TBD](#) (filled in on merge)
+**Prefix:** `TRX6` · **PR:** [#2862](https://github.com/thegspiro/the-logbook/pull/2862)
 
 **Watchdog note:** the dedicated `/loop 30m /security-review` session had
 stalled for roughly 10 days with no open PR and no in-progress branch. A

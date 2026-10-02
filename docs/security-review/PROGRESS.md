@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#TBD](#)** — branch `claude/security-review-feature18-pass6`, Feature 18
+**PR [#2862](https://github.com/thegspiro/the-logbook/pull/2862)** — branch `claude/security-review-feature18-pass6`, Feature 18
 (Training extended), pass 6. **Watchdog iteration:** the `/loop 30m
 /security-review` session had stalled for roughly 10 days with no open PR
 and no in-progress branch for Feature 18. Confirmed via the GitHub API before
@@ -16932,7 +16932,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-10-02 — Feature 18 (Training extended, pass 6) — 0 fixed, 0 flagged, 0 new findings — PR #TBD opened
+### 2026-10-02 — Feature 18 (Training extended, pass 6) — 0 fixed, 0 flagged, 0 new findings — PR #2862 opened
 
 Watchdog pickup. The dedicated `/loop 30m /security-review` session had
 stalled for roughly 10 days with no open PR and no in-progress branch for
