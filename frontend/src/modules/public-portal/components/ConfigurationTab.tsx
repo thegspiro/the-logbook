@@ -72,12 +72,12 @@ const ConfigurationTab: React.FC = () => {
       </div>
 
       {/* Security Notice */}
-      <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+      <div className="alert-info">
         <div className="flex">
-          <AlertCircle className="h-5 w-5 shrink-0 text-blue-600" />
+          <AlertCircle className="text-theme-alert-info-icon h-5 w-5 shrink-0" />
           <div className="ml-3">
-            <h4 className="text-sm font-medium text-blue-900">Security Best Practices</h4>
-            <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-blue-800">
+            <h4 className="text-theme-alert-info-title text-sm font-medium">Security Best Practices</h4>
+            <ul className="text-theme-alert-info-text mt-2 list-inside list-disc space-y-1 text-sm">
               <li>Use conservative rate limits to prevent abuse</li>
               <li>Monitor access logs regularly for suspicious activity</li>
               <li>Only enable fields under Data Control that are safe to publish</li>

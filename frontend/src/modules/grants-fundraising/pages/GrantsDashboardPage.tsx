@@ -558,7 +558,7 @@ const GrantsDashboardPage: React.FC = () => {
 
       {/* Error Banner */}
       {error && (
-        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        <div className="alert-danger text-theme-alert-danger-text flex items-center gap-3 text-sm">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <p>{error}</p>
         </div>
