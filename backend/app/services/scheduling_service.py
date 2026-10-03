@@ -6788,7 +6788,7 @@ class SchedulingService:
             select(User.id, User.first_name, User.last_name, User.email).where(
                 User.organization_id == str(org_id),
                 User.platoon == shift.platoon,
-                User.status == "active",
+                User.is_active,
             )
         )
         members = member_result.all()
@@ -6905,7 +6905,7 @@ class SchedulingService:
         user_result = await self.db.execute(
             select(User.id, User.first_name, User.last_name, User.email).where(
                 User.organization_id == str(organization_id),
-                User.status == "active",
+                User.is_active,
             )
         )
         users = user_result.all()
@@ -8021,7 +8021,7 @@ class SchedulingService:
         user_result = await self.db.execute(
             select(User)
             .where(User.organization_id == str(organization_id))
-            .where(User.status == "active")
+            .where(User.is_active)
             .order_by(User.last_name, User.first_name)
         )
         all_users = user_result.scalars().all()
