@@ -148,4 +148,17 @@ describe('NfcTapButton', () => {
     readers[0]?.emitUrl(`${window.location.origin}/events/good-id/check-in`);
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/events/good-id/check-in'));
   });
+
+  // On My Admin Hours the tap is the point of the page, so the label shows on
+  // a phone too; elsewhere it stays an icon beside other header actions.
+  it('shows a caller-supplied label instead of the default', () => {
+    render(
+      <MemoryRouter>
+        <NfcTapButton label="Tap a tag to clock in" className="self-start" />
+      </MemoryRouter>
+    );
+    const button = screen.getByRole('button', { name: 'Tap a tag to clock in' });
+    expect(button).toHaveClass('self-start');
+    expect(screen.queryByText('Tap Tag')).not.toBeInTheDocument();
+  });
 });
