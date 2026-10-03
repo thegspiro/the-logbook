@@ -16,6 +16,24 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2884](https://github.com/thegspiro/the-logbook/pull/2884)** — branch
+`claude/security-review-messaging-notifications`, Feature 25 (Messaging &
+notifications), pass 5. Watchdog pickup: the dedicated loop session had
+stalled 2+ hours with no open security-review PR and no in-progress branch;
+confirmed via `list_pull_requests` (state=open) that no `claude/security-review-*`
+PR existed, both before starting and again immediately before opening this
+PR. 0 fixed, 0 new findings — every pass 1-4 fix re-verified intact against
+substantial churn (38 commits) since pass 4, including two newly-wired
+notification triggers correctly consulting `NotificationRuleResolver`
+(Pitfall #19) and 3 new routes correctly gated. One doc correction: MAIL-22
+(app-review, still open) cross-referenced into this feature's own findings
+file. Gate: flake8/black/isort clean, `validate_migrations.py --strict`
+passed (508 revisions), 916 scoped backend tests passed, frontend
+typecheck/lint clean. Subscribed for CI/review events.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 24, Meetings & minutes, pass 5, PR #2881, merged, after the Feature 25 pass-5 watchdog pickup recorded above), preserved for history</summary>
+
 **None.** PR [#2881](https://github.com/thegspiro/the-logbook/pull/2881)
 (Feature 24, Meetings & minutes, pass 5) merged clean — all 17 check runs
 `success` (`CI Success` included), `mergeable_state: clean`, no unresolved
@@ -27,6 +45,8 @@ watchdog check on the `/loop 30m /security-review` session
 this. Rotation row 24 stays ✅. Next: Feature 25 (Messaging &
 notifications) — not yet started as of this check, no in-progress
 `claude/security-review-*` branch or open PR.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 24, Meetings & minutes, pass 5, PR #2881, before it merged), preserved for history</summary>
@@ -17164,7 +17184,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
-| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
+| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
@@ -25299,3 +25319,81 @@ so almost entirely via this watchdog rather than the loop it is meant to be
 checking on. Worth the account owner's attention if the loop session itself
 is expected to be doing this work rather than being substituted for
 indefinitely.
+
+### 2026-10-03 — Feature 25 (Messaging & notifications, pass 5)
+
+Watchdog pickup: the dedicated `/loop 30m /security-review` session had
+stalled 2+ hours with no open security-review PR and no in-progress
+`claude/security-review-*` branch. Confirmed via `list_pull_requests`
+(state=open) before starting, and again immediately before opening this
+pass's own PR, that no PR with a head branch starting with
+`claude/security-review-` existed either time.
+
+Loaded prior art in order (`CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+`docs/module-audit/messaging.md`/`notifications.md`,
+`docs/app-review/messaging.md`/`notifications.md`/`email-templates.md`,
+this feature's own passes 1-4) before reading any code, and loaded the
+`repo-tenancy` skill. Substantial churn since pass 4 (2026-09-13): 38
+commits touching this feature's files, including a full email-design reset
+(every default template rewritten onto one shell, with a new
+`email_template_backups` table and restore UI), two new notification
+triggers (suggestion-box submissions, equipment-request status changes),
+in-app notification category stacking, and a new member email
+policy/opt-out screen. Re-read every endpoint and service file fresh
+(`messages.py`, `message_history.py`, `notifications.py`,
+`email_templates.py`, `messaging_service.py`, `message_delivery_service.py`,
+`notifications_service.py`, `push_service.py`, `notification_rules.py`,
+`notification_channels.py`, `integration_services/notification_dispatch.py`,
+`email_template_service.py`, `email_templates_storefront.py`,
+`email_footers.py`, `email_theme.py`, `email_service.py`,
+`schemas/notifications.py`) and two new files the churn surfaced on this
+feature's send path (`email_policy.py`, `email_test_records.py`), plus one
+file formally owned by Inventory but newly calling into this feature's
+shared push/notification-rules machinery (`equipment_request_notifications.py`).
+Re-enumerated all 51 routes (48 at pass 4, +3: `GET`/`PUT
+/email-templates/member-email-policy`, `GET /email-templates/{id}/backups`)
+— every route still carries an auth dependency and no permission string
+reads as under-gated. Re-verified MSG-4 through MSG-9 and MSG-13 through
+MSG-16 (including the push-subscription lock-ordering fix and its
+deadlock-retry) all unchanged and intact; the SMS allowlist (Pitfall #18)
+still has exactly one member and is still the only path to `SMSService`.
+
+Checked the two newly-wired notification triggers specifically against
+Pitfall #19 (a config switch needs a reader): both `SUGGESTION_SUBMITTED`
+and `EQUIPMENT_REQUEST_UPDATE` are in `ENFORCED_TRIGGERS` and both senders
+(`suggestions.py`, `equipment_request_notifications.py`) call
+`NotificationRuleResolver.is_enabled()` before sending — correctly wired,
+not a repeat of the original bug. `equipment_request_notifications.py`'s
+delivery path re-fetches the request and member by id with an explicit
+`organization_id` filter and escapes every user-controlled value reaching
+an HTML email context — no cross-tenant or injection gap. Three new/changed
+migrations (two enum widenings for the new triggers, one large
+data-migrating reset-and-backup for the email redesign) were reviewed:
+nullability/`ondelete` correct on the new `email_template_backups` FK,
+`create_all`-table guards present where needed (Pitfall #26), enum
+snapshots written as literal tuples rather than imported (the established
+pattern).
+
+0 new findings; 0 fixed, 0 flagged. One doc-correction, no code change:
+MAIL-22 (`docs/app-review/email-templates.md` pass 5, 2026-09-09 —
+`upload_attachment` persists the client's claimed MIME type rather than the
+one it just validated) sits inside this feature's own file
+(`email_templates.py`) but had never been cross-referenced from this
+findings doc; re-verified still open against current code
+(`email_templates.py:832`) and noted here, pointing at the existing
+`KNOWN_LIMITATIONS.md` entry rather than creating a second, divergent
+record of the same defect. MSG-3, MSG-12's `failed`/throttled sub-cases,
+MSG-15, MAIL-4, `email_service.py`'s F4, and the
+`NotificationRuleCreate.config` unbounded-JSON note are all re-verified
+unchanged and not re-flagged.
+
+Full completion gate green: flake8/black/isort clean (isort 9.0.1, matching
+CI's pin) over `app/ tests/ alembic/`; `validate_migrations.py --strict`
+passed (508 revisions, single head); 916/916 scoped backend tests passed (1
+pre-existing skip); frontend `npm run typecheck` 0 errors and `npm run
+lint` (`eslint --max-warnings 10`) exit 0. No code changed this pass, so
+the full ~12,900-test suite was not awaited (started, but still running
+past 6+ CPU-minutes with no sign of finishing); the scoped run already
+covers every file this pass read. Findings doc:
+`docs/security-review/MSG-25-messaging-notifications.md` (Pass 5).
+Rotation row 25 stays ✅ (pending PR merge). Next: Feature 26 (Forms).
