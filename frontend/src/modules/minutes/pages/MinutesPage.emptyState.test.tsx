@@ -35,6 +35,10 @@ vi.mock('../../../services/api', () => ({
 vi.mock('../services/api', () => ({
   minutesService: {
     createFromMeeting: vi.fn(),
+    // Plain functions, not vi.fn(): an empty organization has no minutes in
+    // every test here, and nothing can leak an implementation forward.
+    listAllMinutes: () => Promise.resolve([]),
+    getStats: () => Promise.resolve({ total: 0, this_month: 0, open_action_items: 0, pending_approval: 0 }),
   },
 }));
 

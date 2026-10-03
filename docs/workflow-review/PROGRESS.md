@@ -104,7 +104,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | #   | Activity                                                              | Acts as            | Starts at                                          | Status |
 | --- | --------------------------------------------------------------------- | ------------------ | -------------------------------------------------- | ------ |
 | W50 | An election: create, nominate, vote by ballot link, close, results    | secretary → member | `/elections`, `/ballot`                            | ✅     |
-| W51 | Meeting minutes: draft, approve, publish                              | secretary          | `/minutes`                                         | ⬜     |
+| W51 | Meeting minutes: draft, approve, publish                              | secretary          | `/minutes`                                         | ✅     |
 | W52 | Action items: assign, work, close                                     | secretary → member | `/action-items`                                    | ⬜     |
 | W53 | Documents: folders, upload, who can see what                          | secretary, member  | `/documents`                                       | ⬜     |
 | W54 | Org chart and legal documents                                         | admin, member      | `/governance/org-chart`, `/governance/legal`       | ⬜     |
@@ -194,12 +194,63 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   `ballot_notification` keeps the old body. Check that the editor's variable
   palette lists the two and that the preview's "Quorum Met" sample value
   (`email_template_service.py` ~1062) reads as an example, not a claim.
-- **W18 / W51** — the election meeting-link → Import Attendees → unlink round
-  trip could not be driven in W50 (no event exists in the review org); an
-  events or minutes run should leave a business meeting for it. The "link
-  survives a clear" half of W50-60 is read from code only.
+- **W50 follow-up** — the election meeting-link → Import Attendees → unlink
+  round trip could not be driven in W50. W51 left a business-meeting event for
+  it: "W51 October Business Meeting (event)", 1 Oct 7:00 PM, linked to the
+  second set of October minutes. The "link survives a clear" half of W50-60 is
+  still read from code only.
+- **W52** — the Action Items page may show a minutes action item's due date a
+  day early, the same UTC-midnight shift W51-5 fixed on the minutes page.
+  The Minutes page's "Open action items" tile counts meeting action items only
+  (the meetings summary), not minutes action items: a minutes item left it at 0.
+- **Minutes, a later pass** — the meetings list badges every meeting "Draft"
+  forever (W51-9).
 
 ## Log
+
+### W51 — Meeting minutes: draft, approve, publish — 2026-10-03
+
+Driven as: `secretary` drafting and submitting, `chief` approving and
+publishing, `member` reading, at 1280×900. The list, the create dialog and the
+minutes page were repeated at 390×844. Database continued from W60.
+
+Held:
+
+- every double-click acted once, including Publish (one document);
+- the secretary could not approve their own minutes;
+- a reject needs a 10-character reason, which the secretary then reads and
+  can act on;
+- `member` saw approved minutes only, got a 404 on drafts and a 403 on writes;
+- a linked event and a written section survived a reload.
+
+Fixed:
+
+- W51-1 (HIGH — minutes from a meeting were dated the day before, or hours
+  early: the local date and time were read as UTC);
+- W51-2 (HIGH — the Minutes page never linked to minutes, so an approver
+  could not find what awaited approval, and "Pending approval" read 0);
+- W51-3 (MED — the book icon wrote a second set of minutes for a meeting that
+  had them);
+- W51-4 (MED — Executive, Trustee and Annual meetings were offered and always
+  refused with a misleading message);
+- W51-5 (MED — action item due dates read a day early);
+- W51-6 (LOW — the submitter was offered Approve);
+- W51-7 (LOW — raw ISO dates, an unnamed dialog, the date only checked by a
+  422, 32px icon buttons).
+
+Flagged:
+
+- W51-4's missing meeting types (MED, needs a migration);
+- W51-8 (MED — existing minutes keep the shifted date; a backfill needs a
+  decision). Both are in KNOWN_LIMITATIONS.
+
+Open: W51-9 (LOW — meeting status badge).
+
+Gate: typecheck, lint, flake8, black and isort are clean. 39 minutes frontend
+tests and 4083 backend tests (minutes and meetings) pass, as does the full frontend suite (708 files,
+9002 tests).
+
+Next: W52.
 
 ### W50 — An election: create, nominate, vote by ballot link, close, results — 2026-09-30
 

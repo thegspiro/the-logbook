@@ -5482,6 +5482,33 @@ each row carries the evidence and the file.
 | **Elections stored with `eligible_voters = []` still read "restricted to nobody" until re-saved**       | 🚩 Open (LOW, 2026-09-30, workflow review W50-41, residual) | `7aa3405` normalises `[]` to `NULL` on create and update; rows written earlier keep `[]`, which refuses every in-app vote while ballot mails and token votes treat it as everyone. `UPDATE elections SET eligible_voters = NULL WHERE JSON_LENGTH(eligible_voters) = 0` is the one-off repair, a data migration left to the owner.                                                                                                                                                                                                                                                                                                                                        |
 | **Write-ins stored HTML-escaped before S15 stay escaped**                                               | 🚩 Open (LOW, 2026-09-30, workflow review W50-42, residual) | Write-in names are now stored as typed; rows written before the fix hold `&lt;`, `&#x27;` and the like and render that way on the Candidates tab, the results and the PDF. An `html.unescape` backfill on `candidates WHERE is_write_in = 1` completes it (CLAUDE.md pitfall 20: settle the shape at the write and migrate the rows already there); a data migration, left to the owner.                                                                                                                                                                                                                                                                                  |
 
+## Minutes — Owner Decisions From the W51 Drive (2026-10-03)
+
+Found driving W51 (`docs/workflow-review/W51-minutes.md`).
+
+- **W51-4 — Executive, Trustee and Annual meetings cannot be recorded.**
+  - Minutes support eight meeting types, but a meeting record
+    (`meetings.meeting_type`, a MySQL ENUM) accepts five.
+  - The Minutes page now offers only those five instead of failing with a 422.
+    So a closed executive session cannot be recorded through the UI at all,
+    although the minutes side, and its member restriction on executive
+    minutes, exists.
+  - Recording one needs a migration widening the ENUM, and a mapping for the
+    three types in `MinuteService.create_from_meeting`. Until that mapping
+    exists, an executive meeting's minutes would be typed "business", which
+    members can read.
+- **W51-8 — Minutes created from meetings before 2026-10-03 carry a shifted
+  date.**
+  - `create_from_meeting` read the meeting's local date and time as UTC. A
+    meeting with no start time is therefore dated the evening before, and
+    one at 7:00 PM is shown at 2:00 PM. New minutes are correct.
+  - The linked `meeting_id` would let a backfill recompute the date, but it
+    cannot tell a shifted value from one a secretary has since corrected by
+    hand.
+  - Options: a backfill that changes only rows still equal to the old
+    UTC-combined value (which spares hand corrections), with a dry run; or
+    leaving the old rows and noting it.
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area

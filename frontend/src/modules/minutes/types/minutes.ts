@@ -172,6 +172,8 @@ export interface MinutesListItem {
   location?: string;
   called_by?: string;
   template_id?: string;
+  /** The meeting record these minutes were written from, if any. */
+  meeting_id?: string | null;
   motions_count: number;
   action_items_count: number;
   open_action_items: number;
