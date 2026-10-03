@@ -56,7 +56,7 @@ _TERMINAL_CARD_STATUSES = {NfcTagStatus.LOST, NfcTagStatus.REVOKED}
 MIN_TOGGLE_SECONDS = 60
 
 # Members whose card must stop working even though the record still exists.
-# Mirrors ``User.is_active`` (status ACTIVE and not deleted) apart from two
+# Mirrors ``User.is_active`` (ACTIVE or PROBATIONARY, not deleted) apart from two
 # deliberate exceptions: a retired or on-leave member keeps a working card,
 # because they still attend meetings and banquets, which is exactly what a
 # station records. INACTIVE carries no such meaning — it is the plain "not an

@@ -119,6 +119,14 @@ class UserStatus(str, enum.Enum):
     ARCHIVED = "archived"
 
 
+# Account statuses that may sign in and take part: be scheduled, receive
+# messages, file checks. A probationary member is a current member on
+# probation, not a former one. Admins set PROBATIONARY from the member's
+# "Change status" menu, and junior members derive to it, so leaving it out
+# locked every probie and junior out of the app with "Account is inactive".
+ACTIVE_ACCOUNT_STATUSES = (UserStatus.ACTIVE, UserStatus.PROBATIONARY)
+
+
 class MembershipType(str, enum.Enum):
     """
     Department membership classification.
@@ -532,14 +540,18 @@ class User(Base):
 
     @hybrid_property
     def is_active(self) -> bool:
-        """Check if user account is active"""
-        return self.status == UserStatus.ACTIVE and not self.deleted_at
+        """Whether the account may sign in and take part.
+
+        True for ACTIVE and PROBATIONARY (see ``ACTIVE_ACCOUNT_STATUSES``)
+        when the record is not deleted.
+        """
+        return self.status in ACTIVE_ACCOUNT_STATUSES and not self.deleted_at
 
     @is_active.expression
     @classmethod
     def is_active(cls):
-        """SQL expression for is_active filtering in queries"""
-        return and_(cls.status == UserStatus.ACTIVE, cls.deleted_at.is_(None))
+        """SQL form of ``is_active``; the two must stay identical."""
+        return and_(cls.status.in_(ACTIVE_ACCOUNT_STATUSES), cls.deleted_at.is_(None))
 
     @property
     def is_locked(self) -> bool:
