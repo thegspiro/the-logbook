@@ -16,6 +16,24 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2884](https://github.com/thegspiro/the-logbook/pull/2884)** — branch
+`claude/security-review-messaging-notifications`, Feature 25 (Messaging &
+notifications), pass 5. Watchdog pickup: the dedicated loop session had
+stalled 2+ hours with no open security-review PR and no in-progress branch;
+confirmed via `list_pull_requests` (state=open) that no `claude/security-review-*`
+PR existed, both before starting and again immediately before opening this
+PR. 0 fixed, 0 new findings — every pass 1-4 fix re-verified intact against
+substantial churn (38 commits) since pass 4, including two newly-wired
+notification triggers correctly consulting `NotificationRuleResolver`
+(Pitfall #19) and 3 new routes correctly gated. One doc correction: MAIL-22
+(app-review, still open) cross-referenced into this feature's own findings
+file. Gate: flake8/black/isort clean, `validate_migrations.py --strict`
+passed (508 revisions), 916 scoped backend tests passed, frontend
+typecheck/lint clean. Subscribed for CI/review events.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 24, Meetings & minutes, pass 5, PR #2881, merged, after the Feature 25 pass-5 watchdog pickup recorded above), preserved for history</summary>
+
 **None.** PR [#2881](https://github.com/thegspiro/the-logbook/pull/2881)
 (Feature 24, Meetings & minutes, pass 5) merged clean — all 17 check runs
 `success` (`CI Success` included), `mergeable_state: clean`, no unresolved
@@ -27,6 +45,8 @@ watchdog check on the `/loop 30m /security-review` session
 this. Rotation row 24 stays ✅. Next: Feature 25 (Messaging &
 notifications) — not yet started as of this check, no in-progress
 `claude/security-review-*` branch or open PR.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 24, Meetings & minutes, pass 5, PR #2881, before it merged), preserved for history</summary>
