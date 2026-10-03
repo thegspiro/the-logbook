@@ -16,6 +16,21 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2881](https://github.com/thegspiro/the-logbook/pull/2881)** — branch
+`claude/security-review-meetings-minutes`, Feature 24 (Meetings & minutes),
+pass 5 (the feature's own fifth review; `PROGRESS.md`'s rotation-wide cycle
+counter calls this "pass 6" — see the findings doc's note on the
+discrepancy). Watchdog pickup: the dedicated loop had stalled 2+ hours with
+no open security-review PR and no in-progress branch, confirmed via the
+GitHub API before starting. 0 fixed, 0 new findings — near-zero-delta since
+pass 4 (PR #2502); MM-9 and MM-17 both re-confirmed unchanged and still
+OPEN. Gate: flake8/black/isort clean, 508 migrations single head, 289
+backend tests passed (scope), frontend typecheck/lint clean, 26 frontend
+tests passed. Subscribed for CI/review events.
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #2877's merge, Feature 23, Medical supplies, pass 12 — the state this pass's PR conflicted with), preserved for history</summary>
+
 **None.** PR [#2877](https://github.com/thegspiro/the-logbook/pull/2877)
 (Feature 23, Medical supplies, pass 12) merged directly by a 30-minute
 watchdog check, after that same check resolved a `PROGRESS.md` conflict on
@@ -25,6 +40,8 @@ the same time — see the superseded note below). Post-resolution: CI green
 (only the informational Codex usage-limit comment). Rotation row 23 stays
 ✅. Next: Feature 24 (Meetings & minutes), pass 6 — not yet started as of
 this check, no in-progress `claude/security-review-*` branch or open PR.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 23, Medical supplies, pass 12, PR #2877, merged directly by a 30-minute watchdog check), preserved for history</summary>
