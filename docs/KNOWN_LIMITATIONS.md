@@ -5534,6 +5534,49 @@ Found driving W51 (`docs/workflow-review/W51-minutes.md`).
     UTC-combined value (which spares hand corrections), with a dry run; or
     leaving the old rows and noting it.
 
+## CC-7 — A Cohort Shift Can Move Classes That Already Happened (2026-10-03)
+
+`CourseCohortService.shift_remaining` bounds which classes move in one of two
+ways, and the `from_sequence` bound **replaces** the future-only bound rather
+than narrowing it (`backend/app/services/course_cohort_service.py:985-988`):
+
+```python
+if data.from_sequence:
+    query = query.where(CourseCohortClass.sequence >= data.from_sequence)
+else:
+    query = query.where(CourseCohortClass.scheduled_start > now)
+```
+
+So `POST /cohorts/{id}/shift` with `from_sequence=1` moves every non-cancelled
+class in the cohort, including ones members have already attended. A class whose
+event has **finalized** attendance now refuses the whole batch (CC-6, fixed
+2026-10-03), because finalize derived the credited durations from the event's
+clock and those minutes are already in the hours ledger. A class that happened
+but was never finalized still moves, silently.
+
+**API-only today**, which bounds the exposure without resolving it: the shift
+control at `frontend/src/pages/training/CohortDetailPage.tsx:134` sends `days`
+and nothing else, so the parameter is reachable only by calling the endpoint
+directly — available to any `training.manage` holder and to integrators.
+
+**Why it is here rather than fixed.** The two readings lead to opposite changes
+and only the owner can choose. Re-shifting "from class 5 onward" after a
+syllabus correction — including a class that slipped past its date without being
+finalized — is a plausible intended use of the parameter, in which case the
+filter is correct and nothing should change. If an officer should never be able
+to move a delivered class, the fix is to intersect the two bounds, which narrows
+behaviour that exists today.
+
+The method's docstring asserted the stricter rule (_"Classes that already
+happened keep their dates"_) while the code did not, so the docstring was
+corrected to describe actual behaviour. That is a documentation fix and settles
+nothing about which behaviour is wanted.
+
+**What would fix it.** A decision: either add `scheduled_start > now` to the
+`from_sequence` branch and say so in the endpoint's docs, or keep the current
+reach and have the UI warn when a requested shift would move a class whose date
+has passed. See [`docs/app-review/course-cohorts.md`](./app-review/course-cohorts.md) → Pass 3.
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area
