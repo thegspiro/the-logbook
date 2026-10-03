@@ -50,7 +50,7 @@ describe('ElectionWorkflowTabs', () => {
 
     // Non-managers viewing an OPEN election only see 'voting' (results are
     // hidden until close), so the parent must be told to switch to it.
-    expect(onTabChange).toHaveBeenCalledWith('voting');
+    expect(onTabChange).toHaveBeenCalledWith('voting', { replace: true });
   });
 
   it('keeps a manager on the ballot tab', () => {
@@ -78,7 +78,7 @@ describe('ElectionWorkflowTabs', () => {
 
     // 'attendance' only shows for draft/open elections; the first visible
     // tab for a closed election is 'ballot'.
-    expect(onTabChange).toHaveBeenCalledWith('ballot');
+    expect(onTabChange).toHaveBeenCalledWith('ballot', { replace: true });
   });
 
   // Only the selected tab is focusable, so without arrow keys a keyboard user

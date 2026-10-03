@@ -103,9 +103,10 @@ async def _send(kind, stored_template=None, **kwargs):
                 _election(),
                 "u-2",
                 "org-1",
-                "open",
-                "draft",
+                kwargs.pop("from_status", "open"),
+                kwargs.pop("to_status", "draft"),
                 "Ballots went to the wrong roster",
+                **kwargs,
             )
         else:
             count = await service._notify_leadership_of_deletion(
@@ -134,6 +135,67 @@ class TestTheRollbackAlert:
         assert "Moved from: Open" in text
         assert "Moved to: Draft" in text
         assert message["template_type"] == "election_rollback"
+
+    # W50-37: the alert claimed "votes recorded after the stage this election
+    # returned to are no longer counted". A rollback deletes no vote on any
+    # path; what it can do is kill the issued ballot links on a zero-vote
+    # reopen. The sentence must say which of those happened.
+    async def test_an_open_to_draft_rollback_says_votes_are_kept(self):
+        _count, sent = await _send("rollback")
+        for body in (sent[0]["html_body"], sent[0]["text_body"]):
+            assert "no longer counted" not in body
+            assert "All recorded votes remain counted" in body
+            assert "No issued ballot links were invalidated" in body
+        text = sent[0]["text_body"]
+        assert "Ballot links invalidated: 0" in text
+        assert "Ballots must be resent: No" in text
+        assert ">0</p>" in sent[0]["html_body"]
+        assert ">No</p>" in sent[0]["html_body"]
+
+    async def test_a_reopen_that_killed_the_ballot_links_says_so(self):
+        _count, sent = await _send(
+            "rollback",
+            from_status="closed",
+            to_status="open",
+            tokens_invalidated=21,
+            ballots_must_be_resent=True,
+        )
+        for body in (sent[0]["html_body"], sent[0]["text_body"]):
+            assert "no longer counted" not in body
+            assert "All recorded votes remain counted" in body
+            assert "21 issued ballot links were invalidated" in body
+            assert "ballots must be sent again" in body
+        text = sent[0]["text_body"]
+        assert "Ballot links invalidated: 21" in text
+        assert "Ballots must be resent: Yes" in text
+        assert "Moved from: Closed" in text
+
+    async def test_a_single_dead_link_reads_in_the_singular(self):
+        _count, sent = await _send(
+            "rollback",
+            from_status="closed",
+            to_status="open",
+            tokens_invalidated=1,
+            ballots_must_be_resent=True,
+        )
+        assert "1 issued ballot link was invalidated" in sent[0]["text_body"]
+
+    async def test_a_department_edit_can_place_the_effect_itself(self):
+        stored = EmailTemplate(
+            template_type=EmailTemplateType.ELECTION_ROLLBACK,
+            subject="Heads up",
+            html_body="<p>{{rollback_effect}} Resend: {{ballots_must_be_resent}}</p>",
+            text_body="Custom",
+        )
+        _count, sent = await _send(
+            "rollback",
+            stored_template=stored,
+            tokens_invalidated=3,
+            ballots_must_be_resent=True,
+        )
+        html = sent[0]["html_body"]
+        assert "3 issued ballot links were invalidated" in html
+        assert "Resend: Yes" in html
 
     async def test_a_department_edit_is_what_gets_sent(self):
         stored = EmailTemplate(

@@ -28,14 +28,13 @@ import { createServer } from "node:http";
 import { join } from "node:path";
 import {
   ACCOUNTS_FILE,
-  LOGIN_INTERVAL_MS,
   STATE_DIR,
   apiCall,
   authFile,
   launchBrowser,
+  pacedSignIn,
   readEnv,
   readJson,
-  signIn,
 } from "./lib.mjs";
 
 const PORT = Number(process.env.WR_DRIVER_PORT ?? 9555);
@@ -107,17 +106,6 @@ function accounts() {
   return readJson(ACCOUNTS_FILE, {});
 }
 
-// Sign-ins from this driver are spaced LOGIN_INTERVAL_MS apart, so a script
-// that switches roles several times cannot trip the per-IP login limit and
-// its half-hour lockout.
-let lastSignInAt = 0;
-async function pacedSignIn(page, account) {
-  const wait = lastSignInAt + LOGIN_INTERVAL_MS - Date.now();
-  if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
-  lastSignInAt = Date.now();
-  return signIn(page, account.username, account.password);
-}
-
 /**
  * Whether the saved session still works, refreshing it if only the access
  * token has lapsed. The server also ends a session after 15 idle minutes
@@ -168,7 +156,10 @@ const helpers = {
     const account = accounts()[role];
     if (!account) throw new Error(`no account "${role}" in accounts.json`);
     const page = await open(null, viewport);
-    const landed = await pacedSignIn(page, account);
+    // Paced across every driver on this machine (lib.pacedSignIn), so a
+    // script that switches roles several times cannot trip the per-IP login
+    // limit and its half-hour lockout.
+    const landed = await pacedSignIn(page, account.username, account.password);
     await state.context.storageState({ path: authFile(role) });
     state.role = role;
     return landed;

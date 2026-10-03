@@ -177,15 +177,17 @@ export const ElectionsPage: React.FC = () => {
     }
   };
 
+  /** 23:59 on the same calendar day as a datetime-local value, zone-free. */
+  const endOfDepartmentDay = (dateTimeLocal: string) => `${dateTimeLocal.split('T')[0] ?? ''}T23:59`;
+
   const handleStartDateChange = (startDate: string) => {
     setFormData({ ...formData, start_date: startDate });
 
-    // If no end date is set, default to same day at 11:59 PM
+    // If no end date is set, default to same day at 11:59 PM. The value is a
+    // datetime-local string in the department zone, so end-of-day is a string
+    // operation — parsing it with `new Date` would use the browser's zone.
     if (!formData.end_date && startDate) {
-      const start = new Date(startDate);
-      const end = new Date(start);
-      end.setHours(23, 59, 0, 0);
-      setFormData({ ...formData, start_date: startDate, end_date: formatForDateTimeInput(end, tz) });
+      setFormData({ ...formData, start_date: startDate, end_date: endOfDepartmentDay(startDate) });
     }
   };
 
@@ -195,7 +197,9 @@ export const ElectionsPage: React.FC = () => {
       return;
     }
 
-    const start = new Date(formData.start_date);
+    // Interpret the start in the department zone (as the submit path does)
+    // before adding hours; formatForDateTimeInput(…, tz) is the inverse.
+    const start = new Date(localToUTC(formData.start_date, tz));
     const end = new Date(start.getTime() + hours * 60 * 60 * 1000);
     setFormData({ ...formData, end_date: formatForDateTimeInput(end, tz) });
   };
@@ -206,10 +210,7 @@ export const ElectionsPage: React.FC = () => {
       return;
     }
 
-    const start = new Date(formData.start_date);
-    const end = new Date(start);
-    end.setHours(23, 59, 0, 0);
-    setFormData({ ...formData, end_date: formatForDateTimeInput(end, tz) });
+    setFormData({ ...formData, end_date: endOfDepartmentDay(formData.start_date) });
   };
 
   const handleCreateElection = (e: React.FormEvent) => {

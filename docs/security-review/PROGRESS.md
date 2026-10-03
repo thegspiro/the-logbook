@@ -16,6 +16,93 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2875](https://github.com/thegspiro/the-logbook/pull/2875)
+(Feature 22, Grants & fundraising, pass 6) merged directly by this watchdog
+check — CI green (17/17 checks), `mergeable_state: clean`, no unresolved
+review threads (only the informational Codex usage-limit comment), and the
+PR's base matched `main`'s current head exactly. Rotation row 22 stays ✅.
+Next: Feature 23 (Medical supplies), pass 6 — not yet started as of this
+check, no in-progress `claude/security-review-*` branch or open PR for it.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 6, PR #2875, merged directly by this watchdog), preserved for history</summary>
+
+**PR [#2875](https://github.com/thegspiro/the-logbook/pull/2875)** — branch
+`claude/security-review-feature22-pass6`, Feature 22 (Grants & fundraising),
+pass 6. Confirmed via the GitHub API before starting: no open PR whose head
+branch starts with `claude/security-review-` existed, and PR #2874 (Feature
+21, Admin hours, pass 6, recorded below) is merged.
+
+Near-zero-delta pass, matching pass 5's own conclusion. Two real commits
+landed since pass 5: the repo-wide "department's calendar date" sweep
+(donor first/last donation dates, the compliance-task completed date, the
+fundraising dashboard widget — all org-scoped, already documented in
+`docs/KNOWN_LIMITATIONS.md`'s date-sweep entry), and two frontend copy-only
+commits across 11 files, read in full and confirmed to be string-literal
+changes only — specifically re-checked that pass 5's own Pitfall #31
+dialog-dismiss fix on `GrantDetailPage.tsx`'s backdrop survived untouched.
+
+**0 fixed by this pass, 0 new findings.** Re-verified by direct code read:
+45/45 routes unchanged; locking sites (3 + 6) still lock the parent row
+before the child flush; GF-8 (`is_anonymous` not enforced) and GF-9 (float
+money math) unchanged; org-scoping unchanged across both service files.
+Three standing flags (GF-7, GF-27a, GF-33) re-confirmed open by design,
+unchanged. Full completion gate: flake8/black/isort clean,
+`validate_migrations.py --strict` single head, 684 `-k "grant or
+fundraising"` backend tests passed, frontend typecheck/lint clean. Full
+write-up: [`GF-22-grants-fundraising.md`](./GF-22-grants-fundraising.md)'s
+**Pass 6** section. Rotation row 22 → ✅ (pending PR merge). Next: Feature
+23 (Medical supplies).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 6, PR #2874, merged), preserved for history</summary>
+
+**PR [#2874](https://github.com/thegspiro/the-logbook/pull/2874)** — branch
+`claude/security-review-feature21-pass6`, Feature 21 (Admin hours), pass 6.
+Confirmed via the GitHub API before starting: no open PR whose head branch
+starts with `claude/security-review-` existed, and PR #2869 (Feature 20,
+Compliance, pass 6, recorded below) is merged.
+
+**A real, non-security PR intervened between iterations.** While starting
+this feature's completion gate, `validate_migrations.py --strict` found
+`main`'s Alembic chain had forked into two heads (two independently-merged
+PRs each branching off a different then-current head). Opened a fix PR
+(#2873) for it — superseded a few minutes later by another session's
+identical fix (#2872), which merged first; #2873 was closed as a duplicate
+by the repo owner, no action needed. `main`'s chain is single-head again as
+of PR #2872's merge, confirmed below.
+
+Not a zero-delta pass — four real commits landed in this feature's declared
+backend surface since pass 5 (an org-local-"today" change for the
+compliance year/quarter bounds; an org-scoping hardening on the owner-row
+lock; a substantial new member self-service feature — edit, withdraw and
+resubmit one's own entries, plus a new `withdrawn` status; and training
+events no longer double-crediting admin hours alongside training records).
+The new member self-service routes were reviewed in full as new surface
+against all seven checklist dimensions, not spot-checked.
+
+**0 fixed by this pass, 0 new findings.** Four standing items re-verified
+unchanged: the per-org SoD self-approval toggle (still unconditional, by
+design), `credit_event_attendance`'s resync path (still can grow an
+already-approved entry past auto-approve threshold without re-review, by
+design), AH-16 (`export_entries_csv` still unbounded/non-streaming), and
+AH-17 (pass 5's fix, still intact). Route surface re-enumerated from
+scratch: 29/29 routes (up from 27 — the two new self-service routes), every
+one carrying an auth dependency. Full completion gate: flake8/black/isort
+clean, `validate_migrations.py --strict` single head, 128 `-k admin_hours`
+backend tests passed, 22 targeted (org-scoping ratchet + AH-17 permission
+scope) tests passed, frontend typecheck/lint clean. Full write-up:
+[`AH-21-admin-hours.md`](./AH-21-admin-hours.md)'s **Pass 6** section.
+Rotation row 21 → ✅ (pending PR merge). Next: Feature 22 (Grants &
+fundraising).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 6, PR #2869, merged), preserved for history</summary>
+
 **PR [#2869](https://github.com/thegspiro/the-logbook/pull/2869)** — branch
 `claude/security-review-feature20-pass6`, Feature 20 (Compliance), pass 6.
 Confirmed via the GitHub API before starting: no open PR whose head branch
@@ -34,6 +121,8 @@ head, 429 `-k compliance` backend tests passed, 138 targeted tests passed
 (identical to pass 4), frontend typecheck/lint clean. Full write-up:
 [`CMP-20-compliance.md`](./CMP-20-compliance.md)'s **Pass 6** section.
 Rotation row 20 → ✅ (pending PR merge). Next: Feature 21 (Admin hours).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (cleared: Feature 19 PR #2863 merged, before Feature 20 pass 6 started), preserved for history</summary>
@@ -16986,8 +17075,8 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
@@ -24846,3 +24935,116 @@ test files at 138 passed (identical count to pass 4), frontend
 typecheck/lint clean. Full write-up:
 [`CMP-20-compliance.md`](./CMP-20-compliance.md)'s **Pass 6** section.
 Rotation row 20 → ✅ (pending PR merge). Next: Feature 21 (Admin hours).
+
+### 2026-10-03 — Feature 21 (Admin hours, pass 6): 0 fixed by this pass, 0 new findings; a forked migration chain fixed along the way
+
+Picked up this iteration of the `/security-review` rotation. Confirmed via
+the GitHub API before starting: no open PR whose head branch starts with
+`claude/security-review-` existed, and PR #2869 (Feature 20, Compliance,
+pass 6) is merged. Rotation row 20 confirmed ✅.
+
+Running this feature's own completion gate surfaced an unrelated,
+repo-wide problem first: `validate_migrations.py --strict` reported two
+Alembic heads on `main` (two PRs had each branched a migration off a
+different then-current head and both merged independently). Opened a fix
+PR (#2873); another session fixed the identical fork a few minutes earlier
+with PR #2872, which merged first, so #2873 was closed as a duplicate by
+the repo owner. No action needed beyond confirming `main`'s chain is
+single-head again, which it is.
+
+Not a zero-delta pass for Admin hours itself — four real commits landed in
+the declared backend surface since pass 5 (PR #2585): an org-local-"today"
+change for the compliance year/quarter bounds (org-scoped, and now
+explicitly rejects a cross-year request against a quarterly requirement
+rather than silently mixing years); an org-scoping hardening on the
+owner-row lock (closing an org-scoping-ratchet flag, defense in depth since
+the owner id was already org-scoped one line above); a substantial new
+member self-service feature (edit, withdraw and resubmit one's own pending
+or rejected entries, plus a new additive `withdrawn` status); and training
+events no longer double-crediting admin hours alongside training records
+(with a matching org-scoped cleanup of any stale attendance-sourced
+entries). The two new self-service routes were reviewed in full as new
+auth-sensitive surface — self- and org-scoping via `_get_own_open_entry`,
+a state machine that keeps `APPROVED` entries officer-only, a schema that
+exposes only the safe fields, and locking order consistent with Pitfall
+#27 — not spot-checked against a diff.
+
+**0 fixed by this pass, 0 new findings.** Four standing items re-verified
+unchanged by direct code read: the per-org SoD self-approval toggle (still
+unconditional, by design), `credit_event_attendance`'s resync path (still
+can grow an already-approved entry past its auto-approve threshold without
+re-review, by design), AH-16 (`export_entries_csv` still unbounded/
+non-streaming, by design), and AH-17 (pass 5's fix, still intact — both
+scope checks still route through `user_has_permission`). Route surface
+re-enumerated from scratch: 29/29 routes (up from 27), every one carrying
+an auth dependency. Full completion gate: flake8/black/isort clean on the
+4 declared backend files, `validate_migrations.py --strict` single head,
+128 `-k admin_hours` backend tests passed (1 pre-existing skip), 22
+targeted (org-scoping ratchet + AH-17 permission scope) tests passed,
+frontend typecheck/lint clean. Full write-up:
+[`AH-21-admin-hours.md`](./AH-21-admin-hours.md)'s **Pass 6** section.
+Rotation row 21 → ✅ (pending PR merge). Next: Feature 22 (Grants &
+fundraising).
+
+### 2026-10-03 — Feature 22 (Grants & fundraising, pass 6): 0 fixed, 0 new findings, near-zero-delta
+
+Picked up this iteration of the `/security-review` rotation. Confirmed via
+the GitHub API before starting: no open PR whose head branch starts with
+`claude/security-review-` existed, and PR #2874 (Feature 21, Admin hours,
+pass 6) is merged. Rotation row 21 confirmed ✅.
+
+Near-zero-delta pass, matching pass 5's own conclusion for this feature.
+Per-file `git log` found two real commits since pass 5: the repo-wide
+"department's calendar date, not the UTC one" sweep (this feature's share:
+`grant_service.py`'s task completed-date and two `resolve_org_today` call
+sites, `dashboard_widget_service.py`'s `fundraising()` method, and
+`fundraising_service.py`'s donor first/last donation dates via
+`local_date`) — all org-scoped, and the donor-date change specifically is
+already named and recorded in `docs/KNOWN_LIMITATIONS.md`'s cross-cutting
+date-sweep entry, so this pass confirmed the current code matches that
+record rather than re-deriving it. The other commits were two frontend
+copy-only changes across 11 files (toast/error/placeholder/button text, one
+`aria-label`), read in full; specifically re-checked that pass 5's own
+Pitfall #31 dialog-dismiss fix on `GrantDetailPage.tsx`'s backdrop survived
+both commits untouched (still `aria-hidden="true"`, no `onClick`).
+
+**0 fixed by this pass, 0 new findings.** Re-verified by direct code read:
+45/45 routes unchanged; locking sites (3 in `grant_service.py`, 6 in
+`fundraising_service.py`) still lock the parent row before the child flush
+(Pitfall #27); GF-8 (`is_anonymous` not enforced server-side) and GF-9
+(float money math in both report methods) unchanged; org-scoping (#14a/b/c)
+unchanged across both service files — the date-fix commits only changed
+which date a value is stamped with, never which org's rows a query
+reaches. Three standing flags (GF-7 state-machine/overspend guards, GF-27a
+dashboard KPI aggregate mismatch, GF-33 applications page capped at 1,000
+with no real pagination UI) re-confirmed open by design, unchanged. Full
+completion gate: flake8/black/isort clean on the 6 declared backend files,
+`validate_migrations.py --strict` single head, 684 `-k "grant or
+fundraising"` backend tests passed (1 pre-existing skip), frontend
+typecheck/lint clean. Full write-up:
+[`GF-22-grants-fundraising.md`](./GF-22-grants-fundraising.md)'s **Pass 6**
+section. Rotation row 22 → ✅ (pending PR merge). Next: Feature 23
+(Medical supplies).
+
+### 2026-10-03 — Feature 22 (Grants & fundraising, pass 6)'s PR #2875 merged, watchdog recorded it
+
+Routine 30-minute check on the `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`). Confirmed independently before acting,
+per Step 0: `list_pull_requests` (state=open) showed exactly one
+security-review PR, #2875 (Feature 22, Grants & fundraising, pass 6), and no
+`claude/security-review-feature23*` branch existed yet.
+
+PR #2875's base (`763098b2`) matched `main`'s current head exactly — no
+rebase needed. All 17 check runs were `completed`/`success` (`CI Success`,
+`Frontend Tests`, `Frontend E2E (Playwright)`, `Docs Link Check`, `Frontend
+Lint, Typecheck & Build`, both Backend API Contract and Integration Tests
+pairs on MySQL 8.0/MariaDB 10.11, `Backend Lint`, `Docker Image Build &
+Container Tests`, `Backend Security Scan`, `Backend Unit Tests`, `Migration
+Chain`, `Gitleaks`, `Generate SBOM`, `Trivy dependency scan`), and
+`mergeable_state` read `clean`. The PR's only comment was the informational
+Codex usage-limit notice (no review feedback to action). Sat idle with
+nothing further pending, so this watchdog check merged it directly (squash,
+`expectedHeadSha` pinned to `b901c46635c59397dad9a5b289bb2bd4d6984653`).
+Merge commit `e070ce9c4` confirmed on `main`. Rotation row 22 stays ✅. Next:
+Feature 23 (Medical supplies), pass 6 — not yet started as of this check, no
+in-progress branch or open PR.

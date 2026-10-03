@@ -11,7 +11,14 @@ import { electionService, eventService, meetingsService } from '../services/api'
 import type { MeetingRecord } from '../services/api';
 import { electionPackageService, applicantService } from '../modules/prospective-members/services/api';
 import type { ElectionPackage } from '../modules/prospective-members/types';
-import type { Election, ForensicsReport, VoteIntegrityResult, Candidate, ManualBallotBatch } from '../types/election';
+import type {
+  Election,
+  ForensicsReport,
+  VoteIntegrityResult,
+  Candidate,
+  ManualBallotBatch,
+  ElectionUpdate,
+} from '../types/election';
 import type { EventListItem } from '../types/event';
 import { ElectionResults } from '../components/ElectionResults';
 import { ElectionBallot } from '../components/ElectionBallot';
@@ -84,6 +91,9 @@ export const ElectionDetailPage: React.FC = () => {
   const [isSendingEmails, setIsSendingEmails] = useState(false);
   const [sendEmailError, setSendEmailError] = useState<string | null>(null);
   const [lastSkippedDetails, setLastSkippedDetails] = useState<Array<{ name: string; reason: string }>>([]);
+  // Both the ballot send and the reminder send feed the skipped banner; the
+  // heading names which one, so a reminder-time skip is not read as a ballot skip.
+  const [lastSkippedSource, setLastSkippedSource] = useState<'ballots' | 'reminders'>('ballots');
   const [isLoadingNonVoters, setIsLoadingNonVoters] = useState(false);
   const [showRemindModal, setShowRemindModal] = useState(false);
   const [nonVoterCount, setNonVoterCount] = useState(0);
@@ -125,7 +135,11 @@ export const ElectionDetailPage: React.FC = () => {
   // blank panel.
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') ?? 'ballot';
-  const setActiveTab = (tab: string) => setSearchParams({ tab });
+  // The fallback in ElectionWorkflowTabs corrects a forbidden `?tab=` with
+  // `replace`, so Back leaves the page rather than re-landing on the URL that
+  // triggers the correction again. Click-driven changes keep the default push.
+  const setActiveTab = (tab: string, options?: { replace?: boolean }) =>
+    options?.replace ? setSearchParams({ tab }, { replace: true }) : setSearchParams({ tab });
 
   // Pending election packages state
   const [pendingPackages, setPendingPackages] = useState<ElectionPackage[]>([]);
@@ -212,9 +226,12 @@ export const ElectionDetailPage: React.FC = () => {
       const data = await electionService.getElection(electionId);
       setElection(data);
 
-      // Auto-select results tab if they're available
-      if (data.status === ElectionStatus.CLOSED || data.results_visible_immediately) {
-        setActiveTab('results');
+      // Auto-select results only when the URL names no section: an explicit
+      // `?tab=` deep link is honoured, and refreshes (every vote, close,
+      // publish) no longer yank the viewer off the tab they are on. Replace so
+      // the initial landing does not add a history entry.
+      if (!searchParams.get('tab') && (data.status === ElectionStatus.CLOSED || data.results_visible_immediately)) {
+        setActiveTab('results', { replace: true });
       }
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to load election'));
@@ -251,21 +268,23 @@ export const ElectionDetailPage: React.FC = () => {
     const [source, id] = value ? [value.slice(0, value.indexOf(':')), value.slice(value.indexOf(':') + 1)] : ['', ''];
 
     try {
-      const updateData: Record<string, string | undefined> = {};
+      // PATCH is applied with exclude_unset: an omitted key leaves the old
+      // link in place, so every "clear" position must be an explicit null.
+      const updateData: Pick<ElectionUpdate, 'meeting_id' | 'event_id' | 'meeting_date'> = {};
       if (source === 'meeting') {
         const meeting = availableMeetings.find((m) => m.id === id);
         updateData.meeting_id = id;
-        updateData.event_id = undefined;
-        updateData.meeting_date = meeting?.meeting_date;
+        updateData.event_id = null;
+        updateData.meeting_date = meeting?.meeting_date ?? null;
       } else if (source === 'event') {
         const event = upcomingEvents.find((e) => e.id === id);
-        updateData.meeting_id = undefined;
+        updateData.meeting_id = null;
         updateData.event_id = id;
-        updateData.meeting_date = event?.start_datetime;
+        updateData.meeting_date = event?.start_datetime ?? null;
       } else {
-        updateData.meeting_id = undefined;
-        updateData.event_id = undefined;
-        updateData.meeting_date = undefined;
+        updateData.meeting_id = null;
+        updateData.event_id = null;
+        updateData.meeting_date = null;
       }
 
       const updated = await electionService.updateElection(electionId, updateData);
@@ -663,6 +682,7 @@ export const ElectionDetailPage: React.FC = () => {
       void fetchElection(); // Refresh to update email_sent status
 
       // Persist skipped details so they stay visible in a banner
+      setLastSkippedSource('ballots');
       if (response.skipped_details && response.skipped_details.length > 0) {
         setLastSkippedDetails(response.skipped_details.map((d) => ({ name: d.name, reason: d.reason })));
       } else {
@@ -741,9 +761,19 @@ export const ElectionDetailPage: React.FC = () => {
 
       setShowRemindModal(false);
 
-      // Show skipped details from reminders in the persistent banner
+      // Show skipped details from reminders in the persistent banner. A clean
+      // send clears it, as the ballot send does, so a banner from an earlier
+      // ballot send is not left standing under a reminder that skipped nobody.
+      setLastSkippedSource('reminders');
       if (response.skipped_details && response.skipped_details.length > 0) {
         setLastSkippedDetails(response.skipped_details.map((d) => ({ name: d.name, reason: d.reason })));
+      } else {
+        setLastSkippedDetails([]);
+      }
+
+      if (response.recipients_count === 0 && response.failed_count === 0) {
+        toast.success(response.message || 'All eligible voters have already voted.');
+        return;
       }
 
       const parts = [`Reminders sent to ${response.recipients_count} non-voter(s)`];
@@ -753,7 +783,14 @@ export const ElectionDetailPage: React.FC = () => {
       if (response.skipped_count > 0) {
         parts.push(`${response.skipped_count} skipped (see banner)`);
       }
-      toast.success(parts.join(', '));
+
+      // The backend decides success (`failed == 0`); report it rather than
+      // re-deriving it from the counts.
+      if (!response.success) {
+        toast.error(parts.join(', '));
+      } else {
+        toast.success(parts.join(', '));
+      }
     } catch (err: unknown) {
       setRemindError(getErrorMessage(err, 'Failed to send reminders'));
     } finally {
@@ -1083,11 +1120,12 @@ export const ElectionDetailPage: React.FC = () => {
             <div className="flex items-start justify-between">
               <div className="flex-1">
                 <h3 className="text-sm font-bold text-amber-700 dark:text-amber-300">
-                  {lastSkippedDetails.length} member(s) skipped when sending ballots
+                  {lastSkippedDetails.length} member(s) skipped when sending{' '}
+                  {lastSkippedSource === 'reminders' ? 'reminders' : 'ballots'}
                 </h3>
                 <p className="mt-1 mb-2 text-xs text-amber-600 dark:text-amber-400">
-                  These members were not sent a ballot, for the reason shown. To let one of them vote, add a voter
-                  override on the Overrides tab.
+                  These members were not sent a {lastSkippedSource === 'reminders' ? 'reminder' : 'ballot'}, for the
+                  reason shown. To let one of them vote, add a voter override on the Overrides tab.
                 </p>
                 <ul className="space-y-1 text-sm text-amber-700 dark:text-amber-300">
                   {lastSkippedDetails.map((d, i) => (

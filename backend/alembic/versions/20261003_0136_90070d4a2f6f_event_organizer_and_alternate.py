@@ -1,7 +1,7 @@
 """Add events.organizer_id and events.alternate_organizer_id.
 
 Revision ID: 90070d4a2f6f
-Revises: f73b449bdb8b
+Revises: c8266855a348
 Create Date: 2026-10-03 01:36:00.000000
 
 Attendance requests went to an event's creator and, when that failed, to every
@@ -29,7 +29,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "90070d4a2f6f"
-down_revision: Union[str, None] = "f26349cdfbfd"
+down_revision: Union[str, None] = "c8266855a348"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

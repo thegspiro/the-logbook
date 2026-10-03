@@ -9,6 +9,7 @@ security review:
   - Positionless token votes not blocked by unrelated positioned votes
 """
 
+import json
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -1297,3 +1298,261 @@ class TestBallotTokenUrlHygiene(TestPositionEligibilityTokens):
                 _rate=None,
             )
         assert exc_info.value.status_code == 400
+
+
+# ── Dead-token wording after close / reopen (W50-44) ─────────────────
+
+
+class TestDeadTokenWording(TestTokenBallotSetup):
+    """Closing destroys the anonymity salt, so every issued token then fails
+    the frozen-roll hash compare. That compare used to run before the status
+    check, so a member who had voted was told they were never on the roll.
+    """
+
+    async def _freeze_roll_on(self, db_session: AsyncSession, data: dict) -> None:
+        await db_session.execute(
+            text(
+                "UPDATE elections SET eligible_roster_snapshot = :snapshot "
+                "WHERE id = :id"
+            ),
+            {"snapshot": '["' + data["user_id"] + '"]', "id": data["election_id"]},
+        )
+        await db_session.flush()
+
+    async def test_token_after_close_says_voting_has_closed(
+        self, db_session: AsyncSession, setup_ballot_election
+    ):
+        data = setup_ballot_election
+        _, raw_token = await self._issue_token(db_session, data)
+        await self._freeze_roll_on(db_session, data)
+        await db_session.execute(
+            text(
+                "UPDATE elections SET status = 'closed', "
+                "voter_anonymity_salt = NULL WHERE id = :id"
+            ),
+            {"id": data["election_id"]},
+        )
+        await db_session.flush()
+
+        election, token, err = await ElectionService(db_session).get_ballot_by_token(
+            raw_token
+        )
+
+        assert election is None
+        assert token is None
+        assert err == "Voting has closed"
+        assert "roll" not in err.lower()
+
+    async def test_token_after_reopen_points_to_new_ballot_link(
+        self, db_session: AsyncSession, setup_ballot_election
+    ):
+        """A CLOSED->OPEN rollback on a non-anonymous election with votes
+        keeps the issued tokens live but cannot restore the destroyed salt,
+        so the old links are dead for a reason the roll sentence misstates."""
+        data = setup_ballot_election
+        _, raw_token = await self._issue_token(db_session, data)
+        await self._freeze_roll_on(db_session, data)
+        await db_session.execute(
+            text(
+                "UPDATE elections SET status = 'open', anonymous_voting = 0, "
+                "voter_anonymity_salt = NULL WHERE id = :id"
+            ),
+            {"id": data["election_id"]},
+        )
+        await db_session.flush()
+
+        election, token, err = await ElectionService(db_session).get_ballot_by_token(
+            raw_token
+        )
+
+        assert election is None
+        assert token is None
+        assert "Ask your secretary for a new ballot link" in err
+        assert "roll" not in err.lower()
+
+    async def test_post_open_member_still_gets_roll_message_while_open(
+        self, db_session: AsyncSession, setup_ballot_election
+    ):
+        """The reorder must not soften the real frozen-roll refusal."""
+        data = setup_ballot_election
+        _, raw_token = await self._issue_token(db_session, data)
+        await db_session.execute(
+            text(
+                "UPDATE elections SET eligible_roster_snapshot = :snapshot "
+                "WHERE id = :id"
+            ),
+            {"snapshot": "[]", "id": data["election_id"]},
+        )
+        await db_session.flush()
+
+        _, _, err = await ElectionService(db_session).get_ballot_by_token(raw_token)
+
+        assert "voter roll that was frozen" in err
+
+
+# ── Voided receipts, token vote ids, access count (W50-54) ────────────
+
+
+class TestW50VoidedReceiptAndTokenAudit(TestTokenBallotSetup):
+    async def _submit(self, db_session: AsyncSession, raw_token: str) -> dict:
+        svc = ElectionService(db_session)
+        result, err = await svc.submit_ballot_with_token(
+            token=raw_token,
+            votes=[
+                {"ballot_item_id": "item_a", "choice": "approve"},
+                {"ballot_item_id": "item_b", "choice": "deny"},
+            ],
+        )
+        assert err is None, f"Expected success, got: {err}"
+        return result
+
+    async def _ballot_audit_data(self, db_session: AsyncSession, election_id: str):
+        row = await db_session.execute(
+            text(
+                "SELECT event_data FROM audit_logs "
+                "WHERE event_type = 'ballot_submitted_token' "
+                "AND JSON_UNQUOTE(JSON_EXTRACT(event_data, '$.election_id')) = :eid "
+                "ORDER BY id DESC LIMIT 1"
+            ),
+            {"eid": election_id},
+        )
+        event_data = row.scalar_one()
+        if isinstance(event_data, str):
+            event_data = json.loads(event_data)
+        return event_data
+
+    async def test_voided_vote_receipt_says_voided(
+        self, db_session: AsyncSession, setup_ballot_election
+    ):
+        """A voided vote's receipt must not read as a bogus receipt."""
+        from app.api.v1.endpoints.elections import verify_vote_receipt
+
+        data = setup_ballot_election
+        _, raw_token = await self._issue_token(db_session, data)
+        result = await self._submit(db_session, raw_token)
+        receipt = result["receipt_hashes"][0]
+
+        vote_id = (
+            await db_session.execute(
+                text("SELECT id FROM votes WHERE receipt_hash = :r"), {"r": receipt}
+            )
+        ).scalar_one()
+        voided = await ElectionService(db_session).soft_delete_vote(
+            vote_id=uuid.UUID(vote_id),
+            deleted_by=uuid.UUID(data["user_id"]),
+            reason="duplicate ballot",
+            organization_id=uuid.UUID(data["org_id"]),
+            election_id=uuid.UUID(data["election_id"]),
+        )
+        assert voided is not None
+
+        verdict = await verify_vote_receipt(
+            election_id=uuid.UUID(data["election_id"]),
+            receipt=receipt,
+            db=db_session,
+            _rate=None,
+        )
+        assert verdict["verified"] is False
+        assert verdict["counted"] is False
+        assert verdict["voided"] is True, (
+            "a voided vote's receipt reads as 'no matching vote' rather than "
+            "as voided by an officer"
+        )
+        assert "voided by an officer" in verdict["message"]
+
+        # The other vote of the same ballot is untouched.
+        other = await verify_vote_receipt(
+            election_id=uuid.UUID(data["election_id"]),
+            receipt=result["receipt_hashes"][1],
+            db=db_session,
+            _rate=None,
+        )
+        assert other["verified"] is True
+        assert other.get("voided", False) is False
+
+    async def test_named_election_token_ballot_audit_carries_vote_ids(
+        self, db_session: AsyncSession, setup_ballot_election
+    ):
+        """On a non-anonymous election the officer needs ids to void a vote."""
+        data = setup_ballot_election
+        await db_session.execute(
+            text("UPDATE elections SET anonymous_voting = 0 WHERE id = :id"),
+            {"id": data["election_id"]},
+        )
+        await db_session.flush()
+
+        _, raw_token = await self._issue_token(db_session, data)
+        result = await self._submit(db_session, raw_token)
+
+        event_data = await self._ballot_audit_data(db_session, data["election_id"])
+        stored_ids = (
+            (
+                await db_session.execute(
+                    text(
+                        "SELECT id FROM votes WHERE election_id = :eid "
+                        "AND receipt_hash IN (:r0, :r1)"
+                    ),
+                    {
+                        "eid": data["election_id"],
+                        "r0": result["receipt_hashes"][0],
+                        "r1": result["receipt_hashes"][1],
+                    },
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert sorted(event_data.get("vote_ids", [])) == sorted(stored_ids), (
+            "ballot_submitted_token names no vote ids, so a token vote on a "
+            "named election cannot be found to void it"
+        )
+
+    async def test_anonymous_election_token_ballot_audit_has_no_vote_ids(
+        self, db_session: AsyncSession, setup_ballot_election
+    ):
+        data = setup_ballot_election
+        _, raw_token = await self._issue_token(db_session, data)
+        await self._submit(db_session, raw_token)
+
+        event_data = await self._ballot_audit_data(db_session, data["election_id"])
+        assert "vote_ids" not in event_data
+
+    async def test_access_count_counts_only_successful_submits(
+        self, db_session: AsyncSession, setup_ballot_election
+    ):
+        """Page opens and refused submits are not accesses."""
+        data = setup_ballot_election
+        token, raw_token = await self._issue_token(
+            db_session, data, eligible_item_ids=["item_a"]
+        )
+        svc = ElectionService(db_session)
+
+        for _ in range(2):
+            election, _, err = await svc.get_ballot_by_token(raw_token)
+            assert err is None
+            assert election is not None
+
+        # A stale ballot is refused before anything is written, the way a
+        # separate request's refusal leaves nothing behind.
+        result, err = await svc.submit_ballot_with_token(
+            token=raw_token,
+            votes=[{"ballot_item_id": "item_gone", "choice": "approve"}],
+        )
+        assert result is None
+        assert "out of date" in (err or "")
+
+        await db_session.refresh(token)
+        assert token.first_accessed_at is not None
+        assert (
+            token.access_count == 0
+        ), "ballot opens and refused submits were counted as accesses"
+
+        result, err = await svc.submit_ballot_with_token(
+            token=raw_token,
+            votes=[{"ballot_item_id": "item_a", "choice": "approve"}],
+        )
+        assert err is None, err
+
+        await db_session.refresh(token)
+        assert token.used is True
+        assert token.access_count == 1

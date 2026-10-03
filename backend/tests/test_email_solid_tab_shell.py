@@ -438,19 +438,49 @@ class TestTheMigrationsFrozenDefaults:
         # If this fails, a default changed without a migration to carry the
         # rows already holding this one. Ship a new revision whose previous
         # values are these, and point this test at it.
-        # ba5c348d7045 carries the event reminder's body on (it gained the
-        # date tile); its own test pins that the pair lines up.
+        # Each revision that carried a shipped default on is named here as
+        # {template_type: (previous html, current html, previous text,
+        # current text)}; a text of None means the revision left it alone.
+        # ba5c348d7045 carried the event reminder's body (it gained the date
+        # tile); c8266855a348 carried the three election bodies the W50 drive
+        # reworded. Each revision's own test pins that its pair lines up.
         date_tile = _load("*_ba5c348d7045_*.py")
+        w50_wording = _load("*_c8266855a348_*.py")
+        carried = {
+            date_tile.TEMPLATE_TYPE: (
+                date_tile.PREVIOUS_BODY,
+                date_tile.CURRENT_BODY,
+                None,
+                None,
+            ),
+            **{
+                template_type: (
+                    pair["previous"]["html"],
+                    pair["current"]["html"],
+                    pair["previous"]["text"],
+                    pair["current"]["text"],
+                )
+                for template_type, pair in w50_wording.CARRIED.items()
+            },
+        }
         assert set(MIGRATION.DEFAULTS) == set(_DEFAULTS) - set(_ADDED_AFTER_THE_FREEZE)
         for template_type, frozen in MIGRATION.DEFAULTS.items():
             shipped = _DEFAULTS[template_type]
             assert frozen["subject"] == shipped["subject"], template_type
-            if template_type == date_tile.TEMPLATE_TYPE:
-                assert frozen["html_body"] == date_tile.PREVIOUS_BODY
-                assert shipped["html"] == date_tile.CURRENT_BODY
+            if template_type in carried:
+                previous_html, current_html, previous_text, current_text = carried[
+                    template_type
+                ]
+                assert frozen["html_body"] == previous_html, template_type
+                assert shipped["html"] == current_html, template_type
+                if previous_text is None:
+                    assert frozen["text_body"] == shipped["text"], template_type
+                else:
+                    assert frozen["text_body"] == previous_text, template_type
+                    assert shipped["text"] == current_text, template_type
             else:
                 assert frozen["html_body"] == shipped["html"], template_type
-            assert frozen["text_body"] == shipped["text"], template_type
+                assert frozen["text_body"] == shipped["text"], template_type
             assert frozen["footer_key"] == shipped.get("footer"), template_type
             assert frozen["header_accent"] == shipped["accent"], template_type
             assert frozen["status_chip"] == shipped["chip"], template_type

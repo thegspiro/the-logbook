@@ -11,6 +11,7 @@ import { electionService, userService } from '../services/api';
 import type { Election, Candidate, CandidateCreate, CandidateUpdate } from '../types/election';
 import type { User } from '../types/user';
 import { getErrorMessage } from '../utils/errorHandling';
+import { blankToNull } from '../utils/formValues';
 import { UserStatus, ElectionStatus } from '../constants/enums';
 import { useConfirm } from '../contexts/ConfirmContext';
 
@@ -137,8 +138,10 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({ electi
 
       const updateData: CandidateUpdate = {
         ...(formData.name.trim() ? { name: formData.name.trim() } : {}),
-        ...(formData.position ? { position: formData.position } : {}),
-        ...(formData.statement ? { statement: formData.statement } : {}),
+        // Update path: an emptied box must reach the API as an explicit null,
+        // since the backend applies exclude_unset and an omitted key is "leave alone".
+        position: blankToNull(formData.position),
+        statement: blankToNull(formData.statement),
       };
 
       const updated = await electionService.updateCandidate(electionId, candidateId, updateData);

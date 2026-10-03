@@ -25,6 +25,11 @@ from app.models.user import Organization
 
 DEFAULT_SCHEDULING_TIMEZONE = "America/New_York"
 
+# For an emailed deadline. A ballot's close is read on phones that may sit in
+# another zone than the department's, and "05:00 PM" with no zone is the
+# member's guess; the abbreviation ("CDT") says whose clock it is (W50-68).
+ZONED_DATE_TIME_FORMAT = "%B %d, %Y at %I:%M %p %Z"
+
 
 def scheduling_timezone(organization: Optional[Organization]) -> ZoneInfo:
     """The organization's timezone, or the scheduling default."""

@@ -1,6 +1,162 @@
 # Security Review — Admin Hours
 
-**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15 (pass 5) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1, merged), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2, merged), [#2247](https://github.com/thegspiro/the-logbook/pull/2247) (pass 3, merged), [#2481](https://github.com/thegspiro/the-logbook/pull/2481) (pass 4, merged), [#2585](https://github.com/thegspiro/the-logbook/pull/2585) (pass 5, this PR)
+**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15 (pass 5), 2026-10-03 (pass 6) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1, merged), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2, merged), [#2247](https://github.com/thegspiro/the-logbook/pull/2247) (pass 3, merged), [#2481](https://github.com/thegspiro/the-logbook/pull/2481) (pass 4, merged), [#2585](https://github.com/thegspiro/the-logbook/pull/2585) (pass 5, merged), pass 6 (this PR)
+
+## Pass 6 (2026-10-03) — 0 fixed by this pass, 0 new findings, substantial real delta reviewed
+
+**Not a zero-delta pass.** Per-file `git log` (the shallow clone here does not
+resolve pass 5's merge commit directly — the same artifact every prior pass
+has worked around) found four real commits touching the declared backend
+surface since pass 5's merge (PR #2585, 2026-09-15):
+
+- **`6850d691f`** (2026-09-26) — moved the admin-hours compliance year/quarter
+  bounds from a bare server clock to `resolve_org_today(db, organization_id)`
+  (`app/utils/org_timezone.py`), org-scoped on the caller's own org in every
+  call site. A quarterly requirement's "current quarter" has no client-
+  supplied quarter number, so the method now explicitly rejects a request for
+  a year other than the department's current one when any requirement is
+  quarterly, rather than silently mixing the live quarter into a response
+  graded for a different year (the shape CLAUDE.md's "a derived date is a
+  value" corollary warns about) or silently dropping the quarterly items.
+  Read in full at its current lines, not inferred from the commit message.
+  No finding.
+- **`c4eafa98b`** (2026-09-27) — `_lock_owner_row`'s `User`-row lock now
+  filters `organization_id` directly (`.where(User.id == owner_id,
+User.organization_id == organization_id)`), closing a gap
+  `tests/test_org_scoping_ratchet.py` flagged. The owner id it locks was
+  already resolved through an org-scoped `AdminHoursEntry` lookup one line
+  above, so this was defense in depth rather than a live cross-tenant path —
+  confirmed by reading the full call chain, not assumed from the commit
+  message. Already fixed; re-verified intact.
+- **`73b87938f`** (2026-09-27) — **the real scope of this pass**: two new
+  member-self-service routes, `PATCH /entries/my/{id}` and `POST
+/entries/my/{id}/withdraw`, plus a new `withdrawn` status. Reviewed in full
+  against all seven checklist dimensions (detailed below) rather than
+  spot-checked — this is new auth-sensitive surface, not a refactor of
+  existing surface.
+- **`b65142bd4`** (2026-09-29) — training events stopped crediting admin
+  hours (credited to `TrainingRecord` instead, to avoid double-crediting the
+  same attendance). Finalizing a training event now also deletes any
+  `EVENT_ATTENDANCE`-sourced admin-hours entries it previously wrote
+  (`delete_event_attendance_entries_for_event`), org-scoped on
+  `organization_id` and narrowed to `entry_method == EVENT_ATTENDANCE` so a
+  manually-entered claim is never touched. Reviewed the full call site in
+  `event_service.py`; no finding in this feature's own scope (the
+  crediting/finalize logic itself is Feature 16/Events', already covered
+  there).
+
+One further commit this pass's own per-file `git log` surfaced
+(`54eb7e2dd`, a merge-into-feature-branch commit) carries no independent
+diff beyond what `73b87938f` already introduced.
+
+### `73b87938f` reviewed in full — member edit / withdraw / resubmit
+
+**Routes** (`admin_hours.py:673-758`): `edit_my_entry`
+(`PATCH /entries/my/{entry_id}`) and `withdraw_my_entry`
+(`POST /entries/my/{entry_id}/withdraw`), both gated by bare
+`Depends(get_current_user)` rather than `require_permission` — correct,
+since these are self-service for any authenticated member; authorization
+that the entry belongs to the caller is enforced at the service layer, not
+the route.
+
+**Self- and org-scoping (checklist #2/#3).** Both delegate to
+`AdminHoursService._get_own_open_entry(entry_id, organization_id, user_id)`
+(`admin_hours_service.py:923-948`), which calls `_lock_owner_row(entry_id,
+organization_id, user_id)` — the `user_id` parameter restricts the owner
+lookup itself to that member's own entries — then re-fetches the entry with
+`organization_id == organization_id AND user_id == user_id` under
+`with_for_update()`. Anyone else's entry, or another org's, resolves to
+"Entry not found" (404-equivalent `ValueError`), never a 403 that would
+confirm the id exists. Confirmed by reading both methods directly.
+
+**State-machine correctness.** `MEMBER_EDITABLE_STATUSES = (PENDING,
+REJECTED)` (`admin_hours_service.py:43-46`) — an `APPROVED` entry is
+officer-only, matching the design note in the route's own docstring.
+Editing a `REJECTED` entry resubmits it (`edit_own_entry`,
+`admin_hours_service.py:950-1002`): status flips back to `PENDING` and
+`approved_by`/`approved_at`/`rejection_reason` are cleared, so a resubmitted
+claim is graded fresh rather than inheriting a stale officer decision.
+`EVENT_ATTENDANCE`-sourced entries are explicitly refused for edit (`"Hours
+credited from event attendance follow the event record"`) because a resync
+rewrites them in place — but are not excluded from withdraw, matching the
+commit's own stated intent.
+
+**New `withdrawn` status.** Additive-only MySQL enum migration
+(`20260927_0146_8c47e8945f69`), guarded for both `op.alter_column` directions;
+the downgrade converts any `withdrawn` row to `rejected` with a synthetic
+reason rather than failing or truncating. `_check_overlap`
+(`admin_hours_service.py:1479-1518`) excludes both `REJECTED` and
+`WITHDRAWN` from the overlap check, so a withdrawn claim frees its time range
+for re-logging, matching the feature's stated intent. No reader anywhere
+still filters only on the old four-value set in a way that would mis-handle
+a withdrawn row (checked `AdminHoursEntryStatus` usages across both scope
+files).
+
+**Schema (checklist #4/#5).** `AdminHoursEntryEdit`
+(`schemas/admin_hours.py:159-165`) exposes only `clock_in_at`/
+`clock_out_at`/`description`/`category_id` — no `status`, `user_id`, or
+`approved_by` a member could smuggle through the shared edit path. Editing
+the category re-validates it in-org via `get_category(category_id,
+organization_id)` (XC-1).
+
+**Locking order (checklist #7 / Pitfall #27).** `edit_own_entry` and
+`withdraw_own_entry` both go through `_get_own_open_entry` →
+`_lock_owner_row` → the entry's own locking re-fetch, the same parent-then-
+child order `create_manual_entry`/`edit_pending_entry` already use, so a
+concurrent create and self-edit for the same member cannot deadlock by
+taking the two locks in opposite orders. `with_for_update()` call sites grew
+from 11 (pass 5) to 14 — the three new ones are this feature's own locking
+reads, not a gap.
+
+**No new finding.** This is new surface, reviewed as such, not a diff
+against a known-good baseline — and it held up.
+
+### Standing findings re-verified, unchanged
+
+- **Per-org SoD toggle (AH-4 refinement) — still open by design.**
+  `assert_different_person` in `approve_or_reject` (`admin_hours_service.py:1056-1061`)
+  is still unconditional; there is still no org setting to permit
+  self-approval in a department with one officer. Unchanged since pass 1.
+- **`credit_event_attendance`'s resync path can still grow an
+  already-APPROVED entry past its category's auto-approve threshold without
+  re-review — still open by design.** Re-read the resync branch directly
+  (`admin_hours_service.py:1954-1966`): `duration_minutes` is still updated
+  in place with no call to `_determine_post_clockout_status`. Unchanged
+  since pass 2.
+- **AH-16 (`export_entries_csv` unbounded/non-streaming) — still open,
+  unchanged.** `export_entries` (`admin_hours.py:866-898`) still builds the
+  whole CSV in memory and wraps it in `StreamingResponse(iter([csv_content]),
+...)` — a single chunk, not true streaming. Still uses `SafeCsvWriter`
+  correctly (Pitfall #15); still org-scoped.
+- **AH-17 (pass 5's fix) — re-verified intact.** `get_summary`'s and
+  `get_user_hours_compliance`'s scope checks still route through
+  `user_has_permission(current_user, "admin_hours.manage")` (and `... or
+user_has_permission(current_user, "compliance.view")`), not the hand-rolled
+  scan pass 5 replaced.
+- **Route inventory re-enumerated from scratch** (not re-read from pass 5's
+  count): 29 routes (was 27 — the two new self-service routes), every one
+  carrying an auth dependency (`get_current_user` on the 10 self-scoped
+  routes including the two new ones; `require_permission("admin_hours.manage")`
+  on the remaining 19). No route relies on a bare, ungated dependency.
+- Both pass-5-documented "confirmed still open" items remain mirrored in
+  `docs/KNOWN_LIMITATIONS.md` (added pass 2) — re-read there too, still
+  accurate, no update needed.
+
+## Completion gate (pass 6)
+
+| Check                                                                                          | Result                             |
+| ---------------------------------------------------------------------------------------------- | ---------------------------------- |
+| `flake8` on the 4 declared backend files                                                       | ✅ 0 violations                    |
+| `black --check` on the 4 declared backend files                                                | ✅ 4 files unchanged               |
+| `isort --check-only` on the 4 declared backend files                                           | ✅ clean                           |
+| `python3 scripts/validate_migrations.py --strict`                                              | ✅ single head (`f26349cdfbfd`)    |
+| `pytest tests/ -q -k "admin_hours"`                                                            | ✅ 128 passed, 1 pre-existing skip |
+| `pytest tests/test_org_scoping_ratchet.py tests/test_admin_hours_endpoint_permission_scope.py` | ✅ 22 passed                       |
+| `cd frontend && npm run typecheck`                                                             | ✅ 0 errors                        |
+| `cd frontend && npm run lint`                                                                  | ✅ 0 errors, 0 warnings            |
+
+No source file was modified by this pass itself — this is a documentation-only
+re-verification and new-surface review pass.
 
 ## Pass 5 (2026-09-15) — 1 fixed (LOW), zero admin-hours-behavioral drift
 

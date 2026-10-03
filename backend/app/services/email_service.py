@@ -34,6 +34,8 @@ from app.services.email_theme import (
     build_logo_block,
     build_shell,
     colourway_context,
+    fact,
+    facts,
     find_element_end,
 )
 from app.utils.email_providers import (
@@ -42,7 +44,7 @@ from app.utils.email_providers import (
     stored_email_section,
 )
 from app.utils.microsoft_oauth import acquire_access_token, xoauth2_string
-from app.utils.org_timezone import format_in_org_timezone
+from app.utils.org_timezone import ZONED_DATE_TIME_FORMAT, format_in_org_timezone
 
 # Header injection control characters that must never appear in
 # RFC 5322 unstructured fields (Subject, From display-name, etc.).
@@ -1631,15 +1633,40 @@ class EmailService:
         if custom_message:
             custom_message_html = f"<p>{_html.escape(custom_message)}</p>"
 
+        # The meeting is optional, and an election with none used to mail a
+        # "Meeting Date:" label followed by nothing. The sender builds the
+        # fact and the text line so the template can leave both out (W50-68).
+        meeting_local = (
+            self._format_local_dt(meeting_date, ZONED_DATE_TIME_FORMAT)
+            if meeting_date
+            else ""
+        )
+        meeting_date_html = (
+            facts([[fact("Meeting date", _html.escape(meeting_local))]])
+            if meeting_local
+            else ""
+        )
+        meeting_date_text = f"\nMeeting Date: {meeting_local}" if meeting_local else ""
+
         context = {
             "recipient_name": recipient_name,
             "election_title": election_title,
             "ballot_url": ballot_url or "",
-            "meeting_date": self._format_local_dt(meeting_date) if meeting_date else "",
+            "meeting_date": meeting_local,
+            "meeting_date_html": meeting_date_html,
+            "meeting_date_text": meeting_date_text,
             "custom_message": custom_message or "",
             "custom_message_html": custom_message_html,
-            "voting_opens": self._format_local_dt(start_date) if start_date else "",
-            "voting_closes": self._format_local_dt(end_date) if end_date else "",
+            "voting_opens": (
+                self._format_local_dt(start_date, ZONED_DATE_TIME_FORMAT)
+                if start_date
+                else ""
+            ),
+            "voting_closes": (
+                self._format_local_dt(end_date, ZONED_DATE_TIME_FORMAT)
+                if end_date
+                else ""
+            ),
             "positions": ", ".join(positions) if positions else "",
             "ballot_items_html": ballot_items_html,
             "ballot_items_text": ballot_items_text,
@@ -1680,6 +1707,10 @@ class EmailService:
         cc_emails: Optional[List[str]] = None,
         db: Any = None,
         organization_id: Optional[str] = None,
+        closed_at: str = "",
+        closed_by: str = "",
+        ballot_recipients_count: int = 0,
+        skipped_voters_count: int = 0,
     ) -> tuple[int, int]:
         """
         Send an election report email to the secretary/leadership.
@@ -1701,6 +1732,8 @@ class EmailService:
             "election_type": election_type,
             "start_date": start_date,
             "end_date": end_date,
+            "closed_at": closed_at,
+            "closed_by": closed_by,
             "total_eligible_voters": str(total_eligible_voters),
             "total_votes_cast": str(total_votes_cast),
             "voter_turnout_percentage": f"{voter_turnout_percentage:.1f}",
@@ -1710,8 +1743,10 @@ class EmailService:
             "results_text": results_text,
             "ballot_recipients_html": ballot_recipients_html,
             "ballot_recipients_text": ballot_recipients_text,
+            "ballot_recipients_count": str(ballot_recipients_count),
             "skipped_voters_html": skipped_voters_html,
             "skipped_voters_text": skipped_voters_text,
+            "skipped_voters_count": str(skipped_voters_count),
             "organization_name": org_name,
         }
 
