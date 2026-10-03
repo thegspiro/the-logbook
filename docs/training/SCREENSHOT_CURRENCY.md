@@ -1,5 +1,76 @@
 # Screenshot currency
 
+## Closing the "not swept" copy commits from the previous entry, 2026-10-03
+
+`audit_images.py --baseline` still reports nothing new. `main` has not moved
+since the previous entry — its tip (`e070ce9c4`) is this branch's merge-base,
+so there were zero new commits to diff against this time. Instead this pass
+picked up the explicit "not swept" item the entry below left open: the
+2026-09-29 `copy(elections)`, `copy(apparatus)`, `copy(events)` tightening
+commits and the matching `W18`/`W20`/`W21`/`W48`/`W50` workflow-review
+commits, read diff by diff rather than by guessing from the images.
+
+**Three re-shot, all guide prose that quoted old UI text verbatim:**
+
+| Image | What changed | Fix |
+| ----- | ------------ | --- |
+| `19-25-ballot-template-settings-before`, `19-26-ballot-template-settings-after` | `3c9871e25` (W50 frontend round 2) replaced the Voting Method card's generic `.replace('_',' ').toUpperCase()` formatting with a `VOTING_METHOD_LABELS` map — a one-choice-per-voter election now reads **"One choice per voter"**, not "Simple Majority", and ranked choice reads **"Ranked choice"**, not "Ranked Choice". The same commit added a **Winner** row beside it, naming the victory rule directly (previously visible only via Preview Ballot) | Re-shot both; the guide's prose, the two alt texts and the manifest's own comment all quoted the old labels and now quote the new ones, and the surrounding paragraph was rewritten to describe the Winner row instead of claiming the card "reports only the method" |
+| `04-38-rolling-recurrence` | `2317a5ca7` (W18) reworded the rolling-cycle note from "New occurrences are created automatically to maintain a 12-month horizon" to "New occurrences are added automatically so the series always runs 12 months ahead" | Re-shot; the guide's literal quote of the note updated to match |
+| `04-39-delete-event-series` | `cdee5e350` renamed the delete-series dialog's dismiss button from **Go Back** to **Keep Event** | Re-shot; the guide's `**Go Back** leaves everything alone` line now reads `**Keep Event**` |
+
+**A fourth stale passage, no image involved.** The Voter Overrides how-to
+(`14-elections.md`) told a secretary to "Navigate to Eligibility Roster" and
+"click Grant Override" — a button that has never existed on that screen,
+confirmed by `git log -p --follow` on the file. `94c5847b2` and `3c9871e25`
+(both W50) reworked the real flow in this exact area — overrides are granted
+from the separate **Overrides** tab's **+ Add Override** form, which now picks
+the member from a **Member** dropdown rather than typing a user ID — and the
+roster's own hint text already pointed there ("add a voter override on the
+**Overrides** tab"). The guide's steps were rewritten to match the actual
+control. No screenshot exists of this form, so nothing to re-shoot.
+
+**A capture-harness bug found and fixed in the same commit.** `04-39` failed
+with a 10s `locator.click` timeout on every attempt through the realistic
+list → detail navigation path, while a direct `/events/{id}` navigation
+succeeded — the difference was timing, not content. `clickByName()` in
+`manifest.mjs` takes a one-shot `count()` of the visible matches for a name
+immediately after navigation to decide whether to use the visible match or
+fall back to the first DOM match unfiltered; on a page still hydrating (the
+event's own "More" button is gated behind a `canManage` permission check) that
+count reads 0 for a few hundred ms, so it fell back to `target.first()` —
+which, unfiltered, resolved to a permanently-hidden duplicate "More" earlier
+in DOM order (the responsive sidebar carries one) and hung until its own
+timeout. Fixed by waiting briefly for a visible match before deciding. Verified
+against `04-39` (now captures reliably) and three other `clickByName`-driven
+shots from unrelated guides (`03-104-my-shifts-hours`,
+`01-41-profile-visibility`, `03-100-open-shifts-member`) to confirm no
+regression; their images were not re-committed since nothing about them
+changed.
+
+**Checked, not re-shot — not quoted or not in frame.** The bulk of the two
+2026-09-29 passes is toast text, empty-state copy and dialog titles
+(`DeleteElectionModal`'s "DELETE ACTIVE ELECTION" → "Delete Election",
+`RollbackElectionModal`'s "Rollback Election" → "Roll Back Election",
+apparatus's `ApparatusFormPage`/`ApparatusBasicPage` changes which turned out
+to be `htmlFor`/`aria-label` wiring only, no visible label renamed). Grepped
+each changed string against both guide prose and manifest `alt`/`anchor`
+text; none matched, and the apparatus-rename class this window did carry
+(`e163cbcca`'s "Maint. Due" → "Maintenance Due") was already caught and fixed
+by the previous entry. `bb0bda095` (W48 apparatus) was read in full given its
+size (258-line `ApparatusFormPage.tsx` diff) and is the same story: accessible
+names and null-vs-omit update semantics, nothing a screenshot pictures
+differently.
+
+**Not chased.** `efc7c4b21` renamed the Events admin-hub tile and dropdown
+link from "Events settings"/"Event Module Settings" to "Event settings"/"Event
+Settings" (singular) — but the settings page's own `<h1>` has read "Event
+Settings" (singular) since the screen was written, while the guide has always
+said "Events Settings" (plural) throughout. `git log -p --follow` on
+`EventsSettingsTab.tsx` confirms the singular title predates this window, so
+this is a pre-existing naming looseness this pass did not introduce and did
+not have the budget to rename consistently across the ~10 places the guide
+uses the plural form.
+
 ## Targeted check against ~352 frontend commits since the last full sweep, 2026-10-03
 
 `audit_images.py --baseline` (the gutter-class check) still reports nothing new
