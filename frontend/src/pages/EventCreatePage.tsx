@@ -211,6 +211,7 @@ export const EventCreatePage: React.FC = () => {
             initialData={templateInitialData}
             onSubmit={handleSubmit}
             onSubmitRecurring={handleSubmitRecurring}
+            showOrganizerPickers
             onCancel={handleCancel}
             submitLabel="Create Event"
             isSubmitting={isSubmitting}

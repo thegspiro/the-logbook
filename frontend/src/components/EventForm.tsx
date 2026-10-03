@@ -42,6 +42,8 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { useAuthStore } from '../stores/authStore';
 import { formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
+import { useOrganizerOptions } from '../hooks/useOrganizerOptions';
+import { EventOrganizerPickers } from './EventOrganizerPickers';
 import { Collapsible } from './ux/Collapsible';
 import DateTimeQuarterHour from './ux/DateTimeQuarterHour';
 import { TrainingDetailsFields } from './training/TrainingDetailsFields';
@@ -86,6 +88,12 @@ interface EventFormProps {
   userEvents?: ConflictEvent[] | undefined;
   /** When editing, the ID of the current event (excluded from conflict checks) */
   editingEventId?: string | undefined;
+  /**
+   * Offer organizer and alternate pickers. Create only: once an event exists,
+   * changing who runs it is a transfer from the event page, which tells the
+   * members involved and can carry the change across a recurring series.
+   */
+  showOrganizerPickers?: boolean | undefined;
 }
 
 const EVENT_TYPES: EventType[] = [
@@ -200,8 +208,13 @@ export const EventForm: React.FC<EventFormProps> = ({
   initialRecurrence,
   userEvents,
   editingEventId,
+  showOrganizerPickers = false,
 }) => {
   const tz = useTimezone();
+  const currentUserId = useAuthStore((state) => state.user?.id);
+  const organizerOptions = useOrganizerOptions(showOrganizerPickers);
+  const [organizerId, setOrganizerId] = useState('');
+  const [alternateId, setAlternateId] = useState('');
   // Create Training Session lives in the Training admin hub, which only a
   // training.manage holder can open; anyone else is pointed at who can.
   const canCreateTrainingSession = useAuthStore((state) => state.checkPermission('training.manage'));
@@ -569,6 +582,13 @@ export const EventForm: React.FC<EventFormProps> = ({
     // Clean up data before submit
     const submitData = { ...formData };
 
+    // Left on "Me (default)", the key is omitted and the API makes the
+    // creator the organizer.
+    if (showOrganizerPickers) {
+      submitData.organizer_id = organizerId || undefined;
+      submitData.alternate_organizer_id = alternateId || undefined;
+    }
+
     // Only an explicit pick attaches a training session; an untouched section
     // leaves the event to be credited under its title as Continuing Education.
     delete submitData.training_details;
@@ -879,6 +899,29 @@ export const EventForm: React.FC<EventFormProps> = ({
                 </optgroup>
               )}
             </select>
+          </div>
+        )}
+        {showOrganizerPickers && (
+          <div>
+            {organizerOptions.error ? (
+              <p className="text-sm text-red-700 dark:text-red-400" role="alert">
+                {organizerOptions.error} You will be the organizer; you can transfer the event once it is created.
+              </p>
+            ) : (
+              <EventOrganizerPickers
+                idPrefix="event"
+                options={organizerOptions.options}
+                organizerId={organizerId}
+                alternateId={alternateId}
+                onOrganizerChange={setOrganizerId}
+                onAlternateChange={setAlternateId}
+                organizerPlaceholder="Me (default)"
+                defaultOrganizerId={currentUserId}
+                disabled={organizerOptions.loading}
+                selectClassName={selectClass}
+                labelClassName={labelClass}
+              />
+            )}
           </div>
         )}
       </section>
