@@ -76,8 +76,8 @@ const ConfigurationTab: React.FC = () => {
         <div className="flex">
           <AlertCircle className="text-theme-alert-info-icon h-5 w-5 shrink-0" />
           <div className="ml-3">
-            <h4 className="text-theme-alert-info-title text-sm font-medium">Security Best Practices</h4>
-            <ul className="text-theme-alert-info-text mt-2 list-inside list-disc space-y-1 text-sm">
+            <h4 className="text-theme-text-primary text-sm font-medium">Security Best Practices</h4>
+            <ul className="text-theme-text-secondary mt-2 list-inside list-disc space-y-1 text-sm">
               <li>Use conservative rate limits to prevent abuse</li>
               <li>Monitor access logs regularly for suspicious activity</li>
               <li>Only enable fields under Data Control that are safe to publish</li>
