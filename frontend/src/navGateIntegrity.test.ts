@@ -191,8 +191,9 @@ describe('navigation gates match the routes they target', () => {
     }
 
     // Bottom bar — a tab landing on Access Denied is worse than no tab, since
-    // the slot fallback would otherwise hand the space to a usable page.
-    const bottom = read('components/layout/BottomNavigation.tsx');
+    // the slot fallback would otherwise hand the space to a usable page. The
+    // tab list lives beside the bar, shared with the My Account picker.
+    const bottom = read('components/layout/bottomNavTabs.ts');
     const storeTab = bottom.slice(bottom.indexOf("path: '/store',"));
     expect(storeTab.slice(0, storeTab.indexOf('},')), 'BottomNavigation /store tab is ungated').toContain(
       "permission: 'storefront.view'"
@@ -230,10 +231,9 @@ describe('navigation gates match the routes they target', () => {
     }
 
     // The bottom bar is member-facing and must not offer the console at all.
-    expect(
-      read('components/layout/BottomNavigation.tsx'),
-      'BottomNavigation offers the store admin console'
-    ).not.toContain("path: '/store/admin'");
+    expect(read('components/layout/bottomNavTabs.ts'), 'BottomNavigation offers the store admin console').not.toContain(
+      "path: '/store/admin'"
+    );
   });
 
   it('offers the admin hub to the checklist officer whose console it is', () => {

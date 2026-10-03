@@ -9,6 +9,14 @@ Only exposes minimal, non-sensitive data: location name, event name,
 event time, and the check-in URL. Member check-in requires authentication on
 the scanning user's device.
 
+Rooms that opt in via ``nfc_badge_check_in_enabled`` accept member ID card
+taps at the kiosk itself (``/badge-tap``). That is the one unauthenticated
+write that acts *for a member*, so it carries more than the guest path: the
+room's own switch and the department's NFC ID Cards integration must both be
+on, the room decides the event (never the request), the answer names the
+member only by first name and initial, and every tap that moves attendance is
+audited with the room and the caller's IP.
+
 Events that opt in via ``allow_guest_check_in`` additionally expose a guest
 sign-in path here, so a visitor at an interest night can record their own
 attendance without an account. That path is an unauthenticated *write*, so it
@@ -46,9 +54,16 @@ from app.schemas.event import (
     QRCheckInData,
 )
 from app.schemas.location import LocationDisplayInfo
+from app.schemas.nfc_tag import (
+    KioskBadgeTapRequest,
+    KioskBadgeTapResponse,
+    NfcCheckInStatus,
+)
 from app.services.event_service import EventService, attendance_is_finalized
 from app.services.guest_check_in_service import GuestCheckInService
 from app.services.location_service import LocationService
+from app.services.nfc_tag_service import NfcTagService
+from app.utils.nfc_integration import nfc_id_cards_enabled
 
 router = APIRouter(prefix="/public/v1/display", tags=["public-display"])
 
@@ -88,6 +103,47 @@ async def _rate_limit_guest_check_in(request: Request) -> None:
         raise CodedHTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many sign-in attempts. Please try again in a few minutes.",
+            error_code=ErrorCode.SYS_RATE_LIMITED,
+        )
+
+
+async def _rate_limit_badge_tap_ip(request: Request) -> None:
+    """Rate limit kiosk card taps per IP: 60/minute, then a 5-minute lockout.
+
+    The kiosk tablet is the caller, so one IP carries a whole room's arrivals —
+    sized for a rush at the door, not for a person.
+    """
+    client_ip = get_client_ip(request)
+    is_limited, _ = await public_rate_limit(
+        key=f"pub_badge_tap:{client_ip}",
+        max_requests=60,
+        window_seconds=60,
+        lockout_seconds=300,
+    )
+    if is_limited:
+        raise CodedHTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many card taps. Please wait a few minutes.",
+            error_code=ErrorCode.SYS_RATE_LIMITED,
+        )
+
+
+async def _rate_limit_badge_tap_room(display_code: str) -> None:
+    """The same ceiling per room, whatever IP the taps arrive from.
+
+    Per-IP limiting alone cannot stop a caller spread across addresses from
+    walking card serials against one leaked display code.
+    """
+    is_limited, _ = await public_rate_limit(
+        key=f"pub_badge_tap_room:{display_code}",
+        max_requests=60,
+        window_seconds=60,
+        lockout_seconds=300,
+    )
+    if is_limited:
+        raise CodedHTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many card taps. Please wait a few minutes.",
             error_code=ErrorCode.SYS_RATE_LIMITED,
         )
 
@@ -240,13 +296,90 @@ async def get_public_location_display(
         )
     ).scalar_one_or_none()
 
+    badge_check_in_enabled = bool(
+        location.nfc_badge_check_in_enabled
+    ) and await nfc_id_cards_enabled(db, location.organization_id)
+
     return LocationDisplayInfo(
         location_id=UUID(location.id),
         location_name=location.name,
         current_events=current_events,
         has_overlap=len(current_events) > 1,
         timezone=org_tz,
+        badge_check_in_enabled=badge_check_in_enabled,
     )
+
+
+@router.post(
+    "/{display_code}/badge-tap",
+    response_model=KioskBadgeTapResponse,
+    dependencies=[Depends(_rate_limit_badge_tap_ip)],
+)
+async def kiosk_badge_tap(
+    display_code: str,
+    payload: KioskBadgeTapRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Record a member ID card tap at a room kiosk (public, no auth required).
+
+    Checks the member in to the event open in this room, or out of it when
+    they are already in. Every domain outcome — an unknown card, no event
+    open, two events open — is a 200 the kiosk draws on screen, as at a
+    check-in station; only a missing display, a room without badge check-in
+    and rate limiting answer otherwise.
+    """
+    _validate_display_code(display_code)
+    await _rate_limit_badge_tap_room(display_code)
+
+    location = await LocationService(db).get_location_by_display_code(display_code)
+    if not location:
+        raise CodedHTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Display not found",
+            error_code=ErrorCode.EVT_DISPLAY_NOT_FOUND,
+        )
+
+    # Both switches, checked on every tap rather than trusted from the page:
+    # a kiosk left running after an officer turned the room off must stop
+    # recording on its very next tap.
+    if not location.nfc_badge_check_in_enabled or not await nfc_id_cards_enabled(
+        db, location.organization_id
+    ):
+        raise CodedHTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Badge check-in is not turned on for this room.",
+            error_code=ErrorCode.EVT_BADGE_CHECKIN_UNAVAILABLE,
+        )
+
+    result = await NfcTagService(db).kiosk_check_in(
+        location=location,
+        tag_uid=payload.tag_uid,
+        tag_payload=payload.tag_payload,
+    )
+
+    if result["status"] in (
+        NfcCheckInStatus.CHECKED_IN,
+        NfcCheckInStatus.CHECKED_OUT,
+    ):
+        await log_audit_event(
+            db=db,
+            event_type="nfc_kiosk_badge_tap",
+            event_category="members",
+            severity="info",
+            event_data={
+                "location_id": location.id,
+                "event_id": result.get("event_id"),
+                "member_id": result.get("user_id"),
+                "outcome": result["status"].value,
+                "source": "room_kiosk",
+            },
+            organization_id=location.organization_id,
+            ip_address=get_client_ip(request),
+        )
+
+    return KioskBadgeTapResponse(**result)
 
 
 @router.get(

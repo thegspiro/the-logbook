@@ -484,6 +484,36 @@ named ("N modules you did not enable are hidden") with a control to reveal
 them, so a department that cannot find Inventory learns it is off rather than
 concluding the permission does not exist.
 
+## Room Kiosk Badge Check-In — A Copied Card Works With Nobody Watching (2026-10-03)
+
+**Accepted by the owner on 2026-10-02.** A room with **Badge check-in** on
+records attendance from a card tap at its public kiosk, with nobody signed in.
+The card's credential — a chip serial, or a code written onto a blank tag — is
+readable by any phone held near the card, so someone who copies a member's
+card, and stands at a switched-on room's kiosk (or knows its display code), can
+check that member in or out of the event open there. A check-in station has an
+officer beside it; the kiosk does not.
+
+What limits it, and what does not:
+
+- **Off by default, room by room**, and only with the NFC ID Cards integration
+  on. Turning either off stops the very next tap.
+- **Narrow reach.** Only the one event open in that room, through the event's
+  own check-in rules — no shifts, no admin hours, no other room.
+- **Little to learn.** The answer shows a first name and last initial; an
+  unknown card and an ambiguous overlap answer the same way for everyone.
+- **Traceable, not prevented.** Every tap that moves attendance is audited with
+  the room and IP, so an officer can find and correct a false record; nothing
+  stops it being made.
+- **Rate limited** to 60 taps a minute per IP and per room, which slows walking
+  serials against a leaked display code but does nothing against one copied
+  card. Rotating the display code (Regenerate) locks out a leaked one.
+
+Closing the gap would need cards that cannot be copied by reading them
+(challenge-response cards such as DESFire), which Web NFC cannot drive. Until
+then, a department that needs attendance it can rely on for credit should keep
+those events on a staffed station, or on members' own signed-in phones.
+
 ## Prospective Members — Purge Is Manual; Auto-Purge Is Not Wired (2026-09-30)
 
 **Purge Selected** on the Inactive Applications tab permanently deletes the
@@ -3996,17 +4026,17 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   numbers for every org currently using profiles — a dedicated fix, not a
   drive-by.
 - **A requirement with zero currently-applicable members renders as a
-  failing 0% (CMP4-4, LOW).** `ComplianceOfficerDashboard.tsx:433-438`
-  colors `requirement_analysis.compliance_pct` red below 50%, including the
-  `0.0` CMP4-1 now emits whenever a scoped requirement currently applies to
-  no active member. This is the per-_requirement_ counterpart to TR4-4 above
-  (which is about the per-_member_ side) — and per that entry's own
-  precedent, `complianceMatrixModel.ts`'s `rollUpRequirements` already
-  returns `null` ("not applicable") for exactly this shape at the
-  requirement level, so a fix here has working in-repo precedent to follow:
-  widen `AnnualReportRequirement.compliance_pct`
-  (`frontend/src/types/training.ts:2585`) to `number | null` and render a
-  muted "N/A" instead of a red percentage.
+  failing 0% (CMP4-4, LOW) — ✅ fixed 2026-09-29, workflow review W29-4.**
+  `ComplianceOfficerDashboard.tsx` colored `requirement_analysis.compliance_pct`
+  red below 50%, including the `0.0` CMP4-1 emits whenever a scoped
+  requirement currently applies to no active member — the per-_requirement_
+  counterpart to TR4-4 above. Fixed without widening the backend contract or
+  `AnnualReportRequirement.compliance_pct`'s type: the dashboard now checks
+  `req.members_total === 0` directly and renders a muted "Not applicable"
+  instead of reading `compliance_pct` at all in that case
+  (`ComplianceOfficerDashboard.tsx:436-437`; `docs/workflow-review/W29-compliance.md`
+  W29-4; re-verified against current code by `docs/security-review/CMP-20-compliance.md`
+  pass 6).
 
 Full detail, line citations, and the "considered, not changed" rationale for
 why CMP4-1 deliberately left the per-member zero-denominator case alone (see
@@ -5398,6 +5428,55 @@ needs a decision rather than a patch:
   ✅ Resolved: the owner granted `inventory.check_manage` (authoring only),
   seeded and backfilled by migration `f73b449bdb8b` — see "The seeded
   Quartermaster cannot build equipment checklists" above.
+
+## Forms — A Public Form Asks for Sign-In Only After It Is Filled In (2026-10-02)
+
+Found driving W60 (`docs/workflow-review/W60-forms.md`, W60-11). A new form
+defaults to `require_authentication = true` and `allow_multiple_submissions =
+true`. Making it public opens the link to anyone, but submitting still needs a
+signed-in member until an officer ticks "Allow submissions without signing in"
+in the Share dialog (which explains this). A visitor on `/f/<slug>` is not told
+until they press Submit. They then get "Authentication is required to submit
+this form." with no sign-in link, and their answers are lost.
+
+The options:
+
+- tell the visitor above the form, with a sign-in link that returns to
+  `/f/<slug>`;
+- or default new **public** forms to anonymous submission. That changes who
+  can submit, so it is the owner's call.
+
+## Elections — Owner Decisions From the W50 Drive (2026-09-30)
+
+Found driving W50 (`docs/workflow-review/W50-elections.md`): two browsers ran
+the module end to end with email on, and 41 findings were fixed across
+`3de83db`, `d6f828c` and `7aa3405`. These are what is left: each changes
+behaviour a department may rely on, needs a migration, or is a product
+decision, so it is recorded here rather than patched. The finding named in
+each row carries the evidence and the file.
+
+| Item                                                                                                    | Status                                                      | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Paper ballots cannot record a vote on a motion or membership item**                                   | 🚩 Open (HIGH, 2026-09-30, workflow review W50-8)           | Print Blank Ballots now prints every approval item as "☐ Approve ☐ Deny" (`7aa3405`), but `POST /elections/{id}/manual-ballots` takes candidate ids only, and an item's Approve/Deny rows exist only once an electronic vote has materialised them (W50-30). So a motion decided on paper cannot be keyed in. Either pre-create the option rows per approval item when the election opens, or document paper as positions-only. Candidate-selection items whose position is not in `election.positions` are also still absent from the printout.                                                                                                                          |
+| **Certified, published results can be revised after close by merge, void and batch void**               | 🚩 Open (HIGH, 2026-09-30, workflow review W50-9)           | S09 refuses renaming or re-positioning a candidate once votes exist (compared by value, so a statement edit still saves). Merge Write-Ins, Void a Vote and a paper-batch void remain allowed after close and after publish, and re-issue the tally silently: in the drive one election went from four co-winners to one and another from a tie to a win, with the certified PDF's integrity line unchanged. These are deliberate corrections, so the choice is between a gate after publish and a "results revised <when> by <who>" mark on the PDF and the panel.                                                                                                        |
+| **The in-app Cast Vote tab is not the ballot**                                                          | 🚩 Open (HIGH, 2026-09-30, workflow review W50-10)          | `ElectionBallot.tsx` iterates `election.positions` only: ballot items are missing and a multi-seat race is single-select, while the emailed ballot carries the items and "Select up to 2". A member who votes in-app then needs Abstain on the race to get past "You have already voted on: Chief" on the link. Either rebuild the tab on the token page's model, or hide it when the election has items or a cap above 1 and send members to their emailed link (the smaller change, which can ship first). S24 records the email-first ballot as a design decision, not a regression.                                                                                   |
+| **A multi-seat race declares one winner**                                                               | 🚩 Open (HIGH, 2026-09-30, workflow review W50-11)          | `max_votes_per_position` (API only — the create dialog has no field) lets voters pick two, but the tally has no seat count: "2027 Board of Directors (2 seats)" elected one, and the report read "ELECTED" beside one name. A `seats_per_position` is schema, migration, tally and UI; the alternative is a documented one person per position, with the cap hidden.                                                                                                                                                                                                                                                                                                      |
+| **A voter override on a restricted-list election says it lets the member vote, and it does not**        | 🚩 Open (HIGH, 2026-09-30, workflow review W50-13)          | With `eligible_voters` set, an override for another member is created, the roster reads "Override", `total_eligible_voters` rises and turnout falls — but the member's vote is still refused "restricted to a specific voter list", and the endpoint's own docstring says overrides do not bypass the list. Decide whether an override extends a restricted list. Either way a non-admitted override should leave the denominator, and its row should say it has no effect.                                                                                                                                                                                               |
+| **A draft's test ballot cannot be opened**                                                              | 🚩 Open (MED, 2026-09-30, workflow review W50-19)           | Election Settings offers test ballots for drafts only, and the draft test token is sent — `send-ballot` now refuses a draft unless `is_test` (S08's status question, settled that way in `7aa3405`) — but the public lookup refuses every non-open election, so the link answers "Election is draft". Either admit `is_test` tokens on a draft, which gives the officer the preview the settings promise, or offer open elections in the select.                                                                                                                                                                                                                          |
+| **Closed early, results are refused to everyone until the scheduled end**                               | 🚩 Open (MED, 2026-09-30, workflow review W50-22)           | The results gate needs `now > end_date` even when the election is CLOSED, so the officer who closed it gets 403 seconds after the report mail carrying the same numbers reached them; only Publish lifts it. The report, the certified PDF and the runoff logic already bypass the gate (CLAUDE.md pitfall 29 in miniature). Decide whether CLOSED alone unlocks results for managers. S10 fixed the gate's shape (403 vs 404, the live-tally flag) and holds live.                                                                                                                                                                                                       |
+| **The proxy holder is Cc'd a ballot that says the link is the voter's alone**                           | 🚩 Open (MED, 2026-09-30, workflow review W50-23)           | Creating a proxy authorization sends nothing; at send time the holder is Cc'd on the delegating member's ballot mail, whose callout reads "This link is yours alone… Don't forward this email" and names no proxy, and the holder's own mail says nothing either. There is no proxy ballot mode (see the 2026-08-12 entry below). If the Cc is the mechanism, the delegator's mail must say who holds the proxy and the holder's copy whose ballot it is. The manual now describes the Cc.                                                                                                                                                                                |
+| **The emailed ballot pre-selects Abstain on every item**                                                | 🚩 Open (MED, 2026-09-30, workflow review W50-25)           | `BallotVotingPage.tsx` fills the Abstain radio on load under "Make a selection for each item below"; an untouched Submit → Cast burns the single-use link with no votes, and the confirm dialog's "Abstain (No Vote)" per item is the only guard. A product choice between no default (Submit disabled until every item has a choice or an explicit abstain) and stating the default with "You have not voted on N items" at the confirm step.                                                                                                                                                                                                                            |
+| **A sanctioned void certifies the election CHAIN_BROKEN**                                               | 🚩 Open (MED, 2026-09-30, workflow review W50-31)           | `verify_vote_integrity` drops deleted rows before walking the chain, so an officer's own void — a single vote or a paper batch — shows "Vote Integrity Issue Detected — votes may have been deleted or reordered" and prints CHAIN_BROKEN on the certified PDF under "We certify that the results above are true and correct", while voiding the chain's tail leaves PASS. `7aa3405` stops every forensics read re-logging the critical audit row; the chain design must decide how voids are represented, e.g. walk them and report "PASS — N votes voided by <officer>: <reason>".                                                                                      |
+| **A manager can accept a nomination for the nominee, and the slate is not frozen at Close Nominations** | 🚩 Open (MED, 2026-09-30, workflow review W50-38)           | `PATCH …/candidates/{id}` accepts `accepted` from any manager with no nominee check and no notice, after the nominator was refused "Only the nominee can respond"; after Close Nominations members lose the tab but the API still accepts and declines, so a race silently lost a candidate. The positions guard is fixed (S17, corrected for item-keyed candidates in `7aa3405`). Decide whether managers may accept on a nominee's behalf (then label it so and notify) and whether the slate freezes at close.                                                                                                                                                         |
+| **A ballot item added after tokens were issued never reaches already-sent links**                       | 🚩 Open (MED, 2026-09-30, workflow review W50-47)           | The lookup serves the item ids snapshotted when the token was minted, and a rollback to draft leaves tokens live, so a link minted before an item was added shows the old ballot and nothing prompts a resend. Invalidate outstanding tokens when the ballot changes inside a rollback window (with the W50-36 resend banner), or serve the current item list on lookup.                                                                                                                                                                                                                                                                                                  |
+| **Members read the recipient list and live counts from the election body**                              | 🚩 Open (LOW, 2026-09-30, workflow review W50-70)           | `GET /elections/{id}` gives every `elections.view` holder `email_recipients` and vote counts while `/results` is 403, and the public ballot lookup hands token holders every candidate's `user_id` and `nominated_by`. Probably intended for attendees and recipients; decide whether counts and ids are withheld while the election is open.                                                                                                                                                                                                                                                                                                                             |
+| **Auto-open sends no ballots**                                                                          | 🚩 Open (LOW, 2026-09-30, workflow review W50-72)           | A scheduled open changes the status only; the department's first ballot mail is then the pre-close reminder, or nothing if reminders are off. Decide whether auto-open should send ballots; otherwise the Features copy should say "Scheduled opening changes the status only — send ballots yourself" (the manual now says so).                                                                                                                                                                                                                                                                                                                                          |
+| **A proxy ballot on an anonymous election is attributable**                                             | 🚩 Open (HIGH, 2026-09-30, workflow review W50-2, S01)      | S01 stopped audit rows naming in-app voters on anonymous elections, but a proxy vote stores `proxy_voter_id` and `proxy_delegating_user_id` on the `Vote` row in clear regardless of `anonymous_voting`, `_sign_vote` covers the delegating id, and forensics is designed to list `vote_id` with the delegating member. Scrubbing the audit row alone changes nothing. Either document that a proxy ballot is attributable and tell the delegating member so when the authorization is created, or store the linkage as a salted hash that dies with the salt at close — a migration plus a signing change on existing rows. No proxy vote can be cast from the UI today. |
+| **Audit rows written before S01 still name anonymous in-app voters**                                    | 🚩 Open (MED, 2026-09-30, workflow review W50-2, residual)  | `vote_cast` rows written before `3de83db` carry the voter's `user_id` beside `vote_id`, and they cannot be scrubbed without breaking `verify_integrity` — the same shape as the ELEC-6 IP residual above. `7aa3405` removes the other half of the join (`candidate_id` in `deleted_votes` on anonymous elections), so such a row can no longer be paired with a choice through forensics, but a database read still can. The operator should be told that the audit trail of any anonymous election held before the fix names its in-app voters.                                                                                                                          |
+| **Votes stored across the deploy on an open ballot-item election can count twice**                      | 🚩 Open (MED, 2026-09-30, workflow review W50-3, S03)       | Documented for operators in `docs/UPGRADING.md` — "Close any election that is OPEN before you upgrade (2026-09-30)". In-app rows written before the change carry no `voter_hash` and link rows no `voter_id`, so the two never collide; a backfill of `voter_hash` from `voter_id` is possible only while the election's salt exists, and a closed named election that was double-voted cannot be repaired. Separately, a link vote in a named election stores the hash only, so the roster of who voted cannot name link voters — resolving `voter_id` on the token path for named elections (or a `user_id` on the token, a migration) is a product call.               |
+| **A multi-item ballot's `overall_results` pools every item into one contest**                           | 🚩 Open (MED, 2026-09-30, workflow review W50-7, S04)       | S04 reads each item's own victory condition and S05 reports per-item results with a label, but the pooled `overall_results` list — the one the results screen renders when `results_by_position` is empty, i.e. every general-vote ballot — still ranks one motion's Approve against another's Deny for a single winner, with percentages over the whole ballot. Grouping per item fixes that but changes the response shape and what the certified PDF and the runoff tie detector see for a ballot-item election; the owner decides whether to take that scope.                                                                                                         |
+| **Elections stored with `eligible_voters = []` still read "restricted to nobody" until re-saved**       | 🚩 Open (LOW, 2026-09-30, workflow review W50-41, residual) | `7aa3405` normalises `[]` to `NULL` on create and update; rows written earlier keep `[]`, which refuses every in-app vote while ballot mails and token votes treat it as everyone. `UPDATE elections SET eligible_voters = NULL WHERE JSON_LENGTH(eligible_voters) = 0` is the one-off repair, a data migration left to the owner.                                                                                                                                                                                                                                                                                                                                        |
+| **Write-ins stored HTML-escaped before S15 stay escaped**                                               | 🚩 Open (LOW, 2026-09-30, workflow review W50-42, residual) | Write-in names are now stored as typed; rows written before the fix hold `&lt;`, `&#x27;` and the like and render that way on the Candidates tab, the results and the PDF. An `html.unescape` backfill on `candidates WHERE is_write_in = 1` completes it (CLAUDE.md pitfall 20: settle the shape at the write and migrate the rows already there); a data migration, left to the owner.                                                                                                                                                                                                                                                                                  |
 
 ## Process
 

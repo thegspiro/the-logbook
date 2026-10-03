@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Plus, ScanLine, Settings } from 'lucide-react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockGetSummary = vi.fn();
 vi.mock('../../services/adminHubService', () => ({
@@ -176,6 +176,54 @@ describe('AdminHubFrame', () => {
     );
 
     await waitFor(() => expect(mockGetSummary).toHaveBeenCalledTimes(2));
+  });
+
+  describe('tab strip on a phone', () => {
+    // jsdom lays nothing out, so geometry is supplied: a 300px strip, with
+    // Settings either past its right edge (a deep link to the last tab) or
+    // inside it. Restored after each test so no other block inherits it.
+    const layOut = (settingsLeft: number) =>
+      vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+        const box = (left: number, width: number) => ({ left, width, right: left + width }) as DOMRect;
+        if (this.getAttribute('role') === 'tablist') return box(0, 300);
+        if (this.getAttribute('role') === 'tab' && this.textContent === 'Settings') return box(settingsLeft, 80);
+        return box(0, 0);
+      });
+
+    const tabs = [
+      { id: 'create', label: 'Create Event' },
+      { id: 'community', label: 'Community Engagement' },
+      { id: 'settings', label: 'Settings' },
+    ];
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('scrolls the strip to centre an active tab that starts out of view', () => {
+      layOut(500);
+      renderFrame({ tabs, activeTab: 'settings', onTabChange: vi.fn() });
+
+      // 500 from the strip's left edge, less half the space left around an 80px tab.
+      expect(screen.getByRole('tablist').scrollLeft).toBe(500 - (300 - 80) / 2);
+    });
+
+    it('leaves the strip alone when the active tab is already visible', () => {
+      layOut(200);
+      renderFrame({ tabs, activeTab: 'settings', onTabChange: vi.fn() });
+
+      expect(screen.getByRole('tablist').scrollLeft).toBe(0);
+    });
+
+    // The mobile overflow check treats tabs scrolled out of view as overflow
+    // unless the strip says its scroll is intentional.
+    it('declares the strip as an intentional scroll region without joining the tab order', () => {
+      renderFrame({ tabs, activeTab: 'create', onTabChange: vi.fn() });
+
+      const strip = screen.getByRole('tablist');
+      expect(strip).toHaveAttribute('data-mobile-scroll-region');
+      expect(strip).not.toHaveAttribute('tabindex');
+    });
   });
 
   it('shows the settings icon action it was given', async () => {

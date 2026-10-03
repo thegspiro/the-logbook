@@ -443,6 +443,10 @@ ROUTES_OPEN_BY_DESIGN = {
     "/f/:slug": "public form submission; answers /api/public/v1/forms",
     "/application-status/:token": "an applicant checking their own application",
     "/locations": "the stand-in served when Facilities is off",
+    "/locations/:locationId/check-in": (
+        "a room NFC tag's landing; must work in Locations and Facilities mode, "
+        "and forwards to /events/:id/check-in, which carries the event gate"
+    ),
     "/apparatus-basic": "the stand-in served when Apparatus is off",
 }
 

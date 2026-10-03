@@ -2,8 +2,91 @@
 
 **Prefix:** `GF` · **Iteration:** 22 · **Reviewed:** 2026-08-26 (pass 1),
 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15
-(pass 5) · **PR:**
-[#1904](https://github.com/thegspiro/the-logbook/pull/1904) (pass 1)
+(pass 5), 2026-10-03 (pass 6) · **PR:**
+[#1904](https://github.com/thegspiro/the-logbook/pull/1904) (pass 1), pass 6
+(this PR)
+
+---
+
+## Pass 6 (2026-10-03) — 0 fixed, 0 new findings, near-zero-delta
+
+**Scope check.** Per-file `git log` on all six declared backend files and
+the frontend module (the shallow clone here does not resolve pass 5's merge
+commit directly — the same artifact pass 5 itself worked around) found two
+real commits since pass 5 (2026-09-15):
+
+- **`6850d691f`** (2026-09-26) and **`cfc54148b`** (2026-09-27) — the
+  repo-wide "department's calendar date, not the UTC one" sweep. This
+  feature's share of it: `grant_service.py` (task `completed_date`, two
+  `resolve_org_today` call sites) and `dashboard_widget_service.py`'s
+  `fundraising()` method now resolve "today" via `resolve_org_today`/
+  `resolve_scheduling_timezone`, org-scoped on the caller's own
+  `organization_id` in every call site (confirmed by reading each site, not
+  grepped for the function name alone); `fundraising_service.py`'s
+  `_update_donor_stats` now writes `donor.first_donation_date`/
+  `last_donation_date` via `local_date(row, tz)` instead of a bare
+  `.date()` cut of a UTC timestamp. This exact change — "donor first/last
+  donation dates" — is named in `docs/KNOWN_LIMITATIONS.md`'s "A stored UTC
+  timestamp cut to a date" entry, and the accepted gap (pre-change rows keep
+  their old UTC-cut date, not rewritten by a migration) is recorded there
+  too. No new finding — already documented, read directly to confirm the
+  current code matches what that entry describes rather than trusting the
+  entry's prose.
+- **Two frontend copy-only commits** (`a2efe1839`, `332c069ba`,
+  2026-09-29) touching 11 of the module's files. Read every diff in full:
+  every change is a string literal (toast/error/placeholder/button text,
+  one `aria-label` addition on the `Modal`'s close button). Specifically
+  checked `GrantDetailPage.tsx`'s backdrop, since pass 5's own one-line
+  diff was the Pitfall #31 dialog-dismiss fix on this exact file: still
+  `<div className="modal-overlay" aria-hidden="true" />`, no `onClick`,
+  unchanged by either copy commit. `GrantApplicationFormPage.tsx`'s
+  opportunity merge-fetch `catch` branch (GF-38) is untouched — only its
+  toast strings changed.
+
+**Conclusion: near-zero code drift**, matching pass 5's own finding. The one
+substantive change (donor-date timezone fix) is a correctness improvement
+already reviewed and recorded by this repo's cross-cutting date sweep, not
+new surface this feature introduced.
+
+**Re-verified by direct code read, not re-cited from pass 5's prose:**
+
+- Route count: **45/45** (`grep -c "^@router\."`), unchanged.
+- Locking sites present and unchanged in shape: `grant_service.py` (3
+  `with_for_update()` sites), `fundraising_service.py` (6) — still locking
+  the parent row before the child flush (Pitfall #27).
+- GF-8 — `DonationResponse`/`DonorResponse` still type `is_anonymous` as a
+  plain `bool`/`Optional[bool]`; still not enforced server-side.
+- GF-9 — `grant_service.py`'s report methods still build totals via bare
+  `float(...)` over `Decimal` columns.
+- Org-scoping (#14a/b/c) — every by-id query and FK validation in both
+  service files still filters `organization_id` directly or resolves
+  through an already-org-scoped parent; no gap introduced by the date-fix
+  commits (they only changed _which_ date a value is stamped with, never
+  which org's rows a query reaches).
+
+**Re-confirmed still open (unchanged, per every prior pass):** GF-7
+(state-machine/overspend guards), GF-27a (dashboard KPI aggregate vs.
+single-status link), GF-33 (applications page capped at 1,000, no real
+pagination UI). All product/design decisions, already in
+`KNOWN_LIMITATIONS.md`, re-checked against the current file — citations
+still match.
+
+**No new findings.**
+
+### Completion gate (pass 6)
+
+| Check                                                 | Result                             |
+| ----------------------------------------------------- | ---------------------------------- |
+| `flake8` (all six declared backend files)             | ✅ 0 violations                    |
+| `black --check` (all six declared backend files)      | ✅ clean, unchanged                |
+| `isort --check-only` (all six declared backend files) | ✅ clean                           |
+| `python3 scripts/validate_migrations.py --strict`     | ✅ single head                     |
+| `pytest tests/ -q -k "grant or fundraising"`          | ✅ 684 passed, 1 pre-existing skip |
+| `cd frontend && npm run typecheck`                    | ✅ 0 errors                        |
+| `cd frontend && npm run lint`                         | ✅ 0 errors, 0 warnings            |
+
+No source file was modified by this pass itself — documentation-only
+re-verification.
 
 ---
 

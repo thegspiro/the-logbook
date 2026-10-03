@@ -60,6 +60,7 @@ from app.services.email_theme import (  # noqa: F401  (re-exported: many service
     with_message,
 )
 from app.utils.model_updates import apply_updates
+from app.utils.org_timezone import ZONED_DATE_TIME_FORMAT
 
 # Organization columns that reach templates unchanged, as
 # {column: variable}. Driving the injection from a map rather than a run of
@@ -348,7 +349,24 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
     "ballot_notification": [
         {"name": "recipient_name", "description": "Recipient's display name"},
         {"name": "election_title", "description": "Title of the election/ballot"},
-        {"name": "meeting_date", "description": "Date of the meeting"},
+        {
+            "name": "meeting_date",
+            "description": "Date of the meeting, blank when the election has none",
+        },
+        {
+            "name": "meeting_date_html",
+            "description": (
+                "The meeting date as a fact, omitted entirely when the "
+                "election has no meeting"
+            ),
+        },
+        {
+            "name": "meeting_date_text",
+            "description": (
+                "A plain-text 'Meeting Date:' line starting on a new line, "
+                "omitted entirely when the election has no meeting"
+            ),
+        },
         {"name": "custom_message", "description": "Custom message from secretary"},
         {
             "name": "custom_message_html",
@@ -436,6 +454,18 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "previous_stage", "description": "Stage the election was in"},
         {"name": "current_stage", "description": "Stage it was rolled back to"},
         {"name": "action_time", "description": "When it was rolled back"},
+        {
+            "name": "tokens_invalidated",
+            "description": "Number of issued ballot links the rollback invalidated",
+        },
+        {
+            "name": "ballots_must_be_resent",
+            "description": "Yes/No: whether ballots must be sent again",
+        },
+        {
+            "name": "rollback_effect",
+            "description": "What the rollback did to votes and ballot links",
+        },
     ],
     "election_deleted": [
         {"name": "recipient_name", "description": "Recipient's display name"},
@@ -452,6 +482,11 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "election_type", "description": "Type of election"},
         {"name": "start_date", "description": "Voting start date"},
         {"name": "end_date", "description": "Voting end date"},
+        {"name": "closed_at", "description": "When the election actually closed"},
+        {
+            "name": "closed_by",
+            "description": "Officer who closed the election, or 'Automatic close'",
+        },
         {"name": "total_eligible_voters", "description": "Number of eligible voters"},
         {"name": "total_votes_cast", "description": "Number of votes cast"},
         {
@@ -477,12 +512,20 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
             "description": "Plain-text list of members who received ballots",
         },
         {
+            "name": "ballot_recipients_count",
+            "description": "Number of members listed as having received ballots",
+        },
+        {
             "name": "skipped_voters_html",
             "description": "HTML table of members who did not receive ballots with reasons",
         },
         {
             "name": "skipped_voters_text",
             "description": "Plain-text list of members who did not receive ballots with reasons",
+        },
+        {
+            "name": "skipped_voters_count",
+            "description": "Number of members the ballot send skipped",
         },
     ],
     "member_archived": [
@@ -784,14 +827,18 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         {
             "recipient_name": "John Doe",
             "election_title": "Captain Election 2026",
-            "meeting_date": "April 1, 2026 at 07:00 PM",
+            "meeting_date": "April 1, 2026 at 07:00 PM EDT",
+            "meeting_date_html": facts(
+                [[fact("Meeting date", "April 1, 2026 at 07:00 PM EDT")]]
+            ),
+            "meeting_date_text": "\nMeeting Date: April 1, 2026 at 07:00 PM EDT",
             "custom_message": "Please review the candidates before voting.",
             "custom_message_html": (
                 "<p>Please review the candidates before voting.</p>"
             ),
             "ballot_url": "https://example.com/ballot#token=sample-token",
-            "voting_opens": "March 28, 2026 at 08:00 AM",
-            "voting_closes": "April 1, 2026 at 05:00 PM",
+            "voting_opens": "March 28, 2026 at 08:00 AM EDT",
+            "voting_closes": "April 1, 2026 at 05:00 PM EDT",
             "positions": "Captain, Lieutenant",
             "ballot_items_html": (
                 "<ul>"
@@ -1002,6 +1049,13 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "previous_stage": "Open",
             "current_stage": "Draft",
             "action_time": "March 30, 2026 at 02:15 PM",
+            "tokens_invalidated": "0",
+            "ballots_must_be_resent": "No",
+            "rollback_effect": (
+                "All recorded votes remain counted; this rollback discarded "
+                "none. No issued ballot links were invalidated, so ballots do "
+                "not need to be sent again."
+            ),
         }
     ),
     "election_deleted": _sample(
@@ -1022,6 +1076,8 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "election_type": "Officer Election",
             "start_date": "March 28, 2026 at 08:00 AM",
             "end_date": "April 1, 2026 at 05:00 PM",
+            "closed_at": "April 1, 2026 at 05:00 PM",
+            "closed_by": "Secretary Robert Johnson",
             "total_eligible_voters": "45",
             "total_votes_cast": "38",
             "voter_turnout_percentage": "84.4",
@@ -1065,6 +1121,8 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
                 "  - Mike Wilson (mwilson@example.com)\n"
                 "  ... and 35 others"
             ),
+            "ballot_recipients_count": "38",
+            "skipped_voters_count": "2",
             "skipped_voters_html": (
                 f'<table style="{TABLE_STYLE}">'
                 f'<tr><th style="{TH_STYLE}text-align:left;">Member</th>'
@@ -1347,9 +1405,21 @@ TEST_SAMPLE_DATES: Dict[
         "approval_deadline": (5, None, _strf(_DATE)),
     },
     "ballot_notification": {
-        "voting_opens": (1, time(8, 0), _strf(_DATE_TIME)),
-        "voting_closes": (4, time(17, 0), _strf(_DATE_TIME)),
-        "meeting_date": (4, time(19, 0), _strf(_DATE_TIME)),
+        "voting_opens": (1, time(8, 0), _strf(ZONED_DATE_TIME_FORMAT)),
+        "voting_closes": (4, time(17, 0), _strf(ZONED_DATE_TIME_FORMAT)),
+        "meeting_date": (4, time(19, 0), _strf(ZONED_DATE_TIME_FORMAT)),
+        "meeting_date_html": (
+            4,
+            time(19, 0),
+            lambda moment: facts(
+                [[fact("Meeting date", moment.strftime(ZONED_DATE_TIME_FORMAT))]]
+            ),
+        ),
+        "meeting_date_text": (
+            4,
+            time(19, 0),
+            lambda moment: "\nMeeting Date: " + moment.strftime(ZONED_DATE_TIME_FORMAT),
+        ),
     },
     "member_dropped": {
         "effective_date": (0, None, _strf(_DATE)),
@@ -1365,6 +1435,7 @@ TEST_SAMPLE_DATES: Dict[
     "election_report": {
         "start_date": (-4, time(8, 0), _strf(_DATE_TIME)),
         "end_date": (0, time(17, 0), _strf(_DATE_TIME)),
+        "closed_at": (0, time(17, 0), _strf(_DATE_TIME)),
     },
     "event_request_status": {"event_date": (21, time(18, 0), _strf(_DATE_TIME))},
     "it_password_notification": {"request_time": (0, None, _strf(_DATE_TIME))},
@@ -1941,6 +2012,10 @@ DEFAULT_ELECTION_ROLLBACK_HTML = build_shell(
                 fact("When", "{{action_time}}"),
             ],
             [fact("Reason", "{{reason}}")],
+            [
+                fact("Ballot links invalidated", "{{tokens_invalidated}}"),
+                fact("Ballots must be resent", "{{ballots_must_be_resent}}"),
+            ],
         ]
     )
     + """        <p>This rollback has been logged in the election's audit trail. Please review the election details and coordinate with your team as needed.</p>
@@ -1948,10 +2023,14 @@ DEFAULT_ELECTION_ROLLBACK_HTML = build_shell(
     accent=ACCENT_INDIGO,
     chip="Rolled back",
     tab_note="{{previous_stage}} → {{current_stage}}",
+    # The sentence is filled per transition by the sender: a rollback never
+    # discards a vote on any path, and only a zero-vote reopen that had to
+    # mint a new anonymity salt kills the issued ballot links. A fixed
+    # "votes no longer count" line here was false on every path (W50-37).
     after=callout(
         "warning",
-        "Some votes no longer count",
-        "Votes recorded after the stage this election returned to are no longer counted.",
+        "What this rollback changed",
+        "{{rollback_effect}}",
     ),
 )
 
@@ -1967,8 +2046,10 @@ Moved to: {{current_stage}}
 Rolled back by: {{performer_name}}
 When: {{action_time}}
 Reason: {{reason}}
+Ballot links invalidated: {{tokens_invalidated}}
+Ballots must be resent: {{ballots_must_be_resent}}
 
-Votes recorded after the stage this election returned to are no longer counted.
+{{rollback_effect}}
 
 This rollback has been logged in the election's audit trail. Please review the
 election details and coordinate with your team as needed. If you have
@@ -2261,10 +2342,10 @@ DEFAULT_BALLOT_NOTIFICATION_HTML = build_shell(
                 fact("Voting opens", "{{voting_opens}}"),
                 fact("Voting closes", "{{voting_closes}}"),
             ],
-            [fact("Meeting date", "{{meeting_date}}")],
         ]
     )
-    + """        <h2>Your ballot items</h2>
+    + """{{meeting_date_html}}
+        <h2>Your ballot items</h2>
         {{ballot_items_html}}
         {{custom_message_html}}
 """
@@ -2275,10 +2356,12 @@ DEFAULT_BALLOT_NOTIFICATION_HTML = build_shell(
     chip="Ballot open",
     subtitle="Voting closes {{voting_closes}}",
     tab_note="Closes {{voting_closes}}",
+    # The link opens a ballot page keyed by its token; it never creates a
+    # session, so it must not be described as signing anyone in (W50-68).
     after=callout(
         "info",
         "This link is yours alone",
-        "It signs you in to vote automatically. Don't forward this email: "
+        "It opens your ballot. Don't forward this email: "
         "anyone with the link can vote as you.",
     ),
 )
@@ -2290,9 +2373,8 @@ Hello {{recipient_name}},
 A ballot is now available for your review and vote.
 
 Election: {{election_title}}
-Meeting Date: {{meeting_date}}
 Voting Opens: {{voting_opens}}
-Voting Closes: {{voting_closes}}
+Voting Closes: {{voting_closes}}{{meeting_date_text}}
 
 Your Ballot Items:
 {{ballot_items_text}}
@@ -2300,7 +2382,7 @@ Your Ballot Items:
 {{custom_message}}
 
 Vote here: {{ballot_url}}
-(This link will automatically log you in to vote.)
+(This link opens your ballot.)
 
 If you have any questions, please contact your election administrator:
 {{admin_contact_name}} ({{admin_contact_email}})
@@ -2319,6 +2401,7 @@ DEFAULT_ELECTION_REPORT_HTML = build_shell(
             [fact("Election", "{{election_title}}")],
             [fact("Type", "{{election_type}}")],
             [fact("Voting period", "{{start_date}} &mdash; {{end_date}}")],
+            [fact("Closed", "{{closed_at}} by {{closed_by}}")],
         ]
     )
     + """        <h2>Turnout &amp; quorum</h2>
@@ -2338,11 +2421,10 @@ DEFAULT_ELECTION_REPORT_HTML = build_shell(
     + """        <p>{{quorum_detail}}</p>
         <h2>Results</h2>
         {{results_html}}
-        <h2>Ballot recipients ({{total_eligible_voters}})</h2>
-        <p>The following members received ballots:</p>
+        <h2>Ballot recipients ({{ballot_recipients_count}})</h2>
         {{ballot_recipients_html}}
-        <h2>Members who did not receive ballots</h2>
-        <p>The following active members were not sent a ballot, with the reason why:</p>
+        <h2>Members who did not receive ballots ({{skipped_voters_count}})</h2>
+        <p>Members the ballot send skipped, with the reason recorded at the time:</p>
         {{skipped_voters_html}}""",
     accent=ACCENT_INDIGO,
     chip="Official report",
@@ -2359,6 +2441,7 @@ The following election has been closed. Below is the official report.
 Election: {{election_title}}
 Type: {{election_type}}
 Voting Period: {{start_date}} — {{end_date}}
+Closed: {{closed_at}} by {{closed_by}}
 
 TURNOUT & QUORUM
 Eligible Voters: {{total_eligible_voters}}
@@ -2370,10 +2453,10 @@ Quorum: {{quorum_status}}
 RESULTS
 {{results_text}}
 
-BALLOT RECIPIENTS ({{total_eligible_voters}})
+BALLOT RECIPIENTS ({{ballot_recipients_count}})
 {{ballot_recipients_text}}
 
-MEMBERS WHO DID NOT RECEIVE BALLOTS
+MEMBERS WHO DID NOT RECEIVE BALLOTS ({{skipped_voters_count}})
 {{skipped_voters_text}}
 
 {{footer_text}}"""
@@ -3552,6 +3635,7 @@ class EmailTemplateService:
         "recipients_html",
         "skipped_voters_html",
         "custom_message_html",
+        "meeting_date_html",
         "footer_html",
         "details_html",
         "message_html",

@@ -96,11 +96,35 @@ seed that fails is a finding about those screens, not a fixture problem.
 has lapsed, and signs in afresh when the session is gone. It usually is by the
 next run: the server ends a session after 15 idle minutes
 (`HIPAA_SESSION_TIMEOUT_MINUTES`). Sign-ins are limited to five a minute per
-address, so the driver spaces its own sign-ins 13 seconds apart. A test that
+address, so the driver spaces sign-ins 13 seconds apart — across every driver
+on the machine, not only its own: the moment of the last sign-in is kept in
+`.workflow-review/last-signin` and taken under a lock. A test that
 deliberately trips the limit, or locks an account, should clear what it left
 behind — the `rate_limit:auth:login:*` and `suspicious_ip:*` keys in Redis
 db 3, and the account's `failed_login_attempts` / `locked_until` — so the next
 run can sign in (see W02).
+
+**A second driver** lets one browser carry an activity while another checks
+it from the other side — a member's view of what an officer just did, a
+refusal probe, the phone viewport — without either losing the page it is on.
+Give it its own state directory holding copies of `env.json` and
+`accounts.json` (no `auth-*.json`, so its sessions are its own and one
+driver's token refresh cannot invalidate the other's), its own port, and the
+first driver's pace file:
+
+```sh
+mkdir -p /tmp/wr-b && cp .workflow-review/env.json .workflow-review/accounts.json /tmp/wr-b/
+WR_STATE_DIR=/tmp/wr-b WR_DRIVER_PORT=9556 \
+  WR_SIGNIN_PACE_FILE=$PWD/.workflow-review/last-signin \
+  node scripts/workflow-review/driver.mjs &
+echo 'await wr.as("member"); return wr.text("h1")' \
+  | WR_STATE_DIR=/tmp/wr-b WR_DRIVER_PORT=9556 scripts/workflow-review/send.sh
+```
+
+The public ballot endpoints have their own per-address limits (ten lookups
+and five submissions a minute, `rate_limit:auth:ballot_read:*` and
+`rate_limit:auth:ballot_vote:*` in Redis db 3), and two drivers share them
+the same way.
 
 ### What a script can use
 

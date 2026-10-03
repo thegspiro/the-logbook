@@ -27,7 +27,7 @@ const PipelineSection: React.FC<PipelineSectionProps> = ({
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-theme-text-primary text-lg font-semibold">Request Pipeline</h3>
+        <h2 className="text-theme-text-primary text-lg font-semibold">Request Pipeline</h2>
         <p className="text-theme-text-muted mt-1 text-sm">Configure how event requests are processed.</p>
       </div>
 
@@ -140,7 +140,7 @@ const PipelineSection: React.FC<PipelineSectionProps> = ({
 
       {/* Pipeline tasks with reorder */}
       <div className="border-theme-surface-border border-t pt-4">
-        <h4 className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wider uppercase">Pipeline Tasks</h4>
+        <h3 className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wider uppercase">Pipeline Tasks</h3>
         <p className="text-theme-text-muted mb-3 text-xs">
           Checklist items your team uses when processing requests. Use arrows to reorder.
         </p>
@@ -150,13 +150,14 @@ const PipelineSection: React.FC<PipelineSectionProps> = ({
               key={task.id}
               className="border-theme-surface-border flex items-center justify-between rounded-lg border p-3"
             >
-              <div className="flex items-center gap-3">
-                <div className="flex flex-col">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex shrink-0 flex-col">
                   <button
                     type="button"
                     onClick={() => onReorderTask(idx, 'up')}
                     disabled={saving || idx === 0}
-                    className="text-theme-text-muted hover:text-theme-text-primary transition-colors disabled:opacity-30"
+                    aria-label={`Move "${task.label}" up`}
+                    className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone transition-colors disabled:opacity-30"
                   >
                     <ChevronUp className="h-4 w-4" />
                   </button>
@@ -164,12 +165,13 @@ const PipelineSection: React.FC<PipelineSectionProps> = ({
                     type="button"
                     onClick={() => onReorderTask(idx, 'down')}
                     disabled={saving || idx === pipeline.tasks.length - 1}
-                    className="text-theme-text-muted hover:text-theme-text-primary transition-colors disabled:opacity-30"
+                    aria-label={`Move "${task.label}" down`}
+                    className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone transition-colors disabled:opacity-30"
                   >
                     <ChevronDown className="h-4 w-4" />
                   </button>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <span className="text-theme-text-primary text-sm font-medium">{task.label}</span>
                   {task.description && task.description !== task.label && (
                     <p className="text-theme-text-muted mt-0.5 text-xs">{task.description}</p>
@@ -180,7 +182,7 @@ const PipelineSection: React.FC<PipelineSectionProps> = ({
                 type="button"
                 onClick={() => onRemoveTask(task.id)}
                 disabled={saving}
-                className="text-theme-text-muted text-sm transition-colors hover:text-red-600 disabled:opacity-50 dark:hover:text-red-400"
+                className="text-theme-text-muted touch-target-phone shrink-0 text-sm transition-colors hover:text-red-600 disabled:opacity-50 dark:hover:text-red-400"
                 title={`Remove "${task.label}"`}
               >
                 <Trash2 className="h-4 w-4" />

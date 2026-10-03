@@ -33,6 +33,16 @@ from reportlab.platypus import (
 _GRID = colors.HexColor("#9ca3af")
 _MUTED = colors.HexColor("#6b7280")
 
+_ROW_STYLE = TableStyle(
+    [
+        ("FONTSIZE", (0, 0), (-1, -1), 11),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.25, _GRID),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]
+)
+
 # One instruction line per voting method; {n} = max votes per position.
 _INSTRUCTIONS = {
     "simple_majority": "Mark ONE box per position.",
@@ -53,8 +63,9 @@ def render_printable_ballot_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> B
     """Render the blank ballot, returning a BytesIO at position 0.
 
     *data*: ``election`` (title, voting_method, max_votes_per_position,
-    allow_write_ins) and ``positions`` — ordered list of
-    ``{name, candidates: [names]}``.
+    allow_write_ins), ``positions`` — ordered list of
+    ``{name, candidates: [names]}`` — and optional ``approval_items``,
+    ordered ``{title, description}`` questions answered Approve / Deny.
     *meta*: ``org_name``, ``generated_at`` (display string).
     """
     election = data.get("election", {})
@@ -131,17 +142,28 @@ def render_printable_ballot_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> B
                 Table(
                     rows,
                     colWidths=[0.5 * inch, 6.0 * inch],
-                    style=TableStyle(
-                        [
-                            ("FONTSIZE", (0, 0), (-1, -1), 11),
-                            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                            ("LINEBELOW", (0, 0), (-1, -1), 0.25, _GRID),
-                            ("TOPPADDING", (0, 0), (-1, -1), 6),
-                            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-                        ]
-                    ),
+                    style=_ROW_STYLE,
                 )
             )
+
+    # Approval items are yes/no questions, so they take a fixed Approve /
+    # Deny pair regardless of the election's voting method: a ranked or
+    # multi-vote instruction would make no sense on a motion.
+    for item in data.get("approval_items", []):
+        story.append(Paragraph(_esc(item.get("title")), pos_style))
+        if item.get("description"):
+            story.append(Paragraph(_esc(item.get("description")), instr_style))
+        story.append(Paragraph("Mark ONE box.", instr_style))
+        story.append(
+            Table(
+                [
+                    ["☐", Paragraph("Approve", styles["Normal"])],
+                    ["☐", Paragraph("Deny", styles["Normal"])],
+                ],
+                colWidths=[0.5 * inch, 6.0 * inch],
+                style=_ROW_STYLE,
+            )
+        )
 
     story.append(Spacer(1, 16))
     story.append(HRFlowable(width="100%", thickness=1, color=_GRID))

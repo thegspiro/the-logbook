@@ -55,6 +55,17 @@ export const AdminMetricsSettings: React.FC<AdminMetricsSettingsProps> = ({
     setLoading(true);
     try {
       const data = await adminHubService.getMetricSettings(moduleKey);
+      // The render reads all four lists unguarded, so a 200 that is not this
+      // shape (a captive portal's HTML page) has to take the load-error path
+      // above rather than crash the page through the ErrorBoundary.
+      if (
+        !Array.isArray(data?.options) ||
+        !Array.isArray(data.selected) ||
+        !Array.isArray(data.departmentDefault) ||
+        !Array.isArray(data.builtInDefault)
+      ) {
+        throw new Error('Could not load the metric options.');
+      }
       setSettings(data);
       setSelected(data.selected);
       setAppliesToEveryone(data.appliesToEveryone);
@@ -155,7 +166,7 @@ export const AdminMetricsSettings: React.FC<AdminMetricsSettingsProps> = ({
         <section className="card p-4 sm:p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <h3 className="text-theme-text-primary text-base font-bold">Headline metrics</h3>
+              <h2 className="text-theme-text-primary text-base font-bold">Headline metrics</h2>
               <p className="text-theme-text-muted mt-1 text-sm">
                 Four slots, shown to everyone with <code className="text-xs">{permission}</code>. Reorder with the
                 arrows — slots 1 and 2 are the two that fit on a phone.
@@ -251,7 +262,7 @@ export const AdminMetricsSettings: React.FC<AdminMetricsSettingsProps> = ({
         {/* What this module offers */}
         <section className="card p-4 sm:p-5">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h3 className="text-theme-text-primary text-base font-bold">Available in {moduleLabel}</h3>
+            <h2 className="text-theme-text-primary text-base font-bold">Available in {moduleLabel}</h2>
             <p className="text-theme-text-muted text-sm">
               <span className="font-semibold tabular-nums">{openSlotsUsed}</span> of {ADMIN_METRIC_OPEN_SLOTS} open
               slots used
@@ -311,7 +322,7 @@ export const AdminMetricsSettings: React.FC<AdminMetricsSettingsProps> = ({
       {/* Preview, audience, save */}
       <div className="flex flex-col gap-4">
         <section className="card p-4">
-          <h4 className="text-theme-text-muted text-[11px] font-bold tracking-[0.14em] uppercase">Preview</h4>
+          <h3 className="text-theme-text-muted text-[11px] font-bold tracking-[0.14em] uppercase">Preview</h3>
           <div className="mt-3 grid grid-cols-2 gap-2">
             {[...selected, ...(fixedOption ? [fixedOption.key] : [])].map((key) => {
               const option = byKey(key);
@@ -329,9 +340,9 @@ export const AdminMetricsSettings: React.FC<AdminMetricsSettingsProps> = ({
         </section>
 
         <section className="card p-4">
-          <h4 className="text-theme-text-muted text-[11px] font-bold tracking-[0.14em] uppercase">
+          <h3 className="text-theme-text-muted text-[11px] font-bold tracking-[0.14em] uppercase">
             Who this applies to
-          </h4>
+          </h3>
           <div className="mt-3 flex items-start gap-3">
             <button
               type="button"

@@ -632,6 +632,8 @@ export interface Location {
   facility_id?: string;
   facility_room_id?: string;
   display_code?: string;
+  /** This room's kiosk accepts member ID card taps. */
+  nfc_badge_check_in_enabled?: boolean;
   is_active: boolean;
   created_at: string;
   updated_at: string;
