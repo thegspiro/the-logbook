@@ -1,5 +1,20 @@
 # Screenshot currency
 
+## Watchdog check-in: rebased onto main, one new commit audited, 2026-10-03
+
+This branch had drifted one commit behind `main` (merge-base `383365d76` was
+three hours stale). Rebased cleanly — the only intervening commit, PR #2881
+(`security(meetings-minutes): pass 5`), touches only
+`docs/security-review/MM-24-meetings-minutes.md` and
+`docs/security-review/PROGRESS.md`, neither of which this branch's own
+commits modify, so the rebase replayed with no conflicts.
+
+That commit touches no file under `frontend/` or `backend/`, so there is
+nothing in it for this sweep to check against the guides — a security-review
+pass over an already-shipped screen's permission logic, not a UI change.
+`audit_images.py --baseline scripts/screenshots/audit_baseline.txt` also
+reports no new findings (582 images checked). Nothing re-shot this pass.
+
 ## Closing the "not swept" copy commits from the previous entry, 2026-10-03
 
 `audit_images.py --baseline` still reports nothing new. `main` has not moved
