@@ -137,7 +137,7 @@ const BallotPreviewModal: React.FC<BallotPreviewModalProps> = ({ election, candi
                             </div>
                           ))
                         ) : (
-                          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
+                          <div className="alert-warning text-theme-alert-warning-text text-sm">
                             No candidates added for this position yet.
                           </div>
                         )}

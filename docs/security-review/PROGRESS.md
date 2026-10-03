@@ -16,16 +16,52 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR [#2875](https://github.com/thegspiro/the-logbook/pull/2875)
-(Feature 22, Grants & fundraising, pass 6) merged directly by this watchdog
-check — CI green (17/17 checks), `mergeable_state: clean`, no unresolved
-review threads (only the informational Codex usage-limit comment), and the
-PR's base matched `main`'s current head exactly. Rotation row 22 stays ✅.
-Next: Feature 23 (Medical supplies), pass 6 — not yet started as of this
-check, no in-progress `claude/security-review-*` branch or open PR for it.
+**PR [#2877](https://github.com/thegspiro/the-logbook/pull/2877)** — branch
+`claude/security-review-feature23-pass12`, Feature 23 (Medical supplies),
+pass 12. Confirmed via the GitHub API before starting: no open PR whose
+head branch starts with `claude/security-review-` existed, and PR #2875
+(Feature 22, Grants & fundraising, pass 6, recorded below) is merged.
+
+Not a zero-delta pass since pass 11 (2026-09-11): a browser-driven workflow
+review (W47) landed one backend fix directly in this feature's scope
+(`get_expiring_lots` now excludes a retired item's lots, closing a stale
+Expiring-Stock-tab/summary-count mismatch) plus four frontend-only fixes,
+all re-verified present by direct code read. A genuinely new surface since
+pass 11 — an MCP write tool (`create_reorder_request`) reachable from an AI
+connection — was reviewed for this feature's one concern: it correctly
+refuses a reorder that reaches the medical domain by id, category, **or
+name** (a new `name_in_domain` helper), with every check scoped to the
+service-key principal's own org, never client input. A full MCP
+write-surface review is Feature 27 (Integrations)'s scope, not re-litigated
+here.
+
+**0 fixed by this pass, 0 new findings.** Route count (15/15) and the four
+domain-pinning helpers re-verified unchanged (fail-closed, org-scoped both
+sides of their join). Four standing flags (MSUP-4, MSUP-11, MSUP-15,
+MSUP-25) re-confirmed open, unchanged. Full completion gate: flake8/
+black/isort clean, `validate_migrations.py --strict` single head, 1194
+`-k "inventory or medical_supplies"` backend tests passed, frontend
+typecheck/lint clean. Full write-up:
+[`MSUP-23-medical-supplies.md`](./MSUP-23-medical-supplies.md)'s **Pass 12**
+section. Rotation row 23 → ✅ (pending PR merge). Next: Feature 24
+(Meetings & minutes).
 
 <details>
-<summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 6, PR #2875, merged directly by this watchdog), preserved for history</summary>
+<summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 6, PR #2875, merged directly by a 30-minute watchdog check), preserved for history</summary>
+
+**None.** PR [#2875](https://github.com/thegspiro/the-logbook/pull/2875)
+(Feature 22, Grants & fundraising, pass 6) merged directly by a 30-minute
+watchdog check — CI green (17/17 checks), `mergeable_state: clean`, no
+unresolved review threads (only the informational Codex usage-limit
+comment), and the PR's base matched `main`'s current head exactly.
+Rotation row 22 stays ✅. Next: Feature 23 (Medical supplies) — picked up
+independently by this feature's own pass 12 (PR #2877, recorded above)
+before this note landed on `main`.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 6, PR #2875, merged), preserved for history</summary>
 
 **PR [#2875](https://github.com/thegspiro/the-logbook/pull/2875)** — branch
 `claude/security-review-feature22-pass6`, Feature 22 (Grants & fundraising),
@@ -17077,7 +17113,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
@@ -25048,3 +25084,58 @@ nothing further pending, so this watchdog check merged it directly (squash,
 Merge commit `e070ce9c4` confirmed on `main`. Rotation row 22 stays ✅. Next:
 Feature 23 (Medical supplies), pass 6 — not yet started as of this check, no
 in-progress branch or open PR.
+
+**This PR's own branch (`claude/security-review-feature23-pass12`) had
+already picked up Feature 23 independently before this note landed on
+`main`**, so the two ran concurrently rather than one waiting on the other;
+the resulting `PROGRESS.md` conflict (both sides editing the Open PR
+section) was resolved by a follow-up watchdog check merging `main` into
+this branch, keeping both log entries in their chronological order.
+
+### 2026-10-03 — Feature 23 (Medical supplies, pass 12): 0 fixed by this pass, 0 new findings
+
+Picked up this iteration of the `/security-review` rotation. Confirmed via
+the GitHub API before starting: no open PR whose head branch starts with
+`claude/security-review-` existed, and PR #2875 (Feature 22, Grants &
+fundraising, pass 6) is merged. Rotation row 22 confirmed ✅.
+
+Not a zero-delta pass since pass 11 (2026-09-11, PR #2489). A browser-driven
+workflow review (W47, `docs/workflow-review/W47-medical-supplies.md`,
+2026-09-30) landed one backend fix directly in this feature's scope:
+`InventoryService.get_expiring_lots` did not filter retired items, so a
+retired supply's lots stayed on the Expiring Stock tab and in the summary
+counts after retirement — fixed by adding an `active` filter, confirmed
+present at its current location with a new integration test that fails
+against the old query. The other four W47 fixes are frontend-only
+(ready/expired lot split, named lot controls, named delivery lines, a
+linked categories page), all re-verified present by direct read. W47-6
+(dashboard "Low stock" counting a lot-stocked medical category as empty)
+is flagged, not fixed, and confirmed mirrored into KNOWN_LIMITATIONS.md.
+
+A genuinely new surface since pass 11: an MCP write tool
+(`create_reorder_request` in `app/mcp/tools/writes.py`) reachable from an
+AI connection with write access. Reviewed for this feature's one concern —
+the module's own docstring states inventory tools must never reach medical
+stock — and confirmed it refuses a reorder reaching the medical domain by
+id, category, or (via a new `name_in_domain` helper) by name alone, with
+every check scoped to the service-key principal's own `organization_id`,
+never a client-supplied value. A full review of the MCP write-tool surface
+is Feature 27 (Integrations)'s scope, not re-litigated here. Two unrelated
+commits (inventory labels, return-request type widening) touched
+`inventory_service.py` well outside this feature's method ranges, confirmed
+by diff line numbers.
+
+**0 fixed by this pass, 0 new findings.** Route count (15/15) and the four
+domain-pinning helpers (`category_in_domain`/`item_in_domain`/
+`items_in_domain`/`lot_in_domain`) re-verified unchanged — still fail
+closed, still org-scoped on both sides of their join. Four standing flags
+(MSUP-4 unbounded `get_expiring_lots`, MSUP-11 unbounded lot list, MSUP-15
+the general-inventory form's lot-stock gap, MSUP-25 the
+preflight-then-mutate TOCTOU shape) re-confirmed open, unchanged. Full
+completion gate: flake8/black/isort clean over `app/ tests/ alembic/`,
+`validate_migrations.py --strict` single head, 1194 `-k "inventory or
+medical_supplies"` backend tests passed (1 pre-existing skip), frontend
+typecheck/lint clean. Full write-up:
+[`MSUP-23-medical-supplies.md`](./MSUP-23-medical-supplies.md)'s **Pass 12**
+section. Rotation row 23 → ✅ (pending PR merge). Next: Feature 24
+(Meetings & minutes).

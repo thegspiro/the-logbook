@@ -19,7 +19,7 @@ Each step is guarded on the column's absence so a re-run, or a database that
 ``repair_schema.py`` already patched from the models, is a no-op.
 
 Revision ID: d058b5e7c1f4
-Revises: c8266855a348
+Revises: 90070d4a2f6f
 Create Date: 2026-10-03 01:44:10.870923
 
 """
@@ -31,7 +31,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "d058b5e7c1f4"
-down_revision: Union[str, None] = "c8266855a348"
+down_revision: Union[str, None] = "90070d4a2f6f"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

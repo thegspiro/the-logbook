@@ -655,12 +655,12 @@ const MyTrainingPage: React.FC = () => {
               against the training you are required to complete.
             </p>
           </div>
-          <div className="flex items-center space-x-3">
+          <div className="flex shrink-0 items-center space-x-3">
             <button
               onClick={() => void navigate('/training/submit')}
-              className="btn-primary flex items-center space-x-2 text-sm font-medium"
+              className="btn-primary flex items-center space-x-2 text-sm font-medium whitespace-nowrap"
             >
-              <Send className="h-4 w-4" />
+              <Send className="h-4 w-4 shrink-0" />
               <span>Submit Training</span>
             </button>
           </div>

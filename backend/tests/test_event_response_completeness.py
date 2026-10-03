@@ -64,6 +64,12 @@ CALLER_SUPPLIED = {
     # endpoint. Like the counts above it is not an Event column.
     "occupied_seats",
     "user_waitlist_exceeds_capacity",
+    # The organizer pair's names and whether this caller may decide requests
+    # and hand the event over: per-caller, resolved on the detail endpoint.
+    # The ids themselves are columns and are passed by the builder.
+    "organizer_name",
+    "alternate_organizer_name",
+    "can_manage_organizers",
 }
 
 

@@ -32,6 +32,10 @@ vi.mock('../services/api', () => ({
   roleService: {
     getRoles: vi.fn().mockResolvedValue([]),
   },
+  // Behind EventForm's organizer pickers.
+  userService: {
+    getUsers: vi.fn().mockResolvedValue([]),
+  },
   locationsService: {
     getLocations: vi.fn().mockResolvedValue([]),
   },

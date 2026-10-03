@@ -4989,9 +4989,9 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
     Send email reminders 6 months before a recurring event series ends.
 
     Queries all parent recurring events whose recurrence_end_date falls
-    within the next 6 months (180 days). For each, sends an email to
-    users with events.manage permission so they can extend or modify the
-    series before it expires.
+    within the next 6 months (180 days). For each, notifies the series'
+    organizer and alternate — or its creator when neither can be reached —
+    so they can extend or modify the series before it expires.
 
     Tracks sent reminders in custom_fields.series_end_reminder_sent to
     ensure each series only triggers one notification.
@@ -5010,6 +5010,7 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
     from app.models.notification import NotificationChannel, NotificationLog
     from app.services.email_service import EmailService
     from app.services.email_template_service import EmailTemplateService
+    from app.services.event_organizer_service import EventOrganizerService
 
     now = datetime.now(dt_timezone.utc)
     six_months_from_now = now + timedelta(days=180)
@@ -5045,7 +5046,6 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
                 .where(Event.recurrence_end_date.isnot(None))
                 .where(Event.recurrence_end_date > now)
                 .where(Event.recurrence_end_date <= six_months_from_now)
-                .where(Event.created_by.isnot(None))
             )
             events = list(events_result.scalars().all())
 
@@ -5054,21 +5054,17 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
 
             email_service = EmailService(organization=org)
             template_service = EmailTemplateService(db)
+            organizer_service = EventOrganizerService(db)
 
             for event in events:
                 custom = event.custom_fields or {}
                 if custom.get("series_end_reminder_sent"):
                     continue
 
-                # Notify the event creator
-                creator_result = await db.execute(
-                    select(User).where(
-                        User.id == event.created_by,
-                        User.is_active == True,  # noqa: E712
-                    )
-                )
-                creator = creator_result.scalar_one_or_none()
-                if not creator:
+                # The organizer and alternate run the series now; whoever
+                # created it may have handed it over long ago.
+                recipients = await organizer_service.series_reminder_recipients(event)
+                if not recipients:
                     continue
 
                 # Count remaining future occurrences
@@ -5109,84 +5105,85 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
                     EmailTemplateType.SERIES_END_REMINDER,
                 )
 
-                prefs = creator.notification_preferences or {}
-                user_name = f"{creator.first_name} {creator.last_name}"
+                for recipient in recipients:
+                    prefs = recipient.notification_preferences or {}
+                    user_name = f"{recipient.first_name} {recipient.last_name}"
 
-                # In-app notification
-                try:
-                    in_app_log = NotificationLog(
-                        id=generate_uuid(),
-                        organization_id=str(org.id),
-                        recipient_id=str(creator.id),
-                        channel=NotificationChannel.IN_APP,
-                        category="series_end_reminder",
-                        subject=(f"Recurring series ending soon: {event.title}"),
-                        message=(
-                            f'The recurring event series "{event.title}" '
-                            f"({pattern_label}) ends on {series_end_str} "
-                            f"with {remaining} occurrence(s) remaining."
-                        ),
-                        action_url=f"/events/{event.id}",
-                        delivered=True,
-                    )
-                    db.add(in_app_log)
-                    org_reminders += 1
-                except Exception as e:
-                    logger.error(
-                        f"Failed to create series-end in-app notification "
-                        f"for user {creator.id}: {e}"
-                    )
-
-                # Email notification
-                if creator.email and member_receives_email(
-                    prefs, EmailKind.EVENT_REMINDERS, department_required_kinds(org)
-                ):
+                    # In-app notification
                     try:
-                        context = {
-                            "recipient_name": user_name,
-                            "event_title": event.title,
-                            "recurrence_pattern": pattern_label,
-                            "series_end_date": series_end_str,
-                            "remaining_occurrences": str(remaining),
-                            "event_url": event_url,
-                        }
-
-                        if template:
-                            subject, html_body, text_body = template_service.render(
-                                template, context, org
-                            )
-                        else:
-                            from app.services.email_template_service import (
-                                DEFAULT_SERIES_END_REMINDER_HTML,
-                                DEFAULT_SERIES_END_REMINDER_SUBJECT,
-                                DEFAULT_SERIES_END_REMINDER_TEXT,
-                            )
-
-                            subject = DEFAULT_SERIES_END_REMINDER_SUBJECT
-                            html_body = DEFAULT_SERIES_END_REMINDER_HTML
-                            text_body = DEFAULT_SERIES_END_REMINDER_TEXT
-                            for key, val in context.items():
-                                placeholder = "{{" + key + "}}"
-                                subject = subject.replace(placeholder, val)
-                                html_body = html_body.replace(placeholder, val)
-                                text_body = text_body.replace(placeholder, val)
-
-                        success, _ = await email_service.send_email(
-                            to_emails=[creator.email],
-                            subject=subject,
-                            html_body=html_body,
-                            text_body=text_body,
-                            db=db,
-                            template_type="series_end_reminder",
+                        in_app_log = NotificationLog(
+                            id=generate_uuid(),
+                            organization_id=str(org.id),
+                            recipient_id=str(recipient.id),
+                            channel=NotificationChannel.IN_APP,
+                            category="series_end_reminder",
+                            subject=(f"Recurring series ending soon: {event.title}"),
+                            message=(
+                                f'The recurring event series "{event.title}" '
+                                f"({pattern_label}) ends on {series_end_str} "
+                                f"with {remaining} occurrence(s) remaining."
+                            ),
+                            action_url=f"/events/{event.id}",
+                            delivered=True,
                         )
-                        if success > 0:
-                            org_emails += 1
+                        db.add(in_app_log)
+                        org_reminders += 1
                     except Exception as e:
                         logger.error(
-                            "Failed to send series-end email to {}: {}",
-                            _redact_email(creator.email),
-                            e,
+                            f"Failed to create series-end in-app notification "
+                            f"for user {recipient.id}: {e}"
                         )
+
+                    # Email notification
+                    if recipient.email and member_receives_email(
+                        prefs, EmailKind.EVENT_REMINDERS, department_required_kinds(org)
+                    ):
+                        try:
+                            context = {
+                                "recipient_name": user_name,
+                                "event_title": event.title,
+                                "recurrence_pattern": pattern_label,
+                                "series_end_date": series_end_str,
+                                "remaining_occurrences": str(remaining),
+                                "event_url": event_url,
+                            }
+
+                            if template:
+                                subject, html_body, text_body = template_service.render(
+                                    template, context, org
+                                )
+                            else:
+                                from app.services.email_template_service import (
+                                    DEFAULT_SERIES_END_REMINDER_HTML,
+                                    DEFAULT_SERIES_END_REMINDER_SUBJECT,
+                                    DEFAULT_SERIES_END_REMINDER_TEXT,
+                                )
+
+                                subject = DEFAULT_SERIES_END_REMINDER_SUBJECT
+                                html_body = DEFAULT_SERIES_END_REMINDER_HTML
+                                text_body = DEFAULT_SERIES_END_REMINDER_TEXT
+                                for key, val in context.items():
+                                    placeholder = "{{" + key + "}}"
+                                    subject = subject.replace(placeholder, val)
+                                    html_body = html_body.replace(placeholder, val)
+                                    text_body = text_body.replace(placeholder, val)
+
+                            success, _ = await email_service.send_email(
+                                to_emails=[recipient.email],
+                                subject=subject,
+                                html_body=html_body,
+                                text_body=text_body,
+                                db=db,
+                                template_type="series_end_reminder",
+                            )
+                            if success > 0:
+                                org_emails += 1
+                        except Exception as e:
+                            logger.error(
+                                "Failed to send series-end email to {}: {}",
+                                _redact_email(recipient.email),
+                                e,
+                            )
 
                 # Mark reminder as sent using deep copy to avoid
                 # SQLAlchemy shallow-copy pitfall with JSON columns
@@ -5394,6 +5391,11 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
                 "allowed_rsvp_statuses",
                 "template_id",
                 "is_draft",
+                # A handover with "this and future" lands on the parent, so a
+                # new occurrence carries whoever runs the series now rather
+                # than reverting to its creator.
+                "organizer_id",
+                "alternate_organizer_id",
             ):
                 val = getattr(parent, field, None)
                 if val is not None:

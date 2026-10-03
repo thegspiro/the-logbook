@@ -536,6 +536,27 @@ export const eventService = {
     const response = await api.patch<import('../types/event').EventModuleSettings>('/events/settings', data);
     return response.data;
   },
+  /** Positions by name, for the attendance-request fallback (events.manage). */
+  async getFallbackPositionOptions(): Promise<import('../types/event').EventPositionOption[]> {
+    const response = await api.get<import('../types/event').EventPositionOption[]>('/events/settings/position-options');
+    return asArray(response.data);
+  },
+
+  /**
+   * Hand an event to a new organizer and alternate. With scope 'future' on a
+   * recurring event, every upcoming occurrence moves too.
+   */
+  async transferEvent(
+    eventId: string,
+    data: import('../types/event').EventTransferRequest
+  ): Promise<import('../types/event').EventTransferResponse> {
+    const response = await api.post<import('../types/event').EventTransferResponse>(
+      `/events/${eventId}/transfer`,
+      data
+    );
+    return response.data;
+  },
+
   async getVisibleEventTypes(): Promise<import('../types/event').EventType[]> {
     const response = await api.get<{ visible_event_types: import('../types/event').EventType[] }>(
       '/events/visible-event-types'

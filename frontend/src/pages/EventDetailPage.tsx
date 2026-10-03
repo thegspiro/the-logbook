@@ -74,6 +74,7 @@ import TrainingSessionLinkageCard from '../components/event-detail/TrainingSessi
 import EventProspectsCard from '../components/event-detail/EventProspectsCard';
 import EventAttendancePetitionPrompt from '../components/event-detail/EventAttendancePetitionPrompt';
 import EventAttendancePetitionsCard from '../components/event-detail/EventAttendancePetitionsCard';
+import EventTransferModal from '../components/event-detail/EventTransferModal';
 import { buildCsv, downloadCsv } from '../utils/csv';
 
 /**
@@ -210,6 +211,7 @@ export const EventDetailPage: React.FC = () => {
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [showRecordTimesModal, setShowRecordTimesModal] = useState(false);
   const [showCancelSeriesModal, setShowCancelSeriesModal] = useState(false);
+  const [showTransferModal, setShowTransferModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEndEventConfirm, setShowEndEventConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -243,7 +245,7 @@ export const EventDetailPage: React.FC = () => {
   const actionsMenuRef = useRef<HTMLDivElement>(null);
   const reminderMenuRef = useRef<HTMLDivElement>(null);
 
-  const { checkPermission, user: currentUser } = useAuthStore();
+  const { checkPermission } = useAuthStore();
   const tz = useTimezone();
   const canManage = checkPermission('events.manage');
   // Deliberately a separate grant from events.manage: whoever closed the event
@@ -865,9 +867,11 @@ export const EventDetailPage: React.FC = () => {
   // own eligibility (the 30-day window, already present) is the server's call;
   // the page only decides whether to ask.
   const attendancePetitionsOpen = checkInClosed && !event.is_cancelled && !event.is_draft;
-  // The organizer need not hold events.manage to decide their own event's
-  // requests; the API grants the same pair.
-  const canReviewAttendancePetitions = canManage || (Boolean(currentUser?.id) && currentUser?.id === event.created_by);
+  // The organizer and alternate need not hold events.manage to decide their own
+  // event's requests or hand it over. The server decides who that is
+  // (CLAUDE.md #29), so the page reads its answer rather than comparing ids.
+  const canManageOrganizers = Boolean(event.can_manage_organizers);
+  const canReviewAttendancePetitions = canManageOrganizers;
 
   // RSVP deadline countdown
   const rsvpCountdown = (() => {
@@ -1423,23 +1427,32 @@ export const EventDetailPage: React.FC = () => {
                   </div>
                 )}
 
-                {/* Who to hand a discrepancy back to. Any officer holding
-                    events.manage can close an event, but the member who
-                    organized it is the one who reconciles its attendance, and
-                    nothing else on this page says who that was.
+                {/* Who to hand a discrepancy back to, and the way to hand the
+                    event itself to someone else. Any officer holding
+                    events.manage can close an event, but its organizer is the
+                    one who reconciles its attendance, and nothing else on this
+                    page says who that is.
 
-                    The server withholds the name from callers without
-                    events.manage, so the canManage check here only keeps it off
-                    a screen it would never be populated for anyway. Renders
-                    nothing when absent: an event predating the column, or one
-                    whose organizer has left the department, has no honest name
-                    to show, and an "Unknown" row would read as a data error. */}
-                {canManage && event.created_by_name && (
+                    The server names the pair only to a caller who may transfer
+                    the event — its organizer, its alternate or an events
+                    manager — so this row is gated on its answer, not on a
+                    permission re-derived here. */}
+                {canManageOrganizers && (
                   <div className="flex items-start">
                     <UserRound className="text-theme-text-muted mr-3 h-5 w-5 shrink-0" aria-hidden="true" />
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <p className="text-theme-text-secondary text-sm font-medium">Organized by</p>
-                      <p className="text-theme-text-secondary text-sm">{event.created_by_name}</p>
+                      <p className="text-theme-text-secondary text-sm">{event.organizer_name ?? 'No organizer set'}</p>
+                      {event.alternate_organizer_name && (
+                        <p className="text-theme-text-muted text-sm">Alternate: {event.alternate_organizer_name}</p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setShowTransferModal(true)}
+                        className="mt-1 text-sm font-medium text-blue-700 underline hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                      >
+                        Transfer event
+                      </button>
                     </div>
                   </div>
                 )}
@@ -1956,10 +1969,24 @@ export const EventDetailPage: React.FC = () => {
           />
         )}
 
+        {showTransferModal && (
+          <EventTransferModal
+            eventId={event.id}
+            isRecurring={Boolean(event.is_recurring)}
+            currentOrganizerId={event.organizer_id ?? null}
+            currentAlternateId={event.alternate_organizer_id ?? null}
+            onClose={() => setShowTransferModal(false)}
+            onTransferred={() => {
+              setShowTransferModal(false);
+              void fetchEvent();
+            }}
+          />
+        )}
+
         {showCheckInModal && (
           <EventCheckInModal
             eligibleMembers={eligibleMembers}
-            organizerName={event.created_by_name ?? null}
+            organizerName={event.organizer_name ?? event.created_by_name ?? null}
             rsvps={rsvps}
             memberSearch={memberSearch}
             onMemberSearchChange={setMemberSearch}
@@ -2000,7 +2027,7 @@ export const EventDetailPage: React.FC = () => {
         {override.showOverrideModal && override.editingRsvp && (
           <EventOverrideAttendanceModal
             editingRsvp={override.editingRsvp}
-            organizerName={event.created_by_name ?? null}
+            organizerName={event.organizer_name ?? event.created_by_name ?? null}
             overrideCheckIn={override.overrideCheckIn}
             onOverrideCheckInChange={override.setOverrideCheckIn}
             overrideCheckOut={override.overrideCheckOut}
