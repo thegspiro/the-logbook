@@ -24,6 +24,7 @@ import type {
   ShiftEquipmentCheckRecord,
   EquipmentCheckTemplate,
 } from '../../../modules/inventory/types/equipmentCheck';
+import { isChecklistSubmitted } from '../../../modules/inventory/types/equipmentCheck';
 import type { ActiveChecklistRecord } from '../services/equipmentCheckApi';
 import { calendarDaysFromToday, formatCalendarDate, formatDate, formatTime } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -118,9 +119,6 @@ const dueLabel = (days: number): string => {
   if (days > 1) return `In ${days} days`;
   return `${Math.abs(days)} days ago`;
 };
-
-/** `/my-checklists` statuses meaning the shift's check has been filed. */
-const SUBMITTED_STATUSES: ReadonlySet<string> = new Set(['pass', 'passed', 'fail', 'failed', 'out_of_service']);
 
 const TIMING_LABELS: Record<string, string> = {
   start_of_shift: 'Start of shift',
@@ -249,12 +247,15 @@ export const MyChecklistsPage: React.FC = () => {
     }
   }, []);
 
+  // No toast here: the form has already said how the check ended — submitted,
+  // saved offline, or queued for sync — and only it knows which. A second
+  // "submitted" from the page doubled the online message and contradicted the
+  // offline one.
   const handleComplete = useCallback(() => {
     setActiveTemplate(null);
     setActiveShiftId(null);
     setActiveCheckId(null);
     setActiveShiftContext(undefined);
-    toast.success('Equipment check submitted');
     void fetchActiveChecklists();
     if (showHistory) {
       void fetchHistory();
@@ -528,9 +529,13 @@ export const MyChecklistsPage: React.FC = () => {
         ) : activeChecklists.length === 0 ? (
           <div className="card p-8 text-center">
             <ClipboardCheck className="text-theme-text-muted mx-auto h-10 w-10" />
+            {/* Written for the member reading it, who cannot configure
+                anything: it must not imply they are off the schedule, since
+                a member on a shift whose vehicle has no checklist sees this
+                too. */}
             <p className="text-theme-text-muted mt-3 text-sm">
-              No active checklists. Equipment checks will appear here when you&apos;re assigned to a shift with
-              configured templates.
+              Nothing to check right now. When one of your shifts has an equipment checklist, it will show up here. If
+              you expected one, ask your shift officer.
             </p>
           </div>
         ) : (
@@ -564,7 +569,7 @@ export const MyChecklistsPage: React.FC = () => {
                 // One check per shift and checklist, whoever on the crew files
                 // it. Offering to open a submitted one walked the member
                 // through every item and then refused at Submit with a 409.
-                const isSubmitted = SUBMITTED_STATUSES.has(checklist.status);
+                const isSubmitted = isChecklistSubmitted(checklist.status);
                 const isHighlighted = highlightShiftId === checklist.shiftId;
 
                 return (
