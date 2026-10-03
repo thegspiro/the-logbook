@@ -167,8 +167,15 @@ const TrainingProgramsPage: React.FC = () => {
     try {
       if (isEdit && id) {
         const updated = await trainingService.updateRequirement(id, data);
-        setRequirements((prev) => prev.map((r) => (r.id === id ? updated : r)));
-        toast.success('Requirement updated');
+        if (updated.id !== id) {
+          // Saved for new members only: the original was narrowed and a copy
+          // created, so both rows changed — reload rather than patch one in.
+          await loadData();
+          toast.success('Saved for new members. The current standard stays in place for existing members.');
+        } else {
+          setRequirements((prev) => prev.map((r) => (r.id === id ? updated : r)));
+          toast.success('Requirement updated');
+        }
       } else {
         const created = await trainingService.createRequirement(data as TrainingRequirementCreate);
         setRequirements((prev) => [...prev, created]);
@@ -385,7 +392,7 @@ const TrainingProgramsPage: React.FC = () => {
                     <p className="text-theme-text-muted mb-4 text-sm">
                       Real-world starting points you can add to your department, then edit and enroll members.
                     </p>
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <div className="card-grid gap-4">
                       {sampleTemplates.map((template) => (
                         <div key={template.key} className="card-secondary flex flex-col p-5">
                           <h3 className="text-theme-text-primary mb-1 text-base font-semibold">{template.name}</h3>

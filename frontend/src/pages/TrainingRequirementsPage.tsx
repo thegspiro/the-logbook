@@ -35,6 +35,8 @@ import type {
 } from '../types/training';
 import toast from 'react-hot-toast';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { getErrorMessage } from '@/utils/errorHandling';
+import { grandfatheringSummary } from '@/utils/requirementGrandfathering';
 
 type FilterSource = 'all' | 'department' | 'state' | 'national';
 
@@ -154,6 +156,8 @@ const TrainingRequirementsPage: React.FC = () => {
         period_end_day: requirement.period_end_day,
         include_current_month: requirement.include_current_month,
         category_ids: requirement.category_ids,
+        new_member_cutoff_date: requirement.new_member_cutoff_date,
+        existing_member_deadline: requirement.existing_member_deadline,
       };
 
       const created = await trainingService.createRequirement(newReq);
@@ -185,8 +189,15 @@ const TrainingRequirementsPage: React.FC = () => {
     try {
       if (isEdit && id) {
         const updated = await trainingService.updateRequirement(id, data);
-        setRequirements(requirements.map((r) => (r.id === id ? updated : r)));
-        toast.success('Requirement updated');
+        if (updated.id !== id) {
+          // Saved for new members only: the original was narrowed and a copy
+          // created, so both rows changed — reload rather than patch one in.
+          await fetchData();
+          toast.success('Saved for new members. The current standard stays in place for existing members.');
+        } else {
+          setRequirements(requirements.map((r) => (r.id === id ? updated : r)));
+          toast.success('Requirement updated');
+        }
       } else {
         const created = await trainingService.createRequirement(data as TrainingRequirementCreate);
         setRequirements([...requirements, created]);
@@ -195,8 +206,10 @@ const TrainingRequirementsPage: React.FC = () => {
       setShowCreateModal(false);
       setSelectedRequirement(null);
       setTemplateSeed(null);
-    } catch (_error) {
-      toast.error('Failed to save requirement');
+    } catch (error: unknown) {
+      // The backend explains a refused save (e.g. a new-members-only save on
+      // a requirement that already holds the earlier standard); say so.
+      toast.error(getErrorMessage(error, 'Failed to save requirement'));
     }
   };
 
@@ -565,6 +578,12 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
                 <div className="text-theme-text-secondary flex items-center space-x-2">
                   <Tag className="h-4 w-4" aria-hidden="true" />
                   <span>{getCategoryNames()}</span>
+                </div>
+              )}
+              {grandfatheringSummary(requirement) && (
+                <div className="text-theme-text-secondary flex items-center space-x-2">
+                  <Users className="h-4 w-4" aria-hidden="true" />
+                  <span>{grandfatheringSummary(requirement)}</span>
                 </div>
               )}
             </div>

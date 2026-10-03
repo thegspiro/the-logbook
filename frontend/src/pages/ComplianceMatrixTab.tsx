@@ -97,6 +97,12 @@ const TONE_CLASSES: Record<CellTone, { pill: string; bar: string; pip: string }>
     bar: 'bg-red-800 dark:bg-red-400',
     pip: 'bg-red-800 dark:bg-red-400',
   },
+  // Neutral rather than amber or red: nothing is held against the member yet.
+  [CellTone.CATCH_UP]: {
+    pill: 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300',
+    bar: 'bg-blue-800 dark:bg-blue-400',
+    pip: 'bg-blue-800 dark:bg-blue-400',
+  },
 };
 
 const TONE_LABELS: Record<CellTone, string> = {
@@ -105,6 +111,7 @@ const TONE_LABELS: Record<CellTone, string> = {
   [CellTone.SOON]: 'Due soon',
   [CellTone.LAPSED]: 'Lapsed',
   [CellTone.MISSING]: 'Nothing on file',
+  [CellTone.CATCH_UP]: 'Catching up',
 };
 
 const STANDING_CLASSES: Record<Standing, { pill: string; dot: string; head: string }> = {
@@ -765,7 +772,7 @@ const ComplianceMatrixTab: React.FC = () => {
 
         {/* Legend + provenance */}
         <div className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-muted flex flex-wrap items-center gap-x-4 gap-y-2 border-t px-4 py-2.5 text-xs">
-          {([CellTone.MET, CellTone.SHORT, CellTone.SOON, CellTone.LAPSED] as const).map((tone) => (
+          {([CellTone.MET, CellTone.SHORT, CellTone.SOON, CellTone.LAPSED, CellTone.CATCH_UP] as const).map((tone) => (
             <span key={tone} className="inline-flex items-center gap-1.5">
               <span className={`h-3 w-3 rounded-xs ${TONE_CLASSES[tone].pip}`} aria-hidden="true" />
               {TONE_LABELS[tone]}

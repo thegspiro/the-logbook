@@ -69,6 +69,11 @@ from app.services.shift_eligibility_service import (
     DEFAULT_LATE_SIGNUP_GRACE_MINUTES,
     DEFAULT_SIGNUP_CLOSES_MINUTES_BEFORE,
 )
+from app.services.training_compliance import (
+    catch_up_deadline,
+    member_join_date,
+    requirement_applies_by_join_date,
+)
 from app.utils.apparatus_ref import (
     apparatus_ref_exists,
     resolve_apparatus_display_map,
@@ -8053,6 +8058,10 @@ class SchedulingService:
             # Determine which users this requirement applies to
             applicable_users = []
             for user in all_users:
+                # Grandfathering first: a member the requirement's cutoff
+                # exempts is not graded here whatever their rank or position.
+                if not requirement_applies_by_join_date(req, member_join_date(user)):
+                    continue
                 if req.applies_to_all:
                     applicable_users.append(user)
                     continue
@@ -8147,6 +8156,7 @@ class SchedulingService:
             # Build member compliance list
             members = []
             compliant_count = 0
+            graded_count = 0
 
             for user in applicable_users:
                 att = attendance_map.get(
@@ -8187,8 +8197,17 @@ class SchedulingService:
                 )
                 is_compliant = compliance_value >= member_required
 
-                if is_compliant:
-                    compliant_count += 1
+                # An existing member short of the target inside the catch-up
+                # period is listed with the deadline but counted neither way.
+                deadline = (
+                    None
+                    if is_compliant
+                    else catch_up_deadline(req, member_join_date(user), reference_date)
+                )
+                if deadline is None:
+                    graded_count += 1
+                    if is_compliant:
+                        compliant_count += 1
 
                 members.append(
                     {
@@ -8206,10 +8225,11 @@ class SchedulingService:
                         "total_hours": total_hours,
                         "external_shift_count": ext["shift_count"],
                         "external_hours": hours_from_minutes(ext["minutes"]),
+                        "catch_up_deadline": deadline.isoformat() if deadline else None,
                     }
                 )
 
-            total_members = len(members)
+            total_members = graded_count
             non_compliant = total_members - compliant_count
             compliance_rate = round(
                 (compliant_count / total_members * 100) if total_members > 0 else 0, 1

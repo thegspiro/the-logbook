@@ -76,6 +76,17 @@ export interface Event {
    * recorded", never "the field was forgotten".
    */
   created_by_name?: string | null;
+  /** Who runs the event, and their stand-in. Attendance requests go to these
+   * two; changing them is a transfer (`eventService.transferEvent`). */
+  organizer_id?: string | null;
+  alternate_organizer_id?: string | null;
+  /** Resolved on the detail endpoint only, for a caller who may transfer the
+   * event (its organizer, its alternate or an events manager). */
+  organizer_name?: string | null;
+  alternate_organizer_name?: string | null;
+  /** Server-decided: may this caller decide the event's attendance requests
+   * and hand it over. Detail endpoint only; false elsewhere. */
+  can_manage_organizers?: boolean;
   created_at: string;
   updated_at: string;
   rsvp_count?: number;
@@ -257,6 +268,9 @@ export interface EndEventResult extends TrainingCreditReport {
 export interface EventCreate {
   title: string;
   description?: string | undefined;
+  /** Omitted, the organizer is the member creating the event. */
+  organizer_id?: string | undefined;
+  alternate_organizer_id?: string | undefined;
   event_type: EventType;
   custom_category?: string | undefined;
   location_id?: string | undefined;
@@ -588,6 +602,8 @@ export interface EventTemplateCreate {
 export interface RecurringEventCreate {
   title: string;
   description?: string | undefined;
+  organizer_id?: string | undefined;
+  alternate_organizer_id?: string | undefined;
   event_type?: EventType | undefined;
   location_id?: string | undefined;
   location?: string | undefined;
@@ -726,6 +742,35 @@ export interface EventModuleSettings {
   outreach_roles: OutreachRole[];
   // Configurable pipeline settings for event requests
   request_pipeline: RequestPipelineSettings;
+  /**
+   * Event type -> position id whose members take an attendance request the
+   * event's organizer and alternate cannot. An absent or null type goes to the
+   * Secretary, then to every events manager.
+   */
+  attendance_request_fallback_positions: Partial<Record<EventType, string | null>>;
+}
+
+/** A transfer of an event to a new organizer and alternate. */
+export type EventTransferScope = 'this' | 'future';
+
+export interface EventTransferRequest {
+  organizer_id: string;
+  /** null clears the alternate. */
+  alternate_organizer_id: string | null;
+  scope: EventTransferScope;
+}
+
+export interface EventTransferResponse {
+  updated_count: number;
+  organizer_id: string;
+  alternate_organizer_id: string | null;
+}
+
+/** A position, for choosing who takes attendance requests nobody else can. */
+export interface EventPositionOption {
+  id: string;
+  name: string;
+  slug: string;
 }
 
 // Event Request Pipeline

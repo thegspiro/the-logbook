@@ -7,6 +7,7 @@ import {
   evaluateCell,
   evaluateMember,
   evaluationBasis,
+  isGradedTone,
   isMetTone,
   rankMembers,
   requirementMeta,
@@ -600,5 +601,46 @@ describe('requirementMeta', () => {
 
   it('is empty for an unknown requirement', () => {
     expect(requirementMeta(undefined)).toBe('');
+  });
+});
+
+describe('an existing member inside a catch-up period', () => {
+  const reqs = new Map([['r1', requirement()]]);
+  const catchUp = cell({ requirement_id: 'r2', status: 'catch_up', catch_up_deadline: '2026-12-31' });
+
+  it('reads as catching up with the deadline, not as missing', () => {
+    const evaluated = evaluateCell(catchUp, undefined, AS_OF);
+    expect(evaluated.tone).toBe(CellTone.CATCH_UP);
+    expect(evaluated.dateLabel).toBe('Due by Dec 31, 2026');
+    expect(isMetTone(evaluated.tone)).toBe(false);
+    expect(isGradedTone(evaluated.tone)).toBe(false);
+  });
+
+  it('counts neither met nor open, matching the backend tally', () => {
+    const result = evaluateMember(
+      member({ requirements: [cell({ requirement_id: 'r1', status: 'completed' }), catchUp] }),
+      reqs,
+      AS_OF
+    );
+    expect(result.met).toBe(1);
+    expect(result.total).toBe(1);
+    expect(result.open).toBe(0);
+    expect(result.pct).toBe(100);
+  });
+
+  it('keeps the member off the requirement’s behind list and out of its denominator', () => {
+    const veteran = evaluateMember(member({ user_id: 'u1', requirements: [catchUp] }), reqs, AS_OF);
+    const recruit = evaluateMember(
+      member({
+        user_id: 'u2',
+        member_name: 'Recruit, Ada',
+        requirements: [cell({ requirement_id: 'r2', status: 'not_started' })],
+      }),
+      reqs,
+      AS_OF
+    );
+    const [rollup] = rollUpRequirements([veteran, recruit], [requirement({ id: 'r2' })]);
+    expect(rollup?.total).toBe(1);
+    expect(rollup?.behind.map((m) => m.member.user_id)).toEqual(['u2']);
   });
 });

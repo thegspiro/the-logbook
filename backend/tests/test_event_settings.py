@@ -173,6 +173,7 @@ class TestEventSettingsDefaults:
             "defaults",
             "qr_code",
             "cancellation",
+            "attendance_request_fallback_positions",
         }
         assert set(EVENT_SETTINGS_DEFAULTS.keys()) == expected_keys
 

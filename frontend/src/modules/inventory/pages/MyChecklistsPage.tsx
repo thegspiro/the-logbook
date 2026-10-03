@@ -534,7 +534,7 @@ export const MyChecklistsPage: React.FC = () => {
             </p>
           </div>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="card-grid gap-3">
             {activeChecklists
               .filter((c) => timingFilter === 'all' || c.checkTiming === timingFilter)
               .slice()

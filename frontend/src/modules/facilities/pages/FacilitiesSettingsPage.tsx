@@ -130,13 +130,13 @@ function LookupEditor({
 }) {
   return (
     <section className="card overflow-hidden">
-      <div className="border-theme-surface-border flex items-center justify-between border-b p-4">
+      <div className="border-theme-surface-border flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-theme-text-primary font-semibold">{definitions[kind].title}</h2>
           <p className="text-theme-text-muted text-xs">Offered {definitions[kind].offeredOn}.</p>
         </div>
-        <button className="btn-primary flex items-center gap-1 text-sm" onClick={onAdd}>
-          <Plus className="h-4 w-4" /> Add {definitions[kind].singular}
+        <button className="btn-primary flex items-center gap-1 text-sm whitespace-nowrap" onClick={onAdd}>
+          <Plus className="h-4 w-4 shrink-0" /> Add {definitions[kind].singular}
         </button>
       </div>
       <div className="overflow-x-auto">

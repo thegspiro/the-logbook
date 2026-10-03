@@ -740,6 +740,28 @@ export const DATE_ROLL_POLICY_LABELS: Record<string, string> = {
 // ============================================
 // Training Requirements
 // ============================================
+/**
+ * Who an edit to a training requirement reaches. Mirrors
+ * `RequirementChangeScope` in `app/schemas/training.py`.
+ */
+export const RequirementChangeScope = {
+  EVERYONE: 'everyone',
+  NEW_MEMBERS_ONLY: 'new_members_only',
+} as const;
+export type RequirementChangeScope = (typeof RequirementChangeScope)[keyof typeof RequirementChangeScope];
+
+/**
+ * How a requirement treats members who joined before its cutoff date. Derived
+ * from `new_member_cutoff_date` / `existing_member_deadline` for the form; not
+ * stored as such.
+ */
+export const ExistingMemberPolicy = {
+  APPLY_TO_ALL: 'apply_to_all',
+  EXEMPT: 'exempt',
+  CATCH_UP: 'catch_up',
+} as const;
+export type ExistingMemberPolicy = (typeof ExistingMemberPolicy)[keyof typeof ExistingMemberPolicy];
+
 export const REQUIREMENT_TYPE_LABELS: Record<string, string> = {
   hours: 'Training hours',
   shifts: 'Shifts',
@@ -844,6 +866,12 @@ export const CellTone = {
   SOON: 'soon',
   LAPSED: 'lapsed',
   MISSING: 'missing',
+  /**
+   * An existing member's unmet requirement before its catch-up deadline: shown
+   * with the deadline, counted neither met nor open — the backend's
+   * `tally_standing()` leaves it out of both sides of the standing.
+   */
+  CATCH_UP: 'catch_up',
 } as const;
 export type CellTone = (typeof CellTone)[keyof typeof CellTone];
 
