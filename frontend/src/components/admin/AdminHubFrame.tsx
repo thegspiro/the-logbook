@@ -143,6 +143,22 @@ export function AdminHubFrame<K extends string>({
     // refreshToken is a deliberate re-run trigger, not a value load() reads.
   }, [load, refreshToken]);
 
+  // On a phone the tab strip scrolls sideways, and a deep link such as
+  // `?tab=settings` landed with the active tab — Settings is always last —
+  // scrolled out of sight, so nothing on screen said which tab was open. Only
+  // the strip's own scrollLeft moves: `scrollIntoView` would also scroll the
+  // page vertically, jumping past the header and metrics on first load.
+  useEffect(() => {
+    if (!activeTab) return;
+    const tab = tabRefs.current[activeTab];
+    const strip = tab?.parentElement;
+    if (!tab || !strip) return;
+    const tabRect = tab.getBoundingClientRect();
+    const stripRect = strip.getBoundingClientRect();
+    if (tabRect.left >= stripRect.left && tabRect.right <= stripRect.right) return;
+    strip.scrollLeft += tabRect.left - stripRect.left - (stripRect.width - tabRect.width) / 2;
+  }, [activeTab]);
+
   const handleTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (!tabs || !activeTab || !onTabChange) return;
     const ids = tabs.map((tab) => tab.id);
@@ -176,16 +192,21 @@ export function AdminHubFrame<K extends string>({
             for is the step up, which nothing else on a hub offers. */}
         <Breadcrumbs items={breadcrumbs} className="mb-0" omitCurrentPage />
 
-        {/* 1 — Header. Icon actions and a single red primary; never two reds. */}
+        {/* 1 — Header. Icon actions and a single red primary; never two reds.
+            The title's 16rem basis is what makes this row wrap. With `flex-1`
+            (basis 0) the title claimed no width of its own, so the row never
+            wrapped and the non-shrinking actions crushed it — at 390px the
+            <h1> was 53px wide and the actions sat over the eyebrow. Now the
+            actions drop beneath the title as soon as both cannot fit. */}
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 grow basis-64">
             <p className="text-theme-text-muted text-[11px] font-bold tracking-[0.16em] uppercase">{eyebrow}</p>
             <h1 className="text-theme-text-primary mt-0.5 text-2xl font-bold">{title}</h1>
             <p className="text-theme-text-muted mt-1 text-sm">{description}</p>
           </div>
 
           {(actions.length > 0 || primaryAction || headerAside) && (
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex max-w-full shrink-0 flex-wrap items-center gap-2">
               {actions.map((action) => (
                 <button
                   key={action.key}
@@ -247,10 +268,18 @@ export function AdminHubFrame<K extends string>({
         </div>
 
         {/* 4 — Tab bar. Underline tabs, red-500 active border, Settings last;
-            scrolls horizontally on a phone rather than wrapping. */}
+            scrolls horizontally on a phone rather than wrapping. The attribute
+            declares that scroll as intentional to the mobile overflow check; no
+            tabIndex, because a tablist stays out of the tab order (its tabs use
+            roving tabindex) and the tabs themselves reach the hidden end. */}
         {tabs && activeTab && onTabChange && (
           <div className="border-theme-surface-border border-b">
-            <div className="tab-scroll border-b-0" role="tablist" aria-label={`${title} tabs`}>
+            <div
+              className="tab-scroll border-b-0"
+              role="tablist"
+              aria-label={`${title} tabs`}
+              data-mobile-scroll-region
+            >
               {tabs.map((tab) => {
                 const isActive = activeTab === tab.id;
                 return (

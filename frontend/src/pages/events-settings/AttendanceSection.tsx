@@ -47,10 +47,10 @@ const AttendanceSection: React.FC<AttendanceSectionProps> = ({
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
+        <h2 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
           <Users className="h-5 w-5" aria-hidden="true" />
           Attendee list
-        </h3>
+        </h2>
         <p className="text-theme-text-secondary mt-1 text-sm">
           Who can see the list of members going to an event. Individual events can override this.
         </p>

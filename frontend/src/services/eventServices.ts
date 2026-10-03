@@ -792,7 +792,7 @@ export const eventRequestService = {
   },
   async listEmailTemplates(): Promise<import('../types/event').EmailTemplate[]> {
     const response = await api.get<import('../types/event').EmailTemplate[]>('/event-requests/email-templates');
-    return response.data;
+    return asArray(response.data);
   },
   async createEmailTemplate(data: {
     name: string;

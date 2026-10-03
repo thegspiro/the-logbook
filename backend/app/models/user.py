@@ -353,6 +353,14 @@ class User(Base):
     # chosen".
     profile_visibility = Column(JSON, nullable=True)
 
+    # The member's choice of the two configurable tabs on the phone bottom bar,
+    # as a JSON array of app paths (``["/events", "/account"]``). NULL means
+    # never chosen, which leaves the bar on its role-based defaults. Written
+    # only as a whole list by ``PUT /users/me/bottom-navigation`` and read
+    # through ``normalize_bottom_nav_slots``, so a malformed value degrades to
+    # the defaults rather than breaking the bar.
+    bottom_nav_slots = Column(JSON, nullable=True)
+
     # Department Membership (one per member, no permissions – purely classification)
     #
     # Three columns, two facts. ``member_class`` (operational / administrative

@@ -55,7 +55,7 @@ describe('getFacilitiesRoutes', () => {
     expect(capturedPermissions).toContain('facilities.manage');
   });
 
-  it('restricts the bulk QR code directory to managers and apparatus viewers', async () => {
+  it('restricts the bulk QR code directory to managers, apparatus viewers and tag writers', async () => {
     capturedAnyPermissions.length = 0;
     render(
       <MemoryRouter initialEntries={['/locations/qr-codes']}>
@@ -66,7 +66,14 @@ describe('getFacilitiesRoutes', () => {
     expect(await screen.findByTestId('room-qr-codes-page')).toBeInTheDocument();
     // apparatus.view is admitted for the apparatus shift check-in cards only —
     // room kiosk codes are redacted server-side for non-managers, so those
-    // cards never render for apparatus-only viewers.
-    expect(capturedAnyPermissions).toContainEqual(['locations.manage', 'facilities.manage', 'apparatus.view']);
+    // cards never render for apparatus-only viewers. A tag writer may enter to
+    // write its own tags, and is shown no kiosk code it is not entitled to.
+    expect(capturedAnyPermissions).toContainEqual([
+      'locations.manage',
+      'facilities.manage',
+      'apparatus.view',
+      'locations.manage_nfc_tags',
+      'apparatus.manage_nfc_tags',
+    ]);
   });
 });

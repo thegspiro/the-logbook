@@ -483,6 +483,36 @@ named ("N modules you did not enable are hidden") with a control to reveal
 them, so a department that cannot find Inventory learns it is off rather than
 concluding the permission does not exist.
 
+## Room Kiosk Badge Check-In — A Copied Card Works With Nobody Watching (2026-10-03)
+
+**Accepted by the owner on 2026-10-02.** A room with **Badge check-in** on
+records attendance from a card tap at its public kiosk, with nobody signed in.
+The card's credential — a chip serial, or a code written onto a blank tag — is
+readable by any phone held near the card, so someone who copies a member's
+card, and stands at a switched-on room's kiosk (or knows its display code), can
+check that member in or out of the event open there. A check-in station has an
+officer beside it; the kiosk does not.
+
+What limits it, and what does not:
+
+- **Off by default, room by room**, and only with the NFC ID Cards integration
+  on. Turning either off stops the very next tap.
+- **Narrow reach.** Only the one event open in that room, through the event's
+  own check-in rules — no shifts, no admin hours, no other room.
+- **Little to learn.** The answer shows a first name and last initial; an
+  unknown card and an ambiguous overlap answer the same way for everyone.
+- **Traceable, not prevented.** Every tap that moves attendance is audited with
+  the room and IP, so an officer can find and correct a false record; nothing
+  stops it being made.
+- **Rate limited** to 60 taps a minute per IP and per room, which slows walking
+  serials against a leaked display code but does nothing against one copied
+  card. Rotating the display code (Regenerate) locks out a leaked one.
+
+Closing the gap would need cards that cannot be copied by reading them
+(challenge-response cards such as DESFire), which Web NFC cannot drive. Until
+then, a department that needs attendance it can rely on for credit should keep
+those events on a staffed station, or on members' own signed-in phones.
+
 ## Prospective Members — Purge Is Manual; Auto-Purge Is Not Wired (2026-09-30)
 
 **Purge Selected** on the Inactive Applications tab permanently deletes the
@@ -3995,17 +4025,17 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   numbers for every org currently using profiles — a dedicated fix, not a
   drive-by.
 - **A requirement with zero currently-applicable members renders as a
-  failing 0% (CMP4-4, LOW).** `ComplianceOfficerDashboard.tsx:433-438`
-  colors `requirement_analysis.compliance_pct` red below 50%, including the
-  `0.0` CMP4-1 now emits whenever a scoped requirement currently applies to
-  no active member. This is the per-_requirement_ counterpart to TR4-4 above
-  (which is about the per-_member_ side) — and per that entry's own
-  precedent, `complianceMatrixModel.ts`'s `rollUpRequirements` already
-  returns `null` ("not applicable") for exactly this shape at the
-  requirement level, so a fix here has working in-repo precedent to follow:
-  widen `AnnualReportRequirement.compliance_pct`
-  (`frontend/src/types/training.ts:2585`) to `number | null` and render a
-  muted "N/A" instead of a red percentage.
+  failing 0% (CMP4-4, LOW) — ✅ fixed 2026-09-29, workflow review W29-4.**
+  `ComplianceOfficerDashboard.tsx` colored `requirement_analysis.compliance_pct`
+  red below 50%, including the `0.0` CMP4-1 emits whenever a scoped
+  requirement currently applies to no active member — the per-_requirement_
+  counterpart to TR4-4 above. Fixed without widening the backend contract or
+  `AnnualReportRequirement.compliance_pct`'s type: the dashboard now checks
+  `req.members_total === 0` directly and renders a muted "Not applicable"
+  instead of reading `compliance_pct` at all in that case
+  (`ComplianceOfficerDashboard.tsx:436-437`; `docs/workflow-review/W29-compliance.md`
+  W29-4; re-verified against current code by `docs/security-review/CMP-20-compliance.md`
+  pass 6).
 
 Full detail, line citations, and the "considered, not changed" rationale for
 why CMP4-1 deliberately left the per-member zero-denominator case alone (see
@@ -5397,6 +5427,23 @@ needs a decision rather than a patch:
   ✅ Resolved: the owner granted `inventory.check_manage` (authoring only),
   seeded and backfilled by migration `f73b449bdb8b` — see "The seeded
   Quartermaster cannot build equipment checklists" above.
+
+## Forms — A Public Form Asks for Sign-In Only After It Is Filled In (2026-10-02)
+
+Found driving W60 (`docs/workflow-review/W60-forms.md`, W60-11). A new form
+defaults to `require_authentication = true` and `allow_multiple_submissions =
+true`. Making it public opens the link to anyone, but submitting still needs a
+signed-in member until an officer ticks "Allow submissions without signing in"
+in the Share dialog (which explains this). A visitor on `/f/<slug>` is not told
+until they press Submit. They then get "Authentication is required to submit
+this form." with no sign-in link, and their answers are lost.
+
+The options:
+
+- tell the visitor above the form, with a sign-in link that returns to
+  `/f/<slug>`;
+- or default new **public** forms to anonymous submission. That changes who
+  can submit, so it is the owner's call.
 
 ## Process
 

@@ -67,9 +67,9 @@ fails if this document misses a curated code).
 
 ## Organization (LB-ORG)
 
-| Code       | Meaning                                                        | What to do                                                                     |
-| ---------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| LB-ORG-001 | The account references an organization record that is missing. | Escalate to the system administrator — this is a data problem, not user error. |
+| Code       | Meaning                                                               | What to do                                                                                                                     |
+| ---------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| LB-ORG-001 | The account references an organization record that is missing.        | Escalate to the system administrator — this is a data problem, not user error.                                                 |
 | LB-ORG-002 | The department has switched this module off under Settings → Modules. | Not a permission fault. Turn the module on if it is wanted; otherwise the caller is a stale tab or bookmark and should reload. |
 
 ## System (LB-SYS)
@@ -88,6 +88,7 @@ fails if this document misses a curated code).
 | LB-EVT-002 | Check-in window closed — opens shortly before the event and closes when it ends.                                                               | Verify the current time against the event schedule; an event manager can record attendance manually.              |
 | LB-EVT-003 | Event hit its per-day public sign-in ceiling (flood protection, not event capacity).                                                           | Record remaining attendees manually; raise `GUEST_CHECK_IN_DAILY_LIMIT` if a large event hits this routinely.     |
 | LB-EVT-004 | Kiosk display code doesn't match any configured display (mistyped, or regenerated after deletion).                                             | Re-open the display from Locations → Displays and update the kiosk bookmark/QR.                                   |
+| LB-EVT-005 | A member ID card was tapped at a room kiosk that doesn't accept card taps (room switch off, or the NFC ID Cards integration off).              | Turn on badge check-in for the room on Check-In QR Codes and NFC ID Cards under Settings → Integrations.          |
 
 ## File uploads (LB-UPLD)
 

@@ -50,6 +50,7 @@ import type { OrgMember, EventRequestFormSummary } from './events-settings';
 import { SettingsLayout, type SettingsSection } from '../components/settings/SettingsLayout';
 import { useSettingsAutosave } from '../hooks/useSettingsAutosave';
 import { AdminMetricsSettings } from '../components/admin';
+import { asArray } from '../utils/asArray';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -137,6 +138,18 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
         eventService.getModuleSettings(),
         userService.getUsers() as Promise<OrgMember[]>,
       ]);
+      // A 200 that is not a settings object — a captive portal's HTML page —
+      // must land on the error state, not crash the hub through the
+      // ErrorBoundary, and not render as "nothing is visible": every section
+      // reads these lists unguarded, and an empty one would be a false claim
+      // about the department's configuration that an admin might act on.
+      if (
+        !Array.isArray(data?.visible_event_types) ||
+        !Array.isArray(data.outreach_event_types) ||
+        !Array.isArray(data.request_pipeline?.tasks)
+      ) {
+        throw new TypeError('The event settings response was not a settings object');
+      }
       setSettings(data);
       setMembers(memberList);
     } catch {
@@ -173,7 +186,7 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
     try {
       setLoadingForms(true);
       const response = await eventRequestService.getForms({ limit: 50 });
-      setEventRequestForms(response.forms);
+      setEventRequestForms(asArray(response.forms));
     } catch {
       // Silently fail — the list is supplemental
     } finally {

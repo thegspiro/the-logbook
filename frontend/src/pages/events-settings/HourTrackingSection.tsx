@@ -159,7 +159,7 @@ const HourTrackingSection: React.FC<HourTrackingSectionProps> = ({ settings }) =
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-theme-text-primary text-lg font-semibold">Event Hour Tracking</h3>
+        <h2 className="text-theme-text-primary text-lg font-semibold">Event Hour Tracking</h2>
         <p className="text-theme-text-muted mt-1 text-sm">
           Map event types and custom categories to admin hours categories. When members attend events, their hours are
           automatically credited to the mapped admin hours categories. Training events are not mapped here: their
@@ -259,7 +259,7 @@ const HourTrackingSection: React.FC<HourTrackingSectionProps> = ({ settings }) =
       {/* Add new mapping */}
       {categories.length > 0 && (
         <div className="border-theme-surface-border border-t pt-4">
-          <h4 className="text-theme-text-primary mb-3 text-sm font-medium">Add Mapping</h4>
+          <h3 className="text-theme-text-primary mb-3 text-sm font-medium">Add Mapping</h3>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {/* Source selector */}
             <select

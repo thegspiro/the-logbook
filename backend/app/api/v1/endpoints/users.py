@@ -50,6 +50,7 @@ from app.schemas.role import UserRoleAssignment, UserRoleResponse
 from app.schemas.user import (
     AdminPasswordReset,
     AdminUserCreate,
+    BottomNavigationPreference,
     ContactInfoUpdate,
     DeletionImpactResponse,
     MemberAuditLogEntry,
@@ -60,6 +61,7 @@ from app.schemas.user import (
     UserProfileResponse,
     UserUpdate,
     UserWithRolesResponse,
+    normalize_bottom_nav_slots,
     resolve_profile_visibility,
 )
 from app.services.admin_continuity_service import (
@@ -2973,6 +2975,39 @@ async def set_my_profile_visibility(
     )
     await db.commit()
 
+    return body
+
+
+@router.get("/me/bottom-navigation", response_model=BottomNavigationPreference)
+async def get_my_bottom_navigation(
+    current_user: User = Depends(get_current_user),
+):
+    """
+    The calling member's chosen phone bottom-bar tabs, or ``null`` slots when
+    they have not chosen and the bar uses its role-based defaults. The same
+    value is served on ``/auth/me`` so the bar needs no request of its own.
+    """
+    return BottomNavigationPreference(
+        slots=normalize_bottom_nav_slots(current_user.bottom_nav_slots)
+    )
+
+
+@router.put("/me/bottom-navigation", response_model=BottomNavigationPreference)
+async def set_my_bottom_navigation(
+    body: BottomNavigationPreference,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Replace the calling member's bottom-bar tabs, or clear them with
+    ``null``. Self-scoped by construction: there is no user id to point at
+    somebody else's bar. Not audited — it decides only which shortcuts the
+    member's own phone shows, and grants nothing.
+    """
+    # A fresh list on every write, never an in-place mutation, so SQLAlchemy
+    # sees the change on a plain JSON column (pitfall #12).
+    current_user.bottom_nav_slots = list(body.slots) if body.slots else None
+    await db.commit()
     return body
 
 

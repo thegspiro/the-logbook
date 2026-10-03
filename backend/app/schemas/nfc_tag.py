@@ -177,3 +177,33 @@ class NfcCheckInResponse(UTCResponseBase):
     membership_number: Optional[str] = None
     occurred_at: Optional[datetime] = None
     duration_minutes: Optional[int] = None
+
+
+class KioskBadgeTapRequest(BaseModel):
+    """A card tap at a room's public kiosk.
+
+    No target and no direction: the room's display code decides the event and
+    the tap toggles in/out, because nobody is standing at the kiosk to choose.
+    """
+
+    tag_uid: str = Field(..., pattern=_UID_PATTERN)
+    tag_payload: Optional[str] = Field(None, max_length=512)
+
+
+class KioskBadgeTapResponse(UTCResponseBase):
+    """Result of a kiosk tap, cut down for a screen anyone can read.
+
+    Deliberately narrower than ``NfcCheckInResponse``: no member id, full name
+    or membership number. A first name and last initial is enough for a member
+    to confirm their own tap and too little to read anyone else's record off a
+    copied card.
+    """
+
+    model_config = _RESPONSE_CONFIG
+
+    status: NfcCheckInStatus
+    message: str
+    target_name: Optional[str] = None
+    member_display_name: Optional[str] = None
+    occurred_at: Optional[datetime] = None
+    duration_minutes: Optional[int] = None
