@@ -392,7 +392,7 @@ const TrainingProgramsPage: React.FC = () => {
                     <p className="text-theme-text-muted mb-4 text-sm">
                       Real-world starting points you can add to your department, then edit and enroll members.
                     </p>
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <div className="card-grid gap-4">
                       {sampleTemplates.map((template) => (
                         <div key={template.key} className="card-secondary flex flex-col p-5">
                           <h3 className="text-theme-text-primary mb-1 text-base font-semibold">{template.name}</h3>

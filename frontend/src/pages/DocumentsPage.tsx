@@ -603,7 +603,7 @@ const DocumentsPage: React.FC = () => {
                 <p className="text-red-700 dark:text-red-300">{foldersError}</p>
               </div>
             ) : folders.length > 0 ? (
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <div className="card-grid gap-4">
                 {folders.map((folder) => (
                   <button
                     key={folder.id}
@@ -661,7 +661,7 @@ const DocumentsPage: React.FC = () => {
               </div>
             ) : documents.length > 0 ? (
               viewMode === 'grid' ? (
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <div className="card-grid gap-4">
                   {documents.map((doc) => (
                     <div
                       key={doc.id}

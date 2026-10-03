@@ -623,7 +623,7 @@ export default function RoomQRCodesPage() {
                 <Building2 className="h-5 w-5 text-red-500 print:hidden" aria-hidden="true" />
                 {group.name}
               </h2>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 print:grid-cols-2">
+              <div className="card-grid gap-4 print:grid-cols-2">
                 {group.locations.map((location) => (
                   <QRCard
                     key={location.id}
@@ -646,7 +646,7 @@ export default function RoomQRCodesPage() {
                 Permanent codes — scanning resolves the apparatus's active shift, so one printed card covers every
                 shift.
               </p>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 print:grid-cols-2">
+              <div className="card-grid gap-4 print:grid-cols-2">
                 {filteredApparatus.map((a) => (
                   <QRCard key={a.id} {...apparatusCardProps(a)} nfcUrl={apparatusTagUrl(a)} />
                 ))}

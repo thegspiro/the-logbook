@@ -312,7 +312,7 @@ export const ShiftTemplatesPage: React.FC = () => {
               </button>
             </div>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="card-grid gap-4">
               {templates
                 .filter((t) => categoryFilter === 'all' || (t.category || 'standard') === categoryFilter)
                 .map((template) => (
@@ -529,7 +529,7 @@ export const ShiftTemplatesPage: React.FC = () => {
               </button>
             </div>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="card-grid gap-4">
               {patterns.map((pattern) => (
                 <div key={pattern.id} className="card-secondary p-5">
                   <div className="mb-3 flex items-start justify-between">

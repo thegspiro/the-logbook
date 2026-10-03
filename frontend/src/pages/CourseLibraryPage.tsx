@@ -715,7 +715,7 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
           </div>
         ) : (
           <>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="card-grid gap-4">
               {paginatedCourses.map((course) => (
                 <div key={course.id} className="card-secondary hover:bg-theme-surface-hover p-5">
                   <div className="mb-3 flex items-start justify-between">

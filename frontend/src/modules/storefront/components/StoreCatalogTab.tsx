@@ -92,7 +92,7 @@ export const StoreCatalogTab: React.FC = () => {
           description="Add the shirts, coins, or gear the department sells to members."
         />
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="card-grid gap-3">
           {products.map((product) => (
             <div key={product.id} className="card-secondary p-4">
               <div className="flex items-start justify-between gap-2">

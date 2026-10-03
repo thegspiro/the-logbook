@@ -16,6 +16,53 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2881](https://github.com/thegspiro/the-logbook/pull/2881)
+(Feature 24, Meetings & minutes, pass 5) merged clean — all 17 check runs
+`success` (`CI Success` included), `mergeable_state: clean`, no unresolved
+review threads (only the informational Codex usage-limit comment). Merge
+commit `c23c100b4` confirmed on `main` via `git fetch`. Routine 30-minute
+watchdog check on the `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`); confirmed via `list_pull_requests`
+(state=open) that no other security-review PR was open before recording
+this. Rotation row 24 stays ✅. Next: Feature 25 (Messaging &
+notifications) — not yet started as of this check, no in-progress
+`claude/security-review-*` branch or open PR.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 24, Meetings & minutes, pass 5, PR #2881, before it merged), preserved for history</summary>
+
+**PR [#2881](https://github.com/thegspiro/the-logbook/pull/2881)** — branch
+`claude/security-review-meetings-minutes`, Feature 24 (Meetings & minutes),
+pass 5 (the feature's own fifth review; `PROGRESS.md`'s rotation-wide cycle
+counter calls this "pass 6" — see the findings doc's note on the
+discrepancy). Watchdog pickup: the dedicated loop had stalled 2+ hours with
+no open security-review PR and no in-progress branch, confirmed via the
+GitHub API before starting. 0 fixed, 0 new findings — near-zero-delta since
+pass 4 (PR #2502); MM-9 and MM-17 both re-confirmed unchanged and still
+OPEN. Gate: flake8/black/isort clean, 508 migrations single head, 289
+backend tests passed (scope), frontend typecheck/lint clean, 26 frontend
+tests passed. Subscribed for CI/review events.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #2877's merge, Feature 23, Medical supplies, pass 12 — the state this pass's PR conflicted with), preserved for history</summary>
+
+**None.** PR [#2877](https://github.com/thegspiro/the-logbook/pull/2877)
+(Feature 23, Medical supplies, pass 12) merged directly by a 30-minute
+watchdog check, after that same check resolved a `PROGRESS.md` conflict on
+its branch (both it and PR #2876 had edited the Open PR section at roughly
+the same time — see the superseded note below). Post-resolution: CI green
+(17/17 checks), `mergeable_state: clean`, no unresolved review threads
+(only the informational Codex usage-limit comment). Rotation row 23 stays
+✅. Next: Feature 24 (Meetings & minutes), pass 6 — not yet started as of
+this check, no in-progress `claude/security-review-*` branch or open PR.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 23, Medical supplies, pass 12, PR #2877, merged directly by a 30-minute watchdog check), preserved for history</summary>
+
 **PR [#2877](https://github.com/thegspiro/the-logbook/pull/2877)** — branch
 `claude/security-review-feature23-pass12`, Feature 23 (Medical supplies),
 pass 12. Confirmed via the GitHub API before starting: no open PR whose
@@ -45,6 +92,8 @@ typecheck/lint clean. Full write-up:
 [`MSUP-23-medical-supplies.md`](./MSUP-23-medical-supplies.md)'s **Pass 12**
 section. Rotation row 23 → ✅ (pending PR merge). Next: Feature 24
 (Meetings & minutes).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 6, PR #2875, merged directly by a 30-minute watchdog check), preserved for history</summary>
@@ -17114,7 +17163,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
-| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
+| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
@@ -17132,6 +17181,64 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-03 — Feature 24 (Meetings & minutes, pass 5) — 0 fixed, 0 new findings, 2 flagged items re-confirmed OPEN
+
+Watchdog pickup. The dedicated `/loop 30m /security-review` session had
+stalled for over 2 hours with no security-review activity, no open PR, and
+no in-progress branch. Confirmed via `list_pull_requests` (state=open) that
+no PR whose head branch starts with `claude/security-review-` existed before
+proceeding. Rotation row 24 was the first `⬜` in the table (rows 00-23 all
+`✅`), matching the Open PR section's own "Next: Feature 24" note.
+
+Near-zero-delta pass: only three substantive commits had landed in this
+feature's declared files since pass 4 merged (PR #2502, 2026-09-13) —
+`6850d691f` (a timezone fix moving `meetings_service.py`'s "meetings this
+month" count and `create_from_event`'s date/time copy onto the department's
+own clock instead of the server's UTC one), `653b4906e` (rewrote
+`attendance_dashboard_service.py` to share its attendance-window math with
+the elections ballot-eligibility check, closing a could-disagree gap between
+the two — Pitfall #29's shape, already fixed correctly, not a defect), and
+two pure copy/wording commits on the two minutes frontend pages. Read all
+four diffs in full, re-verified all 14 previously-fixed findings (MM-1
+through MM-8, MM-10, MM-11, MM-14 through MM-16) at their current lines, and
+freshly enumerated all 42 routes top to bottom rather than trusting the
+pass-4 count. Also read `app/mcp/tools/meetings.py` (642 L) in full for the
+first time as its own surface — a read-only MCP tool set, every handler
+org-scoped, the two minutes-reading tools hard-coding `restricted=True`
+regardless of the calling principal (stricter than the human path) — clean,
+no finding.
+
+**0 new findings.** MM-9 (`approve_meeting`/`update_meeting` has no approval
+state machine or separation-of-duties check) and MM-17
+(`set_meeting_quorum_config` has no finalization guard on approved minutes)
+both re-confirmed unchanged and still open, pending the product decisions
+pass 2/3/4 already described; both already mirrored in
+`KNOWN_LIMITATIONS.md`. Two non-security correctness observations recorded
+for a future pass rather than fixed here (a UTC-vs-org-timezone gap in
+`minute_service.get_stats`'s "this month" count that the recent sitewide
+"today reads" sweep missed because it doesn't match that sweep's AST
+pattern, and an unlocked find-or-create in `grant_waiver` that could
+duplicate a `MeetingAttendee` row under a two-admin race) — see the findings
+doc's "Looked at, not a finding" section for why neither was fixed in place.
+
+This worktree's `node_modules` did not exist at all (not stale — absent),
+so the frontend gates needed `npm ci` from the repo root against the
+committed, unmodified `package-lock.json` before they could run; this is the
+documented-safe operation (exact install from the lockfile), not the
+lockfile-regeneration CLAUDE.md warns against, and `package-lock.json` is
+untouched in this PR's diff.
+
+**Gate:** `flake8`/`black`/`isort` clean on `app/`, `tests/`, `alembic/`;
+`validate_migrations.py --strict` 508 revisions, single head; backend
+`meeting or minutes or quorum` scope 289 passed/1 pre-existing skip
+(identical count to pass 4); frontend `typecheck` 0 errors; `npm run lint` 0
+errors/0 warnings; `vitest run src/modules/minutes` 26 passed/4 files.
+Findings doc: `docs/security-review/MM-24-meetings-minutes.md` → Pass 5 (see
+that file's own note on why it is titled "Pass 5" rather than "Pass 6" —
+this feature's own review count, not the rotation-wide cycle counter).
+Rotation row 24 → `✅` (pending PR merge). Next: Feature 25 (Messaging &
+notifications), once this PR merges.
 
 ### 2026-10-02 — Feature 18 (Training extended, pass 6) — 0 fixed, 0 flagged, 0 new findings — PR #2862 opened
 
@@ -25139,3 +25246,56 @@ typecheck/lint clean. Full write-up:
 [`MSUP-23-medical-supplies.md`](./MSUP-23-medical-supplies.md)'s **Pass 12**
 section. Rotation row 23 → ✅ (pending PR merge). Next: Feature 24
 (Meetings & minutes).
+
+### 2026-10-03 — Feature 23 (Medical supplies, pass 12)'s PR #2877 merged, watchdog resolved a conflict and recorded it
+
+Routine 30-minute check on the `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`). PR #2877 (Feature 23, Medical
+supplies, pass 12) had been opened by the loop session concurrently with
+this watchdog's own prior check-in (the one recording PR #2875's merge,
+above), and both edited `PROGRESS.md`'s Open PR section — `mergeable_state`
+read `dirty`.
+
+Resolved per the merge-conflict procedure: checked out
+`claude/security-review-feature23-pass12`, merged `origin/main` in,
+resolved the two conflicting hunks (the Open PR section and the end-of-file
+log) by keeping both sides' content — Feature 23's pass 12 as the current
+entry, the prior watchdog note nested as superseded history, both dated log
+entries kept in chronological order — then pushed the merge commit
+(`5dc895f99`) directly to the PR's branch (no rebase/force-push, per the
+"never rewrite history on someone else's branch" rule).
+
+Post-resolution, `mergeable_state` read `clean` and all 17 checks went
+green (`CI Success` included) with no unresolved review threads (only the
+informational Codex usage-limit comment), so this watchdog check merged it
+directly (squash, `expectedHeadSha` pinned to `5dc895f99`). Merge commit
+`a9db9aae` confirmed on `main`. Rotation row 23 stays ✅. Next: Feature 24
+(Meetings & minutes), pass 6 — not yet started as of this check, no
+in-progress branch or open PR.
+
+### 2026-10-03 — Feature 24 (Meetings & minutes, pass 5)'s PR #2881 merged, watchdog recorded it
+
+Routine 30-minute check on the `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`). Confirmed independently before acting,
+per Step 0: `list_pull_requests` (state=open) showed no open security-review
+PR, and no `claude/security-review-feature25*` (or equivalent Messaging &
+notifications) branch existed yet.
+
+PR #2881 (opened by an earlier watchdog pickup after the dedicated loop had
+stalled 2+ hours — see the superseded Open PR note above) had already been
+merged by the time this check ran: all 17 check runs `success` (`CI
+Success` included), `mergeable_state: clean`, no unresolved review threads
+(only the informational Codex usage-limit comment). Merge commit
+`c23c100b4` confirmed on `main` via `git fetch`. Rotation row 24 stays ✅.
+Next: Feature 25 (Messaging & notifications) — not yet started as of this
+check, no in-progress `claude/security-review-*` branch or open PR.
+
+**Pattern worth flagging:** this is the third consecutive feature (22, 23, 24) whose review PR was opened and/or merged by a 30-minute watchdog check
+rather than by the dedicated `/loop 30m /security-review` session itself —
+each time because that session was found stalled (2+ hours, in these three
+cases) with no open PR and no in-progress branch. The rotation is still
+moving (rows 22-24 all closed within the last ~10 hours), but it is doing
+so almost entirely via this watchdog rather than the loop it is meant to be
+checking on. Worth the account owner's attention if the loop session itself
+is expected to be doing this work rather than being substituted for
+indefinitely.

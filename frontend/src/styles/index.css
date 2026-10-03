@@ -449,6 +449,28 @@
   @apply bg-theme-surface-secondary border-theme-surface-border rounded-lg border shadow-sm transition-shadow duration-200;
 }
 
+@utility card-grid {
+  /* A list of record cards — one card per event, document, course, etc.
+
+     Columns follow the width the grid itself has, never the viewport. The
+     sidebar is expanded from lg up, so a viewport rule like
+     `sm:grid-cols-2 lg:grid-cols-3` packed three ~200px cards into a 1024px
+     tablet and pushed their footer buttons off the card edge.
+
+     - 20rem is the narrowest a card gets: it is what the events card needs
+       for "Going", "Not Going" and the calendar button to fit side by side.
+     - `min(100%, …)` lets a single column shrink below that on a small phone
+       rather than overflow the screen.
+     - `100% / 3 - 1rem` caps it at three columns on a wide screen. A fourth
+       would need each track to be 1rem wider than a third of the row minus
+       gaps, which cannot fit for any gap up to gap-6 (1.5rem).
+
+     The gap is a default; a `gap-*` at the call site overrides it. */
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, max(20rem, calc(100% / 3 - 1rem))), 1fr));
+}
+
 /* --- Buttons --- (#4 press effect, #5 shadow elevation, #6 smooth multi-property transitions) */
 @utility btn-primary {
   /* red-800, not red-600. White on red-600 measures 4.83:1 — AA for large
