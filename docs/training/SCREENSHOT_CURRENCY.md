@@ -1,5 +1,18 @@
 # Screenshot currency
 
+## Watchdog check-in: rebased onto main, two new commits audited, 2026-10-03
+
+This branch had drifted two commits behind `main` (merge-base `c23c100b4` was
+about two hours stale): `d9169b468` (`docs(security-review): record PR #2881
+merge, watchdog check-in`) and its own merge commit `2f08531b9`. Rebased
+cleanly — both touch only `docs/security-review/PROGRESS.md`, which this
+branch's own commits do not modify, so there was nothing to conflict.
+
+Neither commit touches a file under `frontend/` or `backend/`, so there is
+nothing in them for this sweep to check against the guides.
+`audit_images.py --baseline scripts/screenshots/audit_baseline.txt` reports
+no new findings (582 images checked). Nothing re-shot this pass.
+
 ## Watchdog check-in: rebased onto main, one new commit audited, 2026-10-03
 
 This branch had drifted one commit behind `main` (merge-base `383365d76` was
