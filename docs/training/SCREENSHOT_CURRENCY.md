@@ -1,5 +1,31 @@
 # Screenshot currency
 
+## Watchdog check-in: rebased onto main, three new commits audited, 2026-10-03
+
+This branch had drifted three commits behind `main` (merge-base `2f08531b9`
+was about two hours stale, through PRs #2880 and #2884). Rebased cleanly —
+none of the three touch a file this branch's own commits modify.
+
+`cfeb21e34` (`security(messaging-notifications): pass 5`) and its merge/record
+commits touch only `docs/security-review/MSG-25-messaging-notifications.md`
+and `docs/security-review/PROGRESS.md` — nothing for this sweep.
+
+`09b3b887a` / `e0286d842` (PR #2880, "card-grid utility") rework 25 record-card
+grids and the events grid from viewport breakpoints (`sm:grid-cols-2
+lg:grid-cols-3`) to container queries, to fix column overflow at ~1024px/820px
+tablet widths where the sidebar eats into the content column. Training-guide
+capture only ever shoots `1440x900` desktop and `390x844` phone
+(`capture.mjs`'s `DESKTOP/MOBILE` constants) — neither breakpoint the fix
+targets. At 1440px both the old and new grids resolve to 3 columns (the new
+`card-grid` track floor is `20rem`, well under the ~360px a 1440px content
+column gives each of 3 cards), and at 390px both are a single column. Checked
+against the affected guides' own desktop/phone shots (events, documents,
+training, templates, facilities, inventory, reports, integrations) — none
+show a column-count change at the captured widths, so none were re-shot.
+
+`audit_images.py --baseline scripts/screenshots/audit_baseline.txt` reports no
+new findings (582 images checked). Nothing re-shot this pass.
+
 ## Watchdog check-in: rebased onto main, two new commits audited, 2026-10-03
 
 This branch had drifted two commits behind `main` (merge-base `c23c100b4` was
