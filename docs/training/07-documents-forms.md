@@ -749,10 +749,7 @@ that only the box's reviewers can forward it.
 by side. Tap a submission and the page scrolls down to it; scroll back up for the
 list.
 
-> **Screenshot needed:**
-> _[Suggestions → **Review** on a phone, a submission open: its title and
-> details at the top of the screen, then the **Disposition** and **Internal
-> note**, with the mobile bottom navigation below.]_
+![Suggestions → Review on a phone with a submission open: the list has scrolled away above, and the screen shows the submission's title, box and details, then the Disposition and Internal note, above the mobile bottom navigation. This submission has no attachments, so no Screenshots heading appears](./images/07-19-suggestion-review-phone.png)
 
 ### Edge cases
 
