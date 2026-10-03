@@ -975,3 +975,31 @@ describe('ShiftDetailPanel close-out manual hours', () => {
     expect(screen.getByRole('spinbutton', { name: 'Hours for Alex Brooks' })).toBeInTheDocument();
   });
 });
+
+describe('ShiftDetailPanel apparatus NFC tag writer', () => {
+  const apparatusShift = { ...shift, apparatus_id: 'eng-4', apparatus_name: 'Engine 4' };
+
+  afterEach(() => {
+    grantedPermissions.current = null;
+  });
+
+  const openQr = async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftDetailPanel shift={apparatusShift as never} onClose={vi.fn()} />);
+    await user.click(await screen.findByRole('button', { name: /Show Check-In QR Code/ }));
+  };
+
+  // Assigning the roster does not make an officer the one who tags the truck.
+  it('shows a roster officer the QR code but not the tag writer', async () => {
+    grantedPermissions.current = ['scheduling.manage'];
+    await openQr();
+    expect(screen.getByText(/permanent code/)).toBeInTheDocument();
+    expect(screen.queryByText('NFC tags:')).not.toBeInTheDocument();
+  });
+
+  it('offers the tag writer to a holder of apparatus.manage_nfc_tags', async () => {
+    grantedPermissions.current = ['scheduling.manage', 'apparatus.manage_nfc_tags'];
+    await openQr();
+    expect(screen.getByText('NFC tags:')).toBeInTheDocument();
+  });
+});

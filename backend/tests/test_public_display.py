@@ -43,7 +43,12 @@ def _event(window_type, starts_in_minutes, allow_guest_check_in=False):
 
 
 def _patch_location_service(monkeypatch, events):
-    location = SimpleNamespace(id=LOC_ID, organization_id="org-1", name="Station 1")
+    location = SimpleNamespace(
+        id=LOC_ID,
+        organization_id="org-1",
+        name="Station 1",
+        nfc_badge_check_in_enabled=False,
+    )
 
     fake = SimpleNamespace(
         get_location_by_display_code=AsyncMock(return_value=location),

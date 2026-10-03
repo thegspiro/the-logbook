@@ -91,7 +91,10 @@ interface NfcTargetSpec {
  * `/display/:code` is deliberately absent. It is a public, unauthenticated
  * kiosk screen for a tablet left in a room, keyed by a non-guessable code —
  * putting that code on a tag anyone can read hands it to whoever walks past,
- * and routing a member's phone to a wall display is not a check-in anyway.
+ * and routing a member's phone to a wall display is not a check-in anyway. A
+ * room's tag names the room by id instead (`/locations/:id/check-in`), which
+ * carries no secret: the page behind it requires a session and resolves the
+ * room within the member's own organization.
  */
 const TAG_TARGETS: readonly NfcTargetSpec[] = [
   {
@@ -114,6 +117,14 @@ const TAG_TARGETS: readonly NfcTargetSpec[] = [
     // route has to mean what the page will do with it.
     idQueryParams: ['shift', 'apparatus'],
     toPath: (_ids, query) => `/scheduling/checkin?${query?.name}=${encodeURIComponent(query?.value ?? '')}`,
+  },
+  {
+    target: NfcTagTarget.ROOM_CHECK_IN,
+    // Resolves to whichever event is in its check-in window in the room at tap
+    // time, so a sticker by the door outlives every individual event — the
+    // room counterpart of the apparatus-keyed shift tag.
+    pathPattern: /^\/locations\/([^/]+)\/check-in\/?$/,
+    toPath: (ids) => `/locations/${ids[0]}/check-in`,
   },
   {
     target: NfcTagTarget.INVENTORY_ITEM,
@@ -204,6 +215,7 @@ const TARGET_ACTION_NOUNS: Record<NfcTagTarget, string> = {
   [NfcTagTarget.EVENT_CHECK_IN]: 'check-in',
   [NfcTagTarget.ADMIN_HOURS_CLOCK_IN]: 'clock-in',
   [NfcTagTarget.SHIFT_CHECK_IN]: 'shift check-in',
+  [NfcTagTarget.ROOM_CHECK_IN]: 'check-in',
   [NfcTagTarget.INVENTORY_ITEM]: 'item record',
 };
 
@@ -236,6 +248,15 @@ export function buildAdminHoursClockInUrl(categoryId: string, origin?: string): 
 export function buildShiftCheckInUrl(ref: { apparatusId: string } | { shiftId: string }, origin?: string): string {
   const query = 'apparatusId' in ref ? `apparatus=${ref.apparatusId}` : `shift=${ref.shiftId}`;
   return withOrigin(origin, `/scheduling/checkin?${query}`);
+}
+
+/**
+ * Absolute URL to encode onto a tag mounted in a room. Like the apparatus
+ * shift tag, it names the place rather than an event, so one sticker serves
+ * every event held there.
+ */
+export function buildRoomCheckInUrl(locationId: string, origin?: string): string {
+  return withOrigin(origin, `/locations/${locationId}/check-in`);
 }
 
 /** Prefix on codes this app writes onto equipment tags; the backend only

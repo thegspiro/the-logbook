@@ -483,6 +483,36 @@ named ("N modules you did not enable are hidden") with a control to reveal
 them, so a department that cannot find Inventory learns it is off rather than
 concluding the permission does not exist.
 
+## Room Kiosk Badge Check-In — A Copied Card Works With Nobody Watching (2026-10-03)
+
+**Accepted by the owner on 2026-10-02.** A room with **Badge check-in** on
+records attendance from a card tap at its public kiosk, with nobody signed in.
+The card's credential — a chip serial, or a code written onto a blank tag — is
+readable by any phone held near the card, so someone who copies a member's
+card, and stands at a switched-on room's kiosk (or knows its display code), can
+check that member in or out of the event open there. A check-in station has an
+officer beside it; the kiosk does not.
+
+What limits it, and what does not:
+
+- **Off by default, room by room**, and only with the NFC ID Cards integration
+  on. Turning either off stops the very next tap.
+- **Narrow reach.** Only the one event open in that room, through the event's
+  own check-in rules — no shifts, no admin hours, no other room.
+- **Little to learn.** The answer shows a first name and last initial; an
+  unknown card and an ambiguous overlap answer the same way for everyone.
+- **Traceable, not prevented.** Every tap that moves attendance is audited with
+  the room and IP, so an officer can find and correct a false record; nothing
+  stops it being made.
+- **Rate limited** to 60 taps a minute per IP and per room, which slows walking
+  serials against a leaked display code but does nothing against one copied
+  card. Rotating the display code (Regenerate) locks out a leaked one.
+
+Closing the gap would need cards that cannot be copied by reading them
+(challenge-response cards such as DESFire), which Web NFC cannot drive. Until
+then, a department that needs attendance it can rely on for credit should keep
+those events on a staffed station, or on members' own signed-in phones.
+
 ## Prospective Members — Purge Is Manual; Auto-Purge Is Not Wired (2026-09-30)
 
 **Purge Selected** on the Inactive Applications tab permanently deletes the

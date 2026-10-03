@@ -195,6 +195,7 @@ export type {
   RankValidationResponse,
   SecurityStatus,
   SecurityAlert,
+  LocationCheckInInfo,
 } from './facilitiesServices';
 
 // Admin (security, analytics, dashboard, reports, etc.)

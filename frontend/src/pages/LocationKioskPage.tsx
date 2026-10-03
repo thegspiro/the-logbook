@@ -4,6 +4,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { MapPin, Wifi, WifiOff } from 'lucide-react';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDateCustom } from '../utils/dateFormatting';
+import { KioskBadgeReader } from '../components/nfc/KioskBadgeReader';
 
 /**
  * Location Kiosk Page (Public — No Authentication Required)
@@ -15,6 +16,8 @@ import { formatDateCustom } from '../utils/dateFormatting';
  * - No login required — uses a non-guessable display code in the URL
  * - Full-screen optimized: no sidebar, no navigation
  * - Shows idle screen when no events are active
+ * - When the room has badge check-in on, also reads member ID cards (Web NFC
+ *   or a USB reader) and checks the tapper in, or out if already in
  */
 
 interface KioskEvent {
@@ -42,6 +45,8 @@ interface DisplayData {
   has_overlap: boolean;
   /** Department IANA timezone, supplied because this page is unauthenticated. */
   timezone?: string | undefined;
+  /** This room accepts member ID card taps (room switch and NFC ID Cards both on). */
+  badge_check_in_enabled?: boolean | undefined;
 }
 
 const POLL_INTERVAL_MS = 30_000; // 30 seconds
@@ -113,6 +118,12 @@ const LocationKioskPage: React.FC = () => {
     }, 10_000);
     return () => clearInterval(interval);
   }, [data]);
+
+  // The server refused a tap as "not on for this room" — re-read the feed so
+  // the reader disappears on the flag the server reports, not on a guess.
+  const handleBadgeDisabled = useCallback(() => {
+    void fetchDisplay(true);
+  }, [fetchDisplay]);
 
   const getCheckInUrl = (eventId: string) => {
     return `${window.location.origin}/events/${eventId}/check-in`;
@@ -273,6 +284,12 @@ const LocationKioskPage: React.FC = () => {
                 <p className="text-theme-text-primary text-xl font-medium">Scan with your phone to check in</p>
                 <p className="text-theme-text-muted mt-2 text-sm">You will be prompted to log in if needed</p>
               </>
+            )}
+
+            {data.badge_check_in_enabled && code && (
+              <div className="mt-8">
+                <KioskBadgeReader displayCode={code} onDisabled={handleBadgeDisabled} />
+              </div>
             )}
           </div>
         ) : (

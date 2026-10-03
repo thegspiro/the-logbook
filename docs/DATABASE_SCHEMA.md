@@ -378,7 +378,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`locations`](#locations) | `Location` | 21 | Location model for managing physical spaces |
+| [`locations`](#locations) | `Location` | 22 | Location model for managing physical spaces |
 
 ### Mcp_Service_Key
 
@@ -5899,6 +5899,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `capacity` | INTEGER | yes |  |  |  |
 | `is_active` | BOOL | no | IDX | `1` |  |
 | `display_code` | VARCHAR(12) | yes | UQ, UQ-IDX |  |  |
+| `nfc_badge_check_in_enabled` | BOOL | no |  | `0` |  |
 | `facility_id` | VARCHAR(36) | yes | FK, IDX |  | → `facilities.id` ON DELETE SET NULL |
 | `facility_room_id` | VARCHAR(36) | yes | FK, UQ |  | → `facility_rooms.id` ON DELETE SET NULL |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
