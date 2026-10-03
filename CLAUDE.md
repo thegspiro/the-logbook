@@ -167,7 +167,7 @@ The Logbook is an open-source modular intranet platform for fire departments and
 
 - **Framework:** FastAPI 0.141 (starlette 1.x) + Uvicorn
 - **Language:** Python 3.13
-- **ORM:** SQLAlchemy 2.0 (async via aiomysql)
+- **ORM:** SQLAlchemy 2.1 (async via aiomysql)
 - **Database:** MySQL 8.0
 - **Migrations:** Alembic
 - **Cache / sessions:** Redis 7
