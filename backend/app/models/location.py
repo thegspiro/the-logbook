@@ -67,6 +67,15 @@ class Location(Base):
     # Allows tablets to display QR codes at `/display/{code}` without authentication.
     display_code = Column(String(12), nullable=True, unique=True, index=True)
 
+    # Whether this room's kiosk accepts member ID card taps. Off by default and
+    # switched on room by room: a tap at the kiosk records attendance with
+    # nobody signed in, so the display code above becomes the only thing
+    # standing between a copied card serial and an attendance record. A
+    # department turns it on only where a reader is actually mounted.
+    nfc_badge_check_in_enabled = Column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+
     # Facility link — when the Facilities module is enabled, this location can
     # optionally reference a Facility record for deep building management data.
     # The locations table remains the universal "place picker" for all modules.

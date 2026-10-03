@@ -1,23 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router';
-import {
-  Home,
-  Calendar,
-  Clock,
-  GraduationCap,
-  Menu,
-  Plus,
-  Users,
-  FileText,
-  Store,
-  BookOpen,
-  Settings,
-} from 'lucide-react';
+import { Menu, Plus } from 'lucide-react';
 import { useEnabledModules } from '../../hooks/useEnabledModules';
 import { prefetchRoute } from '../../utils/routePrefetch';
 import { useAuthStore } from '../../stores/authStore';
 import { QuickAddSheet } from './QuickAddSheet';
 import { availableQuickAddActions } from './quickAddActions';
+import { resolveBottomNavTabs, type TabDef } from './bottomNavTabs';
 
 /**
  * Event that asks whichever navigation component is mounted (side or top) to
@@ -28,76 +17,6 @@ import { availableQuickAddActions } from './quickAddActions';
  * reach it.
  */
 export const OPEN_MOBILE_NAV_EVENT = 'open-mobile-nav';
-
-interface TabDef {
-  label: string;
-  path: string;
-  icon: React.ElementType;
-  /** Module key this tab belongs to; omitted for always-available tabs. */
-  module?: string;
-  permission?: string;
-}
-
-/**
- * Destinations and slot fallbacks are deliberately separate.  This prevents a
- * module toggle from shifting every item to its left, which made muscle-memory
- * navigation unreliable.
- */
-const TAB_CANDIDATES: TabDef[] = [
-  { label: 'Home', path: '/dashboard', icon: Home },
-  { label: 'Events', path: '/events', icon: Calendar },
-  // `permission` as well as `module`: the /store route requires
-  // storefront.view, and a tab that lands on Access Denied is worse than no
-  // tab — the slot fallback chain below hands the space to a destination the
-  // member can actually open.
-  { label: 'Store', path: '/store', icon: Store, module: 'storefront', permission: 'storefront.view' },
-  { label: 'Schedule', path: '/scheduling', icon: Clock, module: 'scheduling' },
-  { label: 'Training', path: '/training/my-training', icon: GraduationCap, module: 'training' },
-  { label: 'Members', path: '/members', icon: Users },
-  { label: 'Documents', path: '/documents', icon: FileText },
-  { label: 'Learning', path: '/learning', icon: BookOpen },
-  { label: 'Settings', path: '/settings', icon: Settings, permission: 'settings.manage' },
-];
-
-export const BOTTOM_NAV_STORAGE_KEY = 'logbook.bottom-navigation.v1';
-
-/**
- * Two configurable slots, not three: the centre of the bar is Quick Add.
- *
- * A stored preference written before Quick Add shipped holds three paths.
- * Slicing keeps its first two rather than versioning the key — the third
- * destination is still one tap away under More, and a version bump would throw
- * away a customization to replace it with a default the member did not ask for.
- */
-const CONFIGURABLE_SLOTS = 2;
-const DEFAULT_MEMBER_SLOTS = [
-  ['/events', '/members', '/documents'],
-  ['/scheduling', '/training/my-training', '/learning'],
-];
-
-function readPreferredSlots(isAdministrator: boolean): string[][] {
-  try {
-    const value: unknown = JSON.parse(localStorage.getItem(BOTTOM_NAV_STORAGE_KEY) ?? 'null');
-    if (Array.isArray(value)) {
-      const selected = value.slice(0, CONFIGURABLE_SLOTS).map((path) => (typeof path === 'string' ? path : ''));
-      return DEFAULT_MEMBER_SLOTS.map((fallbacks, index) => [selected[index] ?? '', ...fallbacks]);
-    }
-  } catch {
-    // Corrupt or unavailable browser storage simply restores policy defaults.
-  }
-  const defaults = isAdministrator
-    ? [
-        ['/events', '/members'],
-        ['/settings', '/scheduling', '/training/my-training'],
-      ]
-    : DEFAULT_MEMBER_SLOTS;
-  try {
-    localStorage.setItem(BOTTOM_NAV_STORAGE_KEY, JSON.stringify(defaults.map(([path]) => path)));
-  } catch {
-    // Navigation remains usable when persistence is unavailable.
-  }
-  return defaults;
-}
 
 interface BottomNavigationProps {
   /** Hidden while the on-screen keyboard is up, where it would otherwise sit
@@ -143,25 +62,8 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ hidden = fal
     setRestoreAddFocus(true);
   };
 
-  const available = TAB_CANDIDATES.filter(
-    (tab) => (!tab.module || isModuleOn(tab.module)) && (!tab.permission || checkPermission(tab.permission))
-  );
-  const availableByPath = new Map(available.map((tab) => [tab.path, tab]));
-  const used = new Set<string>(['/dashboard']);
-  const slots = readPreferredSlots(checkPermission('settings.manage')).map((priorities) => {
-    const path = priorities.find((candidate) => availableByPath.has(candidate) && !used.has(candidate));
-    if (path) used.add(path);
-    return path ? availableByPath.get(path) : undefined;
-  });
-  // A slot whose entire fallback chain is unavailable gets the first remaining
-  // safe destination rather than becoming a dead button.
-  const resolvedSlots = slots.map((tab) => {
-    if (tab) return tab;
-    const fallback = available.find((item) => !used.has(item.path));
-    if (fallback) used.add(fallback.path);
-    return fallback;
-  });
-  const tabs = [availableByPath.get('/dashboard'), ...resolvedSlots].filter((tab): tab is TabDef => Boolean(tab));
+  const chosenSlots = useAuthStore((state) => state.user?.bottom_nav_slots);
+  const tabs = resolveBottomNavTabs({ chosen: chosenSlots, isModuleOn, checkPermission });
 
   const isActive = (path: string) => {
     const base = path.split('?')[0] ?? path;

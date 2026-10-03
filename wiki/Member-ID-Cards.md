@@ -14,7 +14,10 @@ a check-in station running at the door. Members tap and walk in.
 
 Member profile → **ID Cards**. An officer holding `members.manage_id_cards`
 binds a physical card to a member, labels it, and can later suspend it, report
-it lost, or revoke it.
+it lost, or revoke it. By default that is department leadership (President,
+Vice President, Chief, Deputy Chief, Assistant Chief), the Membership
+Coordinator and Assistant Membership Coordinator, the Secretary and Assistant
+Secretary, and Captains; a department changes it on the Positions screen.
 
 Cards ship blank, so **the tag's serial number is the credential** — there is
 nothing written onto the card to read instead.
@@ -77,6 +80,25 @@ come back as an ordinary success carrying a status, not as an error. A station
 left running at a door has to say what happened and stay armed for the next
 person — an error page in front of a queue of members is a worse failure than
 the tap it was reporting.
+
+## Tapping in at a room kiosk _(2026-10-03)_
+
+A room's kiosk tablet (`/display/<code>`) can read cards too, with nobody
+signed in. It is **off for every room** until an officer holding
+`locations.manage_nfc_tags` turns on **Badge check-in** for that room on
+Check-In QR Codes, and it needs the NFC ID Cards integration on.
+
+- The room decides the event: whichever one is open for check-in there. If two
+  are open at once the tap is refused — unless the member is checked in to
+  exactly one of them, in which case it checks them out of it.
+- A tap checks the member in, or out if they are already in. A second tap
+  within a minute is read as a bounce, not a check-out, as at a station.
+- The screen shows a first name and last initial, never more.
+- Every tap that records attendance is in the audit log with the room and the
+  tablet's IP address.
+
+Turning a room off takes effect on the very next tap, even on a kiosk that is
+already running.
 
 ## Provenance in the record
 

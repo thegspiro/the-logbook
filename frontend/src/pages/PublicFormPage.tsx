@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams } from 'react-router';
 import DOMPurify from 'dompurify';
 import { publicFormsService } from '../services/api';
@@ -8,6 +8,7 @@ import { FieldType } from '../constants/enums';
 import TimeQuarterHour from '../components/ux/TimeQuarterHour';
 import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
 import { useCaptcha } from '../hooks/useCaptcha';
+import { getVisibleFieldIds } from '../utils/formVisibility';
 
 // Sanitize any text content that came from the server
 const clean = (text: string | null | undefined): string => {
@@ -59,6 +60,11 @@ const PublicFormPage = () => {
     }
   };
 
+  // Follows branches through every level, so a follow-up to a question that
+  // has been hidden is hidden (and not required) too.
+  const visibleFieldIds = useMemo(() => getVisibleFieldIds(form?.fields ?? [], formData), [form, formData]);
+  const isFieldVisible = (field: PublicFormField): boolean => visibleFieldIds.has(field.id);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form) return;
@@ -84,9 +90,14 @@ const PublicFormPage = () => {
     try {
       setSubmitting(true);
       setError(null);
+      // An answer left in a question that is now hidden belongs to a branch
+      // the visitor backed out of; it stays in state but is not sent.
+      const visibleAnswers = Object.fromEntries(
+        Object.entries(formData).filter(([fieldId]) => visibleFieldIds.has(fieldId))
+      );
       const result = await publicFormsService.submitForm(
         slug ?? '',
-        formData,
+        visibleAnswers,
         honeypotRef.current?.value || undefined,
         captchaToken || undefined
       );
@@ -105,26 +116,6 @@ const PublicFormPage = () => {
 
   const handleFieldChange = (fieldId: string, value: string) => {
     setFormData((prev) => ({ ...prev, [fieldId]: value }));
-  };
-
-  /** Evaluate conditional visibility for a field. */
-  const isFieldVisible = (field: PublicFormField): boolean => {
-    if (!field.condition_field_id || !field.condition_operator) return true;
-    const parentValue = (formData[field.condition_field_id] || '').trim();
-    switch (field.condition_operator) {
-      case 'equals':
-        return parentValue === (field.condition_value || '');
-      case 'not_equals':
-        return parentValue !== (field.condition_value || '');
-      case 'contains':
-        return parentValue.toLowerCase().includes((field.condition_value || '').toLowerCase());
-      case 'not_empty':
-        return parentValue.length > 0;
-      case 'is_empty':
-        return parentValue.length === 0;
-      default:
-        return true;
-    }
   };
 
   const renderField = (field: PublicFormField) => {

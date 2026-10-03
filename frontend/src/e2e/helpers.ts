@@ -185,6 +185,132 @@ const enrollments = () => [
   },
 ];
 
+/**
+ * Events module settings, shaped as `EVENT_SETTINGS_DEFAULTS` in
+ * backend/app/api/v1/endpoints/events.py returns them, plus two custom
+ * categories. The page rejects a body that is not this shape, so without it the
+ * settings tab measures its error state instead of its sections.
+ *
+ * `auxiliary_fundraising_dinner` is deliberately long: an unbreakable slug is
+ * what pushed the remove button off a 320px card, and a short one cannot
+ * reproduce that.
+ */
+const eventSettings = () => ({
+  enabled_event_types: [
+    'business_meeting',
+    'public_education',
+    'training',
+    'social',
+    'fundraiser',
+    'ceremony',
+    'other',
+    'recruitment',
+  ],
+  visible_event_types: ['business_meeting', 'public_education', 'training', 'other'],
+  event_type_labels: {},
+  custom_event_categories: [
+    {
+      value: 'apparatus_parade',
+      label: 'Apparatus Parade',
+      color: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
+    },
+    {
+      value: 'auxiliary_fundraising_dinner',
+      label: 'Auxiliary Fundraising Dinner',
+      color: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
+    },
+  ],
+  visible_custom_categories: ['apparatus_parade'],
+  outreach_event_types: [
+    { value: 'fire_safety_demo', label: 'Fire Safety Demo' },
+    { value: 'station_tour', label: 'Station Tour' },
+    { value: 'cpr_first_aid', label: 'CPR / First Aid Class' },
+    { value: 'other', label: 'Other' },
+  ],
+  outreach_roles: [
+    { value: 'tour_guide', label: 'Tour Guide' },
+    { value: 'educator', label: 'Educator' },
+    { value: 'setup_teardown', label: 'Setup & Teardown' },
+  ],
+  request_pipeline: {
+    min_lead_time_days: 21,
+    default_assignee_id: null,
+    public_progress_visible: false,
+    accept_public_requests: false,
+    public_daily_limit: 50,
+    tasks: [
+      { id: 'review_request', label: 'Review Request', description: 'Review the incoming request details' },
+      {
+        id: 'assign_coordinator',
+        label: 'Assign Coordinator',
+        description: 'Assign a team member to coordinate this event',
+      },
+      { id: 'confirm_date', label: 'Confirm Date', description: 'Confirm the event date with the requester' },
+    ],
+    email_triggers: {
+      on_submitted: { enabled: true, notify_assignee: true, notify_requester: true },
+      on_assigned: { enabled: true, notify_assignee: true, notify_requester: false },
+      on_scheduled: { enabled: true, notify_requester: true },
+      days_before_event: { enabled: true, notify_requester: true, days: [7, 1] },
+      volunteer_call: { enabled: true },
+    },
+  },
+  defaults: {
+    event_type: 'other',
+    check_in_window_type: 'flexible',
+    check_in_minutes_before: 60,
+    check_in_minutes_after: 15,
+    require_checkout: false,
+    requires_rsvp: false,
+    allowed_rsvp_statuses: ['going', 'not_going'],
+    allow_guests: false,
+    attendee_visibility: 'managers',
+    is_mandatory: false,
+    send_reminders: true,
+    reminder_target: 'going',
+    reminder_schedule: [24],
+    default_reminder_time: '09:00',
+    default_duration_minutes: 120,
+  },
+  qr_code: { show_event_description: true, show_location_details: true, custom_instructions: '' },
+  cancellation: { require_reason: false, notify_attendees: true },
+});
+
+/** The Events hub's metric choices, keyed as `admin_hub_service.py` declares them. */
+const eventMetricSettings = () => {
+  const option = (key: string, label: string, description: string, value: string) => ({
+    key,
+    label,
+    description,
+    value,
+    unavailableReason: null,
+    fixed: false,
+  });
+  const defaults = ['upcoming_events', 'rsvps_this_week', 'check_ins_logged'];
+  return {
+    moduleKey: 'events',
+    options: [
+      option('upcoming_events', 'Upcoming', 'Events starting in the next 30 days', '6'),
+      option('rsvps_this_week', 'RSVPs this week', 'Responses recorded in the last seven days', '18'),
+      option('check_ins_logged', 'Check-ins logged', 'Attendance captured in the last 30 days', '42'),
+      option('attendance_rate', 'Attendance rate', 'Check-ins against members who said they were going', '81%'),
+      {
+        key: 'needs_attention',
+        label: 'Needs attention',
+        description: 'Items waiting on you',
+        value: '0',
+        unavailableReason: null,
+        fixed: true,
+      },
+    ],
+    selected: defaults,
+    appliesToEveryone: true,
+    isPersonal: false,
+    departmentDefault: [],
+    builtInDefault: defaults,
+  };
+};
+
 export interface MockOptions {
   /**
    * Serve empty collections everywhere so the dashboard's empty states render.
@@ -446,6 +572,25 @@ const routes = ({
       last_check_in_at: null,
     }),
   ],
+  // After `events**` for the same reason as check-in monitoring above.
+  ['**/api/v1/events/settings', eventSettings],
+  [
+    '**/api/v1/event-requests/email-templates**',
+    () => [
+      {
+        id: 'tpl-1',
+        name: 'Request received confirmation',
+        subject: 'We received your request',
+        body_html: '<p>Thank you, {{contact_name}}.</p>',
+        trigger: 'on_submitted',
+        is_active: 1,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+    ],
+  ],
+  ['**/api/v1/event-requests/forms**', () => ({ forms: [], total: 0, skip: 0, limit: 50 })],
+  ['**/api/v1/admin-hub/events/metrics', eventMetricSettings],
 ];
 
 /**

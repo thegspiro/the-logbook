@@ -206,6 +206,26 @@ export const ALL_ROUTES: RouteCheck[] = [
     permissions: ['training.manage'],
   },
   { path: '/events/1/monitoring', maxSmallTargets: 0, maxTinyText: 0, permissions: ['events.manage'] },
+  // The Events hub's settings tab, reached the way the hub's gear button reaches
+  // it. Its nine sections are held in `useState`, not the URL, so they are
+  // listed as states: arrival alone measures Visibility and nothing else. The
+  // hub header above it is the shared AdminHubFrame one, and this is the entry
+  // that first measured it at 390px with a primary action beside the title.
+  {
+    path: '/events/admin?tab=settings',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['events.manage'],
+    expectText: 'Event Settings',
+    states: [
+      {
+        selector: 'nav[aria-label="Event settings sections"] button',
+        label: 'Event settings section',
+        max: 9,
+        mayRepeatArrival: true,
+      },
+    ],
+  },
   { path: '/training/my-training', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/training/submit', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/training/courses', maxSmallTargets: 0, maxTinyText: 0 },

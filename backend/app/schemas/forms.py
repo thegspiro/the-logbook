@@ -118,8 +118,11 @@ class FormFieldUpdate(BaseModel):
     validation_pattern: Optional[str] = Field(None, max_length=500)
     options: Optional[List[FormFieldOption]] = None
     condition_field_id: Optional[str] = None
-    condition_operator: Optional[str] = None
-    condition_value: Optional[str] = None
+    condition_operator: Optional[str] = Field(
+        None,
+        pattern="^(equals|not_equals|contains|not_empty|is_empty)$",
+    )
+    condition_value: Optional[str] = Field(None, max_length=500)
     sort_order: Optional[int] = Field(None, ge=0)
     width: Optional[str] = None
 

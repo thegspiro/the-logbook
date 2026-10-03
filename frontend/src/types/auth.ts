@@ -50,6 +50,12 @@ export interface CurrentUser {
   mfa_enrollment_required?: boolean;
   password_expired: boolean;
   must_change_password: boolean;
+  /**
+   * The member's chosen phone bottom-bar tabs, left then right of Quick Add.
+   * Null or absent when they have never chosen, which leaves the bar on its
+   * role-based defaults.
+   */
+  bottom_nav_slots?: string[] | null;
 }
 
 export interface PasswordChangeData {

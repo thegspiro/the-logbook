@@ -14,6 +14,7 @@ import type {
   Room,
   FacilitySystem,
 } from '../modules/facilities/types';
+import type { QRCheckInData } from '../types/event';
 import { asArray, expectArray } from '../utils/asArray';
 
 // ============================================
@@ -1065,6 +1066,18 @@ export interface TrainingWaiverResponse {
   updated_at: string | null;
 }
 
+/**
+ * A room's events whose check-in window is open right now, as resolved by
+ * `GET /locations/{id}/display` — the signed-in counterpart of the public
+ * kiosk feed. Org-scoped on the server, so an id from another department 404s.
+ */
+export interface LocationCheckInInfo {
+  location_id: string;
+  location_name: string;
+  current_events: QRCheckInData[];
+  has_overlap: boolean;
+}
+
 export const locationsService = {
   async getLocations(params?: {
     is_active?: boolean;
@@ -1093,6 +1106,26 @@ export const locationsService = {
 
   async deleteLocation(locationId: string): Promise<void> {
     await api.delete(`/locations/${locationId}`);
+  },
+
+  async getCurrentCheckIns(locationId: string): Promise<LocationCheckInInfo> {
+    // `_skipCache`: the answer is "what is open in this room right now". A
+    // member who taps the tag a minute after the window opens must not be
+    // told nothing is running because the shared client cached the earlier
+    // reply for 30s and served it stale for a further 60s.
+    const response = await api.get<LocationCheckInInfo>(`/locations/${locationId}/display`, { _skipCache: true });
+    // An empty list here is a claim ("nothing is checking in"), so a body
+    // that is not the promised shape must fail rather than read as one.
+    return {
+      ...response.data,
+      current_events: expectArray(response.data?.current_events, 'room check-in events'),
+    };
+  },
+
+  /** Turn member ID card taps on or off for one room's public kiosk. */
+  async setBadgeCheckIn(locationId: string, enabled: boolean): Promise<Location> {
+    const response = await api.put<Location>(`/locations/${locationId}/badge-check-in`, { enabled });
+    return response.data;
   },
 
   /** Rotate a location's kiosk display code — the old /display/{code} URL stops working immediately */

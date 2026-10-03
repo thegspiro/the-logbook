@@ -66,10 +66,12 @@ _LATER_REVOCATIONS = (
         "apparatus.view",
     ),
 )
-# Later grant backfills, each exposing ``_SLUGS`` and ``_PERMISSION``.
+# Later grant backfills, each exposing ``_SLUGS`` and ``_PERMISSION`` — or,
+# for one that adds several grants, a ``_GRANTS`` map of slug to permissions.
 _LATER_GRANTS = (
     _VERSIONS / "20260923_2219_394600cbfae2_grant_suggestions_manage.py",
     _VERSIONS / "20260930_0327_f73b449bdb8b_add_quartermaster_check_manage.py",
+    _VERSIONS / "20261002_2303_5bed4c485d2f_grant_nfc_tag_writers.py",
 )
 
 
@@ -112,7 +114,9 @@ def _pristine_registry_set(slug: str) -> set[str]:
     # backfill, is not on the row this backfill meets.
     for index, path in enumerate(_LATER_GRANTS):
         grant = _load_module(path, f"_later_grant_{index}")
-        if slug in grant._SLUGS:
+        if hasattr(grant, "_GRANTS"):
+            permissions.difference_update(grant._GRANTS.get(slug, ()))
+        elif slug in grant._SLUGS:
             permissions.discard(grant._PERMISSION)
     return {_RENAMED_SINCE.get(p, p) for p in permissions}
 
