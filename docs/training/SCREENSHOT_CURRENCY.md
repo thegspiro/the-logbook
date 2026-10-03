@@ -1,5 +1,16 @@
 # Screenshot currency
 
+## Watchdog check-in: rebased onto main, three new commits audited, 2026-10-03 (2)
+
+This branch had drifted three commits behind `main` (merge-base `812b15cd4`):
+`c02de305c` (`security(forms): pass 5`) and its merge/record commits.
+Rebased cleanly. All three touch only `docs/app-review/CROSS-CUTTING.md`,
+`docs/app-review/forms.md`, `docs/security-review/FORM-26-forms.md` and
+`docs/security-review/PROGRESS.md` — nothing for this sweep.
+
+`audit_images.py --baseline scripts/screenshots/audit_baseline.txt` reports no
+new findings (582 images checked). Nothing re-shot this pass.
+
 ## Watchdog check-in: rebased onto main, one new commit audited, two shots re-shot, 2026-10-03
 
 This branch had drifted five commits behind `main` (merge-base `1e352a68b`):
