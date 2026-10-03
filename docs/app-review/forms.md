@@ -11,6 +11,18 @@ cross-org integration writes) and FORM-3 fixed; FORM-4 (definition text unescape
 FORM-5 (require_authentication not enforced), FORM-6 (required = presence-only)
 left open.
 
+**Correction (2026-10-03, from `docs/security-review/FORM-26-forms.md` pass
+5):** every BXC-1 note below (pass 3, pass 4) describes a now-superseded
+state. The 2026-10-02 workflow-review pass (W60) added a same-form/cycle
+check (`FormsService._condition_error`, called from `add_field`/
+`update_field`) and started dereferencing `condition_field_id` server-side
+(`_visible_field_ids`/`_condition_matches`, to decide which hidden-branch
+fields are excused from their `required` check) — for a functional reason,
+not a security one, but it closes BXC-1 as a side effect: the dangling/
+foreign-reference case these notes reasoned about can no longer occur. See
+the security-review pass 5 entry for the full re-verification. Left in place
+below as the historical record of what was true through pass 4.
+
 ---
 
 ## Pass 4 (2026-08-09) — full FK re-audit; the one residual re-confirmed non-security

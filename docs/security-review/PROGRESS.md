@@ -16,20 +16,31 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#2884](https://github.com/thegspiro/the-logbook/pull/2884)** — branch
-`claude/security-review-messaging-notifications`, Feature 25 (Messaging &
-notifications), pass 5. Watchdog pickup: the dedicated loop session had
-stalled 2+ hours with no open security-review PR and no in-progress branch;
-confirmed via `list_pull_requests` (state=open) that no `claude/security-review-*`
-PR existed, both before starting and again immediately before opening this
-PR. 0 fixed, 0 new findings — every pass 1-4 fix re-verified intact against
-substantial churn (38 commits) since pass 4, including two newly-wired
-notification triggers correctly consulting `NotificationRuleResolver`
-(Pitfall #19) and 3 new routes correctly gated. One doc correction: MAIL-22
-(app-review, still open) cross-referenced into this feature's own findings
-file. Gate: flake8/black/isort clean, `validate_migrations.py --strict`
-passed (508 revisions), 916 scoped backend tests passed, frontend
-typecheck/lint clean. Subscribed for CI/review events.
+**PR [#2885](https://github.com/thegspiro/the-logbook/pull/2885)** — branch
+`claude/security-review-forms-pass5`, Feature 26 (Forms), pass 5. Watchdog
+pickup: the dedicated loop session had stalled ~2 hours (PR #2884 merged
+19:51 UTC; this check ran 21:48 UTC) with no open security-review PR and no
+in-progress branch; confirmed via `list_pull_requests` (state=open) that no
+`claude/security-review-*` PR existed before starting. 0 fixed, 0 new
+findings — every pass 1-4 fix (FORM-1 through FORM-12) re-verified intact.
+One standing item closed as a side effect of other work: BXC-1
+(`condition_field_id`, open since the original module audit) is now closed
+by the 2026-10-02 W60 workflow-review pass's same-form/cycle validation and
+server-side dereferencing; `docs/app-review/forms.md` and
+`CROSS-CUTTING.md`'s BXC-1 batch-list corrected to point here. Gate:
+flake8/black/isort clean, `validate_migrations.py --strict` passed (508
+revisions, no migration this pass), 623 scoped backend tests passed,
+frontend typecheck/lint clean. Subscribed for CI/review events.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 25, Messaging & notifications, pass 5, PR #2884, merged, before this watchdog pickup), preserved for history</summary>
+
+**None.** PR [#2884](https://github.com/thegspiro/the-logbook/pull/2884)
+(Feature 25, Messaging & notifications, pass 5) had already merged by the
+time this watchdog check ran. Rotation row 25 stays ✅. Next: Feature 26
+(Forms) — picked up by this same watchdog check, recorded above.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 24, Meetings & minutes, pass 5, PR #2881, merged, after the Feature 25 pass-5 watchdog pickup recorded above), preserved for history</summary>
@@ -17185,7 +17196,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
-| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
+| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
@@ -25397,3 +25408,42 @@ past 6+ CPU-minutes with no sign of finishing); the scoped run already
 covers every file this pass read. Findings doc:
 `docs/security-review/MSG-25-messaging-notifications.md` (Pass 5).
 Rotation row 25 stays ✅ (pending PR merge). Next: Feature 26 (Forms).
+
+### 2026-10-03 — Feature 26 (Forms, pass 5)
+
+Watchdog pickup: the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) had stalled roughly 2 hours (PR #2884,
+Feature 25, merged 19:51 UTC; this check ran 21:48 UTC) with no open
+security-review PR and no in-progress `claude/security-review-*` branch.
+Confirmed via `list_pull_requests` (state=open) before starting — the two
+open PRs (#2882, #2878) are unrelated feature work, not security-review.
+
+Loaded prior art (`CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+`docs/module-audit/forms.md`, `docs/app-review/forms.md`, this feature's own
+passes 1-4) before reading code. Growth since pass 4 (2026-09-13):
+`forms_service.py` +323 L, `schemas/forms.py` +3 L, driven by exactly one
+substantive commit, `4c7d69be3` — a **workflow-review** pass (W60, a
+different rotation, functional/UX-focused) that built full-depth
+conditional-visibility ("branching") support, re-read in full against this
+module's two touched files. Re-verified every prior finding (FORM-1 through
+FORM-12, BXC-1) against current code; full route inventory re-enumerated
+(22 routes, unchanged permission set).
+
+**0 new findings; 0 fixed, 0 flagged — but one standing item closed as a
+side effect of other work.** BXC-1 (`FormField.condition_field_id`, open
+since the original module audit, re-confirmed non-security at every prior
+pass because it was a soft reference _never dereferenced server-side_) is
+now closed: W60 added a same-form/cycle check
+(`FormsService._condition_error`, called from `add_field`/`update_field`)
+and started dereferencing the field server-side (`_visible_field_ids`,
+to decide which hidden-branch fields are excused from `required`) — for a
+functional reason, not a security one, but the dangling/foreign-reference
+case BXC-1 was about can no longer occur. `docs/app-review/forms.md` and
+`docs/app-review/CROSS-CUTTING.md`'s BXC-1 batch-list both corrected to
+point here rather than carry a second, stale record. Full completion gate:
+flake8/black/isort clean over `app/ tests/ alembic/`,
+`validate_migrations.py --strict` single head (no migration — no model
+change this pass), 623 `-k form` backend tests passed (1 pre-existing
+skip), frontend typecheck 0 errors, `npm run lint` exit 0. Full write-up:
+[`FORM-26-forms.md`](./FORM-26-forms.md)'s **Pass 5** section. Rotation row
+26 → ✅ (pending PR merge). Next: Feature 27 (Integrations).
