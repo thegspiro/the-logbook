@@ -216,9 +216,9 @@ const ExpenseReportDetailPage: React.FC = () => {
         )}
 
         {er.denialReason && (
-          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3">
-            <p className="text-xs font-medium text-red-700">Denial Reason</p>
-            <p className="mt-0.5 text-sm text-red-600">{er.denialReason}</p>
+          <div className="alert-danger mt-4">
+            <p className="text-theme-alert-danger-title text-xs font-medium">Denial Reason</p>
+            <p className="text-theme-alert-danger-text mt-0.5 text-sm">{er.denialReason}</p>
           </div>
         )}
       </div>

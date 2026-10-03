@@ -459,9 +459,9 @@ const PurchaseRequestDetailPage: React.FC = () => {
 
         {/* Denial reason */}
         {pr.denialReason && (
-          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3">
-            <p className="text-xs font-medium text-red-700">Denial Reason</p>
-            <p className="mt-0.5 text-sm text-red-600">{pr.denialReason}</p>
+          <div className="alert-danger mt-4">
+            <p className="text-theme-alert-danger-title text-xs font-medium">Denial Reason</p>
+            <p className="text-theme-alert-danger-text mt-0.5 text-sm">{pr.denialReason}</p>
           </div>
         )}
       </div>
