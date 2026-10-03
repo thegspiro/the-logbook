@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import toast from 'react-hot-toast';
@@ -22,6 +22,10 @@ function makeApiError(message: string, status = 400) {
 
 // Mock the API module
 vi.mock('../services/api', () => ({
+  // Behind the transfer dialog's organizer pickers.
+  userService: {
+    getUsers: vi.fn(),
+  },
   eventService: {
     getEvent: vi.fn(),
     getEventRSVPs: vi.fn(),
@@ -38,6 +42,7 @@ vi.mock('../services/api', () => ({
     reopenAttendance: vi.fn(),
     endEvent: vi.fn(),
     getMyAttendancePetition: vi.fn(),
+    transferEvent: vi.fn(),
     submitAttendancePetition: vi.fn(),
     getAttendancePetitions: vi.fn(),
     approveAttendancePetition: vi.fn(),
@@ -166,7 +171,7 @@ const mockRSVPs: RSVP[] = [
 ];
 
 describe('EventDetailPage', () => {
-  const { eventService } = apiModule;
+  const { eventService, userService } = apiModule;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -1724,7 +1729,18 @@ describe('EventDetailPage', () => {
   });
 
   describe('the event organizer', () => {
-    const organizedEvent: Event = { ...mockEvent, created_by: 'organizer-1', created_by_name: 'Sam Ortiz' };
+    // The server names the pair and sets can_manage_organizers only for a
+    // caller who may transfer the event; the page renders what it is told.
+    const organizedEvent: Event = {
+      ...mockEvent,
+      created_by: 'organizer-1',
+      created_by_name: 'Sam Ortiz',
+      organizer_id: 'organizer-1',
+      organizer_name: 'Sam Ortiz',
+      alternate_organizer_id: 'alt-1',
+      alternate_organizer_name: 'Ana Reyes',
+      can_manage_organizers: true,
+    };
 
     // mockReset, not the file-level vi.clearAllMocks: clearAllMocks drops
     // recorded calls but not implementations, and nested blocks in this file
@@ -1746,13 +1762,14 @@ describe('EventDetailPage', () => {
 
       expect(await screen.findByText('Organized by')).toBeInTheDocument();
       expect(screen.getByText('Sam Ortiz')).toBeInTheDocument();
+      expect(screen.getByText('Alternate: Ana Reyes')).toBeInTheDocument();
     });
 
-    it('shows nothing to a member who cannot finalize', async () => {
-      // The server withholds created_by_name from this caller, so the realistic
-      // payload has no name at all. Asserted anyway: the point is that a member
-      // is never told who organized the event, whichever layer withheld it.
-      vi.mocked(eventService.getEvent).mockResolvedValue(organizedEvent);
+    it('shows nothing to a member who may not transfer it', async () => {
+      // The server withholds the names and the flag from this caller.
+      // Asserted with the names present anyway: the row follows the flag, so
+      // a member is never told who organized it whichever layer withheld it.
+      vi.mocked(eventService.getEvent).mockResolvedValue({ ...organizedEvent, can_manage_organizers: false });
 
       renderWithRouter(<EventDetailPage />);
 
@@ -1761,16 +1778,39 @@ describe('EventDetailPage', () => {
       expect(screen.queryByText('Sam Ortiz')).not.toBeInTheDocument();
     });
 
-    it('renders nothing when no organizer is recorded', async () => {
-      // An event predating the column, or one whose organizer has left the
-      // department. An "Unknown" row would read as a data error.
+    it('says plainly when no organizer is set, and offers to set one', async () => {
+      // An event whose organizer was never recorded or has since been removed.
+      // The row is the way to assign one, so it stays, saying so rather than
+      // inventing a name.
       mockCheckPermission.mockImplementation((p: string) => p === 'events.manage');
-      vi.mocked(eventService.getEvent).mockResolvedValue({ ...mockEvent, created_by_name: null });
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        organizer_id: null,
+        organizer_name: null,
+        can_manage_organizers: true,
+      });
 
       renderWithRouter(<EventDetailPage />);
 
-      await screen.findByRole('heading', { level: 1, name: mockEvent.title });
-      expect(screen.queryByText('Organized by')).not.toBeInTheDocument();
+      expect(await screen.findByText('No organizer set')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Transfer event' })).toBeInTheDocument();
+    });
+
+    it('opens the transfer dialog on the current pair', async () => {
+      vi.mocked(userService.getUsers).mockReset();
+      vi.mocked(userService.getUsers).mockResolvedValue([
+        { id: 'organizer-1', first_name: 'Sam', last_name: 'Ortiz', username: 'sam', status: 'active' },
+        { id: 'alt-1', first_name: 'Ana', last_name: 'Reyes', username: 'ana', status: 'active' },
+      ] as unknown as Awaited<ReturnType<typeof userService.getUsers>>);
+      vi.mocked(eventService.getEvent).mockResolvedValue(organizedEvent);
+      const user = userEvent.setup();
+
+      renderWithRouter(<EventDetailPage />);
+      await user.click(await screen.findByRole('button', { name: 'Transfer event' }));
+
+      const dialog = await screen.findByRole('dialog', { name: 'Transfer Event' });
+      await waitFor(() => expect(within(dialog).getByLabelText(/^organizer/i)).toHaveValue('organizer-1'));
+      expect(within(dialog).getByLabelText(/^alternate/i)).toHaveValue('alt-1');
     });
   });
 
@@ -1943,7 +1983,9 @@ describe('EventDetailPage', () => {
 
     it('shows the organizer the requests without events.manage', async () => {
       mockAuthState.user = { id: 'organizer-1', permissions: [] } as unknown as CurrentUser;
-      vi.mocked(eventService.getEvent).mockResolvedValue(pastEvent);
+      // The server's answer for its organizer (or alternate): no
+      // events.manage, but this event's requests are theirs to decide.
+      vi.mocked(eventService.getEvent).mockResolvedValue({ ...pastEvent, can_manage_organizers: true });
       vi.mocked(eventService.getAttendancePetitions).mockResolvedValue([
         {
           id: 'pet-1',

@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**286 tables · 4713 columns · 929 foreign keys**
+**286 tables · 4715 columns · 931 foreign keys**
 
 ---
 
@@ -204,7 +204,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`event_external_attendees`](#event_external_attendees) | `EventExternalAttendee` | 17 | External (non-member) attendee at an event. |
 | [`event_rsvps`](#event_rsvps) | `EventRSVP` | 21 | Event RSVP model for tracking attendance |
 | [`event_templates`](#event_templates) | `EventTemplate` | 29 | Event Template model for reusable event configurations |
-| [`events`](#events) | `Event` | 53 | Event model for managing department events |
+| [`events`](#events) | `Event` | 55 | Event model for managing department events |
 | [`rsvp_history`](#rsvp_history) | `RSVPHistory` | 8 | RSVP History model for tracking RSVP status changes. |
 
 ### External_Shift_Hours
@@ -2810,15 +2810,19 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `cancelled_at` | DATETIME | yes |  |  |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
+| `organizer_id` | VARCHAR(36) | yes | FK, IDX | generated | → `users.id` ON DELETE SET NULL |
+| `alternate_organizer_id` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 
 **Indexes**
 
+- `ix_events_alternate_organizer_id` (`alternate_organizer_id`)
 - `ix_events_custom_category` (`custom_category`)
 - `ix_events_event_type` (`event_type`)
 - `ix_events_location_id` (`location_id`)
 - `ix_events_organization_id` (`organization_id`)
+- `ix_events_organizer_id` (`organizer_id`)
 - `ix_events_recurrence_parent_id` (`recurrence_parent_id`)
 - `ix_events_start_datetime` (`start_datetime`)
 
@@ -9959,7 +9963,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (342 references)
+### → `users` (344 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10058,8 +10062,10 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `event_rsvps` | `user_id` | CASCADE | no |
 | `event_templates` | `created_by` | RESTRICT | yes |
 | `event_templates` | `updated_by` | RESTRICT | yes |
+| `events` | `alternate_organizer_id` | SET NULL | yes |
 | `events` | `attendance_finalized_by` | SET NULL | yes |
 | `events` | `created_by` | RESTRICT | yes |
+| `events` | `organizer_id` | SET NULL | yes |
 | `events` | `updated_by` | RESTRICT | yes |
 | `expense_reports` | `approved_by` | SET NULL | yes |
 | `expense_reports` | `submitted_by` | RESTRICT | no |

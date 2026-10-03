@@ -269,6 +269,16 @@
   ::file-selector-button {
     border-color: var(--color-gray-200, currentcolor);
   }
+
+  /* A native radio or checkbox is a flex item at almost every call site,
+     beside a label whose text wraps. Flex items default to `flex-shrink: 1`,
+     so long text squeezes the control's width while its height holds:
+     `h-4 w-4` measured 13x16px on a 390px viewport, which drew every radio
+     as an upright oval. In `base`, so a call site can still opt back in. */
+  input[type='radio'],
+  input[type='checkbox'] {
+    flex-shrink: 0;
+  }
 }
 
 /*
