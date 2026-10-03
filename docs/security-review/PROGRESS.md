@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this branch, not yet numbered at commit time)** — branch
+**PR [#2869](https://github.com/thegspiro/the-logbook/pull/2869)** — branch
 `claude/security-review-feature20-pass6`, Feature 20 (Compliance), pass 6.
 Confirmed via the GitHub API before starting: no open PR whose head branch
 starts with `claude/security-review-` existed, and PR #2863 (Feature 19,
