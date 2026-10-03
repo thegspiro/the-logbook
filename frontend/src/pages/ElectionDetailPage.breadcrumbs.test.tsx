@@ -27,9 +27,10 @@ import { screen, within } from '@testing-library/react';
 import { renderWithRouter } from '../test/utils';
 
 const getElection = vi.fn();
+const getEvents = vi.fn();
 vi.mock('../services/api', () => ({
   electionService: { getElection: (...a: unknown[]) => getElection(...a) as unknown },
-  eventService: { getEvents: vi.fn().mockResolvedValue([]) },
+  eventService: { getEvents: (...a: unknown[]) => getEvents(...a) as unknown },
   meetingsService: { getMeetings: vi.fn().mockResolvedValue([]) },
 }));
 vi.mock('../modules/prospective-members/services/api', () => ({
@@ -68,6 +69,8 @@ describe('ElectionDetailPage breadcrumbs', () => {
     vi.clearAllMocks();
     // Reset implementations, not just calls (CLAUDE.md pitfall #28).
     getElection.mockReset();
+    getEvents.mockReset();
+    getEvents.mockResolvedValue([]);
     checkPermission.mockReset();
     checkPermission.mockReturnValue(true);
   });
@@ -84,6 +87,10 @@ describe('ElectionDetailPage breadcrumbs', () => {
     // The loading branch renders before any title exists. An empty last crumb
     // would read as a trail that lost its destination.
     getElection.mockReturnValue(new Promise(() => undefined));
+    // Hold the upcoming-events fetch open too: with it resolving, its state
+    // update landed one microtask after these synchronous assertions, outside
+    // any act() scope, and React warned on every run.
+    getEvents.mockReturnValue(new Promise(() => undefined));
     renderAt();
 
     expect(within(trail()).getByText('Election')).toBeInTheDocument();

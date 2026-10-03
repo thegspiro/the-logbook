@@ -285,11 +285,11 @@ that they become management records.
 
 ### Edge Cases
 
-| Scenario                          | Behavior                                      |
-| --------------------------------- | --------------------------------------------- |
-| Candidate with existing votes     | Cannot be deleted (preserves audit trail)     |
-| Candidate declines nomination     | Mark as not accepted; still visible but noted |
-| Write-in candidate receives votes | Recorded as-is; counted in results            |
+| Scenario                          | Behavior                                                                       |
+| --------------------------------- | ------------------------------------------------------------------------------ |
+| Candidate with existing votes     | Cannot be deleted (preserves audit trail)                                      |
+| Candidate declines nomination     | The nomination is removed from the election; the member can be nominated again |
+| Write-in candidate receives votes | Recorded as-is; counted in results                                             |
 
 ---
 
@@ -433,9 +433,9 @@ downloads are both audit-logged.
 When the election is ready:
 
 1. Review all ballot items and candidates
-2. Click **Open Election** — status changes from Draft to Open
-3. If configured, ballot emails are sent to all eligible voters
-4. Voters can now cast their votes via the in-app interface or email ballot link
+2. Click **Open Election** — status changes from Draft to Open, and the voter roll is frozen (see below)
+3. Opening sends no ballots. Send them yourself with **Send Ballot Emails** (see Ballot Distribution) — a scheduled opening (**Open Automatically at Start Time**) does not send them either
+4. Once the ballots are out, voters can cast their votes via the in-app interface or the email ballot link
 
 > **Hint:** Send a **test ballot** to yourself first (`POST /elections/:id/send-test-ballot`) to verify the email rendering and voting link before sending to all members. Votes cast from a test ballot are flagged as test votes — they are excluded from results, statistics, and rosters, and they never consume your real vote.
 
@@ -510,6 +510,9 @@ are never contacted.
 
 - **One-hour cooldown** per election (manual or automatic) — a double-click
   can't spam the membership
+- A reminder **replaces the earlier ballot link**: the mail is titled
+  "Reminder: vote in <election>", and an older link opened afterwards says it
+  was replaced by a newer ballot email
 - Each reminded member's **older unused links are expired only once the new
   email is confirmed handed to the mail server** — a bounce leaves the old
   link working, so nobody is stranded with zero live ballots
@@ -528,7 +531,7 @@ are never contacted.
 2. Review each ballot item and the candidates
 3. Select your choice for each position (or your approvals/rankings for approval and ranked-choice elections)
 4. Click **Submit Vote** — for approval and ranked-choice elections all of your selections for the position are submitted together, atomically
-5. A **receipt hash** is returned with your submission — save it; you can later confirm your vote was recorded via the receipt verification endpoint without revealing who you voted for
+5. Your vote is confirmed on screen. A **receipt** you can verify later comes with the emailed ballot (see below); the in-app tab does not show one
 
 ### Email Ballot Voting (Token-Based)
 
@@ -669,7 +672,7 @@ When enabled for the organization, proxy voting allows one member to vote on beh
 3. Click **Authorize Proxy**
 4. Select the **delegating member** (who can't attend)
 5. Select the **proxy holder** (who will vote for them)
-6. Save — the proxy holder receives email notification
+6. Save — nothing is sent at this point. When ballots go out, the proxy holder is **Cc'd on the delegating member's ballot email** (their own ballot email is separate)
 
 ### Casting a Proxy Vote
 
@@ -709,7 +712,7 @@ If results are hidden until close:
 
 **Required Permission:** `elections.manage` (to close)
 
-1. Click **Close Election** and confirm in the dialog — the buttons read **Close election** / **Keep it open**, and it warns that voting ends immediately and cannot be undone _(2026-08-11: this is now an in-app dialog rather than a browser popup, so it cannot be silently suppressed by the browser)_. Closing early (before the scheduled end date) is fully supported — runoff conditions are still evaluated and membership-approval results still flow back to the pipeline
+1. Click **Close Election** and confirm in the dialog — the buttons read **Close election** / **Keep it open**, and it warns that voting ends immediately and cannot be undone _(2026-08-11: this is now an in-app dialog rather than a browser popup, so it cannot be silently suppressed by the browser)_. Closing early (before the scheduled end date) is fully supported — runoff conditions are still evaluated and membership-approval results still flow back to the pipeline. The close records **who closed the election and when**; the certified results PDF and the report print that instant and officer, and an automatic close at the scheduled end is shown as such
 2. Results are calculated and displayed:
    - Per-position winner (or "No winner" if the victory condition wasn't met)
    - Vote counts per candidate
@@ -1027,7 +1030,7 @@ After 30 minutes, Sarah closes the election:
 
 **Secretary:** FF Nguyen wins unopposed with 95%.
 
-Sarah generates the election report and emails it to the department.
+The election report is emailed to Sarah — the election secretary who created it — when the election closes (**Email me the results report** on the Publish Results panel sends it again). She forwards it to the department herself.
 
 ---
 

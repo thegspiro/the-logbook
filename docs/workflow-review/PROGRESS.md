@@ -183,6 +183,72 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   as `2026-09-30` (W46-16).
 - **W75** — password sign-in, failure, lockout and sign-out never reach the
   audit log, so the audit screen cannot show them (W02-3).
+- **W75** — since W50-45, `/audit-logs` resolves the actor's `username`
+  server-side and the page should read "system" only for rows with no
+  `user_id`; confirm on the audit page. Also `GET /audit-logs?event_type=runoff_election_created`
+  returned 0 for a row visibly present in the table (W50, A10) — check the
+  event-type filter.
+- **W57** — the shipped ballot template gained `meeting_date_html` /
+  `meeting_date_text` and reworded callouts (W50-68, carried into stored
+  templates by `cbd97eb`); a department that saved its own
+  `ballot_notification` keeps the old body. Check that the editor's variable
+  palette lists the two and that the preview's "Quorum Met" sample value
+  (`email_template_service.py` ~1062) reads as an example, not a claim.
+- **W18 / W51** — the election meeting-link → Import Attendees → unlink round
+  trip could not be driven in W50 (no event exists in the review org); an
+  events or minutes run should leave a business meeting for it. The "link
+  survives a clear" half of W50-60 is read from code only.
+
+## Log
+
+### W50 — An election: create, nominate, vote by ballot link, close, results — 2026-09-30
+
+Driven as: `secretary`, `member` and `member2` (driver A) and `admin`,
+`treasurer`, `training_officer`, `chief` and a signed-out visitor (driver B),
+two browsers at once at 1280×900 and 390×844, on a fresh database with
+**email on** and routed to a local sink (265 messages read back, every ballot
+link followed). Three officer elections — Chief plus a budget motion and a
+membership approval, a two-seat board, and an engineered tie with its runoff
+— and nine probe elections for permissions, security and the lifecycle task.
+Not driven: a proxy vote (no UI), a second attesting officer, keyboard-only
+navigation; the meeting-link round trip (no event in the org).
+
+Held: create with items and saved templates; nominations end to end; in-app,
+emailed-link, paper and attested ballots; close, publish, the certified PDF
+and the report; the runoff chain; clone, rollback and void; every refusal
+(401/403/404, CSRF, foreign ids, the module gate); every date in Chicago time
+from a UTC browser; no console or page error in ~250 scripts.
+
+Fixed (41 findings, 52 fixes: `3de83db` 17 backend S01–S17, `d6f828c` 7
+frontend S18–S24, `7aa3405` 28 backend from the drive, `cbd97eb` the
+template carry; 18 re-driven live against `7aa3405` and holding):
+
+- W50-1 (CRITICAL — deleting any election with issued ballot tokens 500'd after leadership was mailed "permanently deleted").
+- W50-2 (HIGH — an anonymous election was de-anonymised by any manager in two reads), W50-3 (HIGH — a named-election member voted in-app and by link, both counted), W50-4, W50-5 (HIGH — an item id or a missing `position` skipped the attendance rule and the one-vote rule), W50-6 (HIGH — a voided voter's next vote 500'd on both routes), W50-7 (HIGH — motions and membership approvals reported nowhere), W50-8 (HIGH — the printed ballot carried positions only; the recording half is flagged), W50-9 (HIGH — candidates renamed after close; merge and void after close flagged), W50-12 (HIGH — a mid-vote tally mailed as the official closed report), W50-14 (HIGH — an early close dated to the scheduled end, with no actor).
+- MED: W50-15, 16, 17, 18, 20, 21, 27, 28, 32, 33, 34, 35, 37, 39, 40, 41, 42, 44, 45 — browser-zone date arithmetic, a cleared statement that survived, a member's deep-link trap, test ballots indistinguishable from real ones, the package's eligibility count, publish controls the server refuses, reminders titled and stamped as first ballots, "send to all voters" that mailed one person, ties printed as two 50% rows, invented recipient facts, runoffs losing their tie policy and items, ballots mailed from a draft, a rollback alert that lied, a vote deleted through another election's path, pending batches counting toward the cap, `[]` meaning nobody, a 60-character write-in 500, a dead token blaming the voter roll, an audit page reading "system".
+- LOW: W50-48, 49, 54, 55, 60, 65, 66, 67, 68, 69, 71 — "Quorum Met" with no quorum, an unenforced proxy cap, a voided receipt's message, the roster against the frozen roll, a no-op toast, forensics counters, batch-card void trails, a malformed id 500 and an unbounded statement, ballot-mail wording, a clone's stale flag, a runoff audit row with no election.
+
+Flagged (mirrored to `docs/KNOWN_LIMITATIONS.md`): W50-8 recording half, W50-9
+post-close merge/void, W50-10 (the in-app tab is not the ballot), W50-11 (no
+seat count), W50-13 (an override on a restricted list) — HIGH; W50-19, W50-22,
+W50-23, W50-25, W50-31, W50-38, W50-47 — MED; W50-70, W50-72 — LOW; plus the
+S01 proxy-ballot attributability (HIGH), the pre-fix audit rows (MED), the
+pre-deploy double-vote window (MED, in `docs/UPGRADING.md`), pooled
+`overall_results` on multi-item ballots (MED) and two data residuals (LOW).
+
+In progress: frontend round 2 for W50-24, 26, 29, 30, 36, 43, 46, 50, 51, 52,
+53, 56, 57, 58, 59, 61, 62, 63, 64, 73 and the frontend halves of fourteen
+backend fixes (marked `<!-- FE2 -->` in the findings file). Open: W50-74 to
+W50-82 (NIT). The manual (`docs/training/14-elections.md`) corrected on five
+lines the drive contradicted.
+
+Gate: backend — the election suite 622 passed and the CI unit selection
+11977 passed after round 2 and the template carry; flake8, black and isort
+clean; each new Alembic revision proven up, down and up; `generate_schema_docs`
+and `check_route_permissions --strict` clean. Frontend — typecheck, eslint,
+prettier and the election suites (143 passed) clean after round 1; the
+round-2 gate is recorded when that round lands. Next: W51.
+
 - **Any forms or prospects run** — `scripts/clear_hidden_form_answers.py`
   still judges each rule one level deep (`FormsService._is_field_visible`,
   kept that way on purpose in W60). So answers stored before W60 under a

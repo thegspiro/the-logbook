@@ -26,7 +26,21 @@ from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 router = APIRouter()
 
 
-def _serialize(entry: AuditLog) -> dict[str, Any]:
+# Most callers of log_audit_event pass user_id and never username, so the
+# stored column is NULL on the bulk of rows and the admin screen attributed
+# every action to "system". The actor is resolved from users at read time;
+# the join is org-scoped so a user_id from another tenant never resolves.
+_ACTOR_USERNAME = func.coalesce(AuditLog.username, User.username)
+
+
+def _actor_join(stmt: Any, organization_id: str) -> Any:
+    return stmt.outerjoin(
+        User,
+        and_(User.id == AuditLog.user_id, User.organization_id == organization_id),
+    )
+
+
+def _serialize(entry: AuditLog, actor_username: str | None = None) -> dict[str, Any]:
     return {
         "id": entry.id,
         "timestamp": utc_isoformat(entry.timestamp),
@@ -34,7 +48,7 @@ def _serialize(entry: AuditLog) -> dict[str, Any]:
         "event_category": entry.event_category,
         "severity": entry.severity.value if entry.severity else None,
         "user_id": entry.user_id,
-        "username": entry.username,
+        "username": entry.username or actor_username,
         "ip_address": entry.ip_address,
         "event_data": entry.event_data or {},
     }
@@ -61,7 +75,8 @@ async def list_audit_logs(
     Filters: event_type, event_category, severity, user_id, search,
     start_date, end_date. Pagination via skip/limit.
     """
-    filters: list[Any] = [AuditLog.organization_id == str(current_user.organization_id)]
+    org_id = str(current_user.organization_id)
+    filters: list[Any] = [AuditLog.organization_id == org_id]
     if event_type:
         filters.append(AuditLog.event_type == event_type)
     if event_category:
@@ -80,7 +95,7 @@ async def list_audit_logs(
         like = like_pattern(search)
         filters.append(
             or_(
-                AuditLog.username.ilike(like, escape=LIKE_ESCAPE_CHAR),
+                _ACTOR_USERNAME.ilike(like, escape=LIKE_ESCAPE_CHAR),
                 AuditLog.event_type.ilike(like, escape=LIKE_ESCAPE_CHAR),
             )
         )
@@ -88,21 +103,23 @@ async def list_audit_logs(
     where_clause = and_(*filters)
 
     count_result = await db.execute(
-        select(func.count()).select_from(AuditLog).where(where_clause)
+        _actor_join(select(func.count()).select_from(AuditLog), org_id).where(
+            where_clause
+        )
     )
     total = count_result.scalar() or 0
 
     result = await db.execute(
-        select(AuditLog)
+        _actor_join(select(AuditLog, User.username), org_id)
         .where(where_clause)
         .order_by(AuditLog.timestamp.desc())
         .offset(skip)
         .limit(limit)
     )
-    entries = result.scalars().all()
+    entries = result.all()
 
     return {
-        "logs": [_serialize(e) for e in entries],
+        "logs": [_serialize(e, actor) for e, actor in entries],
         "total": total,
         "skip": skip,
         "limit": limit,
@@ -155,15 +172,14 @@ async def get_audit_log_entry(
     current_user: User = Depends(require_permission("audit.view")),
 ) -> dict[str, Any]:
     """Fetch a single audit log entry. Org-scoped."""
+    org_id = str(current_user.organization_id)
     result = await db.execute(
-        select(AuditLog).where(
-            and_(
-                AuditLog.id == log_id,
-                AuditLog.organization_id == str(current_user.organization_id),
-            )
+        _actor_join(select(AuditLog, User.username), org_id).where(
+            and_(AuditLog.id == log_id, AuditLog.organization_id == org_id)
         )
     )
-    entry = result.scalar_one_or_none()
-    if not entry:
+    row = result.one_or_none()
+    if not row:
         raise HTTPException(status_code=404, detail="Audit log entry not found")
-    return _serialize(entry)
+    entry, actor = row
+    return _serialize(entry, actor)

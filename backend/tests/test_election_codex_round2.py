@@ -234,6 +234,7 @@ class TestTokenLockRepopulatesExisting:
             id=str(uuid4()),
             election_id=election.id,
             used=False,
+            superseded_at=None,
             expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
         )
         service.db.execute.side_effect = [

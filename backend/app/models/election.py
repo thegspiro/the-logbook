@@ -9,7 +9,7 @@ from enum import Enum
 from sqlalchemy import JSON, Boolean, Column, DateTime
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, Index, Integer, String, Text, UniqueConstraint
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import backref, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -113,6 +113,11 @@ class Election(Base):
     email_recipients = Column(
         JSON, nullable=True
     )  # List of user IDs who received email
+    # Members the last live send/reminder skipped, with the reason recorded
+    # at that moment: [{"user_id", "name", "reason"}]. The close report
+    # prints this rather than re-deriving eligibility at close time, which
+    # invented reasons for members the send never considered (W50-33).
+    email_skipped_details = Column(JSON, nullable=True)
     meeting_date = Column(
         DateTime(timezone=True), nullable=True
     )  # For meeting-based ballots
@@ -149,6 +154,16 @@ class Election(Base):
     # deadline is set, the lifecycle task closes nominations (back to DRAFT)
     # once the deadline passes. NULL = nominations close manually.
     nomination_deadline = Column(DateTime(timezone=True), nullable=True)
+
+    # When and by whom the election actually closed. end_date is the
+    # *scheduled* end and survives an early manual close unchanged, so it is
+    # the wrong date for the certified record (W50-14). closed_by is NULL
+    # for a lifecycle (automatic) close; both are cleared by a rollback to
+    # OPEN so a re-close stamps fresh values.
+    closed_at = Column(DateTime(timezone=True), nullable=True)
+    closed_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     # Status
     status = Column(
@@ -414,15 +429,31 @@ class VotingToken(Base):
     # rules (unrestricted).
     eligible_positions = Column(JSON, nullable=True)
 
-    # Access tracking
+    # Access tracking: first_accessed_at is the first ballot-page open;
+    # access_count counts successful submits only (W50-54).
     first_accessed_at = Column(DateTime(timezone=True), nullable=True)
     access_count = Column(Integer, nullable=False, default=0, server_default="0")
+
+    # Stamped when a reminder mailed this voter a fresh link and retired
+    # this one. It is also expired, but the ballot page reads this first:
+    # "expired" told a member 45 hours before the close that voting was
+    # over, when the link in their newer email still worked (W50-27).
+    superseded_at = Column(DateTime(timezone=True), nullable=True)
 
     # Multi-position tracking: which positions have been voted on via this token
     positions_voted = Column(JSON, nullable=True)  # ["Chief", "President"]
 
-    # Relationships
-    election = relationship("Election", backref="voting_tokens")
+    # Relationships. The FK is ondelete=CASCADE, but a plain backref makes the
+    # ORM null election_id on every loaded token when the election is deleted
+    # — a NOT NULL column, so the delete failed at commit (MySQL 1048) after
+    # leadership had been told the election was gone (W50-1). Cascade in the
+    # ORM and let the database do the rest.
+    election = relationship(
+        "Election",
+        backref=backref(
+            "voting_tokens", cascade="all, delete-orphan", passive_deletes=True
+        ),
+    )
 
     __table_args__ = (
         Index("ix_voting_tokens_election_id", "election_id"),
@@ -475,6 +506,8 @@ class Vote(Base):
 
     # MySQL-compatible dedup hash — SHA256(election_id:voter_id_or_hash:position)
     # Unique constraint on this column prevents double-voting at DB level.
+    # Cleared when the vote is voided (soft-deleted), or the voter could never
+    # cast the replacement ballot the void was meant to allow (W50-6).
     vote_dedup_hash = Column(String(64), nullable=True, unique=True)
 
     # Sequential chain hash — SHA256(previous_chain_hash + vote_signature)
@@ -579,10 +612,24 @@ class ManualBallotBatch(Base):
     # from per-candidate tallies. Nullable: pre-existing batches never
     # recorded it.
     ballots_cast = Column(Integer, nullable=True)
+    # The recorder pushed the batch past the plausibility guard. Kept on the
+    # batch, not only in the audit log, so the attesting officers see the
+    # mark on the card they are being asked to confirm (W50-66).
+    over_count_override = Column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     confirmed_at = Column(DateTime(timezone=True), nullable=True)
+    # Who voided the batch, when, and why. The same facts sit on each
+    # soft-deleted vote row, but the card is read per batch and the void
+    # is one action — one record of it, not ``count`` copies.
+    voided_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    voided_at = Column(DateTime(timezone=True), nullable=True)
+    void_reason = Column(Text, nullable=True)
 
     attestations = relationship(
         "ManualBallotAttestation",

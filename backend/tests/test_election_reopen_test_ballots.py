@@ -113,6 +113,12 @@ class TestZeroVoteReopen:
         assert audit_payload["anonymity_salt_regenerated"] is True
         assert audit_payload["voting_tokens_invalidated"] == 4
 
+        # W50-37: the leadership alert is told what this rollback did, so
+        # its sentence can be truthful per transition.
+        notify_kwargs = service._notify_leadership_of_rollback.await_args.kwargs
+        assert notify_kwargs["tokens_invalidated"] == 4
+        assert notify_kwargs["ballots_must_be_resent"] is True
+
     async def test_anonymous_reopen_with_votes_still_refused(self):
         election = _closed_election(salt=None, anonymous=True)
         db = _db(
@@ -158,6 +164,9 @@ class TestZeroVoteReopen:
         payload = service._audit.await_args.args[1]
         assert payload["anonymity_salt_regenerated"] is False
         assert payload["voting_tokens_invalidated"] == 0
+        notify_kwargs = service._notify_leadership_of_rollback.await_args.kwargs
+        assert notify_kwargs["tokens_invalidated"] == 0
+        assert notify_kwargs["ballots_must_be_resent"] is False
 
     async def test_non_anonymous_zero_vote_reopen_also_regenerates(self):
         # close_election destroys the salt for every election, so the token
@@ -194,6 +203,7 @@ def _voting_token(is_test):
     return SimpleNamespace(
         is_test=is_test,
         used=False,
+        superseded_at=None,
         expires_at=datetime.now(timezone.utc) + timedelta(days=1),
         first_accessed_at=None,
         access_count=0,
@@ -286,6 +296,7 @@ def _send_election():
         email_sent=False,
         email_sent_at=None,
         email_recipients=None,
+        email_skipped_details=None,
     )
 
 

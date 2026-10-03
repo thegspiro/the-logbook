@@ -232,6 +232,34 @@ class TestCloneElection(EnhancementSetup):
         )
         assert clone_candidates == []
 
+    async def test_clone_resets_results_visible_immediately(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        """W50-69: publishing a closed election's results sets the flag; a
+        clone must start unpublished or its draft shows a results tab."""
+        org_id, user1_id, _ = setup_org_and_users
+        source_id = await self._insert_election(
+            db_session, org_id, user1_id, status="closed"
+        )
+        await db_session.execute(
+            text("UPDATE elections SET results_visible_immediately = 1 WHERE id = :id"),
+            {"id": source_id},
+        )
+        await db_session.flush()
+        svc = ElectionService(db_session)
+
+        start = datetime.now(timezone.utc) + timedelta(days=30)
+        clone, err = await svc.clone_election(
+            election_id=uuid.UUID(source_id),
+            organization_id=uuid.UUID(org_id),
+            created_by=user1_id,
+            title="Officer Election 2027",
+            start_date=start,
+            end_date=start + timedelta(days=1),
+        )
+        assert err is None, err
+        assert clone.results_visible_immediately is False
+
     async def test_clone_with_candidates(
         self, db_session: AsyncSession, setup_org_and_users
     ):
@@ -429,8 +457,11 @@ class TestTiePolicy(EnhancementSetup):
             _internal_bypass_visibility=True,
         )
         chief = results.results_by_position[0]
-        assert chief.is_tie is False
+        # The tie is still reported as one (W50-32); the policy only decides
+        # that both tied candidates are elected.
+        assert chief.is_tie is True
         assert all(c.is_winner for c in chief.candidates)
+        assert all(c.is_tied for c in chief.candidates)
 
     async def test_revote_policy_flags_tie_and_audits(
         self, db_session: AsyncSession, setup_org_and_users
