@@ -476,6 +476,12 @@ export interface MemberComplianceRecord {
   /** The part of the totals logged on another jurisdiction's apparatus. */
   external_shift_count?: number;
   external_hours?: number;
+  /**
+   * Set when an existing member is short of the target but still inside the
+   * requirement's catch-up period. Such a member is excluded from
+   * `total_members` / `compliant_count` / `non_compliant_count`.
+   */
+  catch_up_deadline?: string | null;
 }
 
 export interface RequirementComplianceSummary {

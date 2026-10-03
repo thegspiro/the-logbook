@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**286 tables · 4715 columns · 931 foreign keys**
+**286 tables · 4718 columns · 931 foreign keys**
 
 ---
 
@@ -629,7 +629,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`training_module_configs`](#training_module_configs) | `TrainingModuleConfig` | 45 | Training Module Configuration model |
 | [`training_programs`](#training_programs) | `TrainingProgram` | 23 | Training Program model |
 | [`training_records`](#training_records) | `TrainingRecord` | 39 | Training Record model |
-| [`training_requirements`](#training_requirements) | `TrainingRequirement` | 42 | Training Requirement model |
+| [`training_requirements`](#training_requirements) | `TrainingRequirement` | 45 | Training Requirement model |
 | [`training_sessions`](#training_sessions) | `TrainingSession` | 30 | Training Session model |
 | [`training_submissions`](#training_submissions) | `TrainingSubmission` | 25 | Training Submission model |
 | [`training_waivers`](#training_waivers) | `TrainingWaiver` | 13 | Training Waiver / Leave of Absence |
@@ -9467,6 +9467,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `required_roles` | JSON | yes |  |  |  |
 | `required_positions` | JSON | yes |  |  |  |
 | `required_membership_types` | JSON | yes |  |  |  |
+| `new_member_cutoff_date` | DATE | yes |  |  |  |
+| `existing_member_deadline` | DATE | yes |  |  |  |
+| `applies_to_joined_before` | DATE | yes |  |  |  |
 | `start_date` | DATE | yes |  |  |  |
 | `due_date` | DATE | yes | IDX |  |  |
 | `time_limit_days` | INTEGER | yes |  |  |  |

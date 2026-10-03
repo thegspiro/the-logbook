@@ -39,6 +39,11 @@ from app.models.training import (
 )
 from app.models.user import User, UserStatus
 from app.services.call_tracking_service import CallTrackingService
+from app.services.training_compliance import (
+    catch_up_deadline,
+    member_join_date,
+    requirement_applies_to_user,
+)
 from app.utils.hours import (
     hours_from_minutes,
     round_hours_exact,
@@ -1157,8 +1162,11 @@ class ReportsService:
         requirements = req_result.scalars().all()
         req_map = {str(r.id): r for r in requirements}
 
+        # positions eager-loaded for the per-member applicability check.
         users_result = await self.db.execute(
-            select(User).where(
+            select(User)
+            .options(selectinload(User.positions))
+            .where(
                 User.organization_id == str(organization_id),
                 User.status == UserStatus.ACTIVE,
                 User.compliance_exempt.is_(False),
@@ -1192,22 +1200,49 @@ class ReportsService:
                 ):
                     user_completed[uid].add(str(rp.requirement_id))
 
-        total_reqs = len(requirements)
         report_entries = []
         fully_compliant = 0
         partially_compliant = 0
         non_compliant = 0
+        # The department's date is needed only to judge a catch-up period, so
+        # an org that has configured none is spared the lookup.
+        today = (
+            await resolve_org_today(self.db, str(organization_id))
+            if any(r.existing_member_deadline for r in requirements)
+            else None
+        )
 
         for user in users:
             uid = str(user.id)
             completed_ids = user_completed.get(uid, set())
-            completed_count = sum(1 for rid in req_map if rid in completed_ids)
+            join_date = member_join_date(user)
+            # Only the requirements that grade this member. An unmet one inside
+            # an existing member's catch-up period is an upcoming deadline,
+            # not an overdue item, and counts neither way.
+            graded = []
+            upcoming_deadlines = []
+            for rid, req in req_map.items():
+                if not requirement_applies_to_user(req, user):
+                    continue
+                deadline = (
+                    None
+                    if rid in completed_ids or today is None
+                    else catch_up_deadline(req, join_date, today)
+                )
+                if deadline is not None:
+                    upcoming_deadlines.append(
+                        {"name": req.name, "due_date": deadline.isoformat()}
+                    )
+                    continue
+                graded.append(rid)
+            total_reqs = len(graded)
+            completed_count = sum(1 for rid in graded if rid in completed_ids)
             pct = (
                 round(completed_count / total_reqs * 100, 1) if total_reqs > 0 else 100
             )
 
             overdue_items = [
-                req_map[rid].name for rid in req_map if rid not in completed_ids
+                req_map[rid].name for rid in graded if rid not in completed_ids
             ]
 
             if pct >= 100:
@@ -1227,7 +1262,7 @@ class ReportsService:
                     "completed_requirements": completed_count,
                     "compliance_percentage": pct,
                     "overdue_items": overdue_items,
-                    "upcoming_deadlines": [],
+                    "upcoming_deadlines": upcoming_deadlines,
                 }
             )
 

@@ -319,6 +319,11 @@ class ProgramRequirementCreate(ProgramRequirementBase):
     # program — it makes unlinking delete the requirement too. Defaults False so
     # linking an existing department requirement never puts it up for deletion.
     owns_requirement: bool = False
+    # Not stored. Whether members already enrolled (active or on hold) are held
+    # to the newly added requirement. False records it as waived for each of
+    # them — a missing progress row would block their phase advancement — so
+    # only members who enrol afterwards must complete it.
+    apply_to_current_enrollments: bool = True
 
 
 class ProgramRequirementUpdate(BaseModel):

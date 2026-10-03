@@ -400,6 +400,51 @@ class TestAddRequirementBackfill:
         # Each affected enrollment is recomputed so the new requirement counts.
         assert svc._recalculate_enrollment_progress.await_count == 2
 
+    async def test_can_waive_it_for_members_already_enrolled(self):
+        """An officer adding a requirement for future enrollees only must not
+        strand the current ones: a missing row for a required requirement
+        blocks phase advancement, so each gets a recorded waiver instead."""
+        from app.models.training import RequirementProgress, RequirementProgressStatus
+        from app.schemas.training_program import ProgramRequirementCreate
+
+        program = SimpleNamespace(id=str(uuid4()), organization_id="org-1")
+        e1, e2 = str(uuid4()), str(uuid4())
+        db = RecordingSession(
+            [
+                _one(program),
+                _one(SimpleNamespace(id=str(uuid4()))),
+                _one(None),
+                MagicMock(all=MagicMock(return_value=[(e1,), (e2,)])),
+                _scalars([]),
+            ]
+        )
+        svc = TrainingProgramService(db)
+        svc._recalculate_enrollment_progress = AsyncMock()
+
+        data = ProgramRequirementCreate(
+            program_id=uuid4(),
+            requirement_id=uuid4(),
+            apply_to_current_enrollments=False,
+        )
+        _, error = await svc.add_requirement_to_program(
+            data, uuid4(), acting_user_id="officer-1"
+        )
+
+        assert error is None
+        rows = [o for o in db.added if isinstance(o, RequirementProgress)]
+        assert {r.enrollment_id for r in rows} == {e1, e2}
+        for row in rows:
+            assert row.status == RequirementProgressStatus.WAIVED
+            assert row.progress_percentage == 100.0
+            assert row.verified_by == "officer-1"
+            assert row.completed_at is not None
+
+    async def test_applies_to_current_enrollees_by_default(self):
+        from app.schemas.training_program import ProgramRequirementCreate
+
+        data = ProgramRequirementCreate(program_id=uuid4(), requirement_id=uuid4())
+        assert data.apply_to_current_enrollments is True
+
     async def test_link_defaults_to_not_owning_the_requirement(self):
         """
         The endpoint always receives an id that already exists, so ownership is

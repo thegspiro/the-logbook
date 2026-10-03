@@ -301,11 +301,13 @@ describe('TrainingProgramsPage', () => {
     await userEvent.clear(nameInput);
     await userEvent.type(nameInput, 'FCVFD Duty Shifts');
     await userEvent.click(within(dialog).getByRole('button', { name: /Update Requirement/i }));
+    // Every edit asks who it reaches before anything is sent.
+    await userEvent.click(await screen.findByRole('button', { name: 'Save for everyone' }));
 
     await waitFor(() =>
       expect(mockUpdateRequirement).toHaveBeenCalledWith(
         'req-1',
-        expect.objectContaining({ name: 'FCVFD Duty Shifts' })
+        expect.objectContaining({ name: 'FCVFD Duty Shifts', apply_to: 'everyone' })
       )
     );
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Requirement updated'));

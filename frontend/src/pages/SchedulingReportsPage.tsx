@@ -33,7 +33,7 @@ import type {
   AvailabilityRecord,
 } from '../modules/scheduling/types';
 import { useTimezone } from '../hooks/useTimezone';
-import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
+import { formatCalendarDate, formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import { formatHours, formatHoursExact, roundHoursToQuarter, sumHoursToQuarter } from '../utils/hoursFormatting';
 import { DateRangePicker } from '../components/ux/DateRangePicker';
 import { useAuthStore } from '../stores/authStore';
@@ -1043,7 +1043,9 @@ export const SchedulingReportsPage: React.FC = () => {
                 {complianceData.map((req) => {
                   const isExpanded = expandedRequirements.has(req.requirement_id);
                   const filteredMembers =
-                    complianceFilter === 'non-compliant' ? req.members.filter((m) => !m.compliant) : req.members;
+                    complianceFilter === 'non-compliant'
+                      ? req.members.filter((m) => !m.compliant && !m.catch_up_deadline)
+                      : req.members;
 
                   return (
                     <div key={req.requirement_id} className="card overflow-hidden">
@@ -1198,7 +1200,7 @@ export const SchedulingReportsPage: React.FC = () => {
                                       <div className="flex items-center justify-end gap-2">
                                         <div className="bg-theme-surface-secondary h-1.5 w-16 overflow-hidden rounded-full">
                                           <div
-                                            className={`h-full rounded-full ${member.compliant ? 'bg-green-500' : 'bg-red-500'}`}
+                                            className={`h-full rounded-full ${member.compliant ? 'bg-green-500' : member.catch_up_deadline ? 'bg-blue-500' : 'bg-red-500'}`}
                                             style={{ width: `${member.percentage}%` }}
                                           />
                                         </div>
@@ -1212,6 +1214,11 @@ export const SchedulingReportsPage: React.FC = () => {
                                         <span className="inline-flex items-center gap-1 rounded-sm bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-500/20 dark:text-green-400">
                                           <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
                                           Compliant
+                                        </span>
+                                      ) : member.catch_up_deadline ? (
+                                        <span className="inline-flex items-center gap-1 rounded-sm bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-500/20 dark:text-blue-300">
+                                          <Clock className="h-3 w-3" aria-hidden="true" />
+                                          Due {formatCalendarDate(member.catch_up_deadline)}
                                         </span>
                                       ) : (
                                         <span className="inline-flex items-center gap-1 rounded-sm bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-500/20 dark:text-red-400">

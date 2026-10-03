@@ -6,9 +6,9 @@ Used by both the dashboard admin-summary and the training compliance-matrix endp
 """
 
 import calendar
-from dataclasses import dataclass
-from datetime import date, timedelta
-from typing import Dict, List, Optional, Tuple
+from dataclasses import dataclass, replace
+from datetime import date, datetime, timedelta
+from typing import Dict, Iterable, List, Optional, Tuple
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -260,9 +260,44 @@ class RequirementEvaluation:
     window_start: Optional[str] = None
     window_end: Optional[str] = None
     as_of: Optional[str] = None
+    catch_up_deadline: Optional[str] = None
 
 
 def evaluate_member_requirement_detail(
+    req,
+    member_records,
+    today: date,
+    waivers=None,
+    org_include_current_month: bool = True,
+    join_date: Optional[date] = None,
+) -> RequirementEvaluation:
+    """Evaluate one member against one requirement, honouring a catch-up period.
+
+    The grading itself lives in :func:`_grade_member_requirement`; this adds
+    the one member-specific rule that grading cannot see: an existing member
+    inside the requirement's catch-up period (see :func:`catch_up_deadline`)
+    whose requirement is not yet met is reported as ``catch_up`` rather than
+    unmet, carrying the deadline. ``join_date`` is the member's
+    :func:`member_join_date`; omitting it skips the rule.
+    """
+    ev = _grade_member_requirement(
+        req,
+        member_records,
+        today,
+        waivers=waivers,
+        org_include_current_month=org_include_current_month,
+    )
+    # Measured against the real day rather than the evaluation cut-off: the
+    # deadline is a calendar promise to the member, not a period boundary.
+    deadline = catch_up_deadline(req, join_date, today)
+    if deadline is not None and ev.status != TrainingStatus.COMPLETED.value:
+        return replace(
+            ev, status=CATCH_UP_STATUS, catch_up_deadline=deadline.isoformat()
+        )
+    return ev
+
+
+def _grade_member_requirement(
     req,
     member_records,
     today: date,
@@ -633,6 +668,7 @@ def evaluate_member_requirement(
     today: date,
     waivers=None,
     org_include_current_month: bool = True,
+    join_date: Optional[date] = None,
 ):
     """
     Evaluate a single member's status for a single requirement.
@@ -651,6 +687,7 @@ def evaluate_member_requirement(
         today,
         waivers=waivers,
         org_include_current_month=org_include_current_month,
+        join_date=join_date,
     )
     return ev.status, ev.completion_date, ev.expiry_date
 
@@ -697,10 +734,104 @@ def _find_matching_profile(
     return None
 
 
+# Status reported for an existing member's unmet requirement while its
+# catch-up period runs. Not a TrainingStatus: it describes the member's
+# obligation, not a training record, and it never counts against standing.
+CATCH_UP_STATUS = "catch_up"
+
+
+def member_join_date(member) -> Optional[date]:
+    """The date a member joined the department, for grandfathering.
+
+    ``hire_date`` when the department recorded one, otherwise the date the
+    member's account was created. ``hire_date`` is optional and the membership
+    pipeline does not always set it, so without the fallback a member with no
+    hire date could be neither "existing" nor "new". The fallback reads the
+    account's UTC creation date; a day's skew at the cutoff is the accepted
+    cost of not loading the org timezone for every member.
+    """
+    return join_date_from(
+        getattr(member, "hire_date", None), getattr(member, "created_at", None)
+    )
+
+
+def join_date_from(hire_date, created_at) -> Optional[date]:
+    """:func:`member_join_date` for a caller holding the two columns, not a row."""
+    for value in (hire_date, created_at):
+        if value:
+            return value.date() if isinstance(value, datetime) else value
+    return None
+
+
+def requirement_applies_by_join_date(req, join_date: Optional[date]) -> bool:
+    """Whether a requirement's grandfathering dates include this member.
+
+    - ``applies_to_joined_before``: members who joined on or after it are
+      graded by the newer copy instead, so this one does not apply.
+    - ``new_member_cutoff_date`` with no ``existing_member_deadline``: members
+      who joined before the cutoff are exempt.
+    - With a deadline, existing members are still included — the catch-up
+      period is handled by :func:`catch_up_deadline`, not by exclusion.
+
+    An unknown join date (only an unsaved member has neither a hire date nor a
+    creation date) is held to the requirement: never drop one silently.
+    """
+    if join_date is None:
+        return True
+    joined_before = getattr(req, "applies_to_joined_before", None)
+    if joined_before and join_date >= joined_before:
+        return False
+    cutoff = getattr(req, "new_member_cutoff_date", None)
+    if (
+        cutoff
+        and join_date < cutoff
+        and getattr(req, "existing_member_deadline", None) is None
+    ):
+        return False
+    return True
+
+
+def catch_up_deadline(req, join_date: Optional[date], today: date) -> Optional[date]:
+    """The deadline still protecting an existing member, or None.
+
+    Non-None only while today is on or before ``existing_member_deadline`` for
+    a member who joined before ``new_member_cutoff_date``. After the deadline,
+    and for every new member, the requirement is graded normally.
+    """
+    cutoff = getattr(req, "new_member_cutoff_date", None)
+    deadline = getattr(req, "existing_member_deadline", None)
+    if not (cutoff and deadline and join_date):
+        return None
+    if join_date < cutoff and today <= deadline:
+        return deadline
+    return None
+
+
+def tally_standing(statuses: Iterable[str]) -> Tuple[int, int]:
+    """(met, total) over a member's requirement statuses.
+
+    A requirement in its catch-up period is left out of both counts: it is
+    neither met nor held against the member until the deadline passes. Every
+    screen that turns statuses into a standing goes through this so a
+    grandfathered member reads the same on the dashboard, the matrix and the
+    profile card.
+    """
+    met = 0
+    total = 0
+    for status in statuses:
+        if status == CATCH_UP_STATUS:
+            continue
+        total += 1
+        if status == TrainingStatus.COMPLETED.value:
+            met += 1
+    return met, total
+
+
 def requirement_applies_to_member(
     req,
     membership_type: str,
     role_ids: Optional[List[str]] = None,
+    join_date: Optional[date] = None,
 ) -> bool:
     """Whether a requirement applies to a member.
 
@@ -721,7 +852,14 @@ def requirement_applies_to_member(
     contradicting what ``/my-training`` told that same member. One
     definition, called from everywhere that needs it, is what keeps a
     fifth reimplementation from drifting the same way.
+
+    ``join_date`` (the member's :func:`member_join_date`) applies the
+    requirement's grandfathering dates before any of the above. Every caller
+    in ``app/`` passes it — ``tests/test_requirement_grandfathering.py``
+    sweeps for one that does not.
     """
+    if not requirement_applies_by_join_date(req, join_date):
+        return False
     if req.applies_to_all:
         return True
     if req.required_membership_types:
@@ -729,6 +867,35 @@ def requirement_applies_to_member(
     if req.required_roles and role_ids:
         return any(rid in role_ids for rid in req.required_roles)
     return False
+
+
+def member_role_ids(member) -> List[str]:
+    """The ids ``required_roles`` is matched against: the member's positions.
+
+    ``User.roles`` is a synonym for ``User.positions``, and both the requirement
+    form and ``get_applicable_requirements`` store and compare position ids.
+    The relationship is lazy, so a caller loading members in bulk must
+    ``selectinload(User.positions)`` first — touching it unloaded on an
+    AsyncSession raises MissingGreenlet.
+    """
+    positions = getattr(member, "positions", None) or []
+    return [str(p.id) for p in positions if getattr(p, "id", None)]
+
+
+def requirement_applies_to_user(req, member) -> bool:
+    """:func:`requirement_applies_to_member` with every input read off ``member``.
+
+    The form a bulk caller should use: it cannot forget the role ids or the
+    join date, which is how the dashboard percentage and the compliance matrix
+    came to ignore role-scoped requirements that ``/my-training`` and the
+    profile card enforced.
+    """
+    return requirement_applies_to_member(
+        req,
+        getattr(member, "membership_type", None) or "active",
+        member_role_ids(member),
+        join_date=member_join_date(member),
+    )
 
 
 def classify_standing(
@@ -774,6 +941,7 @@ def _evaluate_member_compliance(
     at_risk_threshold: float,
     threshold_type: str,
     org_include_current_month: bool = True,
+    join_date: Optional[date] = None,
 ) -> Tuple[str, float]:
     """Evaluate a member's compliance status against a set of requirements.
 
@@ -783,7 +951,7 @@ def _evaluate_member_compliance(
     if not member_reqs:
         return "compliant", 100.0
 
-    completed_count = 0
+    statuses = []
     for req in member_reqs:
         req_status, _, _ = evaluate_member_requirement(
             req,
@@ -791,13 +959,14 @@ def _evaluate_member_compliance(
             today,
             waivers=waivers,
             org_include_current_month=org_include_current_month,
+            join_date=join_date,
         )
-        if req_status == TrainingStatus.COMPLETED.value:
-            completed_count += 1
+        statuses.append(req_status)
+    completed_count, total_count = tally_standing(statuses)
 
     return classify_standing(
         completed_count,
-        len(member_reqs),
+        total_count,
         compliant_threshold,
         at_risk_threshold,
         threshold_type,
@@ -991,11 +1160,8 @@ async def compute_org_compliance_pct(
         # member/requirement pair it's supposed to describe the same way.
         # See requirement_applies_to_member's own docstring for why this is
         # a shared helper rather than a fourth ad-hoc reimplementation.
-        member_membership_type = member.membership_type or "active"
         member_reqs = [
-            req
-            for req in member_reqs
-            if requirement_applies_to_member(req, member_membership_type)
+            req for req in member_reqs if requirement_applies_to_user(req, member)
         ]
 
         status, _ = _evaluate_member_compliance(
@@ -1007,6 +1173,7 @@ async def compute_org_compliance_pct(
             member_at_risk_threshold,
             threshold_type,
             org_include_current_month=org_include_current,
+            join_date=member_join_date(member),
         )
         if status == "compliant":
             compliant_count += 1
