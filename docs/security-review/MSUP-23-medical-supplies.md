@@ -3,7 +3,92 @@
 **Prefix:** `MSUP` · **Iteration:** 23 · **Reviewed:** 2026-08-26 (pass 1, PR
 #1905), 2026-08-30 (pass 2, PR #2075; audit-trail follow-up, PR #2076),
 2026-09-06 (pass 3 through pass 10, all on PR #2301), 2026-09-11 (pass 11, PR
-#2489)
+#2489), 2026-10-03 (pass 12, this PR)
+
+## Pass 12 (2026-10-03) — 0 fixed by this pass, 0 new findings
+
+**Scope check.** Per-file `git log` on `medical_supplies.py` and
+`inventory_service.py` (the shared file; pass 11's own method precisely, not
+the whole file) since pass 11's merge (PR #2489, 2026-09-11) found:
+
+- **`docs(workflow-review): W47 medical supplies — 5 fixed, 1 flagged`**
+  (2026-09-30, `docs/workflow-review/W47-medical-supplies.md`) — a full
+  browser-driven pass over this exact module. **W47-4 landed directly in
+  this feature's scope**: `InventoryService.get_expiring_lots` did not
+  filter retired items, so a retired supply's lots stayed on the Expiring
+  Stock tab and in the summary counts after retirement — fixed by adding
+  `InventoryItem.active.is_(True)` to the query (confirmed present at its
+  current location, `inventory_service.py:8251-8291`), with a new
+  integration test (`test_expiring_lots_retired_items.py`) that fails
+  against the old query. The other four W47 fixes are frontend-only
+  (`StockLotsPanel.tsx`'s ready/expired split, named lot controls, named
+  delivery lines, a linked category page) — confirmed present by direct
+  read, not re-cited from the workflow-review doc. **W47-6** (dashboard
+  "Low stock" counting a lot-stocked medical category as empty) is flagged,
+  not fixed, and confirmed mirrored into `docs/KNOWN_LIMITATIONS.md`.
+- **`6850d691f`** (org-local-"today" sweep) — `medical_supplies.py`'s two
+  date-dependent routes (`list_expiring_medical_lots`, `medical_supply_summary`)
+  now resolve "today" via `resolve_org_today(db, current_user.organization_id)`
+  instead of a bare server clock, org-scoped on the caller's own org. No new
+  finding.
+- **A new MCP write tool since pass 11**: `app/mcp/tools/writes.py`'s
+  `create_reorder_request` (not present in any prior pass's scope) can open
+  an inventory reorder request from an AI connection, and explicitly refuses
+  one that reaches the medical domain by id, category, or **name** — the
+  third check is new, via a new `InventoryService.name_in_domain` helper.
+  Verified directly: all three checks resolve against
+  `principal.organization_id` (from the bound MCP service-key principal,
+  via `org_uuid()`, never a client-supplied value), and `name_in_domain`
+  itself queries both `InventoryItem.name` and `InventoryCategory.name`
+  scoped to `organization_id` and `item_types=MEDICAL_ITEM_TYPES`. This is
+  the exact invariant this module's own docstring states ("the inventory
+  tools never show [medical stock], so a reorder must not be able to reach
+  it either") — correctly enforced for the one new way to reach it since
+  pass 11. A full review of the MCP write-tool surface itself is Feature 27
+  (Integrations)'s scope, not re-litigated here; this pass verified only
+  the medical-domain boundary this new tool crosses.
+- Two inventory-labels commits (`68cad931c`, `c1e30031f`) touched
+  `inventory_service.py` at lines 5689-6508 — the labels feature, well
+  outside the medical-domain method ranges pass 11 enumerated
+  (798-957, 2560-2897, 7329-8001). Confirmed by diff line numbers, not
+  assumed. No finding.
+- One commit (`28934f50c`) touched `inventory_service.py` at
+  `get_return_requests` (a type-annotation widening, unrelated feature,
+  general inventory return requests). No finding.
+
+**Re-verified by direct code read, not re-cited from pass 11's prose:**
+
+- Route count: still 15/15, all still `Depends(require_permission(...))`
+  OR'd domain-first against the broad inventory permissions.
+- `category_in_domain`/`item_in_domain`/`items_in_domain`/`lot_in_domain`
+  (now at `inventory_service.py:7686-7857`, shifted from pass 11's line
+  numbers by unrelated growth elsewhere in the file) — all still fail
+  closed, still org-scoped on both sides of their join; `category_in_domain`'s
+  `for_update` parameter still defaults `False` and is still passed `True`
+  only by `retire_item`'s post-lock re-check.
+- MSUP-4 (`get_expiring_lots` has no row cap) — still open, unchanged;
+  W47-4's fix added a filter, not a cap.
+- MSUP-11, MSUP-15, MSUP-25 — re-read at their current lines, still
+  accurately described; no drift.
+
+**No new findings.**
+
+### Completion gate (pass 12)
+
+| Check                                             | Result                              |
+| ------------------------------------------------- | ----------------------------------- |
+| `flake8 app/ tests/ alembic/`                     | ✅ clean                            |
+| `black --check app/ tests/ alembic/`              | ✅ clean, unchanged                 |
+| `isort --check-only app/ tests/ alembic/`         | ✅ clean                            |
+| `python3 scripts/validate_migrations.py --strict` | ✅ single head                      |
+| `pytest -k "inventory or medical_supplies"`       | ✅ 1194 passed, 1 pre-existing skip |
+| `cd frontend && npm run typecheck`                | ✅ 0 errors                         |
+| `cd frontend && npm run lint`                     | ✅ 0 errors, 0 warnings             |
+
+No source file was modified by this pass itself — documentation-only
+re-verification.
+
+---
 
 **Backend:** `app/api/v1/endpoints/medical_supplies.py` (pass 1: 667 L, 15
 endpoints; pass 2: 670 L, 14 routes — no route added or removed). No
