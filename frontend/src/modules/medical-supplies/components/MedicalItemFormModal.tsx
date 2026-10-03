@@ -8,6 +8,7 @@
  */
 
 import React, { useState } from 'react';
+import { Link } from 'react-router';
 import toast from 'react-hot-toast';
 import { medicalSuppliesService } from '../../../services/medicalSuppliesService';
 import type { InventoryCategory, InventoryItem } from '../../../services/eventServices';
@@ -155,8 +156,11 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
             </div>
           ) : categories.length === 0 ? (
             <div className="alert-warning">
-              No medical supply categories exist yet. Add one on the Medical Supply Categories page first — a
-              supply&apos;s category is what makes it medical.
+              No medical supply categories exist yet. Add one on the{' '}
+              <Link to="/medical-supplies/categories" className="underline">
+                Medical Supply Categories
+              </Link>{' '}
+              page first — a supply&apos;s category is what makes it medical.
             </div>
           ) : null}
 

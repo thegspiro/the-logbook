@@ -18,7 +18,7 @@ const OutreachSection: React.FC<OutreachSectionProps> = ({
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-theme-text-primary text-lg font-semibold">Outreach Event Types</h3>
+        <h2 className="text-theme-text-primary text-lg font-semibold">Outreach Event Types</h2>
         <p className="text-theme-text-muted mt-1 text-sm">Types of public outreach events shown on the request form.</p>
       </div>
 
@@ -28,16 +28,16 @@ const OutreachSection: React.FC<OutreachSectionProps> = ({
             key={ot.value}
             className="border-theme-surface-border flex items-center justify-between rounded-lg border p-3"
           >
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
               <span className="text-theme-text-primary text-sm font-medium">{ot.label}</span>
-              <span className="text-theme-text-muted font-mono text-xs">{ot.value}</span>
+              <span className="text-theme-text-muted min-w-0 font-mono text-xs break-all">{ot.value}</span>
             </div>
             {ot.value !== 'other' && (
               <button
                 type="button"
                 onClick={() => onRemoveType(ot.value)}
                 disabled={saving}
-                className="text-theme-text-muted text-sm transition-colors hover:text-red-600 disabled:opacity-50 dark:hover:text-red-400"
+                className="text-theme-text-muted touch-target-phone shrink-0 text-sm transition-colors hover:text-red-600 disabled:opacity-50 dark:hover:text-red-400"
                 title={`Remove "${ot.label}"`}
               >
                 <Trash2 className="h-4 w-4" />
@@ -73,7 +73,7 @@ const OutreachSection: React.FC<OutreachSectionProps> = ({
       </div>
 
       <div className="border-theme-surface-border border-t pt-6">
-        <h3 className="text-theme-text-primary text-lg font-semibold">Outreach Roles</h3>
+        <h2 className="text-theme-text-primary text-lg font-semibold">Outreach Roles</h2>
         <p className="text-theme-text-muted mt-1 mb-4 text-sm">
           The jobs members sign up for at a community event. These are deliberately not the riding positions used on a
           duty shift — nobody is taking a seat on an engine at a school visit, and &quot;Driver&quot; tells a member
@@ -86,15 +86,15 @@ const OutreachSection: React.FC<OutreachSectionProps> = ({
               key={role.value}
               className="border-theme-surface-border flex items-center justify-between rounded-lg border p-3"
             >
-              <div className="flex items-center gap-3">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
                 <span className="text-theme-text-primary text-sm font-medium">{role.label}</span>
-                <span className="text-theme-text-muted font-mono text-xs">{role.value}</span>
+                <span className="text-theme-text-muted min-w-0 font-mono text-xs break-all">{role.value}</span>
               </div>
               <button
                 type="button"
                 onClick={() => onRemoveRole(role.value)}
                 disabled={saving}
-                className="text-theme-text-muted text-sm transition-colors hover:text-red-600 disabled:opacity-50 dark:hover:text-red-400"
+                className="text-theme-text-muted touch-target-phone shrink-0 text-sm transition-colors hover:text-red-600 disabled:opacity-50 dark:hover:text-red-400"
                 title={`Remove "${role.label}"`}
               >
                 <Trash2 className="h-4 w-4" />

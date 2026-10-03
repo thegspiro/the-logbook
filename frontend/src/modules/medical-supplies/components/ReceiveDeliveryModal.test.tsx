@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 
@@ -52,6 +52,17 @@ describe('ReceiveDeliveryModal', () => {
     vi.clearAllMocks();
     mockReceiveDelivery.mockResolvedValue([]);
     mockGetItems.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 20 });
+  });
+
+  // Every line's fields read "Item", "Qty", "Lot #" and "Expires", so with two
+  // lines a screen reader heard each name twice with nothing saying which line.
+  it('groups each line under its number', async () => {
+    renderModal();
+    await userEvent.click(screen.getByRole('button', { name: 'Add line' }));
+    const second = screen.getByRole('group', { name: 'Line 2' });
+    expect(within(second).getByLabelText('Qty')).toBeInTheDocument();
+    expect(within(second).getByRole('button', { name: 'Remove line 2' })).toBeInTheDocument();
+    expect(within(screen.getByRole('group', { name: 'Line 1' })).getByLabelText('Lot #')).toBeInTheDocument();
   });
 
   it('records a complete line', async () => {

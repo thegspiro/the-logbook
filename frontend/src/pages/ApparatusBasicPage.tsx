@@ -342,7 +342,7 @@ export default function ApparatusBasicPage() {
                       <button
                         onClick={() => openEdit(apparatus)}
                         title="Edit"
-                        aria-label="Edit apparatus"
+                        aria-label={`Edit ${apparatus.name}`}
                         className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-2 transition-colors"
                       >
                         <Pencil className="h-4 w-4" aria-hidden="true" />
@@ -352,7 +352,7 @@ export default function ApparatusBasicPage() {
                           void handleDelete(apparatus);
                         }}
                         title="Delete"
-                        aria-label="Delete apparatus"
+                        aria-label={`Delete ${apparatus.name}`}
                         className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-red-500/10 hover:text-red-500"
                       >
                         <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -394,13 +394,14 @@ export default function ApparatusBasicPage() {
           className="modal-overlay z-50 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
+          aria-labelledby="apparatus-basic-dialog-title"
           onKeyDown={(e) => {
             if (e.key === 'Escape') setShowModal(false);
           }}
         >
           <div ref={dialogRef} className="modal-panel max-h-[90dvh] w-full max-w-lg overflow-y-auto">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
-              <h2 className="text-theme-text-primary text-lg font-bold">
+              <h2 id="apparatus-basic-dialog-title" className="text-theme-text-primary text-lg font-bold">
                 {editing ? 'Edit Apparatus' : 'Add Apparatus'}
               </h2>
               <button
@@ -414,8 +415,11 @@ export default function ApparatusBasicPage() {
             <div className="space-y-4 p-6">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className={labelCls}>Unit Number *</label>
+                  <label htmlFor="apparatus-basic-unit" className={labelCls}>
+                    Unit Number *
+                  </label>
                   <input
+                    id="apparatus-basic-unit"
                     type="text"
                     value={form.unit_number}
                     onChange={(e) => setForm((p) => ({ ...p, unit_number: e.target.value }))}
@@ -424,8 +428,11 @@ export default function ApparatusBasicPage() {
                   />
                 </div>
                 <div>
-                  <label className={labelCls}>Name *</label>
+                  <label htmlFor="apparatus-basic-name" className={labelCls}>
+                    Name *
+                  </label>
                   <input
+                    id="apparatus-basic-name"
                     type="text"
                     value={form.name}
                     onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
@@ -436,8 +443,11 @@ export default function ApparatusBasicPage() {
               </div>
 
               <div>
-                <label className={labelCls}>Apparatus Type</label>
+                <label htmlFor="apparatus-basic-type" className={labelCls}>
+                  Apparatus Type
+                </label>
                 <select
+                  id="apparatus-basic-type"
                   value={form.apparatus_type}
                   onChange={(e) => handleTypeChange(e.target.value)}
                   className={inputCls}
@@ -451,8 +461,11 @@ export default function ApparatusBasicPage() {
               </div>
 
               <div>
-                <label className={labelCls}>Minimum Staffing</label>
+                <label htmlFor="apparatus-basic-min-staffing" className={labelCls}>
+                  Minimum Staffing
+                </label>
                 <input
+                  id="apparatus-basic-min-staffing"
                   type="number"
                   min={1}
                   max={20}
@@ -478,6 +491,7 @@ export default function ApparatusBasicPage() {
                     <div key={i} className="flex items-center gap-2">
                       <span className="text-theme-text-muted w-6 text-right text-xs">{i + 1}.</span>
                       <select
+                        aria-label={`Crew position ${i + 1}`}
                         value={pos}
                         onChange={(e) => updatePosition(i, e.target.value)}
                         className="form-input flex-1"
@@ -491,7 +505,7 @@ export default function ApparatusBasicPage() {
                       {form.positions.length > 1 && (
                         <button
                           onClick={() => removePosition(i)}
-                          aria-label="Remove position"
+                          aria-label={`Remove crew position ${i + 1}`}
                           className="text-theme-text-muted rounded-sm p-1.5 transition-colors hover:text-red-500"
                         >
                           <X className="h-4 w-4" aria-hidden="true" />

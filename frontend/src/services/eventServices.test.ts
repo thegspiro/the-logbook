@@ -662,6 +662,15 @@ describe('eventRequestService', () => {
       expect(mockGet).toHaveBeenCalledWith('/event-requests/email-templates');
       expect(result).toEqual(templates);
     });
+
+    // The settings screen maps this list straight into rows, so a body that is
+    // not an array (a captive portal's HTML) must arrive as an empty list
+    // rather than take the Email section down.
+    it('returns an empty list when the body is not an array', async () => {
+      mockGet.mockResolvedValueOnce({ data: '<html>Sign in to Wi-Fi</html>' });
+
+      await expect(eventRequestService.listEmailTemplates()).resolves.toEqual([]);
+    });
   });
 
   describe('deleteEmailTemplate', () => {

@@ -19,6 +19,20 @@ import DateTimeQuarterHour from '../ux/DateTimeQuarterHour';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
+/**
+ * Field types rendered as several controls (or a control with its own label),
+ * which are named by the field label through `aria-labelledby` rather than a
+ * `<label htmlFor>`. Every other type renders one control with id
+ * `field-<id>`, which the label names directly.
+ */
+const GROUPED_FIELD_TYPES: readonly string[] = [
+  FieldType.CHECKBOX,
+  FieldType.MULTISELECT,
+  FieldType.RADIO,
+  FieldType.FILE,
+  FieldType.SIGNATURE,
+];
+
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -158,8 +172,8 @@ export interface FieldDefinition {
   required: boolean;
   min_length?: number | undefined;
   max_length?: number | undefined;
-  min_value?: number;
-  max_value?: number;
+  min_value?: number | undefined;
+  max_value?: number | undefined;
   validation_pattern?: string | undefined;
   options?: { value: string; label: string }[] | undefined;
   condition_field_id?: string | undefined;
@@ -197,6 +211,7 @@ const FieldRenderer = ({
 
   const isDark = theme === 'dark';
   const errorId = `field-error-${field.id}`;
+  const labelId = `field-label-${field.id}`;
   const ariaProps = {
     ...(error ? { 'aria-describedby': errorId, 'aria-invalid': true as const } : {}),
     ...(field.required ? { 'aria-required': true as const } : {}),
@@ -386,7 +401,13 @@ const FieldRenderer = ({
       case FieldType.MULTISELECT: {
         const selected = value ? value.split(',').filter(Boolean) : [];
         return (
-          <div className="card bg-theme-input-bg border-theme-input-border space-y-2 p-3">
+          <div
+            id={`field-${field.id}`}
+            role="group"
+            aria-labelledby={labelId}
+            tabIndex={-1}
+            className="card bg-theme-input-bg border-theme-input-border space-y-2 p-3"
+          >
             {field.options?.map((opt) => {
               const checked = selected.includes(opt.value);
               return (
@@ -414,7 +435,7 @@ const FieldRenderer = ({
       case FieldType.CHECKBOX: {
         const checkedValues = value ? value.split(',').filter(Boolean) : [];
         return (
-          <div className="space-y-2">
+          <div id={`field-${field.id}`} role="group" aria-labelledby={labelId} tabIndex={-1} className="space-y-2">
             {field.options?.map((opt) => {
               const checked = checkedValues.includes(opt.value);
               return (
@@ -466,6 +487,7 @@ const FieldRenderer = ({
             <div className="relative">
               <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
               <input
+                id={`field-${field.id}`}
                 type="text"
                 className={`${inputClass} pl-10`}
                 placeholder={field.placeholder || 'Search members...'}
@@ -631,7 +653,11 @@ const FieldRenderer = ({
             : ''
       }
     >
-      <label className={`mb-1 block text-sm font-medium ${labelClass}`}>
+      <label
+        id={labelId}
+        {...(GROUPED_FIELD_TYPES.includes(field.field_type) ? {} : { htmlFor: `field-${field.id}` })}
+        className={`mb-1 block text-sm font-medium ${labelClass}`}
+      >
         {field.label}
         {field.required && <span className="ml-1 text-red-700 dark:text-red-400">*</span>}
       </label>

@@ -56,6 +56,7 @@ import ContactInfoSection from '../components/member-profile/ContactInfoSection'
 import EmergencyContactsSection from '../components/member-profile/EmergencyContactsSection';
 import { VisibilityControl } from '../components/member-profile/VisibilityControl';
 import { useOverlaySurface } from '../hooks/useOverlaySurface';
+import { canViewMemberIdCard } from '../utils/memberIdCardAccess';
 import { MemberIdCardsPanel } from '../modules/membership/components/MemberIdCardsPanel';
 import { ReactivateMemberModal } from '../components/ReactivateMemberModal';
 import { AnonymizeMemberModal } from '../components/AnonymizeMemberModal';
@@ -638,6 +639,7 @@ export const MemberProfilePage: React.FC = () => {
   };
 
   const canManageIdCards = checkPermission('members.manage_id_cards');
+  const canViewIdCard = canViewMemberIdCard(currentUser?.id, userId, checkPermission);
   // Whether the backend handed this viewer the unredacted record. It decides
   // that in `_redact_profile_for_viewer` (users.py): the member themselves
   // always, a colleague's only for members.manage — and marks the colleague
@@ -846,13 +848,15 @@ export const MemberProfilePage: React.FC = () => {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Link
-                  to={`/members/${userId}/id-card`}
-                  className="touch-target-phone inline-flex items-center gap-1.5 rounded-lg border border-blue-300 px-3 py-1 text-sm font-medium text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 dark:border-blue-500/40 dark:text-blue-400 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
-                >
-                  <CreditCard className="h-4 w-4" />
-                  ID Card
-                </Link>
+                {canViewIdCard && (
+                  <Link
+                    to={`/members/${userId}/id-card`}
+                    className="touch-target-phone inline-flex items-center gap-1.5 rounded-lg border border-blue-300 px-3 py-1 text-sm font-medium text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 dark:border-blue-500/40 dark:text-blue-400 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
+                  >
+                    <CreditCard className="h-4 w-4" />
+                    ID Card
+                  </Link>
+                )}
                 {canManageMembers ? (
                   <button
                     type="button"

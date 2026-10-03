@@ -14,8 +14,10 @@ from typing import (
     Awaitable,
     Callable,
     Dict,
+    Iterable,
     List,
     Optional,
+    Set,
     Tuple,
 )
 from uuid import UUID
@@ -55,6 +57,11 @@ if TYPE_CHECKING:
     from app.models.membership_pipeline import ProspectiveMember
 
 _DEADLOCK_MYSQL_CODE = 1213
+
+# Answers stored comma-joined, one entry per selected option.
+_MULTI_VALUE_FIELD_TYPES = frozenset(
+    {FieldType.CHECKBOX.value, FieldType.MULTISELECT.value}
+)
 
 
 def _is_deadlock(exc: OperationalError) -> bool:
@@ -211,6 +218,7 @@ class FormsService:
         Returns (sanitized_data, error_message).
         """
         field_map = {str(f.id): f for f in fields}
+        visible_ids = FormsService._visible_field_ids(fields, data)
         sanitized = {}
 
         for field_id, value in data.items():
@@ -224,8 +232,9 @@ class FormsService:
             # was typed before they changed the answer that shows it (EMT
             # experience left over after switching to Administrative), so it is
             # not stored. Visibility is judged against the raw submitted
-            # values, the same inputs the renderer used to hide the field.
-            if not FormsService._is_field_visible(field, data):
+            # values, the same inputs the renderer used to hide the field, and
+            # follows the branch up: a follow-up to a hidden question is hidden.
+            if field_id not in visible_ids:
                 continue
 
             # Coerce to string for sanitization
@@ -364,17 +373,27 @@ class FormsService:
         return False
 
     @staticmethod
-    def _is_field_visible(field: Any, data: Dict[str, Any]) -> bool:
-        """Whether a field's conditional-visibility rule shows it for ``data``.
+    def _answer_text(raw: Any) -> str:
+        """A submitted answer as the text a visibility rule compares against.
+        Checkbox and multi-select answers arrive comma-joined from the browser,
+        or as a list from an API caller; both read the same."""
+        if raw is None:
+            return ""
+        if isinstance(raw, (list, tuple)):
+            return ",".join(str(v) for v in raw).strip()
+        return str(raw).strip()
 
-        A hidden field is never shown to the submitter, so enforcing its
-        ``required`` flag would reject a form nobody can complete ("previous
-        EMT experience" required of an applicant who chose an administrative
-        membership). This must stay identical to ``isFieldVisible`` in
-        ``frontend/src/pages/PublicFormPage.tsx`` and
-        ``frontend/src/components/forms/FormRenderer.tsx``: if the two disagree
-        the browser accepts a form the server rejects, or the reverse. An
-        unrecognised operator counts as visible so a bad rule fails closed —
+    @staticmethod
+    def _condition_matches(
+        field: Any, data: Dict[str, Any], parent_type: Optional[str] = None
+    ) -> bool:
+        """Whether ``field``'s own visibility rule passes for ``data``, without
+        asking whether the question it branches from is itself shown.
+
+        ``parent_type`` is the controlling field's type. For a checkbox or
+        multi-select parent, "contains" matches a whole selected option rather
+        than a substring, so picking "AEMT" does not satisfy "contains EMT".
+        An unrecognised operator counts as passing so a bad rule fails closed —
         the field stays required rather than silently becoming optional.
         """
         condition_field_id = getattr(field, "condition_field_id", None)
@@ -382,13 +401,7 @@ class FormsService:
         if not condition_field_id or not operator:
             return True
 
-        raw = data.get(str(condition_field_id))
-        if raw is None:
-            parent_value = ""
-        elif isinstance(raw, (list, tuple)):
-            parent_value = ",".join(str(v) for v in raw).strip()
-        else:
-            parent_value = str(raw).strip()
+        parent_value = FormsService._answer_text(data.get(str(condition_field_id)))
         expected = getattr(field, "condition_value", None) or ""
 
         if operator == "equals":
@@ -396,12 +409,115 @@ class FormsService:
         if operator == "not_equals":
             return parent_value != expected
         if operator == "contains":
-            return expected.lower() in parent_value.lower()
+            if not expected:
+                return True
+            needle = expected.lower()
+            if parent_type in _MULTI_VALUE_FIELD_TYPES:
+                return any(
+                    part.strip().lower() == needle for part in parent_value.split(",")
+                )
+            return needle in parent_value.lower()
         if operator == "not_empty":
             return len(parent_value) > 0
         if operator == "is_empty":
             return len(parent_value) == 0
         return True
+
+    @staticmethod
+    def _is_field_visible(field: Any, data: Dict[str, Any]) -> bool:
+        """Whether one field's own rule shows it for ``data``, judged in
+        isolation — its parent's answer is taken at face value even if the
+        parent is itself hidden.
+
+        Submission does not use this: it uses ``_visible_field_ids``, which
+        follows a branch through every level. This single-rule form is kept
+        for ``scripts/clear_hidden_form_answers.py``, whose decisions about
+        what to delete from stored submissions must not move under it.
+        """
+        return FormsService._condition_matches(field, data)
+
+    @staticmethod
+    def _visible_field_ids(fields: Iterable[Any], data: Dict[str, Any]) -> Set[str]:
+        """The ids of every field shown to a submitter of ``data``.
+
+        A hidden field is never shown, so enforcing its ``required`` flag would
+        reject a form nobody can complete ("previous EMT experience" required
+        of an applicant who chose an administrative membership). A field is
+        shown only when its own rule passes **and** the field it branches from
+        is shown: an answer left in a question the submitter has since hidden
+        belongs to a branch they backed out of, and must not keep that branch's
+        required follow-ups demanding answers.
+
+        This must stay identical to ``getVisibleFieldIds`` in
+        ``frontend/src/utils/formVisibility.ts``, which both form renderers
+        use: if the two disagree the browser accepts a form the server
+        rejects, or the reverse. A rule naming a field that is no longer on the
+        form is judged against an empty answer; a cycle is broken by not
+        looking past the field already being resolved.
+        """
+        field_list = list(fields)
+        by_id = {str(f.id): f for f in field_list}
+
+        def field_type_of(f: Any) -> str:
+            ft = getattr(f, "field_type", None)
+            return ft if isinstance(ft, str) or ft is None else ft.value
+
+        def is_shown(f: Any, resolving: frozenset) -> bool:
+            parent_id = getattr(f, "condition_field_id", None)
+            if not parent_id or not getattr(f, "condition_operator", None):
+                return True
+            parent = by_id.get(str(parent_id))
+            if parent is not None and str(parent.id) not in resolving:
+                if not is_shown(parent, resolving | {str(f.id)}):
+                    return False
+            parent_type = field_type_of(parent) if parent is not None else None
+            return FormsService._condition_matches(f, data, parent_type)
+
+        return {str(f.id) for f in field_list if is_shown(f, frozenset({str(f.id)}))}
+
+    @staticmethod
+    def _condition_error(
+        field_id: Optional[str],
+        condition_field_id: Optional[str],
+        fields: Iterable[Any],
+    ) -> Optional[str]:
+        """Why a field may not branch from ``condition_field_id``, or None.
+
+        The controlling question must be another field on the same form (a
+        client-supplied id from elsewhere would be a dangling, cross-form
+        reference), may not be a section header (it has no answer), and may
+        not be the field itself or anything that already branches from it —
+        that is a cycle no submitter can enter.
+        """
+        if not condition_field_id:
+            return None
+        field_list = list(fields)
+        by_id = {str(f.id): f for f in field_list}
+        parent = by_id.get(str(condition_field_id))
+        if parent is None:
+            return "The question this field depends on is not on this form"
+        parent_type = getattr(parent, "field_type", None)
+        parent_type = getattr(parent_type, "value", parent_type)
+        if parent_type == FieldType.SECTION_HEADER.value:
+            return "A field cannot depend on a section header"
+        if field_id is None:
+            return None
+        cursor: Optional[str] = str(condition_field_id)
+        seen: Set[str] = set()
+        while cursor and cursor not in seen:
+            if cursor == str(field_id):
+                return (
+                    "A field cannot depend on itself or on a question that "
+                    "depends on it"
+                )
+            seen.add(cursor)
+            nxt = by_id.get(cursor)
+            cursor = (
+                str(nxt.condition_field_id)
+                if nxt is not None and getattr(nxt, "condition_field_id", None)
+                else None
+            )
+        return None
 
     @staticmethod
     def _sanitize_submitter_info(
@@ -870,6 +986,12 @@ class FormsService:
             if not form:
                 return None, "Form not found"
 
+            condition_error = self._condition_error(
+                None, field_data.get("condition_field_id"), form.fields
+            )
+            if condition_error:
+                return None, condition_error
+
             # Auto-set sort_order if not provided
             if "sort_order" not in field_data or field_data["sort_order"] is None:
                 max_order = max((f.sort_order for f in form.fields), default=-1)
@@ -912,6 +1034,23 @@ class FormsService:
             if not field:
                 return None, "Field not found"
 
+            if "condition_field_id" in update_data:
+                if update_data["condition_field_id"]:
+                    condition_error = self._condition_error(
+                        str(field.id), update_data["condition_field_id"], form.fields
+                    )
+                    if condition_error:
+                        return None, condition_error
+                else:
+                    # Removing the controlling question removes the rule; an
+                    # operator left behind with no field to read is meaningless.
+                    update_data = {
+                        **update_data,
+                        "condition_field_id": None,
+                        "condition_operator": None,
+                        "condition_value": None,
+                    }
+
             apply_updates(field, update_data, skip={"id", "form_id"})
 
             await self.db.flush()
@@ -945,6 +1084,16 @@ class FormsService:
             field = result.scalar_one_or_none()
             if not field:
                 return False, "Field not found"
+
+            # A follow-up whose question is gone would read an empty answer
+            # forever: "equals yes" hides it from everyone, required or not,
+            # while "is empty" shows it to everyone. Drop the rule so it is
+            # plainly shown to everyone, which is what the builder warns of.
+            for dependent in form.fields:
+                if str(dependent.condition_field_id or "") == str(field.id):
+                    dependent.condition_field_id = None
+                    dependent.condition_operator = None
+                    dependent.condition_value = None
 
             await self.db.delete(field)
             await self.db.flush()
@@ -1002,10 +1151,11 @@ class FormsService:
 
             # Validate required fields (FORM-6: presence AND a non-empty value —
             # a key holding "" / whitespace / [] does not satisfy "required").
+            visible_ids = self._visible_field_ids(form.fields, data)
             for field in form.fields:
                 if (
                     field.required
-                    and self._is_field_visible(field, data)
+                    and str(field.id) in visible_ids
                     and (
                         str(field.id) not in data
                         or self._is_empty_value(data[str(field.id)])
@@ -1195,10 +1345,11 @@ class FormsService:
                 # Validate required fields (FORM-6: presence AND a non-empty
                 # value -- a key holding "" / whitespace / [] does not
                 # satisfy "required").
+                visible_ids = self._visible_field_ids(form.fields, data)
                 for field in form.fields:
                     if (
                         field.required
-                        and self._is_field_visible(field, data)
+                        and str(field.id) in visible_ids
                         and (
                             str(field.id) not in data
                             or self._is_empty_value(data[str(field.id)])

@@ -21,6 +21,7 @@ from app.core.utils import ensure_found, handle_service_errors
 from app.models.user import User
 from app.schemas.event import QRCheckInData
 from app.schemas.location import (
+    LocationBadgeCheckInUpdate,
     LocationCreate,
     LocationDisplayInfo,
     LocationListItem,
@@ -29,6 +30,7 @@ from app.schemas.location import (
 )
 from app.services.event_service import EventService
 from app.services.location_service import LocationService
+from app.utils.nfc_integration import nfc_id_cards_enabled
 
 router = APIRouter()
 
@@ -52,6 +54,7 @@ def _location_to_list_item(loc, *, include_display_code: bool) -> LocationListIt
         facility_id=UUID(loc.facility_id) if loc.facility_id else None,
         facility_room_id=(UUID(loc.facility_room_id) if loc.facility_room_id else None),
         display_code=loc.display_code if include_display_code else None,
+        nfc_badge_check_in_enabled=bool(loc.nfc_badge_check_in_enabled),
         created_at=loc.created_at,
         updated_at=loc.updated_at,
     )
@@ -80,6 +83,7 @@ def _location_to_response(location, *, include_display_code: bool) -> LocationRe
             UUID(location.facility_room_id) if location.facility_room_id else None
         ),
         display_code=location.display_code if include_display_code else None,
+        nfc_badge_check_in_enabled=bool(location.nfc_badge_check_in_enabled),
         created_by=UUID(location.created_by) if location.created_by else None,
         created_at=location.created_at,
         updated_at=location.updated_at,
@@ -272,6 +276,67 @@ async def regenerate_display_code(
         event_type="location_display_code_regenerated",
         event_category="administration",
         severity="warning",
+        event_data={"location_id": str(location_id), "location_name": location.name},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return _location_to_response(
+        location, include_display_code=can_view_kiosk_display_codes(current_user)
+    )
+
+
+@router.put("/{location_id}/badge-check-in", response_model=LocationResponse)
+async def set_badge_check_in(
+    location_id: UUID,
+    data: LocationBadgeCheckInUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("locations.manage_nfc_tags")),
+):
+    """
+    Turn member ID card taps on or off for one room's public kiosk
+
+    A tap at the kiosk records attendance with nobody signed in, so this is
+    its own grant and its own audited act rather than a field on the general
+    location form: the officers who decide where the room's NFC tags go decide
+    whether its kiosk reads cards. Turning it on needs the NFC ID Cards
+    integration, since a kiosk could otherwise be switched on for cards the
+    department cannot issue; turning it off is always allowed.
+
+    **Authentication required**
+    **Permissions required:** locations.manage_nfc_tags
+    """
+    service = LocationService(db)
+
+    if data.enabled and not await nfc_id_cards_enabled(
+        db, str(current_user.organization_id)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Turn on NFC ID Cards under Settings → Integrations before "
+                "enabling badge check-in for a room."
+            ),
+        )
+
+    async with handle_service_errors("Failed to update badge check-in"):
+        location = await service.set_badge_check_in(
+            location_id=location_id,
+            organization_id=current_user.organization_id,
+            enabled=data.enabled,
+        )
+
+    location = ensure_found(location, "Location")
+
+    await log_audit_event(
+        db=db,
+        event_type=(
+            "location_badge_check_in_enabled"
+            if data.enabled
+            else "location_badge_check_in_disabled"
+        ),
+        event_category="administration",
+        severity="warning" if data.enabled else "info",
         event_data={"location_id": str(location_id), "location_name": location.name},
         user_id=str(current_user.id),
         username=current_user.username,

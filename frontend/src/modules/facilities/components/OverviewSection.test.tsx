@@ -201,3 +201,37 @@ describe('OverviewSection — a lookup that was deactivated after the fact', () 
     expect(screen.queryByRole('option', { name: /\(inactive\)/ })).not.toBeInTheDocument();
   });
 });
+
+describe('OverviewSection — the edit form', () => {
+  beforeEach(() => {
+    updateFacility.mockReset();
+    updateFacility.mockResolvedValue(undefined);
+  });
+
+  // Every label sat beside its field without naming it: Name, the selects,
+  // the address, contacts and every number were announced as bare boxes.
+  it('names each field by its label', async () => {
+    const user = userEvent.setup();
+    await renderEditing(user);
+    expect(screen.getByRole('textbox', { name: /^Name/ })).toHaveValue('Station 1');
+    expect(screen.getByRole('combobox', { name: /^Type/ })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'City' })).toHaveValue('Falls Church');
+    expect(screen.getByRole('textbox', { name: 'Email' })).toBeInTheDocument();
+    expect(screen.getByRole('spinbutton', { name: 'Year Built' })).toHaveValue(1974);
+    expect(screen.getByRole('textbox', { name: 'Notes' })).toHaveValue('Roof replaced 2019');
+  });
+
+  // The server accepts any string, so "not-an-email" was saved as a station's
+  // address from the add dialog and then shown on its overview.
+  it('refuses an email address without an @ and says why', async () => {
+    const user = userEvent.setup();
+    await renderEditing(user);
+    const email = screen.getByRole('textbox', { name: 'Email' });
+    await user.type(email, 'not-an-email');
+    expect(email).toHaveAttribute('aria-invalid', 'true');
+    expect(email).toHaveAccessibleDescription(/Enter an email address/);
+
+    await user.click(screen.getByRole('button', { name: /Save/ }));
+    expect(updateFacility).not.toHaveBeenCalled();
+  });
+});

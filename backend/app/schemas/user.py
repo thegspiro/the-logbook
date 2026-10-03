@@ -4,6 +4,7 @@ User Pydantic Schemas
 Request and response schemas for user-related endpoints.
 """
 
+import re
 from datetime import date, datetime
 from typing import Dict, List, Optional
 from uuid import UUID
@@ -92,6 +93,68 @@ def resolve_profile_visibility(user: object) -> ProfileVisibility:
     return ProfileVisibility(
         **normalize_profile_visibility(getattr(user, "profile_visibility", None))
     )
+
+
+# --- Member-chosen phone bottom-bar tabs ------------------------------------
+#
+# The bottom bar has two configurable tabs either side of Quick Add. The bar
+# itself decides which paths are real tabs and which the member may open, and
+# falls back for anything it does not recognise, so the backend validates only
+# the shape: a stored path is never rendered, only compared against the bar's
+# own list. Keeping the tab list out of the backend means adding a tab is a
+# frontend change alone.
+BOTTOM_NAV_CONFIGURABLE_SLOTS = 2
+_BOTTOM_NAV_PATH = re.compile(r"^/[a-z0-9][a-z0-9/-]{0,63}$")
+
+
+def normalize_bottom_nav_slots(stored: object) -> Optional[list[str]]:
+    """The member's stored choice, or ``None`` when they have not made one.
+
+    Anything malformed in the JSON column — a non-list, a non-string entry, a
+    path of the wrong shape — degrades to "never chosen" (or drops the bad
+    entry) rather than raising: this is read on every ``/auth/me``, and a bad
+    value must cost the member their customisation, not their session
+    (pitfall #19).
+    """
+    if not isinstance(stored, list):
+        return None
+    slots: list[str] = []
+    for value in stored:
+        if (
+            isinstance(value, str)
+            and _BOTTOM_NAV_PATH.match(value)
+            and value not in slots
+        ):
+            slots.append(value)
+        if len(slots) == BOTTOM_NAV_CONFIGURABLE_SLOTS:
+            break
+    return slots or None
+
+
+class BottomNavigationPreference(BaseModel):
+    """The calling member's bottom-bar tabs, written as a whole.
+
+    ``slots`` is the left and right tab in order; ``null`` clears the choice
+    and returns the bar to its role-based defaults.
+    """
+
+    slots: Optional[list[str]] = Field(
+        default=None, min_length=1, max_length=BOTTOM_NAV_CONFIGURABLE_SLOTS
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("slots")
+    @classmethod
+    def _validate_slots(cls, v: Optional[list[str]]) -> Optional[list[str]]:
+        if v is None:
+            return v
+        for path in v:
+            if not _BOTTOM_NAV_PATH.match(path):
+                raise ValueError(f"Not a navigation path: {path!r}")
+        if len(set(v)) != len(v):
+            raise ValueError("The same tab cannot fill both slots")
+        return v
 
 
 class EmergencyContact(BaseModel):

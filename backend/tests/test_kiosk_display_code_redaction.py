@@ -50,6 +50,7 @@ def _location(**overrides) -> SimpleNamespace:
         facility_id=None,
         facility_room_id=None,
         display_code="ABC12345",
+        nfc_badge_check_in_enabled=False,
         created_by=None,
         created_at=now,
         updated_at=now,

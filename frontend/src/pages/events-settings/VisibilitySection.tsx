@@ -29,16 +29,16 @@ const VisibilitySection: React.FC<VisibilitySectionProps> = ({
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-theme-text-primary text-lg font-semibold">Event Type Visibility</h3>
+        <h2 className="text-theme-text-primary text-lg font-semibold">Event Type Visibility</h2>
         <p className="text-theme-text-muted mt-1 text-sm">
           Choose which event types appear as primary filter categories.
         </p>
       </div>
 
       <div>
-        <h4 className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wider uppercase">
+        <h3 className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wider uppercase">
           Visible Categories
-        </h4>
+        </h3>
         <div className="space-y-2">
           {visibleTypes.map((eventType) => (
             <div
@@ -58,7 +58,7 @@ const VisibilitySection: React.FC<VisibilitySectionProps> = ({
                   type="button"
                   onClick={() => onToggleVisibility(eventType)}
                   disabled={saving}
-                  className="text-theme-text-muted hover:text-theme-text-primary text-sm transition-colors disabled:opacity-50"
+                  className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone shrink-0 text-sm transition-colors disabled:opacity-50"
                   title={`Move "${getEventTypeLabel(eventType)}" to Other`}
                 >
                   <EyeOff className="h-4 w-4" />
@@ -71,9 +71,9 @@ const VisibilitySection: React.FC<VisibilitySectionProps> = ({
 
       {hiddenTypes.length > 0 && (
         <div>
-          <h4 className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wider uppercase">
+          <h3 className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wider uppercase">
             Grouped Under &ldquo;Other&rdquo;
-          </h4>
+          </h3>
           <div className="space-y-2">
             {hiddenTypes.map((eventType) => (
               <div
@@ -82,8 +82,11 @@ const VisibilitySection: React.FC<VisibilitySectionProps> = ({
               >
                 <div className="flex items-center gap-3">
                   <EyeOff className="text-theme-text-muted h-4 w-4" />
+                  {/* Not dimmed: opacity on a pastel badge drops its text below
+                      AA contrast. The EyeOff icon, the tinted row and the
+                      heading already say these are hidden. */}
                   <span
-                    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getEventTypeBadgeColor(eventType)} opacity-60`}
+                    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getEventTypeBadgeColor(eventType)}`}
                   >
                     {getEventTypeLabel(eventType)}
                   </span>
@@ -92,7 +95,7 @@ const VisibilitySection: React.FC<VisibilitySectionProps> = ({
                   type="button"
                   onClick={() => onToggleVisibility(eventType)}
                   disabled={saving}
-                  className="text-theme-text-muted text-sm transition-colors hover:text-green-600 disabled:opacity-50 dark:hover:text-green-400"
+                  className="text-theme-text-muted touch-target-phone shrink-0 text-sm transition-colors hover:text-green-600 disabled:opacity-50 dark:hover:text-green-400"
                   title={`Show "${getEventTypeLabel(eventType)}" as primary category`}
                 >
                   <Eye className="h-4 w-4" />
@@ -106,9 +109,9 @@ const VisibilitySection: React.FC<VisibilitySectionProps> = ({
       {/* Custom Categories visibility */}
       {customCategories.length > 0 && (
         <div className="border-theme-surface-border border-t pt-4">
-          <h4 className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wider uppercase">
+          <h3 className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wider uppercase">
             Custom Categories
-          </h4>
+          </h3>
           <p className="text-theme-text-muted mb-3 text-xs">
             Toggle visibility of organization-defined categories as primary filter tabs.
           </p>
@@ -131,9 +134,7 @@ const VisibilitySection: React.FC<VisibilitySectionProps> = ({
                       <EyeOff className="text-theme-text-muted h-4 w-4" />
                     )}
                     <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${cat.color} ${
-                        isVisible ? '' : 'opacity-60'
-                      }`}
+                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${cat.color}`}
                     >
                       {cat.label}
                     </span>
@@ -142,7 +143,7 @@ const VisibilitySection: React.FC<VisibilitySectionProps> = ({
                     type="button"
                     onClick={() => onToggleCategoryVisibility(cat.value)}
                     disabled={saving}
-                    className={`text-sm transition-colors disabled:opacity-50 ${
+                    className={`touch-target-phone shrink-0 text-sm transition-colors disabled:opacity-50 ${
                       isVisible
                         ? 'text-theme-text-muted hover:text-theme-text-primary'
                         : 'text-theme-text-muted hover:text-green-600 dark:hover:text-green-400'

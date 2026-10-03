@@ -475,23 +475,26 @@ export const ApparatusListPage: React.FC = () => {
                                 onClick={() => void navigate(`/apparatus/print-labels?ids=${apparatus.id}`)}
                                 className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary hidden min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-2 transition-colors sm:inline-flex"
                                 title="Print label"
+                                aria-label={`Print label for ${apparatus.unitNumber}`}
                               >
-                                <Printer className="h-4 w-4" />
+                                <Printer className="h-4 w-4" aria-hidden="true" />
                               </button>
                               <button
                                 onClick={() => void navigate(`/apparatus/${apparatus.id}`)}
                                 className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-2 text-blue-700 transition-colors hover:bg-blue-500/10 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                                 title="View Details"
+                                aria-label={`View ${apparatus.unitNumber}`}
                               >
-                                <Eye className="h-4 w-4" />
+                                <Eye className="h-4 w-4" aria-hidden="true" />
                               </button>
                               {canEdit && (
                                 <button
                                   onClick={() => void navigate(`/apparatus/${apparatus.id}/edit`)}
                                   className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-2 text-green-700 transition-colors hover:bg-green-500/10 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
                                   title="Edit"
+                                  aria-label={`Edit ${apparatus.unitNumber}`}
                                 >
-                                  <Edit className="h-4 w-4" />
+                                  <Edit className="h-4 w-4" aria-hidden="true" />
                                 </button>
                               )}
                               {canManage && (
@@ -499,8 +502,9 @@ export const ApparatusListPage: React.FC = () => {
                                   onClick={() => void navigate(`/apparatus/${apparatus.id}`)}
                                   className="hidden min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-2 text-yellow-700 transition-colors hover:bg-yellow-500/10 hover:text-yellow-700 sm:inline-flex dark:text-yellow-400 dark:hover:text-yellow-300"
                                   title="View Details"
+                                  aria-label={`View ${apparatus.unitNumber}`}
                                 >
-                                  <Wrench className="h-4 w-4" />
+                                  <Wrench className="h-4 w-4" aria-hidden="true" />
                                 </button>
                               )}
                               {canManage && !apparatus.isArchived && (

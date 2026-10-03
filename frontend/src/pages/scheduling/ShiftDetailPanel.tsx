@@ -176,6 +176,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   // record itself still requires scheduling.manage.
   const isShiftOfficer = !!(shift.shift_officer_id && user?.id && String(shift.shift_officer_id) === String(user.id));
   const canAssign = checkPermission('scheduling.assign') || canManage || isShiftOfficer;
+  // Filling the roster is not fitting out the rig: the officer who prints the
+  // QR card may still not be the one who mounts the truck's NFC tag.
+  const canWriteApparatusTags = checkPermission('apparatus.manage_nfc_tags');
   const canManageShift = canManage || isShiftOfficer;
   const isCancelled = shift.status === 'cancelled';
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -2906,7 +2909,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                       </button>
                     </div>
                   )}
-                  {showQR && (
+                  {showQR && canWriteApparatusTags && (
                     <NfcTagWriter
                       url={buildShiftCheckInUrl({ apparatusId: shift.apparatus_id })}
                       targetLabel={shift.apparatus_name || shift.apparatus_unit_number || 'this apparatus'}

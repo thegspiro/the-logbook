@@ -6,7 +6,9 @@
  * - Room kiosk codes, grouped by station/facility. Every location gets a
  *   `display_code` when created; its QR encodes the public kiosk URL
  *   `/display/{code}`. Admins with locations.edit/manage can rotate a
- *   leaked code — the old URL stops resolving immediately.
+ *   leaked code — the old URL stops resolving immediately. A room's NFC tag
+ *   is written with `/locations/{id}/check-in` instead: a tag is readable by
+ *   anyone who walks past, so it must not carry the kiosk's code.
  * - Apparatus shift check-in codes (when the Scheduling module is on and
  *   the viewer can see apparatus). Each QR encodes the permanent URL
  *   `/scheduling/checkin?apparatus={id}`, which resolves the apparatus's
@@ -20,6 +22,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
+import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { QRCodeSVG } from 'qrcode.react';
 import {
@@ -31,6 +34,7 @@ import {
   Download,
   LayoutGrid,
   Loader2,
+  Nfc,
   Printer,
   QrCode,
   RefreshCw,
@@ -45,10 +49,13 @@ import { apparatusService } from '../modules/apparatus/services/api';
 import type { ApparatusListItem } from '../modules/apparatus/types';
 import { groupByStation } from '../utils/locationGrouping';
 import { copyToClipboard } from '../utils/clipboard';
+import { getErrorMessage } from '../utils/errorHandling';
 import { useAuthStore } from '../stores/authStore';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useEnabledModules } from '../hooks/useEnabledModules';
-import { buildShiftCheckInUrl } from '../constants/nfc';
+import { useConnectedIntegrations } from '../hooks/useConnectedIntegrations';
+import { NFC_ID_CARDS_INTEGRATION } from '../modules/membership/constants/idCards';
+import { buildRoomCheckInUrl, buildShiftCheckInUrl, isNfcSupported } from '../constants/nfc';
 import { NfcTagWriteButton } from '../components/nfc/NfcTagWriteButton';
 
 /** Rasterize an inline QR SVG to a PNG download (white background for print/signage use). */
@@ -108,17 +115,28 @@ function QRCard({
   title,
   subtitle,
   url,
+  nfcUrl,
   icon,
   variant = 'card',
   onRegenerate,
+  extraAction,
 }: {
   title: string;
   /** Sign-variant context line, e.g. "Station 1 — Scan to check in" */
   subtitle?: string | undefined;
   url: string;
+  /**
+   * What a tag for this card should carry, or undefined when the viewer may
+   * not write one. Differs from `url` for rooms: the QR opens the public
+   * kiosk, but a tag must not carry the kiosk's code, so it names the room
+   * instead and the member signs in to check in.
+   */
+  nfcUrl?: string | undefined;
   icon: QRCardIcon;
   variant?: QRCardVariant;
   onRegenerate?: (() => Promise<void>) | undefined;
+  /** A further control for the actions row, e.g. the badge check-in switch. */
+  extraAction?: ReactNode;
 }) {
   const [copied, setCopied] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
@@ -196,7 +214,8 @@ function QRCard({
           <Download className="h-3 w-3" aria-hidden="true" />
           Download PNG
         </button>
-        <NfcTagWriteButton url={url} label={title} />
+        {nfcUrl && <NfcTagWriteButton url={nfcUrl} label={title} />}
+        {extraAction}
         {onRegenerate && (
           <button
             onClick={() => {
@@ -215,14 +234,101 @@ function QRCard({
   );
 }
 
-function locationCardProps(location: Location): { title: string; subtitle: string; url: string; icon: QRCardIcon } {
+function locationCardProps(location: Location): {
+  title: string;
+  subtitle: string;
+  url: string;
+  icon: QRCardIcon;
+} {
   const isStation = Boolean(location.address && !location.building && !location.room_number);
   return {
-    title: `${location.name}${location.room_number ? ` #${location.room_number}` : ''}`,
+    title: locationTitle(location),
     subtitle: `${location.building ? `${location.building} — ` : ''}Scan to check in`,
     url: `${window.location.origin}/display/${location.display_code}`,
     icon: isStation ? 'station' : 'room',
   };
+}
+
+function locationTitle(location: Location): string {
+  return `${location.name}${location.room_number ? ` #${location.room_number}` : ''}`;
+}
+
+/**
+ * Rooms a tag writer can tag but that have no kiosk card on this page — every
+ * room, for a writer the backend withholds kiosk codes from (the Vice
+ * President), and rooms with no kiosk code for everyone else. A room's tag
+ * names the room, not the kiosk, so it never needed the code.
+ */
+/**
+ * Whether this room's public kiosk reads member ID cards. A tap there records
+ * attendance with nobody signed in, so it is off until an officer turns it on
+ * for a room that actually has a reader beside the door.
+ */
+function BadgeCheckInSwitch({
+  location,
+  onToggle,
+}: {
+  location: Location;
+  onToggle: (location: Location) => Promise<void>;
+}) {
+  const [saving, setSaving] = useState(false);
+  const on = Boolean(location.nfc_badge_check_in_enabled);
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={`Badge check-in at ${locationTitle(location)}`}
+      disabled={saving}
+      onClick={() => {
+        setSaving(true);
+        void onToggle(location).finally(() => setSaving(false));
+      }}
+      className="text-theme-text-muted flex items-center gap-1.5 text-xs max-md:min-h-11"
+    >
+      <span className={`toggle-track-sm ${on ? 'bg-green-700' : 'bg-theme-surface-border'}`}>
+        <span className={`toggle-knob-sm ${on ? 'translate-x-6' : 'translate-x-1'}`} />
+      </span>
+      Badge check-in
+    </button>
+  );
+}
+
+function RoomTagList({
+  rooms,
+  renderSwitch,
+}: {
+  rooms: Location[];
+  renderSwitch?: ((room: Location) => ReactNode) | undefined;
+}) {
+  return (
+    <section className="no-print">
+      <h2 className="text-theme-text-primary mb-1 flex items-center gap-2 text-lg font-semibold">
+        <Nfc className="h-5 w-5 text-red-500" aria-hidden="true" />
+        Room NFC Tags
+      </h2>
+      <p className="text-theme-text-muted mb-3 text-sm">
+        Write a tag for a room&apos;s door. Tapping it checks a member into whatever event is open in that room.
+      </p>
+      {isNfcSupported() ? (
+        <ul className="card divide-theme-surface-border divide-y py-1">
+          {rooms.map((room) => (
+            <li key={room.id} className="flex items-center justify-between gap-3 py-1">
+              <span className="text-theme-text-primary min-w-0 text-sm break-words">{locationTitle(room)}</span>
+              <span className="flex shrink-0 items-center gap-3">
+                {renderSwitch?.(room)}
+                <NfcTagWriteButton url={buildRoomCheckInUrl(room.id)} label={locationTitle(room)} />
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-theme-text-muted text-sm">
+          To write a room tag, open this page in Chrome on an Android phone.
+        </p>
+      )}
+    </section>
+  );
 }
 
 function apparatusCardProps(apparatus: ApparatusListItem): {
@@ -251,6 +357,47 @@ export default function RoomQRCodesPage() {
   const [layout, setLayout] = useState<'grid' | 'signs'>('grid');
 
   const canManage = checkPermission('locations.edit') || checkPermission('locations.manage');
+  // Who may write which tag is the department's decision, not whoever can see
+  // the code: leadership and the Facilities Manager tag rooms, leadership and
+  // the Apparatus Officer tag apparatus.
+  const canWriteRoomTags = checkPermission('locations.manage_nfc_tags');
+  const canWriteApparatusTags = checkPermission('apparatus.manage_nfc_tags');
+  // The switch is offered only where it can work: a room's kiosk reads cards
+  // only while the NFC ID Cards integration is connected, and the server
+  // refuses to turn it on otherwise.
+  const { isConnected } = useConnectedIntegrations({ enabled: canWriteRoomTags });
+  const canSwitchBadgeCheckIn = canWriteRoomTags && isConnected(NFC_ID_CARDS_INTEGRATION);
+
+  const handleBadgeToggle = async (location: Location) => {
+    const enabling = !location.nfc_badge_check_in_enabled;
+    if (
+      enabling &&
+      !(await confirm({
+        title: 'Turn on badge check-in',
+        message: `Members will be able to tap their ID card at the "${locationTitle(location)}" kiosk to check in to the event open there, or out if they are already in — with nobody signed in at the kiosk. Turn it on only where a card reader is mounted beside the display.`,
+        confirmLabel: 'Turn on',
+        cancelLabel: 'Leave it off',
+      }))
+    )
+      return;
+    try {
+      const updated = await locationsService.setBadgeCheckIn(location.id, enabling);
+      setLocations((prev) =>
+        prev.map((l) =>
+          l.id === updated.id ? { ...l, nfc_badge_check_in_enabled: updated.nfc_badge_check_in_enabled ?? enabling } : l
+        )
+      );
+      toast.success(enabling ? 'Badge check-in turned on' : 'Badge check-in turned off');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to change badge check-in'));
+    }
+  };
+  const badgeSwitch = (location: Location) =>
+    canSwitchBadgeCheckIn ? <BadgeCheckInSwitch location={location} onToggle={handleBadgeToggle} /> : undefined;
+
+  const roomTagUrl = (location: Location) => (canWriteRoomTags ? buildRoomCheckInUrl(location.id) : undefined);
+  const apparatusTagUrl = (a: ApparatusListItem) =>
+    canWriteApparatusTags ? buildShiftCheckInUrl({ apparatusId: a.id }) : undefined;
   const schedulingOn = isModuleOn('scheduling');
 
   // Both loads gate the page: rendering (and Print All) on locations alone
@@ -336,22 +483,20 @@ export default function RoomQRCodesPage() {
     }
   };
 
-  const hasAnyCodes = locations.some((l) => l.display_code) || apparatus.length > 0;
   const query = searchQuery.trim().toLowerCase();
-  const groups = groupByStation(
-    query
-      ? locations.filter(
-          (l) =>
-            l.name.toLowerCase().includes(query) ||
-            l.building?.toLowerCase().includes(query) ||
-            l.room_number?.toLowerCase().includes(query)
-        )
-      : locations
-  );
+  const matchesQuery = (l: Location) =>
+    !query ||
+    l.name.toLowerCase().includes(query) ||
+    Boolean(l.building?.toLowerCase().includes(query)) ||
+    Boolean(l.room_number?.toLowerCase().includes(query));
+  const groups = groupByStation(locations.filter(matchesQuery));
   const filteredApparatus = query
     ? apparatus.filter((a) => a.unitNumber.toLowerCase().includes(query) || a.name?.toLowerCase().includes(query))
     : apparatus;
-  const nothingMatches = groups.length === 0 && filteredApparatus.length === 0;
+  const tagOnlyRooms = canWriteRoomTags ? locations.filter((l) => !l.display_code && matchesQuery(l)) : [];
+  const hasAnyCodes =
+    locations.some((l) => l.display_code) || apparatus.length > 0 || (canWriteRoomTags && locations.length > 0);
+  const nothingMatches = groups.length === 0 && filteredApparatus.length === 0 && tagOnlyRooms.length === 0;
 
   return (
     <div className="space-y-6">
@@ -459,13 +604,16 @@ export default function RoomQRCodesPage() {
               <QRCard
                 key={location.id}
                 {...locationCardProps(location)}
+                nfcUrl={roomTagUrl(location)}
+                extraAction={badgeSwitch(location)}
                 variant="sign"
                 onRegenerate={canManage ? () => handleRegenerate(location) : undefined}
               />
             ))}
           {filteredApparatus.map((a) => (
-            <QRCard key={a.id} {...apparatusCardProps(a)} variant="sign" />
+            <QRCard key={a.id} {...apparatusCardProps(a)} nfcUrl={apparatusTagUrl(a)} variant="sign" />
           ))}
+          {tagOnlyRooms.length > 0 && <RoomTagList rooms={tagOnlyRooms} renderSwitch={badgeSwitch} />}
         </div>
       ) : (
         <div className="space-y-8">
@@ -480,6 +628,8 @@ export default function RoomQRCodesPage() {
                   <QRCard
                     key={location.id}
                     {...locationCardProps(location)}
+                    nfcUrl={roomTagUrl(location)}
+                    extraAction={badgeSwitch(location)}
                     onRegenerate={canManage ? () => handleRegenerate(location) : undefined}
                   />
                 ))}
@@ -498,11 +648,12 @@ export default function RoomQRCodesPage() {
               </p>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 print:grid-cols-2">
                 {filteredApparatus.map((a) => (
-                  <QRCard key={a.id} {...apparatusCardProps(a)} />
+                  <QRCard key={a.id} {...apparatusCardProps(a)} nfcUrl={apparatusTagUrl(a)} />
                 ))}
               </div>
             </section>
           )}
+          {tagOnlyRooms.length > 0 && <RoomTagList rooms={tagOnlyRooms} renderSwitch={badgeSwitch} />}
         </div>
       )}
 

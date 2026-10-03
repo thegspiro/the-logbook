@@ -411,6 +411,24 @@ describe('InventoryAdminHub', () => {
     await waitFor(() => expect(mockGetWriteOffRequests).toHaveBeenCalledTimes(2));
   });
 
+  // A 200 whose body is not the declared shape — a captive portal's HTML page —
+  // used to be cast straight through: `{}` reached `.clearances.filter` and the
+  // whole hub fell to the ErrorBoundary. It is a failed source like any other:
+  // named in the banner, with the rest of the page still working.
+  it('names a source whose body is malformed instead of crashing on it', async () => {
+    mockGetDepartureClearances.mockResolvedValue({});
+    mockGetEquipmentRequests.mockResolvedValue('<html>Sign in to Wi-Fi</html>');
+    mockGetOverdueCheckouts.mockResolvedValue({ checkouts: 'nope' });
+    renderWithRouter(<InventoryAdminHub />);
+
+    const banner = await screen.findByRole('alert');
+    expect(banner).toHaveTextContent('departure clearances');
+    expect(banner).toHaveTextContent('gear requests');
+    expect(banner).toHaveTextContent('temporary loans');
+    expect(banner).not.toHaveTextContent('write-offs');
+    expect(screen.getByRole('heading', { name: 'Inventory Administration' })).toBeInTheDocument();
+  });
+
   it('shows an explicit empty state when every attention source succeeds', async () => {
     mockGetLowStockItems.mockResolvedValue([]);
     renderWithRouter(<InventoryAdminHub />);

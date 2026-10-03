@@ -213,6 +213,7 @@ export default function MaintenanceSection({ facilityId, canEdit, canDelete }: P
         <div
           className="modal-overlay z-50 flex items-center justify-center p-4"
           role="dialog"
+          aria-labelledby="facility-maintenance-dialog-title"
           aria-modal="true"
           onKeyDown={(e) => {
             if (e.key === 'Escape') setShowModal(false);
@@ -220,7 +221,7 @@ export default function MaintenanceSection({ facilityId, canEdit, canDelete }: P
         >
           <DialogPanel onClose={() => setShowModal(false)} className="max-h-[90dvh] w-full max-w-lg overflow-y-auto">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
-              <h2 className="text-theme-text-primary text-lg font-bold">
+              <h2 id="facility-maintenance-dialog-title" className="text-theme-text-primary text-lg font-bold">
                 {editingRecord ? 'Edit Maintenance Record' : 'New Maintenance Record'}
               </h2>
               <button
@@ -233,8 +234,11 @@ export default function MaintenanceSection({ facilityId, canEdit, canDelete }: P
             </div>
             <div className="space-y-4 p-6">
               <div>
-                <label className={labelCls}>Description *</label>
+                <label htmlFor="facility-maintenance-description" className={labelCls}>
+                  Description *
+                </label>
                 <textarea
+                  id="facility-maintenance-description"
                   value={formData.description}
                   onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))}
                   rows={3}
@@ -244,8 +248,11 @@ export default function MaintenanceSection({ facilityId, canEdit, canDelete }: P
               </div>
               {maintenanceTypes.length > 0 && (
                 <div>
-                  <label className={labelCls}>Maintenance Type</label>
+                  <label htmlFor="facility-maintenance-maintenance-type-id" className={labelCls}>
+                    Maintenance Type
+                  </label>
                   <select
+                    id="facility-maintenance-maintenance-type-id"
                     value={formData.maintenance_type_id}
                     onChange={(e) => setFormData((p) => ({ ...p, maintenance_type_id: e.target.value }))}
                     className={inputCls}
@@ -261,8 +268,11 @@ export default function MaintenanceSection({ facilityId, canEdit, canDelete }: P
               )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className={labelCls}>Scheduled Date</label>
+                  <label htmlFor="facility-maintenance-scheduled-date" className={labelCls}>
+                    Scheduled Date
+                  </label>
                   <input
+                    id="facility-maintenance-scheduled-date"
                     type="date"
                     value={formData.scheduled_date}
                     onChange={(e) => setFormData((p) => ({ ...p, scheduled_date: e.target.value }))}
@@ -270,8 +280,11 @@ export default function MaintenanceSection({ facilityId, canEdit, canDelete }: P
                   />
                 </div>
                 <div>
-                  <label className={labelCls}>Due Date</label>
+                  <label htmlFor="facility-maintenance-due-date" className={labelCls}>
+                    Due Date
+                  </label>
                   <input
+                    id="facility-maintenance-due-date"
                     type="date"
                     value={formData.due_date}
                     onChange={(e) => setFormData((p) => ({ ...p, due_date: e.target.value }))}
@@ -281,8 +294,11 @@ export default function MaintenanceSection({ facilityId, canEdit, canDelete }: P
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className={labelCls}>Performed By</label>
+                  <label htmlFor="facility-maintenance-performed-by" className={labelCls}>
+                    Performed By
+                  </label>
                   <input
+                    id="facility-maintenance-performed-by"
                     type="text"
                     value={formData.performed_by}
                     onChange={(e) => setFormData((p) => ({ ...p, performed_by: e.target.value }))}
@@ -290,8 +306,11 @@ export default function MaintenanceSection({ facilityId, canEdit, canDelete }: P
                   />
                 </div>
                 <div>
-                  <label className={labelCls}>Vendor</label>
+                  <label htmlFor="facility-maintenance-vendor" className={labelCls}>
+                    Vendor
+                  </label>
                   <input
+                    id="facility-maintenance-vendor"
                     type="text"
                     value={formData.vendor}
                     onChange={(e) => setFormData((p) => ({ ...p, vendor: e.target.value }))}
@@ -301,8 +320,11 @@ export default function MaintenanceSection({ facilityId, canEdit, canDelete }: P
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className={labelCls}>Cost ($)</label>
+                  <label htmlFor="facility-maintenance-cost" className={labelCls}>
+                    Cost ($)
+                  </label>
                   <input
+                    id="facility-maintenance-cost"
                     type="number"
                     value={formData.cost}
                     onChange={(e) => setFormData((p) => ({ ...p, cost: e.target.value }))}
@@ -311,8 +333,11 @@ export default function MaintenanceSection({ facilityId, canEdit, canDelete }: P
                   />
                 </div>
                 <div>
-                  <label className={labelCls}>Work Order #</label>
+                  <label htmlFor="facility-maintenance-work-order-number" className={labelCls}>
+                    Work Order #
+                  </label>
                   <input
+                    id="facility-maintenance-work-order-number"
                     type="text"
                     value={formData.work_order_number}
                     onChange={(e) => setFormData((p) => ({ ...p, work_order_number: e.target.value }))}
@@ -321,8 +346,11 @@ export default function MaintenanceSection({ facilityId, canEdit, canDelete }: P
                 </div>
               </div>
               <div>
-                <label className={labelCls}>Notes</label>
+                <label htmlFor="facility-maintenance-notes" className={labelCls}>
+                  Notes
+                </label>
                 <textarea
+                  id="facility-maintenance-notes"
                   value={formData.notes}
                   onChange={(e) => setFormData((p) => ({ ...p, notes: e.target.value }))}
                   rows={2}

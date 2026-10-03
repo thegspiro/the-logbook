@@ -2712,9 +2712,11 @@ async def send_ballot_emails(
         )
 
     # Send eligibility summary email to secretary if requested
-    if email_data.send_eligibility_summary and total_attempted > 0:
+    summary_requested = bool(email_data.send_eligibility_summary)
+    summary_sent = False
+    if summary_requested and total_attempted > 0:
         try:
-            await service.send_eligibility_summary_email(
+            summary_sent, _ = await service.send_eligibility_summary_email(
                 election_id=election_id,
                 organization_id=current_user.organization_id,
                 sent_count=recipients_count,
@@ -2724,22 +2726,61 @@ async def send_ballot_emails(
         except Exception as e:
             logger.warning(f"Failed to send eligibility summary email: {e}")
 
-    parts = [f"Ballot emails sent to {recipients_count} recipient(s)"]
-    if failed_count > 0:
-        parts.append(f"{failed_count} failed")
-    if skipped_count > 0:
-        parts.append(ElectionService.summarize_skipped(skipped_details))
-    if email_data.send_eligibility_summary and total_attempted > 0:
-        parts.append("eligibility summary emailed to you")
-
     return EmailBallotResponse(
         success=recipients_count > 0 and failed_count == 0,
         recipients_count=recipients_count,
         failed_count=failed_count,
         skipped_count=skipped_count,
         skipped_details=skipped_details,
-        message=". ".join(parts),
+        message=ballot_send_message(
+            recipients_count,
+            failed_count,
+            skipped_count,
+            summary_requested=summary_requested,
+            summary_sent=summary_sent,
+            skipped_details=skipped_details,
+        ),
     )
+
+
+def ballot_send_message(
+    recipients_count: int,
+    failed_count: int,
+    skipped_count: int,
+    *,
+    summary_requested: bool,
+    summary_sent: bool,
+    skipped_details: Optional[list[dict]] = None,
+) -> str:
+    """The secretary's account of a ballot send.
+
+    The summary line reports whether the summary email actually went. It used
+    to say "emailed to you" whenever one was asked for, including when email
+    was off and nothing was sent.
+
+    The skipped clause names the reasons the send actually recorded when it
+    has them. The fixed "did not meet ballot item requirements" named an item
+    rule for a member skipped for not being on the voter roll frozen when the
+    election opened (W50-55); it remains the wording for a caller that has a
+    count but no per-member reasons to report.
+    """
+    parts = [f"Ballot emails sent to {recipients_count} recipient(s)"]
+    if failed_count > 0:
+        parts.append(f"{failed_count} failed")
+    if skipped_count > 0:
+        parts.append(
+            ElectionService.summarize_skipped(skipped_details)
+            if skipped_details
+            else f"{skipped_count} skipped (did not meet ballot item "
+            f"requirements — see skipped details for per-member reasons)"
+        )
+    if summary_requested:
+        parts.append(
+            "Eligibility summary emailed to you"
+            if summary_sent
+            else "The eligibility summary email could not be sent"
+        )
+    return ". ".join(parts)
 
 
 @router.post("/{election_id}/send-report", response_model=ElectionReportResponse)

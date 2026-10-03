@@ -15,12 +15,16 @@ vi.mock('../services/api', () => ({
   },
 }));
 
+// The card being opened and what the viewer holds; the viewer is user-123.
+let routeUserId = 'user-123';
+let grantedPermissions: string[] = [];
+
 // Mock react-router
 vi.mock('react-router', async () => {
   const actual = await vi.importActual('react-router');
   return {
     ...actual,
-    useParams: () => ({ userId: 'user-123' }),
+    useParams: () => ({ userId: routeUserId }),
   };
 });
 
@@ -85,7 +89,7 @@ const mockCurrentUser = {
 vi.mock('../stores/authStore', () => ({
   useAuthStore: () => ({
     user: mockCurrentUser,
-    checkPermission: () => true,
+    checkPermission: (permission: string) => grantedPermissions.includes(permission),
   }),
 }));
 
@@ -138,6 +142,8 @@ describe('MemberIdCardPage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    routeUserId = 'user-123';
+    grantedPermissions = [];
   });
 
   describe('Loading State', () => {
@@ -465,6 +471,33 @@ describe('MemberIdCardPage', () => {
         expect(logo).toBeInTheDocument();
       });
       expect(logo).toHaveAttribute('src', '/logos/sfd.png');
+    });
+  });
+  describe('Access to another member card', () => {
+    beforeEach(() => {
+      routeUserId = 'someone-else';
+      vi.mocked(userService.getUserWithRoles).mockReset();
+      vi.mocked(userService.getUserWithRoles).mockResolvedValue({ ...mockMember, id: 'someone-else' } as never);
+      vi.mocked(organizationService.getProfile).mockReset();
+      vi.mocked(organizationService.getProfile).mockResolvedValue(mockOrg);
+    });
+
+    it('refuses a plain member and never fetches the colleague', async () => {
+      grantedPermissions = ['members.view', 'users.view', 'members.check_in'];
+      renderWithRouter(<MemberIdCardPage />);
+
+      expect(await screen.findByText('You can only view your own ID card.')).toBeInTheDocument();
+      expect(screen.queryByTestId('qr-code')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('barcode-container')).not.toBeInTheDocument();
+      expect(userService.getUserWithRoles).not.toHaveBeenCalled();
+    });
+
+    it.each(['members.manage', 'members.manage_id_cards'])('shows the card to a holder of %s', async (permission) => {
+      grantedPermissions = [permission];
+      renderWithRouter(<MemberIdCardPage />);
+
+      expect(await screen.findByTestId('qr-code')).toBeInTheDocument();
+      expect(userService.getUserWithRoles).toHaveBeenCalledWith('someone-else');
     });
   });
 });

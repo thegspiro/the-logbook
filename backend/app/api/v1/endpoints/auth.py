@@ -67,6 +67,7 @@ from app.schemas.auth import (
     ValidateResetToken,
 )
 from app.schemas.organization import AppearanceSettings, AuthSettings
+from app.schemas.user import normalize_bottom_nav_slots
 from app.services import mfa_service
 from app.services.auth_service import RESET_TOKEN_EXPIRY_MINUTES, AuthService
 from app.services.branding_service import get_primary_branding
@@ -224,6 +225,7 @@ async def _build_current_user_dict(user: User, db: AsyncSession) -> dict:
         mfa_enrollment_required=mfa_enrollment_required,
         password_expired=password_expired,
         must_change_password=bool(user.must_change_password),
+        bottom_nav_slots=normalize_bottom_nav_slots(user.bottom_nav_slots),
     ).model_dump(mode="json")
 
 

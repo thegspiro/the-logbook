@@ -68,6 +68,7 @@ class ErrorCode(str, Enum):
     EVT_CHECKIN_WINDOW_CLOSED = "LB-EVT-002"
     EVT_SIGNIN_DAILY_LIMIT = "LB-EVT-003"
     EVT_DISPLAY_NOT_FOUND = "LB-EVT-004"
+    EVT_BADGE_CHECKIN_UNAVAILABLE = "LB-EVT-005"
 
     # --- File uploads ---------------------------------------------------
     UPLD_TOO_LARGE = "LB-UPLD-001"
@@ -373,6 +374,20 @@ ERROR_CODE_CATALOG: dict[ErrorCode, ErrorCodeInfo] = {
         resolution=(
             "Re-open the display from Locations → Displays to get its "
             "current link/QR code and update the kiosk bookmark.",
+        ),
+    ),
+    ErrorCode.EVT_BADGE_CHECKIN_UNAVAILABLE: ErrorCodeInfo(
+        title="Badge check-in not turned on for this room",
+        description=(
+            "A member ID card was tapped at a room kiosk that does not accept "
+            "card taps — badge check-in is off for that room, or the "
+            "department's NFC ID Cards integration is off."
+        ),
+        resolution=(
+            "Turn on badge check-in for the room on Check-In QR Codes, and "
+            "NFC ID Cards under Settings → Integrations.",
+            "Until then, members check in by tapping the room's NFC tag or "
+            "scanning its QR code with their phone.",
         ),
     ),
     ErrorCode.UPLD_TOO_LARGE: ErrorCodeInfo(

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
@@ -8,7 +8,7 @@ const mockFetchFleetSummary = vi.fn();
 let grantedPermissions = new Set<string>();
 
 const store = {
-  apparatusList: [],
+  apparatusList: [] as Array<Record<string, unknown>>,
   types: [],
   statuses: [],
   fleetSummary: {
@@ -86,5 +86,33 @@ describe('ApparatusListPage permissions', () => {
     expect(screen.getAllByRole('button', { name: 'Add Apparatus' })).toHaveLength(2);
     expect(screen.queryByText('Total Fleet')).not.toBeInTheDocument();
     await waitFor(() => expect(mockFetchFleetSummary).not.toHaveBeenCalled());
+  });
+});
+
+describe('ApparatusListPage row actions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    grantedPermissions = new Set(['apparatus.manage', 'apparatus.edit']);
+    mockCheckPermission.mockImplementation((permission: string) => grantedPermissions.has(permission));
+    localStorage.setItem('has_session', 'true');
+    store.apparatusList = [
+      { id: 'a-1', unitNumber: 'E-2', name: 'Pumper', minStaffing: 3, isArchived: false },
+      { id: 'a-2', unitNumber: 'U-9', name: null, minStaffing: 1, isArchived: false },
+    ];
+  });
+
+  afterEach(() => {
+    store.apparatusList = [];
+  });
+
+  // Every row's icon buttons were named only by a shared title, "View Details",
+  // "Edit" and "Print label", so a list of units read as the same three
+  // buttons over and over.
+  it('names each row action after its unit', async () => {
+    renderWithRouter(<ApparatusListPage />);
+    expect(await screen.findByRole('button', { name: 'Print label for E-2' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit U-9' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'View E-2' }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: 'View Details' })).not.toBeInTheDocument();
   });
 });

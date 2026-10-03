@@ -107,6 +107,7 @@ const EditDatesModal: React.FC<EditDatesModalProps> = ({
               </label>
               <DateTimeQuarterHour
                 id="edit-dates-start"
+                timeLabel="Voting opens time"
                 value={newStartDate}
                 onChange={(val) => setNewStartDate(val)}
                 className={inputClass}
@@ -124,6 +125,7 @@ const EditDatesModal: React.FC<EditDatesModalProps> = ({
               </label>
               <DateTimeQuarterHour
                 id="edit-dates-end"
+                timeLabel="Voting closes time"
                 value={newEndDate}
                 onChange={(val) => setNewEndDate(val)}
                 className={inputClass}

@@ -265,8 +265,11 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({ electi
           <div className="space-y-3">
             {positions.length > 0 && (
               <div>
-                <label className="text-theme-text-primary block text-sm font-medium">Position</label>
+                <label htmlFor="candidate-position" className="text-theme-text-primary block text-sm font-medium">
+                  Position
+                </label>
                 <select
+                  id="candidate-position"
                   value={formData.position}
                   onChange={(e) => setFormData((prev) => ({ ...prev, position: e.target.value }))}
                   className={inputClass}
@@ -283,9 +286,12 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({ electi
 
             {/* Member Search */}
             <div>
-              <label className="text-theme-text-primary block text-sm font-medium">Select Member</label>
+              <label htmlFor="candidate-member-search" className="text-theme-text-primary block text-sm font-medium">
+                Select Member
+              </label>
               <div className="relative">
                 <input
+                  id="candidate-member-search"
                   type="text"
                   value={memberSearch}
                   onChange={(e) => setMemberSearch(e.target.value)}
@@ -329,10 +335,11 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({ electi
 
             {/* Manual name entry (fallback or override) */}
             <div>
-              <label className="text-theme-text-primary block text-sm font-medium">
+              <label htmlFor="candidate-name" className="text-theme-text-primary block text-sm font-medium">
                 Name {formData.user_id ? '' : '*'}
               </label>
               <input
+                id="candidate-name"
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value, user_id: '' }))}
@@ -342,8 +349,11 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({ electi
             </div>
 
             <div>
-              <label className="text-theme-text-primary block text-sm font-medium">Statement</label>
+              <label htmlFor="candidate-statement" className="text-theme-text-primary block text-sm font-medium">
+                Statement
+              </label>
               <textarea
+                id="candidate-statement"
                 value={formData.statement}
                 onChange={(e) => setFormData((prev) => ({ ...prev, statement: e.target.value }))}
                 rows={3}

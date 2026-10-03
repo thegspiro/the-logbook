@@ -92,6 +92,7 @@ class LocationResponse(LocationBase):
     organization_id: UUID
     facility_room_id: Optional[UUID] = None
     display_code: Optional[str] = None
+    nfc_badge_check_in_enabled: bool = False
     created_by: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
@@ -118,10 +119,17 @@ class LocationListItem(UTCResponseBase):
     facility_id: Optional[UUID] = None
     facility_room_id: Optional[UUID] = None
     display_code: Optional[str] = None
+    nfc_badge_check_in_enabled: bool = False
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class LocationBadgeCheckInUpdate(BaseModel):
+    """Turn member ID card taps on or off for one room's kiosk."""
+
+    enabled: bool
 
 
 class LocationDisplayInfo(BaseModel):
@@ -142,6 +150,14 @@ class LocationDisplayInfo(BaseModel):
     timezone: str | None = Field(
         default=None,
         description="Organization IANA timezone for rendering the times above",
+    )
+    # Whether the kiosk should run its ID card reader: the room's own switch
+    # and the department's NFC ID Cards integration, both on. Reported rather
+    # than left for the kiosk to discover by tapping, so a room that is not
+    # set up shows no reader prompt at all. Defaults off for older clients.
+    badge_check_in_enabled: bool = Field(
+        default=False,
+        description="Whether this room's kiosk accepts member ID card taps",
     )
 
     model_config = ConfigDict(from_attributes=True)

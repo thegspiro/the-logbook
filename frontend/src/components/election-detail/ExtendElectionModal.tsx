@@ -82,6 +82,7 @@ const ExtendElectionModal: React.FC<ExtendElectionModalProps> = ({
               </label>
               <DateTimeQuarterHour
                 id="extend-new-end-time"
+                timeLabel="New end time"
                 value={newEndDate}
                 onChange={(val) => setNewEndDate(val)}
                 className="form-input mt-1 shadow-xs"

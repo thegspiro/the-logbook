@@ -859,9 +859,16 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       {
         path: '/locations/qr-codes',
         label: 'Room QR codes',
-        anyPermission: ['locations.manage', 'facilities.manage', 'apparatus.view'],
+        anyPermission: [
+          'locations.manage',
+          'facilities.manage',
+          'apparatus.view',
+          'locations.manage_nfc_tags',
+          'apparatus.manage_nfc_tags',
+        ],
         module: 'facilities',
       },
+      { path: '/locations/:locationId/check-in', label: 'Room check-in (NFC tag landing)' },
     ],
   },
   {

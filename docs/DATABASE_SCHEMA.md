@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**286 tables · 4711 columns · 929 foreign keys**
+**286 tables · 4713 columns · 929 foreign keys**
 
 ---
 
@@ -378,7 +378,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`locations`](#locations) | `Location` | 21 | Location model for managing physical spaces |
+| [`locations`](#locations) | `Location` | 22 | Location model for managing physical spaces |
 
 ### Mcp_Service_Key
 
@@ -649,7 +649,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`prospects`](#prospects) | `Prospect` | 17 | Prospective member – someone who has expressed interest in joining |
 | [`sessions`](#sessions) | `Session` | 12 | User session model for tracking active sessions |
 | [`user_positions`](#user_positions) | _(association table)_ | 4 |  |
-| [`users`](#users) | `User` | 58 | User model with comprehensive authentication and profile support. |
+| [`users`](#users) | `User` | 59 | User model with comprehensive authentication and profile support. |
 
 ---
 
@@ -854,7 +854,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `model` | VARCHAR(100) | yes |  |  |  |
 | `body_manufacturer` | VARCHAR(100) | yes |  |  |  |
 | `color` | VARCHAR(50) | yes |  |  |  |
-| `fuel_type` | ENUM(`gasoline`, `diesel`, `electric`, `hybrid`, `propane`, `cng`, `other`) | yes |  | `'diesel'` |  |
+| `fuel_type` | ENUM(`gasoline`, `diesel`, `electric`, `hybrid`, `propane`, `cng`, `other`) | yes |  |  |  |
 | `fuel_capacity_gallons` | NUMERIC(10, 2) | yes |  |  |  |
 | `seating_capacity` | INTEGER | yes |  |  |  |
 | `gvwr` | INTEGER | yes |  |  |  |
@@ -5907,6 +5907,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `capacity` | INTEGER | yes |  |  |  |
 | `is_active` | BOOL | no | IDX | `1` |  |
 | `display_code` | VARCHAR(12) | yes | UQ, UQ-IDX |  |  |
+| `nfc_badge_check_in_enabled` | BOOL | no |  | `0` |  |
 | `facility_id` | VARCHAR(36) | yes | FK, IDX |  | → `facilities.id` ON DELETE SET NULL |
 | `facility_room_id` | VARCHAR(36) | yes | FK, UQ |  | → `facility_rooms.id` ON DELETE SET NULL |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
@@ -9908,6 +9909,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `emergency_contacts` | JSON | yes |  | `list()` |  |
 | `notification_preferences` | JSON | yes |  | `dict()` |  |
 | `profile_visibility` | JSON | yes |  |  |  |
+| `bottom_nav_slots` | JSON | yes |  |  |  |
 | `membership_type` | VARCHAR(50) | yes |  | `'active'` |  |
 | `member_class` | VARCHAR(20) | yes | IDX |  |  |
 | `member_status` | VARCHAR(20) | yes | IDX |  |  |

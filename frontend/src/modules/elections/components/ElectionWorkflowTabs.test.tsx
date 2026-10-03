@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { ElectionWorkflowTabs } from './ElectionWorkflowTabs';
 import type { Election } from '../../../types/election';
 
@@ -79,5 +79,22 @@ describe('ElectionWorkflowTabs', () => {
     // 'attendance' only shows for draft/open elections; the first visible
     // tab for a closed election is 'ballot'.
     expect(onTabChange).toHaveBeenCalledWith('ballot', { replace: true });
+  });
+
+  // Only the selected tab is focusable, so without arrow keys a keyboard user
+  // could never leave it.
+  it('moves between tabs with the arrow keys, Home and End', () => {
+    render(
+      <ElectionWorkflowTabs election={baseElection} canManage={true} activeTab="ballot" onTabChange={onTabChange} />
+    );
+    const ballot = screen.getByRole('tab', { name: /Ballot/ });
+    fireEvent.keyDown(ballot, { key: 'ArrowRight' });
+    expect(onTabChange).toHaveBeenLastCalledWith('candidates');
+    fireEvent.keyDown(ballot, { key: 'ArrowLeft' });
+    expect(onTabChange).toHaveBeenLastCalledWith('voting');
+    fireEvent.keyDown(ballot, { key: 'End' });
+    expect(onTabChange).toHaveBeenLastCalledWith('voting');
+    fireEvent.keyDown(ballot, { key: 'Home' });
+    expect(onTabChange).toHaveBeenLastCalledWith('ballot');
   });
 });

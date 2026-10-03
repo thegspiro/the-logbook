@@ -101,6 +101,18 @@ describe('AdminMetricsSettings', () => {
   // A metric the department cannot produce is listed rather than hidden, so an
   // admin can see what turning a module on would buy them instead of wondering
   // why something is missing.
+  // A 200 that is not this shape — a captive portal's HTML page — used to read
+  // `selected.length` off undefined and take the whole hub down through the
+  // ErrorBoundary. It must land on the panel's own load error instead.
+  it('shows the load error for a response that is not metric settings', async () => {
+    mockGetMetricSettings.mockReset();
+    mockGetMetricSettings.mockResolvedValue({});
+    renderPanel();
+
+    expect(await screen.findByText('Could not load the metric options.')).toBeInTheDocument();
+    expect(screen.queryByText('Slot 1 · phone')).not.toBeInTheDocument();
+  });
+
   it('lists an unavailable metric with its reason and no way to choose it', async () => {
     renderPanel();
 

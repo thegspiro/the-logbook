@@ -32,13 +32,13 @@ import { RunoffChain } from '../modules/elections/components/RunoffChain';
 import { PublishResultsPanel } from '../modules/elections/components/PublishResultsPanel';
 import { ElectionWorkflowTabs } from '../modules/elections/components/ElectionWorkflowTabs';
 import { useAuthStore } from '../stores/authStore';
-import { ElectionStatus } from '../constants/enums';
+import { ElectionStatus, VotingMethod } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { Breadcrumbs, PromptDialog } from '../components/ux';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatDateTime, getTodayLocalDate, localToUTC } from '../utils/dateFormatting';
-import { getTimeRemaining, getStatusBadgeClass } from '../utils/electionHelpers';
+import { getTimeRemaining, getStatusBadgeClass, getVictoryDescription } from '../utils/electionHelpers';
 import SendBallotEmailsModal from '../components/election-detail/SendBallotEmailsModal';
 import RemindNonVotersModal from '../components/election-detail/RemindNonVotersModal';
 import NominationsPanel from '../components/election-detail/NominationsPanel';
@@ -57,6 +57,16 @@ import RollbackElectionModal from '../components/election-detail/RollbackElectio
 /** Floor the void-reason prompt already enforced, now stated to the user
  *  instead of silently rejecting anything shorter. */
 const MIN_VOID_REASON_LENGTH = 3;
+
+// How a voter marks the ballot. Who wins is victory_condition, shown on its
+// own row: a plurality election used to read "Simple Majority" here, because
+// the create form stores every one-choice rule as simple_majority.
+const VOTING_METHOD_LABELS: Record<string, string> = {
+  [VotingMethod.SIMPLE_MAJORITY]: 'One choice per voter',
+  [VotingMethod.RANKED_CHOICE]: 'Ranked choice',
+  [VotingMethod.APPROVAL]: 'Approval',
+  [VotingMethod.SUPERMAJORITY]: 'One choice per voter',
+};
 
 export const ElectionDetailPage: React.FC = () => {
   const { electionId } = useParams<{ electionId: string }>();
@@ -917,6 +927,8 @@ export const ElectionDetailPage: React.FC = () => {
   const isDraft = election.status === ElectionStatus.DRAFT;
   const isActiveOrCompleted = election.status === ElectionStatus.OPEN || election.status === ElectionStatus.CLOSED;
 
+  const hasBallotItems = (election.ballot_items?.length ?? 0) > 0;
+
   // ── Lifecycle stepper config ────────────────────────────────────
   const lifecycleSteps = [
     { key: 'draft', label: 'Draft', description: 'Configure ballot & candidates' },
@@ -985,20 +997,26 @@ export const ElectionDetailPage: React.FC = () => {
         {/* Election Lifecycle Stepper */}
         {election.status !== ElectionStatus.CANCELLED && (
           <div className="bg-theme-surface mb-6 rounded-lg p-4 shadow-sm backdrop-blur-xs">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between" role="list" aria-label="Election progress">
               {lifecycleSteps.map((step, idx) => {
                 const status = getStepStatus(step.key);
                 return (
                   <React.Fragment key={step.key}>
                     {idx > 0 && (
                       <div
+                        aria-hidden="true"
                         className={`mx-2 h-0.5 flex-1 ${
                           status === 'upcoming' ? 'bg-theme-surface-border' : 'bg-blue-500'
                         }`}
                       />
                     )}
-                    <div className="flex shrink-0 items-center gap-2">
+                    <div
+                      role="listitem"
+                      className="flex shrink-0 items-center gap-2"
+                      aria-current={status === 'current' ? 'step' : undefined}
+                    >
                       <div
+                        aria-hidden="true"
                         className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold ${
                           status === 'completed'
                             ? 'bg-blue-600 text-white'
@@ -1019,7 +1037,10 @@ export const ElectionDetailPage: React.FC = () => {
                           idx + 1
                         )}
                       </div>
-                      <div className="hidden sm:block">
+                      {/* Hidden visually on a phone, where the circles alone fit, but
+                          kept for a screen reader: without it the stepper read as
+                          bare numbers with nothing saying which step is current. */}
+                      <div className="sr-only sm:not-sr-only">
                         <div
                           className={`text-sm font-medium ${
                             status === 'upcoming' ? 'text-theme-text-muted' : 'text-theme-text-primary'
@@ -1160,8 +1181,12 @@ export const ElectionDetailPage: React.FC = () => {
             <div>
               <div className="text-theme-text-muted text-sm">Voting Method</div>
               <div className="text-theme-text-primary mt-1 text-sm font-medium">
-                {election.voting_method.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
+                {VOTING_METHOD_LABELS[election.voting_method] ?? election.voting_method}
               </div>
+            </div>
+            <div>
+              <div className="text-theme-text-muted text-sm">Winner</div>
+              <div className="text-theme-text-primary mt-1 text-sm font-medium">{getVictoryDescription(election)}</div>
             </div>
             <div>
               <div className="text-theme-text-muted text-sm">Anonymous Voting</div>
@@ -1479,16 +1504,22 @@ export const ElectionDetailPage: React.FC = () => {
                     {election.status === ElectionStatus.OPEN && (
                       <button
                         onClick={() => setShowSendEmailModal(true)}
-                        disabled={!election.ballot_items || election.ballot_items.length === 0}
+                        disabled={!hasBallotItems}
+                        aria-describedby={hasBallotItems ? undefined : 'send-ballot-unavailable'}
                         className="btn-primary text-sm"
-                        title={
-                          !election.ballot_items || election.ballot_items.length === 0
-                            ? 'Add ballot items before sending emails'
-                            : undefined
-                        }
                       >
                         {election.email_sent ? 'Resend Ballot Emails' : 'Send Ballot Emails'}
                       </button>
+                    )}
+                    {/* The emailed ballot page votes on ballot items only, and the
+                        ballot is locked while voting is open. The reason used to
+                        be a hover title on a disabled button, which a phone, a
+                        keyboard and a screen reader never show. */}
+                    {election.status === ElectionStatus.OPEN && !hasBallotItems && (
+                      <p id="send-ballot-unavailable" className="text-theme-text-muted w-full text-xs">
+                        Ballot emails need ballot items, and the ballot cannot change while voting is open. Members can
+                        vote in the app.
+                      </p>
                     )}
                     {featureFlags.reminders_enabled &&
                       election.status === ElectionStatus.OPEN &&
@@ -1580,138 +1611,140 @@ export const ElectionDetailPage: React.FC = () => {
               onTabChange={setActiveTab}
             />
 
-            {/* Tab: Ballot Builder */}
-            {activeTab === 'ballot' && canManage && election.status !== ElectionStatus.CANCELLED && (
-              <div className="mb-6 space-y-6">
-                <BallotBuilder electionId={electionId} election={election} onUpdate={setElection} />
+            <div role="tabpanel" id={`panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`}>
+              {/* Tab: Ballot Builder */}
+              {activeTab === 'ballot' && canManage && election.status !== ElectionStatus.CANCELLED && (
+                <div className="mb-6 space-y-6">
+                  <BallotBuilder electionId={electionId} election={election} onUpdate={setElection} />
 
-                {/* Pending Member Applications (draft only) */}
-                {election.status === ElectionStatus.DRAFT && (
-                  <div className="card overflow-hidden">
-                    <button
-                      className="flex w-full items-center justify-between px-6 py-4 text-left"
-                      onClick={() => {
-                        const next = !showPendingPackages;
-                        setShowPendingPackages(next);
-                        if (next && pendingPackages.length === 0) void fetchPendingPackages();
-                      }}
-                    >
-                      <h2 className="text-theme-text-primary text-lg font-semibold">Pending Member Applications</h2>
-                      <span className="text-theme-text-muted text-sm">{showPendingPackages ? '▾' : '▸'}</span>
-                    </button>
+                  {/* Pending Member Applications (draft only) */}
+                  {election.status === ElectionStatus.DRAFT && (
+                    <div className="card overflow-hidden">
+                      <button
+                        className="flex w-full items-center justify-between px-6 py-4 text-left"
+                        onClick={() => {
+                          const next = !showPendingPackages;
+                          setShowPendingPackages(next);
+                          if (next && pendingPackages.length === 0) void fetchPendingPackages();
+                        }}
+                      >
+                        <h2 className="text-theme-text-primary text-lg font-semibold">Pending Member Applications</h2>
+                        <span className="text-theme-text-muted text-sm">{showPendingPackages ? '▾' : '▸'}</span>
+                      </button>
 
-                    {showPendingPackages && (
-                      <div className="px-6 pb-4">
-                        {isLoadingPackages ? (
-                          <p className="text-theme-text-muted py-2 text-sm">Loading pending applications...</p>
-                        ) : pendingPackages.length === 0 ? (
-                          <p className="text-theme-text-muted py-2 text-sm">
-                            No applications are ready to add to the ballot.
-                          </p>
-                        ) : (
-                          <div className="space-y-2">
-                            <p className="text-theme-text-muted mb-2 text-xs">
-                              {pendingPackages.length} application{pendingPackages.length !== 1 ? 's' : ''} ready to be
-                              added to this election.
+                      {showPendingPackages && (
+                        <div className="px-6 pb-4">
+                          {isLoadingPackages ? (
+                            <p className="text-theme-text-muted py-2 text-sm">Loading pending applications...</p>
+                          ) : pendingPackages.length === 0 ? (
+                            <p className="text-theme-text-muted py-2 text-sm">
+                              No applications are ready to add to the ballot.
                             </p>
-                            {pendingPackages.map((pkg) => (
-                              <div
-                                key={pkg.id}
-                                className="bg-theme-surface-secondary border-theme-surface-border flex items-center justify-between rounded-lg border p-3"
-                              >
-                                <div>
-                                  <p className="text-theme-text-primary text-sm font-medium">{pkg.applicant_name}</p>
-                                  <p className="text-theme-text-muted text-xs capitalize">
-                                    {pkg.target_membership_type} membership
-                                    {pkg.coordinator_notes && ` — ${pkg.coordinator_notes}`}
-                                  </p>
-                                </div>
-                                <button
-                                  onClick={() => {
-                                    void handleAssignPackage(pkg);
-                                  }}
-                                  disabled={assigningPackageId === pkg.id}
-                                  className="rounded-lg bg-purple-600 px-3 py-1.5 text-xs text-white transition-colors hover:bg-purple-700 disabled:opacity-50"
+                          ) : (
+                            <div className="space-y-2">
+                              <p className="text-theme-text-muted mb-2 text-xs">
+                                {pendingPackages.length} application{pendingPackages.length !== 1 ? 's' : ''} ready to
+                                be added to this election.
+                              </p>
+                              {pendingPackages.map((pkg) => (
+                                <div
+                                  key={pkg.id}
+                                  className="bg-theme-surface-secondary border-theme-surface-border flex items-center justify-between rounded-lg border p-3"
                                 >
-                                  {assigningPackageId === pkg.id ? 'Adding...' : 'Add to Ballot'}
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
+                                  <div>
+                                    <p className="text-theme-text-primary text-sm font-medium">{pkg.applicant_name}</p>
+                                    <p className="text-theme-text-muted text-xs capitalize">
+                                      {pkg.target_membership_type} membership
+                                      {pkg.coordinator_notes && ` — ${pkg.coordinator_notes}`}
+                                    </p>
+                                  </div>
+                                  <button
+                                    onClick={() => {
+                                      void handleAssignPackage(pkg);
+                                    }}
+                                    disabled={assigningPackageId === pkg.id}
+                                    className="rounded-lg bg-purple-600 px-3 py-1.5 text-xs text-white transition-colors hover:bg-purple-700 disabled:opacity-50"
+                                  >
+                                    {assigningPackageId === pkg.id ? 'Adding...' : 'Add to Ballot'}
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
-            {/* Tab: Nominations */}
-            {activeTab === 'nominations' && election.status !== ElectionStatus.CANCELLED && (
-              <div className="mb-6">
-                <NominationsPanel
-                  electionId={electionId}
-                  election={election}
-                  currentUserId={currentUser?.id ?? null}
-                  nominationsOpen={election.status === ElectionStatus.NOMINATIONS}
-                />
-              </div>
-            )}
+              {/* Tab: Nominations */}
+              {activeTab === 'nominations' && election.status !== ElectionStatus.CANCELLED && (
+                <div className="mb-6">
+                  <NominationsPanel
+                    electionId={electionId}
+                    election={election}
+                    currentUserId={currentUser?.id ?? null}
+                    nominationsOpen={election.status === ElectionStatus.NOMINATIONS}
+                  />
+                </div>
+              )}
 
-            {/* Tab: Candidates */}
-            {activeTab === 'candidates' && canManage && (
-              <div className="mb-6">
-                <CandidateManagement electionId={electionId} election={election} />
-              </div>
-            )}
+              {/* Tab: Candidates */}
+              {activeTab === 'candidates' && canManage && (
+                <div className="mb-6">
+                  <CandidateManagement electionId={electionId} election={election} />
+                </div>
+              )}
 
-            {/* Tab: Eligibility Roster */}
-            {activeTab === 'eligibility' && canManage && election.status !== ElectionStatus.CANCELLED && (
-              <div className="mb-6">
-                <EligibilityRoster electionId={electionId} />
-              </div>
-            )}
+              {/* Tab: Eligibility Roster */}
+              {activeTab === 'eligibility' && canManage && election.status !== ElectionStatus.CANCELLED && (
+                <div className="mb-6">
+                  <EligibilityRoster electionId={electionId} />
+                </div>
+              )}
 
-            {/* Tab: Attendance */}
-            {activeTab === 'attendance' && canManage && election.status !== ElectionStatus.CANCELLED && (
-              <div className="mb-6">
-                <MeetingAttendance electionId={electionId} election={election} onUpdate={setElection} />
-              </div>
-            )}
+              {/* Tab: Attendance */}
+              {activeTab === 'attendance' && canManage && election.status !== ElectionStatus.CANCELLED && (
+                <div className="mb-6">
+                  <MeetingAttendance electionId={electionId} election={election} onUpdate={setElection} />
+                </div>
+              )}
 
-            {/* Tab: Voter Overrides */}
-            {activeTab === 'overrides' && canManage && election.status !== ElectionStatus.CANCELLED && (
-              <div className="mb-6">
-                <VoterOverrideManagement electionId={electionId} canManage={canManage} />
-              </div>
-            )}
+              {/* Tab: Voter Overrides */}
+              {activeTab === 'overrides' && canManage && election.status !== ElectionStatus.CANCELLED && (
+                <div className="mb-6">
+                  <VoterOverrideManagement electionId={electionId} canManage={canManage} />
+                </div>
+              )}
 
-            {/* Tab: Proxy Voting */}
-            {activeTab === 'proxies' && canManage && election.status !== ElectionStatus.CANCELLED && (
-              <div className="mb-6">
-                <ProxyVotingManagement electionId={electionId} canManage={canManage} />
-              </div>
-            )}
+              {/* Tab: Proxy Voting */}
+              {activeTab === 'proxies' && canManage && election.status !== ElectionStatus.CANCELLED && (
+                <div className="mb-6">
+                  <ProxyVotingManagement electionId={electionId} canManage={canManage} />
+                </div>
+              )}
 
-            {/* Tab: Cast Vote (when election is open) */}
-            {activeTab === 'voting' && election.status === ElectionStatus.OPEN && (
-              <div className="mb-6">
-                <ElectionBallot
-                  electionId={electionId}
-                  election={election}
-                  onVoteCast={() => {
-                    void fetchElection();
-                  }}
-                />
-              </div>
-            )}
+              {/* Tab: Cast Vote (when election is open) */}
+              {activeTab === 'voting' && election.status === ElectionStatus.OPEN && (
+                <div className="mb-6">
+                  <ElectionBallot
+                    electionId={electionId}
+                    election={election}
+                    onVoteCast={() => {
+                      void fetchElection();
+                    }}
+                  />
+                </div>
+              )}
 
-            {/* Tab: Results */}
-            {activeTab === 'results' && resultsAvailable && (
-              <div className="mb-6">
-                <ElectionResults electionId={electionId} election={election} />
-              </div>
-            )}
+              {/* Tab: Results */}
+              {activeTab === 'results' && resultsAvailable && (
+                <div className="mb-6">
+                  <ElectionResults electionId={electionId} election={election} />
+                </div>
+              )}
+            </div>
           </>
         )}
 
