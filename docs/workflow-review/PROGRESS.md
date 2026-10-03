@@ -289,7 +289,8 @@ Fixed:
 - W60-10 (LOW — the field-type picker had no checked state).
 
 Flagged: W60-11 (MED — the public page asks for sign-in only after the form is
-filled in; in KNOWN_LIMITATIONS).
+filled in). Fixed 2026-10-03 on the owner's decision: a notice above the
+questions with a Sign in button that returns to the form.
 
 Gate: typecheck, lint, flake8, black and isort are clean. 29 frontend forms
 tests and 369 backend forms tests pass, as does the full frontend suite (692 files,

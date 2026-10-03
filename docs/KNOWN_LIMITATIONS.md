@@ -5428,7 +5428,12 @@ needs a decision rather than a patch:
   seeded and backfilled by migration `f73b449bdb8b` — see "The seeded
   Quartermaster cannot build equipment checklists" above.
 
-## Forms — A Public Form Asks for Sign-In Only After It Is Filled In (2026-10-02)
+## Forms — A Public Form Asks for Sign-In Only After It Is Filled In (2026-10-02, resolved 2026-10-03)
+
+✅ **Resolved:** the owner chose the first option below. The public page now
+says so above the questions, with a Sign in button that returns to the form,
+and the default is unchanged. See W60-11 in
+`docs/workflow-review/W60-forms.md`.
 
 Found driving W60 (`docs/workflow-review/W60-forms.md`, W60-11). A new form
 defaults to `require_authentication = true` and `allow_multiple_submissions =
