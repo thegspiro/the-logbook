@@ -16,6 +16,17 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2875](https://github.com/thegspiro/the-logbook/pull/2875)
+(Feature 22, Grants & fundraising, pass 6) merged directly by this watchdog
+check — CI green (17/17 checks), `mergeable_state: clean`, no unresolved
+review threads (only the informational Codex usage-limit comment), and the
+PR's base matched `main`'s current head exactly. Rotation row 22 stays ✅.
+Next: Feature 23 (Medical supplies), pass 6 — not yet started as of this
+check, no in-progress `claude/security-review-*` branch or open PR for it.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 6, PR #2875, merged directly by this watchdog), preserved for history</summary>
+
 **PR [#2875](https://github.com/thegspiro/the-logbook/pull/2875)** — branch
 `claude/security-review-feature22-pass6`, Feature 22 (Grants & fundraising),
 pass 6. Confirmed via the GitHub API before starting: no open PR whose head
@@ -42,6 +53,8 @@ fundraising"` backend tests passed, frontend typecheck/lint clean. Full
 write-up: [`GF-22-grants-fundraising.md`](./GF-22-grants-fundraising.md)'s
 **Pass 6** section. Rotation row 22 → ✅ (pending PR merge). Next: Feature
 23 (Medical supplies).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 6, PR #2874, merged), preserved for history</summary>
@@ -25012,3 +25025,26 @@ typecheck/lint clean. Full write-up:
 [`GF-22-grants-fundraising.md`](./GF-22-grants-fundraising.md)'s **Pass 6**
 section. Rotation row 22 → ✅ (pending PR merge). Next: Feature 23
 (Medical supplies).
+
+### 2026-10-03 — Feature 22 (Grants & fundraising, pass 6)'s PR #2875 merged, watchdog recorded it
+
+Routine 30-minute check on the `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`). Confirmed independently before acting,
+per Step 0: `list_pull_requests` (state=open) showed exactly one
+security-review PR, #2875 (Feature 22, Grants & fundraising, pass 6), and no
+`claude/security-review-feature23*` branch existed yet.
+
+PR #2875's base (`763098b2`) matched `main`'s current head exactly — no
+rebase needed. All 17 check runs were `completed`/`success` (`CI Success`,
+`Frontend Tests`, `Frontend E2E (Playwright)`, `Docs Link Check`, `Frontend
+Lint, Typecheck & Build`, both Backend API Contract and Integration Tests
+pairs on MySQL 8.0/MariaDB 10.11, `Backend Lint`, `Docker Image Build &
+Container Tests`, `Backend Security Scan`, `Backend Unit Tests`, `Migration
+Chain`, `Gitleaks`, `Generate SBOM`, `Trivy dependency scan`), and
+`mergeable_state` read `clean`. The PR's only comment was the informational
+Codex usage-limit notice (no review feedback to action). Sat idle with
+nothing further pending, so this watchdog check merged it directly (squash,
+`expectedHeadSha` pinned to `b901c46635c59397dad9a5b289bb2bd4d6984653`).
+Merge commit `e070ce9c4` confirmed on `main`. Rotation row 22 stays ✅. Next:
+Feature 23 (Medical supplies), pass 6 — not yet started as of this check, no
+in-progress branch or open PR.
