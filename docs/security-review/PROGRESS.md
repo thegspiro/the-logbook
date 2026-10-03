@@ -16,6 +16,46 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2863](https://github.com/thegspiro/the-logbook/pull/2863)** — branch `claude/security-review-feature19-pass1`, Feature 19
+(Skills testing), pass 6. Confirmed via the GitHub API before starting: no
+open PR whose head branch starts with `claude/security-review-` existed, and
+PR #2862 (Feature 18 pass 6, recorded below) is merged.
+
+**Scope check:** no clean single merge-commit SHA was available to diff
+against (this file's branch-merge history does not resolve via
+`git log --follow` to one prior commit — a pre-existing artifact of how
+feature branches land here, unrelated to this feature), so scope was
+established by walking `git log` on each of the four backend files
+individually since pass 5. Result: **one** commit touched this feature's
+backend surface since pass 5 — `6d2a24ec6` ("Redesign every email onto the
+solid-tab shell", 2026-09-27), which migrated `email_test_results`'s HTML
+construction onto the application's new shared email-theme kit
+(`wrap_email_body`/`fact`/`facts`). Read in full rather than assumed safe from
+the commit message: every escaping guarantee the route already depended on
+(member-controlled names `html.escape`d before reaching the new helpers,
+which themselves insert values verbatim) survived the migration unchanged.
+`skills_testing_service.py`, `schemas/skills_testing.py`, and
+`models/skills_testing.py` are untouched since pass 5.
+
+**0 fixed, 0 flagged, 0 new findings.** All ten passes 1–5 fixes
+(SKT-1 through SKT-4, SKT2-1, SKT3-1, SKT4-4, SKT4-5, SKT4-6, SKT5-1)
+re-verified intact by direct code read; the route surface re-enumerated from
+scratch at 29/29, identical gates to every prior pass; all five standing
+flags (SKT3-2, SKT4-1, SKT4-2, SKT4-3, SKT4-7) re-confirmed unchanged in
+scope against current code, not re-cited from the document's own prose. One
+new frontend file since pass 3's inventory (`ResultVerdictBanner.tsx`) read
+in full — pure presentation, no new data-exposure surface. Full completion
+gate: flake8/black/isort clean, `validate_migrations.py --strict` at 497
+revisions (unchanged from Feature 18's count — no migration landed in this
+feature's own files)/single head, 464 skills-testing-scoped backend tests
+passed (identical count to pass 5), frontend typecheck/lint clean. Full
+write-up: [`SKT-19-skills-testing.md`](./SKT-19-skills-testing.md)'s **Pass 6**
+section. Rotation row 19 → ✅ (pending PR merge). Next: Feature 20
+(Compliance).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 6, PR #2862, merged), preserved for history</summary>
+
 **PR [#2862](https://github.com/thegspiro/the-logbook/pull/2862)** — branch `claude/security-review-feature18-pass6`, Feature 18
 (Training extended), pass 6. **Watchdog iteration:** the `/loop 30m
 /security-review` session had stalled for roughly 10 days with no open PR
@@ -57,6 +97,8 @@ plus the full 15307-test backend suite green, frontend typecheck/lint clean.
 Full write-up: [`TRX-18-training-extended.md`](./TRX-18-training-extended.md)'s
 **Pass 6** section. Rotation row 18 → ✅ (pending PR merge). Next: Feature 19
 (Skills testing).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 17, Training core, pass 6, PR #2635, merged), preserved for history</summary>
@@ -16908,7 +16950,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜     |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
@@ -24674,3 +24716,55 @@ time this was noticed, #2631 was closed as a duplicate (one explanatory
 comment on the PR, no force-push, no reopening) rather than reconciling two
 docs-only diffs of the same findings section. Rotation row 16 stays ✅. Next:
 Feature 17 (Training core) — not yet started as of this check.
+
+### 2026-10-02 — Feature 19 (Skills testing, pass 6): near-zero-delta re-verification, 0 fixed, 0 new findings
+
+Picked up this iteration of the `/security-review` rotation. Confirmed via
+the GitHub API before starting: no open PR whose head branch starts with
+`claude/security-review-` existed, and PR #2862 (Feature 18, Training
+extended, pass 6) is merged on `main`. Rotation row 19 (Skills testing)
+confirmed the first ⬜ in the table.
+
+No single prior merge-commit SHA was available to diff the backend surface
+against cleanly (this file's branch-merge history does not resolve via
+`git log --follow` to one commit — a pre-existing quirk of how feature
+branches land in this repository, not specific to this feature), so scope
+was established by walking `git log` on each of the four backend files
+(`skills_testing.py`, `skills_testing_service.py`, `schemas/skills_testing.py`,
+`models/skills_testing.py`) individually since pass 5. One commit had
+touched the endpoint file: `6d2a24ec6` ("Redesign every email onto the
+solid-tab shell", 2026-09-27), migrating `email_test_results`'s HTML onto the
+application's new shared email-theme kit. Read in full rather than assumed
+safe from the commit message — every escaping guarantee the route already
+relied on (member-controlled values `html.escape`d by the caller before
+reaching helpers that insert their arguments verbatim) survived unchanged.
+The service, schema, and model files are untouched since pass 5.
+
+Re-enumerated the 29-route surface from scratch via a fresh AST walk (not a
+re-read of any prior table): identical paths, methods, and
+`get_current_user`/`require_permission(...)` gates to every pass since
+pass 1. Re-swept all 82 `select(` call sites in the endpoint file for
+org-scoping (direct filter, or resolution through an already-org-scoped
+`test`/`template` row): no gap. Re-verified all ten standing fixes from
+passes 1–5 (SKT-1 through SKT-4, SKT2-1, SKT3-1, SKT4-4, SKT4-5, SKT4-6,
+SKT5-1) directly against current code. Re-confirmed all five standing
+flagged findings (SKT3-2 — no pagination on `list_tests`/`export_tests_csv`/
+`list_templates`; SKT4-1 — unbounded template `sections`/`criteria`/
+`checklist_items`; SKT4-2 — unbounded test `section_results`/
+`criteria_results`/`checklist_completed`/`result_viewer_positions`; SKT4-3 —
+`/summary`'s small-cohort disclosure; SKT4-7 — `PUT /tests/{id}` can
+fabricate a result bypassing `complete_test`'s scoring/waiver guards) are
+unchanged in scope, each a product/content decision this rotation correctly
+continues to flag rather than guess at. Read one new frontend file since
+pass 3's 20-file inventory, `ResultVerdictBanner.tsx` (pure presentation, no
+API call, no new data-exposure surface) — no finding.
+
+**0 fixed, 0 flagged, 0 new findings.** Full completion gate: `flake8`/
+`black --check`/`isort --check-only` clean over `app/ tests/ alembic/`;
+`validate_migrations.py --strict` clean, 497 revisions/single head
+(unchanged from Feature 18's count — no migration lands in this feature's
+own files); `pytest tests/ -k "skill or skill_testing or evaluator"` 464
+passed, 1 pre-existing skip (identical count to pass 5); `npm run typecheck`
+clean; `npm run lint` 0 errors/0 warnings. Full write-up:
+[`SKT-19-skills-testing.md`](./SKT-19-skills-testing.md)'s **Pass 6** section.
+Rotation row 19 → ✅ (pending PR merge). Next: Feature 20 (Compliance).
