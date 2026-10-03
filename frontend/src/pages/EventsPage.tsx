@@ -1182,31 +1182,38 @@ export const EventsPage: React.FC = () => {
           )
         ) : (
           <>
-            <div
-              ref={gridRef}
-              data-testid="events-grid"
-              className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
-            >
-              {paginatedEvents.map((event) => (
-                <EventListCard
-                  key={event.id}
-                  event={event}
-                  urgency={getEventUrgency(event, now)}
-                  timezone={tz}
-                  timezoneAbbr={tzAbbr}
-                  now={now}
-                  canManage={canManage}
-                  selectionMode={selectionMode}
-                  isSelected={selectedEvents.has(event.id)}
-                  onToggleSelect={toggleEventSelection}
-                  onDuplicate={handleDuplicateEvent}
-                  rsvpLoading={!!rsvpLoading[event.id]}
-                  isChangingRsvp={!!rsvpChanging[event.id]}
-                  onQuickRSVP={handleQuickRSVPAction}
-                  onStartChangeRsvp={handleStartChangeRsvp}
-                  onCancelChangeRsvp={handleCancelChangeRsvp}
-                />
-              ))}
+            {/* Columns follow the width the grid actually has, not the viewport.
+                The sidebar is expanded from lg up, so at a 1024px tablet a
+                `lg:grid-cols-3` packed three ~200px cards into what was left and
+                their footers pushed "Not Going" and the calendar button off the
+                card edge. A card needs ~330px for its RSVP footer to fit. */}
+            <div className="@container">
+              <div
+                ref={gridRef}
+                data-testid="events-grid"
+                className="grid grid-cols-1 gap-4 @2xl:grid-cols-2 @4xl:grid-cols-3"
+              >
+                {paginatedEvents.map((event) => (
+                  <EventListCard
+                    key={event.id}
+                    event={event}
+                    urgency={getEventUrgency(event, now)}
+                    timezone={tz}
+                    timezoneAbbr={tzAbbr}
+                    now={now}
+                    canManage={canManage}
+                    selectionMode={selectionMode}
+                    isSelected={selectedEvents.has(event.id)}
+                    onToggleSelect={toggleEventSelection}
+                    onDuplicate={handleDuplicateEvent}
+                    rsvpLoading={!!rsvpLoading[event.id]}
+                    isChangingRsvp={!!rsvpChanging[event.id]}
+                    onQuickRSVP={handleQuickRSVPAction}
+                    onStartChangeRsvp={handleStartChangeRsvp}
+                    onCancelChangeRsvp={handleCancelChangeRsvp}
+                  />
+                ))}
+              </div>
             </div>
 
             {sortedEvents.length > DEFAULT_PAGE_SIZE && (
