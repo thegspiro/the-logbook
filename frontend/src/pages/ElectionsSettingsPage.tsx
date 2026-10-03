@@ -147,7 +147,8 @@ export const ElectionsSettingsPage: React.FC = () => {
               description="When enabled, a secretary can authorize one member to vote on behalf of another absent member."
             />
             <div className="space-y-4">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-theme-text-primary text-sm font-medium">Allow proxy voting</p>
                 <Toggle
                   checked={settings.proxy_voting_enabled ?? false}
                   onChange={(next) => updateField('proxy_voting_enabled', next)}
@@ -185,19 +186,31 @@ export const ElectionsSettingsPage: React.FC = () => {
               description="Optional election workflows for your department. All features are on by default. Automatic closing at the end date is always on — it finalizes results and runs the anonymity purge."
             />
             <div className="space-y-3">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-theme-text-primary text-sm font-medium">Nominations</p>
+                  <p className="text-theme-text-muted text-xs">
+                    Members nominate candidates (with accept/decline) before the ballot opens.
+                  </p>
+                </div>
                 <Toggle
                   checked={settings.nominations_enabled ?? true}
                   onChange={(next) => updateField('nominations_enabled', next)}
-                  label="Nomination phase — members nominate candidates (with accept/decline) before the ballot opens"
+                  label="Nominations"
                 />
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-theme-text-primary text-sm font-medium">Paper Ballots</p>
+                  <p className="text-theme-text-muted text-xs">
+                    Officers record in-room paper tallies into the results.
+                  </p>
+                </div>
                 <Toggle
                   checked={settings.paper_ballots_enabled ?? true}
                   onChange={(next) => updateField('paper_ballots_enabled', next)}
-                  label="Paper-ballot entry — officers record in-room paper tallies into the results"
+                  label="Paper Ballots"
                 />
               </div>
 
@@ -218,21 +231,31 @@ export const ElectionsSettingsPage: React.FC = () => {
                 </select>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-theme-text-primary text-sm font-medium">Reminders</p>
+                  <p className="text-theme-text-muted text-xs">
+                    Manual and automatic non-voter reminder emails with fresh ballot links.
+                  </p>
+                </div>
                 <Toggle
                   checked={settings.reminders_enabled ?? true}
                   onChange={(next) => updateField('reminders_enabled', next)}
-                  label="Non-voter reminders — manual and automatic reminder emails with fresh ballot links"
+                  label="Reminders"
                 />
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-theme-text-primary text-sm font-medium">Auto-Open</p>
+                  <p className="text-theme-text-muted text-xs">
+                    Elections flagged "open automatically" open themselves at their start time.
+                  </p>
+                </div>
                 <Toggle
                   checked={settings.auto_open_enabled ?? true}
                   onChange={(next) => updateField('auto_open_enabled', next)}
-                  label={
-                    'Scheduled opening — elections flagged "open automatically" open themselves at their start time'
-                  }
+                  label="Auto-Open"
                 />
               </div>
             </div>

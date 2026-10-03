@@ -7412,13 +7412,20 @@ export const SHOTS = [
     route: "/elections",
   },
   {
+    // The page used to open on a "Defaults" tab this shot pictured -- that
+    // whole section was removed (nothing read it, see CLAUDE.md pitfall #19)
+    // and the page now opens on Proxy Voting instead. The guide text right
+    // above this image describes the Features tab's toggles (Nominations,
+    // Paper Ballots, Reminders, Auto-Open, Attestations), so the shot needs to
+    // land there explicitly rather than on whatever the page now opens to.
     id: "14-16-election-settings",
     doc: "14-elections.md",
     line: 700,
     anchor:
       "Screenshot of the Election Settings page showing toggle switches for each setting,",
-    alt: "Election settings page with the default rule toggles",
-    route: "/elections/settings",
+    alt: "Election settings page on the Features tab, with the Nominations, Paper Ballots, Reminders, Auto-Open and Attestations toggles",
+    route: "/elections/settings?tab=features",
+    expect: "Optional election workflows",
     fullPage: true,
   },
 
