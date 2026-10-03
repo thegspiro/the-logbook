@@ -16,20 +16,31 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#2884](https://github.com/thegspiro/the-logbook/pull/2884)** — branch
-`claude/security-review-messaging-notifications`, Feature 25 (Messaging &
-notifications), pass 5. Watchdog pickup: the dedicated loop session had
-stalled 2+ hours with no open security-review PR and no in-progress branch;
-confirmed via `list_pull_requests` (state=open) that no `claude/security-review-*`
-PR existed, both before starting and again immediately before opening this
-PR. 0 fixed, 0 new findings — every pass 1-4 fix re-verified intact against
-substantial churn (38 commits) since pass 4, including two newly-wired
-notification triggers correctly consulting `NotificationRuleResolver`
-(Pitfall #19) and 3 new routes correctly gated. One doc correction: MAIL-22
-(app-review, still open) cross-referenced into this feature's own findings
-file. Gate: flake8/black/isort clean, `validate_migrations.py --strict`
-passed (508 revisions), 916 scoped backend tests passed, frontend
-typecheck/lint clean. Subscribed for CI/review events.
+**PR [#2885](https://github.com/thegspiro/the-logbook/pull/2885)** — branch
+`claude/security-review-forms-pass5`, Feature 26 (Forms), pass 5. Watchdog
+pickup: the dedicated loop session had stalled ~2 hours (PR #2884 merged
+19:51 UTC; this check ran 21:48 UTC) with no open security-review PR and no
+in-progress branch; confirmed via `list_pull_requests` (state=open) that no
+`claude/security-review-*` PR existed before starting. 0 fixed, 0 new
+findings — every pass 1-4 fix (FORM-1 through FORM-12) re-verified intact.
+One standing item closed as a side effect of other work: BXC-1
+(`condition_field_id`, open since the original module audit) is now closed
+by the 2026-10-02 W60 workflow-review pass's same-form/cycle validation and
+server-side dereferencing; `docs/app-review/forms.md` and
+`CROSS-CUTTING.md`'s BXC-1 batch-list corrected to point here. Gate:
+flake8/black/isort clean, `validate_migrations.py --strict` passed (508
+revisions, no migration this pass), 623 scoped backend tests passed,
+frontend typecheck/lint clean. Subscribed for CI/review events.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 25, Messaging & notifications, pass 5, PR #2884, merged, before this watchdog pickup), preserved for history</summary>
+
+**None.** PR [#2884](https://github.com/thegspiro/the-logbook/pull/2884)
+(Feature 25, Messaging & notifications, pass 5) had already merged by the
+time this watchdog check ran. Rotation row 25 stays ✅. Next: Feature 26
+(Forms) — picked up by this same watchdog check, recorded above.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 24, Meetings & minutes, pass 5, PR #2881, merged, after the Feature 25 pass-5 watchdog pickup recorded above), preserved for history</summary>
