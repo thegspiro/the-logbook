@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [TBD]** — branch `claude/security-review-feature19-pass1`, Feature 19
+**PR [#2863](https://github.com/thegspiro/the-logbook/pull/2863)** — branch `claude/security-review-feature19-pass1`, Feature 19
 (Skills testing), pass 6. Confirmed via the GitHub API before starting: no
 open PR whose head branch starts with `claude/security-review-` existed, and
 PR #2862 (Feature 18 pass 6, recorded below) is merged.
