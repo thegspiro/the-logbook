@@ -1493,7 +1493,7 @@ const IntegrationsPage: React.FC = () => {
         </div>
 
         {/* Integration Cards */}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="card-grid gap-4">
           {showDelegatedMcpCard && (
             <div className="card p-6" data-testid="integration-card-claude-mcp-delegated">
               <div className="mb-4 flex items-start space-x-3">

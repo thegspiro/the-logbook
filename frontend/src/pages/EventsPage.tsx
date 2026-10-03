@@ -1182,11 +1182,7 @@ export const EventsPage: React.FC = () => {
           )
         ) : (
           <>
-            <div
-              ref={gridRef}
-              data-testid="events-grid"
-              className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
-            >
+            <div ref={gridRef} data-testid="events-grid" className="card-grid gap-4">
               {paginatedEvents.map((event) => (
                 <EventListCard
                   key={event.id}

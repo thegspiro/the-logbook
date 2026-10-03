@@ -322,7 +322,7 @@ export default function ApparatusBasicPage() {
           <p className="text-theme-text-muted">No apparatus matching "{searchQuery}"</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="card-grid gap-4">
           {filtered.map((apparatus) => {
             const typeInfo = getTypeInfo(apparatus.apparatus_type);
             return (

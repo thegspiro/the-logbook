@@ -83,7 +83,7 @@ export const SkeletonPage: React.FC<{ rows?: number; showStats?: boolean }> = ({
 
 /** Skeleton for event card grid */
 export const SkeletonCardGrid: React.FC<{ count?: number }> = ({ count = 6 }) => (
-  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3" role="status" aria-live="polite">
+  <div className="card-grid gap-4" role="status" aria-live="polite">
     <span className="sr-only">Loading...</span>
     {Array.from({ length: count }).map((_, i) => (
       <SkeletonCard key={i} />
