@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this branch, not yet numbered at commit time)** — branch
+**PR [#2877](https://github.com/thegspiro/the-logbook/pull/2877)** — branch
 `claude/security-review-feature23-pass12`, Feature 23 (Medical supplies),
 pass 12. Confirmed via the GitHub API before starting: no open PR whose
 head branch starts with `claude/security-review-` existed, and PR #2875
