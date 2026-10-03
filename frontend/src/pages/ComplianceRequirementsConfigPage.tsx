@@ -510,7 +510,7 @@ export default function ComplianceRequirementsConfigPage() {
             onClick={() => setActiveTab(tab.id)}
             aria-pressed={activeTab === tab.id}
             className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === tab.id ? 'bg-blue-600 text-white' : 'text-theme-text-secondary hover:bg-theme-surface-hover'
+              activeTab === tab.id ? 'bg-red-800 text-white' : 'text-theme-text-secondary hover:bg-theme-surface-hover'
             }`}
           >
             {tab.icon}
@@ -822,7 +822,7 @@ export default function ComplianceRequirementsConfigPage() {
                         onClick={() => toggleMembershipType(type)}
                         className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                           profileMembershipTypes.includes(type)
-                            ? 'bg-blue-600 text-white'
+                            ? 'bg-red-800 text-white'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
                         }`}
                       >
