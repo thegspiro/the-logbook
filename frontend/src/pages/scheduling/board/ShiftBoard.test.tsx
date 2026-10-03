@@ -211,6 +211,14 @@ describe('ShiftBoard', () => {
       />
     );
     expect(await screen.findByRole('button', { name: /create the first shift/i })).toBeInTheDocument();
+    expect(screen.queryByText(/Your scheduling officer has not published/)).not.toBeInTheDocument();
+  });
+
+  it('tells a member nothing is published yet when the range is empty', async () => {
+    mockGetMonth.mockResolvedValue([]);
+    renderBoard();
+    expect(await screen.findByText('Nothing is scheduled for this month yet.')).toBeInTheDocument();
+    expect(screen.getByText(/Your scheduling officer has not published shifts for these dates/)).toBeInTheDocument();
   });
 
   it('surfaces a failed load instead of showing an empty month', async () => {
@@ -218,6 +226,7 @@ describe('ShiftBoard', () => {
     renderBoard();
     // The reason reaches the member rather than presenting as an empty month.
     expect(await screen.findByText('offline')).toBeInTheDocument();
+    expect(screen.queryByText(/Nothing is scheduled/)).not.toBeInTheDocument();
   });
 });
 

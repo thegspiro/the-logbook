@@ -6,19 +6,35 @@ Complete reference of all pages in the application, organized by module.
 
 ## Public Pages (No Authentication Required)
 
-| URL                                    | Page                   | Description                                                                                          |
-| -------------------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------- |
-| `/`                                    | Welcome                | Landing / onboarding entry point                                                                     |
-| `/login`                               | Login                  | User authentication                                                                                  |
-| `/forgot-password`                     | Forgot Password        | Password reset request                                                                               |
-| `/reset-password`                      | Reset Password         | Password reset form                                                                                  |
-| `/auth/callback`                       | `OAuthCallbackPage`    | OAuth sign-in landing page (handles Google/Microsoft redirect)                                       |
-| `/f/:slug`                             | Public Form            | Public form submission (token-based)                                                                 |
-| `/ballot`                              | Ballot Voting          | Public ballot voting (token-based)                                                                   |
-| `/display/:code`                       | Location Kiosk Display | QR code display for tablets in rooms (display-code-based)                                            |
-| `/display/:code/events/:eventId/guest` | `GuestCheckInPage`     | Guest (non-member) sign-in for an event held in that room _(2026-08-09)_                             |
-| `/privacy`                             | Privacy Policy         | Public privacy notice; department control + status-based access, dated; department-configurable text |
-| `/terms`                               | Terms of Service       | Public terms of use; department control + status-based access, dated; department-configurable text   |
+| URL                                    | Page                   | Description                                                                                                                          |
+| -------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `/`                                    | Welcome                | Landing / onboarding entry point                                                                                                     |
+| `/login`                               | Login                  | User authentication                                                                                                                  |
+| `/forgot-password`                     | Forgot Password        | Password reset request                                                                                                               |
+| `/reset-password`                      | Reset Password         | Password reset form                                                                                                                  |
+| `/auth/callback`                       | `OAuthCallbackPage`    | OAuth sign-in landing page (handles Google/Microsoft redirect)                                                                       |
+| `/f/:slug`                             | Public Form            | Public form submission (token-based)                                                                                                 |
+| `/ballot`                              | Ballot Voting          | Public ballot voting (token-based)                                                                                                   |
+| `/display/:code`                       | Location Kiosk Display | QR code display for tablets in rooms (display-code-based); reads member ID cards where the room has badge check-in on _(2026-10-03)_ |
+| `/display/:code/events/:eventId/guest` | `GuestCheckInPage`     | Guest (non-member) sign-in for an event held in that room _(2026-08-09)_                                                             |
+| `/privacy`                             | Privacy Policy         | Public privacy notice; department control + status-based access, dated; department-configurable text                                 |
+| `/terms`                               | Terms of Service       | Public terms of use; department control + status-based access, dated; department-configurable text                                   |
+
+> **Badge check-in at the room kiosk** _(2026-10-03)_. A room with **Badge
+> check-in** switched on (Check-In QR Codes, `locations.manage_nfc_tags`, needs
+> the NFC ID Cards integration) shows "Or tap your ID card here" on its kiosk
+> while an event is open, and reads cards through Web NFC on an Android tablet
+> (one "Start card reader" press after loading, which the browser requires) or a
+> USB reader that types the serial. A tap posts to
+> `POST /api/public/v1/display/{code}/badge-tap` with no session: the room
+> decides the event — exactly one in its check-in window; two at once are
+> refused unless the member is checked in to exactly one of them — and the tap
+> checks the member in, or out when they already are, through the same event
+> self check-in rules as everywhere else. The kiosk shows only a first name and
+> last initial. Every tap that moves attendance is audited
+> (`nfc_kiosk_badge_tap`) with the room and the caller's IP, taps are limited
+> to 60 a minute per IP and per room, and both switches are re-checked on every
+> tap. The accepted risk is recorded in `docs/KNOWN_LIMITATIONS.md`.
 
 > **The guest check-in page is addressed through the room's display code**, not
 > through the event alone, so the backend can resolve the department without a
@@ -308,14 +324,17 @@ Requires `events.manage` permission. Tab-based admin interface.
 
 ## Locations (when Facilities module is off)
 
-| URL                   | Page                 | Permission                                                            |
-| --------------------- | -------------------- | --------------------------------------------------------------------- |
-| `/locations`          | Locations Management | Authenticated                                                         |
-| `/locations/qr-codes` | Check-In QR Codes    | `locations.manage` **OR** `facilities.manage` **OR** `apparatus.view` |
+| URL                               | Page                            | Permission                                                                                                                                  |
+| --------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/locations`                      | Locations Management            | Authenticated                                                                                                                               |
+| `/locations/qr-codes`             | Check-In QR Codes               | `locations.manage` **OR** `facilities.manage` **OR** `apparatus.view` **OR** `locations.manage_nfc_tags` **OR** `apparatus.manage_nfc_tags` |
+| `/locations/:locationId/check-in` | Room Check-In (NFC tag landing) | Authenticated                                                                                                                               |
 
 > Manages stations, addresses, and rooms for use by events, training, QR code check-in, and other modules. Each room gets a unique kiosk display code for tablet-based QR check-in. The Check-In QR Codes page is a printable directory of every kiosk QR code, grouped by station/facility (available in both Locations and Facilities modes), plus apparatus shift check-in codes when the Scheduling module is enabled.
 
 > **Name check:** the page's on-screen heading is **"Check-In QR Codes"** — that is what a reader will see and what the command palette calls it. "Room QR Codes" is the component's filename (`RoomQRCodesPage.tsx`) and appears in some engineering notes; it is not a user-facing label. Documentation should use the heading.
+
+> **Room check-in** _(2026-10-02)_ is where a room's NFC tag sends a member's phone. The tag names the room rather than an event, so one sticker by the door serves every event held there. The page reads `GET /locations/{id}/display` (org-scoped, signed in) and, with exactly one event in its check-in window, forwards to that event's `/events/:id/check-in`; with several it asks which one, because guessing would file attendance on the wrong event; with none it says so. It records nothing itself — the event's own check-in does, with all of its rules. Registered by the Facilities module but, like the event check-in page it forwards to, gated only on being signed in, so a room tag works in both Locations and Facilities modes.
 
 > **The QR directory is restricted, unlike the rest of Locations** _(corrected 2026-08-16)_. This page was previously listed here as Authenticated; it is not. The route is registered by the Facilities module (so it resolves in both Locations and Facilities modes) behind `locations.manage` **OR** `facilities.manage`. The restriction is the point: a kiosk display code is a check-in credential, so a bulk directory of every room's code is a different object from any one room's QR. Regenerating a display code invalidates the previous one, and codes are tenant-bound.
 
@@ -1165,6 +1184,7 @@ lot's number or expiration date require `inventory.check_manage` or
 | `/finance/check-requests/new`         | New Check Request          | `finance.view`                |
 | `/finance/check-requests/:id`         | Check Request Detail       | `finance.view`                |
 | `/finance/dues`                       | Dues                       | `finance.view`                |
+| `/finance/approvals`                  | Approvals                  | `finance.approve`             |
 | `/finance/settings`                   | Finance Settings           | `finance.manage`              |
 | `/finance/settings/approval-chains`   | Approval Chains            | `finance.configure_approvals` |
 | `/finance/approvals/:token`           | Tokenized Approval Landing | Token-based                   |
@@ -1381,6 +1401,22 @@ or with gloves on.
 | `/admin-hours/categories/:id/qr-code`   | that category's clock-in URL         | `NfcTagWriter`                                |
 | Shift detail panel → QR block           | `/scheduling/checkin?apparatus=<id>` | `NfcTagWriter`                                |
 | `/locations/qr-codes` (apparatus cards) | `/scheduling/checkin?apparatus=<id>` | `NfcTagWriteButton` (compact, toast feedback) |
+| `/locations/qr-codes` (room cards)      | `/locations/<id>/check-in`           | `NfcTagWriteButton` (compact, toast feedback) |
+
+> **Who writes which tag** _(2026-10-02)_. Each kind of tag has its own grant,
+> because seeing a code and being the officer who mounts its tag are different
+> jobs. Room tags take `locations.manage_nfc_tags` (leadership — President, Vice
+> President, Chief, Deputy Chief, Assistant Chief — and the Facilities Manager);
+> apparatus tags, on the QR directory and the shift panel alike, take
+> `apparatus.manage_nfc_tags` (leadership and the Apparatus Officer); member ID
+> cards stay on `members.manage_id_cards`. The two tag grants gate the writer in
+> the app only: writing a tag never reaches the server and the link carries no
+> secret, so a generic NFC app can write the same URL — and the member who taps
+> it still signs in and meets the check-in's own rules. A room-tag writer the
+> backend withholds kiosk codes from (the Vice President, by default) gets a
+> **Room NFC Tags** list on `/locations/qr-codes` instead of the kiosk cards, as
+> does any room without a kiosk code. Migration `5bed4c485d2f` writes these
+> grants onto existing departments' seeded positions.
 
 ### Where the reader appears
 
@@ -1419,9 +1455,11 @@ reviewable in one place.
 > **`/display/:code` is deliberately not taggable.** It is a public,
 > unauthenticated kiosk screen keyed by a non-guessable code. Writing that code
 > to a tag anyone can read hands it to whoever walks past, and sending a member's
-> phone to a wall display is not a check-in. A test asserts it stays rejected,
-> and the same rule hides the **Write NFC tag** button on room kiosk cards while
-> showing it on the apparatus cards beside them.
+> phone to a wall display is not a check-in. A test asserts it stays rejected.
+> A room card's **Write NFC tag** button therefore writes the room's
+> `/locations/<id>/check-in` link rather than the kiosk URL its QR carries: the
+> room id is no secret, because that page requires a session and resolves the
+> room inside the member's own organization.
 
 > **Web NFC is Android-Chromium only, and requires a secure context.** The two
 > compact controls — **Tap Tag** and the `/locations/qr-codes` **Write NFC tag**

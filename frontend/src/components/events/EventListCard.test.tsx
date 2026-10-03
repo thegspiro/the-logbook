@@ -253,6 +253,40 @@ describe('EventListCard', () => {
       expect(screen.getByRole('button', { name: 'Add Ladder Company Drill to calendar' })).toBeInTheDocument();
     });
 
+    it('offers no RSVP controls once the event has ended', () => {
+      // The API refuses every RSVP after end_datetime, so the pair would only
+      // ever produce an error.
+      renderCard(makeEvent({ start_datetime: hoursFromNow(-6), end_datetime: hoursFromNow(-4) }));
+      expect(screen.queryByRole('button', { name: /^going$/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /not going/i })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Add Ladder Company Drill to calendar' })).toBeInTheDocument();
+    });
+
+    it('offers no Change RSVP once the event has ended', () => {
+      renderCard(
+        makeEvent({ start_datetime: hoursFromNow(-6), end_datetime: hoursFromNow(-4), user_rsvp_status: 'going' })
+      );
+      expect(screen.queryByRole('button', { name: /change rsvp/i })).not.toBeInTheDocument();
+    });
+
+    it('offers no Leave Waitlist once the event has ended', () => {
+      renderCard(
+        makeEvent({ start_datetime: hoursFromNow(-6), end_datetime: hoursFromNow(-4), user_rsvp_status: 'waitlisted' })
+      );
+      expect(screen.queryByRole('button', { name: /leave waitlist/i })).not.toBeInTheDocument();
+    });
+
+    it('offers no RSVP controls once the RSVP deadline has passed', () => {
+      renderCard(makeEvent({ rsvp_deadline: hoursFromNow(-1) }));
+      expect(screen.queryByRole('button', { name: /^going$/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /not going/i })).not.toBeInTheDocument();
+    });
+
+    it('still offers RSVP controls before a future RSVP deadline', () => {
+      renderCard(makeEvent({ rsvp_deadline: hoursFromNow(12) }));
+      expect(screen.getByRole('button', { name: /^going$/i })).toBeInTheDocument();
+    });
+
     it('points a missed event at its attendance record', () => {
       const event = makeEvent({
         is_mandatory: true,

@@ -12,7 +12,9 @@ vi.mock('../services/api', () => ({
   },
   eventService: { getEvents: vi.fn().mockResolvedValue([]) },
   meetingsService: { getMeetings: vi.fn().mockResolvedValue({ meetings: [] }) },
-  ranksService: { getRanks: vi.fn().mockResolvedValue([]) },
+  ranksService: {
+    getRanks: vi.fn().mockResolvedValue([{ id: 'r-capt', display_name: 'Captain', rank_code: 'captain' }]),
+  },
 }));
 
 vi.mock('../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
@@ -51,5 +53,35 @@ describe('ElectionsPage create form', () => {
 
     expect(select).toHaveValue('simple_majority|most_votes');
     expect(select.className).not.toMatch(/\btext-white\b/);
+  });
+
+  // Both pickers announced "Time hour", "Time minute" and "Time AM/PM", so the
+  // start and end times could not be told apart.
+  it('names the start and end times apart', async () => {
+    await openCreateDialog();
+    expect(screen.getByRole('combobox', { name: 'Start time hour' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'End time hour' })).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Time hour' })).not.toBeInTheDocument();
+  });
+
+  // While the suggestions were open, a full-screen click-away layer covered the
+  // Add button, so the first click on Add only closed the list and the typed
+  // position was not added. The list now closes when the field loses focus.
+  it('closes the suggestions when focus leaves the field', async () => {
+    await openCreateDialog();
+    const input = screen.getByRole('textbox', { name: 'Position name' });
+    await userEvent.type(input, 'Cap');
+    expect(await screen.findByRole('listbox', { name: 'Available positions' })).toBeInTheDocument();
+    await userEvent.tab();
+    expect(screen.queryByRole('listbox', { name: 'Available positions' })).not.toBeInTheDocument();
+  });
+
+  it('adds a typed position with Add', async () => {
+    await openCreateDialog();
+    const input = screen.getByRole('textbox', { name: 'Position name' });
+    await userEvent.type(input, 'Engineer');
+    await userEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect(input).toHaveValue('');
+    expect(screen.getByText('Engineer')).toBeInTheDocument();
   });
 });

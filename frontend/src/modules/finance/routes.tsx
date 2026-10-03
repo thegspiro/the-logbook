@@ -3,7 +3,7 @@
  *
  * Route definitions for the finance module including budgets,
  * purchase requests, expense reports, check requests, dues,
- * approval chains, and QuickBooks export.
+ * approvals, approval chains, and QuickBooks export.
  */
 
 import React from 'react';
@@ -36,6 +36,9 @@ const ExpenseReportDetailPage = lazyWithRetry(() => import('./pages/ExpenseRepor
 const CheckRequestsPage = lazyWithRetry(() => import('./pages/CheckRequestsPage'));
 const CheckRequestDetailPage = lazyWithRetry(() => import('./pages/CheckRequestDetailPage'));
 const CheckRequestFormPage = lazyWithRetry(() => import('./pages/CheckRequestFormPage'));
+
+// Approvals
+const ApprovalsPage = lazyWithRetry(() => import('./pages/ApprovalsPage'));
 
 // Dues
 const DuesManagementPage = lazyWithRetry(() => import('./pages/DuesManagementPage'));
@@ -89,6 +92,16 @@ export const getFinanceRoutes = () => {
             moduleLabel="Finance"
           >
             <ApprovalChainsSettingsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Approvals — the gate the approve/deny endpoints themselves enforce */}
+      <Route
+        path="/finance/approvals"
+        element={
+          <ProtectedRoute requiredPermission="finance.approve" requiredModule="finance" moduleLabel="Finance">
+            <ApprovalsPage />
           </ProtectedRoute>
         }
       />

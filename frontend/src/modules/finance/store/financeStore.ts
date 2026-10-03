@@ -19,6 +19,11 @@ import {
 } from '../services/api';
 import type {
   ApprovalChain,
+  ApprovalChainCreatePayload,
+  ApprovalChainStep,
+  ApprovalChainStepCreatePayload,
+  ApprovalChainStepUpdatePayload,
+  ApprovalChainUpdatePayload,
   Budget,
   BudgetCategory,
   BudgetSummary,
@@ -33,6 +38,28 @@ import type {
   PurchaseRequest,
 } from '../types';
 import { handleStoreError } from '../../../utils/storeHelpers';
+
+/** A chain's steps in the order the backend walks them (see get_approval_records). */
+function orderedSteps(chains: ApprovalChain[], chainId: string): ApprovalChainStep[] {
+  const chain = chains.find((c) => c.id === chainId);
+  return [...(chain?.steps ?? [])].sort(
+    (a, b) => a.stepOrder - b.stepOrder || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)
+  );
+}
+
+/**
+ * Write step_order 1..n for `steps` as given, touching only the steps whose
+ * order changes — a swap of neighbours in a contiguous chain is two PUTs.
+ * Nothing constrains step_order to be unique, so the transient duplicate
+ * between the two writes is harmless.
+ */
+async function renumberSteps(chainId: string, steps: ApprovalChainStep[]): Promise<void> {
+  for (const [index, step] of steps.entries()) {
+    if (step.stepOrder !== index + 1) {
+      await approvalChainService.updateStep(chainId, step.id, { step_order: index + 1 });
+    }
+  }
+}
 
 interface FinanceState {
   // Data
@@ -75,8 +102,15 @@ interface FinanceState {
 
   // Approval Chain Actions
   fetchApprovalChains: () => Promise<void>;
-  createApprovalChain: (data: Partial<ApprovalChain>) => Promise<ApprovalChain>;
+  createApprovalChain: (data: ApprovalChainCreatePayload) => Promise<ApprovalChain>;
   deleteApprovalChain: (id: string) => Promise<void>;
+  // Chain edits and every step mutation re-fetch the chain list afterwards,
+  // success or failure, and rethrow so the caller can say what went wrong.
+  updateApprovalChain: (id: string, data: ApprovalChainUpdatePayload) => Promise<void>;
+  addChainStep: (chainId: string, data: ApprovalChainStepCreatePayload) => Promise<void>;
+  updateChainStep: (chainId: string, stepId: string, data: ApprovalChainStepUpdatePayload) => Promise<void>;
+  deleteChainStep: (chainId: string, stepId: string) => Promise<void>;
+  moveChainStep: (chainId: string, stepId: string, direction: 'up' | 'down') => Promise<void>;
 
   // Approval Actions
   fetchPendingApprovals: () => Promise<void>;
@@ -110,7 +144,7 @@ interface FinanceState {
   fetchDashboard: () => Promise<void>;
 }
 
-export const useFinanceStore = create<FinanceState>((set) => ({
+export const useFinanceStore = create<FinanceState>((set, get) => ({
   // Initial state
   fiscalYears: [],
   budgetCategories: [],
@@ -249,6 +283,57 @@ export const useFinanceStore = create<FinanceState>((set) => ({
       }));
     } catch (err) {
       set({ error: handleStoreError(err, 'Failed to delete approval chain'), isLoading: false });
+      throw err;
+    }
+  },
+
+  updateApprovalChain: async (id, data) => {
+    try {
+      await approvalChainService.update(id, data);
+    } finally {
+      await get().fetchApprovalChains();
+    }
+  },
+
+  addChainStep: async (chainId, data) => {
+    try {
+      await approvalChainService.addStep(chainId, data);
+    } finally {
+      await get().fetchApprovalChains();
+    }
+  },
+
+  updateChainStep: async (chainId, stepId, data) => {
+    try {
+      await approvalChainService.updateStep(chainId, stepId, data);
+    } finally {
+      await get().fetchApprovalChains();
+    }
+  },
+
+  deleteChainStep: async (chainId, stepId) => {
+    try {
+      await approvalChainService.deleteStep(chainId, stepId);
+      const remaining = orderedSteps(get().approvalChains, chainId).filter((s) => s.id !== stepId);
+      await renumberSteps(chainId, remaining);
+    } finally {
+      await get().fetchApprovalChains();
+    }
+  },
+
+  moveChainStep: async (chainId, stepId, direction) => {
+    try {
+      const steps = orderedSteps(get().approvalChains, chainId);
+      const from = steps.findIndex((s) => s.id === stepId);
+      const to = direction === 'up' ? from - 1 : from + 1;
+      const moving = steps[from];
+      const other = steps[to];
+      if (from < 0 || !moving || !other) return;
+      steps[from] = other;
+      steps[to] = moving;
+      await renumberSteps(chainId, steps);
+    } finally {
+      await get().fetchApprovalChains();
     }
   },
 
@@ -256,31 +341,34 @@ export const useFinanceStore = create<FinanceState>((set) => ({
   fetchPendingApprovals: async () => {
     try {
       const pendingApprovals = await approvalService.getPending();
-      set({ pendingApprovals });
+      set({ pendingApprovals, error: null });
     } catch (err) {
       set({ error: handleStoreError(err, 'Failed to load pending approvals'), isLoading: false });
     }
   },
 
+  // A decision rejects to its caller instead of landing in `error`: the dialog
+  // that made it has to stay open and name the API's reason (a self-approval
+  // refusal, a step that moved on), and the page-level banner `error` feeds is
+  // shared with whatever that page loaded. Refreshing the list afterwards is
+  // best-effort — the decision itself has already been recorded.
   approveStep: async (stepRecordId, notes) => {
-    set({ isLoading: true, error: null });
+    await approvalService.approve(stepRecordId, notes);
     try {
-      await approvalService.approve(stepRecordId, notes);
       const pendingApprovals = await approvalService.getPending();
-      set({ pendingApprovals, isLoading: false });
+      set({ pendingApprovals });
     } catch (err) {
-      set({ error: handleStoreError(err, 'Failed to approve'), isLoading: false });
+      set({ error: handleStoreError(err, 'Failed to refresh pending approvals') });
     }
   },
 
   denyStep: async (stepRecordId, notes) => {
-    set({ isLoading: true, error: null });
+    await approvalService.deny(stepRecordId, notes);
     try {
-      await approvalService.deny(stepRecordId, notes);
       const pendingApprovals = await approvalService.getPending();
-      set({ pendingApprovals, isLoading: false });
+      set({ pendingApprovals });
     } catch (err) {
-      set({ error: handleStoreError(err, 'Failed to deny'), isLoading: false });
+      set({ error: handleStoreError(err, 'Failed to refresh pending approvals') });
     }
   },
 

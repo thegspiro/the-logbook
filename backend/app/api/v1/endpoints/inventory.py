@@ -1394,7 +1394,7 @@ def _coerce_csv_row(
 
         if field == "quantity":
             try:
-                item_data[field] = int(value)
+                quantity = int(value)
             except ValueError:
                 row_errors.append(
                     {
@@ -1402,11 +1402,25 @@ def _coerce_csv_row(
                         "error": f"Invalid quantity value: '{value}'",
                     }
                 )
+                continue
+            # The item response requires a quantity of 0 or more. A negative
+            # one written here saved, and then every item list that included
+            # the row failed validation with a 500 — the whole Items page.
+            if quantity < 0:
+                row_errors.append(
+                    {
+                        "row": row_num,
+                        "error": f"Quantity cannot be negative: '{value}'",
+                    }
+                )
+                fatal = True
+                break
+            item_data[field] = quantity
             continue
 
         if field == "purchase_price":
             try:
-                item_data[field] = float(value.replace("$", "").replace(",", ""))
+                price = float(value.replace("$", "").replace(",", ""))
             except ValueError:
                 row_errors.append(
                     {
@@ -1414,6 +1428,18 @@ def _coerce_csv_row(
                         "error": f"Invalid purchase price: '{value}'",
                     }
                 )
+                continue
+            # Same bound, same consequence as quantity above.
+            if price < 0:
+                row_errors.append(
+                    {
+                        "row": row_num,
+                        "error": f"Purchase price cannot be negative: '{value}'",
+                    }
+                )
+                fatal = True
+                break
+            item_data[field] = price
             continue
 
         if field == "status":

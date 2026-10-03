@@ -12,6 +12,7 @@ import type {
   FormCreate,
   FormUpdate,
   FormFieldCreate,
+  FormFieldUpdate,
   FormField,
   FormSubmission,
   SubmissionsListResponse,
@@ -74,7 +75,7 @@ export const formsService = {
     return response.data;
   },
 
-  async updateField(formId: string, fieldId: string, data: Partial<FormFieldCreate>): Promise<FormField> {
+  async updateField(formId: string, fieldId: string, data: FormFieldUpdate): Promise<FormField> {
     const response = await api.patch<FormField>(`/forms/${formId}/fields/${fieldId}`, data);
     return response.data;
   },

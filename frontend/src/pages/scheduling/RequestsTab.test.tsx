@@ -149,6 +149,42 @@ describe('RequestsTab', () => {
     });
   });
 
+  it('names the member a one-way offer was made to instead of calling it an open swap', async () => {
+    mockCheckPermission.mockReturnValue(true);
+    mockGetSwapRequests.mockResolvedValue({
+      items: [
+        {
+          id: 'swap-offer',
+          requesting_user_id: 'user-1',
+          requesting_user_name: 'Katherine Reed',
+          target_user_id: 'user-9',
+          target_user_name: 'Sam Ortiz',
+          offering_shift_id: 'shift-1',
+          offering_shift_date: '2026-10-03',
+          status: 'pending',
+          created_at: '2026-09-29T00:00:00Z',
+        },
+        {
+          id: 'swap-open',
+          requesting_user_id: 'user-2',
+          requesting_user_name: 'Lee Park',
+          offering_shift_id: 'shift-2',
+          offering_shift_date: '2026-10-04',
+          status: 'pending',
+          created_at: '2026-09-29T00:00:00Z',
+        },
+      ],
+      total: 2,
+      skip: 0,
+      limit: 20,
+    });
+
+    renderWithRouter(<RequestsTab />);
+
+    expect(await screen.findByText(/Offered to Sam Ortiz/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Open swap/)).toHaveLength(1);
+  });
+
   it("shows only the current member's requests in member view", async () => {
     mockGetSwapRequests.mockResolvedValue({
       items: [

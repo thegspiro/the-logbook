@@ -262,22 +262,27 @@ describe('EventsPage', () => {
 
       renderWithRouter(<EventsPage />);
 
+      // "Found" reads as a search that came back empty; nothing was searched.
       await waitFor(() => {
-        expect(screen.getByText('No events found')).toBeInTheDocument();
+        expect(screen.getByText('No upcoming events yet')).toBeInTheDocument();
         expect(screen.getByText('Get started by creating a new event.')).toBeInTheDocument();
       });
+      expect(screen.queryByText('No events found')).not.toBeInTheDocument();
     });
 
-    it('should leave the list blank for a member when there are no events at all', async () => {
+    it('explains an empty list to a member without offering to create', async () => {
       vi.mocked(eventService.getEvents).mockResolvedValue([]);
 
       renderWithRouter(<EventsPage />);
 
-      // The whole page is a skeleton while loading, so the Upcoming toggle
-      // appearing is what proves the loaded empty list rendered.
-      await screen.findByRole('button', { name: 'Upcoming' });
-      expect(screen.queryByText('No events found')).not.toBeInTheDocument();
+      expect(await screen.findByText('No upcoming events yet')).toBeInTheDocument();
+      expect(screen.getByText(/Open one to RSVP, add it to your calendar, and check in/)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /walkthrough in the Learning Center/ })).toHaveAttribute(
+        'href',
+        '/learning/events'
+      );
       expect(screen.queryByText('Get started by creating a new event.')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Create Event' })).not.toBeInTheDocument();
     });
 
     it('should still report an empty search result to a member', async () => {
@@ -616,9 +621,18 @@ describe('EventsPage', () => {
   describe('Quick RSVP refresh', () => {
     // Pitfall #28: this block installs the mocks it depends on rather than
     // inheriting whatever a previous block configured.
+    // The shared fixtures are fixed dates that have since passed, and the card
+    // withholds RSVP controls on an ended event, so this block needs events
+    // that are still ahead of the real clock.
+    const upcomingEvents: EventListItem[] = mockEvents.map((event, i) => ({
+      ...event,
+      start_datetime: new Date(Date.now() + (i + 1) * 86_400_000).toISOString(),
+      end_datetime: new Date(Date.now() + (i + 1) * 86_400_000 + 3_600_000).toISOString(),
+    }));
+
     beforeEach(() => {
       vi.mocked(eventService.getEvents).mockReset();
-      vi.mocked(eventService.getEvents).mockResolvedValue(mockEvents);
+      vi.mocked(eventService.getEvents).mockResolvedValue(upcomingEvents);
       vi.mocked(eventService.createOrUpdateRSVP).mockReset();
       vi.mocked(eventService.createOrUpdateRSVP).mockResolvedValue({ status: 'going' } as never);
     });

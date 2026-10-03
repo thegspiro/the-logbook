@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import get_encryption_salt
 from app.models.admin_hours import AdminHoursEntryMethod
 from app.models.event import Event, EventRSVP
+from app.models.location import Location
 from app.models.nfc_tag import NfcCredentialType, NfcTag, NfcTagStatus
 from app.models.user import User, UserStatus
 from app.schemas.nfc_tag import (
@@ -36,6 +37,7 @@ from app.services.event_service import (
     PHASE_GATE_PREFIX,
     EventService,
 )
+from app.services.location_service import LocationService
 from app.services.scheduling_service import SchedulingService
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
@@ -172,6 +174,18 @@ class NfcTagService:
             )
         ).scalar_one_or_none()
 
+        if existing and existing.status in _TERMINAL_CARD_STATUSES:
+            # Reissuing a revoked or lost card is a new registration, not a
+            # reactivation of the old one: the old row stays terminal (so the
+            # lifecycle guard in update_tag still holds) and stays on the
+            # previous holder's record as history. It only gives up its claim
+            # on the (organization_id, uid_hash) unique slot, by rehashing to a
+            # value no card read can produce — hash_tag_uid always hashes the
+            # installation pepper first, this never does.
+            existing.uid_hash = _retired_uid_hash(existing)
+            await self.db.flush()
+            existing = None
+
         if existing:
             # Naming the current holder would let anyone with card-issuing
             # rights turn a pile of found cards into a staff directory, so the
@@ -179,8 +193,9 @@ class NfcTagService:
             if existing.user_id == str(user_id):
                 raise ValueError("This card is already registered to this member.")
             raise ValueError(
-                "This card is already registered to another member. "
-                "Revoke the existing registration before reissuing it."
+                "This card is already registered to another member and is still "
+                "in use. Mark that registration lost or revoked, then register "
+                "the card again."
             )
 
         tag = NfcTag(
@@ -372,6 +387,128 @@ class NfcTagService:
             await self.db.flush()
 
         return result
+
+    # =========================================================================
+    # Room kiosk (unattended)
+    # =========================================================================
+
+    async def kiosk_check_in(
+        self,
+        *,
+        location: Location,
+        tag_uid: str,
+        tag_payload: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Record a card tap at a room's public kiosk.
+
+        Nobody is signed in at the kiosk, so the room decides the target rather
+        than an operator: whichever event is in its check-in window there now.
+        The tap moves the member in, or out when they are already in (AUTO, with
+        the station's bounce guard), through the same ``check_in`` a station
+        uses — so every card and event rule applies unchanged.
+
+        When two events are open in the room at once the tap is refused rather
+        than guessed at, with one exception: a member checked in to exactly one
+        of them can only mean "check me out of that one".
+
+        The result never carries the member's id, full name or membership
+        number — whoever is standing at a public screen sees a first name and
+        initial, enough to confirm their own tap and no more.
+        """
+        organization_id = str(location.organization_id)
+        events = await LocationService(self.db).get_current_events_in_check_in_window(
+            location_id=location.id, organization_id=organization_id
+        )
+
+        if not events:
+            return self._kiosk_result(
+                self._result(
+                    NfcCheckInStatus.REFUSED,
+                    "No event in this room is open for check-in right now.",
+                )
+            )
+
+        if len(events) == 1:
+            event = events[0]
+        else:
+            event = await self._only_event_checked_into(
+                organization_id, events, (tag_payload, tag_uid)
+            )
+            if event is None:
+                return self._kiosk_result(
+                    self._result(
+                        NfcCheckInStatus.REFUSED,
+                        "More than one event is running in this room. Tap the "
+                        "room's tag with your phone to choose, or ask an "
+                        "officer to check you in.",
+                    )
+                )
+
+        result = await self.check_in(
+            organization_id=organization_id,
+            tag_uid=tag_uid,
+            tag_payload=tag_payload,
+            target_type=NfcCheckInTarget.EVENT,
+            target_id=str(event.id),
+            direction=NfcCheckInDirection.AUTO,
+        )
+        result["event_id"] = str(event.id)
+        return self._kiosk_result(result)
+
+    async def _only_event_checked_into(
+        self,
+        organization_id: str,
+        events: Sequence[Event],
+        candidates: Sequence[Optional[str]],
+    ) -> Optional[Event]:
+        """The one open event this card's member is checked in to, if exactly one.
+
+        A card that does not resolve to a usable member returns None, so an
+        overlap answers every unknown card the same way and the endpoint cannot
+        be used to learn which events a stranger's card is checked in to.
+        """
+        _tag, user, refusal = await self.resolve_tag(organization_id, candidates)
+        if refusal is not None or user is None:
+            return None
+        rsvps = (
+            (
+                await self.db.execute(
+                    select(EventRSVP).where(
+                        EventRSVP.event_id.in_([str(e.id) for e in events]),
+                        EventRSVP.user_id == str(user.id),
+                        EventRSVP.checked_in_at.is_not(None),
+                        EventRSVP.checked_out_at.is_(None),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if len(rsvps) != 1:
+            return None
+        checked_into = str(rsvps[0].event_id)
+        return next((e for e in events if str(e.id) == checked_into), None)
+
+    @staticmethod
+    def _kiosk_result(result: Dict[str, Any]) -> Dict[str, Any]:
+        """Strip a check-in result to what a public screen may show."""
+        full_name = (result.get("member_name") or "").split()
+        display_name = None
+        if full_name:
+            display_name = full_name[0]
+            if len(full_name) > 1:
+                display_name += f" {full_name[-1][0]}."
+        return {
+            "status": result["status"],
+            "message": result["message"],
+            "target_name": result.get("target_name"),
+            "member_display_name": display_name,
+            "occurred_at": result.get("occurred_at"),
+            "duration_minutes": result.get("duration_minutes"),
+            # Internal, for the audit entry; the response schema drops them.
+            "user_id": result.get("user_id"),
+            "event_id": result.get("event_id"),
+        }
 
     async def _check_in_shift(
         self,
@@ -730,6 +867,16 @@ class NfcTagService:
             "member_name": names.get(tag.user_id),
             "issued_by_name": names.get(tag.issued_by) if tag.issued_by else None,
         }
+
+
+def _retired_uid_hash(tag: NfcTag) -> str:
+    """Tombstone hash for a terminal card whose serial is being reissued.
+
+    Keyed on the row id so two retirements of the same serial cannot collide
+    on the unique constraint, and never equal to any ``hash_tag_uid`` output
+    because that one always starts from the installation's pepper.
+    """
+    return hashlib.sha256(f"retired:{tag.id}:{tag.uid_hash}".encode()).hexdigest()
 
 
 def _as_utc(value: datetime) -> datetime:

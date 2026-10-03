@@ -1,4 +1,5 @@
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithRouter } from '../../../test/utils';
 
@@ -75,5 +76,28 @@ describe('FacilityDetailPage — renders only the routed facility', () => {
     renderWithRouter(<FacilityDetailPage />);
 
     expect(screen.getByText('Station 1')).toBeInTheDocument();
+  });
+});
+
+describe('FacilityDetailPage — section navigation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useParamsMock.mockReturnValue({ id: 'f1' });
+    storeState.selectedFacility = facilityFixture;
+    storeState.isLoadingDetail = false;
+  });
+
+  // The open section differed from the other thirteen only by its colour.
+  it('marks the open section as current', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<FacilityDetailPage />);
+    const nav = screen.getByRole('navigation', { name: 'Facility sections' });
+
+    expect(within(nav).getByRole('button', { name: 'Overview' })).toHaveAttribute('aria-current', 'true');
+    expect(within(nav).getByRole('button', { name: 'Rooms' })).not.toHaveAttribute('aria-current');
+
+    await user.click(within(nav).getByRole('button', { name: 'Rooms' }));
+    expect(within(nav).getByRole('button', { name: 'Rooms' })).toHaveAttribute('aria-current', 'true');
+    expect(within(nav).getByRole('button', { name: 'Overview' })).not.toHaveAttribute('aria-current');
   });
 });

@@ -8,8 +8,10 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
-import { electionService } from '../services/api';
+import { electionService, userService } from '../services/api';
 import type { VoterOverride } from '../types/election';
+import type { User } from '../types/user';
+import { UserStatus } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { formatShortDateTime } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
@@ -27,6 +29,8 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
   const [showAddForm, setShowAddForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [confirmingRemoveId, setConfirmingRemoveId] = useState<string | null>(null);
+
+  const [members, setMembers] = useState<User[]>([]);
 
   // Form state
   const [userId, setUserId] = useState('');
@@ -49,6 +53,21 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
     void fetchOverrides();
   }, [fetchOverrides]);
 
+  // The form used to ask for a member's user ID, which no screen shows a
+  // secretary; the members are listed by name instead, as the candidate
+  // picker lists them.
+  useEffect(() => {
+    if (!showAddForm || members.length > 0) return;
+    userService
+      .getUsers()
+      .then((data) =>
+        setMembers(data.filter((m) => m.status === UserStatus.ACTIVE || m.status === UserStatus.PROBATIONARY))
+      )
+      .catch((err: unknown) => setError(getErrorMessage(err, 'Failed to load members')));
+  }, [showAddForm, members.length]);
+
+  const overriddenIds = new Set(overrides.map((o) => o.user_id));
+
   const resetForm = () => {
     setUserId('');
     setReason('');
@@ -60,7 +79,7 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
     const trimmedReason = reason.trim();
 
     if (!trimmedUserId) {
-      setError('User ID is required');
+      setError('Choose a member');
       return;
     }
     if (trimmedReason.length < 10) {
@@ -136,21 +155,33 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
           <h4 className="text-theme-text-primary mb-3 text-sm font-semibold">Add Voter Override</h4>
           <div className="space-y-3">
             <div>
-              <label className="text-theme-text-primary block text-sm font-medium">Member User ID *</label>
-              <input
-                type="text"
+              <label htmlFor="voter-override-member" className="text-theme-text-primary block text-sm font-medium">
+                Member *
+              </label>
+              <select
+                id="voter-override-member"
                 value={userId}
                 onChange={(e) => setUserId(e.target.value)}
                 className="form-input mt-1 shadow-xs"
-                placeholder="Enter the member's user ID..."
-              />
+              >
+                <option value="">Select a member…</option>
+                {members
+                  .filter((m) => !overriddenIds.has(m.id))
+                  .map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.full_name || `${m.first_name ?? ''} ${m.last_name ?? ''}`.trim() || m.username}
+                      {m.membership_number ? ` (#${m.membership_number})` : ''}
+                    </option>
+                  ))}
+              </select>
             </div>
 
             <div>
-              <label className="text-theme-text-primary block text-sm font-medium">
+              <label htmlFor="voter-override-reason" className="text-theme-text-primary block text-sm font-medium">
                 Reason * <span className="text-theme-text-muted font-normal">(min 10 characters)</span>
               </label>
               <textarea
+                id="voter-override-reason"
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 rows={2}
@@ -205,9 +236,9 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-theme-text-primary truncate font-medium">
-                      {override.user_name || override.user_id}
+                      {override.member_name || override.user_id}
                     </span>
-                    {override.user_name && (
+                    {override.member_name && (
                       <span className="text-theme-text-muted shrink-0 text-xs">{override.user_id}</span>
                     )}
                   </div>
@@ -228,7 +259,7 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
                           onClick={() => {
                             void handleRemove(override.user_id);
                           }}
-                          aria-label={`Confirm removal of override for ${override.user_name || override.user_id}`}
+                          aria-label={`Confirm removal of override for ${override.member_name || override.user_id}`}
                           className="btn-primary rounded-sm px-2 py-1 text-xs"
                         >
                           Confirm
@@ -245,7 +276,7 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
                       <button
                         type="button"
                         onClick={() => setConfirmingRemoveId(override.user_id)}
-                        aria-label={`Remove override for ${override.user_name || override.user_id}`}
+                        aria-label={`Remove override for ${override.member_name || override.user_id}`}
                         className="rounded-sm bg-red-500/20 px-2 py-1 text-xs text-red-700 hover:bg-red-500/30 dark:text-red-300"
                       >
                         Remove

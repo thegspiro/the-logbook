@@ -112,9 +112,14 @@ describe('MyEquipmentPage', () => {
 
   it('shows empty section messaging when nothing is assigned', async () => {
     renderWithRouter(<MyEquipmentPage />);
-    expect(await screen.findByText('Nothing issued to you.')).toBeInTheDocument();
+    expect(await screen.findByText('Nothing has been issued to you yet.')).toBeInTheDocument();
+    expect(screen.getByText(/When the quartermaster hands you department gear/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /walkthrough in the Learning Center/ })).toHaveAttribute(
+      'href',
+      '/learning/gear'
+    );
     expect(screen.getByText('Issued to Me')).toBeInTheDocument();
-    expect(screen.getByText('No active temporary loans.')).toBeInTheDocument();
+    expect(screen.getByText(/A temporary loan is gear lent to you for a set time/)).toBeInTheDocument();
     expect(screen.getByText('Active Temporary Loans')).toBeInTheDocument();
     // Permanent assignments and pool issuances share one section; a member
     // holds both open-endedly, so nothing on this page splits them any more.
@@ -159,6 +164,31 @@ describe('MyEquipmentPage', () => {
     // sitting in separate blocks. The checkout trails both, in its own
     // section, so its position here is incidental.
     expect(gearNames).toEqual(['Work Gloves', 'Turnout Coat', 'Thermal Camera']);
+  });
+
+  it('tells the member what happens after they notify a return', async () => {
+    mockGetUserInventory.mockResolvedValue(fullInv);
+    const user = userEvent.setup();
+    renderWithRouter(<MyEquipmentPage />);
+    await screen.findByText('Turnout Coat');
+
+    await user.click(screen.getByRole('button', { name: 'Notify quartermaster of return: Turnout Coat' }));
+
+    expect(
+      await screen.findByText(/Hand the item in as usual; it stays on your list until they confirm they have it/)
+    ).toBeInTheDocument();
+  });
+
+  it('counts a single item in the singular', async () => {
+    mockGetUserInventory.mockResolvedValue({
+      ...fullInv,
+      issued_items: [],
+      active_checkouts: [],
+      permanent_assignments: fullInv.permanent_assignments.slice(0, 1),
+    });
+    renderWithRouter(<MyEquipmentPage />);
+
+    expect(await screen.findByText('(1 item)')).toBeInTheDocument();
   });
 
   it('submits a return request for an assignment row', async () => {
@@ -230,8 +260,8 @@ describe('MyEquipmentPage', () => {
     ]);
     renderWithRouter(<MyEquipmentPage />);
 
-    const tile = await screen.findByRole('group', { name: 'Pending' });
-    await waitFor(() => expect(tile).toHaveTextContent(/^2Pending$/));
+    const tile = await screen.findByRole('group', { name: 'Pending requests' });
+    await waitFor(() => expect(tile).toHaveTextContent(/^2Pending requests$/));
   });
 
   it('names the fields of the return notice', async () => {
@@ -277,8 +307,8 @@ describe('MyEquipmentPage', () => {
     await user.click(screen.getByRole('button', { name: 'Notify quartermaster of return: Turnout Coat' }));
     await user.click(screen.getByRole('button', { name: 'Submit' }));
 
-    const tile = screen.getByRole('group', { name: 'Pending' });
-    await waitFor(() => expect(tile).toHaveTextContent(/^1Pending$/));
+    const tile = screen.getByRole('group', { name: 'Pending requests' });
+    await waitFor(() => expect(tile).toHaveTextContent(/^1Pending requests$/));
   });
 
   // The picked date was sent as UTC midnight, which west of Greenwich is the

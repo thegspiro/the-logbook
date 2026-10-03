@@ -31,6 +31,7 @@ import {
   type SchedulingHubSection,
   type SchedulingHubTone,
 } from './schedulingHubCards';
+import { SchedulingSetupGuide } from './SchedulingSetupGuide';
 
 const TONE_CLASSES: Record<SchedulingHubTone, string> = {
   blue: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
@@ -162,6 +163,8 @@ const SchedulingAdminHub: React.FC = () => {
               to another screen, and the page's other links — the trail above it
               — are a different journey. Named so a screen reader user can jump
               to the tools rather than tabbing the trail first. */}
+          {canManage && <SchedulingSetupGuide />}
+
           <nav className="space-y-8" aria-label="Scheduling administration tools">
             {sections.map(({ section, cards }) => (
               <Section key={section} title={section}>

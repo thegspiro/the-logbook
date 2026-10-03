@@ -56,6 +56,13 @@ async function tap(tag: Tag) {
 
 const me = (loans: unknown[] = []) => ({ member_name: 'Morgan Tester', loans });
 
+/** A refusal as the API sends it: a 409 carrying the reason and a support code. */
+function refusal(detail: string) {
+  return Object.assign(new Error(detail), {
+    response: { status: 409, statusText: 'Conflict', data: { detail, code: 'LB-API-409' } },
+  });
+}
+
 async function identified() {
   renderWithRouter(<InventoryKioskPage />);
   await tap(CARD);
@@ -109,6 +116,16 @@ describe('InventoryKioskPage', () => {
     Object.assign(state, overrides);
     renderWithRouter(<InventoryKioskPage />);
     expect(await screen.findByText(new RegExp(`needs ${label} turned on`))).toBeInTheDocument();
+  });
+
+  // Opening the kiosk takes inventory.kiosk; the switch takes the settings
+  // grant, so "Turn on NFC tags" sent a kiosk officer to Access Denied.
+  it('says who can turn NFC tags on when they are off', async () => {
+    state.nfc = false;
+    renderWithRouter(<InventoryKioskPage />);
+    const notice = await screen.findByText(/needs NFC tag tracking turned on/);
+    expect(notice).toHaveTextContent('An administrator can turn it on under NFC Tags.');
+    expect(screen.getByRole('link', { name: 'NFC Tags' })).toHaveAttribute('href', '/inventory/admin/nfc');
   });
 
   it('greets the member by card and lists what they have out', async () => {
@@ -173,6 +190,8 @@ describe('InventoryKioskPage', () => {
   it('shows the reason a tap was refused', async () => {
     service.kioskPreview.mockRejectedValue(new Error('Radio cannot be checked out at the kiosk. Ask a quartermaster.'));
     await identified();
+    // As on the server: an item's tag is not anybody's card.
+    service.kioskIdentify.mockRejectedValue(refusal('This card is not registered to a member.'));
     await tap(ITEM);
     expect(await screen.findByRole('alert')).toHaveTextContent('cannot be checked out at the kiosk');
     expect(screen.getByText('Hi, Morgan Tester')).toBeInTheDocument();
@@ -196,6 +215,29 @@ describe('InventoryKioskPage', () => {
     });
     expect(await screen.findByText('Tap your ID card to start')).toBeInTheDocument();
     expect(screen.queryByText('Hi, Morgan Tester')).not.toBeInTheDocument();
+  });
+
+  // A refusal is the kiosk's answer to the member, not a fault for IT: the
+  // support code appended to other errors means nothing at a shared tablet.
+  it('shows a refusal in the words the server gave, without a support code', async () => {
+    await identified();
+    service.kioskPreview.mockRejectedValue(refusal('Radio is not available (checked out).'));
+    service.kioskIdentify.mockRejectedValue(refusal('This card is not registered to a member.'));
+    await tap(ITEM);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/^Radio is not available \(checked out\)\.$/);
+  });
+
+  // Cards are issued by serial by default and carry no code, so the next
+  // member's tap reached the item lookup and read "This tag is not linked to
+  // anything" until the previous member pressed Done or a minute passed.
+  it('a new card without a code starts a new member without Done', async () => {
+    await identified();
+    service.kioskPreview.mockRejectedValue(refusal('This tag is not linked to anything.'));
+    service.kioskIdentify.mockResolvedValue({ member_name: 'Riley Tester', loans: [] });
+    await tap({ serialNumber: '04:dd:44:55', payload: null });
+    expect(await screen.findByText('Hi, Riley Tester')).toBeInTheDocument();
+    expect(service.kioskIdentify).toHaveBeenLastCalledWith({ code: undefined, serial_number: '04DD4455' });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('a new card with an issued code starts a new member without Done', async () => {

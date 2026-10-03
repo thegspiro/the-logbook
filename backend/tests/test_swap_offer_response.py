@@ -1,10 +1,10 @@
 """
 The member an offer was made to answers it themselves.
 
-Manager review (`review_swap_request`) refuses participants by design and
-reads a set `target_user_id` as "there must be a shift coming back" — so a
-one-way targeted offer, which is the shape the scheduling board creates, could
-never be completed by anybody before this path existed.
+Manager review (`review_swap_request`) refuses participants by design, so a
+one-way targeted offer — the shape the scheduling board creates — needs this
+path for the member it was offered to. A duty officer can approve the same
+offer through manager review, which hands the seat over the same way.
 
 Accepting grants no authority: it is the offerer withdrawing and the accepter
 signing up, in one step, both of which are already unprivileged self-service.
@@ -104,6 +104,7 @@ def _service(offer, shift=None, assignment=None, validation_error=None, org=None
     service = SchedulingService(_Session(offer, shift, assignment, org))
     service._validate_assignment_candidate = AsyncMock(return_value=validation_error)
     service._notify_offer_answered = AsyncMock()
+    service._cancel_swaps_for_vacated_seats = AsyncMock(return_value=[])
     return service
 
 
@@ -138,6 +139,20 @@ class TestAcceptance:
         service = _service(offer, shift, assignment)
         await service.respond_to_swap_offer("sw1", ORG, TARGET, accept=True)
         service._notify_offer_answered.assert_awaited_once()
+
+    async def test_the_offerers_other_requests_for_the_seat_are_withdrawn(self):
+        offer, shift = _offer(), _shift()
+        assignment = SimpleNamespace(
+            id="a1",
+            user_id=str(OFFERER),
+            position="firefighter",
+            is_training=False,
+        )
+        service = _service(offer, shift, assignment)
+        await service.respond_to_swap_offer("sw1", ORG, TARGET, accept=True)
+        service._cancel_swaps_for_vacated_seats.assert_awaited_once_with(
+            ORG, [("shift-1", str(OFFERER))], exclude_request_id="sw1"
+        )
         assert service._notify_offer_answered.await_args.kwargs["accepted"] is True
 
     async def test_the_seat_being_handed_over_is_excluded_from_the_checks(self):

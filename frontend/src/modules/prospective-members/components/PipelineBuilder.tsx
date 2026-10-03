@@ -12,6 +12,7 @@ import { STAGE_TYPE_ICONS, STAGE_TYPE_COLORS, STAGE_TYPE_LABELS } from '../const
 import { pipelineService } from '../services/api';
 import { StageConfigModal } from './StageConfigModal';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { blankToNull } from '../../../utils/formValues';
 
 interface PipelineBuilderProps {
   pipeline: Pipeline;
@@ -47,7 +48,13 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({ pipeline, onPi
   const handleUpdateStage = async (stageData: PipelineStageCreate) => {
     if (!editingStage) return;
     try {
-      const updatedStage = await pipelineService.updateStage(pipeline.id, editingStage.id, stageData);
+      // The modal builds one create-shaped payload for both modes, where a
+      // blank description is omitted. On an edit an omitted key means "leave
+      // it alone", so the clear has to travel as an explicit null.
+      const updatedStage = await pipelineService.updateStage(pipeline.id, editingStage.id, {
+        ...stageData,
+        description: blankToNull(stageData.description),
+      });
       const updated = stages.map((s) => (s.id === editingStage.id ? updatedStage : s));
       setStages(updated);
       onPipelineUpdated({ ...pipeline, stages: updated });

@@ -295,9 +295,16 @@ services:
     ports:
       - "${NGINX_HTTP_PORT:-80}:80"
       - "${NGINX_HTTPS_PORT:-443}:443"
+    # docker.conf is this container's own config; infrastructure/nginx/nginx.conf
+    # is for a host-installed nginx and cannot run here (its upstreams are
+    # 127.0.0.1). TLS terminates in this container: put fullchain.pem and
+    # privkey.pem in ./infrastructure/nginx/ssl before starting — nginx will
+    # not start without them. See "Docker Compose production profile" in
+    # docs/DEPLOYMENT.md.
     volumes:
-      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      # - ./infrastructure/nginx/ssl:/etc/nginx/ssl:ro  # Uncomment when SSL certificates are added
+      - ./infrastructure/nginx/docker.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./infrastructure/nginx/ssl:/etc/nginx/ssl:ro
+      - ./infrastructure/nginx/certbot:/var/www/certbot:ro
     depends_on:
       backend:
         condition: service_healthy

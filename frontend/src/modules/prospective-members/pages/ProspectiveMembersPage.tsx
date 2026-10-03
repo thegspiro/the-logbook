@@ -1656,12 +1656,22 @@ export const ProspectiveMembersPage: React.FC = () => {
                 <button
                   onClick={() => {
                     void (async () => {
+                      const requested = selectedInactive.size;
                       try {
-                        await purgeInactiveApplicants(Array.from(selectedInactive));
-                        toast.success(`Purged ${selectedInactive.size} application(s)`);
+                        // The server's count, not the selection's: it skips any
+                        // application no longer inactive, and saying otherwise
+                        // tells an officer data is gone that is still held.
+                        const purged = await purgeInactiveApplicants(Array.from(selectedInactive));
+                        if (purged === requested) {
+                          toast.success(`Purged ${purged} application(s)`);
+                        } else {
+                          toast.error(
+                            `Purged ${purged} of ${requested} application(s). The rest are no longer inactive and were kept.`
+                          );
+                        }
                         setSelectedInactive(new Set());
-                      } catch {
-                        toast.error('Failed to purge applications');
+                      } catch (err: unknown) {
+                        toast.error(getErrorMessage(err, 'Failed to purge applications'));
                       }
                       setShowPurgeConfirm(false);
                     })();

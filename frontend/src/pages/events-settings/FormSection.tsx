@@ -53,7 +53,7 @@ const FormSection: React.FC<FormSectionProps> = ({
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-theme-text-primary text-lg font-semibold">Public Event Request Form</h3>
+        <h2 className="text-theme-text-primary text-lg font-semibold">Public Event Request Form</h2>
         <p className="text-theme-text-muted mt-1 text-sm">
           Generate a public form for community members to request outreach events.
         </p>
@@ -70,10 +70,10 @@ const FormSection: React.FC<FormSectionProps> = ({
           {/* Published forms */}
           {publishedForms.length > 0 && (
             <div className="space-y-2">
-              <h4 className="text-theme-text-primary flex items-center gap-1.5 text-sm font-medium">
+              <h3 className="text-theme-text-primary flex items-center gap-1.5 text-sm font-medium">
                 <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
                 Published &mdash; Accepting Submissions ({publishedForms.length})
-              </h4>
+              </h3>
               {publishedForms.map((form) => (
                 <div
                   key={form.id}
@@ -126,10 +126,10 @@ const FormSection: React.FC<FormSectionProps> = ({
           {/* Draft forms */}
           {draftForms.length > 0 && (
             <div className="space-y-2">
-              <h4 className="text-theme-text-primary flex items-center gap-1.5 text-sm font-medium">
+              <h3 className="text-theme-text-primary flex items-center gap-1.5 text-sm font-medium">
                 <span className="h-2 w-2 rounded-full bg-yellow-500" />
                 Draft &mdash; Not Yet Published ({draftForms.length})
-              </h4>
+              </h3>
               {draftForms.map((form) => (
                 <div
                   key={form.id}
@@ -159,10 +159,10 @@ const FormSection: React.FC<FormSectionProps> = ({
           {/* Archived forms */}
           {archivedForms.length > 0 && (
             <div className="space-y-2">
-              <h4 className="text-theme-text-muted flex items-center gap-1.5 text-sm font-medium">
+              <h3 className="text-theme-text-muted flex items-center gap-1.5 text-sm font-medium">
                 <span className="bg-theme-text-muted h-2 w-2 rounded-full" />
                 Archived ({archivedForms.length})
-              </h4>
+              </h3>
               {archivedForms.map((form) => (
                 <div
                   key={form.id}
@@ -211,7 +211,7 @@ const FormSection: React.FC<FormSectionProps> = ({
           <button
             type="button"
             onClick={onNavigateToForms}
-            className="flex items-center gap-1 text-sm text-blue-600 hover:underline dark:text-blue-400"
+            className="touch-target-phone flex items-center gap-1 text-sm text-blue-600 hover:underline dark:text-blue-400"
           >
             <ExternalLink className="h-3.5 w-3.5" />
             View all forms

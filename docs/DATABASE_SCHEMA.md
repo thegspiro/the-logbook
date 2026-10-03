@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**285 tables · 4687 columns · 923 foreign keys**
+**286 tables · 4704 columns · 927 foreign keys**
 
 ---
 
@@ -200,6 +200,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
+| [`event_attendance_petitions`](#event_attendance_petitions) | `EventAttendancePetition` | 13 | A member's request to be recorded as present at an event that is over. |
 | [`event_external_attendees`](#event_external_attendees) | `EventExternalAttendee` | 17 | External (non-member) attendee at an event. |
 | [`event_rsvps`](#event_rsvps) | `EventRSVP` | 21 | Event RSVP model for tracking attendance |
 | [`event_templates`](#event_templates) | `EventTemplate` | 29 | Event Template model for reusable event configurations |
@@ -214,7 +215,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`external_agencies`](#external_agencies) | `ExternalAgency` | 6 | A department members may staff apparatus for. |
 | [`external_apparatus`](#external_apparatus) | `ExternalApparatus` | 8 | One unit belonging to an :class:`ExternalAgency`. |
-| [`external_shift_hours`](#external_shift_hours) | `ExternalShiftHours` | 16 |  |
+| [`external_shift_hours`](#external_shift_hours) | `ExternalShiftHours` | 18 |  |
 
 ### Facilities
 
@@ -377,7 +378,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`locations`](#locations) | `Location` | 21 | Location model for managing physical spaces |
+| [`locations`](#locations) | `Location` | 22 | Location model for managing physical spaces |
 
 ### Mcp_Service_Key
 
@@ -424,7 +425,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`membership_pipeline_steps`](#membership_pipeline_steps) | `MembershipPipelineStep` | 17 | A single step within a membership pipeline. |
-| [`membership_pipelines`](#membership_pipelines) | `MembershipPipeline` | 15 | Pipeline definition for prospective member onboarding. |
+| [`membership_pipelines`](#membership_pipelines) | `MembershipPipeline` | 16 | Pipeline definition for prospective member onboarding. |
 | [`prospect_activity_log`](#prospect_activity_log) | `ProspectActivityLog` | 6 | Audit trail for prospect-related actions. |
 | [`prospect_documents`](#prospect_documents) | `ProspectDocument` | 10 | Document uploaded for a prospective member. |
 | [`prospect_election_packages`](#prospect_election_packages) | `ProspectElectionPackage` | 11 | Election package for a prospective member. |
@@ -648,7 +649,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`prospects`](#prospects) | `Prospect` | 17 | Prospective member – someone who has expressed interest in joining |
 | [`sessions`](#sessions) | `Session` | 12 | User session model for tracking active sessions |
 | [`user_positions`](#user_positions) | _(association table)_ | 4 |  |
-| [`users`](#users) | `User` | 58 | User model with comprehensive authentication and profile support. |
+| [`users`](#users) | `User` | 59 | User model with comprehensive authentication and profile support. |
 
 ---
 
@@ -853,7 +854,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `model` | VARCHAR(100) | yes |  |  |  |
 | `body_manufacturer` | VARCHAR(100) | yes |  |  |  |
 | `color` | VARCHAR(50) | yes |  |  |  |
-| `fuel_type` | ENUM(`gasoline`, `diesel`, `electric`, `hybrid`, `propane`, `cng`, `other`) | yes |  | `'diesel'` |  |
+| `fuel_type` | ENUM(`gasoline`, `diesel`, `electric`, `hybrid`, `propane`, `cng`, `other`) | yes |  |  |  |
 | `fuel_capacity_gallons` | NUMERIC(10, 2) | yes |  |  |  |
 | `seating_capacity` | INTEGER | yes |  |  |  |
 | `gvwr` | INTEGER | yes |  |  |  |
@@ -2603,6 +2604,34 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 ## Events
 
+### `event_attendance_petitions`
+
+**EventAttendancePetition** · `app/models/event.py`
+
+> A member's request to be recorded as present at an event that is over. The member missed the check-in window (no signal, a dead phone, forgot to scan) and asks the organizer to vouch for them. Nothing is credited by the request itself: approval writes a manager override onto the member's RSVP, and the event's normal finalize is what turns that into training records or admin hours. That keeps one path for credit, and is why approval is refused while attendance is finalized — reopening is the deliberate step that lets credited records change. One per member per event, so a rejection is the answer rather than the start of a resubmission loop.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `event_id` | VARCHAR(36) | no | FK, UQ-IDX |  | → `events.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
+| `status` | ENUM(`pending`, `approved`, `rejected`) | no |  | `pending` |  |
+| `reason` | TEXT | no |  |  |  |
+| `requested_check_in_at` | DATETIME | yes |  |  |  |
+| `requested_check_out_at` | DATETIME | yes |  |  |  |
+| `reviewed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `reviewed_at` | DATETIME | yes |  |  |  |
+| `review_note` | TEXT | yes |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- UNIQUE `ix_event_attendance_petitions_event_user` (`event_id`, `user_id`)
+- `ix_event_attendance_petitions_organization_id` (`organization_id`)
+- `ix_event_attendance_petitions_user_id` (`user_id`)
+
 ### `event_external_attendees`
 
 **EventExternalAttendee** · `app/models/event.py`
@@ -2866,6 +2895,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `user_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
 | `shift_date` | DATE | no |  |  |  |
 | `duration_minutes` | INTEGER | no |  |  |  |
+| `start_at` | DATETIME | yes |  |  |  |
+| `end_at` | DATETIME | yes |  |  |  |
 | `external_apparatus_id` | VARCHAR(36) | yes | FK, IDX |  | → `external_apparatus.id` ON DELETE SET NULL |
 | `agency_name` | VARCHAR(255) | no |  |  |  |
 | `apparatus_name` | VARCHAR(100) | no |  |  |  |
@@ -5868,6 +5899,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `capacity` | INTEGER | yes |  |  |  |
 | `is_active` | BOOL | no | IDX | `1` |  |
 | `display_code` | VARCHAR(12) | yes | UQ, UQ-IDX |  |  |
+| `nfc_badge_check_in_enabled` | BOOL | no |  | `0` |  |
 | `facility_id` | VARCHAR(36) | yes | FK, IDX |  | → `facilities.id` ON DELETE SET NULL |
 | `facility_room_id` | VARCHAR(36) | yes | FK, UQ |  | → `facility_rooms.id` ON DELETE SET NULL |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
@@ -6253,6 +6285,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `is_active` | BOOL | yes | IDX | `True` |  |
 | `auto_transfer_on_approval` | BOOL | yes |  | `False` |  |
 | `inactivity_config` | JSON | yes |  | `dict()` |  |
+| `conversion_config` | JSON | yes |  |  |  |
 | `public_status_enabled` | BOOL | yes |  | `False` |  |
 | `public_show_future_stages` | BOOL | no |  | `1` |  |
 | `report_stage_groups` | JSON | yes |  | `list()` |  |
@@ -9868,6 +9901,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `emergency_contacts` | JSON | yes |  | `list()` |  |
 | `notification_preferences` | JSON | yes |  | `dict()` |  |
 | `profile_visibility` | JSON | yes |  |  |  |
+| `bottom_nav_slots` | JSON | yes |  |  |  |
 | `membership_type` | VARCHAR(50) | yes |  | `'active'` |  |
 | `member_class` | VARCHAR(20) | yes | IDX |  |  |
 | `member_status` | VARCHAR(20) | yes | IDX |  |  |
@@ -9917,7 +9951,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (338 references)
+### → `users` (340 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10003,6 +10037,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `equipment_requests` | `fulfilled_by` | SET NULL | yes |
 | `equipment_requests` | `requester_id` | CASCADE | no |
 | `equipment_requests` | `reviewed_by` | SET NULL | yes |
+| `event_attendance_petitions` | `reviewed_by` | SET NULL | yes |
+| `event_attendance_petitions` | `user_id` | CASCADE | no |
 | `event_external_attendees` | `created_by` | SET NULL | yes |
 | `event_external_attendees` | `updated_by` | SET NULL | yes |
 | `event_hour_mappings` | `created_by` | RESTRICT | yes |
@@ -10260,7 +10296,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (231 references)
+### → `organizations` (232 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10318,6 +10354,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `equipment_check_templates` | `organization_id` | CASCADE | no |
 | `equipment_kits` | `organization_id` | CASCADE | no |
 | `equipment_requests` | `organization_id` | CASCADE | no |
+| `event_attendance_petitions` | `organization_id` | CASCADE | no |
 | `event_external_attendees` | `organization_id` | CASCADE | no |
 | `event_hour_mappings` | `organization_id` | CASCADE | no |
 | `event_request_email_templates` | `organization_id` | CASCADE | no |
@@ -10566,13 +10603,14 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `locations` | `facility_id` | SET NULL | yes |
 | `purchase_requests` | `facility_id` | SET NULL | yes |
 
-### → `events` (15 references)
+### → `events` (16 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `admin_hours_entries` | `source_event_id` | SET NULL | yes |
 | `course_cohort_classes` | `event_id` | SET NULL | yes |
 | `elections` | `event_id` | SET NULL | yes |
+| `event_attendance_petitions` | `event_id` | CASCADE | no |
 | `event_external_attendees` | `event_id` | CASCADE | no |
 | `event_requests` | `event_id` | SET NULL | yes |
 | `event_rsvps` | `event_id` | CASCADE | no |

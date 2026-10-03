@@ -239,6 +239,12 @@ type AdminTab = 'overview' | 'settings';
 /** A clearance still waiting on the member: the backend's INITIATED and IN_PROGRESS. */
 const OPEN_CLEARANCE_STATUSES = new Set(['initiated', 'in_progress']);
 
+const isRecord = (body: unknown): body is Record<string, unknown> => typeof body === 'object' && body !== null;
+
+/** An object carrying an array under `key`, the shape the paged inventory endpoints return. */
+const hasList = (body: unknown, key: string): body is Record<string, unknown> =>
+  isRecord(body) && Array.isArray(body[key]);
+
 const TABS: AdminHubTab<AdminTab>[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'settings', label: 'Settings' },
@@ -333,22 +339,32 @@ export const InventoryAdminHub: React.FC = () => {
     // is broken when it is working exactly as configured. The figures these
     // fill are inventory figures; there is nothing for them to say to someone
     // who administers neither.
-    const sources: readonly (readonly [string, Promise<unknown>])[] = canManage
+    // Each source carries the shape check its consumer below depends on. A
+    // request can succeed with a body that is not what it declares — a captive
+    // portal's HTML page answers 200 — and `value()` used to cast that straight
+    // through, so `{}` reached `.clearances.filter` and took the hub down. A
+    // malformed body is now a failed source like any other: named in the
+    // banner, with the fallback shown, rather than a crash or a silent zero.
+    const sources: readonly (readonly [string, Promise<unknown>, (body: unknown) => boolean])[] = canManage
       ? [
-          ['summary', inventoryService.getSummary()],
-          ['low stock', inventoryService.getLowStockItems()],
-          ['returns', inventoryService.getReturnRequests({ status: 'requested' })],
-          ['gear requests', inventoryService.getEquipmentRequests({ status: 'pending' })],
-          ['setup', inventoryService.getSetupStatus()],
-          ['temporary loans', inventoryService.getOverdueCheckouts()],
-          ['maintenance', inventoryService.getMaintenanceDueItems(30)],
-          ['write-offs', inventoryService.getWriteOffRequests({ status: 'pending' })],
-          ['purchase deliveries', inventoryService.getReorderRequests({ status: 'ordered' })],
+          ['summary', inventoryService.getSummary(), isRecord],
+          ['low stock', inventoryService.getLowStockItems(), Array.isArray],
+          ['returns', inventoryService.getReturnRequests({ status: 'requested' }), Array.isArray],
+          [
+            'gear requests',
+            inventoryService.getEquipmentRequests({ status: 'pending' }),
+            (body) => hasList(body, 'requests') && typeof body.total === 'number',
+          ],
+          ['setup', inventoryService.getSetupStatus(), isRecord],
+          ['temporary loans', inventoryService.getOverdueCheckouts(), (body) => hasList(body, 'checkouts')],
+          ['maintenance', inventoryService.getMaintenanceDueItems(30), Array.isArray],
+          ['write-offs', inventoryService.getWriteOffRequests({ status: 'pending' }), Array.isArray],
+          ['purchase deliveries', inventoryService.getReorderRequests({ status: 'ordered' }), Array.isArray],
           // Every status, filtered below: a clearance opens as `initiated` and
           // only becomes `in_progress` once something is returned, so asking for
           // `in_progress` alone left a freshly dropped member's clearance off this
           // list entirely (workflow review W15).
-          ['departure clearances', inventoryService.getDepartureClearances()],
+          ['departure clearances', inventoryService.getDepartureClearances(), (body) => hasList(body, 'clearances')],
         ]
       : [];
     const [results, medicalSettled] = await Promise.all([
@@ -357,10 +373,12 @@ export const InventoryAdminHub: React.FC = () => {
     ]);
     // Widened from the `as const` tuple's literal union: the medical request is
     // not one of its members, and it reports into the same banner.
-    const failed: string[] = results.flatMap((result, index) => {
-      const source = sources[index];
-      return result.status === 'rejected' && source ? [source[0]] : [];
-    });
+    const usable = (index: number): boolean => {
+      const result = results[index];
+      const check = sources[index]?.[2];
+      return result?.status === 'fulfilled' && check !== undefined && check(result.value);
+    };
+    const failed: string[] = sources.flatMap(([name], index) => (usable(index) ? [] : [name]));
 
     const medicalResult = medicalSettled[0];
     if (medicalResult?.status === 'rejected') failed.push('EMS supplies');
@@ -369,7 +387,7 @@ export const InventoryAdminHub: React.FC = () => {
     setFailedSources(failed);
     const value = <T,>(index: number, fallback: T): T => {
       const result = results[index];
-      return result?.status === 'fulfilled' ? (result.value as T) : fallback;
+      return result?.status === 'fulfilled' && usable(index) ? (result.value as T) : fallback;
     };
     const summaryData = value<InventorySummary | null>(0, null);
     const lowStock = value<LowStockAlert[]>(1, []);

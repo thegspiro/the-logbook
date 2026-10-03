@@ -50,6 +50,7 @@ from app.schemas.role import UserRoleAssignment, UserRoleResponse
 from app.schemas.user import (
     AdminPasswordReset,
     AdminUserCreate,
+    BottomNavigationPreference,
     ContactInfoUpdate,
     DeletionImpactResponse,
     MemberAuditLogEntry,
@@ -60,6 +61,7 @@ from app.schemas.user import (
     UserProfileResponse,
     UserUpdate,
     UserWithRolesResponse,
+    normalize_bottom_nav_slots,
     resolve_profile_visibility,
 )
 from app.services.admin_continuity_service import (
@@ -76,6 +78,7 @@ from app.services.email_policy import (
     member_choice,
 )
 from app.services.email_service import welcome_email_can_send
+from app.services.member_service_history_service import MemberServiceHistoryService
 from app.services.operational_rank_service import (
     OperationalRankService,
     rank_not_configured_message,
@@ -89,6 +92,8 @@ from app.services.user_deletion_service import (
 from app.services.user_service import UserService
 from app.utils.membership import (
     ADMINISTRATIVE_RANK_MESSAGE,
+    DEACTIVATED_EMAIL_MESSAGE,
+    DEACTIVATED_USERNAME_MESSAGE,
     DEFAULT_CLASS,
     is_administrative,
     split_membership_type,
@@ -209,16 +214,22 @@ async def create_member(
 
     from app.core.security import generate_temporary_password, hash_password
 
-    # Check if username already exists
+    # Check if username already exists. Deactivated rows count: the unique index
+    # includes them, so skipping them only moved the failure to the insert.
     result = await db.execute(
         select(User)
         .where(User.username == user_data.username)
         .where(User.organization_id == str(current_user.organization_id))
-        .where(User.deleted_at.is_(None))
     )
-    if result.scalar_one_or_none():
+    existing_username = result.scalar_one_or_none()
+    if existing_username:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Username already exists"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                DEACTIVATED_USERNAME_MESSAGE
+                if existing_username.deleted_at is not None
+                else "Username already exists"
+            ),
         )
 
     # Check if membership number already exists in the organization
@@ -232,14 +243,18 @@ async def create_member(
                 status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
             ) from e
 
-    # Check if email already exists (including archived members)
+    # Check if email already exists (including archived and deactivated members)
     result = await db.execute(
         select(User)
         .where(User.email == user_data.email)
         .where(User.organization_id == str(current_user.organization_id))
-        .where(User.deleted_at.is_(None))
     )
     existing_user = result.scalar_one_or_none()
+    if existing_user and existing_user.deleted_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=DEACTIVATED_EMAIL_MESSAGE,
+        )
     if existing_user:
         if existing_user.status == UserStatus.ARCHIVED:
             raise HTTPException(
@@ -398,7 +413,21 @@ async def create_member(
         new_user.member_status = user_data.member_status
 
     db.add(new_user)
-    await db.flush()  # Flush to get the user ID
+    try:
+        await db.flush()  # Flush to get the user ID
+    except IntegrityError as e:
+        # The checks above cover every unique column; this is the backstop for
+        # a row created concurrently between those checks and this insert, so
+        # it reads as a refused create rather than a 500.
+        await db.rollback()
+        logger.warning(f"Member create hit a unique index: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Another member record already uses this username, email or "
+                "membership number"
+            ),
+        ) from e
 
     # Assign initial roles if provided (already resolved and ceiling-checked
     # above, before this user row existed).
@@ -670,15 +699,50 @@ def _withhold_profile_visibility(
     payload.profile_visibility = None
 
 
-def _profile_response(
-    user: User, current_user: User, is_self: bool
+async def _redact_profile_for_viewer(
+    db: AsyncSession,
+    payload: UserProfileResponse,
+    user: User,
+    current_user: User,
+    is_self: bool,
+) -> None:
+    """Blank, in place, what ``current_user`` may not see of ``user``'s profile.
+
+    The one rule for every route that serialises ``UserProfileResponse`` — the
+    profile read and both profile writes. A write answering with fields the
+    read withholds would make the read's redaction advisory: a ``users.edit``
+    holder without ``members.manage`` could save a colleague's profile
+    unchanged and read back the date of birth, emergency contacts and home
+    address the profile page redacts for them.
+
+    The subject and members-managers are exempt, as on the read. Those are
+    also exactly the viewers ``_withhold_profile_visibility`` leaves the
+    ``profile_visibility`` object for, and ``MemberProfilePage`` reads its
+    presence as "this record arrived unredacted" to decide whether to show
+    restricted-PII sections and edit forms. Keep the two exemptions identical.
+    """
+    user_permissions = _collect_user_permissions(current_user)
+    is_admin = _has_permission("members.manage", user_permissions)
+    if not (is_admin or is_self):
+        visibility = await _load_contact_visibility(db, current_user, is_admin)
+        _clear_hidden_contact_fields(
+            payload, visibility, resolve_profile_visibility(user)
+        )
+        _clear_leadership_only_fields(payload)
+        if not _has_permission("users.view", user_permissions):
+            _clear_directory_only_profile_metadata(payload)
+    _withhold_profile_visibility(payload, current_user, is_self)
+
+
+async def _profile_response(
+    db: AsyncSession, user: User, current_user: User, is_self: bool
 ) -> User | UserProfileResponse:
     """What a profile write returns.
 
     The subject and members-managers get the row itself, which FastAPI
     serialises through ``UserProfileResponse`` exactly as before. Anyone else
-    — a ``users.edit`` holder editing a colleague — gets a payload with the
-    subject's visibility choice withheld, on the same terms as the read.
+    — a ``users.edit`` holder editing a colleague — gets the payload redacted
+    by ``_redact_profile_for_viewer``, on exactly the terms of the read.
     Serialising only on that path keeps the write handlers indifferent to how
     complete the row object is, which their unit tests rely on.
     """
@@ -687,7 +751,7 @@ def _profile_response(
     ):
         return user
     payload = UserProfileResponse.model_validate(user)
-    payload.profile_visibility = None
+    await _redact_profile_for_viewer(db, payload, user, current_user, is_self)
     return payload
 
 
@@ -835,6 +899,9 @@ async def _enforce_role_grant_ceiling(
     roles: list[Role],
     db: AsyncSession,
     ip_address: str | None,
+    *,
+    report: bool = True,
+    detail: str | None = None,
 ) -> None:
     """Prevent privilege escalation through role assignment.
 
@@ -849,17 +916,21 @@ async def _enforce_role_grant_ceiling(
 
     A blocked attempt is reported to security monitoring (a CRITICAL alert), so
     a user probing for an escalation path is visible even though it's denied.
+    ``report=False`` refuses without the alert, for a role the caller did not
+    choose -- one someone else stored on the record they are acting on.
     """
     caller_perms = _collect_user_permissions(current_user)
     for role in roles:
         for perm in role.permissions or []:
             if not _has_permission(perm, caller_perms):
-                await report_privilege_escalation_attempt(
-                    db, str(current_user.id), f"role:{role.id}", ip_address
-                )
+                if report:
+                    await report_privilege_escalation_attempt(
+                        db, str(current_user.id), f"role:{role.id}", ip_address
+                    )
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail=(
+                    detail=detail
+                    or (
                         "You cannot assign a role that grants permissions "
                         "beyond your own."
                     ),
@@ -1043,8 +1114,18 @@ async def assign_user_roles(
 
     # Prevent privilege escalation: the caller cannot grant a role that exceeds
     # their own permissions (e.g. assigning a wildcard "System Owner" role).
+    #
+    # Only roles being *added* are grants. This call replaces the whole set, so
+    # the list always repeats the member's existing positions; checking those
+    # too refused a coordinator adding "Driver" to the Chief -- and reported it
+    # as a CRITICAL escalation attempt -- because the Chief's own position was
+    # still in the list. Keeping or removing a position grants nothing.
+    held = {str(r.id) for r in user.roles}
     await _enforce_role_grant_ceiling(
-        current_user, list(roles), db, get_client_ip(request)
+        current_user,
+        [r for r in roles if str(r.id) not in held],
+        db,
+        get_client_ip(request),
     )
 
     # The escalation ceiling above only guards *raising* permissions. This call
@@ -1419,15 +1500,7 @@ async def get_user_with_roles(
     # its own profile through here and writes the fields back, so redacting for
     # self would blank a member's own address and phone on their next save.
     payload = UserProfileResponse.model_validate(user)
-    if not (is_admin or is_self):
-        visibility = await _load_contact_visibility(db, current_user, is_admin)
-        _clear_hidden_contact_fields(
-            payload, visibility, resolve_profile_visibility(user)
-        )
-        _clear_leadership_only_fields(payload)
-        if not _has_permission("users.view", user_permissions):
-            _clear_directory_only_profile_metadata(payload)
-    _withhold_profile_visibility(payload, current_user, is_self)
+    await _redact_profile_for_viewer(db, payload, user, current_user, is_self)
 
     return payload
 
@@ -1483,8 +1556,8 @@ async def update_contact_info(
             # so the caller's own row is actually excluded (a UUID-vs-str compare
             # never matches, producing a spurious "already in use" on self-save).
             .where(User.id != str(user_id))
-            .where(User.deleted_at.is_(None))
         )
+        # Deactivated rows count, as on create: the unique index includes them.
         if existing.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -1496,11 +1569,14 @@ async def update_contact_info(
             user.email_verified = False
         user.email = contact_update.email
 
-    if contact_update.phone is not None:
-        user.phone = contact_update.phone
+    # Keyed on what the caller sent, not on None: an explicit null (or a blank)
+    # clears the number. `is not None` made clearing impossible -- the member
+    # emptied the box, saved, and got the old number back with a 200.
+    if "phone" in contact_update.model_fields_set:
+        user.phone = (contact_update.phone or "").strip() or None
 
-    if contact_update.mobile is not None:
-        user.mobile = contact_update.mobile
+    if "mobile" in contact_update.model_fields_set:
+        user.mobile = (contact_update.mobile or "").strip() or None
 
     if contact_update.notification_preferences is not None:
         # Merge, never replace. Every field on NotificationPreferences defaults
@@ -1569,8 +1645,8 @@ async def update_contact_info(
         username=current_user.username,
     )
 
-    return _profile_response(
-        user, current_user, is_self=str(current_user.id) == str(user_id)
+    return await _profile_response(
+        db, user, current_user, is_self=str(current_user.id) == str(user_id)
     )
 
 
@@ -1793,6 +1869,17 @@ async def update_user_profile(
             # permissions live on a member now outside the chain of command.
             update_data["rank"] = None
 
+        if "hire_date" in update_data and update_data["hire_date"] != user.hire_date:
+            try:
+                await MemberServiceHistoryService(db).check_hire_date_change(
+                    user, update_data["hire_date"]
+                )
+            except ValueError as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=safe_error_detail(e),
+                ) from e
+
     # Snapshot for the audit trail before `emergency_contacts` is popped below.
     # Taken from `update_data` rather than the raw payload because a move to the
     # administrative class clears the member's rank without the client having
@@ -1875,7 +1962,7 @@ async def update_user_profile(
         username=current_user.username,
     )
 
-    return _profile_response(user, current_user, is_self)
+    return await _profile_response(db, user, current_user, is_self)
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -2888,6 +2975,39 @@ async def set_my_profile_visibility(
     )
     await db.commit()
 
+    return body
+
+
+@router.get("/me/bottom-navigation", response_model=BottomNavigationPreference)
+async def get_my_bottom_navigation(
+    current_user: User = Depends(get_current_user),
+):
+    """
+    The calling member's chosen phone bottom-bar tabs, or ``null`` slots when
+    they have not chosen and the bar uses its role-based defaults. The same
+    value is served on ``/auth/me`` so the bar needs no request of its own.
+    """
+    return BottomNavigationPreference(
+        slots=normalize_bottom_nav_slots(current_user.bottom_nav_slots)
+    )
+
+
+@router.put("/me/bottom-navigation", response_model=BottomNavigationPreference)
+async def set_my_bottom_navigation(
+    body: BottomNavigationPreference,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Replace the calling member's bottom-bar tabs, or clear them with
+    ``null``. Self-scoped by construction: there is no user id to point at
+    somebody else's bar. Not audited — it decides only which shortcuts the
+    member's own phone shows, and grants nothing.
+    """
+    # A fresh list on every write, never an in-place mutation, so SQLAlchemy
+    # sees the change on a plain JSON column (pitfall #12).
+    current_user.bottom_nav_slots = list(body.slots) if body.slots else None
+    await db.commit()
     return body
 
 

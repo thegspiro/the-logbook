@@ -14,9 +14,19 @@ interface QuickDurationButtonsProps {
   /** True while there is no start time to measure from. */
   disabled?: boolean;
   size?: 'sm' | 'md';
+  /** Hours offered; defaults to the Create Events presets. */
+  presets?: readonly number[];
+  /** Label each button as an offset from the start ("+12 hours"). */
+  signed?: boolean;
 }
 
-const QuickDurationButtons: React.FC<QuickDurationButtonsProps> = ({ onSelect, disabled = false, size = 'md' }) => (
+const QuickDurationButtons: React.FC<QuickDurationButtonsProps> = ({
+  onSelect,
+  disabled = false,
+  size = 'md',
+  presets = DURATION_PRESET_HOURS,
+  signed = false,
+}) => (
   <div>
     <span
       className={
@@ -28,7 +38,7 @@ const QuickDurationButtons: React.FC<QuickDurationButtonsProps> = ({ onSelect, d
       Quick duration
     </span>
     <div className="flex flex-wrap gap-2">
-      {DURATION_PRESET_HOURS.map((hours) => (
+      {presets.map((hours) => (
         <button
           key={hours}
           type="button"
@@ -39,6 +49,7 @@ const QuickDurationButtons: React.FC<QuickDurationButtonsProps> = ({ onSelect, d
             size === 'sm' ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-sm'
           }`}
         >
+          {signed ? '+' : ''}
           {hours} {hours === 1 ? 'hour' : 'hours'}
         </button>
       ))}

@@ -538,12 +538,23 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
         </div>
       ) : (
         <>
-          {shifts.length === 0 && emptyAction && (
+          {/* Shown to everyone, not only to whoever can fill it: a member
+              looking at a blank grid cannot otherwise tell "nothing published
+              yet" from a page that failed to load. Never beside a load error,
+              where the empty list is not the answer. */}
+          {shifts.length === 0 && !error && (
             <div className="card mb-3 p-6 text-center">
-              <p className="text-theme-text-secondary mb-3 text-sm">
+              <p className="text-theme-text-secondary text-sm">
                 Nothing is scheduled for this {view === 'week' ? 'week' : 'month'} yet.
               </p>
-              {emptyAction}
+              {emptyAction ? (
+                <div className="mt-3">{emptyAction}</div>
+              ) : (
+                <p className="text-theme-text-muted mt-1 text-sm">
+                  Your scheduling officer has not published shifts for these dates. Once they do, shifts with open seats
+                  show up here and you can sign up for them.
+                </p>
+              )}
             </div>
           )}
 

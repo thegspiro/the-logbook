@@ -282,10 +282,17 @@ const MyEquipmentPage: React.FC = () => {
       <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
         {/* Header */}
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-          <div className="flex items-center gap-3">
-            <Package className="text-theme-text-primary h-6 w-6" />
-            <h1 className="text-theme-text-primary text-2xl font-bold">My Issued Gear</h1>
-            <span className="text-theme-text-muted text-sm">({totalItems} items)</span>
+          <div>
+            <div className="flex items-center gap-3">
+              <Package className="text-theme-text-primary h-6 w-6" />
+              <h1 className="text-theme-text-primary text-2xl font-bold">My Issued Gear</h1>
+              <span className="text-theme-text-muted text-sm">
+                ({totalItems} {totalItems === 1 ? 'item' : 'items'})
+              </span>
+            </div>
+            <p className="text-theme-text-muted mt-1 text-sm">
+              The department equipment you are responsible for, and your requests for more.
+            </p>
           </div>
           <button
             type="button"
@@ -312,7 +319,7 @@ const MyEquipmentPage: React.FC = () => {
           />
           <StatCard
             icon={<ClipboardList className="h-5 w-5 text-purple-500" />}
-            label="Pending"
+            label="Pending requests"
             value={pendingReqCount}
           />
         </div>
@@ -417,7 +424,22 @@ const MyEquipmentPage: React.FC = () => {
 
         {/* Gear held open-endedly: assignments and pool issuances together */}
         <Section title="Issued to Me" count={myGear.length} icon={<Package className="h-4 w-4 text-green-500" />}>
-          {myGear.length === 0 && <p className="text-theme-text-muted py-2 text-sm">Nothing issued to you.</p>}
+          {myGear.length === 0 && (
+            <div className="text-theme-text-muted space-y-2 py-2 text-sm">
+              <p>Nothing has been issued to you yet.</p>
+              <p>
+                When the quartermaster hands you department gear, such as turnouts, a radio or uniforms, it is listed
+                here so you can see what you are responsible for and return it when you leave. Need something now? Use
+                Request Equipment above.
+              </p>
+              <Link
+                to="/learning/gear"
+                className="mobile-touch-target font-medium text-red-800 hover:underline dark:text-red-300"
+              >
+                Take the short walkthrough in the Learning Center
+              </Link>
+            </div>
+          )}
           {myGear.map((g) => (
             <div
               key={g.key}
@@ -483,7 +505,12 @@ const MyEquipmentPage: React.FC = () => {
           count={checkouts.length}
           icon={<Clock className="h-4 w-4 text-yellow-500" />}
         >
-          {checkouts.length === 0 && <p className="text-theme-text-muted py-2 text-sm">No active temporary loans.</p>}
+          {checkouts.length === 0 && (
+            <p className="text-theme-text-muted py-2 text-sm">
+              No active temporary loans. A temporary loan is gear lent to you for a set time, such as a spare radio for
+              an event; it shows here with the date it is due back.
+            </p>
+          )}
           {checkouts.map((c) => (
             <div
               key={c.checkout_id}
@@ -600,6 +627,10 @@ const MyEquipmentPage: React.FC = () => {
           size="sm"
         >
           <div className="space-y-4">
+            <p className="text-theme-text-muted text-sm">
+              This tells the quartermaster you are bringing it back. Hand the item in as usual; it stays on your list
+              until they confirm they have it.
+            </p>
             <div>
               <label htmlFor="return-condition" className={labelClass}>
                 Condition

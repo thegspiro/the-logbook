@@ -114,8 +114,12 @@ export const ReceiveDeliveryModal: React.FC<ReceiveDeliveryModalProps> = ({ onCl
 
             <div className="space-y-2">
               {lines.map((line, index) => (
+                // Every line repeats the same four field names; the group is
+                // what tells a screen reader which line it is in.
                 <div
                   key={line.key}
+                  role="group"
+                  aria-label={`Line ${index + 1}`}
                   className="border-theme-surface-border grid gap-2 rounded-md border p-3 sm:grid-cols-12"
                 >
                   <div className="sm:col-span-5">

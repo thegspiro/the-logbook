@@ -697,6 +697,8 @@ export const ElectionsPage: React.FC = () => {
                       </label>
                       <DateTimeQuarterHour
                         id="election-start-date"
+                        timeLabel="Start time"
+                        timezone={tz}
                         required
                         value={formData.start_date}
                         onChange={(val) => handleStartDateChange(val)}
@@ -710,6 +712,8 @@ export const ElectionsPage: React.FC = () => {
                       </label>
                       <DateTimeQuarterHour
                         id="election-end-date"
+                        timeLabel="End time"
+                        timezone={tz}
                         required
                         value={formData.end_date}
                         onChange={(val) => setFormData({ ...formData, end_date: val })}
@@ -773,6 +777,11 @@ export const ElectionsPage: React.FC = () => {
                               setShowPositionDropdown(true);
                             }}
                             onFocus={() => setShowPositionDropdown(true)}
+                            // Options commit on mousedown and prevent the blur,
+                            // so closing here cannot swallow a pick. This
+                            // replaces a full-screen click-away layer that sat
+                            // over the Add button and ate the first click.
+                            onBlur={() => setShowPositionDropdown(false)}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
                                 e.preventDefault();
@@ -847,14 +856,6 @@ export const ElectionsPage: React.FC = () => {
                           Add
                         </button>
                       </div>
-                      {/* Click-away listener */}
-                      {showPositionDropdown && (
-                        <div
-                          className="fixed inset-0 z-10"
-                          aria-hidden="true"
-                          onClick={() => setShowPositionDropdown(false)}
-                        />
-                      )}
                     </div>
                     <p className="text-theme-text-muted mt-1 text-xs">
                       Select from existing ranks or type a custom position name.

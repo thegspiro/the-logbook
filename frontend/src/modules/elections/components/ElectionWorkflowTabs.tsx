@@ -118,12 +118,31 @@ export const ElectionWorkflowTabs: React.FC<ElectionWorkflowTabsProps> = ({
     }
   }, [validActiveTab, activeTab, onTabChange]);
 
+  // Only the selected tab is in the tab order (tabIndex -1 on the rest), so
+  // the arrow keys are the one way a keyboard reaches the others — the
+  // WAI-ARIA tabs pattern, with selection following focus.
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+    const index = tabs.findIndex((tab) => tab.id === validActiveTab);
+    let next: number;
+    if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+    else if (event.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = tabs.length - 1;
+    else return;
+    event.preventDefault();
+    const target = tabs[next];
+    if (!target) return;
+    onTabChange(target.id);
+    document.getElementById(`tab-${target.id}`)?.focus();
+  };
+
   return (
     <div className="mb-6">
       <nav
         className="border-theme-surface-border flex gap-1 overflow-x-auto border-b pb-1"
         role="tablist"
         aria-label="Election management sections"
+        onKeyDown={handleKeyDown}
       >
         {tabs.map((tab) => {
           const Icon = tab.icon;
@@ -143,7 +162,7 @@ export const ElectionWorkflowTabs: React.FC<ElectionWorkflowTabsProps> = ({
                   : 'text-theme-text-muted hover:text-theme-text-secondary hover:border-theme-surface-border border-transparent'
               }`}
             >
-              <Icon className="h-4 w-4" />
+              <Icon className="h-4 w-4" aria-hidden="true" />
               {tab.label}
               {tab.badge != null && tab.badge > 0 && (
                 <span

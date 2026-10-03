@@ -140,8 +140,8 @@ describe('StorageAreasPage', () => {
     renderWithRouter(<StorageAreasPage />);
     await screen.findByText('Cab');
 
-    await user.click(screen.getByRole('button', { name: 'Expand' }));
-    await user.click(screen.getAllByRole('button', { name: 'Expand' })[0] as HTMLElement);
+    await user.click(screen.getByRole('button', { name: 'Expand Cab' }));
+    await user.click(screen.getByRole('button', { name: 'Expand Medical bag' }));
     expect(screen.getByLabelText('Cab › Medical bag › Airway pouch')).toBeInTheDocument();
 
     expect(hierarchySnapshot()).toMatchSnapshot();
@@ -191,7 +191,7 @@ describe('StorageAreasPage', () => {
     renderWithRouter(<StorageAreasPage />);
     await screen.findByText('Cab');
 
-    expect(screen.getByRole('button', { name: 'Expand' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Expand Cab' })).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByRole('button', { name: 'Open Cab' })).not.toBeInTheDocument();
   });
 
@@ -257,7 +257,7 @@ describe('StorageAreasPage', () => {
     await screen.findByText('Bay Rack');
 
     await user.selectOptions(screen.getByLabelText(/Room/), 'room-1');
-    await user.click(screen.getByRole('button', { name: 'Expand' }));
+    await user.click(screen.getByRole('button', { name: 'Expand Bay Rack' }));
     expect(screen.getByText('Top Shelf')).toBeInTheDocument();
   });
 
@@ -353,6 +353,37 @@ describe('StorageAreasPage', () => {
     await user.click(screen.getByRole('button', { name: 'Update' }));
     await waitFor(() => expect(mockUpdateStorageArea).toHaveBeenCalledTimes(1));
     expect(mockUpdateStorageArea.mock.calls[0]?.[0]).toBe('a-rack');
+  });
+
+  // Delete only deactivates the area, so its items kept pointing at it and
+  // read "--" for their location everywhere; the dialog said "move them" and
+  // then deleted anyway.
+  it('waits for an area to be emptied before deleting it', async () => {
+    mockGetStorageAreas.mockResolvedValue([
+      makeArea({ item_count: 2 }),
+      makeArea({ id: 'a-shelf', name: 'Shelf 1', parent_id: 'a-rack' }),
+    ]);
+    const user = userEvent.setup();
+    renderWithRouter(<StorageAreasPage />);
+    await screen.findByText('Rack A');
+
+    await user.click(screen.getByRole('button', { name: 'Delete Rack A' }));
+    expect(await screen.findByText(/Move them to another storage area first/)).toBeInTheDocument();
+    expect(screen.getByText(/nested inside it/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled();
+    expect(mockDeleteStorageArea).not.toHaveBeenCalled();
+  });
+
+  it('offers no toggle for an area with nothing nested in it', async () => {
+    setViewportWidth(1024);
+    mockGetStorageAreas.mockResolvedValue([makeArea()]);
+    renderWithRouter(<StorageAreasPage />);
+    await screen.findByText('Rack A');
+
+    expect(screen.queryByRole('button', { name: /^(Expand|Collapse)/ })).not.toBeInTheDocument();
+    expect(
+      screen.getAllByRole('button').filter((b) => !b.getAttribute('aria-label') && !b.textContent?.trim())
+    ).toEqual([]);
   });
 
   it('deletes an area after confirmation', async () => {

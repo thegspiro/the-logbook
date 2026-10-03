@@ -65,6 +65,17 @@ describe('ImportInventory', () => {
     expect(input).toBeInTheDocument();
   });
 
+  // The file input was display:none and the zone around it a plain div, so
+  // no keyboard could reach the one control that starts an import.
+  it('keeps the file chooser named and in the tab order', () => {
+    renderWithRouter(<ImportInventory />);
+
+    const input = screen.getByLabelText('Choose a CSV file');
+    expect(input).toBe(screen.getByTestId('csv-file-input'));
+    expect(input).not.toHaveClass('hidden');
+    expect(input).toHaveClass('sr-only');
+  });
+
   it('calls downloadImportTemplate when template button clicked', async () => {
     const user = userEvent.setup();
     const mockBlob = new Blob(['csv data'], { type: 'text/csv' });

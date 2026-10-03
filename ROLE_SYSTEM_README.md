@@ -187,6 +187,9 @@ The following roles are automatically created for each organization:
   (events, notifications, storefront)
 - Deliberately narrower than the coordinator: no member-record edits, no
   position assignment, no training-disclosure settings
+- Issues and revokes member ID cards (`members.manage_id_cards`) alongside the
+  coordinator _(2026-10-02)_ — handing a new member their card is the last
+  step of the pipeline this role runs
 - Copied, with the coordinator, on applicant-withdrawal emails
 - Created on existing departments by migration `43e9df281412`
 - Cannot be deleted

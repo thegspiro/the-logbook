@@ -4,6 +4,68 @@
 
 ---
 
+## Out-of-rotation finding (2026-09-30) — MP-31
+
+Found by a membership-module review outside the rotation, not by a pass. No
+other scope was re-read, so the standing FLAGGED items are unchanged.
+
+### MP-31 — HIGH — a stored target role let a pipeline coordinator mint an administrator account — ✅ FIXED
+
+**What:** `target_role_id` (added 2026-09-24, after pass 7) is copied onto the
+new member at conversion. `create_prospect` and `update_prospect` checked only
+that the role is in the organization. `POST /prospects/{id}/transfer` ran
+`_enforce_role_grant_ceiling` only on an explicit `role_ids`, and
+`_do_transfer` fell back to the stored role when none was sent. Automatic
+conversion (`complete_step` on a final stage with `auto_transfer_on_approval`)
+applied the stored role with no check at all.
+
+**Exploit:** a holder of `prospective_members.manage` (no role-management
+authority) creates an applicant with an email they control and
+`target_role_id` = the organization's `*` position, then converts them with
+`role_ids` omitted and a `password` of their choosing. Result: an ACTIVE
+account holding `*` whose password they know — full tenant takeover. The same
+stored role reached automatic conversion, where the welcome email carries the
+generated password to the attacker's address.
+
+**Why it was missed:** `test_privilege_ceiling_wiring.py` pins the ceiling on
+the explicit `role_ids` branch only, and
+`test_the_stored_role_is_applied_when_the_caller_sends_none` pinned the
+unchecked fallback as intended.
+
+**Fix:**
+
+- **Saving is granting.** `create_prospect` / `update_prospect` run the ceiling
+  on a target role the caller sets (`_enforce_target_role_ceiling`, alerting
+  like any other role grant). An update re-checks only a _change_: the drawer
+  re-sends the stored role on every save.
+- **Who chose it is recorded server-side**, as `metadata.target_role_set_by`,
+  rewritten only when `target_role_id` changes. Client metadata reaches
+  `create_prospect` verbatim (a public form's answers land at its top level),
+  so any incoming value for that key is discarded (`_with_target_role_setter`).
+- **Manual conversion** checks the role actually applied: the explicit
+  `role_ids`, or else the stored role, against the caller — without an alert
+  in the second case, since the caller did not choose it — and passes it on
+  explicitly, so the service fallback never runs on this path.
+- **Automatic conversion** applies the stored role only while its recorded
+  chooser is still active in the organization and holds every permission it
+  grants (`_target_role_setter_may_grant`). Otherwise the member converts with
+  the default position and a `target_role_not_applied` activity entry says a
+  leader must assign it. Roles stored before this fix have no recorded chooser
+  and are not applied automatically.
+
+**Tests:** `tests/test_prospect_target_role_ceiling.py` (14): forged setter
+discarded, re-save keeps the chooser, change/clear re-records it; automatic
+conversion applies within the chooser's ceiling and refuses beyond it, with no
+recorded chooser, and after the chooser left; create/update refuse and report
+a role beyond the caller and check before writing; manual conversion holds the
+stored role to the caller's ceiling without an alert, and applies one within
+it. The endpoint half fails against the unfixed endpoints, reproducing the
+exploit. `test_prospect_target_role_and_lifecycle.py` now records the chooser.
+
+**No schema change.** The chooser lives in the existing `metadata` JSON.
+
+---
+
 ## Pass 7 (2026-09-16) — 0 fixed, 0 new flagged, all 4 standing FLAGGED items re-verified unchanged
 
 **Watchdog note.** This iteration ran as a one-off watchdog pass (the

@@ -5,10 +5,10 @@ Request and response schemas for the prospective member pipeline endpoints.
 """
 
 from datetime import date, datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional, Tuple
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.membership_pipeline import (
     ActionType,
@@ -150,6 +150,76 @@ class PipelineStepResponse(PipelineStepBase):
     model_config = _response_config
 
 
+ConversionClass = Literal["operational", "administrative", "social"]
+ConversionStatus = Literal["probationary", "regular"]
+
+
+class ConversionOutcome(BaseModel):
+    """The class and starting status an applicant becomes as a member."""
+
+    member_class: ConversionClass
+    member_status: ConversionStatus
+
+
+# The outcomes conversion produced before pipelines could choose, and still
+# produces for a pipeline that has not: the Convert dialog's "Regular Member
+# (starts as probationary)" and "Administrative" buttons.
+DEFAULT_CONVERSION_OUTCOMES: Dict[str, Tuple[str, str]] = {
+    "operational": ("operational", "probationary"),
+    "administrative": ("administrative", "regular"),
+}
+
+
+class PipelineConversionConfig(BaseModel):
+    """What each applicant track becomes when the pipeline converts them.
+
+    The track is the applicant's ``desired_membership_type``: "administrative"
+    is the administrative track and anything else the operational one.
+    """
+
+    operational: ConversionOutcome = Field(
+        default_factory=lambda: ConversionOutcome(
+            member_class="operational", member_status="probationary"
+        )
+    )
+    administrative: ConversionOutcome = Field(
+        default_factory=lambda: ConversionOutcome(
+            member_class="administrative", member_status="regular"
+        )
+    )
+
+
+def conversion_track(desired_membership_type: Optional[str]) -> str:
+    """The applicant track a desired membership type falls on."""
+    return (
+        "administrative"
+        if (desired_membership_type or "").strip().lower() == "administrative"
+        else "operational"
+    )
+
+
+def resolve_conversion_outcome(
+    conversion_config: Optional[Dict[str, Any]],
+    desired_membership_type: Optional[str],
+) -> Tuple[str, str]:
+    """``(member_class, member_status)`` a converted applicant receives.
+
+    The single rule for it: automatic conversion applies it, and the Convert
+    dialog pre-fills from the pipeline's stored outcomes it serves.
+    """
+    track = conversion_track(desired_membership_type)
+    stored = (conversion_config or {}).get(track)
+    if isinstance(stored, dict):
+        try:
+            outcome = ConversionOutcome.model_validate(stored)
+            return outcome.member_class, outcome.member_status
+        except ValueError:
+            # Only ever written through PipelineConversionConfig; a row that
+            # somehow is not falls back rather than failing a conversion.
+            pass
+    return DEFAULT_CONVERSION_OUTCOMES[track]
+
+
 class PipelineBase(BaseModel):
     """Base schema for a membership pipeline"""
 
@@ -178,6 +248,15 @@ class PipelineBase(BaseModel):
 class PipelineCreate(PipelineBase):
     """Schema for creating a pipeline"""
 
+    conversion_config: Optional[PipelineConversionConfig] = Field(
+        None,
+        description=(
+            "What each applicant track becomes on conversion; null uses the "
+            "defaults (operational -> probationary operational, administrative "
+            "-> regular administrative)"
+        ),
+    )
+
     steps: Optional[List[PipelineStepCreate]] = Field(
         None, description="Optional initial steps"
     )
@@ -192,12 +271,26 @@ class PipelineUpdate(BaseModel):
     is_active: Optional[bool] = None
     auto_transfer_on_approval: Optional[bool] = None
     inactivity_config: Optional[Dict[str, Any]] = None
+    conversion_config: Optional[PipelineConversionConfig] = None
     public_status_enabled: Optional[bool] = None
     public_show_future_stages: Optional[bool] = None
 
 
 class PipelineResponse(PipelineBase):
     """Schema for pipeline response"""
+
+    # Always the effective outcomes, defaults filled in, so the Convert dialog
+    # pre-fills from what conversion will actually do instead of keeping its
+    # own copy of the defaults (CLAUDE.md pitfall #29). Saving them back makes
+    # the defaults explicit, which changes nothing.
+    conversion_config: PipelineConversionConfig = Field(
+        default_factory=PipelineConversionConfig
+    )
+
+    @field_validator("conversion_config", mode="before")
+    @classmethod
+    def _defaults_when_unset(cls, value: Any) -> Any:
+        return value if value else PipelineConversionConfig()
 
     id: UUID
     organization_id: UUID
@@ -724,8 +817,35 @@ class TransferProspectRequest(BaseModel):
         None, description="Emergency contacts for the new member"
     )
     membership_type: Optional[str] = Field(
-        None, description="Membership type: probationary or administrative"
+        None,
+        description=(
+            "Legacy membership type: probationary or administrative. Ignored "
+            "when member_class and member_status are sent"
+        ),
     )
+    member_class: Optional[ConversionClass] = Field(
+        None,
+        description=(
+            "Class for the new member; with member_status, overrides the "
+            "pipeline's conversion outcome for this applicant"
+        ),
+    )
+    member_status: Optional[ConversionStatus] = Field(
+        None, description="Starting status for the new member"
+    )
+    notes: Optional[str] = Field(
+        None,
+        max_length=2000,
+        description="Coordinator's notes on the conversion, kept in the activity log",
+    )
+
+    @model_validator(mode="after")
+    def _class_and_status_together(self) -> "TransferProspectRequest":
+        # One without the other would leave half the outcome to the pipeline
+        # rule and half to the caller -- a combination nobody chose.
+        if (self.member_class is None) != (self.member_status is None):
+            raise ValueError("Send member_class and member_status together")
+        return self
 
 
 class TransferProspectResponse(BaseModel):

@@ -9,7 +9,10 @@
 import React, { useEffect, useState } from 'react';
 import { electionService } from '../services/api';
 import type { ElectionResults as ElectionResultsType, CandidateResult, Election } from '../types/election';
-import { getErrorMessage } from '../utils/errorHandling';
+import { getErrorMessage, toAppError } from '../utils/errorHandling';
+import { formatDateTime } from '../utils/dateFormatting';
+import { useTimezone } from '../hooks/useTimezone';
+import { ElectionStatus } from '../constants/enums';
 import { getVictoryDescription } from '../utils/electionHelpers';
 
 interface ElectionResultsProps {
@@ -86,6 +89,7 @@ const CandidateResultCard: React.FC<{ candidate: CandidateResult }> = ({ candida
 );
 
 export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, election }) => {
+  const tz = useTimezone();
   const [results, setResults] = useState<ElectionResultsType | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -101,7 +105,18 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
       const data = await electionService.getResults(electionId);
       setResults(data);
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Results not available yet'));
+      // The server withholds results until the scheduled end date has passed,
+      // even when the election was closed early. Say when, rather than show a
+      // bare refusal to the secretary who just closed it.
+      const heldUntilEnd =
+        toAppError(err).status === 403 &&
+        election.status === ElectionStatus.CLOSED &&
+        new Date(election.end_date).getTime() > Date.now();
+      setError(
+        heldUntilEnd
+          ? `Voting is closed. Results will be available after the scheduled end, ${formatDateTime(election.end_date, tz)}.`
+          : getErrorMessage(err, 'Results not available yet')
+      );
     } finally {
       setLoading(false);
     }

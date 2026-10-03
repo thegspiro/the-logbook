@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { TrainingDashboardSummary } from '../../../../services/trainingServices';
-import { PendingValidationWidget, UpcomingExpirationsWidget } from '.';
+import { ComplianceOverviewWidget, PendingValidationWidget, UpcomingExpirationsWidget } from '.';
 import { TRAINING_WIDGET_METADATA } from './metadata';
 
 const data = {
@@ -9,6 +9,10 @@ const data = {
   stats: {
     total_members: 2,
     tracked_members: 2,
+    active_requirements: 1,
+    active_courses: 1,
+    training_sessions: 1,
+    active_programs: 0,
     compliant_members: 1,
     compliance_percentage: 50,
     expiring_count: 1,
@@ -53,5 +57,20 @@ describe('training dashboard widgets', () => {
       expect.stringContaining('validation_state=pending_review')
     );
     expect(screen.queryByText('Example Member')).not.toBeInTheDocument();
+  });
+  it('reports the compliance percentage when requirements exist', () => {
+    render(<ComplianceOverviewWidget data={data} />);
+    expect(screen.getByText('50%')).toBeInTheDocument();
+    expect(screen.getByText('1 of 2 active, non-exempt members')).toBeInTheDocument();
+  });
+  it('says compliance is not set up, not 100%, when no requirements exist', () => {
+    const empty = {
+      ...data,
+      stats: { ...data.stats, active_requirements: 0, compliant_members: 2, compliance_percentage: 100 },
+    };
+    render(<ComplianceOverviewWidget data={empty} />);
+    expect(screen.getByText('Not set up')).toBeInTheDocument();
+    expect(screen.queryByText('100%')).not.toBeInTheDocument();
+    expect(screen.getByRole('link')).toHaveAttribute('href', '/training/admin?page=setup&tab=requirements');
   });
 });

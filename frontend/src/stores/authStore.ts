@@ -239,6 +239,11 @@ interface AuthState {
   checkPermission: (permission: string) => boolean;
   hasRole: (role: string) => boolean;
   hasPosition: (position: string) => boolean;
+  /**
+   * Reflect a saved bottom-bar choice on the signed-in user, so the bar
+   * changes as soon as the save succeeds rather than on the next /auth/me.
+   */
+  setBottomNavSlots: (slots: string[] | null) => void;
 }
 
 const initialLockout = loadLockoutState();
@@ -589,5 +594,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   hasPosition: (position: string) => {
     const { user } = get();
     return user?.positions?.includes(position) || false;
+  },
+
+  setBottomNavSlots: (slots: string[] | null) => {
+    const { user } = get();
+    if (!user) return;
+    set({ user: { ...user, bottom_nav_slots: slots } });
   },
 }));

@@ -208,6 +208,27 @@ const isRsvpDeadlineSoon = (event: EventListItem, nowMs: number): boolean => {
 };
 
 /**
+ * Whether the API will refuse a member's RSVP on time grounds alone.
+ *
+ * Mirrors the two time checks in `EventService.create_or_update_rsvp`: the
+ * event has ended (`end_datetime`), or its `rsvp_deadline` has passed. Screens
+ * use it to withhold RSVP controls, because a button that can only produce a
+ * 400 is worse than an absent one. An unparseable date is treated as open so
+ * the server, not a malformed payload, makes the call.
+ */
+export function isRsvpClosed(
+  event: Pick<EventListItem, 'end_datetime' | 'rsvp_deadline'>,
+  now: Date = new Date()
+): boolean {
+  const nowMs = now.getTime();
+  const endsAt = Date.parse(event.end_datetime);
+  if (!Number.isNaN(endsAt) && endsAt < nowMs) return true;
+  if (!event.rsvp_deadline) return false;
+  const deadline = Date.parse(event.rsvp_deadline);
+  return !Number.isNaN(deadline) && deadline <= nowMs;
+}
+
+/**
  * Classify an event by what it needs from the current member.
  *
  * Precedence is fixed: live -> missed -> action -> waitlisted -> confirmed ->

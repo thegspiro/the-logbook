@@ -237,6 +237,28 @@ describe('EquipmentCheckForm quantity seeding', () => {
     expect(screen.getByRole('button', { name: 'Out of service' })).toHaveClass('bg-amber-800');
   });
 
+  // Every item's answers read "Pass", "Fail" with nothing saying which item
+  // they answer or which one was chosen: the choice was shown by colour alone.
+  it("groups each item's answers under its name and marks the chosen one", async () => {
+    const user = userEvent.setup();
+    render({ name: 'Portable light', checkType: 'function' });
+
+    const answers = await screen.findByRole('group', { name: 'Portable light' });
+    const pass = within(answers).getByRole('button', { name: 'Pass' });
+    const fail = within(answers).getByRole('button', { name: 'Fail' });
+    expect(pass).toHaveAttribute('aria-pressed', 'false');
+    expect(fail).toHaveAttribute('aria-pressed', 'false');
+
+    await user.click(fail);
+    expect(fail).toHaveAttribute('aria-pressed', 'true');
+    expect(pass).toHaveAttribute('aria-pressed', 'false');
+
+    await user.click(within(answers).getByRole('button', { name: 'Out of service' }));
+    expect(within(answers).getByRole('button', { name: 'Out of service' })).toHaveAttribute('aria-pressed', 'true');
+    expect(fail).toHaveAttribute('aria-pressed', 'false');
+    expect(within(answers).getByRole('button', { name: 'Not on truck' })).toHaveAttribute('aria-pressed', 'false');
+  });
+
   it('retains a failed online photo upload without claiming unconditional success', async () => {
     const onComplete = vi.fn();
     mockSubmitCheck.mockResolvedValue({

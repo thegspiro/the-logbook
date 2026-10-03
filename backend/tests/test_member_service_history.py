@@ -755,6 +755,81 @@ class TestStatusChangeWritesStints:
         assert await _stints(db_session, member) == []
 
 
+@pytest.mark.integration
+class TestHireDateEdit:
+    """A stint with a NULL start begins on the hire date, so editing the hire
+    date moves it -- and must not be able to move it onto or past its end."""
+
+    async def _edit(self, db, monkeypatch, officer, member, hire_date):
+        from app.api.v1.endpoints import users as ep
+        from app.schemas.user import UserUpdate
+
+        monkeypatch.setattr(ep, "_has_permission", lambda *_: True)
+        return await ep.update_user_profile(
+            uuid.UUID(member.id),
+            UserUpdate(hire_date=hire_date),
+            db=db,
+            current_user=officer,
+        )
+
+    async def _setup(self, db):
+        org = await _org(db)
+        officer = await _user(db, org, hire_date=date(2000, 1, 1))
+        member = await _user(db, org, hire_date=date(2010, 1, 1))
+        db.add_all(
+            [
+                MemberServicePeriod(
+                    organization_id=org.id,
+                    user_id=member.id,
+                    start_date=None,
+                    end_date=date(2014, 6, 30),
+                    separation_status="retired",
+                ),
+                MemberServicePeriod(
+                    organization_id=org.id,
+                    user_id=member.id,
+                    start_date=date(2018, 1, 1),
+                    end_date=None,
+                ),
+            ]
+        )
+        await db.flush()
+        return officer, member
+
+    @pytest.mark.parametrize(
+        "new_hire", [date(2014, 6, 30), date(2016, 1, 1)], ids=["on-end", "after-end"]
+    )
+    async def test_moving_the_hire_date_past_the_first_stint_is_refused(
+        self, db_session, monkeypatch, new_hire
+    ):
+        officer, member = await self._setup(db_session)
+
+        with pytest.raises(HTTPException) as exc:
+            await self._edit(db_session, monkeypatch, officer, member, new_hire)
+
+        assert exc.value.status_code == 400
+        assert "2014-06-30" in exc.value.detail
+        await db_session.refresh(member)
+        assert member.hire_date == date(2010, 1, 1)
+
+    async def test_clearing_the_hire_date_is_refused(self, db_session, monkeypatch):
+        officer, member = await self._setup(db_session)
+
+        with pytest.raises(HTTPException) as exc:
+            await self._edit(db_session, monkeypatch, officer, member, None)
+
+        assert exc.value.status_code == 400
+        assert "cannot be cleared" in exc.value.detail
+
+    async def test_a_hire_date_inside_the_stint_is_saved(self, db_session, monkeypatch):
+        officer, member = await self._setup(db_session)
+
+        await self._edit(db_session, monkeypatch, officer, member, date(2011, 3, 1))
+
+        await db_session.refresh(member)
+        assert member.hire_date == date(2011, 3, 1)
+
+
 @pytest.mark.unit
 def test_rejoin_options_are_optional():
     assert RejoinServiceOptions().model_dump() == {

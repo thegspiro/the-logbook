@@ -15,6 +15,7 @@ import type {
   ApplicantListFilters,
   PipelineViewMode,
   ElectionPackage,
+  ElectionPackageCreate,
   ElectionPackageUpdate,
   Interview,
   InterviewCreate,
@@ -23,8 +24,6 @@ import type {
 } from '../types';
 import { pipelineService, applicantService, interviewService } from '../services/api';
 import { handleStoreError } from '../../../utils/storeHelpers';
-import { toAppError } from '../../../utils/errorHandling';
-import { StageType } from '../../../constants/enums';
 import { KANBAN_PAGE_SIZE } from '../constants';
 
 export type PipelineTab = 'active' | 'inactive' | 'withdrawn' | 'rejected' | 'converted';
@@ -166,11 +165,13 @@ interface ProspectiveMembersState {
   fetchWithdrawnApplicants: (page?: number) => Promise<void>;
   fetchRejectedApplicants: (page?: number) => Promise<void>;
   fetchConvertedApplicants: (page?: number) => Promise<void>;
-  purgeInactiveApplicants: (applicantIds?: string[]) => Promise<void>;
+  /** Resolves with how many the server actually deleted; rejects on failure. */
+  purgeInactiveApplicants: (applicantIds?: string[]) => Promise<number>;
   updateInactivitySettings: (config: InactivityConfig) => Promise<void>;
 
   // Election package actions
   fetchElectionPackage: (applicantId: string) => Promise<void>;
+  createElectionPackage: (applicantId: string, data: ElectionPackageCreate) => Promise<void>;
   updateElectionPackage: (applicantId: string, data: ElectionPackageUpdate) => Promise<void>;
   submitElectionPackage: (applicantId: string) => Promise<void>;
   assignPackageToElection: (applicantId: string, electionId: string) => Promise<void>;
@@ -527,42 +528,17 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
   advanceApplicant: async (id: string, notes?: string) => {
     set({ isAdvancing: true, error: null });
     try {
-      const advanced = await applicantService.advanceStage(id, notes ? { notes } : undefined);
+      await applicantService.advanceStage(id, notes ? { notes } : undefined);
       // Advancing moves a stage count, and can move a status when the new
       // stage closes the application, so the header is refreshed with the list.
+      // Landing on an Election Vote stage creates its election package on the
+      // server, in the same transaction as the move, whichever path moved the
+      // applicant — so there is nothing to create here, only to re-read
+      // (ElectionPackageSection fetches it when the drawer shows the stage).
       await get().refreshPipelineView();
       const currentApplicant = get().currentApplicant;
       if (currentApplicant?.id === id) {
         await get().fetchApplicant(id);
-      }
-
-      // Auto-create election package if applicant landed on an election_vote stage
-      const pipeline = get().currentPipeline;
-      if (pipeline && advanced) {
-        const newStage = (pipeline.stages || []).find((s) => s.id === advanced.current_stage_id);
-        if (newStage?.stage_type === StageType.ELECTION_VOTE) {
-          try {
-            await applicantService.createElectionPackage(id, {
-              applicant_id: id,
-              pipeline_id: pipeline.id,
-              stage_id: newStage.id,
-            });
-          } catch (packageError: unknown) {
-            // A 409 means the package is already there, which is the expected
-            // outcome when a stage is re-entered. Anything else left the
-            // applicant sitting on an election-vote stage with nothing to vote
-            // on — the advance itself succeeded, so this is reported as a
-            // warning rather than rolled back.
-            if (toAppError(packageError).status !== 409) {
-              set({
-                error: handleStoreError(
-                  packageError,
-                  'Applicant advanced, but the election package could not be created'
-                ),
-              });
-            }
-          }
-        }
       }
 
       set({ isAdvancing: false });
@@ -619,7 +595,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
     set({ isAdvancing: true, error: null });
     try {
       await applicantService.completeStep(id, stepId, notes);
-      await get().fetchApplicants();
+      await get().refreshPipelineView();
       const currentApplicant = get().currentApplicant;
       if (currentApplicant?.id === id) {
         await get().fetchApplicant(id);
@@ -677,7 +653,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
     set({ isResuming: true, error: null });
     try {
       await applicantService.resumeApplicant(id);
-      await get().fetchApplicants();
+      await get().refreshPipelineView();
       const currentApplicant = get().currentApplicant;
       if (currentApplicant?.id === id) {
         await get().fetchApplicant(id);
@@ -883,22 +859,26 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
 
   purgeInactiveApplicants: async (applicantIds?: string[]) => {
     const state = get();
-    if (!state.currentPipeline) return;
+    // Thrown, not returned: a purge that quietly did nothing is exactly what
+    // let the page report "Purged N" for rows that were never deleted.
+    if (!state.currentPipeline) throw new Error('No pipeline is selected');
 
     set({ isPurging: true, error: null });
     try {
-      await applicantService.purgeInactiveApplicants(state.currentPipeline.id, {
+      const { purged_count } = await applicantService.purgeInactiveApplicants(state.currentPipeline.id, {
         applicant_ids: applicantIds,
         confirm: true,
       });
       await get().fetchInactiveApplicants();
       await get().fetchPipelineStats(state.currentPipeline.id);
       set({ isPurging: false });
+      return purged_count;
     } catch (error) {
       set({
         error: handleStoreError(error, 'Failed to purge inactive applicants'),
         isPurging: false,
       });
+      throw error;
     }
   },
 
@@ -929,6 +909,25 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
         error: handleStoreError(error, 'Failed to load election package'),
         isLoadingElectionPackage: false,
       });
+    }
+  },
+
+  // For an applicant who reached an Election Vote stage before the server
+  // created packages on stage entry, and so has none. Re-read rather than
+  // trusting the create response: the drawer shows the latest package, the
+  // same one the advance gate grades (_election_block_reason), and reading it
+  // back is what keeps the two in agreement.
+  createElectionPackage: async (applicantId: string, data: ElectionPackageCreate) => {
+    set({ error: null });
+    try {
+      await applicantService.createElectionPackage(applicantId, data);
+      const pkg = await applicantService.getElectionPackage(applicantId);
+      set({ currentElectionPackage: pkg });
+    } catch (error) {
+      set({
+        error: handleStoreError(error, 'Failed to create election package'),
+      });
+      throw error;
     }
   },
 

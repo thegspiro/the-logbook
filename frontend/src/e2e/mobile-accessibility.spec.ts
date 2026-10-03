@@ -126,6 +126,15 @@ const AAA_CONTRAST_BUDGET: Record<string, number> = {
   // severity badges already sit. Call sites are held to AA by policy.
   '/admin/audit-log': 2,
   '/events/1/monitoring': 1,
+  // Five event-type badges counted in the light and high-contrast themes (clean
+  // in dark): the `text-*-800` on `bg-*-100` pastels from
+  // `getEventTypeBadgeColor` in utils/eventHelpers.ts, used wherever an event
+  // type is shown. AA-clean — this file asserts that at zero — and short of
+  // 7:1. Those on the "Grouped under Other" rows were dimmed with opacity-60
+  // and failed AA outright; the dimming is gone, which is what moved them into
+  // this count. Clearing it is a palette decision for every event screen, not
+  // one this settings tab makes on its own.
+  '/events/admin?tab=settings': 10,
   '/scheduling/admin/closeout': 5,
   '/admin-hours': 2,
   '/notifications?tab=inbox': 3,

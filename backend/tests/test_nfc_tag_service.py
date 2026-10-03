@@ -289,6 +289,66 @@ class TestRegisterTag:
             for name in ("label", "uid_preview", "uid_hash")
         )
 
+    @pytest.mark.parametrize(
+        "terminal", [NfcTagStatus.REVOKED, NfcTagStatus.LOST], ids=["revoked", "lost"]
+    )
+    @pytest.mark.parametrize("to_user", ["u1", "u2"], ids=["same", "other"])
+    async def test_a_revoked_or_lost_card_can_be_reissued(self, terminal, to_user):
+        """The old refusal told the officer to revoke a card they had revoked.
+
+        Reissue is a fresh registration: the old row stays terminal and on the
+        record, and only releases the serial's unique slot.
+        """
+        old = _tag(status=terminal, user_id="u1")
+        old_hash = old.uid_hash
+        db = _db([_one(old), MagicMock(__iter__=lambda self: iter([]))])
+        service = NfcTagService(db)
+        with patch(
+            "app.services.nfc_tag_service.assert_in_org", AsyncMock(return_value=None)
+        ):
+            await service.register_tag(
+                organization_id=ORG,
+                user_id=to_user,
+                tag_uid="04A2245B",
+                label="Replacement",
+                issued_by="admin-1",
+            )
+
+        stored = db.add.call_args[0][0]
+        assert stored.uid_hash == old_hash
+        assert stored.status == NfcTagStatus.ACTIVE
+        assert stored.user_id == to_user
+        assert stored.organization_id == ORG
+        # The old registration is still terminal — never brought back — and no
+        # longer answers to any card read.
+        assert old.status == terminal
+        assert old.uid_hash != old_hash
+        assert len(old.uid_hash) == 64
+        db.delete.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "live",
+        [NfcTagStatus.ACTIVE, NfcTagStatus.SUSPENDED],
+        ids=["active", "suspended"],
+    )
+    async def test_a_live_card_is_still_refused_with_the_real_remedy(self, live):
+        old = _tag(status=live, user_id="u2")
+        db = _db([_one(old)])
+        service = NfcTagService(db)
+        with patch(
+            "app.services.nfc_tag_service.assert_in_org", AsyncMock(return_value=None)
+        ):
+            with pytest.raises(ValueError, match="another member and is still in use"):
+                await service.register_tag(
+                    organization_id=ORG,
+                    user_id="u1",
+                    tag_uid="04A2245B",
+                    label=None,
+                    issued_by="admin-1",
+                )
+        db.add.assert_not_called()
+        assert old.uid_hash == hash_tag_uid("04A2245B")
+
 
 class TestCardLifecycleTransitions:
     async def test_a_lost_card_cannot_be_reactivated(self):
@@ -702,3 +762,71 @@ class TestNameMapOrgScoping:
 
         assert names == {}
         db.execute.assert_not_called()
+
+
+@pytest.mark.integration
+class TestReissueAgainstTheUniqueConstraint:
+    """The mocked tests above cannot see (organization_id, uid_hash): this one
+    proves the retired row really releases the slot in MySQL."""
+
+    async def test_a_revoked_card_is_reissued_as_a_new_row(self, db_session):
+        import uuid
+
+        from sqlalchemy import select
+
+        from app.models.nfc_tag import NfcTag
+        from app.models.user import Organization, User
+
+        org = Organization(
+            id=str(uuid.uuid4()),
+            name="NFC Reissue VFD",
+            slug=f"nfc-reissue-{uuid.uuid4().hex[:8]}",
+        )
+        db_session.add(org)
+        await db_session.flush()
+        members = []
+        for name in ("first", "second"):
+            username = f"{name}{uuid.uuid4().hex[:8]}"
+            user = User(
+                id=str(uuid.uuid4()),
+                organization_id=org.id,
+                username=username,
+                email=f"{username}@nfc.test",
+                first_name="Test",
+                last_name=name.title(),
+                password_hash="x",
+            )
+            db_session.add(user)
+            members.append(user)
+        await db_session.flush()
+
+        service = NfcTagService(db_session)
+        first = await service.register_tag(
+            organization_id=org.id,
+            user_id=members[0].id,
+            tag_uid="04A2245B",
+            label=None,
+            issued_by=None,
+        )
+        await service.update_tag(first["id"], org.id, {"status": NfcTagStatus.REVOKED})
+
+        second = await service.register_tag(
+            organization_id=org.id,
+            user_id=members[1].id,
+            tag_uid="04:a2:24:5b",
+            label="Reissued",
+            issued_by=None,
+        )
+
+        result = await db_session.execute(
+            select(NfcTag).where(NfcTag.organization_id == org.id)
+        )
+        by_id = {row.id: row for row in result.scalars().all()}
+        assert set(by_id) == {first["id"], second["id"]}
+        assert by_id[first["id"]].status == NfcTagStatus.REVOKED
+        assert by_id[second["id"]].status == NfcTagStatus.ACTIVE
+
+        tag, user, refusal = await service.resolve_tag(org.id, ["04A2245B"])
+        assert refusal is None
+        assert tag.id == second["id"]
+        assert user.id == members[1].id

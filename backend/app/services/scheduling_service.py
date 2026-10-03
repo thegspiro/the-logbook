@@ -2530,6 +2530,9 @@ class SchedulingService:
 
             await self.db.commit()
             await self.db.refresh(shift)
+            await self._cancel_swaps_for_vacated_seats(
+                organization_id, shift_ids=[shift_id]
+            )
             return shift, None
         except Exception as e:
             await self.db.rollback()
@@ -3081,11 +3084,29 @@ class SchedulingService:
         # ("total_shifts", "total_hours_this_month") that gave no hint, so a
         # member comparing this screen to a completion report saw a
         # discrepancy that looked like a bug.
+        # What the department has built to schedule from. The administration
+        # hub's setup guide ticks its steps off these; they are department-wide
+        # regardless of ``open_to_all_only``, which scopes shifts, not setup.
+        active_templates = await self.db.scalar(
+            select(func.count(ShiftTemplate.id)).where(
+                ShiftTemplate.organization_id == str(organization_id),
+                ShiftTemplate.is_active.is_(True),
+            )
+        )
+        active_patterns = await self.db.scalar(
+            select(func.count(ShiftPattern.id)).where(
+                ShiftPattern.organization_id == str(organization_id),
+                ShiftPattern.is_active.is_(True),
+            )
+        )
+
         return {
             "shifts_scheduled": total_shifts,
             "shifts_scheduled_this_week": shifts_this_week,
             "shifts_scheduled_this_month": shifts_this_month,
             "hours_worked_this_month": total_hours,
+            "active_templates": active_templates or 0,
+            "active_patterns": active_patterns or 0,
         }
 
     # ============================================
@@ -4653,13 +4674,23 @@ class SchedulingService:
 
             old_status = assignment.assignment_status
             position = assignment.position
+            old_seat = (str(assignment.shift_id), str(assignment.user_id))
 
             for key, value in update_data.items():
                 if key not in self.PROTECTED_FIELDS:
                     setattr(assignment, key, value)
 
+            # A decline, a cancellation or a reassignment all take the seat
+            # away from the member who held it, and any swap offering it.
+            seat_vacated = old_status not in self.INACTIVE_ASSIGNMENT_STATUSES and (
+                assignment.assignment_status in self.INACTIVE_ASSIGNMENT_STATUSES
+                or (str(assignment.shift_id), str(assignment.user_id)) != old_seat
+            )
+
             await self.db.commit()
             await self.db.refresh(assignment)
+            if seat_vacated:
+                await self._cancel_swaps_for_vacated_seats(organization_id, [old_seat])
 
             # Fire decline notification if status changed to declined
             new_status = assignment.assignment_status
@@ -4729,6 +4760,9 @@ class SchedulingService:
 
             await self.db.delete(assignment)
             await self.db.commit()
+            await self._cancel_swaps_for_vacated_seats(
+                organization_id, [(shift_id, user_id)]
+            )
 
             # Fire removal notification
             await self._notify_shift_decline(
@@ -4850,6 +4884,9 @@ class SchedulingService:
 
             await self.db.commit()
             await self.db.refresh(assignment)
+            await self._cancel_swaps_for_vacated_seats(
+                organization_id, [(assignment.shift_id, assignment.user_id)]
+            )
 
             # Only on the transition, so a repeated tap — or a retry after a
             # dropped response — does not tell the officer twice that this seat
@@ -5238,6 +5275,23 @@ class SchedulingService:
                 action_url=f"/scheduling?shift={swap_request.offering_shift_id}",
             )
 
+            # An approved offer or exchange changes the target's roster too,
+            # and they did not ask an officer for anything — without this they
+            # learn about the new shift from the schedule, if at all.
+            if status == SwapRequestStatus.APPROVED and swap_request.target_user_id:
+                await self._send_notification(
+                    recipient_ids={str(swap_request.target_user_id)},
+                    subject="Shift Swap Approved",
+                    message=(
+                        f"A duty officer approved a shift swap involving you for "
+                        f"the {shift_date_str} shift. Check My Shifts for your "
+                        f"updated schedule."
+                    ),
+                    category="shift_swap",
+                    organization_id=organization_id,
+                    action_url=f"/scheduling?shift={swap_request.offering_shift_id}",
+                )
+
         except Exception as e:
             logger.warning("Swap review notification failed: {}", e)
 
@@ -5500,8 +5554,11 @@ class SchedulingService:
 
         In a two-person exchange, positions are seats belonging to their shifts,
         so only the two ``user_id`` values change.  In a one-way move, the
-        assignment itself moves and its position stays with the member. This is
-        a manager-review workflow, so neither participant may perform the review.
+        assignment itself moves and its position stays with the member. In a
+        one-way targeted offer — a target member and no requested shift — the
+        offered seat is handed to the target, exactly as if they had accepted
+        it themselves. This is a manager-review workflow, so neither
+        participant may perform the review.
         """
 
         async def reject(message: str):
@@ -5524,6 +5581,9 @@ class SchedulingService:
 
             if swap_request.status != SwapRequestStatus.PENDING:
                 return await reject("Swap request is no longer pending")
+
+            # Seats the approval takes away from the members who held them.
+            vacated: List[Tuple[Any, Any]] = []
 
             # Enforce separation of duties before mutating either the request
             # or its assignments. Participant acceptance, if added later, must
@@ -5634,16 +5694,45 @@ class SchedulingService:
                     if swap_request.target_user_id
                     else None
                 )
-                if swap_request.target_user_id and not target_assign:
+                # A target with no requested shift is an offer of the seat,
+                # not an exchange: nothing is traded back, so there is no
+                # target assignment to find.
+                is_handover = bool(
+                    swap_request.target_user_id and not swap_request.requesting_shift_id
+                )
+                if (
+                    swap_request.target_user_id
+                    and not is_handover
+                    and not target_assign
+                ):
                     return await reject(
                         "Requested assignment was removed after this request was submitted",
+                    )
+                # Same refusal as the member's own accept: a training seat
+                # carries the trainee's program and evaluator, and handing it
+                # over files that training against someone who may not be in
+                # the program. The officer can reassign it from the roster,
+                # where the training fields are edited deliberately.
+                if is_handover and req_assignment.is_training:
+                    return await reject(
+                        "A training seat cannot be handed over by approving an "
+                        "offer. Reassign it from the shift roster instead."
                     )
 
                 moving_ids = {str(req_assignment.id)}
                 if target_assign:
                     moving_ids.add(str(target_assign.id))
                 candidates = []
-                if requested_shift:
+                if is_handover:
+                    candidates.append(
+                        (
+                            offering_shift,
+                            swap_request.target_user_id,
+                            req_assignment.position,
+                            "offering shift",
+                        )
+                    )
+                elif requested_shift:
                     candidates.append(
                         (
                             requested_shift,
@@ -5694,8 +5783,32 @@ class SchedulingService:
                 if target_assign:
                     req_assignment.user_id = swap_request.target_user_id
                     target_assign.user_id = swap_request.requesting_user_id
+                    vacated = [
+                        (
+                            swap_request.offering_shift_id,
+                            swap_request.requesting_user_id,
+                        ),
+                        (
+                            swap_request.requesting_shift_id,
+                            swap_request.target_user_id,
+                        ),
+                    ]
+                elif is_handover:
+                    req_assignment.user_id = swap_request.target_user_id
+                    vacated = [
+                        (
+                            swap_request.offering_shift_id,
+                            swap_request.requesting_user_id,
+                        )
+                    ]
                 elif requested_shift:
                     req_assignment.shift_id = swap_request.requesting_shift_id
+                    vacated = [
+                        (
+                            swap_request.offering_shift_id,
+                            swap_request.requesting_user_id,
+                        )
+                    ]
 
             # Deliberately last: no request becomes approved until all live-state
             # validation and assignment mutations have succeeded.
@@ -5712,6 +5825,11 @@ class SchedulingService:
                 status=status,
             )
             await self.db.commit()
+            # The members who just moved no longer hold the seats any of their
+            # other pending requests offer.
+            await self._cancel_swaps_for_vacated_seats(
+                organization_id, vacated, exclude_request_id=swap_request.id
+            )
 
             return swap_request, None
         except CodedValueError:
@@ -5740,10 +5858,10 @@ class SchedulingService:
         already unprivileged self-service. A two-way exchange moves two
         rosters and stays with the manager review that exists for it.
 
-        Without this path a targeted offer is a dead end. Manager review reads
-        a set ``target_user_id`` as "there must be an assignment to trade back"
-        and rejects the request when there is no requesting shift, so nothing
-        could ever complete an offer of this shape.
+        A duty officer can also complete an offer of this shape through
+        ``review_swap_request``, which hands the seat over the same way; this
+        path is how the member it was offered to answers without waiting for
+        one.
         """
 
         async def reject(message: str):
@@ -5877,6 +5995,11 @@ class SchedulingService:
                 swap_request, organization_id, accepted=True
             )
             await self.db.commit()
+            await self._cancel_swaps_for_vacated_seats(
+                organization_id,
+                [(swap_request.offering_shift_id, swap_request.requesting_user_id)],
+                exclude_request_id=swap_request.id,
+            )
             return swap_request, None
         except CodedValueError as exc:
             await self.db.rollback()
@@ -5959,6 +6082,181 @@ class SchedulingService:
                 swap_request.requesting_user_id,
                 exc,
             )
+
+    #: Recorded on a swap withdrawn because its seat went away. Shown on the
+    #: Requests tab, so it names the cause rather than the mechanism.
+    SWAP_VACATED_NOTE = (
+        "Cancelled automatically: a member it involved is no longer on the shift."
+    )
+
+    async def _cancel_swaps_for_vacated_seats(
+        self,
+        organization_id: UUID,
+        seats: Optional[List[Tuple[Any, Any]]] = None,
+        *,
+        shift_ids: Optional[List[Any]] = None,
+        exclude_request_id: Optional[Any] = None,
+    ) -> List[ShiftSwapRequest]:
+        """Cancel pending swaps whose seat a member no longer holds.
+
+        A swap names seats by (shift, member) rather than by assignment id, so
+        removing an assignment never touches the request that offers it. Left
+        pending, the request sits in the review queue until an officer
+        approves it and is refused with "assignment was removed" — the member
+        who left is long gone and the reviewer is the one who finds out.
+
+        ``seats`` are (shift_id, user_id) pairs just vacated: the offerer's
+        seat on the offering shift, or, on a two-way exchange, the target's
+        seat on the requested shift. ``shift_ids`` cancels every pending swap
+        touching a shift that can no longer be worked at all.
+
+        Call it **after** the removal has committed, as its own transaction.
+        ``review_swap_request`` locks the swap row first and the assignments
+        after it; doing this inside the removal would take those locks in the
+        opposite order and deadlock against a concurrent review. Running
+        second is safe because review re-checks the assignment under lock, so
+        a request approved in between is refused rather than applied.
+        Failures are logged, never raised: the removal itself has already
+        succeeded, and a leftover request is still refused at review.
+        """
+        conditions = []
+        for shift_id, user_id in seats or []:
+            if not shift_id or not user_id:
+                continue
+            conditions.append(
+                and_(
+                    ShiftSwapRequest.offering_shift_id == str(shift_id),
+                    ShiftSwapRequest.requesting_user_id == str(user_id),
+                )
+            )
+            conditions.append(
+                and_(
+                    ShiftSwapRequest.requesting_shift_id == str(shift_id),
+                    ShiftSwapRequest.target_user_id == str(user_id),
+                )
+            )
+        ids = [str(value) for value in (shift_ids or []) if value]
+        if ids:
+            conditions.append(ShiftSwapRequest.offering_shift_id.in_(ids))
+            conditions.append(ShiftSwapRequest.requesting_shift_id.in_(ids))
+        if not conditions:
+            return []
+
+        try:
+            stale = await self._lock_and_cancel_swaps(
+                organization_id, conditions, exclude_request_id
+            )
+            await self.db.commit()
+        except Exception as exc:
+            await self.db.rollback()
+            logger.warning(
+                "Pending swaps for a vacated seat were not cancelled: {}", exc
+            )
+            return []
+        await self._notify_swaps_cancelled(organization_id, stale)
+        return stale
+
+    async def _lock_and_cancel_swaps(
+        self,
+        organization_id: UUID,
+        conditions: List[Any],
+        exclude_request_id: Optional[Any],
+    ) -> List[ShiftSwapRequest]:
+        query = (
+            select(ShiftSwapRequest)
+            .where(ShiftSwapRequest.organization_id == str(organization_id))
+            .where(ShiftSwapRequest.status == SwapRequestStatus.PENDING)
+            .where(or_(*conditions))
+            .order_by(ShiftSwapRequest.id)
+            .with_for_update()
+        )
+        if exclude_request_id is not None:
+            query = query.where(ShiftSwapRequest.id != str(exclude_request_id))
+        result = await self.db.execute(query)
+        stale = list(result.scalars().all())
+
+        now = datetime.now(timezone.utc)
+        for swap_request in stale:
+            swap_request.status = SwapRequestStatus.CANCELLED
+            swap_request.reviewed_at = now
+            swap_request.reviewer_notes = self.SWAP_VACATED_NOTE
+        return stale
+
+    async def _notify_swaps_cancelled(
+        self,
+        organization_id: UUID,
+        cancelled: List[ShiftSwapRequest],
+    ) -> None:
+        """Tell both parties that a swap was withdrawn with its seat.
+
+        The requester may not be the member who left — an officer removed
+        them, or the target stepped off the shift they were trading back — and
+        a member offered a seat is otherwise left waiting on an offer that no
+        longer exists. Email-first, like the expiry notice. Failures are
+        logged, never raised: the removal has already committed.
+        """
+        if not cancelled:
+            return
+        from app.models.notification import NotificationChannel
+
+        shift_ids = sorted({str(sr.offering_shift_id) for sr in cancelled})
+        shift_rows = await self.db.execute(
+            select(Shift.id, Shift.shift_date).where(
+                Shift.id.in_(shift_ids),
+                Shift.organization_id == str(organization_id),
+            )
+        )
+        dates = {str(row.id): row.shift_date for row in shift_rows.all()}
+
+        for swap_request in cancelled:
+            shift_date = dates.get(str(swap_request.offering_shift_id))
+            shift_label = (
+                f"the {shift_date.strftime('%b %d, %Y')} shift"
+                if shift_date
+                else "a shift"
+            )
+            subject = "Shift swap request cancelled"
+            message = (
+                f"The swap request for {shift_label} was cancelled because a "
+                f"member it involved is no longer on the shift. No action is "
+                f"needed."
+            )
+            recipients = {str(swap_request.requesting_user_id)}
+            if swap_request.target_user_id:
+                recipients.add(str(swap_request.target_user_id))
+            for recipient_id in sorted(recipients):
+                try:
+                    self.db.add(
+                        NotificationLog(
+                            id=generate_uuid(),
+                            organization_id=str(organization_id),
+                            recipient_id=recipient_id,
+                            channel=NotificationChannel.IN_APP,
+                            category="shift_swap_cancelled",
+                            subject=subject,
+                            message=message,
+                            action_url="/scheduling?tab=requests",
+                            notification_metadata={
+                                "shift_id": str(swap_request.offering_shift_id),
+                                "swap_request_id": str(swap_request.id),
+                            },
+                            delivered=True,
+                        )
+                    )
+                    await self._email_swap_expiry(
+                        organization_id, recipient_id, subject, message
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Swap cancellation notice for {} could not be sent: {}",
+                        recipient_id,
+                        exc,
+                    )
+        try:
+            await self.db.commit()
+        except Exception as exc:
+            await self.db.rollback()
+            logger.warning("Swap cancellation notices could not be saved: {}", exc)
 
     async def cancel_swap_request(
         self, request_id: UUID, organization_id: UUID, user_id: UUID
@@ -6123,7 +6421,11 @@ class SchedulingService:
         subject: str,
         message: str,
     ) -> None:
-        """The channel of record for an expired offer."""
+        """The channel of record for a swap that ended without a review.
+
+        Shared by the expiry sweep and the vacated-seat cancellation: both
+        close a request nobody acted on, and both owe its parties an email.
+        """
         import html as _html
 
         from app.core.config import settings
@@ -6293,13 +6595,15 @@ class SchedulingService:
             time_off.reviewer_notes = reviewer_notes
 
             # When approving, cancel conflicting shift assignments
+            vacated_seats: List[Tuple[Any, Any]] = []
             if status == TimeOffStatus.APPROVED and time_off.user_id:
-                cancelled_count = await self._cancel_conflicting_assignments(
+                vacated_seats = await self._cancel_conflicting_assignments(
                     organization_id=organization_id,
                     user_id=time_off.user_id,
                     start_date=time_off.start_date,
                     end_date=time_off.end_date,
                 )
+                cancelled_count = len(vacated_seats)
                 if cancelled_count > 0:
                     conflict_note = (
                         f" ({cancelled_count} conflicting assignment"
@@ -6318,6 +6622,7 @@ class SchedulingService:
                 status=status,
             )
             await self.db.commit()
+            await self._cancel_swaps_for_vacated_seats(organization_id, vacated_seats)
 
             return time_off, None
         except Exception as e:
@@ -6330,10 +6635,11 @@ class SchedulingService:
         user_id: str,
         start_date,
         end_date,
-    ) -> int:
+    ) -> List[Tuple[str, str]]:
         """Cancel shift assignments that overlap with an approved time-off range.
 
-        Returns the number of assignments cancelled.
+        Returns the (shift_id, user_id) seat of each assignment cancelled, so
+        the caller can withdraw the swaps offering them once it has committed.
         """
         result = await self.db.execute(
             select(ShiftAssignment)
@@ -6351,7 +6657,7 @@ class SchedulingService:
         conflicting = result.scalars().all()
         for assignment in conflicting:
             assignment.assignment_status = AssignmentStatus.CANCELLED
-        return len(conflicting)
+        return [(str(a.shift_id), str(a.user_id)) for a in conflicting]
 
     async def cancel_time_off(
         self, time_off_id: UUID, organization_id: UUID, user_id: UUID
@@ -6571,7 +6877,9 @@ class SchedulingService:
         for assignment in conflicting:
             assignment.assignment_status = AssignmentStatus.CANCELLED
         if conflicting:
+            vacated_seats = [(str(a.shift_id), str(a.user_id)) for a in conflicting]
             await self.db.commit()
+            await self._cancel_swaps_for_vacated_seats(organization_id, vacated_seats)
         return len(conflicting)
 
     async def get_availability_summary(

@@ -453,6 +453,17 @@ LOCATIONS_DELETE = Permission(
 LOCATIONS_MANAGE = Permission(
     "locations.manage", "Manage all locations", PermissionCategory.LOCATIONS
 )
+# Writing a room's NFC tag happens entirely on the officer's phone — the tag
+# carries /locations/<id>/check-in, which holds no secret, and nothing reaches
+# the server. This grant decides who the app offers the writer to, so tags
+# go up under the officers accountable for the room; it cannot stop a generic
+# NFC app from writing the same link, and need not, because the member who
+# taps it still signs in and the event's own check-in rules still apply.
+LOCATIONS_MANAGE_NFC_TAGS = Permission(
+    "locations.manage_nfc_tags",
+    "Write NFC check-in tags for rooms",
+    PermissionCategory.LOCATIONS,
+)
 
 # Forms
 FORMS_VIEW = Permission(
@@ -535,6 +546,16 @@ APPARATUS_MANAGE = Permission(
 APPARATUS_APPROVE_DRIVER_EXCEPTION = Permission(
     "apparatus.approve_driver_exception",
     "Approve exceptions to the EVOC driving requirement",
+    PermissionCategory.APPARATUS,
+)
+# The apparatus counterpart of locations.manage_nfc_tags, and client-side for
+# the same reason: the tag carries /scheduling/checkin?apparatus=<id>. Kept
+# apart from apparatus.manage because the Apparatus Officer writes the truck's
+# tags without holding full fleet management, and from scheduling.manage
+# because filling a roster is not the same job as fitting out the rig.
+APPARATUS_MANAGE_NFC_TAGS = Permission(
+    "apparatus.manage_nfc_tags",
+    "Write NFC shift check-in tags for apparatus",
     PermissionCategory.APPARATUS,
 )
 
@@ -769,6 +790,7 @@ ALL_PERMISSIONS: list[Permission] = [
     LOCATIONS_EDIT,
     LOCATIONS_DELETE,
     LOCATIONS_MANAGE,
+    LOCATIONS_MANAGE_NFC_TAGS,
     # Forms
     FORMS_VIEW,
     FORMS_MANAGE,
@@ -790,6 +812,7 @@ ALL_PERMISSIONS: list[Permission] = [
     APPARATUS_MAINTENANCE,
     APPARATUS_MANAGE,
     APPARATUS_APPROVE_DRIVER_EXCEPTION,
+    APPARATUS_MANAGE_NFC_TAGS,
     # Facilities
     FACILITIES_VIEW,
     FACILITIES_VIEW_SENSITIVE,
@@ -1400,6 +1423,8 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             NOTIFICATIONS_MANAGE.name,
             SUGGESTIONS_MANAGE.name,
             ADMIN_ACCESS.name,
+            APPARATUS_MANAGE_NFC_TAGS.name,
+            LOCATIONS_MANAGE_NFC_TAGS.name,
         ],
     },
     "deputy_chief": {
@@ -1463,6 +1488,8 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             INTEGRATIONS_MANAGE.name,
             NOTIFICATIONS_MANAGE.name,
             SUGGESTIONS_MANAGE.name,
+            APPARATUS_MANAGE_NFC_TAGS.name,
+            LOCATIONS_MANAGE_NFC_TAGS.name,
         ],
     },
     "assistant_chief": {
@@ -1519,6 +1546,8 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             FACILITIES_VIEW_SENSITIVE.name,
             NOTIFICATIONS_MANAGE.name,
             SUGGESTIONS_MANAGE.name,
+            APPARATUS_MANAGE_NFC_TAGS.name,
+            LOCATIONS_MANAGE_NFC_TAGS.name,
         ],
     },
     "captain": {
@@ -1888,6 +1917,8 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             REPORTS_VIEW.name,
             REPORTS_MANAGE.name,
             ADMIN_ACCESS.name,
+            APPARATUS_MANAGE_NFC_TAGS.name,
+            LOCATIONS_MANAGE_NFC_TAGS.name,
         ],
     },
     "vice_president": {
@@ -1939,6 +1970,8 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             NOTIFICATIONS_VIEW.name,
             REPORTS_VIEW.name,
             REPORTS_MANAGE.name,
+            APPARATUS_MANAGE_NFC_TAGS.name,
+            LOCATIONS_MANAGE_NFC_TAGS.name,
         ],
     },
     "treasurer": {
@@ -2086,6 +2119,11 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             INVENTORY_VIEW_MEDICAL.name,
             INVENTORY_MANAGE_MEDICAL.name,
             STOREFRONT_MANAGE.name,
+            # Building the apparatus checklists the stock above is carried on.
+            # Authoring only: reading check results stays with check_view,
+            # which the checklist screens already hide rather than refuse.
+            # Written to stored rows by 20260930 (add_quartermaster_check_manage).
+            INVENTORY_CHECK_MANAGE.name,
             COMPLIANCE_VIEW.name,
             APPARATUS_VIEW.name,
             FACILITIES_VIEW.name,
@@ -2229,6 +2267,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             APPARATUS_CREATE.name,
             APPARATUS_EDIT.name,
             APPARATUS_MAINTENANCE.name,
+            APPARATUS_MANAGE_NFC_TAGS.name,
         ],
     },
     "membership_coordinator": {
@@ -2275,6 +2314,10 @@ DEFAULT_POSITIONS: dict[str, dict] = {
         # and read access to the roster it feeds, but no member-record edits,
         # position assignment or disclosure-policy settings. Holders receive
         # the coordinator's pipeline notices (applicant withdrawals).
+        #
+        # ID cards are the one exception: the deputy coordinator issues them
+        # alongside the coordinator, because handing a new member their card
+        # is the last step of the pipeline this role already runs.
         "permissions": [
             USERS_VIEW.name,
             MEMBERS_VIEW.name,
@@ -2285,6 +2328,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             STOREFRONT_ORDER.name,
             EVENTS_VIEW.name,
             NOTIFICATIONS_VIEW.name,
+            MEMBERS_MANAGE_ID_CARDS.name,
         ],
     },
     "safety_officer": {
@@ -2527,6 +2571,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             FACILITIES_MANAGE.name,
             LOCATIONS_VIEW.name,
             NOTIFICATIONS_VIEW.name,
+            LOCATIONS_MANAGE_NFC_TAGS.name,
         ],
     },
     "member": {

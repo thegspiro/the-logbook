@@ -10,6 +10,7 @@ import { useDialog } from '../../hooks/useDialog';
 import { X, Plus, Trash2, GripVertical, GitBranch } from 'lucide-react';
 import type { FormFieldCreate, FormFieldOption } from '../../services/api';
 import { FieldType } from '../../constants/enums';
+import { CONDITION_OPERATORS_WITH_VALUE, getDescendantFieldIds } from '../../utils/formVisibility';
 
 const FIELD_TYPES = [
   { value: 'text', label: 'Text', icon: 'Aa' },
@@ -37,7 +38,7 @@ const WIDTH_OPTIONS = [
 ];
 
 const CONDITION_OPERATORS = [
-  { value: '', label: 'Always show (no condition)' },
+  { value: '', label: 'Choose a condition…' },
   { value: 'equals', label: 'Equals' },
   { value: 'not_equals', label: 'Does not equal' },
   { value: 'contains', label: 'Contains' },
@@ -64,6 +65,8 @@ export interface SiblingField {
   label: string;
   field_type: string;
   options?: FormFieldOption[];
+  /** The question this one branches from, if any — used to rule out cycles. */
+  condition_field_id?: string | undefined;
 }
 
 export interface FieldEditorProps {
@@ -153,12 +156,15 @@ const FieldEditor = ({
     fieldType
   );
 
-  // Available sibling fields for condition (exclude self)
+  // A field may branch from any other answerable question except itself and
+  // the questions that already branch from it: either would be a cycle, and a
+  // cycle hides the whole branch (required questions included) from everyone.
+  const ownBranch = editingFieldId ? getDescendantFieldIds(siblingFields, editingFieldId) : new Set<string>();
   const conditionTargets = siblingFields.filter(
-    (f) => f.id !== editingFieldId && f.field_type !== FieldType.SECTION_HEADER
+    (f) => !ownBranch.has(f.id) && f.field_type !== FieldType.SECTION_HEADER
   );
   const selectedConditionField = conditionTargets.find((f) => f.id === conditionFieldId);
-  const conditionNeedsValue = ['equals', 'not_equals', 'contains'].includes(conditionOperator);
+  const conditionNeedsValue = CONDITION_OPERATORS_WITH_VALUE.includes(conditionOperator);
 
   const addOption = () => {
     setOptions([...options, { value: '', label: '' }]);
@@ -194,6 +200,14 @@ const FieldEditor = ({
       if (validOptions.length === 0) {
         errs.options = 'Add at least one option';
       }
+    }
+
+    if (conditionFieldId && !siblingFields.some((f) => f.id === conditionFieldId)) {
+      // Nothing to validate: the stale rule is dropped on save.
+    } else if (conditionFieldId && !conditionOperator) {
+      errs.condition = 'Choose when this field should show';
+    } else if (conditionFieldId && conditionNeedsValue && !conditionValue.trim()) {
+      errs.condition = 'Enter the answer this condition compares against';
     }
 
     if (validationPattern) {
@@ -243,8 +257,10 @@ const FieldEditor = ({
       if (helpText.trim()) fieldData.help_text = helpText.trim();
     }
 
-    // Conditional visibility
-    if (conditionFieldId && conditionOperator) {
+    // Conditional visibility. A rule naming a question that is no longer on
+    // the form (deleted before deletions cleared their follow-ups) is dropped,
+    // since the API refuses to store a dangling reference.
+    if (conditionFieldId && conditionOperator && siblingFields.some((f) => f.id === conditionFieldId)) {
       fieldData.condition_field_id = conditionFieldId;
       fieldData.condition_operator = conditionOperator;
       if (conditionNeedsValue) {
@@ -293,6 +309,8 @@ const FieldEditor = ({
                 <button
                   key={ft.value}
                   type="button"
+                  role="radio"
+                  aria-checked={fieldType === ft.value}
                   onClick={() => setFieldType(ft.value)}
                   className={`rounded-lg px-2 py-2 text-center text-xs font-medium transition-colors ${
                     fieldType === ft.value
@@ -599,9 +617,11 @@ const FieldEditor = ({
                     value={conditionFieldId}
                     onChange={(e) => {
                       setConditionFieldId(e.target.value);
+                      // An answer picked for the previous question is
+                      // meaningless against a different one.
+                      setConditionValue('');
                       if (!e.target.value) {
                         setConditionOperator('');
-                        setConditionValue('');
                       }
                     }}
                     className="form-input"
@@ -628,7 +648,7 @@ const FieldEditor = ({
                       value={conditionOperator}
                       onChange={(e) => {
                         setConditionOperator(e.target.value);
-                        if (!['equals', 'not_equals', 'contains'].includes(e.target.value)) {
+                        if (!CONDITION_OPERATORS_WITH_VALUE.includes(e.target.value)) {
                           setConditionValue('');
                         }
                       }}
@@ -674,6 +694,11 @@ const FieldEditor = ({
                       />
                     )}
                   </div>
+                )}
+                {errors.condition && (
+                  <p className="text-xs text-red-700 dark:text-red-400" role="alert">
+                    {errors.condition}
+                  </p>
                 )}
               </div>
             </div>

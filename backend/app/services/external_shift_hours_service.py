@@ -77,18 +77,43 @@ class ExternalShiftHoursService:
             "apparatus_name": unit.name,
         }
 
+    async def _span(
+        self, organization_id: str, start_at: datetime, end_at: datetime
+    ) -> Dict[str, Any]:
+        """The columns a start and end fill in.
+
+        The date is the start's calendar date where the department is, so a
+        night shift that begins at 19:00 counts on the day it began even
+        though it is already the next day in UTC.
+        """
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
+        return {
+            "start_at": start_at,
+            "end_at": end_at,
+            "shift_date": start_at.astimezone(tz).date(),
+            "duration_minutes": int(round((end_at - start_at).total_seconds() / 60)),
+        }
+
     async def create(
         self, organization_id: str, user_id: str, payload: Mapping[str, Any]
     ) -> ExternalShiftHours:
-        await self._assert_not_future(organization_id, payload["shift_date"])
+        if payload.get("start_at") is not None and payload.get("end_at") is not None:
+            timing = await self._span(
+                organization_id, payload["start_at"], payload["end_at"]
+            )
+        else:
+            timing = {
+                "shift_date": payload["shift_date"],
+                "duration_minutes": minutes_from_hours(payload["hours"]),
+            }
+        await self._assert_not_future(organization_id, timing["shift_date"])
         snapshot = await self._apparatus_snapshot(
             organization_id, payload["external_apparatus_id"]
         )
         entry = ExternalShiftHours(
             organization_id=str(organization_id),
             user_id=str(user_id),
-            shift_date=payload["shift_date"],
-            duration_minutes=minutes_from_hours(payload["hours"]),
+            **timing,
             **snapshot,
             role=payload.get("role"),
             notes=payload.get("notes"),
@@ -127,6 +152,22 @@ class ExternalShiftHoursService:
             raise ValueError("A rejected entry cannot be edited")
 
         changes = dict(updates)
+        if "start_at" in changes or "end_at" in changes:
+            start_at = changes.pop("start_at", None)
+            end_at = changes.pop("end_at", None)
+            if start_at is None or end_at is None:
+                raise ValueError("Send both a start and an end time")
+            if "hours" in changes or "shift_date" in changes:
+                raise ValueError(
+                    "Send either start and end times, or a date and hours, not both"
+                )
+            changes.update(await self._span(organization_id, start_at, end_at))
+        elif "hours" in changes or "shift_date" in changes:
+            # A date or hours corrected on their own leave any recorded times
+            # describing a different shift than the one that counts, so they
+            # go rather than contradict it.
+            changes["start_at"] = None
+            changes["end_at"] = None
         if "hours" in changes:
             hours = changes.pop("hours")
             if hours is None:
@@ -257,6 +298,8 @@ class ExternalShiftHoursService:
             "member_name": member.full_name if member is not None else None,
             "shift_date": entry.shift_date,
             "hours": round((entry.duration_minutes or 0) / 60, 2),
+            "start_at": entry.start_at,
+            "end_at": entry.end_at,
             "external_apparatus_id": entry.external_apparatus_id,
             "agency_name": entry.agency_name,
             "apparatus_name": entry.apparatus_name,

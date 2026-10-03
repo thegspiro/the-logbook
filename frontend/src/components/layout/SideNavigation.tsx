@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router';
 import {
   Home,
@@ -48,6 +48,7 @@ import {
 } from 'lucide-react';
 import { Sun, Moon, Monitor, Contrast, WifiOff, RefreshCw, Loader2 } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
+import { useScrollOverflow } from '../../hooks/useScrollOverflow';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
 import { useEnabledModules } from '../../hooks/useEnabledModules';
@@ -116,6 +117,8 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState<string[]>(['Settings']);
   const sideNavRef = useFocusTrap<HTMLElement>(mobileMenuOpen);
+  const navListRef = useRef<HTMLElement>(null);
+  const { canScrollUp, canScrollDown } = useScrollOverflow(navListRef);
   const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
   const { isConnected } = useConnectedIntegrations({ enabled: !modulesLoading && isModuleOn('integrations') });
   const isNfcCardsOn = isConnected(NFC_ID_CARDS_INTEGRATION);
@@ -854,152 +857,202 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
             )}
           </div>
 
-          {/* Navigation Items */}
-          <nav
-            className="-webkit-overflow-scrolling-touch flex-1 space-y-1 overflow-y-auto overscroll-contain p-4"
-            aria-label="Side navigation"
-          >
-            {mobileMenuOpen && activeDestination && (
-              <div className="bg-theme-surface-hover text-theme-text-primary mb-3 rounded-lg px-4 py-3 md:hidden">
-                <span className="text-theme-text-muted block text-[10px] font-bold tracking-widest uppercase">
-                  Current
-                </span>
-                <span className="text-sm font-semibold">{activeDestination.label}</span>
-              </div>
-            )}
-            <ul role="list" className="space-y-1">
-              {navItems.map((item, idx) => {
-                // Render section label dividers
-                if (item.isSectionLabel) {
+          {/* Navigation Items.
+
+              Wrapped so the scroll cues can sit over the list's edges without
+              scrolling with it. Phones draw no scrollbar until a scroll is
+              already under way, so a list cut off on an item boundary looked
+              complete and members never found the items below the fold. */}
+          <div className="relative flex min-h-0 flex-1 flex-col">
+            <nav
+              ref={navListRef}
+              className="-webkit-overflow-scrolling-touch flex-1 space-y-1 overflow-y-auto overscroll-contain p-4"
+              aria-label="Side navigation"
+            >
+              {mobileMenuOpen && activeDestination && (
+                <div className="bg-theme-surface-hover text-theme-text-primary mb-3 rounded-lg px-4 py-3 md:hidden">
+                  <span className="text-theme-text-muted block text-[10px] font-bold tracking-widest uppercase">
+                    Current
+                  </span>
+                  <span className="text-sm font-semibold">{activeDestination.label}</span>
+                </div>
+              )}
+              <ul role="list" className="space-y-1">
+                {navItems.map((item, idx) => {
+                  // Render section label dividers
+                  if (item.isSectionLabel) {
+                    return (
+                      <li key={`section-${item.label}`} aria-hidden="true">
+                        {!collapsed ? (
+                          <div className="px-4 pt-3 pb-2 md:pt-5">
+                            <div className="border-theme-surface-border border-t" />
+                            <span className="text-theme-text-muted/70 mt-3 block text-[10px] font-bold tracking-widest uppercase">
+                              {item.label}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="px-3 pt-3 pb-1">
+                            <div className="border-theme-surface-border border-t" />
+                          </div>
+                        )}
+                      </li>
+                    );
+                  }
+
+                  // Filter sub-items by permission
+                  const visibleSubItems = item.subItems?.filter(
+                    (sub) =>
+                      (!sub.permission || checkPermission(sub.permission)) &&
+                      (!sub.anyPermission || sub.anyPermission.some((p) => checkPermission(p)))
+                  );
+
+                  // Skip top-level permission-gated items
+                  if (item.permission && !checkPermission(item.permission)) return null;
+                  if (item.anyPermission && !item.anyPermission.some((p) => checkPermission(p))) return null;
+
+                  // Skip parent groups where all sub-items are hidden
+                  if (item.subItems && visibleSubItems && visibleSubItems.length === 0) return null;
+
+                  const Icon = item.icon;
+                  const hasSubItems = !!visibleSubItems && visibleSubItems.length > 0;
+                  const isExpanded = expandedMenus.includes(item.label);
+                  const parentActive = isParentActive(item);
+
+                  // Use unique key that accounts for duplicate labels across sections
+                  const itemKey = `${item.label}-${item.path}-${idx}`;
+
                   return (
-                    <li key={`section-${item.label}`} aria-hidden="true">
-                      {!collapsed ? (
-                        <div className="px-4 pt-3 pb-2 md:pt-5">
-                          <div className="border-theme-surface-border border-t" />
-                          <span className="text-theme-text-muted/70 mt-3 block text-[10px] font-bold tracking-widest uppercase">
-                            {item.label}
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="px-3 pt-3 pb-1">
-                          <div className="border-theme-surface-border border-t" />
-                        </div>
+                    <li key={itemKey}>
+                      <button
+                        onClick={() => handleNavigation(item.path, hasSubItems, item.label)}
+                        onMouseEnter={() => {
+                          if (item.path !== '#') prefetchRoute(item.path);
+                          // Also prefetch sub-item routes on parent hover
+                          visibleSubItems?.forEach((sub) => prefetchRoute(sub.path));
+                        }}
+                        onFocus={() => {
+                          if (item.path !== '#') prefetchRoute(item.path);
+                        }}
+                        aria-current={parentActive && !hasSubItems ? 'page' : undefined}
+                        aria-expanded={hasSubItems ? isExpanded : undefined}
+                        aria-controls={hasSubItems ? submenuId(item.label) : undefined}
+                        className={`focus:ring-theme-focus-ring flex w-full items-center rounded-lg transition-all duration-150 focus:ring-2 focus:outline-hidden ${
+                          collapsed ? 'justify-center p-3' : 'px-4 py-3'
+                        } ${
+                          parentActive && !hasSubItems
+                            ? 'bg-red-800 text-white shadow-sm'
+                            : parentActive && hasSubItems
+                              ? 'bg-theme-surface-secondary text-theme-text-primary'
+                              : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary active:scale-[0.98]'
+                        }`}
+                        title={collapsed ? item.label : undefined}
+                        aria-label={
+                          collapsed
+                            ? item.label === 'Notifications' && notifUnreadCount > 0
+                              ? `Notifications (${notifUnreadCount} unread)`
+                              : item.label
+                            : undefined
+                        }
+                      >
+                        <span className="relative">
+                          <Icon className={`h-5 w-5 shrink-0 ${collapsed ? '' : 'mr-3'}`} aria-hidden="true" />
+                          {collapsed && item.label === 'Notifications' && notifUnreadCount > 0 && (
+                            <span className="border-theme-nav-bg absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full border-2 bg-red-500" />
+                          )}
+                        </span>
+                        {!collapsed && (
+                          <>
+                            <span className="flex-1 text-left text-sm font-medium">{item.label}</span>
+                            {item.label === 'Notifications' && notifUnreadCount > 0 && !parentActive && (
+                              <span className="mr-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-800 px-1 text-[10px] font-bold text-white">
+                                {notifUnreadCount > 99 ? '99+' : notifUnreadCount}
+                              </span>
+                            )}
+                            {hasSubItems && (
+                              <ChevronDown
+                                className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                aria-hidden="true"
+                              />
+                            )}
+                          </>
+                        )}
+                      </button>
+
+                      {/* Sub Items */}
+                      {hasSubItems && isExpanded && !collapsed && (
+                        <ul id={submenuId(item.label)} className="mt-1 ml-4 space-y-1" role="list">
+                          {visibleSubItems.map((subItem) => {
+                            const SubIcon = subItem.icon;
+                            const subActive = isSubItemActive(subItem.path, item.subItems || []);
+                            return (
+                              <li key={subItem.path}>
+                                <button
+                                  onClick={() => handleNavigation(subItem.path)}
+                                  onMouseEnter={() => prefetchRoute(subItem.path)}
+                                  onFocus={() => prefetchRoute(subItem.path)}
+                                  aria-current={subActive ? 'page' : undefined}
+                                  className={`focus:ring-theme-focus-ring flex w-full items-center rounded-lg px-4 py-2 transition-all duration-150 focus:ring-2 focus:outline-hidden max-md:min-h-[44px] ${
+                                    subActive
+                                      ? 'bg-red-800 text-white shadow-sm'
+                                      : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary active:scale-[0.98]'
+                                  }`}
+                                >
+                                  <SubIcon className="mr-3 h-4 w-4 shrink-0" aria-hidden="true" />
+                                  <span className="text-sm">{subItem.label}</span>
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
                       )}
                     </li>
                   );
-                }
-
-                // Filter sub-items by permission
-                const visibleSubItems = item.subItems?.filter(
-                  (sub) =>
-                    (!sub.permission || checkPermission(sub.permission)) &&
-                    (!sub.anyPermission || sub.anyPermission.some((p) => checkPermission(p)))
-                );
-
-                // Skip top-level permission-gated items
-                if (item.permission && !checkPermission(item.permission)) return null;
-                if (item.anyPermission && !item.anyPermission.some((p) => checkPermission(p))) return null;
-
-                // Skip parent groups where all sub-items are hidden
-                if (item.subItems && visibleSubItems && visibleSubItems.length === 0) return null;
-
-                const Icon = item.icon;
-                const hasSubItems = !!visibleSubItems && visibleSubItems.length > 0;
-                const isExpanded = expandedMenus.includes(item.label);
-                const parentActive = isParentActive(item);
-
-                // Use unique key that accounts for duplicate labels across sections
-                const itemKey = `${item.label}-${item.path}-${idx}`;
-
-                return (
-                  <li key={itemKey}>
-                    <button
-                      onClick={() => handleNavigation(item.path, hasSubItems, item.label)}
-                      onMouseEnter={() => {
-                        if (item.path !== '#') prefetchRoute(item.path);
-                        // Also prefetch sub-item routes on parent hover
-                        visibleSubItems?.forEach((sub) => prefetchRoute(sub.path));
-                      }}
-                      onFocus={() => {
-                        if (item.path !== '#') prefetchRoute(item.path);
-                      }}
-                      aria-current={parentActive && !hasSubItems ? 'page' : undefined}
-                      aria-expanded={hasSubItems ? isExpanded : undefined}
-                      aria-controls={hasSubItems ? submenuId(item.label) : undefined}
-                      className={`focus:ring-theme-focus-ring flex w-full items-center rounded-lg transition-all duration-150 focus:ring-2 focus:outline-hidden ${
-                        collapsed ? 'justify-center p-3' : 'px-4 py-3'
-                      } ${
-                        parentActive && !hasSubItems
-                          ? 'bg-red-800 text-white shadow-sm'
-                          : parentActive && hasSubItems
-                            ? 'bg-theme-surface-secondary text-theme-text-primary'
-                            : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary active:scale-[0.98]'
-                      }`}
-                      title={collapsed ? item.label : undefined}
-                      aria-label={
-                        collapsed
-                          ? item.label === 'Notifications' && notifUnreadCount > 0
-                            ? `Notifications (${notifUnreadCount} unread)`
-                            : item.label
-                          : undefined
-                      }
-                    >
-                      <span className="relative">
-                        <Icon className={`h-5 w-5 shrink-0 ${collapsed ? '' : 'mr-3'}`} aria-hidden="true" />
-                        {collapsed && item.label === 'Notifications' && notifUnreadCount > 0 && (
-                          <span className="border-theme-nav-bg absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full border-2 bg-red-500" />
-                        )}
-                      </span>
-                      {!collapsed && (
-                        <>
-                          <span className="flex-1 text-left text-sm font-medium">{item.label}</span>
-                          {item.label === 'Notifications' && notifUnreadCount > 0 && !parentActive && (
-                            <span className="mr-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-800 px-1 text-[10px] font-bold text-white">
-                              {notifUnreadCount > 99 ? '99+' : notifUnreadCount}
-                            </span>
-                          )}
-                          {hasSubItems && (
-                            <ChevronDown
-                              className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                              aria-hidden="true"
-                            />
-                          )}
-                        </>
-                      )}
-                    </button>
-
-                    {/* Sub Items */}
-                    {hasSubItems && isExpanded && !collapsed && (
-                      <ul id={submenuId(item.label)} className="mt-1 ml-4 space-y-1" role="list">
-                        {visibleSubItems.map((subItem) => {
-                          const SubIcon = subItem.icon;
-                          const subActive = isSubItemActive(subItem.path, item.subItems || []);
-                          return (
-                            <li key={subItem.path}>
-                              <button
-                                onClick={() => handleNavigation(subItem.path)}
-                                onMouseEnter={() => prefetchRoute(subItem.path)}
-                                onFocus={() => prefetchRoute(subItem.path)}
-                                aria-current={subActive ? 'page' : undefined}
-                                className={`focus:ring-theme-focus-ring flex w-full items-center rounded-lg px-4 py-2 transition-all duration-150 focus:ring-2 focus:outline-hidden max-md:min-h-[44px] ${
-                                  subActive
-                                    ? 'bg-red-800 text-white shadow-sm'
-                                    : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary active:scale-[0.98]'
-                                }`}
-                              >
-                                <SubIcon className="mr-3 h-4 w-4 shrink-0" aria-hidden="true" />
-                                <span className="text-sm">{subItem.label}</span>
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          </nav>
+                })}
+              </ul>
+            </nav>
+            <div
+              aria-hidden="true"
+              className={`from-theme-nav-bg pointer-events-none absolute inset-x-0 top-0 h-8 bg-linear-to-b to-transparent transition-opacity duration-200 ${
+                canScrollUp ? 'opacity-100' : 'opacity-0'
+              }`}
+            />
+            {/* Phones only. Mobile browsers draw overlay scrollbars that stay
+                hidden until a scroll starts, so without this a long drawer gives
+                no sign that anything sits below the fold. A desktop sidebar
+                already shows a permanent scrollbar, and the pill floating over
+                the last rows there only covers them. `md` is the same breakpoint
+                at which this panel stops being the mobile drawer. */}
+            <div
+              data-testid="side-nav-scroll-hint"
+              className={`from-theme-nav-bg via-theme-nav-bg/80 pointer-events-none absolute inset-x-0 bottom-0 flex h-16 items-end justify-center bg-linear-to-t to-transparent pb-1 transition-opacity duration-200 md:hidden ${
+                canScrollDown ? 'opacity-100' : 'opacity-0'
+              }`}
+            >
+              {/* Out of the tab order and the accessibility tree: keyboard and
+                  screen-reader users already move through every item in the
+                  list, so this only duplicates what they reach anyway. */}
+              <button
+                type="button"
+                tabIndex={-1}
+                aria-hidden="true"
+                disabled={!canScrollDown}
+                onClick={() => {
+                  const el = navListRef.current;
+                  if (!el) return;
+                  el.scrollBy({
+                    top: el.clientHeight * 0.75,
+                    behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+                  });
+                }}
+                className={`bg-theme-surface-secondary text-theme-text-primary border-theme-surface-border flex min-h-[44px] items-center gap-1 rounded-full border px-4 text-xs font-medium shadow-md ${
+                  canScrollDown ? 'pointer-events-auto' : ''
+                }`}
+              >
+                {!collapsed && <span>More</span>}
+                <ChevronDown className="h-4 w-4 motion-safe:animate-bounce" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
 
           {/* Theme Toggle & Logout */}
           <div className="border-theme-surface-border space-y-1 border-t p-4">

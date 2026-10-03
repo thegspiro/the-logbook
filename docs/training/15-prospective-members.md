@@ -76,11 +76,12 @@ Navigate to **Prospective Members > Settings** to configure the pipeline.
 
 ### Pipeline Settings
 
-| Setting                       | Description                                                                             |
-| ----------------------------- | --------------------------------------------------------------------------------------- |
-| **Is Default**                | New applicants automatically enter this pipeline                                        |
-| **Auto-Transfer on Approval** | Automatically convert applicant when they reach the final stage                         |
-| **Inactivity Config**         | Timeout settings for stale applications (see [Inactivity Timeout](#inactivity-timeout)) |
+| Setting                                | Description                                                                                                                                                      |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Is Default**                         | New applicants automatically enter this pipeline                                                                                                                 |
+| **Auto-Transfer on Approval**          | Automatically convert applicant when they reach the final stage                                                                                                  |
+| **Inactivity Config**                  | Timeout settings for stale applications (see [Inactivity Timeout](#inactivity-timeout))                                                                          |
+| **When an Applicant Becomes a Member** | Member class and starting status for operational and for administrative applicants on conversion (see [What Happens on Conversion](#what-happens-on-conversion)) |
 
 ---
 
@@ -561,8 +562,10 @@ When an applicant has completed all pipeline stages:
    phone, target membership type and role) so you can check it before an
    account is created. Click **Continue** to go on.
 3. **Step 2 — Set Up Account** collects the details of the new member record:
-   - **Membership Type** — Pre-filled from the applicant's desired type.
-     Choosing **Regular Member** starts the member as probationary
+   - **Member class** and **Starting status** — Pre-filled from the
+     pipeline's **When an Applicant Becomes a Member** setting for the
+     applicant's desired type. Change them here to make an exception for this
+     one applicant; the pipeline setting is unchanged
    - **Rank** — Starting rank, entered free-text (e.g. Firefighter)
    - **Station** — Assigned station, entered free-text
    - **Middle Name** — Optional; the first and last name come from the
@@ -582,8 +585,17 @@ already been transferred_.
 ### What Happens on Conversion
 
 - A new **User** record is created with the applicant's info
-- Regular members start as **Probationary** status
-- Administrative members start as **Active** status
+- The member's **class** and **starting status** come from the pipeline's
+  **When an Applicant Becomes a Member** setting (Pipeline Settings), chosen
+  separately for operational applicants and administrative applicants. For
+  example, a department can make administrative applicants **regular
+  administrative** members while operational applicants start as
+  **probationary operational** members. Automatic conversion after an election
+  or final approval applies the same setting.
+- A pipeline that has not changed the setting uses: operational applicants →
+  probationary operational; administrative applicants → regular administrative
+  _(before 2026-09-30, automatic conversion made every applicant a probationary
+  operational member, whatever their desired type)_
 - Applicant status changes to **Converted**
 - The `converted_to_member_id` field links to the new user
 - Activity log records the conversion with timestamp

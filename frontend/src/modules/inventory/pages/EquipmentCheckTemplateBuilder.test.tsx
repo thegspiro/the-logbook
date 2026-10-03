@@ -22,7 +22,9 @@ const {
   updateEquipmentCheckTemplate,
   toastSuccess,
   toastError,
+  getApparatusOptions,
 } = vi.hoisted(() => ({
+  getApparatusOptions: vi.fn(),
   getTemplate: vi.fn(),
   updateCheckItem: vi.fn(),
   addCheckItem: vi.fn(),
@@ -39,13 +41,14 @@ const {
   updateEquipmentCheckTemplate: vi.fn(),
   toastSuccess: vi.fn(),
   toastError: vi.fn(),
+  getApparatusOptions: vi.fn().mockResolvedValue({ source: 'default', options: [] }),
 }));
 
 vi.mock('react-hot-toast', () => ({ default: { success: toastSuccess, error: toastError } }));
 
 vi.mock('@/modules/scheduling', () => ({
   schedulingService: {
-    getApparatusOptions: vi.fn().mockResolvedValue({ options: [] }),
+    getApparatusOptions: (...args: unknown[]) => getApparatusOptions(...args) as unknown,
   },
 }));
 
@@ -201,6 +204,13 @@ const mockViewport = (width: keyof typeof VIEWPORT_WIDTHS) => {
     dispatchEvent: vi.fn(),
   }));
 };
+
+// Every block starts from no apparatus on record; a test that needs units
+// states them (CLAUDE.md pitfall 28).
+beforeEach(() => {
+  getApparatusOptions.mockReset();
+  getApparatusOptions.mockResolvedValue({ options: [], source: 'default' });
+});
 
 describe('EquipmentCheckTemplateBuilder responsive actions', () => {
   beforeEach(() => {
@@ -1699,6 +1709,27 @@ describe('EquipmentCheckTemplateBuilder narrow widths and assistive tech', () =>
     expect(screen.getByLabelText('Tools')).toBeInTheDocument();
   });
 
+  // dnd-kit's sortable attributes (role="button", tabindex, aria-disabled) were
+  // spread on each whole location and item row, so a screen reader met every
+  // row as one button, and an unsaved location's name and item boxes as
+  // disabled. They belong on the drag handle, which carries the listeners.
+  it('keeps the sortable attributes on the drag handles, not the rows', async () => {
+    mockViewport('laptop');
+    renderBuilder();
+
+    const locationHandles = await screen.findAllByRole('button', {
+      name: 'Drag to reorder compartment among siblings',
+    });
+    for (const handle of locationHandles) expect(handle).toHaveAttribute('aria-roledescription', 'sortable');
+    const itemHandle = await screen.findByRole('button', { name: 'Drag Radio to reorder' });
+    expect(itemHandle).toHaveAttribute('aria-roledescription', 'sortable');
+
+    for (const button of screen.getAllByRole('button')) {
+      expect(within(button).queryByRole('textbox')).toBeNull();
+      expect(within(button).queryAllByRole('button')).toHaveLength(0);
+    }
+  });
+
   it('locks the page and takes focus while the details drawer is open', async () => {
     const user = userEvent.setup();
     mockViewport('laptop');
@@ -2592,4 +2623,69 @@ describe('EquipmentCheckTemplateBuilder blocks a delete for the whole span of a 
     await confirm('Delete');
     await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('cab'));
   }, 10_000);
+});
+
+describe('EquipmentCheckTemplateBuilder details and rows (W46)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getApparatusOptions.mockReset();
+    getApparatusOptions.mockResolvedValue({ source: 'default', options: [] });
+    mockViewport('laptop');
+  });
+
+  const openDetails = async () => {
+    renderNewBuilder();
+    await screen.findByRole('button', { name: 'Details' });
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+  };
+
+  const specificOptions = async () => {
+    const select = await screen.findByLabelText('Specific Apparatus');
+    return within(select)
+      .getAllByRole('option')
+      .map((o) => o.textContent);
+  };
+
+  // W46-8: a basic apparatus was offered, and saving it failed — the column
+  // can only name a full Apparatus record.
+  it('offers no specific unit to a department on basic apparatus', async () => {
+    getApparatusOptions.mockResolvedValue({
+      source: 'basic',
+      options: [{ id: 'basic-1', name: 'Engine 1', unit_number: 'E1', apparatus_type: 'engine' }],
+    });
+    await openDetails();
+    await waitFor(() => expect(getApparatusOptions).toHaveBeenCalled());
+    expect(await specificOptions()).toEqual(['All of type (default)']);
+  });
+
+  it('offers full apparatus records as specific units', async () => {
+    getApparatusOptions.mockResolvedValue({
+      source: 'apparatus',
+      options: [{ id: 'app-1', name: 'Engine 1', unit_number: 'E1', apparatus_type: 'engine' }],
+    });
+    await openDetails();
+    await waitFor(async () => expect(await specificOptions()).toEqual(['All of type (default)', 'E1 — Engine 1']));
+  });
+
+  // W46-9: the chips printed the raw token ("Ems") and had no paramedic seat.
+  it('names seats as the schedule does, paramedic included', async () => {
+    await openDetails();
+    expect(screen.getByRole('checkbox', { name: 'EMT' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Paramedic' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Driver/Operator' })).toBeInTheDocument();
+  });
+
+  // W46-10: dnd-kit's role="button" sat on the whole location, so its fields
+  // were inside a button — presentational to a screen reader.
+  it('keeps the drag attributes on the handle, not the row with the fields', async () => {
+    renderNewBuilder();
+    await screen.findByRole('button', { name: 'Details' });
+    fireEvent.click(screen.getByRole('button', { name: /build from scratch/i }));
+
+    const name = await screen.findByLabelText('Location name');
+    expect(name.closest('[role="button"]')).toBeNull();
+    expect(name.closest('[aria-roledescription="sortable"]')).toBeNull();
+    const handle = screen.getByRole('button', { name: /Save before dragging this compartment/ });
+    expect(handle).toHaveAttribute('aria-roledescription', 'sortable');
+  });
 });

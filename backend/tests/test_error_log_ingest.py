@@ -114,6 +114,56 @@ class TestIngestRateLimit:
         assert ERROR_LOG_RATE_LIMIT > 20
 
 
+class TestAnonymousSuggestionReports:
+    """A frontend report files the member's own user_id; for the anonymous side
+    of the suggestion box that names the submitter, so it is never stored."""
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/suggestions/boxes/b1/submissions",
+            "/suggestions/follow-up/messages",
+            "https://logbook.example.org/api/v1/suggestions/follow-up/lookup",
+        ],
+    )
+    async def test_discarded_without_a_row(self, db, current_user, path):
+        with patch(
+            "app.api.v1.endpoints.error_logs.is_rate_limited",
+            AsyncMock(return_value=False),
+        ):
+            result = await log_error(
+                ErrorLogCreate(
+                    error_type="API_SERVER_ERROR",
+                    error_message="HTTP 500",
+                    context={"path": path, "method": "POST"},
+                ),
+                db=db,
+                current_user=current_user,
+            )
+
+        assert result == {"status": "discarded", "id": None}
+        db.add.assert_not_called()
+        db.commit.assert_not_awaited()
+
+    async def test_a_named_suggestion_failure_is_still_stored(self, db, current_user):
+        with patch(
+            "app.api.v1.endpoints.error_logs.is_rate_limited",
+            AsyncMock(return_value=False),
+        ):
+            result = await log_error(
+                ErrorLogCreate(
+                    error_type="API_SERVER_ERROR",
+                    error_message="HTTP 500",
+                    context={"path": "/suggestions/mine/s1/messages"},
+                ),
+                db=db,
+                current_user=current_user,
+            )
+
+        assert result["status"] == "logged"
+        db.add.assert_called_once()
+
+
 class TestErrorLogRetention:
     def test_error_logs_are_registered_for_retention(self):
         """Every failed request writes a row, so without a default retention

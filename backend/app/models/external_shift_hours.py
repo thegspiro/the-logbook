@@ -122,6 +122,14 @@ class ExternalShiftHours(Base):
 
     shift_date = Column(Date, nullable=False)
     duration_minutes = Column(Integer, nullable=False)
+    # When the member gave the shift's start and end, both are kept and the
+    # date and duration above are derived from them: ``shift_date`` is the
+    # start's calendar date in the department's timezone. Null on entries
+    # logged as a date and an hours figure, which is how every entry before
+    # these columns existed was written, and on an entry whose date or hours
+    # were later corrected without times — the pair would no longer describe it.
+    start_at = Column(DateTime(timezone=True), nullable=True)
+    end_at = Column(DateTime(timezone=True), nullable=True)
 
     # Required on every write; nullable only so removing a unit from the
     # list cannot take the shifts logged on it with it. The two name columns

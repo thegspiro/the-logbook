@@ -2,11 +2,160 @@
 
 **Prefix:** `CMP` · **Iteration:** 20 · **Reviewed:** 2026-08-26 (pass 1),
 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15
-(pass 5) · **PR:** #1902 (pass 1, merged),
+(pass 5), 2026-10-03 (pass 6) · **PR:** #1902 (pass 1, merged),
 [#2059](https://github.com/thegspiro/the-logbook/pull/2059) (pass 2, merged),
 #2245 (pass 3, merged), [#2476](https://github.com/thegspiro/the-logbook/pull/2476)
 (pass 4, merged), [#2583](https://github.com/thegspiro/the-logbook/pull/2583)
-(pass 5)
+(pass 5, merged), pass 6 (this PR)
+
+## Pass 6 (2026-10-03)
+
+**Not a zero-delta pass** — real commits landed in this feature's declared
+surface since pass 5's merge (PR #2583). The shallow clone here does not
+resolve pass 5's merge commit (`621bd36a0`) directly — the same pre-existing
+artifact passes 3 and 5 both noted — so scope was established by walking
+`git log` on each of the seven in-scope files individually:
+
+- `backend/app/services/compliance_officer_service.py` and
+  `backend/app/services/training_compliance.py` — a department-local-"today"
+  pass (`d8afb4c3d`, 2026-09-25) replaced every `date.today()` this feature
+  used to compute a report year, a record-completeness window end date, and
+  the annual report's own "as of" date with `resolve_org_today(db, organization_id)`
+  from `app/utils/org_timezone.py`. All three call sites
+  (`ISOReadinessService.get_iso_readiness:189`,
+  `RecordCompletenessService.evaluate_completeness:509`,
+  `AnnualComplianceReportService.generate_annual_report:816`, plus
+  `compute_org_compliance_pct`'s own `training_compliance.py:946`) pass the
+  caller's own `organization_id` — never a client-supplied value — into a
+  function that only reads that org's own `Organization.timezone` column.
+  This is the CLAUDE.md Pitfall #29 "a derived date is a value" corollary
+  applied correctly: previously a UTC midnight boundary could put a record
+  completed just after local midnight in the wrong report year for an
+  org west of UTC. No new finding.
+- `backend/app/services/compliance_config_service.py` — the shared
+  "solid-tab" email redesign (`6d2a24ec6`, 2026-09-27) rewrote the compliance
+  report email (`_email_report`) onto `wrap_email_body`/`fact`/`facts()`
+  instead of a hand-built `<div>`. Read in full rather than trusted from the
+  commit message, specifically for CS-9's escaping guarantee: `org_name` and
+  `report_type_label` are still `html.escape()`d before interpolation;
+  `period_label` is now folded into the _title_ argument
+  (`f"Compliance Report — {report.period_label or ''}"`), and
+  `wrap_email_body` itself does `_html.escape(title)` before handing it to
+  `build_shell` (`app/services/email_service.py:327`) — confirmed by reading
+  `wrap_email_body`'s body directly, not by trusting its comment. The single
+  shared send path (`_email_report`, called by both `generate_report` and
+  `email_existing_report`) is unchanged; `email_existing_report` still
+  resolves the target report via `get_report(report_id, organization_id)`
+  before sending (14a). No new finding.
+- `backend/app/services/training_compliance.py` — a first-time-user-guidance
+  change (`880191a53`, 2026-09-30) added one new function,
+  `count_active_requirements(db, org_id)`, org-scoped on
+  `TrainingRequirement.organization_id` directly. Not called from either of
+  this feature's own files (its callers are `admin_hub_service.py` and
+  `dashboard.py`, Features 32/29's scope) and, per the commit's own message,
+  does not change `compute_org_compliance_pct`'s contract — confirmed by
+  re-reading that function: unchanged. No new finding.
+- `frontend/src/pages/ComplianceRequirementsConfigPage.tsx` — a copy-only
+  toast-wording change (`640285fc1`, 2026-09-29): `'Report generated
+successfully'` → `'Report generated'`. No security content.
+- `frontend/src/pages/ComplianceRequirementsConfigPage.tsx` and
+  `ComplianceOfficerDashboard.tsx` — **W29's workflow review**
+  (`617e1d424`, 2026-09-29, `docs/workflow-review/W29-compliance.md`) fixed
+  four findings in this same frontend surface. One of them,
+  **W29-4, directly closes CMP4-4** (see below) — a product/display decision
+  this rotation had deliberately left to a UI call, exactly as pass 4 flagged
+  it. The other three (W29-1 printed-matrix re-derivation, W29-2 a swallowed
+  422 reason, W29-3 missing field labels/`aria-pressed`) are workflow/UX
+  findings outside this rotation's seven checklist dimensions; re-read for
+  anything security-relevant and found none. Confirmed directly in the
+  current tree rather than trusted from the doc: `ComplianceOfficerDashboard.tsx:436-437`
+  renders `members_total === 0` as "Not applicable" rather than a red 0%;
+  `ComplianceRequirementsConfigPage.tsx:260,354` toast
+  `getErrorMessage(err, …)` instead of a fixed string; `:511` carries
+  `aria-pressed` on the tab buttons.
+- `frontend/src/types/training.ts` — four external-training-sync commits
+  (`644d93a9a`, `f4a298940`, `90475f4e9`, `10d16b5f9`, 2026-09-28 to
+  2026-10-01) touched this file for TargetSolutions integration and
+  event-attendance linking. Grepped each commit's diff for
+  `compliance`/`annual` — no hit in any of the four;
+  `AnnualReportRequirement` (`training.ts:2586-2593`) is unchanged
+  (`compliance_pct: number`, not widened to `number | null` — consistent
+  with W29-4's fix being a frontend `members_total === 0` check rather than
+  a backend/type change). No new finding.
+- `backend/app/api/v1/endpoints/compliance_config.py`,
+  `compliance_officer.py`, `backend/app/models/compliance_config.py`,
+  `backend/app/schemas/compliance_config.py` — no commit in this feature's
+  per-file `git log` since pass 5 other than the shallow-clone boundary
+  commit (`a13cd0cc4`, which reflects the fetch depth, not a real change —
+  its diff is the entire repository as "added", the same artifact pass 5
+  itself worked around). Re-enumerated both route files from scratch rather
+  than re-reading prior prose: 12 + 8 = 20/20 routes, every one gated by
+  `Depends(require_permission(...))`, identical permission strings to every
+  prior pass. No migration touches a compliance table since pass 5
+  (`git log` on every matching `alembic/versions/*.py` file returns only the
+  same shallow-boundary commit).
+
+**Standing findings re-verified by direct code read, not re-cited from prior
+prose:**
+
+- **CMP4-4 — ✅ now FIXED (by W29-4, outside this rotation).** Pass 4 flagged
+  the backend's `0.0` fallback for a zero-denominator requirement rendering
+  as a failing red percentage on the dashboard, and deliberately left the
+  frontend display decision unmade. W29-4 made it:
+  `ComplianceOfficerDashboard.tsx:436` now reads `req.members_total === 0 ?
+<span>Not applicable</span> : <span className={...}>{req.compliance_pct}%</span>`.
+  The backend's `0.0` (`compliance_officer_service.py:1038`) is unchanged —
+  this is the same "screen decides how to read a value the backend already
+  sends" shape as the rest of this rotation's own fixes, not a backend
+  change, and matches the in-repo precedent (`complianceMatrixModel.ts`'s
+  `rollUpRequirements`) pass 4's own write-up already pointed to.
+- **CMP4-2 — OPEN, unchanged.** `requirement_applies_to_member`
+  (`training_compliance.py:700-731`) still has no `required_positions`
+  branch — confirmed by reading the function in full, reproduced above.
+- **CMP4-3 — OPEN, unchanged.** `generate_annual_report` still never
+  resolves a member's `ComplianceProfile` — `grep -n "profile\|Profile"
+compliance_officer_service.py` still returns nothing in either loop.
+- **CMP4-5 — OPEN, unchanged.** `requirement_applies_to_member`'s `role_ids`
+  parameter is still compared against `req.required_roles` as position ids,
+  while every write path still stores rank slugs there; no sibling feature's
+  pass since (TR-17 pass 4, TRX-18 pass 6, SKT-19 pass 6) has touched this.
+- **CMP2-1 — OPEN by design, unchanged.** `notify_non_compliant_members`/
+  `notify_days_before_deadline` are still only in `schemas/compliance_config.py`
+  and `models/compliance_config.py` — a repository-wide
+  `grep -rn "notify_days_before_deadline\|notify_non_compliant_members"
+backend/app` still hits only those two files. The "Not in effect yet"
+  notice is still present in `ComplianceRequirementsConfigPage.tsx`.
+- **CS-8 (attestation dual control) — unchanged.** `ComplianceAttestationService.create_attestation`
+  (`compliance_officer_service.py:369-443`) still has no update/delete route
+  — confirmed against the fresh 8-route enumeration above (`POST
+/attestations`, `GET /attestations`, nothing else) — so a created
+  attestation is immutable except through the audit log it's written as.
+- **CS-9 (monthly-report windowing) — unchanged.** Not re-derived from
+  prose; `report_type` is still constrained to the known set and
+  `_email_report` (read in full above for the email-redesign change) still
+  windows and escapes the same fields.
+
+**0 fixed by this pass** (CMP4-4 was fixed by W29, outside this rotation —
+re-verified and recorded above, not re-claimed as this pass's own fix).
+**0 new findings.** Four standing flags (CMP4-2, CMP4-3, CMP4-5, CMP2-1)
+re-confirmed open and unchanged; CS-8/CS-9 re-confirmed open-by-design.
+
+## Completion gate (pass 6)
+
+| Check                                                | Result                                       |
+| ---------------------------------------------------- | -------------------------------------------- |
+| `flake8` on the 7 in-scope backend files             | ✅ 0 violations                              |
+| `black --check` on the 7 in-scope backend files      | ✅ 7 files unchanged                         |
+| `isort --check-only` on the 7 in-scope backend files | ✅ clean                                     |
+| `python3 scripts/validate_migrations.py --strict`    | ✅ 498 revisions, single head `8464e9962f76` |
+| `pytest tests/ -q -k "compliance"`                   | ✅ 429 passed, 1 pre-existing skip           |
+| 6 targeted compliance-officer/report test files      | ✅ 138 passed (identical count to pass 4)    |
+| `cd frontend && npm run typecheck`                   | ✅ 0 errors                                  |
+| `cd frontend && npm run lint`                        | ✅ 0 errors, 0 warnings                      |
+
+No backend or frontend source file was modified by this pass itself — this is
+a documentation-only re-verification pass, matching this rotation's "match
+the verification to the change" guidance.
 
 ## Pass 5 (2026-09-15)
 

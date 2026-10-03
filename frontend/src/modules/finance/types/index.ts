@@ -285,6 +285,46 @@ export interface ApprovalChain {
   steps: ApprovalChainStep[];
 }
 
+// Approval-chain request bodies are snake_case. The backend's Finance request
+// schemas accept either snake_case or camelCase keys (the other Finance pages
+// send camelCase); these stay snake_case, which the backend reads by field name.
+
+export interface ApprovalChainCreatePayload {
+  name: string;
+  description?: string | undefined;
+  applies_to: ApprovalEntityType;
+  min_amount?: string | undefined;
+  max_amount?: string | undefined;
+  budget_category_id?: string | undefined;
+  is_default?: boolean | undefined;
+}
+
+export interface ApprovalChainUpdatePayload {
+  name?: string;
+  description?: string | null;
+  is_active?: boolean;
+}
+
+export interface ApprovalChainStepCreatePayload {
+  step_order: number;
+  name: string;
+  step_type: ApprovalStepType;
+  approver_type?: ApproverType | undefined;
+  approver_value?: string | undefined;
+  allow_self_approval: boolean;
+  auto_approve_under?: string | undefined;
+}
+
+export interface ApprovalChainStepUpdatePayload {
+  step_order?: number;
+  name?: string;
+  step_type?: ApprovalStepType;
+  approver_type?: ApproverType | null;
+  approver_value?: string | null;
+  allow_self_approval?: boolean;
+  auto_approve_under?: string | null;
+}
+
 export interface ApprovalStepRecord {
   id: string;
   chainId: string;
@@ -310,6 +350,16 @@ export interface PendingApproval {
   requesterName: string;
   stepName: string;
   stepOrder: number;
+  submittedAt: string;
+}
+
+/** A request waiting for approval that no approval chain applies to, so it has no steps. */
+export interface UnroutedApproval {
+  entityType: ApprovalEntityType;
+  entityId: string;
+  entityTitle: string;
+  entityAmount: MonetaryAmount;
+  requesterName: string;
   submittedAt: string;
 }
 

@@ -20,6 +20,7 @@ import {
   loadTrainingWidgetPreferences,
   saveTrainingWidgetPreferences,
 } from '../components/dashboard/widgets/training/preferences';
+import { TrainingSetupGuide } from '../components/training/TrainingSetupGuide';
 
 const widgets: Record<TrainingWidgetId, React.FC<{ data: TrainingDashboardSummary }>> = {
   'compliance-overview': ComplianceOverviewWidget,
@@ -33,6 +34,38 @@ const widgets: Record<TrainingWidgetId, React.FC<{ data: TrainingDashboardSummar
   'requirements-at-risk': RequirementsAtRiskWidget,
 };
 
+const SUMMARY_LISTS = [
+  'expirations',
+  'recent_completions',
+  'requirements',
+  'members_needing_intervention',
+  'upcoming_session_capacity',
+  'requirements_at_risk',
+] as const;
+
+/**
+ * Whether a response is the summary the widgets read.
+ *
+ * Every widget dereferences `stats`, one of these lists or `pending_validation`
+ * unguarded, so a 200 that is not this shape (a captive portal's HTML page)
+ * took the whole Training hub down through the ErrorBoundary. Substituting
+ * empty values would be worse than an error: "0% compliant" and "no expiring
+ * certifications" are claims an officer acts on, so a malformed body takes the
+ * page's own load-error path instead.
+ */
+const isDashboardSummary = (value: unknown): value is TrainingDashboardSummary => {
+  if (typeof value !== 'object' || value === null) return false;
+  const summary = value as Record<string, unknown>;
+  const pending = summary.pending_validation;
+  return (
+    typeof summary.stats === 'object' &&
+    summary.stats !== null &&
+    typeof pending === 'object' &&
+    pending !== null &&
+    SUMMARY_LISTS.every((key) => Array.isArray(summary[key]))
+  );
+};
+
 const TrainingOfficerDashboard: React.FC = () => {
   const [data, setData] = useState<TrainingDashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -43,7 +76,11 @@ const TrainingOfficerDashboard: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      setData(await trainingService.getDashboardSummary(90));
+      const summary: unknown = await trainingService.getDashboardSummary(90);
+      if (!isDashboardSummary(summary)) {
+        throw new TypeError('The training dashboard response was not a summary');
+      }
+      setData(summary);
     } catch {
       setError('Failed to load the dashboard. Check your connection and refresh the page.');
     } finally {
@@ -110,14 +147,17 @@ const TrainingOfficerDashboard: React.FC = () => {
         </div>
       ) : (
         data && (
-          <div className="grid gap-6 md:grid-cols-2">
-            {(Object.keys(widgets) as TrainingWidgetId[])
-              .filter((id) => enabled[id])
-              .map((id) => {
-                const Widget = widgets[id];
-                return <Widget key={id} data={data} />;
-              })}
-          </div>
+          <>
+            <TrainingSetupGuide stats={data.stats} />
+            <div className="grid gap-6 md:grid-cols-2">
+              {(Object.keys(widgets) as TrainingWidgetId[])
+                .filter((id) => enabled[id])
+                .map((id) => {
+                  const Widget = widgets[id];
+                  return <Widget key={id} data={data} />;
+                })}
+            </div>
+          </>
         )
       )}
     </div>

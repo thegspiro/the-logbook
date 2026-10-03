@@ -193,11 +193,13 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
               </p>
             </div>
           </div>
+          {/* A member reading their own log does not hold the fleet board's
+              grant, so "Fleet" would lead them to Access Denied. */}
           <Link
-            to="/inventory/checklists"
+            to={data?.scope === 'own' ? '/inventory/checklists/my' : '/inventory/checklists'}
             className="border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 self-start rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
           >
-            &larr; Fleet
+            &larr; {data?.scope === 'own' ? 'My checklists' : 'Fleet'}
           </Link>
         </div>
       )}

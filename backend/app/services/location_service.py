@@ -328,6 +328,18 @@ class LocationService:
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
+    async def set_badge_check_in(
+        self, location_id: UUID, organization_id: str, enabled: bool
+    ) -> Optional[Location]:
+        """Turn member ID card taps on or off for one room's kiosk."""
+        location = await self.get_location(location_id, organization_id)
+        if not location:
+            return None
+        location.nfc_badge_check_in_enabled = enabled
+        await self.db.commit()
+        await self.db.refresh(location)
+        return location
+
     async def regenerate_display_code(
         self, location_id: UUID, organization_id: str
     ) -> Optional[Location]:

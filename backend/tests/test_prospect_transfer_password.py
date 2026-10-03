@@ -38,7 +38,7 @@ SERVICE = "app.services.membership_pipeline_service.MembershipPipelineService"
 
 async def _transfer(data: TransferProspectRequest, *, email_can_send: bool):
     """Drive the endpoint with everything but its password rules stubbed."""
-    prospect = SimpleNamespace(status=ProspectStatus.ACTIVE)
+    prospect = SimpleNamespace(status=ProspectStatus.ACTIVE, target_role_id=None)
     service_transfer = AsyncMock(
         return_value={"success": True, "user_id": "u-new", "message": "ok"}
     )

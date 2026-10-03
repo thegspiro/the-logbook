@@ -14,10 +14,12 @@ import { AlertCircle, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import type { ExternalShiftEntry } from '../../modules/scheduling/services/api';
 import { useConfirm } from '../../contexts/ConfirmContext';
+import { useTimezone } from '../../hooks/useTimezone';
 import { formatCalendarDate } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { formatHours } from '../../utils/hoursFormatting';
 import { ExternalShiftFormModal } from './ExternalShiftFormModal';
+import { externalShiftTimeRange } from './externalShiftTimes';
 
 interface MyExternalShiftsProps {
   /** Called after any change, so the hours totals beside this list refresh. */
@@ -26,6 +28,7 @@ interface MyExternalShiftsProps {
 
 export const MyExternalShifts: React.FC<MyExternalShiftsProps> = ({ onChanged }) => {
   const { confirm } = useConfirm();
+  const tz = useTimezone();
   const [entries, setEntries] = useState<ExternalShiftEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -119,6 +122,7 @@ export const MyExternalShifts: React.FC<MyExternalShiftsProps> = ({ onChanged })
           {entries.map((entry) => {
             const rejected = entry.status === 'rejected';
             const detail = [entry.apparatus_name, entry.role].filter(Boolean).join(' · ');
+            const times = externalShiftTimeRange(entry, tz);
             return (
               <li key={entry.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
@@ -131,7 +135,8 @@ export const MyExternalShifts: React.FC<MyExternalShiftsProps> = ({ onChanged })
                     )}
                   </p>
                   <p className="text-theme-text-secondary text-sm">
-                    {formatCalendarDate(entry.shift_date)} · {formatHours(entry.hours)} hrs
+                    {formatCalendarDate(entry.shift_date)}
+                    {times ? ` · ${times}` : ''} · {formatHours(entry.hours)} hrs
                     {detail ? ` · ${detail}` : ''}
                   </p>
                   {rejected && entry.rejection_reason && (

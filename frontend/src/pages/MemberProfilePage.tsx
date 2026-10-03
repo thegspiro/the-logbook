@@ -56,12 +56,15 @@ import ContactInfoSection from '../components/member-profile/ContactInfoSection'
 import EmergencyContactsSection from '../components/member-profile/EmergencyContactsSection';
 import { VisibilityControl } from '../components/member-profile/VisibilityControl';
 import { useOverlaySurface } from '../hooks/useOverlaySurface';
+import { canViewMemberIdCard } from '../utils/memberIdCardAccess';
 import { MemberIdCardsPanel } from '../modules/membership/components/MemberIdCardsPanel';
 import { ReactivateMemberModal } from '../components/ReactivateMemberModal';
 import { AnonymizeMemberModal } from '../components/AnonymizeMemberModal';
 import { RejoinServiceFields } from '../components/RejoinServiceFields';
 import { useRejoinServiceOptions } from '../hooks/useRejoinServiceOptions';
 import { ServiceHistorySection } from '../components/member-profile/ServiceHistorySection';
+import { isCertificationExpired, isCertificationExpiringSoon } from '../utils/certificationExpiry';
+import { blankToNull } from '../utils/formValues';
 
 // Types for inventory data
 interface InventoryItem {
@@ -79,17 +82,12 @@ function isModuleEnabled(moduleId: string): boolean {
   return mod?.enabled ?? false;
 }
 
-function isExpiringSoon(record: TrainingRecord): boolean {
-  if (!record.expiration_date) return false;
-  const expDate = new Date(record.expiration_date);
-  const now = new Date();
-  const daysUntilExpiry = (expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
-  return daysUntilExpiry > 0 && daysUntilExpiry <= 90;
+function isExpiringSoon(record: TrainingRecord, tz: string): boolean {
+  return isCertificationExpiringSoon(record.expiration_date, tz);
 }
 
-function isExpired(record: TrainingRecord): boolean {
-  if (!record.expiration_date) return false;
-  return new Date(record.expiration_date) < new Date();
+function isExpired(record: TrainingRecord, tz: string): boolean {
+  return isCertificationExpired(record.expiration_date, tz);
 }
 
 export const MemberProfilePage: React.FC = () => {
@@ -446,11 +444,14 @@ export const MemberProfilePage: React.FC = () => {
       setSaving(true);
       setError(null);
 
-      // Strip empty strings to undefined so Pydantic doesn't reject '' as an invalid EmailStr
+      // An update, so a cleared box is sent as null and the server clears it;
+      // omitting it (`|| undefined`) left the old number in place behind a
+      // success (CLAUDE.md pitfall #1, update half). Email stays omit-if-blank:
+      // the account email is required and cannot be cleared.
       const payload: ContactInfoUpdate = {
         email: editForm.email?.trim() || undefined,
-        phone: editForm.phone?.trim() || undefined,
-        mobile: editForm.mobile?.trim() || undefined,
+        phone: blankToNull(editForm.phone),
+        mobile: blankToNull(editForm.mobile),
         notification_preferences: editForm.notification_preferences,
       };
 
@@ -554,13 +555,15 @@ export const MemberProfilePage: React.FC = () => {
     try {
       setSavingAddress(true);
       setError(null);
+      // Every field the form owns, blanks as null, so removing an address or
+      // a personal email actually removes it (pitfall #1, update half).
       const updateData: UserProfileUpdate = {
-        address_street: addressForm.address_street || undefined,
-        address_city: addressForm.address_city || undefined,
-        address_state: addressForm.address_state || undefined,
-        address_zip: addressForm.address_zip || undefined,
-        address_country: addressForm.address_country || undefined,
-        personal_email: addressForm.personal_email || undefined,
+        address_street: blankToNull(addressForm.address_street),
+        address_city: blankToNull(addressForm.address_city),
+        address_state: blankToNull(addressForm.address_state),
+        address_zip: blankToNull(addressForm.address_zip),
+        address_country: blankToNull(addressForm.address_country),
+        personal_email: blankToNull(addressForm.personal_email),
       };
       const updated = await userService.updateUserProfile(userId, updateData);
       setUser(updated);
@@ -604,17 +607,27 @@ export const MemberProfilePage: React.FC = () => {
 
   const handleSaveEmergencyContacts = async () => {
     if (!user || !userId) return;
-    // Validate at least name and phone for each contact
-    const valid = contactsForm.every((c) => c.name.trim() && c.phone.trim());
-    if (!valid) {
-      setError('Each emergency contact must have a name and phone number.');
+    // Shaped as MemberAdminEditPage and UserSettingsPage already do it: the
+    // server requires a relationship and types email as EmailStr | None, so an
+    // untouched Email box ('') or a blank Relationship was a 422 that lost the
+    // whole save.
+    const contacts = contactsForm.map((c) => ({
+      name: c.name.trim(),
+      relationship: c.relationship.trim(),
+      phone: c.phone.trim(),
+      email: c.email?.trim() || undefined,
+      is_primary: c.is_primary,
+    }));
+    const incomplete = contacts.findIndex((c) => !c.name || !c.relationship || !c.phone);
+    if (incomplete >= 0) {
+      setError(`Emergency contact ${incomplete + 1} needs a name, a relationship and a phone number.`);
       return;
     }
     try {
       setSavingContacts(true);
       setError(null);
       const updated = await userService.updateUserProfile(userId, {
-        emergency_contacts: contactsForm,
+        emergency_contacts: contacts,
       });
       setUser(updated);
       setEditingContacts(false);
@@ -625,15 +638,31 @@ export const MemberProfilePage: React.FC = () => {
     }
   };
 
-  // Check if current user can edit this profile (self or admin)
-  const isAdmin = checkPermission('users.update') || checkPermission('members.manage');
   const canManageIdCards = checkPermission('members.manage_id_cards');
-  const canEdit = currentUser?.id === userId || isAdmin;
-  // Emergency contacts are leadership-only server-side (members.manage or the
-  // member themselves). Mirror that gate here so everyone else sees no section
-  // at all — a rendered-but-empty section reads as "none on file", which is a
-  // different and wrong statement about the member.
-  const canViewRestrictedPii = canEdit;
+  const canViewIdCard = canViewMemberIdCard(currentUser?.id, userId, checkPermission);
+  // Whether the backend handed this viewer the unredacted record. It decides
+  // that in `_redact_profile_for_viewer` (users.py): the member themselves
+  // always, a colleague's only for members.manage — and marks the colleague
+  // case by including `profile_visibility`, which it nulls for exactly the
+  // viewers it redacts for. Read from the payload rather than re-derived from
+  // local permissions (CLAUDE.md pitfall #29).
+  const receivedFullRecord = isSelf || user?.profile_visibility != null;
+  // Emergency contacts and date of birth are cleared for everyone else, so
+  // those viewers see no section at all — a rendered-but-empty section reads
+  // as "none on file", which is a different and wrong statement about the
+  // member.
+  const canViewRestrictedPii = receivedFullRecord;
+  // Contact, address and emergency-contact edits go to PATCH
+  // /users/{id}/contact-info and /profile, which accept the member, users.edit
+  // or members.manage. They are also gated on the full record because every
+  // form is seeded from what is on screen: on a redacted record a hidden phone,
+  // address or contact list reads as blank, and an update sends blanks as
+  // null, so saving would erase what the editor was never shown. A users.edit
+  // holder without members.manage therefore gets no edit controls on a
+  // colleague's profile.
+  const canEdit = receivedFullRecord && (isSelf || canManageMembers || checkPermission('users.edit'));
+  // POST/DELETE /users/{id}/photo accept only the member or members.manage.
+  const canEditPhoto = isSelf || canManageMembers;
 
   // Which "who can see this" marker a viewer gets. The member flips switches;
   // a members-manager sees a read-only badge (they see every field anyway,
@@ -662,7 +691,7 @@ export const MemberProfilePage: React.FC = () => {
     user?.address_zip ||
     (user?.address_country && user.address_country !== 'USA')
   );
-  const showAddressCard = canEdit || hasAddressData;
+  const showAddressCard = receivedFullRecord || hasAddressData;
 
   // The left column is per-viewer: training, admin hours, ID cards and gear
   // are all hidden from a plain colleague, and a `lg:col-span-2` ghost would
@@ -754,7 +783,7 @@ export const MemberProfilePage: React.FC = () => {
                       </span>
                     </div>
                   )}
-                  {canEdit && (
+                  {canEditPhoto && (
                     <div className="absolute inset-0 flex cursor-pointer items-center justify-center rounded-full bg-black/50 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
                       <input
                         ref={fileInputRef}
@@ -778,7 +807,7 @@ export const MemberProfilePage: React.FC = () => {
                       )}
                     </div>
                   )}
-                  {canEdit && user.photo_url && (
+                  {canEditPhoto && user.photo_url && (
                     <button
                       onClick={() => {
                         void handlePhotoRemove();
@@ -819,13 +848,15 @@ export const MemberProfilePage: React.FC = () => {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Link
-                  to={`/members/${userId}/id-card`}
-                  className="touch-target-phone inline-flex items-center gap-1.5 rounded-lg border border-blue-300 px-3 py-1 text-sm font-medium text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 dark:border-blue-500/40 dark:text-blue-400 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
-                >
-                  <CreditCard className="h-4 w-4" />
-                  ID Card
-                </Link>
+                {canViewIdCard && (
+                  <Link
+                    to={`/members/${userId}/id-card`}
+                    className="touch-target-phone inline-flex items-center gap-1.5 rounded-lg border border-blue-300 px-3 py-1 text-sm font-medium text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 dark:border-blue-500/40 dark:text-blue-400 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
+                  >
+                    <CreditCard className="h-4 w-4" />
+                    ID Card
+                  </Link>
+                )}
                 {canManageMembers ? (
                   <button
                     type="button"
@@ -1302,13 +1333,13 @@ export const MemberProfilePage: React.FC = () => {
                       <div className="flex items-center justify-between">
                         <span className="text-theme-text-secondary text-sm">Active Training</span>
                         <span className="text-theme-text-primary text-sm font-semibold">
-                          {trainings.filter((t) => t.status === 'completed' && !isExpired(t)).length}
+                          {trainings.filter((t) => t.status === 'completed' && !isExpired(t, tz)).length}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-theme-text-secondary text-sm">Expiring Soon</span>
                         <span className="text-sm font-semibold text-yellow-700 dark:text-yellow-400">
-                          {trainings.filter((t) => isExpiringSoon(t)).length}
+                          {trainings.filter((t) => isExpiringSoon(t, tz)).length}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">

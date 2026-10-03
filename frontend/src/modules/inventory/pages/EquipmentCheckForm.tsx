@@ -1998,6 +1998,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         <button
           type="button"
           data-action="not_applicable"
+          aria-pressed={effectiveStatus === 'not_applicable'}
           onClick={() => updateResultAndAdvance(item.id, { status: 'not_applicable' })}
           className={`flex min-h-[48px] shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-3 text-sm font-medium transition-colors ${
             effectiveStatus === 'not_applicable'
@@ -2019,6 +2020,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         <button
           type="button"
           data-action="out_of_service"
+          aria-pressed={effectiveStatus === 'out_of_service'}
           onClick={() => updateResultAndAdvance(item.id, { status: 'out_of_service' })}
           className={`flex min-h-[48px] shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-3 text-sm font-medium transition-colors ${
             effectiveStatus === 'out_of_service'
@@ -2032,11 +2034,14 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         </button>
       );
 
+    // Every item carries the same four labels, so the group names the item and
+    // aria-pressed says which answer is held — the colour alone did both.
     const passFailButtons = (
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-2" role="group" aria-label={item.name}>
         <button
           type="button"
           data-action="pass"
+          aria-pressed={effectiveStatus === 'pass'}
           onClick={() => updateResultAndAdvance(item.id, { status: 'pass' })}
           disabled={isExpired}
           className={`flex min-h-[48px] flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
@@ -2051,6 +2056,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         <button
           type="button"
           data-action="fail"
+          aria-pressed={effectiveStatus === 'fail'}
           onClick={() => updateResultAndAdvance(item.id, { status: 'fail' })}
           className={`flex min-h-[48px] flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
             effectiveStatus === 'fail'
@@ -2104,7 +2110,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         };
 
         return (
-          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+          <div
+            className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2"
+            role="group"
+            aria-label={item.name}
+          >
             <div className="min-w-0 space-y-0.5 text-xs">
               {expected != null && (
                 <span className={`block ${getQtyColor()}`}>
@@ -2138,6 +2148,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               <input
                 id={`qty-${item.id}`}
                 type="number"
+                aria-label={`${item.name} quantity found`}
                 min="0"
                 inputMode="numeric"
                 className={`bg-theme-surface focus:ring-theme-focus-ring h-11 w-14 [appearance:textfield] border-y text-center text-sm font-medium focus:ring-2 focus:outline-none focus:ring-inset [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
@@ -2184,6 +2195,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               <button
                 type="button"
                 data-action="not_applicable"
+                aria-pressed={effectiveStatus === 'not_applicable'}
                 onClick={() => updateResultAndAdvance(item.id, { status: 'not_applicable', quantityFound: undefined })}
                 className={`flex min-h-[40px] shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
                   effectiveStatus === 'not_applicable'

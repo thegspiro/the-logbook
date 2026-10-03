@@ -110,6 +110,7 @@ export default function InspectionsListPage() {
             <button
               key={s}
               onClick={() => setResultFilter(s)}
+              aria-pressed={resultFilter === s}
               className={`px-3 py-2 text-xs font-medium transition-colors ${resultFilter === s ? 'bg-red-500/10 text-red-700 dark:text-red-400' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
             >
               {s.charAt(0).toUpperCase() + s.slice(1)}
@@ -236,6 +237,7 @@ export default function InspectionsListPage() {
         <div
           className="modal-overlay z-50 flex items-center justify-center p-4"
           role="dialog"
+          aria-labelledby="inspection-list-dialog-title"
           aria-modal="true"
           onKeyDown={(e) => {
             if (e.key === 'Escape') setShowModal(false);
@@ -243,7 +245,7 @@ export default function InspectionsListPage() {
         >
           <DialogPanel onClose={() => setShowModal(false)} className="max-h-[90dvh] w-full max-w-lg overflow-y-auto">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
-              <h2 className="text-theme-text-primary text-lg font-bold">
+              <h2 id="inspection-list-dialog-title" className="text-theme-text-primary text-lg font-bold">
                 {editingInspection ? 'Edit Inspection' : 'New Inspection'}
               </h2>
               <button
@@ -256,8 +258,11 @@ export default function InspectionsListPage() {
             </div>
             <div className="space-y-4 p-6">
               <div>
-                <label className={labelCls}>Facility *</label>
+                <label htmlFor="inspection-list-facility-id" className={labelCls}>
+                  Facility *
+                </label>
                 <select
+                  id="inspection-list-facility-id"
                   value={formData.facility_id}
                   onChange={(e) => setFormData((p) => ({ ...p, facility_id: e.target.value }))}
                   className={inputCls}
@@ -273,8 +278,11 @@ export default function InspectionsListPage() {
                 </select>
               </div>
               <div>
-                <label className={labelCls}>Title *</label>
+                <label htmlFor="inspection-list-title" className={labelCls}>
+                  Title *
+                </label>
                 <input
+                  id="inspection-list-title"
                   type="text"
                   value={formData.title}
                   onChange={(e) => setFormData((p) => ({ ...p, title: e.target.value }))}
@@ -284,8 +292,11 @@ export default function InspectionsListPage() {
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className={labelCls}>Type</label>
+                  <label htmlFor="inspection-list-inspection-type" className={labelCls}>
+                    Type
+                  </label>
                   <select
+                    id="inspection-list-inspection-type"
                     value={formData.inspection_type}
                     onChange={(e) => setFormData((p) => ({ ...p, inspection_type: e.target.value }))}
                     className={inputCls}
@@ -298,8 +309,11 @@ export default function InspectionsListPage() {
                   </select>
                 </div>
                 <div>
-                  <label className={labelCls}>Result</label>
+                  <label htmlFor="inspection-list-passed" className={labelCls}>
+                    Result
+                  </label>
                   <select
+                    id="inspection-list-passed"
                     value={formData.passed}
                     onChange={(e) => setFormData((p) => ({ ...p, passed: e.target.value }))}
                     className={inputCls}
@@ -312,8 +326,11 @@ export default function InspectionsListPage() {
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className={labelCls}>Inspection Date *</label>
+                  <label htmlFor="inspection-list-inspection-date" className={labelCls}>
+                    Inspection Date *
+                  </label>
                   <input
+                    id="inspection-list-inspection-date"
                     type="date"
                     value={formData.inspection_date}
                     onChange={(e) => setFormData((p) => ({ ...p, inspection_date: e.target.value }))}
@@ -321,8 +338,11 @@ export default function InspectionsListPage() {
                   />
                 </div>
                 <div>
-                  <label className={labelCls}>Next Inspection Date</label>
+                  <label htmlFor="inspection-list-next-inspection-date" className={labelCls}>
+                    Next Inspection Date
+                  </label>
                   <input
+                    id="inspection-list-next-inspection-date"
                     type="date"
                     value={formData.next_inspection_date}
                     onChange={(e) => setFormData((p) => ({ ...p, next_inspection_date: e.target.value }))}
@@ -332,8 +352,11 @@ export default function InspectionsListPage() {
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className={labelCls}>Inspector Name</label>
+                  <label htmlFor="inspection-list-inspector-name" className={labelCls}>
+                    Inspector Name
+                  </label>
                   <input
+                    id="inspection-list-inspector-name"
                     type="text"
                     value={formData.inspector_name}
                     onChange={(e) => setFormData((p) => ({ ...p, inspector_name: e.target.value }))}
@@ -341,8 +364,11 @@ export default function InspectionsListPage() {
                   />
                 </div>
                 <div>
-                  <label className={labelCls}>Inspector Organization</label>
+                  <label htmlFor="inspection-list-inspector-organization" className={labelCls}>
+                    Inspector Organization
+                  </label>
                   <input
+                    id="inspection-list-inspector-organization"
                     type="text"
                     value={formData.inspector_organization}
                     onChange={(e) => setFormData((p) => ({ ...p, inspector_organization: e.target.value }))}
@@ -351,8 +377,11 @@ export default function InspectionsListPage() {
                 </div>
               </div>
               <div>
-                <label className={labelCls}>Description</label>
+                <label htmlFor="inspection-list-description" className={labelCls}>
+                  Description
+                </label>
                 <textarea
+                  id="inspection-list-description"
                   value={formData.description}
                   onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))}
                   rows={2}
@@ -360,8 +389,11 @@ export default function InspectionsListPage() {
                 />
               </div>
               <div>
-                <label className={labelCls}>Findings</label>
+                <label htmlFor="inspection-list-findings" className={labelCls}>
+                  Findings
+                </label>
                 <textarea
+                  id="inspection-list-findings"
                   value={formData.findings}
                   onChange={(e) => setFormData((p) => ({ ...p, findings: e.target.value }))}
                   rows={2}
@@ -369,8 +401,11 @@ export default function InspectionsListPage() {
                 />
               </div>
               <div>
-                <label className={labelCls}>Corrective Actions</label>
+                <label htmlFor="inspection-list-corrective-actions" className={labelCls}>
+                  Corrective Actions
+                </label>
                 <textarea
+                  id="inspection-list-corrective-actions"
                   value={formData.corrective_actions}
                   onChange={(e) => setFormData((p) => ({ ...p, corrective_actions: e.target.value }))}
                   rows={2}
@@ -379,8 +414,11 @@ export default function InspectionsListPage() {
               </div>
               {formData.corrective_actions && (
                 <div>
-                  <label className={labelCls}>Corrective Action Deadline</label>
+                  <label htmlFor="inspection-list-corrective-action-deadline" className={labelCls}>
+                    Corrective Action Deadline
+                  </label>
                   <input
+                    id="inspection-list-corrective-action-deadline"
                     type="date"
                     value={formData.corrective_action_deadline}
                     onChange={(e) => setFormData((p) => ({ ...p, corrective_action_deadline: e.target.value }))}
@@ -389,8 +427,11 @@ export default function InspectionsListPage() {
                 </div>
               )}
               <div>
-                <label className={labelCls}>Notes</label>
+                <label htmlFor="inspection-list-notes" className={labelCls}>
+                  Notes
+                </label>
                 <textarea
+                  id="inspection-list-notes"
                   value={formData.notes}
                   onChange={(e) => setFormData((p) => ({ ...p, notes: e.target.value }))}
                   rows={2}

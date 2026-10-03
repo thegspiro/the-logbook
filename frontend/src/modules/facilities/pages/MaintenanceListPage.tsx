@@ -116,6 +116,7 @@ export default function MaintenanceListPage() {
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
+              aria-pressed={statusFilter === s}
               className={`px-3 py-2 text-xs font-medium transition-colors ${statusFilter === s ? 'bg-red-500/10 text-red-700 dark:text-red-400' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
             >
               {s.charAt(0).toUpperCase() + s.slice(1)}
@@ -245,6 +246,7 @@ export default function MaintenanceListPage() {
         <div
           className="modal-overlay z-50 flex items-center justify-center p-4"
           role="dialog"
+          aria-labelledby="maintenance-list-dialog-title"
           aria-modal="true"
           onKeyDown={(e) => {
             if (e.key === 'Escape') setShowModal(false);
@@ -252,7 +254,7 @@ export default function MaintenanceListPage() {
         >
           <DialogPanel onClose={() => setShowModal(false)} className="max-h-[90dvh] w-full max-w-lg overflow-y-auto">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
-              <h2 className="text-theme-text-primary text-lg font-bold">
+              <h2 id="maintenance-list-dialog-title" className="text-theme-text-primary text-lg font-bold">
                 {editingRecord ? 'Edit Maintenance Record' : 'New Maintenance Record'}
               </h2>
               <button
@@ -265,8 +267,11 @@ export default function MaintenanceListPage() {
             </div>
             <div className="space-y-4 p-6">
               <div>
-                <label className={labelCls}>Facility *</label>
+                <label htmlFor="maintenance-list-facility-id" className={labelCls}>
+                  Facility *
+                </label>
                 <select
+                  id="maintenance-list-facility-id"
                   value={formData.facility_id}
                   onChange={(e) => setFormData((p) => ({ ...p, facility_id: e.target.value }))}
                   className={inputCls}
@@ -282,8 +287,11 @@ export default function MaintenanceListPage() {
                 </select>
               </div>
               <div>
-                <label className={labelCls}>Description *</label>
+                <label htmlFor="maintenance-list-description" className={labelCls}>
+                  Description *
+                </label>
                 <textarea
+                  id="maintenance-list-description"
                   value={formData.description}
                   onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))}
                   rows={3}
@@ -293,8 +301,11 @@ export default function MaintenanceListPage() {
               </div>
               {maintenanceTypes.length > 0 && (
                 <div>
-                  <label className={labelCls}>Maintenance Type</label>
+                  <label htmlFor="maintenance-list-maintenance-type-id" className={labelCls}>
+                    Maintenance Type
+                  </label>
                   <select
+                    id="maintenance-list-maintenance-type-id"
                     value={formData.maintenance_type_id}
                     onChange={(e) => setFormData((p) => ({ ...p, maintenance_type_id: e.target.value }))}
                     className={inputCls}
@@ -310,8 +321,11 @@ export default function MaintenanceListPage() {
               )}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className={labelCls}>Scheduled Date</label>
+                  <label htmlFor="maintenance-list-scheduled-date" className={labelCls}>
+                    Scheduled Date
+                  </label>
                   <input
+                    id="maintenance-list-scheduled-date"
                     type="date"
                     value={formData.scheduled_date}
                     onChange={(e) => setFormData((p) => ({ ...p, scheduled_date: e.target.value }))}
@@ -319,8 +333,11 @@ export default function MaintenanceListPage() {
                   />
                 </div>
                 <div>
-                  <label className={labelCls}>Due Date</label>
+                  <label htmlFor="maintenance-list-due-date" className={labelCls}>
+                    Due Date
+                  </label>
                   <input
+                    id="maintenance-list-due-date"
                     type="date"
                     value={formData.due_date}
                     onChange={(e) => setFormData((p) => ({ ...p, due_date: e.target.value }))}
@@ -330,8 +347,11 @@ export default function MaintenanceListPage() {
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className={labelCls}>Performed By</label>
+                  <label htmlFor="maintenance-list-performed-by" className={labelCls}>
+                    Performed By
+                  </label>
                   <input
+                    id="maintenance-list-performed-by"
                     type="text"
                     value={formData.performed_by}
                     onChange={(e) => setFormData((p) => ({ ...p, performed_by: e.target.value }))}
@@ -339,8 +359,11 @@ export default function MaintenanceListPage() {
                   />
                 </div>
                 <div>
-                  <label className={labelCls}>Vendor</label>
+                  <label htmlFor="maintenance-list-vendor" className={labelCls}>
+                    Vendor
+                  </label>
                   <input
+                    id="maintenance-list-vendor"
                     type="text"
                     value={formData.vendor}
                     onChange={(e) => setFormData((p) => ({ ...p, vendor: e.target.value }))}
@@ -350,8 +373,11 @@ export default function MaintenanceListPage() {
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className={labelCls}>Cost ($)</label>
+                  <label htmlFor="maintenance-list-cost" className={labelCls}>
+                    Cost ($)
+                  </label>
                   <input
+                    id="maintenance-list-cost"
                     type="number"
                     value={formData.cost}
                     onChange={(e) => setFormData((p) => ({ ...p, cost: e.target.value }))}
@@ -360,8 +386,11 @@ export default function MaintenanceListPage() {
                   />
                 </div>
                 <div>
-                  <label className={labelCls}>Work Order #</label>
+                  <label htmlFor="maintenance-list-work-order-number" className={labelCls}>
+                    Work Order #
+                  </label>
                   <input
+                    id="maintenance-list-work-order-number"
                     type="text"
                     value={formData.work_order_number}
                     onChange={(e) => setFormData((p) => ({ ...p, work_order_number: e.target.value }))}
@@ -370,8 +399,11 @@ export default function MaintenanceListPage() {
                 </div>
               </div>
               <div>
-                <label className={labelCls}>Notes</label>
+                <label htmlFor="maintenance-list-notes" className={labelCls}>
+                  Notes
+                </label>
                 <textarea
+                  id="maintenance-list-notes"
                   value={formData.notes}
                   onChange={(e) => setFormData((p) => ({ ...p, notes: e.target.value }))}
                   rows={2}

@@ -15,7 +15,7 @@
  *     onSubmit={(data) => myCustomHandler(data)}
  *   />
  */
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Send, RefreshCw, CheckCircle, AlertCircle } from 'lucide-react';
 import FieldRenderer from './FieldRenderer';
 import { formsService } from '../../services/api';
@@ -23,6 +23,7 @@ import type { FieldDefinition } from './FieldRenderer';
 import type { FormDetailDef, FormSubmission } from '../../services/api';
 import { FieldType } from '../../constants/enums';
 import { getErrorMessage } from '../../utils/errorHandling';
+import { getVisibleFieldIds } from '../../utils/formVisibility';
 
 export interface FormRendererProps {
   /** Fetch and render a form by ID */
@@ -153,29 +154,10 @@ const FormRenderer = ({
     });
   }, []);
 
-  /** Evaluate whether a field's visibility condition is satisfied. */
-  const isFieldVisible = useCallback(
-    (field: FieldDefinition): boolean => {
-      if (!field.condition_field_id || !field.condition_operator) return true;
-      const parentValue = (formData[field.condition_field_id] || '').trim();
-
-      switch (field.condition_operator) {
-        case 'equals':
-          return parentValue === (field.condition_value || '');
-        case 'not_equals':
-          return parentValue !== (field.condition_value || '');
-        case 'contains':
-          return parentValue.toLowerCase().includes((field.condition_value || '').toLowerCase());
-        case 'not_empty':
-          return parentValue.length > 0;
-        case 'is_empty':
-          return parentValue.length === 0;
-        default:
-          return true;
-      }
-    },
-    [formData]
-  );
+  // Follows branches through every level, so a follow-up to a question that
+  // has been hidden is hidden (and not required) too.
+  const visibleFieldIds = useMemo(() => getVisibleFieldIds(fields, formData), [fields, formData]);
+  const isFieldVisible = useCallback((field: FieldDefinition) => visibleFieldIds.has(field.id), [visibleFieldIds]);
 
   /** Validate a single field. Returns error string or null. */
   const validateField = useCallback(
@@ -279,8 +261,12 @@ const FormRenderer = ({
 
       // Sanitize all form values before submission (lazy-loaded to reduce initial bundle)
       const DOMPurify = (await import('dompurify')).default;
+      // An answer left in a question that is now hidden belongs to a branch
+      // the submitter backed out of. It stays in state (switching back
+      // restores it) but is not sent.
       const sanitizedData: Record<string, string> = {};
       for (const [key, value] of Object.entries(formData)) {
+        if (fields.some((f) => f.id === key) && !visibleFieldIds.has(key)) continue;
         sanitizedData[key] = DOMPurify.sanitize(value, { ALLOWED_TAGS: [] });
       }
 
@@ -355,7 +341,9 @@ const FormRenderer = ({
   const formTitle = title || form?.name;
   const formDesc = description || form?.description;
   const hasRequired = fields.some((f) => f.required && f.field_type !== FieldType.SECTION_HEADER);
-  const errorEntries = Object.entries(fieldErrors);
+  // An error raised on a question that has since been hidden can no longer be
+  // fixed or even reached, so it is not listed.
+  const errorEntries = Object.entries(fieldErrors).filter(([fieldId]) => visibleFieldIds.has(fieldId));
   const visibleFields = fields.filter((f) => isFieldVisible(f)).sort((a, b) => a.sort_order - b.sort_order);
 
   return (

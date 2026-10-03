@@ -178,6 +178,17 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({ electionId
           <h4 className="text-theme-text-secondary mb-2 text-sm font-semibold">
             Check In Members ({notCheckedIn.length} remaining)
           </h4>
+          {/* The voter roll froze when the election opened (from attendance,
+              among other rules), so a check-in now records presence without
+              letting the member vote. Say so rather than let a secretary
+              believe a late arrival can vote. Whether it should is an open
+              decision — docs/KNOWN_LIMITATIONS.md, W50. */}
+          {election.status === ElectionStatus.OPEN && (
+            <p className="alert-warning mb-3 rounded-md p-3 text-sm">
+              Voting is open, so the voter roll is already set. Checking a member in now records them as present, but
+              does not let them vote — add a voter override on the Overrides tab for that.
+            </p>
+          )}
 
           {/* Search */}
           <div className="mb-3">
@@ -185,6 +196,7 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({ electionId
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="Search members to check in"
               className="form-input shadow-xs"
               placeholder="Search by name or membership number..."
             />
@@ -227,6 +239,7 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({ electionId
                       void handleCheckIn(member.id);
                     }}
                     disabled={checking === member.id}
+                    aria-label={`Check in ${member.first_name ?? ''} ${member.last_name ?? ''}`.trim()}
                     className="btn-info rounded-sm px-3 py-1 text-xs"
                   >
                     {checking === member.id ? 'Checking in...' : 'Check In'}

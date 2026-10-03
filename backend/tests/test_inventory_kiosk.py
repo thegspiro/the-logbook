@@ -264,16 +264,21 @@ class TestCheckout:
         )
         assert (await _open_checkout(db_session, item_id)).user_id == kiosk["member"]
 
+    # A suspended card was described as "marked lost or replaced", sending a
+    # member whose card is only held back to ask for a new one (W45-2).
     @pytest.mark.parametrize(
         ("card", "message"),
-        [("unknown", "not registered"), ("lost", "no longer works")],
+        [
+            ("unknown", "not registered"),
+            (NfcTagStatus.LOST, "has been marked lost and no longer works"),
+            (NfcTagStatus.REVOKED, "has been marked revoked and no longer works"),
+            (NfcTagStatus.SUSPENDED, "^This card is suspended. Ask an officer.$"),
+        ],
     )
     async def test_a_bad_card_is_refused(self, db_session, kiosk, card, message):
         serial = "04BADBADBAD000"
-        if card == "lost":
-            await _card(
-                db_session, kiosk["org"], kiosk["member"], serial, NfcTagStatus.LOST
-            )
+        if card != "unknown":
+            await _card(db_session, kiosk["org"], kiosk["member"], serial, card)
         _item_id, tag = await _item(db_session, kiosk["org"], kiosk["loaners"], "Radio")
         with pytest.raises(KioskRefusal, match=message):
             await kiosk["service"].checkout(

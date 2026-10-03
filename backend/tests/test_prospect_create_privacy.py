@@ -47,7 +47,12 @@ async def test_archived_match_conflict_does_not_disclose_member_identity():
         return_value=service,
     ):
         with pytest.raises(HTTPException) as exc_info:
-            await create_prospect(data=data, db=AsyncMock(), current_user=current_user)
+            await create_prospect(
+                data=data,
+                request=SimpleNamespace(client=None, headers={}),
+                db=AsyncMock(),
+                current_user=current_user,
+            )
 
     assert exc_info.value.status_code == 409
     detail = str(exc_info.value.detail)
@@ -64,7 +69,9 @@ async def test_transfer_conflict_does_not_disclose_existing_member_identity():
     private_user_id = str(uuid4())
     service = SimpleNamespace(
         get_prospect=AsyncMock(
-            return_value=SimpleNamespace(status=ProspectStatus.ACTIVE)
+            return_value=SimpleNamespace(
+                status=ProspectStatus.ACTIVE, target_role_id=None
+            )
         ),
         transfer_to_membership=AsyncMock(
             return_value={

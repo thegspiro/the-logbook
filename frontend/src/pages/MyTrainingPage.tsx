@@ -7,7 +7,7 @@
  */
 
 import React, { useCallback, useState, useEffect } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import {
   GraduationCap,
   Clock,
@@ -66,18 +66,20 @@ const getStatusColor = (status: string) => {
 
 // ==================== Stat Card ====================
 
-const StatCard: React.FC<{ icon: React.ElementType; label: string; value: string | number; color?: string }> = ({
-  icon: Icon,
-  label,
-  value,
-  color = 'text-theme-text-primary',
-}) => (
+const StatCard: React.FC<{
+  icon: React.ElementType;
+  label: string;
+  value: string | number;
+  color?: string;
+  hint?: string;
+}> = ({ icon: Icon, label, value, color = 'text-theme-text-primary', hint }) => (
   <div className="card-secondary p-4">
     <div className="mb-1 flex items-center space-x-2">
       <Icon className="text-theme-text-muted h-4 w-4" />
       <span className="text-theme-text-muted text-xs">{label}</span>
     </div>
     <p className={`text-xl font-bold ${color}`}>{value}</p>
+    {hint && <p className="text-theme-text-muted mt-1 text-xs">{hint}</p>}
   </div>
 );
 
@@ -649,7 +651,8 @@ const MyTrainingPage: React.FC = () => {
               <span>My Training</span>
             </h1>
             <p className="text-theme-text-muted mt-1">
-              Your training records, certifications, pipeline progress, and shift experience
+              Every class, certification and training hour the department has on record for you, and how you are doing
+              against the training you are required to complete.
             </p>
           </div>
           <div className="flex items-center space-x-3">
@@ -767,15 +770,23 @@ const MyTrainingPage: React.FC = () => {
                 color="text-blue-700 dark:text-blue-400"
               />
             )}
+            {/* avg_compliance is null exactly when no requirement applies to
+                this member; "N/A" read as a fault rather than as "nothing is
+                asked of you yet". */}
             <StatCard
               icon={BarChart3}
-              label="Requirements"
+              label="Required Training"
               value={
                 data.requirements_summary?.avg_compliance != null
                   ? `${data.requirements_summary.avg_compliance}%`
-                  : 'N/A'
+                  : 'None assigned'
               }
               color="text-yellow-700 dark:text-yellow-400"
+              hint={
+                data.requirements_summary?.avg_compliance != null
+                  ? `${data.requirements_summary.met_requirements} of ${data.requirements_summary.total_requirements} requirements met`
+                  : 'Your department has not assigned you any required training yet.'
+              }
             />
           </div>
 
@@ -1210,14 +1221,40 @@ const MyTrainingPage: React.FC = () => {
             !data.shift_reports?.length &&
             !data.submissions?.length &&
             !data.certifications?.length && (
-              <div className="card-secondary py-8 text-center">
-                <p className="text-theme-text-muted mb-4">
-                  No training on your record yet. Trained outside the department? Submit it to add it here.
+              <section className="card-secondary p-6" aria-labelledby="training-getting-started">
+                <h2 id="training-getting-started" className="text-theme-text-primary text-lg font-semibold">
+                  Nothing is on your training record yet
+                </h2>
+                <p className="text-theme-text-muted mt-1 text-sm">
+                  That is normal for a new member. Training reaches this page in one of three ways:
                 </p>
-                <button onClick={() => void navigate('/training/submit')} className="btn-primary text-sm font-medium">
-                  Submit External Training
-                </button>
-              </div>
+                <ol className="text-theme-text-secondary mt-4 list-decimal space-y-3 pl-5 text-sm">
+                  <li>
+                    <span className="text-theme-text-primary font-medium">Attend a department training.</span> Check in
+                    at the class. Once a training officer approves the attendance, the hours are added here for you.
+                  </li>
+                  <li>
+                    <span className="text-theme-text-primary font-medium">Submit training you did elsewhere.</span> A
+                    class at another agency, an online course or a state certification only counts once you submit it
+                    and a training officer approves it.
+                  </li>
+                  <li>
+                    <span className="text-theme-text-primary font-medium">Take a skills test.</span> When an examiner
+                    tests you on a hands-on skill, the result appears under Skills Tests above.
+                  </li>
+                </ol>
+                <div className="mt-5 flex flex-wrap items-center gap-3">
+                  <button onClick={() => void navigate('/training/submit')} className="btn-primary text-sm font-medium">
+                    Submit External Training
+                  </button>
+                  <Link
+                    to="/learning/training"
+                    className="mobile-touch-target text-sm text-red-800 hover:underline dark:text-red-300"
+                  >
+                    Take the short walkthrough in the Learning Center
+                  </Link>
+                </div>
+              </section>
             )}
         </div>
       )}

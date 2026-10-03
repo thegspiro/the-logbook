@@ -119,6 +119,9 @@ const dueLabel = (days: number): string => {
   return `${Math.abs(days)} days ago`;
 };
 
+/** `/my-checklists` statuses meaning the shift's check has been filed. */
+const SUBMITTED_STATUSES: ReadonlySet<string> = new Set(['pass', 'passed', 'fail', 'failed', 'out_of_service']);
+
 const TIMING_LABELS: Record<string, string> = {
   start_of_shift: 'Start of shift',
   end_of_shift: 'End of shift',
@@ -558,6 +561,10 @@ export const MyChecklistsPage: React.FC = () => {
                 const completed = checklist.completedItems ?? 0;
                 const progressPct = total > 0 ? Math.round((completed / total) * 100) : 0;
                 const isStarted = checklist.status === 'in_progress' || checklist.status === 'incomplete';
+                // One check per shift and checklist, whoever on the crew files
+                // it. Offering to open a submitted one walked the member
+                // through every item and then refused at Submit with a 409.
+                const isSubmitted = SUBMITTED_STATUSES.has(checklist.status);
                 const isHighlighted = highlightShiftId === checklist.shiftId;
 
                 return (
@@ -648,16 +655,20 @@ export const MyChecklistsPage: React.FC = () => {
                           read as a contradiction. The button names the action
                           only — and a check that is not due yet is still
                           openable, just not dressed as the urgent one. */}
-                      <button
-                        onClick={() => void handleStartCheck(checklist)}
-                        className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                          isDueNow || isStarted
-                            ? 'bg-blue-600 text-white hover:bg-blue-700'
-                            : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover border'
-                        }`}
-                      >
-                        {isStarted ? 'Continue checklist' : 'Open checklist'}
-                      </button>
+                      {isSubmitted ? (
+                        <span className="text-theme-text-muted text-xs">Submitted for this shift</span>
+                      ) : (
+                        <button
+                          onClick={() => void handleStartCheck(checklist)}
+                          className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                            isDueNow || isStarted
+                              ? 'bg-blue-600 text-white hover:bg-blue-700'
+                              : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover border'
+                          }`}
+                        >
+                          {isStarted ? 'Continue checklist' : 'Open checklist'}
+                        </button>
+                      )}
                     </div>
                   </div>
                 );

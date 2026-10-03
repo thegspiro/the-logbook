@@ -7,6 +7,7 @@ Covers:
   - Pattern management and shift generation (daily, weekly, platoon, custom)
   - Assignment lifecycle (create, confirm, delete, leave-block)
   - Swap request flow (create, approve with swap, deny, cancel)
+  - Swaps withdrawn with their seat; officer approval of a targeted offer
   - Time-off flow (create, approve, deny, cancel, availability)
   - Attendance tracking (add, update with duration calc, remove)
   - Shift calls (create, update, delete)
@@ -23,12 +24,13 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = [pytest.mark.integration]
 
 from app.api.v1.endpoints import scheduling as scheduling_endpoint
+from app.models.notification import NotificationLog
 from app.models.training import (
     AssignmentStatus,
     PatternType,
@@ -771,6 +773,34 @@ class TestCalendarHelpers:
         assert summary["shifts_scheduled_this_week"] >= 0
         assert summary["shifts_scheduled_this_month"] >= 1
         assert "hours_worked_this_month" in summary
+
+    async def test_summary_counts_active_templates_for_the_setup_guide(
+        self, db_session, setup_org_and_users
+    ):
+        org_id, user_id, _ = setup_org_and_users
+        svc = SchedulingService(db_session)
+
+        summary = await svc.get_summary(uuid.UUID(org_id))
+        assert summary["active_templates"] == 0
+        assert summary["active_patterns"] == 0
+
+        template, err = await svc.create_template(
+            uuid.UUID(org_id),
+            {
+                "name": "Day Shift",
+                "start_time_of_day": "07:00",
+                "end_time_of_day": "19:00",
+                "duration_hours": 12.0,
+            },
+            uuid.UUID(user_id),
+        )
+        assert err is None
+        assert (await svc.get_summary(uuid.UUID(org_id)))["active_templates"] == 1
+
+        await svc.update_template(
+            uuid.UUID(template.id), uuid.UUID(org_id), {"is_active": False}
+        )
+        assert (await svc.get_summary(uuid.UUID(org_id)))["active_templates"] == 0
 
 
 # ── Template Tests ───────────────────────────────────────────────────
@@ -2205,6 +2235,342 @@ class TestSwapRequests:
         )
         assert err is None
         assert cancelled.status == SwapRequestStatus.CANCELLED
+
+
+class TestSwapsFollowTheirSeat:
+    """A pending swap is withdrawn when the seat it names goes away.
+
+    A swap names its seats by (shift, member), not by assignment id, so
+    removing the assignment used to leave the request pending until an officer
+    approved it and was refused with "assignment was removed".
+    """
+
+    @staticmethod
+    async def _shift(svc, org_id, creator_id, days_ahead=3):
+        day = date.today() + timedelta(days=days_ahead)
+        shift, err = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": day,
+                "start_time": datetime(day.year, day.month, day.day, 7, 0),
+            },
+            uuid.UUID(creator_id),
+        )
+        assert err is None
+        return shift
+
+    @staticmethod
+    async def _seat(svc, org_id, shift, user_id, creator_id, position="firefighter"):
+        assignment, err = await svc.create_assignment(
+            uuid.UUID(org_id),
+            uuid.UUID(shift.id),
+            {"user_id": user_id, "position": position},
+            uuid.UUID(creator_id),
+        )
+        assert err is None
+        return assignment
+
+    @staticmethod
+    async def _status(svc, org_id, swap):
+        await svc.db.refresh(swap)
+        return swap.status
+
+    async def _offer(self, db_session, setup_org_and_users):
+        """Member 1 offers their seat to member 2 — the board's give-up shape."""
+        org_id, user_id, user2_id = setup_org_and_users
+        svc = SchedulingService(db_session)
+        manager_id = await _add_user(db_session, org_id, f"mgr_{_uid()[:8]}")
+        shift = await self._shift(svc, org_id, manager_id)
+        assignment = await self._seat(svc, org_id, shift, user_id, manager_id)
+        swap, err = await svc.create_swap_request(
+            uuid.UUID(org_id),
+            uuid.UUID(user_id),
+            {"offering_shift_id": shift.id, "target_user_id": user2_id},
+        )
+        assert err is None
+        return svc, org_id, user_id, user2_id, manager_id, shift, assignment, swap
+
+    async def _cancel_notices(self, db_session, swap_id):
+        rows = await db_session.execute(
+            select(NotificationLog).where(
+                NotificationLog.category == "shift_swap_cancelled"
+            )
+        )
+        return {
+            str(row.recipient_id)
+            for row in rows.scalars().all()
+            if (row.notification_metadata or {}).get("swap_request_id") == str(swap_id)
+        }
+
+    async def test_withdrawing_cancels_the_offer_and_tells_both_members(
+        self, db_session, setup_org_and_users
+    ):
+        svc, org_id, user_id, user2_id, _, _, assignment, swap = await self._offer(
+            db_session, setup_org_and_users
+        )
+
+        ok, err = await svc.delete_assignment(
+            uuid.UUID(assignment.id), uuid.UUID(org_id)
+        )
+
+        assert ok
+        assert err is None
+        assert await self._status(svc, org_id, swap) == SwapRequestStatus.CANCELLED
+        assert swap.reviewer_notes == SchedulingService.SWAP_VACATED_NOTE
+        assert await self._cancel_notices(db_session, swap.id) == {user_id, user2_id}
+
+    async def test_a_member_decline_cancels_the_offer(
+        self, db_session, setup_org_and_users
+    ):
+        svc, org_id, user_id, _, _, _, assignment, swap = await self._offer(
+            db_session, setup_org_and_users
+        )
+
+        _, err = await svc.decline_assignment(
+            uuid.UUID(assignment.id), uuid.UUID(user_id), uuid.UUID(org_id)
+        )
+
+        assert err is None
+        assert await self._status(svc, org_id, swap) == SwapRequestStatus.CANCELLED
+
+    async def test_an_officer_reassigning_the_seat_cancels_the_offer(
+        self, db_session, setup_org_and_users
+    ):
+        svc, org_id, _, _, manager_id, _, assignment, swap = await self._offer(
+            db_session, setup_org_and_users
+        )
+        other_id = await _add_user(db_session, org_id, f"other_{_uid()[:8]}")
+
+        _, err = await svc.update_assignment(
+            uuid.UUID(assignment.id), uuid.UUID(org_id), {"user_id": other_id}
+        )
+
+        assert err is None
+        assert await self._status(svc, org_id, swap) == SwapRequestStatus.CANCELLED
+
+    async def test_an_edit_that_keeps_the_seat_leaves_the_offer_alone(
+        self, db_session, setup_org_and_users
+    ):
+        svc, org_id, _, _, _, _, assignment, swap = await self._offer(
+            db_session, setup_org_and_users
+        )
+
+        _, err = await svc.update_assignment(
+            uuid.UUID(assignment.id), uuid.UUID(org_id), {"notes": "Bring turnouts"}
+        )
+
+        assert err is None
+        assert await self._status(svc, org_id, swap) == SwapRequestStatus.PENDING
+
+    async def test_cancelling_the_shift_cancels_swaps_in_either_direction(
+        self, db_session, setup_org_and_users
+    ):
+        svc, org_id, user_id, _, manager_id, shift, _, offer = await self._offer(
+            db_session, setup_org_and_users
+        )
+        # A one-way move *into* the shift being cancelled: no seat of it is
+        # vacated, but the destination no longer exists.
+        mover_id = await _add_user(db_session, org_id, f"mover_{_uid()[:8]}")
+        other_shift = await self._shift(svc, org_id, manager_id, days_ahead=5)
+        await self._seat(svc, org_id, other_shift, mover_id, manager_id)
+        move, err = await svc.create_swap_request(
+            uuid.UUID(org_id),
+            uuid.UUID(mover_id),
+            {"offering_shift_id": other_shift.id, "requesting_shift_id": shift.id},
+        )
+        assert err is None
+
+        _, err = await svc.cancel_shift(uuid.UUID(shift.id), uuid.UUID(org_id))
+
+        assert err is None
+        assert await self._status(svc, org_id, offer) == SwapRequestStatus.CANCELLED
+        assert await self._status(svc, org_id, move) == SwapRequestStatus.CANCELLED
+
+    async def test_approved_time_off_cancels_the_offer(
+        self, db_session, setup_org_and_users
+    ):
+        svc, org_id, user_id, _, manager_id, shift, _, swap = await self._offer(
+            db_session, setup_org_and_users
+        )
+        time_off, err = await svc.create_time_off(
+            uuid.UUID(org_id),
+            uuid.UUID(user_id),
+            {"start_date": shift.shift_date, "end_date": shift.shift_date},
+        )
+        assert err is None
+
+        _, err = await svc.review_time_off(
+            uuid.UUID(time_off.id),
+            uuid.UUID(org_id),
+            uuid.UUID(manager_id),
+            TimeOffStatus.APPROVED,
+        )
+
+        assert err is None
+        assert await self._status(svc, org_id, swap) == SwapRequestStatus.CANCELLED
+
+    async def test_a_leave_cancels_the_offer(self, db_session, setup_org_and_users):
+        svc, org_id, user_id, _, _, shift, _, swap = await self._offer(
+            db_session, setup_org_and_users
+        )
+
+        cancelled = await svc.cancel_member_assignments_in_range(
+            uuid.UUID(org_id), user_id, shift.shift_date
+        )
+
+        assert cancelled == 1
+        assert await self._status(svc, org_id, swap) == SwapRequestStatus.CANCELLED
+
+    async def test_the_target_leaving_their_side_of_an_exchange_cancels_it(
+        self, db_session, setup_org_and_users
+    ):
+        org_id, user_id, user2_id = setup_org_and_users
+        svc = SchedulingService(db_session)
+        manager_id = await _add_user(db_session, org_id, f"mgr_{_uid()[:8]}")
+        shift_a = await self._shift(svc, org_id, manager_id, days_ahead=3)
+        shift_b = await self._shift(svc, org_id, manager_id, days_ahead=4)
+        await self._seat(svc, org_id, shift_a, user_id, manager_id)
+        target_seat = await self._seat(svc, org_id, shift_b, user2_id, manager_id)
+        swap, err = await svc.create_swap_request(
+            uuid.UUID(org_id),
+            uuid.UUID(user_id),
+            {
+                "offering_shift_id": shift_a.id,
+                "requesting_shift_id": shift_b.id,
+                "target_user_id": user2_id,
+            },
+        )
+        assert err is None
+
+        ok, err = await svc.delete_assignment(
+            uuid.UUID(target_seat.id), uuid.UUID(org_id)
+        )
+
+        assert ok
+        assert err is None
+        assert await self._status(svc, org_id, swap) == SwapRequestStatus.CANCELLED
+
+    async def test_another_members_swap_on_the_same_shift_is_untouched(
+        self, db_session, setup_org_and_users
+    ):
+        svc, org_id, _, _, manager_id, shift, assignment, swap = await self._offer(
+            db_session, setup_org_and_users
+        )
+        other_id = await _add_user(db_session, org_id, f"other_{_uid()[:8]}")
+        await self._seat(svc, org_id, shift, other_id, manager_id, position="driver")
+        others, err = await svc.create_swap_request(
+            uuid.UUID(org_id), uuid.UUID(other_id), {"offering_shift_id": shift.id}
+        )
+        assert err is None
+
+        await svc.delete_assignment(uuid.UUID(assignment.id), uuid.UUID(org_id))
+
+        assert await self._status(svc, org_id, swap) == SwapRequestStatus.CANCELLED
+        assert await self._status(svc, org_id, others) == SwapRequestStatus.PENDING
+
+
+class TestOfficerApprovesATargetedOffer:
+    """An officer can approve a one-way offer, handing the seat to the target.
+
+    Review used to read a set target as "there is a shift coming back", find
+    no assignment on the missing requested shift, and refuse every such offer
+    with "Requested assignment was removed after this request was submitted".
+    """
+
+    async def test_the_seat_moves_to_the_member_it_was_offered_to(
+        self, db_session, setup_org_and_users
+    ):
+        (
+            svc,
+            org_id,
+            user_id,
+            user2_id,
+            manager_id,
+            _,
+            assignment,
+            swap,
+        ) = await TestSwapsFollowTheirSeat()._offer(db_session, setup_org_and_users)
+
+        reviewed, err = await svc.review_swap_request(
+            uuid.UUID(swap.id),
+            uuid.UUID(org_id),
+            uuid.UUID(manager_id),
+            SwapRequestStatus.APPROVED,
+        )
+
+        assert err is None
+        assert reviewed.status == SwapRequestStatus.APPROVED
+        await db_session.refresh(assignment)
+        assert str(assignment.user_id) == user2_id
+        assert assignment.position == "firefighter"
+        target_notice = await db_session.execute(
+            text(
+                "SELECT COUNT(*) FROM notification_logs "
+                "WHERE recipient_id = :uid AND category = 'shift_swap' "
+                "AND subject = 'Shift Swap Approved'"
+            ),
+            {"uid": user2_id},
+        )
+        assert target_notice.scalar() == 1
+
+    async def test_the_offerers_other_requests_for_that_seat_are_withdrawn(
+        self, db_session, setup_org_and_users
+    ):
+        (
+            svc,
+            org_id,
+            user_id,
+            _,
+            manager_id,
+            shift,
+            _,
+            swap,
+        ) = await TestSwapsFollowTheirSeat()._offer(db_session, setup_org_and_users)
+        open_request, err = await svc.create_swap_request(
+            uuid.UUID(org_id), uuid.UUID(user_id), {"offering_shift_id": shift.id}
+        )
+        assert err is None
+
+        _, err = await svc.review_swap_request(
+            uuid.UUID(swap.id),
+            uuid.UUID(org_id),
+            uuid.UUID(manager_id),
+            SwapRequestStatus.APPROVED,
+        )
+
+        assert err is None
+        await db_session.refresh(swap)
+        await db_session.refresh(open_request)
+        assert swap.status == SwapRequestStatus.APPROVED
+        assert open_request.status == SwapRequestStatus.CANCELLED
+
+    async def test_a_training_seat_is_not_handed_over(
+        self, db_session, setup_org_and_users
+    ):
+        (
+            svc,
+            org_id,
+            _,
+            _,
+            manager_id,
+            _,
+            assignment,
+            swap,
+        ) = await TestSwapsFollowTheirSeat()._offer(db_session, setup_org_and_users)
+        assignment.is_training = True
+        await db_session.flush()
+
+        result, err = await svc.review_swap_request(
+            uuid.UUID(swap.id),
+            uuid.UUID(org_id),
+            uuid.UUID(manager_id),
+            SwapRequestStatus.APPROVED,
+        )
+
+        assert result is None
+        assert "training seat" in err
+        await db_session.refresh(swap)
+        assert swap.status == SwapRequestStatus.PENDING
 
 
 # ── Time-Off Tests ───────────────────────────────────────────────────

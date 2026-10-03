@@ -33,7 +33,10 @@ vi.mock('react-router', async () => {
 vi.mock('../stores/authStore', () => ({
   useAuthStore: () => ({
     user: { id: VIEWER_ID },
-    checkPermission: (permission: string) => grantedPermissions.includes(permission),
+    // Honours module wildcards as the real store does, so a `users.*` grant
+    // reaches every `users.<action>` check the page makes.
+    checkPermission: (permission: string) =>
+      grantedPermissions.includes(permission) || grantedPermissions.includes(`${permission.split('.')[0] ?? ''}.*`),
   }),
 }));
 
@@ -57,6 +60,8 @@ const anonymizeMember = vi.fn();
 const getServiceHistory = vi.fn();
 const changeStatus = vi.fn();
 const getMemberLeaves = vi.fn(() => Promise.resolve([]));
+const updateContactInfo = vi.fn();
+const updateUserProfile = vi.fn();
 let nfcIdCardsConnected = false;
 
 vi.mock('../hooks/useConnectedIntegrations', () => ({
@@ -85,6 +90,8 @@ vi.mock('../services/api', () => ({
     getMyProfileVisibility: () =>
       Promise.resolve({ email: true, personal_email: false, phone: true, mobile: true, address: false }),
     setMyProfileVisibility: (...args: unknown[]) => setMyProfileVisibility(...args) as unknown,
+    updateContactInfo: (...args: unknown[]) => updateContactInfo(...args) as unknown,
+    updateUserProfile: (...args: unknown[]) => updateUserProfile(...args) as unknown,
   },
   organizationService: {
     getEnabledModules: () => getEnabledModules() as unknown,
@@ -328,6 +335,38 @@ describe('MemberProfilePage membership and privacy', () => {
     expect(screen.queryByText('Quick Stats')).not.toBeInTheDocument();
     expect(screen.getByTestId('profile-grid-two')).toBeInTheDocument();
     expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+  });
+
+  it('does not offer a colleague ID card to a plain member', async () => {
+    grantedPermissions = ['members.view', 'users.view'];
+    renderWithRouter(<MemberProfilePage />);
+
+    await screen.findByRole('heading', { name: 'jdoe' });
+    expect(screen.queryByRole('link', { name: 'ID Card' })).not.toBeInTheDocument();
+  });
+
+  it.each(['members.manage', 'members.manage_id_cards'])(
+    'offers a colleague ID card to a holder of %s',
+    async (permission) => {
+      grantedPermissions = [permission];
+      renderWithRouter(<MemberProfilePage />);
+
+      expect(await screen.findByRole('link', { name: 'ID Card' })).toHaveAttribute(
+        'href',
+        `/members/${TARGET_ID}/id-card`
+      );
+    }
+  );
+
+  it('offers every member their own ID card', async () => {
+    routeUserId = VIEWER_ID;
+    getUserWithRoles.mockResolvedValue({ ...redactedColleague, id: VIEWER_ID });
+    renderWithRouter(<MemberProfilePage />);
+
+    expect(await screen.findByRole('link', { name: 'ID Card' })).toHaveAttribute(
+      'href',
+      `/members/${VIEWER_ID}/id-card`
+    );
   });
 
   it('shows an address the member chose to share', async () => {
@@ -626,5 +665,154 @@ describe('MemberProfilePage membership and privacy', () => {
     nfcIdCardsConnected = true;
     renderWithRouter(<MemberProfilePage />);
     expect(await screen.findByTestId('profile-grid-three')).toBeInTheDocument();
+  });
+});
+
+// Saves from the member's own profile: an update clears with null, and the
+// emergency-contact payload is shaped to what the server validates.
+describe('MemberProfilePage editing', () => {
+  const ownUser: UserWithRoles = {
+    ...targetUser,
+    id: VIEWER_ID,
+    email: 'jdoe@example.org',
+    phone: '555-0100',
+    mobile: '555-0199',
+    emergency_contacts: [],
+  };
+
+  // Contact, Address and Emergency Contacts each carry an "Edit" button, in
+  // that order down the page.
+  const editButton = (which: 'contact' | 'emergency'): HTMLElement => {
+    const buttons = screen.getAllByRole('button', { name: 'Edit' });
+    const button = which === 'contact' ? buttons[0] : buttons[buttons.length - 1];
+    if (!button) throw new Error(`no ${which} Edit button`);
+    return button;
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    routeUserId = VIEWER_ID;
+    grantedPermissions = [];
+    getUserWithRoles.mockReset();
+    getUserWithRoles.mockResolvedValue(ownUser);
+    checkContactInfoEnabled.mockReset();
+    checkContactInfoEnabled.mockResolvedValue({ enabled: true, show_email: true, show_phone: true, show_mobile: true });
+    getEnabledModules.mockResolvedValue({ enabled_modules: [] });
+    getMemberLeaves.mockReset();
+    getMemberLeaves.mockResolvedValue([]);
+    updateContactInfo.mockReset();
+    updateContactInfo.mockResolvedValue(ownUser);
+    updateUserProfile.mockReset();
+    updateUserProfile.mockResolvedValue(ownUser);
+  });
+
+  it('sends null for a phone number the member cleared', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<MemberProfilePage />);
+    await screen.findByRole('heading', { name: 'Contact Information' });
+
+    await user.click(editButton('contact'));
+    await user.clear(screen.getByDisplayValue('555-0100'));
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await waitFor(() => expect(updateContactInfo).toHaveBeenCalled());
+    expect(updateContactInfo).toHaveBeenCalledWith(
+      VIEWER_ID,
+      expect.objectContaining({ phone: null, mobile: '555-0199', email: 'jdoe@example.org' })
+    );
+  });
+
+  it('omits a blank emergency-contact email rather than sending an empty string', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<MemberProfilePage />);
+    await screen.findByRole('heading', { name: 'Emergency Contacts' });
+
+    await user.click(editButton('emergency'));
+    await user.type(screen.getByPlaceholderText('Name *'), ' Pat Doe ');
+    await user.type(screen.getByPlaceholderText('Relationship'), 'Spouse');
+    await user.type(screen.getByPlaceholderText('Phone *'), '555-0142');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(updateUserProfile).toHaveBeenCalled());
+    expect(updateUserProfile).toHaveBeenCalledWith(VIEWER_ID, {
+      emergency_contacts: [
+        { name: 'Pat Doe', relationship: 'Spouse', phone: '555-0142', email: undefined, is_primary: true },
+      ],
+    });
+  });
+
+  it('asks for a relationship instead of sending a contact the server would refuse', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<MemberProfilePage />);
+    await screen.findByRole('heading', { name: 'Emergency Contacts' });
+
+    await user.click(editButton('emergency'));
+    await user.type(screen.getByPlaceholderText('Name *'), 'Pat Doe');
+    await user.type(screen.getByPlaceholderText('Phone *'), '555-0142');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(
+      await screen.findByText('Emergency contact 1 needs a name, a relationship and a phone number.')
+    ).toBeInTheDocument();
+    expect(updateUserProfile).not.toHaveBeenCalled();
+  });
+});
+
+// The page used to gate every edit control on `users.update`, a permission
+// that does not exist, and showed restricted-PII sections to whoever passed
+// that local guess (a `users.*` holder did). Edit controls and restricted-PII
+// display now follow the record the backend returned: only the member and
+// members-managers receive it unredacted, and only they get forms seeded
+// from it.
+describe('MemberProfilePage edit and restricted-PII gates on a colleague', () => {
+  const fullColleague: UserWithRoles = {
+    ...redactedColleague,
+    email: 'jdoe@example.com',
+    phone: '555-0100',
+    address_street: '12 Ladder Lane',
+    emergency_contacts: [{ name: 'Pat Doe', relationship: 'Spouse', phone: '555-0142', is_primary: true }],
+    profile_visibility: shareNothing,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    routeUserId = TARGET_ID;
+    grantedPermissions = [];
+    getUserWithRoles.mockReset();
+    getUserWithRoles.mockResolvedValue(redactedColleague);
+    checkContactInfoEnabled.mockReset();
+    checkContactInfoEnabled.mockResolvedValue({ enabled: true, show_email: true, show_phone: true, show_mobile: true });
+    getEnabledModules.mockReset();
+    getEnabledModules.mockResolvedValue({ enabled_modules: [] });
+    getMemberLeaves.mockReset();
+    getMemberLeaves.mockResolvedValue([]);
+  });
+
+  it.each([['users.edit'], ['users.*']])(
+    'gives a %s holder neither edit controls nor restricted-PII sections on a redacted record',
+    async (permission) => {
+      grantedPermissions = [permission, 'users.view'];
+      renderWithRouter(<MemberProfilePage />);
+
+      await screen.findByRole('heading', { name: 'Contact Information' });
+      expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Upload photo' })).not.toBeInTheDocument();
+      // An empty section would claim "no contacts on file"; the backend
+      // withheld them, so there is no section.
+      expect(screen.queryByRole('heading', { name: 'Emergency Contacts' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Address' })).not.toBeInTheDocument();
+    }
+  );
+
+  it('gives a members-manager every edit control on the full record', async () => {
+    grantedPermissions = ['members.manage'];
+    getUserWithRoles.mockResolvedValue(fullColleague);
+    renderWithRouter(<MemberProfilePage />);
+
+    expect(await screen.findByRole('heading', { name: 'Emergency Contacts' })).toBeInTheDocument();
+    expect(screen.getByText('Pat Doe')).toBeInTheDocument();
+    // Contact, Address and Emergency Contacts.
+    expect(screen.getAllByRole('button', { name: 'Edit' })).toHaveLength(3);
+    expect(screen.getByRole('button', { name: 'Upload photo' })).toBeInTheDocument();
   });
 });

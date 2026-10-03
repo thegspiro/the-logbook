@@ -60,6 +60,7 @@ from app.schemas.finance import (
     FiscalYearCreate,
     FiscalYearResponse,
     FiscalYearUpdate,
+    ManualDenyRequest,
     MemberDuesPayment,
     MemberDuesResponse,
     MemberDuesUnwaive,
@@ -68,8 +69,14 @@ from app.schemas.finance import (
     PurchaseRequestCreate,
     PurchaseRequestResponse,
     PurchaseRequestUpdate,
+    UnroutedApprovalResponse,
 )
-from app.services.finance_service import BudgetLimitExceededError, FinanceService
+from app.services.finance_service import (
+    BudgetLimitExceededError,
+    FinanceEntityNotFoundError,
+    FinanceService,
+    ManualApprovalConflictError,
+)
 
 router = APIRouter()
 
@@ -619,6 +626,129 @@ async def get_pending_approvals(
         skip=pagination.skip,
         limit=pagination.limit,
     )
+
+
+@router.get("/approvals/unrouted", response_model=list[UnroutedApprovalResponse])
+async def get_unrouted_approvals(
+    pagination: PaginationParams = Depends(),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.approve")),
+):
+    """
+    List requests waiting for approval that no approval chain applies to
+
+    These have no approval steps, so they can only be decided through the
+    manual approve and deny endpoints below.
+
+    **Authentication required**
+    **Requires permission: finance.approve**
+    """
+    service = FinanceService(db)
+    return await service.get_unrouted_approvals(
+        str(current_user.organization_id),
+        skip=pagination.skip,
+        limit=pagination.limit,
+    )
+
+
+def _manual_decision_error(e: Exception) -> HTTPException:
+    if isinstance(e, FinanceEntityNotFoundError):
+        return HTTPException(status_code=404, detail=safe_error_detail(e))
+    if isinstance(e, BudgetLimitExceededError):
+        return HTTPException(status_code=409, detail=str(e))
+    if isinstance(e, ManualApprovalConflictError):
+        return HTTPException(status_code=409, detail=safe_error_detail(e))
+    if isinstance(e, ValueError):
+        return HTTPException(status_code=400, detail=safe_error_detail(e))
+    return HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.post(
+    "/approvals/manual/{entity_type}/{entity_id}/approve",
+    status_code=204,
+)
+async def manual_approve(
+    entity_type: ApprovalEntityType,
+    entity_id: str,
+    data: ApprovalActionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.approve")),
+):
+    """
+    Approve a request that has no approval steps
+
+    Only a request waiting for approval with no approval chain applied can be
+    approved here; one with approval steps is approved through those steps.
+    The requester cannot approve their own request.
+
+    **Authentication required**
+    **Requires permission: finance.approve**
+    """
+    service = FinanceService(db)
+    try:
+        await service.manual_approve(
+            entity_type,
+            entity_id,
+            str(current_user.id),
+            org_id=str(current_user.organization_id),
+        )
+        await log_audit_event(
+            db=db,
+            event_type="finance.manual_approval_approved",
+            event_category="finance",
+            severity="info",
+            event_data={
+                "entity_type": entity_type.value,
+                "entity_id": entity_id,
+                "notes": data.notes,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+    except Exception as e:
+        raise _manual_decision_error(e)
+
+
+@router.post(
+    "/approvals/manual/{entity_type}/{entity_id}/deny",
+    status_code=204,
+)
+async def manual_deny(
+    entity_type: ApprovalEntityType,
+    entity_id: str,
+    data: ManualDenyRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.approve")),
+):
+    """
+    Deny a request that has no approval steps
+
+    Only a request waiting for approval with no approval chain applied can be
+    denied here. A reason is required and is shown to the requester.
+
+    **Authentication required**
+    **Requires permission: finance.approve**
+    """
+    service = FinanceService(db)
+    try:
+        await service.manual_deny(
+            entity_type,
+            entity_id,
+            str(current_user.id),
+            data.reason,
+            org_id=str(current_user.organization_id),
+        )
+        await log_audit_event(
+            db=db,
+            event_type="finance.manual_approval_denied",
+            event_category="finance",
+            severity="warning",
+            event_data={"entity_type": entity_type.value, "entity_id": entity_id},
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+    except Exception as e:
+        raise _manual_decision_error(e)
 
 
 @router.post(

@@ -63,6 +63,14 @@ class CheckInWindowType(str, Enum):
     WINDOW = "window"  # Configurable window (X minutes before/after)
 
 
+class AttendancePetitionStatus(str, Enum):
+    """Where a member's request to be marked present stands."""
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
 class RecurrencePattern(str, Enum):
     """Recurrence pattern for recurring events"""
 
@@ -611,4 +619,72 @@ class RSVPHistory(Base):
         Index("ix_rsvp_history_rsvp_id", "rsvp_id"),
         Index("ix_rsvp_history_user_id", "user_id"),
         Index("ix_rsvp_history_changed_at", "changed_at"),
+    )
+
+
+class EventAttendancePetition(Base):
+    """A member's request to be recorded as present at an event that is over.
+
+    The member missed the check-in window (no signal, a dead phone, forgot to
+    scan) and asks the organizer to vouch for them. Nothing is credited by the
+    request itself: approval writes a manager override onto the member's RSVP,
+    and the event's normal finalize is what turns that into training records or
+    admin hours. That keeps one path for credit, and is why approval is refused
+    while attendance is finalized — reopening is the deliberate step that lets
+    credited records change.
+
+    One per member per event, so a rejection is the answer rather than the
+    start of a resubmission loop.
+    """
+
+    __tablename__ = "event_attendance_petitions"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    event_id = Column(
+        String(36), ForeignKey("events.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id = Column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    status = Column(
+        SQLEnum(
+            AttendancePetitionStatus,
+            values_callable=lambda x: [e.value for e in x],
+        ),
+        nullable=False,
+        default=AttendancePetitionStatus.PENDING,
+        server_default="pending",
+    )
+    reason = Column(Text, nullable=False)
+    # What the member says, for the reviewer to confirm or correct. Not
+    # credited as-is: approval records the times the reviewer settles on.
+    requested_check_in_at = Column(DateTime(timezone=True), nullable=True)
+    requested_check_out_at = Column(DateTime(timezone=True), nullable=True)
+    reviewed_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    review_note = Column(Text, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_event_attendance_petitions_event_user",
+            "event_id",
+            "user_id",
+            unique=True,
+        ),
+        Index("ix_event_attendance_petitions_organization_id", "organization_id"),
+        Index("ix_event_attendance_petitions_user_id", "user_id"),
     )

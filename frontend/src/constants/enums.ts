@@ -17,6 +17,7 @@ export const NfcTagTarget = {
   EVENT_CHECK_IN: 'event-check-in',
   ADMIN_HOURS_CLOCK_IN: 'admin-hours-clock-in',
   SHIFT_CHECK_IN: 'shift-check-in',
+  ROOM_CHECK_IN: 'room-check-in',
   INVENTORY_ITEM: 'inventory-item',
 } as const;
 export type NfcTagTarget = (typeof NfcTagTarget)[keyof typeof NfcTagTarget];
@@ -203,6 +204,16 @@ export const RSVPStatus = {
   WAITLISTED: 'waitlisted',
 } as const;
 export type RSVPStatus = (typeof RSVPStatus)[keyof typeof RSVPStatus];
+
+// ============================================
+// Attendance Petition Status
+// ============================================
+export const AttendancePetitionStatus = {
+  PENDING: 'pending',
+  APPROVED: 'approved',
+  REJECTED: 'rejected',
+} as const;
+export type AttendancePetitionStatus = (typeof AttendancePetitionStatus)[keyof typeof AttendancePetitionStatus];
 
 // ============================================
 // Event Types

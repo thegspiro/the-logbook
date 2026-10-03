@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
-import { BottomNavigation, BOTTOM_NAV_STORAGE_KEY, OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
+import { BottomNavigation, OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
 
 const mockNavigate = vi.fn();
 vi.mock('react-router', async () => {
@@ -50,9 +50,18 @@ vi.mock('./quickAddActions', async () => {
 
 vi.mock('../../utils/routePrefetch', () => ({ prefetchRoute: vi.fn() }));
 let mockPermissions = new Set<string>();
+// The member's saved choice as /auth/me serves it; null is "never chosen".
+let mockChosenSlots: string[] | null = null;
+interface MockAuthState {
+  user: { bottom_nav_slots: string[] | null };
+  checkPermission: (permission: string) => boolean;
+}
 vi.mock('../../stores/authStore', () => ({
-  useAuthStore: (selector: (state: { checkPermission: (permission: string) => boolean }) => unknown) =>
-    selector({ checkPermission: (permission) => mockPermissions.has(permission) }),
+  useAuthStore: (selector: (state: MockAuthState) => unknown) =>
+    selector({
+      user: { bottom_nav_slots: mockChosenSlots },
+      checkPermission: (permission) => mockPermissions.has(permission),
+    }),
 }));
 
 function renderBar(props: { hidden?: boolean } = {}, initialPath = '/dashboard') {
@@ -69,7 +78,7 @@ describe('BottomNavigation', () => {
     // The baseline every seeded member holds — the Store tab is gated on it.
     mockPermissions = new Set(['storefront.view']);
     mockQuickAddEmpty = false;
-    localStorage.clear();
+    mockChosenSlots = null;
     vi.clearAllMocks();
   });
 
@@ -92,10 +101,12 @@ describe('BottomNavigation', () => {
     expect(labels).toEqual(['Home', 'Events', 'Add', 'Training', 'More']);
   });
 
-  it('persists customization and safely falls back when its module is disabled', () => {
-    localStorage.setItem(BOTTOM_NAV_STORAGE_KEY, JSON.stringify(['/members', '/training/my-training', '/store']));
+  it("shows the member's saved choice, falling back when its module is disabled", () => {
+    mockChosenSlots = ['/members', '/scheduling'];
     mockEnabled = new Set(['training']);
-    const { unmount } = renderBar();
+    renderBar();
+    // Schedule is off, so the second slot walks its default chain to Training;
+    // the saved choice itself is untouched and returns when the module does.
     expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual([
       'Home',
       'Members',
@@ -103,14 +114,18 @@ describe('BottomNavigation', () => {
       'Training',
       'More',
     ]);
-    unmount();
-    // A three-entry preference written before Quick Add shipped keeps its
-    // first two and is left intact on disk — the third is not discarded, it is
-    // simply not rendered while the centre of the bar is the action.
-    expect(JSON.parse(localStorage.getItem(BOTTOM_NAV_STORAGE_KEY) ?? '[]')).toEqual([
-      '/members',
-      '/training/my-training',
-      '/store',
+  });
+
+  it("prefers the member's choice over the administrator defaults", () => {
+    mockPermissions.add('settings.manage');
+    mockChosenSlots = ['/documents', '/learning'];
+    renderBar();
+    expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual([
+      'Home',
+      'Documents',
+      'Add',
+      'Learning',
+      'More',
     ]);
   });
 
@@ -124,6 +139,32 @@ describe('BottomNavigation', () => {
     renderBar();
     expect(screen.queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Schedule' })).toBeInTheDocument();
+  });
+
+  it("points Settings at the member's own account, not the organization's", async () => {
+    const user = userEvent.setup();
+    mockPermissions.add('settings.manage');
+    renderBar();
+    await user.click(screen.getByRole('button', { name: 'Settings' }));
+    expect(mockNavigate).toHaveBeenCalledWith('/account');
+  });
+
+  it('offers Settings to a member without settings.manage who chose it', () => {
+    mockChosenSlots = ['/events', '/account'];
+    renderBar();
+    expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument();
+  });
+
+  it('ignores a saved path that is not a tab rather than rendering a dead button', () => {
+    mockChosenSlots = ['/settings', '/not-a-tab'];
+    renderBar();
+    expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual([
+      'Home',
+      'Events',
+      'Add',
+      'Schedule',
+      'More',
+    ]);
   });
 
   // /store requires storefront.view, and a department seeded before the

@@ -859,9 +859,16 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       {
         path: '/locations/qr-codes',
         label: 'Room QR codes',
-        anyPermission: ['locations.manage', 'facilities.manage', 'apparatus.view'],
+        anyPermission: [
+          'locations.manage',
+          'facilities.manage',
+          'apparatus.view',
+          'locations.manage_nfc_tags',
+          'apparatus.manage_nfc_tags',
+        ],
         module: 'facilities',
       },
+      { path: '/locations/:locationId/check-in', label: 'Room check-in (NFC tag landing)' },
     ],
   },
   {
@@ -984,6 +991,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         module: 'finance',
       },
       { path: '/finance/dues', label: 'Dues management', permission: 'finance.view', module: 'finance' },
+      { path: '/finance/approvals', label: 'Approvals', permission: 'finance.approve', module: 'finance' },
       { path: '/finance/settings', label: 'Fiscal year settings', permission: 'finance.manage', module: 'finance' },
       {
         path: '/finance/settings/approval-chains',

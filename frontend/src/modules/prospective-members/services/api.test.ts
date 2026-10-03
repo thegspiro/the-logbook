@@ -302,6 +302,28 @@ describe('mapProspectToApplicant', () => {
   });
 });
 
+describe('mapProspectToApplicant — address', () => {
+  // The address was built only when a street was on file, so an applicant who
+  // gave a city, state and ZIP but no street had none of it shown.
+  it('keeps the address parts that exist when the street is missing', () => {
+    const data = makeProspectResponse([]);
+    data.address_city = 'Springfield';
+    data.address_state = 'IL';
+    data.address_zip = '62701';
+
+    expect(mapProspectToApplicant(data).address).toEqual({
+      street: undefined,
+      city: 'Springfield',
+      state: 'IL',
+      zip_code: '62701',
+    });
+  });
+
+  it('has no address when no part of one is on file', () => {
+    expect(mapProspectToApplicant(makeProspectResponse([])).address).toBeUndefined();
+  });
+});
+
 /** Helper to build a minimal BackendElectionPackageResponse */
 function makeElectionPackageResponse(
   overrides: Partial<BackendElectionPackageResponse> = {}

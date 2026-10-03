@@ -194,9 +194,22 @@ const ImportInventory: React.FC = () => {
           <div className="card mb-8 p-8">
             <h2 className="text-theme-text-primary mb-4 font-bold">Step 1: Upload CSV File</h2>
 
+            {/* sr-only rather than hidden: display:none took the only file
+                control out of the tab order, so the import could not be
+                started without a mouse. It precedes the zone so the zone can
+                show its focus as a peer. */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv"
+              data-testid="csv-file-input"
+              onChange={handleFileSelect}
+              aria-label="Choose a CSV file"
+              className="peer sr-only"
+            />
             <div
               onClick={() => fileInputRef.current?.click()}
-              className="border-theme-input-border cursor-pointer rounded-lg border-2 border-dashed p-12 text-center transition-colors hover:border-blue-500"
+              className="border-theme-input-border peer-focus-visible:ring-theme-focus-ring cursor-pointer rounded-lg border-2 border-dashed p-12 text-center transition-colors peer-focus-visible:ring-2 hover:border-blue-500"
             >
               <Upload className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
               {file ? (
@@ -223,15 +236,6 @@ const ImportInventory: React.FC = () => {
                 </>
               )}
             </div>
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv"
-              data-testid="csv-file-input"
-              onChange={handleFileSelect}
-              className="hidden"
-            />
 
             {validating && (
               <div className="mt-4 flex items-center justify-center space-x-2 text-blue-700 dark:text-blue-400">

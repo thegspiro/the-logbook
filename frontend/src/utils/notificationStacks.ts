@@ -69,6 +69,8 @@ export function groupNotificationsIntoStacks(
 // falls back to the humanized category, which is readable if less specific.
 const STACK_NOUNS: Record<string, string> = {
   event_validation: 'attendance validations',
+  attendance_request: 'attendance requests to review',
+  attendance_request_update: 'updates to your attendance requests',
   shift_validation: 'shift validations',
   shift_report_followup: 'shift report follow-ups',
   event_reminder: 'event reminders',

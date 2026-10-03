@@ -301,6 +301,19 @@ class TestCloseoutBacklog:
         assert value == "0"
         assert context == "every shift closed out"
 
+    async def test_a_department_with_no_shifts_is_not_all_closed_out(self, db_session):
+        """Nothing to close out is not work done: a fresh department must not
+        be told every shift is closed out."""
+        org = await _org(db_session)
+        admin = await _admin(db_session, org)
+
+        value, context = await _metric(
+            db_session, org, admin, "shifts_needing_closeout"
+        )
+
+        assert value == "0"
+        assert context == "no shifts scheduled yet"
+
     async def test_ignores_a_cancelled_shift(self, db_session):
         org = await _org(db_session)
         admin = await _admin(db_session, org)

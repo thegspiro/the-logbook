@@ -36,15 +36,15 @@ const EmailSection: React.FC<EmailSectionProps> = ({
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-theme-text-primary text-lg font-semibold">Email Configuration</h3>
+        <h2 className="text-theme-text-primary text-lg font-semibold">Email Configuration</h2>
         <p className="text-theme-text-muted mt-1 text-sm">Notification triggers and reusable email templates.</p>
       </div>
 
       {/* Email Triggers */}
       <div>
-        <h4 className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wider uppercase">
+        <h3 className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wider uppercase">
           Notification Triggers
-        </h4>
+        </h3>
         <div className="space-y-2">
           {Object.entries(TRIGGER_LABELS).map(([key, label]) => {
             const config = settings.request_pipeline.email_triggers[key] || { enabled: false };
@@ -76,7 +76,7 @@ const EmailSection: React.FC<EmailSectionProps> = ({
       {/* Email Templates */}
       <div className="border-theme-surface-border border-t pt-4">
         <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h4 className="text-theme-text-muted text-xs font-semibold tracking-wider uppercase">Email Templates</h4>
+          <h3 className="text-theme-text-muted text-xs font-semibold tracking-wider uppercase">Email Templates</h3>
           <button
             type="button"
             onClick={() => onToggleTemplateForm(!showTemplateForm)}
@@ -167,7 +167,7 @@ const EmailSection: React.FC<EmailSectionProps> = ({
               <button
                 type="button"
                 onClick={() => onDeleteTemplate(tpl.id)}
-                className="text-theme-text-muted text-sm transition-colors hover:text-red-600 dark:hover:text-red-400"
+                className="text-theme-text-muted touch-target-phone shrink-0 text-sm transition-colors hover:text-red-600 dark:hover:text-red-400"
                 title="Delete template"
               >
                 <Trash2 className="h-4 w-4" />

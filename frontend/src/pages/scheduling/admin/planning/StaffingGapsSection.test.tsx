@@ -76,6 +76,14 @@ const shortShift = {
   created_at: `${TOMORROW}T00:00:00Z`,
 };
 
+const staffedShift = {
+  ...shortShift,
+  id: 'shift-2',
+  apparatus_unit_number: 'Engine 2',
+  positions: [{ position: 'officer' }],
+  roster: [{ user_id: 'user-9', user_name: 'On Duty', position: 'officer', status: 'confirmed' }],
+};
+
 describe('StaffingGapsSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -216,14 +224,32 @@ describe('StaffingGapsSection', () => {
       releaseFirst({ shifts: [shortShift], total: 1, skip: 0, limit: 200 });
     });
 
-    expect(await screen.findByText(/has the crew it asks for/)).toBeInTheDocument();
+    expect(await screen.findByText('No shifts are scheduled in this range')).toBeInTheDocument();
     expect(screen.queryByText(/Engine 1/)).not.toBeInTheDocument();
   });
 
   it('says so plainly when every shift in the range is staffed', async () => {
-    mockGetShifts.mockResolvedValue({ shifts: [], total: 0, skip: 0, limit: 200 });
+    mockGetShifts.mockResolvedValue({ shifts: [staffedShift], total: 1, skip: 0, limit: 200 });
     renderWithRouter(<StaffingGapsSection />);
 
     expect(await screen.findByText(/has the crew it asks for/)).toBeInTheDocument();
+  });
+
+  // Nothing to check is not the same as nothing short: a department that has
+  // not scheduled anything must not be told its shifts are fully crewed.
+  it('says the range is empty, not staffed, when it holds no shifts', async () => {
+    mockGetShifts.mockResolvedValue({ shifts: [], total: 0, skip: 0, limit: 200 });
+    renderWithRouter(<StaffingGapsSection />);
+
+    expect(await screen.findByText('No shifts are scheduled in this range')).toBeInTheDocument();
+    expect(screen.queryByText(/has the crew it asks for/)).not.toBeInTheDocument();
+  });
+
+  it('does not call a cut-short range empty', async () => {
+    mockGetShifts.mockResolvedValue({ shifts: [], total: 412, skip: 0, limit: 200 });
+    renderWithRouter(<StaffingGapsSection />);
+
+    await screen.findByText(/more shifts than one screen reads/);
+    expect(screen.queryByText('No shifts are scheduled in this range')).not.toBeInTheDocument();
   });
 });

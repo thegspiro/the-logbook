@@ -64,7 +64,7 @@ an entry costs navigation**, which is what QE-1 is about.
 | QE-6  | Field entries live in desktop modals inside detail tabs    | Slows people down | Open                  |
 | QE-7  | The highest-volume mobile write echoes data it already has | Slows people down | Open                  |
 | QE-8  | No unified "what do I need to do" endpoint                 | Slows people down | Open                  |
-| QE-9  | The bottom-nav preference is read and written by nothing   | Slows people down | Open                  |
+| QE-9  | The bottom-nav preference is read and written by nothing   | Slows people down | ✅ Fixed (2026-10-02) |
 | QE-10 | Pull-to-refresh is opted into by seven pages               | Slows people down | Open                  |
 | QE-11 | The PWA manifest declares no `share_target`                | Slows people down | Open                  |
 | QE-12 | Four mobile utilities are defined and never used           | Dead code         | Open                  |
@@ -302,6 +302,17 @@ misleading UI.
 
 Worth noting alongside QE-1: with the centre slot now Quick Add, the two
 remaining configurable slots matter more per slot, not less.
+
+**Fixed (2026-10-02).** Members choose the two tabs on My Account → Appearance
+(`components/settings/BottomNavigationSettings.tsx`). The choice is stored on
+the account rather than the device — `users.bottom_nav_slots`, written by
+`PUT /users/me/bottom-navigation` and served on `/auth/me` — so it follows the
+member between phones; NULL keeps the role defaults, so no bar changed on
+upgrade. The bar no longer touches `localStorage`. The tab list and slot
+resolution moved to `components/layout/bottomNavTabs.ts`, shared by the bar and
+the picker so the picker always shows what the bar shows. The Settings tab
+itself now opens the member's own `/account` rather than the
+`settings.manage`-gated organization settings.
 
 ---
 

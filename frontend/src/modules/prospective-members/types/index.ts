@@ -9,7 +9,7 @@
 // =============================================================================
 
 // Import enum types from the canonical source and re-export
-import type { StageType, ApplicantStatus, VotingMethod, VictoryCondition } from '../../../constants/enums';
+import type { StageType, ApplicantStatus, VotingMethod, VictoryCondition, MemberClass } from '../../../constants/enums';
 import {
   VotingMethod as VotingMethodValues,
   VictoryCondition as VictoryConditionValues,
@@ -398,7 +398,8 @@ export interface PipelineStageCreate {
 
 export interface PipelineStageUpdate {
   name?: string | undefined;
-  description?: string | undefined;
+  /** `null` clears the description; omitting the key leaves it untouched. */
+  description?: string | null | undefined;
   stage_type?: StageType | undefined;
   config?: StageConfig | undefined;
   sort_order?: number | undefined;
@@ -412,6 +413,25 @@ export interface PipelineStageUpdate {
 // Pipeline
 // =============================================================================
 
+/** The starting statuses a pipeline may convert applicants into. */
+export type ConversionStatus = 'probationary' | 'regular';
+
+/** What an applicant becomes as a member: class and starting status. */
+export interface ConversionOutcome {
+  member_class: MemberClass;
+  member_status: ConversionStatus;
+}
+
+/**
+ * What each applicant track becomes on conversion. The track is the
+ * applicant's target membership type: administrative, or else operational.
+ * The server always sends the effective outcomes, defaults filled in.
+ */
+export interface PipelineConversionConfig {
+  operational: ConversionOutcome;
+  administrative: ConversionOutcome;
+}
+
 export interface Pipeline {
   id: string;
   organization_id: string;
@@ -421,6 +441,7 @@ export interface Pipeline {
   is_template: boolean;
   is_default: boolean;
   inactivity_config: InactivityConfig;
+  conversion_config: PipelineConversionConfig;
   public_status_enabled: boolean;
   public_show_future_stages: boolean;
   report_stage_groups?: ReportStageGroup[] | undefined;
@@ -445,6 +466,7 @@ export interface PipelineUpdate {
   is_default?: boolean | undefined;
   is_template?: boolean | undefined;
   inactivity_config?: InactivityConfig | undefined;
+  conversion_config?: PipelineConversionConfig | undefined;
   public_status_enabled?: boolean | undefined;
   public_show_future_stages?: boolean | undefined;
 }
@@ -597,14 +619,16 @@ export interface ApplicantUpdate {
   first_name?: string | undefined;
   last_name?: string | undefined;
   email?: string | undefined;
-  phone?: string | undefined;
-  date_of_birth?: string | undefined;
+  // The optional contact fields take `null` as "clear this": the backend
+  // dumps the payload with `exclude_unset`, so an omitted key is "no change".
+  phone?: string | null | undefined;
+  date_of_birth?: string | null | undefined;
   address?:
     | {
-        street?: string | undefined;
-        city?: string | undefined;
-        state?: string | undefined;
-        zip_code?: string | undefined;
+        street?: string | null | undefined;
+        city?: string | null | undefined;
+        state?: string | null | undefined;
+        zip_code?: string | null | undefined;
       }
     | undefined;
   target_membership_type?: TargetMembershipType | undefined;
@@ -656,6 +680,9 @@ export interface AdvanceStageRequest {
 
 export interface ConvertApplicantRequest {
   target_membership_type: TargetMembershipType;
+  /** The new member's class and starting status, pre-filled from the pipeline. */
+  member_class: MemberClass;
+  member_status: ConversionStatus;
   target_role_id?: string | undefined;
   send_welcome_email: boolean;
   /** An initial password the coordinator chose; omitted for a generated one. */
@@ -961,6 +988,7 @@ export interface BackendPipelineResponse {
   is_active: boolean;
   auto_transfer_on_approval: boolean;
   inactivity_config: Record<string, unknown> | null;
+  conversion_config: PipelineConversionConfig;
   public_status_enabled: boolean;
   public_show_future_stages: boolean;
   report_stage_groups: ReportStageGroup[] | null;
@@ -1163,7 +1191,7 @@ export interface BackendStepCreatePayload {
 /** Payload shape sent to backend when updating a step. */
 export interface BackendStepUpdatePayload {
   name?: string | undefined;
-  description?: string | undefined;
+  description?: string | null | undefined;
   step_type?: string | undefined;
   action_type?: string | undefined;
   sort_order?: number | undefined;
@@ -1247,10 +1275,14 @@ export interface InterviewCreate {
   step_id?: string | undefined;
 }
 
+/**
+ * `null` clears a field and an omitted key leaves it untouched — the backend
+ * dumps this with `exclude_unset` and writes it through `apply_updates`.
+ */
 export interface InterviewUpdate {
-  notes?: string | undefined;
-  recommendation?: InterviewRecommendation | undefined;
-  recommendation_notes?: string | undefined;
-  interviewer_role?: string | undefined;
-  interview_date?: string | undefined;
+  notes?: string | null | undefined;
+  recommendation?: InterviewRecommendation | null | undefined;
+  recommendation_notes?: string | null | undefined;
+  interviewer_role?: string | null | undefined;
+  interview_date?: string | null | undefined;
 }
