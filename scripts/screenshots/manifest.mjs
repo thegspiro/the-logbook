@@ -147,6 +147,22 @@ export function clickByName(name) {
     // DOM. It is display:none at this viewport, so clicking it just times out.
     // Take the first *visible* match instead of the first match.
     const visible = target.locator("visible=true");
+    // A page still hydrating can have zero visible matches for a few hundred
+    // ms after `domcontentloaded` (the control a prepare step wants is gated
+    // behind a permission check or a fetch-on-mount), and a one-shot
+    // `count()` taken in that window reads 0 even though the control is about
+    // to render. Falling straight back to `target.first()` then picks
+    // whichever match is first in *DOM* order, unfiltered — often a
+    // permanently hidden duplicate the responsive layout renders twice (the
+    // phone copy of this same nav item) — and the click hangs until its own
+    // timeout because that element never becomes visible. Wait briefly for a
+    // visible match to appear before deciding; this was the cause of
+    // `04-39-delete-event-series` timing out on the "More" button, which is
+    // itself gated behind the event's `canManage` permission check.
+    await visible
+      .first()
+      .waitFor({ state: "visible", timeout: 5_000 })
+      .catch(() => {});
     const control = (await visible.count()) ? visible.first() : target.first();
     // Settings renders its section tabs below the fold on a 900px viewport, and
     // Playwright's actionability check times out on a control it cannot reach.
@@ -14047,14 +14063,15 @@ export const SHOTS = [
     // The first half of the pair the marker asks for. Framed on the whole page
     // rather than the ballot alone, because the two facts that change sit in
     // different places: the item count inside the builder, and the voting
-    // method in the details card above it. "Simple Majority" here is the
+    // method in the details card above it. "One choice per voter" here is the
     // create form's "Supermajority Required (2/3)" -- one control that sets
-    // the method and the victory condition, and only the method is on display.
+    // the method and the victory condition. A workflow review (W50) added a
+    // Winner row beside Voting Method, so the card now shows both.
     id: "19-25-ballot-template-settings-before",
     doc: "19-august-2026-release-changes.md",
     line: 33,
     anchor: "Ballot Builder → Your saved ballots, showing the visible template",
-    alt: "The bylaw draft before a template is applied: one ballot item, and a details card reading Voting Method — Simple Majority",
+    alt: "The bylaw draft before a template is applied: one ballot item, and a details card reading Voting Method — One choice per voter",
     route: "/elections",
     prepare: async (page) => {
       await openBylawDraft(page);
@@ -14112,7 +14129,7 @@ export const SHOTS = [
     doc: "19-august-2026-release-changes.md",
     line: 33,
     anchor: "__paired-with-19-25__",
-    alt: "The same draft immediately after applying the saved officer ballot: four items replacing the one, and the details card now reading Ranked Choice",
+    alt: "The same draft immediately after applying the saved officer ballot: four items replacing the one, and the details card now reading Ranked choice",
     route: "/elections",
     prepare: async (page) => {
       await openBylawDraft(page);

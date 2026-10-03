@@ -160,30 +160,35 @@ and apply it to next year's election:
 > **It replaces two things, and warns about one.** A template carries the
 > **voting method** and **write-in setting** of the election it was saved from,
 > and applying it writes both over the election you applied it to. The
-> confirmation is about the ballot; nothing on screen mentions the settings, and
-> the details card above the builder reports only the method. Click **Preview
-> Ballot** afterwards — its Election Details strip is where the method, the
-> victory condition and its percentage, Anonymous, Write-ins allowed and the
-> quorum appear together.
+> confirmation is about the ballot; nothing on screen mentions the settings.
+> The details card above the builder reports the method as **Voting Method**
+> and, beside it, a **Winner** row naming the victory rule (e.g. "Supermajority
+> (67% of votes)") — added after a workflow review found the card reporting
+> the method alone left the victory condition invisible without opening
+> **Preview Ballot**'s Election Details strip, which still carries all of
+> method, condition and percentage, Anonymous, Write-ins allowed and quorum
+> together.
 
 Below is one draft before and after applying "Annual officer election", a
 template saved from a ranked-choice officer ballot. One item becomes four, which
-the confirmation warned about — and the voting method changes from Simple
-Majority to Ranked Choice, which nothing warned about.
+the confirmation warned about — and the voting method changes from One choice
+per voter to Ranked choice, which nothing warned about.
 
-![The bylaw draft before a template is applied: one ballot item, and a details card reading Voting Method — Simple Majority](./images/19-25-ballot-template-settings-before.png)
+![The bylaw draft before a template is applied: one ballot item, and a details card reading Voting Method — One choice per voter](./images/19-25-ballot-template-settings-before.png)
 
-![The same draft immediately after applying the saved officer ballot: four items replacing the one, and the details card now reading Ranked Choice](./images/19-26-ballot-template-settings-after.png)
+![The same draft immediately after applying the saved officer ballot: four items replacing the one, and the details card now reading Ranked choice](./images/19-26-ballot-template-settings-after.png)
 
-The hazard is the part that did _not_ change. This draft was created as
-**Supermajority Required (2/3)** — Simple Majority counting with the
+The hazard is the part that did _not_ change — and now it is visible in the
+card itself rather than only behind Preview Ballot. This draft was created as
+**Supermajority Required (2/3)** — one-choice-per-voter counting with the
 Supermajority victory condition. The apply overwrote the method and left the
 condition alone, so a bylaw amendment that must carry two-thirds is now decided
-by ranked choice with its 67% threshold still recorded underneath.
-**Positions** still reads the draft's old value over a ballot of four officer
-seats, and the write-in setting is overwritten along with the method: the
-officer template had write-ins off, so they went off. Treat a saved ballot as a
-starting point for a _new_ election rather than a change to a configured one.
+by ranked choice, with the **Winner** row still reading "Supermajority (67% of
+votes)" in both screenshots above. **Positions** still reads the draft's old
+value over a ballot of four officer seats, and the write-in setting is
+overwritten along with the method: the officer template had write-ins off, so
+they went off. Treat a saved ballot as a starting point for a _new_ election
+rather than a change to a configured one.
 
 ### Edge Cases
 
@@ -344,10 +349,11 @@ By default, all active members in the organization are eligible to vote. Eligibi
 When a member is excluded from voting but should be allowed (e.g., absent member with proxy authorization, or a member whose tier was incorrectly set):
 
 1. Open the election detail page
-2. Navigate to **Eligibility Roster**
-3. Find the member and click **Grant Override**
-4. Enter a reason for the override
-5. The member is now eligible to vote regardless of other restrictions
+2. Navigate to the **Overrides** tab (the Eligibility Roster only tells you who is ineligible and points you to this tab — it has no override control of its own)
+3. Click **+ Add Override**
+4. Choose the member from the **Member** dropdown (already-overridden members are left out of the list)
+5. Enter a reason of at least 10 characters
+6. Click **Add Override** — the member is now eligible to vote regardless of other restrictions
 
 > **Linkable tabs** _(2026-08-12)_: every tab on the election detail page can
 > now be sent as a URL — the eligibility roster is
