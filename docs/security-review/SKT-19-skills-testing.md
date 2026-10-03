@@ -1543,3 +1543,235 @@ read; all four still-open pass-3/pass-4 flags (SKT3-2, SKT4-1, SKT4-2,
 SKT4-3) re-confirmed unchanged in scope (no code touching their surfaces
 changed since pass 4, beyond the `score`/`checklist_completed`-adjacent
 tightening this pass's SKT5-1/SKT4-7 sections already account for).
+
+---
+
+## Pass 6 (2026-10-02)
+
+**Prefix:** `SKT6` · **PR:** TBD
+
+**Scope check:** the backend surface has no merge-commit SHA to diff against
+cleanly — this repository's branch-merge history for this file does not
+resolve to a single prior commit via `git log --follow` (a pre-existing
+artifact of how feature branches land here, unrelated to this feature), so
+scope was established by walking every commit that has touched each of the
+four backend files since pass 5 directly (`git log -- <path>`), not by a
+`git diff <sha>..HEAD`. Result: **one** commit touched this feature's backend
+surface since pass 5 — `6d2a24ec6` ("Redesign every email onto the solid-tab
+shell", 2026-09-27), which rewrote `email_test_results`'s HTML construction
+onto the new shared `wrap_email_body`/`facts()` email-theme kit (+34/-35 lines
+in `app/api/v1/endpoints/skills_testing.py`). `app/services/skills_testing_service.py`,
+`app/schemas/skills_testing.py`, and `app/models/skills_testing.py` are
+**untouched** since pass 5 (`git log` on each shows no commit past the one
+already covered by pass 5's own history). No new migration touches a
+skills-testing table (`validate_migrations.py --strict`: 497 revisions, up
+from pass 5's 444, entirely other features' work — single head, re-confirmed
+below).
+
+**Frontend:** re-swept the full call-site inventory from scratch
+(`grep -rli "skillsTesting" frontend/src`, not reused from pass 3's list) —
+**22 files**, up from pass 3's 20. The two new entries are
+`components/training/ResultVerdictBanner.tsx` (added since pass 3 — read in
+full below) and two route-wiring files (`pages/TrainingAdminPage.tsx`,
+`modules/training/routes.tsx`) that only `lazyWithRetry()`-import the
+already-reviewed tab/page components and make no API call of their own.
+
+### Read in full: the one backend diff
+
+`git show 6d2a24ec6 -- app/api/v1/endpoints/skills_testing.py` read directly,
+not summarized from the commit message. The change replaces a hand-built
+`<div>`/`<table>` HTML string with calls into the new `app/services/email_theme.py`
+kit (`wrap_email_body`, `fact`, `facts`) that the rest of the application's
+transactional email is moving onto. Checked specifically for the one thing a
+template-system migration like this tends to break — whether escaping
+survived the rewrite:
+
+- `fact()`/`facts()` (`app/services/email_theme.py:595-640`) insert their
+  `label`/`value` arguments into the returned HTML **verbatim** — confirmed by
+  reading both functions directly; the module's own docstring says so
+  ("Returned as literal markup... there is no macro for the editor to
+  expand"). Escaping is therefore the caller's responsibility, same as before
+  this kit existed.
+- At the one call site this feature owns, every value derived from
+  member-controlled text — `template_name`, `candidate_name`, `examiner_name`
+  — is still wrapped in `html.escape(str(...))` before being passed to
+  `fact()`, unchanged from the pre-redesign code (`skills_testing.py:3176-3183`).
+  `result_text`/`score_text` are formatted from `test.result`/`test.overall_score`
+  (an enum-like string and a rounded number), not free text, so they carry
+  nothing to escape. The five `fact()` labels ("Template", "Candidate",
+  "Examiner", "Result", "Score") are hardcoded literals.
+- `sections_html` (the per-criterion result table, built separately and
+  concatenated onto the `facts()` output) is untouched by this commit —
+  still the same `html.escape(str(label))` per criterion this feature's own
+  CS-6 finding fixed years ago.
+- The disclosure check this email route depends on (SKT4-4's
+  `_ensure_disclosure_allows_email(candidate_view)`, called before any HTML is
+  built) is above the diff hunk and untouched.
+- `test_type`, interpolated raw into the new heading
+  (`f"Skills Test Results — {test_type}"`) and the subject line, is a
+  hardcoded `"Practice"`/`"Official"` literal (`skills_testing.py:3065`), not
+  client input — confirmed by reading its assignment, not assumed from the
+  name.
+- Subject-header injection (CRLF in `template_name`, which still reaches the
+  subject line unescaped at `skills_testing.py:3205`, unchanged by this
+  commit) is handled centrally, not per-caller: `EmailService.send_email`
+  runs every subject through `_sanitize_header()` before it reaches the
+  transport (`app/services/email_service.py:1385`), confirmed by reading that
+  function, so this is not a gap specific to this redesign.
+
+**No finding.** The migration onto the shared email kit preserved every
+escaping guarantee this feature's own `email_test_results` route already
+depended on; nothing in the new `facts()`/`wrap_email_body()` helpers does
+anything this call site relies on them not doing.
+
+### Re-verification of pass 1–5 fixes
+
+Read the current code directly for each, not re-cited from any prior
+write-up:
+
+- **SKT-1** — `update_template` still routes through `apply_updates`
+  (`skills_testing.py:700`).
+- **SKT-2** / **SKT-3** / **create_test's SoD** / **validate_test's SoD** —
+  all four `assert_different_person(...)` call sites re-grepped directly:
+  `create_test:1315`, `validate_test:2115`, `void_test:2762`,
+  `return_test_for_correction:2932` — same four, same lines as pass 5.
+- **SKT-4** — `lock_attempt_capacity` (`skills_testing_service.py:718-751`)
+  still locks `TrainingRequirement` with `.with_for_update()`; the `spent`
+  count in `assert_attempts_remaining` still carries
+  `.with_for_update(of=SkillTest)` (`:857`); `validate_test` still calls
+  `lock_attempt_capacity` (`:810`) ahead of `_lock_test_for_transition`'s
+  per-test lock.
+- **SKT2-1** — zero `is_practice ==` comparisons in the endpoint file
+  (`grep -c` returns 0); still `.is_(...)` throughout.
+- **SKT3-1** — `add_test_viewer` still rejects naming the examiner
+  (`str(viewer.id) == str(test.examiner_id)`, `skills_testing.py:2487-2491`),
+  immediately after the candidate check, both before the existing-grant
+  lookup.
+- **SKT4-4** — `_ensure_disclosure_allows_email` still rejects both
+  `ResultDisclosure.NONE.value` and the pending view, called with the
+  already-resolved `candidate_view` before any HTML is built
+  (`skills_testing.py:3098-3099`).
+- **SKT4-5** — all four write schemas' `result_disclosure`/`result_release`
+  fields still carry `field_validator`s rejecting any value outside the enum,
+  **and** `max_length=50` (the round-6 fix) is present on all four
+  (`app/schemas/skills_testing.py:200-201, 255-256, 381-382, 406-407`);
+  `resolve_disclosure_policy`'s fail-closed substitution for a corrupted
+  stored value is unchanged.
+- **SKT4-6** — `redact_test_for_view`'s `pending` branch still rewrites a
+  voided-before-validation payload's `status` to `"completed"`, clears the
+  four void-specific fields, and flips `pending_validation` to `True`
+  (`skills_testing_service.py`, the `TestVoidedBeforeValidation` guard class
+  still passes — see completion gate).
+- **SKT5-1** — `redact_test_for_view`'s `scores` branch still clears
+  `scrubbed["waive_reason"]` immediately after `scrubbed["notes"]`
+  (`skills_testing_service.py:1276-1281`).
+
+All ten guard-test files from passes 1–5 re-run clean (see completion gate).
+
+**Route surface re-enumerated with a fresh AST walk** (script written this
+pass, not a re-read of any prior table — every `@router.<verb>` decorator plus
+every `Depends(...)` default among its function's arguments): **29/29
+routes**, identical paths, methods, and gates to every prior pass's table.
+The file has grown to 3,855 L (from pass 5's size, driven by the
+`email_theme.py` migration's net +132 L and ordinary docstring/comment
+growth elsewhere) with no new route.
+
+**Org-scoping re-swept mechanically.** Extracted all 82 `select(` call sites
+in the endpoint file (`grep -n "select("`) and checked each against the
+checklist's two accepted shapes: a direct `organization_id` filter, or
+resolution through a `test`/`template` row already fetched org-scoped earlier
+in the same function. Every one of the 82 is one of these two shapes — no new
+bare by-id query reachable from a client-supplied id. `create_test`'s
+`template_id`/`candidate_id`/`requirement_id` in-org validation
+(Pitfall #14c) is unchanged.
+
+### Standing flags re-confirmed unchanged, not re-cited
+
+Each read directly against current code rather than trusted from the prior
+write-up or `KNOWN_LIMITATIONS.md`:
+
+- **SKT3-2** — `list_tests` (`:1000-1228`), `export_tests_csv` (`:3285-3420`),
+  and `list_templates` (`:330-412`) still carry no `.limit()`/`.offset()`.
+  Still open, still a product decision (paging contract + frontend change).
+- **SKT4-1** — `SkillTemplateCreate.sections`, `SkillTemplateSectionSchema.criteria`,
+  and `SkillCriterionSchema.checklist_items` still have no `max_length`
+  (confirmed by grepping every `max_length=` in `app/schemas/skills_testing.py`
+  and finding none attached to these three fields). Still open.
+- **SKT4-2** — `SkillTestUpdate.section_results`, `SectionResultSchema.criteria_results`,
+  `CriterionResultSchema.checklist_completed`, and
+  `SkillTestCreate`/`SkillTestUpdate.result_viewer_positions` are all still
+  uncapped `List[...]` fields; `result_viewer_positions` is confirmed still
+  one of the four `_OFFICER_CONTROLLED_TEST_FIELDS` (`skills_testing.py:107-111`),
+  so the officer-gate-on-official-tests / member-writable-on-practice-tests
+  split this finding describes is unchanged. Still open.
+- **SKT4-3** — `get_testing_summary` (`:3592-3690`) still computes `pass_rate`
+  and `average_score` from plain aggregate queries with no cohort-size
+  suppression and no disclosure resolution. Still open.
+- **SKT4-7** — `update_test` (`:1477-1620`) still allows any member holding
+  `examiner_id` on an unvalidated test to set `status`/`result`/`overall_score`
+  directly; `status`, `result`, and `overall_score` are confirmed absent from
+  `_OFFICER_CONTROLLED_TEST_FIELDS`, and the only guard against a bare
+  `PUT`-to-`completed` is the already-completed field allowlist, which does
+  not fire on the transition itself. `complete_test`'s `unresolved_criteria`/
+  `waived_critical_criteria` guards (added 2026-09-12, widened into this
+  finding by pass 5) are confirmed to still run **only** inside
+  `complete_test` (`:1753-1773`) — `update_test` calls neither. Still open,
+  unchanged in scope since pass 5.
+
+### New frontend file read in full: `ResultVerdictBanner.tsx`
+
+Added since pass 3's inventory. Pure presentation: takes `result`, `breakdown`
+(`ScoreBreakdown` from the server), `overallScore`, and `isVoided` as props;
+makes no API call, holds no state, mutates nothing. Every string it renders —
+`criterion_label`, `section_name` from `breakdown.critical_failures` — goes
+through JSX text interpolation (auto-escaped), never `dangerouslySetInnerHTML`.
+Confirmed these labels are structural template metadata computed server-side
+by `build_score_breakdown()` from the template's own step names, the same
+category pass 3 already traced and found is correctly _not_ stripped by the
+`scores`-view redaction (it is restated arithmetic, not examiner commentary) —
+this component does not change what data reaches the client, only how the
+verdict headline is laid out. No finding.
+
+### Corrections to prior write-ups
+
+None. Passes 1–5's findings, fixes, and flagged items are all re-verified
+intact above; nothing in this pass contradicts anything a prior pass
+recorded.
+
+## Guard tests added
+
+None this pass — zero backend behavior changed (the one commit in scope was a
+shared-infrastructure migration this feature's own call site already
+satisfied), so there is no new class to pin against reintroduction. All ten
+standing guard-test files from passes 1–5 re-run clean.
+
+## Completion gate (pass 6)
+
+| Check                                                       | Result                                                                                                                         |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                               | ✅ 0 violations (`flake8==7.3.0`)                                                                                              |
+| `black --check app/ tests/ alembic/`                        | ✅ 1798 files unchanged (`black==26.5.1`)                                                                                      |
+| `isort --check-only app/ tests/ alembic/`                   | ✅ clean (`isort==9.0.1`, confirmed against CI's pin in `ci.yml`)                                                              |
+| `python3 scripts/validate_migrations.py --strict`           | ✅ 497 revisions, single head `f73b449bdb8b`                                                                                   |
+| `pytest tests/ -q -k "skill or skill_testing or evaluator"` | ✅ 464 passed, 1 skipped (pre-existing optional-dependency skip) — identical count to pass 5, confirming no test added or lost |
+| `cd frontend && npm run typecheck`                          | ✅ 0 errors (aliased 7.0.2 compiler via `scripts/tsc-native.mjs`)                                                              |
+| `cd frontend && npm run lint`                               | ✅ 0 errors, 0 warnings                                                                                                        |
+
+Full backend suite not re-run beyond the `-k skill` scope: zero lines changed
+in `app/services/skills_testing_service.py` or `app/schemas/skills_testing.py`
+this pass (the one in-scope commit touched only the endpoint file's email
+construction, already covered by the skill-scoped run), and neither file has
+any consumer outside this feature's own endpoint file (`grep -rl` across
+`app/`, unchanged from pass 4's finding). No source file is modified by this
+pass at all — every check above is a re-verification against code already on
+`main`, not a fix, so there is no diff for a behavior-neutrality comparison.
+
+**Final disposition: 0 fixed, 0 newly flagged, 0 findings closed.** One real
+backend commit landed in this feature's files since pass 5 (the email-theme
+migration) and was read in full rather than assumed safe from its commit
+message; it preserved every escaping guarantee `email_test_results` depended
+on. The route surface (29/29), all ten passes 1–5 fixes, and all five
+standing flags (SKT3-2, SKT4-1, SKT4-2, SKT4-3, SKT4-7) were re-verified
+directly against current code rather than re-cited from this document's own
+prior prose. One new frontend file (`ResultVerdictBanner.tsx`) was read in
+full and found to introduce no new data-exposure surface.
