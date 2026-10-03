@@ -1,13 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router';
 import type { PublicFormDef } from '../services/api';
 
 const mockGetForm = vi.fn();
+const mockSubmitForm = vi.fn();
 vi.mock('../services/api', () => ({
   publicFormsService: {
     getForm: (...a: unknown[]) => mockGetForm(...a) as unknown,
-    submitForm: vi.fn(),
+    submitForm: (...a: unknown[]) => mockSubmitForm(...a) as unknown,
   },
 }));
 
@@ -80,5 +82,85 @@ describe('PublicFormPage field labels (workflow review W22)', () => {
     expect(screen.getByLabelText('Earliest Date')).toHaveAttribute('type', 'date');
     expect(screen.getByLabelText('Type of Event').tagName).toBe('SELECT');
     expect(screen.getByRole('group', { name: 'Extras' })).toBeInTheDocument();
+  });
+});
+
+const renderPage = () =>
+  render(
+    <MemoryRouter initialEntries={['/f/abc123']}>
+      <Routes>
+        <Route path="/f/:slug" element={<PublicFormPage />} />
+      </Routes>
+    </MemoryRouter>
+  );
+
+// The W60 drive: answering "No" hid "Which certifications?" but left its
+// required follow-up on the public page, so the browser's own required check
+// refused the form with no way to satisfy it honestly.
+const intake: PublicFormDef = {
+  ...form,
+  name: 'Volunteer Intake',
+  fields: [
+    field('certified', 'Do you hold a medical certification?', 'radio', {
+      required: true,
+      options: [
+        { value: 'yes', label: 'Yes' },
+        { value: 'no', label: 'No' },
+      ],
+    }),
+    field('which', 'Which certifications?', 'checkbox', {
+      required: true,
+      options: [
+        { value: 'EMT', label: 'EMT' },
+        { value: 'AEMT', label: 'AEMT' },
+      ],
+      condition_field_id: 'certified',
+      condition_operator: 'equals',
+      condition_value: 'yes',
+    }),
+    field('card', 'EMT card number', 'text', {
+      required: true,
+      condition_field_id: 'which',
+      condition_operator: 'contains',
+      condition_value: 'EMT',
+    }),
+    field('name', 'Full name', 'text', { required: true }),
+  ],
+};
+
+describe('PublicFormPage branching (workflow review W60)', () => {
+  beforeEach(() => {
+    mockGetForm.mockReset();
+    mockGetForm.mockResolvedValue(intake);
+    mockSubmitForm.mockReset();
+    mockSubmitForm.mockResolvedValue({ message: 'Thanks' });
+  });
+
+  it('hides a follow-up of a hidden question and leaves its stale answer out', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('radio', { name: 'Yes' }));
+    await user.click(screen.getByRole('checkbox', { name: 'EMT' }));
+    expect(screen.getByLabelText(/EMT card number/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('radio', { name: 'No' }));
+    expect(screen.queryByLabelText(/EMT card number/)).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText(/Full name/), 'Pat Doe');
+    await user.click(screen.getByRole('button', { name: /Submit/ }));
+
+    expect(mockSubmitForm).toHaveBeenCalledWith('abc123', { certified: 'no', name: 'Pat Doe' }, undefined, undefined);
+    expect(await screen.findByText('Thanks')).toBeInTheDocument();
+  });
+
+  it('does not open an "EMT" follow-up for an "AEMT" answer', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('radio', { name: 'Yes' }));
+    await user.click(screen.getByRole('checkbox', { name: 'AEMT' }));
+
+    expect(screen.queryByLabelText(/EMT card number/)).not.toBeInTheDocument();
   });
 });

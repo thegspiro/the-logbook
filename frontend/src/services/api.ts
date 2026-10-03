@@ -111,6 +111,7 @@ export type {
   FormFieldOption,
   FormField,
   FormFieldCreate,
+  FormFieldUpdate,
   FormIntegration,
   FormIntegrationCreate,
   MemberLookupResult,

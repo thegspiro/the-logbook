@@ -21,8 +21,8 @@ export interface FormField {
   required: boolean;
   min_length?: number | undefined;
   max_length?: number | undefined;
-  min_value?: number;
-  max_value?: number;
+  min_value?: number | undefined;
+  max_value?: number | undefined;
   validation_pattern?: string | undefined;
   options?: FormFieldOption[] | undefined;
   condition_field_id?: string | undefined;
@@ -43,8 +43,8 @@ export interface FormFieldCreate {
   required?: boolean;
   min_length?: number | undefined;
   max_length?: number | undefined;
-  min_value?: number;
-  max_value?: number;
+  min_value?: number | undefined;
+  max_value?: number | undefined;
   validation_pattern?: string | undefined;
   options?: FormFieldOption[] | undefined;
   condition_field_id?: string | undefined;
@@ -53,6 +53,12 @@ export interface FormFieldCreate {
   sort_order?: number;
   width?: string;
 }
+
+/**
+ * A field update. The API applies only the keys sent, so leaving a setting
+ * alone omits its key and clearing one sends `null` (CLAUDE.md pitfall 1).
+ */
+export type FormFieldUpdate = { [K in keyof FormFieldCreate]?: FormFieldCreate[K] | null };
 
 export interface FormIntegration {
   id: string;
@@ -191,8 +197,8 @@ export interface PublicFormField {
   required: boolean;
   min_length?: number;
   max_length?: number;
-  min_value?: number;
-  max_value?: number;
+  min_value?: number | undefined;
+  max_value?: number | undefined;
   options?: FormFieldOption[];
   condition_field_id?: string;
   condition_operator?: string;
