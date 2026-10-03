@@ -79,10 +79,14 @@ const StepIndicator: React.FC<{ currentStep: number }> = ({ currentStep }) => (
         const isComplete = currentStep > step.id;
         const isCurrent = currentStep === step.id;
         return (
-          <li key={step.id} className="flex items-center">
+          // Connectors flex rather than sitting at a fixed width, and the
+          // current step's label wraps between words (never inside one, or it
+          // runs under the next step): at 320px the fixed 24px rules and an
+          // unwrapped label pushed step 4 past the edge of the screen.
+          <li key={step.id} className={`flex items-center ${idx < STEPS.length - 1 ? 'flex-1' : ''}`}>
             <div className="flex items-center">
               <span
-                className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium ${
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-medium ${
                   isComplete
                     ? 'bg-green-700 text-white'
                     : isCurrent
@@ -94,14 +98,16 @@ const StepIndicator: React.FC<{ currentStep: number }> = ({ currentStep }) => (
                 {isComplete ? <CheckCircle2 className="h-5 w-5" /> : step.id}
               </span>
               <span
-                className={`ml-2 text-sm font-medium ${
+                className={`ml-2 text-sm leading-tight font-medium ${
                   isCurrent ? 'text-theme-text-primary' : 'text-theme-text-muted hidden sm:inline'
                 }`}
               >
                 {step.label}
               </span>
             </div>
-            {idx < STEPS.length - 1 && <div className="bg-theme-surface-border mx-2 h-px w-6 sm:mx-3 sm:w-12" />}
+            {idx < STEPS.length - 1 && (
+              <div className="bg-theme-surface-border mx-1 h-px min-w-2 flex-1 sm:mx-3 sm:max-w-12" />
+            )}
           </li>
         );
       })}
@@ -223,7 +229,7 @@ const UploadStep: React.FC<UploadStepProps> = ({ onParsed, matchBy, onMatchByCha
               </span>
               <span className="text-theme-text-muted mt-0.5 block text-xs">{strategy.description}</span>
               <span className="text-theme-text-muted mt-1 block text-xs">
-                Required column: <code className="text-red-500">{strategy.requiredCol}</code>
+                Required column: <code className="text-red-800 dark:text-red-400">{strategy.requiredCol}</code>
               </span>
             </button>
           ))}
@@ -242,16 +248,16 @@ const UploadStep: React.FC<UploadStepProps> = ({ onParsed, matchBy, onMatchByCha
             <ul className="text-theme-text-muted space-y-0.5">
               {matchBy === 'email' && (
                 <li>
-                  <code className="text-red-500">email</code> - Member email for matching
+                  <code className="text-red-800 dark:text-red-400">email</code> - Member email for matching
                 </li>
               )}
               {matchBy === 'membership_number' && (
                 <li>
-                  <code className="text-red-500">membership_number</code> - Membership number
+                  <code className="text-red-800 dark:text-red-400">membership_number</code> - Membership number
                 </li>
               )}
               <li>
-                <code className="text-red-500">course_name</code> - Training course title
+                <code className="text-red-800 dark:text-red-400">course_name</code> - Training course title
               </li>
             </ul>
           </div>
@@ -292,7 +298,7 @@ const UploadStep: React.FC<UploadStepProps> = ({ onParsed, matchBy, onMatchByCha
           a.click();
           URL.revokeObjectURL(url);
         }}
-        className="inline-flex items-center text-sm text-red-500 transition-colors hover:text-red-800 dark:hover:text-red-400"
+        className="inline-flex min-h-11 items-center text-sm text-red-700 transition-colors hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
       >
         <Download className="mr-1 h-4 w-4" />
         Download sample CSV template
@@ -706,7 +712,7 @@ const PreviewStep: React.FC<PreviewStepProps> = ({ parseResult, courseMappings, 
       {rows.length > 50 && !showAll && (
         <button
           onClick={() => setShowAll(true)}
-          className="text-sm text-red-500 hover:text-red-800 dark:hover:text-red-400"
+          className="min-h-11 text-sm text-red-800 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
         >
           Show all {rows.length} rows <ChevronDown className="inline h-4 w-4" />
         </button>
@@ -714,7 +720,7 @@ const PreviewStep: React.FC<PreviewStepProps> = ({ parseResult, courseMappings, 
       {showAll && rows.length > 50 && (
         <button
           onClick={() => setShowAll(false)}
-          className="text-sm text-red-500 hover:text-red-800 dark:hover:text-red-400"
+          className="min-h-11 text-sm text-red-800 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
         >
           Show fewer <ChevronUp className="inline h-4 w-4" />
         </button>
@@ -895,7 +901,9 @@ const HistoricalImportPage: React.FC = () => {
   }, []);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    // Rendered only as the Import History tab of Training Administration,
+    // whose content column already supplies the side padding and width.
+    <div className="py-6">
       <div className="mb-6">
         <h2 className="text-theme-text-primary flex items-center gap-2 text-xl font-bold">
           <FileText className="h-5 w-5" />

@@ -205,6 +205,78 @@ export const ALL_ROUTES: RouteCheck[] = [
     maxTinyText: 0,
     permissions: ['training.manage'],
   },
+  // Training Administration's Setup page, the module's settings, one entry per
+  // tab: each tab is its own `?tab=` URL rather than in-page state. Three of
+  // them render full-page components that brought their own page container
+  // into the hub's, which at 320px left 241px of content and scrolled the page
+  // sideways. `expectText` is what proves each visit reached its tab — the
+  // metrics one names a string its load-error state does not contain.
+  {
+    path: '/training/admin?page=setup&tab=requirements',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Training Requirements',
+  },
+  {
+    path: '/training/admin?page=setup&tab=courses',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Add Course',
+  },
+  {
+    path: '/training/admin?page=setup&tab=pipelines',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Create Training Pipeline',
+  },
+  {
+    path: '/training/admin?page=setup&tab=manual-entry',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Manual Shift Entry',
+  },
+  {
+    path: '/training/admin?page=setup&tab=integrations',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'External Training Integrations',
+  },
+  {
+    path: '/training/admin?page=setup&tab=import',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Import Historical Training',
+  },
+  {
+    path: '/training/admin?page=setup&tab=metrics',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Available in Training',
+  },
+  // Compliance rules, reached from the Compliance Officer dashboard. Its four
+  // sections are in-page state, so they are driven as states.
+  {
+    path: '/training/compliance-config',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['compliance.manage'],
+    expectText: 'Compliance Thresholds',
+    states: [
+      {
+        selector: 'div[aria-label="Compliance configuration sections"] button',
+        label: 'Compliance config section',
+        max: 4,
+        mayRepeatArrival: true,
+      },
+    ],
+  },
   { path: '/events/1/monitoring', maxSmallTargets: 0, maxTinyText: 0, permissions: ['events.manage'] },
   // The Events hub's settings tab, reached the way the hub's gear button reaches
   // it. Its nine sections are held in `useState`, not the URL, so they are
