@@ -1,5 +1,69 @@
 # Screenshot currency
 
+## Targeted check against ~352 frontend commits since the last full sweep, 2026-10-03
+
+`audit_images.py --baseline` (the gutter-class check) still reports nothing new
+— the baseline has been empty since 2026-09-06 and stayed that way. But the
+gap since the last full sweep (2026-09-25, `f28e604cb`) is large: 352 frontend
+commits reached this branch before this check ran, dominated by two passes
+dated 2026-09-29 that touched nearly every module — a `copy(<module>):`
+tightening sweep and a `docs(workflow-review): W##` pass — plus assorted
+feature work (bottom-nav customization, room NFC tags, member ID card access,
+event training details). `audit_images.py` has exactly one check and it is
+pixel-level; none of that is the kind of defect it looks for. So this pass
+read the actual diffs for the commits touching elections, apparatus and events
+(the three named as "many merged PRs" worth checking) rather than trusting the
+audit script to cover content drift it was never built to catch.
+
+**Three re-shot, one was also a real product bug, not just a stale picture:**
+
+| Image | What changed | What the capture shows now |
+| ----- | ------------ | --------------------------- |
+| `10-15-mobile-menu-notifications` | `163e4587e` / `ec89f7169` added a phone-only floating "More" scroll-hint pill to the side nav drawer when items sit below the fold (`useScrollOverflow`). Desktop is `md:hidden`, so this is the one shot affected — it opens the drawer and scrolls to Notifications, which still leaves more below | The pill, fading over the ADMINISTRATION section label beneath My ID Card. Confirmed before re-shooting by reading the hook and the two commits, not by guessing from the image |
+| `06-01-apparatus-list`, `06-03-apparatus-detail`, `06-20-apparatus-badges` | `e163cbcca` renamed the fleet summary card "Maint. Due" → "Maintenance Due" and the overview tab's "Important Dates" → "Expiration Dates" | Both re-shot and read correctly |
+| `14-16-election-settings` | `ea493bd41` deleted the entire Defaults section (nothing read `election_defaults` — CLAUDE.md pitfall #19) and the page now opens on **Proxy Voting**. The guide's own prose above this image was rewritten in the same commit to describe the **Features** tab's toggles instead, but the manifest entry had no `prepare` and would have landed on whichever tab the page now opens to by default | Re-shot after adding `?tab=features` to the manifest's `route` and an `expect`, so the capture lands where the guide text actually points |
+
+**`14-16` surfaced a real bug, fixed in the same commit as the re-shoot.**
+Capturing the Features tab showed four toggle switches with **no visible
+label at all** — `ElectionsSettingsPage.tsx` passed each toggle's description
+only as `SettingsToggle`'s `label` prop, which that component uses solely for
+`aria-label`; nothing rendered the sibling `<p>` every other settings screen
+pairs with it (`ContactVisibilitySection.tsx` is the pattern). A sighted user
+opening Election Settings → Features could not tell what any of the four
+switches did. The Proxy Voting tab's single toggle had the identical gap. Both
+are fixed: each toggle now has a visible title + description, using the exact
+names (Nominations, Paper Ballots, Reminders, Auto-Open) the guide's own table
+already listed — the table was right; the screen was wrong. `npx vitest run
+src/pages/ElectionsSettingsPage.test.tsx`, `eslint` and `tsc-native.mjs
+--noEmit` are all clean on the changed file.
+
+**Not re-shot — a pre-existing, already-recorded gap, unchanged.**
+`06-21-apparatus-evoc-level` still fails ("no Intermediate EVOC level
+defined"): this organization's product-seeded EVOC levels are named "EVOC 1 -
+Light Vehicle", "EVOC 2 - Ambulance", "EVOC 3 - Engine / Pumper" — none contain
+the word "Intermediate" the manifest's `prepare` matches on. The 2026-09-25
+entry below recorded the same failure for the same reason; it is seeder/data
+work, not a capture defect, and this pass did not attempt it.
+
+**Checked and found not to affect any existing capture:**
+bottom-nav-slots (`b59099362`) only changes behaviour when a member sets a
+preference; `NULL` keeps the prior role defaults, so no installation's bar —
+and no existing screenshot of it — changes. The room-NFC-badge work
+(`53830a269`, `0bcf35fd7`, `fe1094d97`) changed what a tag is *written* with,
+not what the Check-In QR Codes page *shows*: `NfcTagWriteButton` already
+rendered on those cards before this window.
+
+**Not swept.** The two 2026-09-29 passes (`copy(elections)`, `copy(apparatus)`,
+`copy(events)`, and the matching `docs(workflow-review): W18/W20/W21 events`,
+`W48 apparatus`, `W50 elections` commits) touch far more strings than the ones
+above — toast text, empty-state copy, dialog labels — most of which this pass
+did not check against a captured frame one by one. The three fixes above are
+the ones confirmed, by reading the diff, to sit inside a non-empty-state region
+an existing `fullPage` or viewport shot actually captures. A dedicated full
+sweep in the shape of the 2026-09-25 one below is the way to close the rest of
+this window with confidence rather than guesswork; 352 commits is too much
+surface for a diff-by-diff read of every file to substitute for one.
+
 ## Suggestion boxes re-shot after notifications, history, board and delete, 2026-09-25
 
 The suggestion-box shots in guide 07 predated four changes to those screens:
