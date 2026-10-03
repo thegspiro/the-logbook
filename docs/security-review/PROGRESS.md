@@ -16,6 +16,19 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2877](https://github.com/thegspiro/the-logbook/pull/2877)
+(Feature 23, Medical supplies, pass 12) merged directly by a 30-minute
+watchdog check, after that same check resolved a `PROGRESS.md` conflict on
+its branch (both it and PR #2876 had edited the Open PR section at roughly
+the same time — see the superseded note below). Post-resolution: CI green
+(17/17 checks), `mergeable_state: clean`, no unresolved review threads
+(only the informational Codex usage-limit comment). Rotation row 23 stays
+✅. Next: Feature 24 (Meetings & minutes), pass 6 — not yet started as of
+this check, no in-progress `claude/security-review-*` branch or open PR.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 23, Medical supplies, pass 12, PR #2877, merged directly by a 30-minute watchdog check), preserved for history</summary>
+
 **PR [#2877](https://github.com/thegspiro/the-logbook/pull/2877)** — branch
 `claude/security-review-feature23-pass12`, Feature 23 (Medical supplies),
 pass 12. Confirmed via the GitHub API before starting: no open PR whose
@@ -45,6 +58,8 @@ typecheck/lint clean. Full write-up:
 [`MSUP-23-medical-supplies.md`](./MSUP-23-medical-supplies.md)'s **Pass 12**
 section. Rotation row 23 → ✅ (pending PR merge). Next: Feature 24
 (Meetings & minutes).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 6, PR #2875, merged directly by a 30-minute watchdog check), preserved for history</summary>
@@ -25139,3 +25154,29 @@ typecheck/lint clean. Full write-up:
 [`MSUP-23-medical-supplies.md`](./MSUP-23-medical-supplies.md)'s **Pass 12**
 section. Rotation row 23 → ✅ (pending PR merge). Next: Feature 24
 (Meetings & minutes).
+
+### 2026-10-03 — Feature 23 (Medical supplies, pass 12)'s PR #2877 merged, watchdog resolved a conflict and recorded it
+
+Routine 30-minute check on the `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`). PR #2877 (Feature 23, Medical
+supplies, pass 12) had been opened by the loop session concurrently with
+this watchdog's own prior check-in (the one recording PR #2875's merge,
+above), and both edited `PROGRESS.md`'s Open PR section — `mergeable_state`
+read `dirty`.
+
+Resolved per the merge-conflict procedure: checked out
+`claude/security-review-feature23-pass12`, merged `origin/main` in,
+resolved the two conflicting hunks (the Open PR section and the end-of-file
+log) by keeping both sides' content — Feature 23's pass 12 as the current
+entry, the prior watchdog note nested as superseded history, both dated log
+entries kept in chronological order — then pushed the merge commit
+(`5dc895f99`) directly to the PR's branch (no rebase/force-push, per the
+"never rewrite history on someone else's branch" rule).
+
+Post-resolution, `mergeable_state` read `clean` and all 17 checks went
+green (`CI Success` included) with no unresolved review threads (only the
+informational Codex usage-limit comment), so this watchdog check merged it
+directly (squash, `expectedHeadSha` pinned to `5dc895f99`). Merge commit
+`a9db9aae` confirmed on `main`. Rotation row 23 stays ✅. Next: Feature 24
+(Meetings & minutes), pass 6 — not yet started as of this check, no
+in-progress branch or open PR.
