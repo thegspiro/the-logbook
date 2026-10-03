@@ -146,7 +146,7 @@ const SchedulingPlatoonsPage: React.FC = () => {
             </div>
 
             {/* Platoon group cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="card-grid gap-4">
               {overview.groups.map((group) => {
                 const key = group.platoon ?? '__unassigned__';
                 return (

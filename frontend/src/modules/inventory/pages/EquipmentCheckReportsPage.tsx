@@ -206,7 +206,7 @@ const ComplianceTab: React.FC<{ startDate: string; endDate: string; tz: string }
         {data.apparatus.length === 0 ? (
           <p className="text-theme-text-muted py-4 text-sm">No apparatus data available.</p>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="card-grid gap-3">
             {data.apparatus.map((a) => (
               <div key={a.apparatusId} className="card p-4">
                 <div className="mb-2 flex items-center justify-between">
