@@ -144,6 +144,9 @@ class CurrentUser(BaseModel):
     must_change_password: bool = (
         False  # True when admin requires password change on next login
     )
+    # The member's chosen phone bottom-bar tabs; None means the bar uses its
+    # role-based defaults. See app.schemas.user.normalize_bottom_nav_slots.
+    bottom_nav_slots: Optional[list[str]] = None
 
 
 class PasswordChange(BaseModel):
