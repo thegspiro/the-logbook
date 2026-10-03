@@ -6,11 +6,17 @@ const mockGetLocations = vi.fn();
 const mockRegenerateDisplayCode = vi.fn();
 const mockGetEnabledModules = vi.fn();
 const mockGetApparatusList = vi.fn();
+const mockSetBadgeCheckIn = vi.fn();
+const mockIntegrationStatus = vi.fn();
 
 vi.mock('../services/api', () => ({
   locationsService: {
     getLocations: (...args: unknown[]) => mockGetLocations(...args) as unknown,
     regenerateDisplayCode: (...args: unknown[]) => mockRegenerateDisplayCode(...args) as unknown,
+    setBadgeCheckIn: (...args: unknown[]) => mockSetBadgeCheckIn(...args) as unknown,
+  },
+  integrationsService: {
+    getConnectedIntegrationStatus: (...args: unknown[]) => mockIntegrationStatus(...args) as unknown,
   },
   organizationService: {
     getEnabledModules: (...args: unknown[]) => mockGetEnabledModules(...args) as unknown,
@@ -112,6 +118,8 @@ describe('RoomQRCodesPage', () => {
     vi.clearAllMocks();
     useAuthStore.setState({ user: null });
     mockGetLocations.mockResolvedValue(mockLocations);
+    mockIntegrationStatus.mockReset();
+    mockIntegrationStatus.mockResolvedValue([]);
     // Configurable module list including scheduling — apparatus section eligible
     mockGetEnabledModules.mockResolvedValue({
       enabled_modules: ['members', 'events', 'documents', 'roles', 'settings', 'scheduling'],
@@ -359,6 +367,9 @@ describe('RoomQRCodesPage — NFC tags', () => {
     mockGetEnabledModules.mockResolvedValue({ enabled_modules: ['members', 'events'], configured: true });
     mockGetApparatusList.mockReset();
     mockGetApparatusList.mockResolvedValue({ ...mockApparatus, items: [] });
+    mockIntegrationStatus.mockReset();
+    mockIntegrationStatus.mockResolvedValue([]);
+    mockSetBadgeCheckIn.mockReset();
   });
 
   afterEach(() => {
@@ -461,6 +472,99 @@ describe('RoomQRCodesPage — NFC tags', () => {
 
       expect(await screen.findByText('No QR codes yet')).toBeInTheDocument();
       expect(screen.queryByRole('heading', { name: 'Room NFC Tags' })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('badge check-in switch', () => {
+    beforeEach(() => {
+      mockIntegrationStatus.mockResolvedValue([{ integration_type: 'nfc-id-cards', status: 'connected' }]);
+    });
+
+    it('is not offered while NFC ID Cards is not connected', async () => {
+      mockIntegrationStatus.mockResolvedValue([]);
+      asViewer(['facilities.manage', 'locations.manage_nfc_tags']);
+      renderPage();
+
+      expect(await screen.findByText('Annex Hall')).toBeInTheDocument();
+      expect(screen.queryByRole('switch', { name: /Badge check-in/ })).not.toBeInTheDocument();
+    });
+
+    it('is not offered to a location manager without the room-tag grant', async () => {
+      asViewer(['locations.manage']);
+      renderPage();
+
+      expect(await screen.findByText('Annex Hall')).toBeInTheDocument();
+      expect(screen.queryByRole('switch', { name: /Badge check-in/ })).not.toBeInTheDocument();
+    });
+
+    it('asks before turning a room on, and turns it on when confirmed', async () => {
+      asViewer(['facilities.manage', 'locations.manage_nfc_tags']);
+      mockSetBadgeCheckIn.mockResolvedValue({
+        ...baseLocation,
+        id: 'room-4',
+        name: 'Annex Hall',
+        display_code: 'ANNEXCODE',
+        nfc_badge_check_in_enabled: true,
+      });
+      const user = userEvent.setup();
+      renderPage();
+
+      const toggle = await screen.findByRole('switch', { name: 'Badge check-in at Annex Hall' });
+      expect(toggle).toHaveAttribute('aria-checked', 'false');
+      await user.click(toggle);
+
+      const dialog = await screen.findByRole('dialog');
+      await user.click(within(dialog).getByRole('button', { name: 'Turn on' }));
+
+      await waitFor(() => {
+        expect(mockSetBadgeCheckIn).toHaveBeenCalledWith('room-4', true);
+      });
+      await waitFor(() => {
+        expect(screen.getByRole('switch', { name: 'Badge check-in at Annex Hall' })).toHaveAttribute(
+          'aria-checked',
+          'true'
+        );
+      });
+    });
+
+    it('leaves the room off when the confirmation is declined', async () => {
+      asViewer(['facilities.manage', 'locations.manage_nfc_tags']);
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.click(await screen.findByRole('switch', { name: 'Badge check-in at Annex Hall' }));
+      const dialog = await screen.findByRole('dialog');
+      await user.click(within(dialog).getByRole('button', { name: 'Leave it off' }));
+
+      expect(mockSetBadgeCheckIn).not.toHaveBeenCalled();
+    });
+
+    it('turns a room off without asking', async () => {
+      mockGetLocations.mockResolvedValue([
+        {
+          ...baseLocation,
+          id: 'room-4',
+          name: 'Annex Hall',
+          display_code: 'ANNEXCODE',
+          nfc_badge_check_in_enabled: true,
+        },
+      ]);
+      mockSetBadgeCheckIn.mockResolvedValue({
+        ...baseLocation,
+        id: 'room-4',
+        name: 'Annex Hall',
+        nfc_badge_check_in_enabled: false,
+      });
+      asViewer(['facilities.manage', 'locations.manage_nfc_tags']);
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.click(await screen.findByRole('switch', { name: 'Badge check-in at Annex Hall' }));
+
+      await waitFor(() => {
+        expect(mockSetBadgeCheckIn).toHaveBeenCalledWith('room-4', false);
+      });
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
   });
 });

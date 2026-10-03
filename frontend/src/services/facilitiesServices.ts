@@ -1122,6 +1122,12 @@ export const locationsService = {
     };
   },
 
+  /** Turn member ID card taps on or off for one room's public kiosk. */
+  async setBadgeCheckIn(locationId: string, enabled: boolean): Promise<Location> {
+    const response = await api.put<Location>(`/locations/${locationId}/badge-check-in`, { enabled });
+    return response.data;
+  },
+
   /** Rotate a location's kiosk display code — the old /display/{code} URL stops working immediately */
   async regenerateDisplayCode(locationId: string): Promise<Location> {
     const response = await api.post<Location>(`/locations/${locationId}/regenerate-display-code`);

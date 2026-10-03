@@ -6,19 +6,35 @@ Complete reference of all pages in the application, organized by module.
 
 ## Public Pages (No Authentication Required)
 
-| URL                                    | Page                   | Description                                                                                          |
-| -------------------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------- |
-| `/`                                    | Welcome                | Landing / onboarding entry point                                                                     |
-| `/login`                               | Login                  | User authentication                                                                                  |
-| `/forgot-password`                     | Forgot Password        | Password reset request                                                                               |
-| `/reset-password`                      | Reset Password         | Password reset form                                                                                  |
-| `/auth/callback`                       | `OAuthCallbackPage`    | OAuth sign-in landing page (handles Google/Microsoft redirect)                                       |
-| `/f/:slug`                             | Public Form            | Public form submission (token-based)                                                                 |
-| `/ballot`                              | Ballot Voting          | Public ballot voting (token-based)                                                                   |
-| `/display/:code`                       | Location Kiosk Display | QR code display for tablets in rooms (display-code-based)                                            |
-| `/display/:code/events/:eventId/guest` | `GuestCheckInPage`     | Guest (non-member) sign-in for an event held in that room _(2026-08-09)_                             |
-| `/privacy`                             | Privacy Policy         | Public privacy notice; department control + status-based access, dated; department-configurable text |
-| `/terms`                               | Terms of Service       | Public terms of use; department control + status-based access, dated; department-configurable text   |
+| URL                                    | Page                   | Description                                                                                                                          |
+| -------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `/`                                    | Welcome                | Landing / onboarding entry point                                                                                                     |
+| `/login`                               | Login                  | User authentication                                                                                                                  |
+| `/forgot-password`                     | Forgot Password        | Password reset request                                                                                                               |
+| `/reset-password`                      | Reset Password         | Password reset form                                                                                                                  |
+| `/auth/callback`                       | `OAuthCallbackPage`    | OAuth sign-in landing page (handles Google/Microsoft redirect)                                                                       |
+| `/f/:slug`                             | Public Form            | Public form submission (token-based)                                                                                                 |
+| `/ballot`                              | Ballot Voting          | Public ballot voting (token-based)                                                                                                   |
+| `/display/:code`                       | Location Kiosk Display | QR code display for tablets in rooms (display-code-based); reads member ID cards where the room has badge check-in on _(2026-10-03)_ |
+| `/display/:code/events/:eventId/guest` | `GuestCheckInPage`     | Guest (non-member) sign-in for an event held in that room _(2026-08-09)_                                                             |
+| `/privacy`                             | Privacy Policy         | Public privacy notice; department control + status-based access, dated; department-configurable text                                 |
+| `/terms`                               | Terms of Service       | Public terms of use; department control + status-based access, dated; department-configurable text                                   |
+
+> **Badge check-in at the room kiosk** _(2026-10-03)_. A room with **Badge
+> check-in** switched on (Check-In QR Codes, `locations.manage_nfc_tags`, needs
+> the NFC ID Cards integration) shows "Or tap your ID card here" on its kiosk
+> while an event is open, and reads cards through Web NFC on an Android tablet
+> (one "Start card reader" press after loading, which the browser requires) or a
+> USB reader that types the serial. A tap posts to
+> `POST /api/public/v1/display/{code}/badge-tap` with no session: the room
+> decides the event — exactly one in its check-in window; two at once are
+> refused unless the member is checked in to exactly one of them — and the tap
+> checks the member in, or out when they already are, through the same event
+> self check-in rules as everywhere else. The kiosk shows only a first name and
+> last initial. Every tap that moves attendance is audited
+> (`nfc_kiosk_badge_tap`) with the room and the caller's IP, taps are limited
+> to 60 a minute per IP and per room, and both switches are re-checked on every
+> tap. The accepted risk is recorded in `docs/KNOWN_LIMITATIONS.md`.
 
 > **The guest check-in page is addressed through the room's display code**, not
 > through the event alone, so the backend can resolve the department without a
