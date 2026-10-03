@@ -5,11 +5,14 @@ Business logic for training management including courses, records, requirements,
 """
 
 import calendar
+import copy
 from datetime import date, timedelta
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func
+from sqlalchemy import inspect as sa_inspect
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -241,13 +244,15 @@ class TrainingService:
             except Exception:
                 pass  # Fail open — don't block training checks if tier lookup fails
 
-            # Get all active requirements
-            req_result = await self.db.execute(
-                select(TrainingRequirement)
-                .where(TrainingRequirement.organization_id == str(organization_id))
-                .where(TrainingRequirement.active.is_(True))
+            # Only the requirements that grade this member: a member a
+            # requirement exempts — by membership type, role, or because they
+            # joined before its cutoff — must not see it listed as pending.
+            requirements = await self.get_applicable_requirements(
+                user_id, organization_id
             )
-            requirements = req_result.scalars().all()
+            join_date = await self._catch_up_join_date(
+                user_id, organization_id, requirements
+            )
 
             # Pre-fetch waivers once for all requirement checks
             user_waivers = await fetch_user_waivers(
@@ -278,6 +283,7 @@ class TrainingService:
                     organization_id,
                     waivers=user_waivers,
                     today=today,
+                    join_date=join_date,
                 )
                 if progress.is_complete:
                     requirements_met.append(req.id)
@@ -543,6 +549,7 @@ class TrainingService:
         today: date,
         waivers=None,
         org_include_current_month: bool = True,
+        join_date: Optional[date] = None,
     ) -> Dict:
         """Evaluate a member's progress on a single requirement (in-memory).
 
@@ -556,12 +563,22 @@ class TrainingService:
 
         This handles every ``requirement_type``: hours, courses,
         certification, shifts, calls, and fallback.
+
+        With *join_date*, an unmet requirement inside an existing member's
+        catch-up period reports ``catch_up_deadline`` and takes it as its due
+        date; callers leave such a requirement out of the met/total summary.
         """
         from app.models.training import RequirementType
         from app.services.training_compliance import (
             apply_recency,
+            catch_up_deadline,
             certification_record_matches,
         )
+
+        # The real day, captured before it is replaced by the evaluation
+        # cut-off below: the catch-up deadline is a calendar date promised to
+        # the member, not a period boundary.
+        real_today = today
         from app.services.training_period import (
             effective_include_current_month,
             resolve_as_of_date,
@@ -844,6 +861,16 @@ class TrainingService:
             (effective_due_date - today).days if effective_due_date else None
         )
 
+        deadline = catch_up_deadline(req, join_date, real_today)
+        if deadline is not None and not is_met:
+            effective_due_date = deadline
+            days_until_due = (deadline - real_today).days
+            # Nothing is held against the member until the deadline passes,
+            # so a lapsed certificate does not block them in the meantime.
+            blocks_activity = False
+        else:
+            deadline = None
+
         return {
             "id": str(req.id),
             "name": req.name,
@@ -866,6 +893,7 @@ class TrainingService:
             "active_months": active_months,
             "cert_expired": cert_expired,
             "blocks_activity": blocks_activity,
+            "catch_up_deadline": str(deadline) if deadline else None,
         }
 
     async def check_requirement_progress(
@@ -877,6 +905,7 @@ class TrainingService:
         requirement: Optional[TrainingRequirement] = None,
         completed_records: Optional[Sequence[Any]] = None,
         today: Optional[date] = None,
+        join_date: Optional[date] = None,
     ) -> RequirementProgress:
         """
         Check a user's progress towards a specific requirement.
@@ -894,10 +923,15 @@ class TrainingService:
         page preload passes plain rows); a caller checking a page of
         requirements passes both so the check reads nothing further.
         Without them the check queries for what it needs, as it always has.
+
+        *join_date* is the member's ``member_join_date``; with it, an unmet
+        requirement inside an existing member's catch-up period reports the
+        catch-up deadline as its due date.
         """
         from app.models.training import RequirementType
         from app.services.training_compliance import (
             apply_recency,
+            catch_up_deadline,
             certification_record_matches,
             recency_cutoff,
         )
@@ -1306,6 +1340,13 @@ class TrainingService:
             percentage = 100.0 if completed_value > 0 else 0.0
         percentage = min(percentage, 100.0)
 
+        deadline = catch_up_deadline(requirement, join_date, today)
+        if deadline is not None and not is_complete:
+            effective_due_date = deadline
+            days_until_due = (deadline - today).days
+        else:
+            deadline = None
+
         return RequirementProgress(
             requirement_id=requirement.id,
             requirement_name=requirement.name,
@@ -1315,6 +1356,7 @@ class TrainingService:
             is_complete=is_complete,
             due_date=effective_due_date,
             days_until_due=days_until_due,
+            catch_up_deadline=deadline,
         )
 
     async def get_all_requirements_progress(
@@ -1348,6 +1390,9 @@ class TrainingService:
             self.db,
             str(organization_id),
             str(user_id),
+        )
+        join_date = await self._catch_up_join_date(
+            user_id, organization_id, requirements
         )
         # One read of the member's completed records serves every
         # requirement on the page; each check then filters in memory
@@ -1386,6 +1431,7 @@ class TrainingService:
                 requirement=req,
                 completed_records=completed,
                 today=today,
+                join_date=join_date,
             )
             progress_list.append(progress)
         return progress_list
@@ -1439,6 +1485,135 @@ class TrainingService:
             return None
         return min(starts), max(ends)
 
+    # Columns a "new members only" copy must not inherit from its original:
+    # identity, authorship and timestamps belong to the new row, and the
+    # grandfathering dates are set explicitly by the split.
+    _SPLIT_EXCLUDED_COLUMNS = frozenset(
+        {
+            "id",
+            "organization_id",
+            "created_by",
+            "created_at",
+            "updated_at",
+            "new_member_cutoff_date",
+            "existing_member_deadline",
+            "applies_to_joined_before",
+        }
+    )
+    # Fields a split edit may not carry. The copy's grandfathering is fixed by
+    # the split itself, and deactivating is a decision about the original.
+    _SPLIT_FORBIDDEN_FIELDS = frozenset(
+        {"new_member_cutoff_date", "existing_member_deadline", "active"}
+    )
+
+    def split_requirement_for_new_members(
+        self,
+        requirement: TrainingRequirement,
+        updates: Dict[str, Any],
+        effective_date: date,
+        created_by: Optional[str],
+    ) -> TrainingRequirement:
+        """Apply ``updates`` to new members only.
+
+        The original keeps its current standard and is limited to members who
+        joined before ``effective_date``; a copy carrying ``updates`` grades
+        everyone who joined on or after it, and exempts everyone earlier —
+        they are still graded by the original. Both rows stay active and are
+        edited independently afterwards.
+
+        Returns the copy, added to the session but not flushed. Raises
+        ``ValueError`` when the split would be meaningless or contradictory;
+        the caller must hold the original row locked so two concurrent splits
+        cannot both succeed.
+
+        Program links (``ProgramRequirement``) stay on the original: a
+        program's enrollees are graded through their enrollment, and whether
+        they take on a changed standard is decided per program when a
+        requirement is added to it.
+        """
+        if requirement.applies_to_joined_before is not None:
+            raise ValueError(
+                "This requirement already holds the earlier standard for members "
+                f"who joined before {requirement.applies_to_joined_before}. Edit "
+                "the newer copy to change the standard for new members."
+            )
+        # The edit form sends every field it owns on every save, so a field is
+        # refused only when the save would actually change it.
+        forbidden = sorted(
+            key
+            for key in self._SPLIT_FORBIDDEN_FIELDS & updates.keys()
+            if getattr(requirement, key) != updates[key]
+        )
+        if forbidden:
+            raise ValueError(
+                f"{', '.join(forbidden)} can't be changed in a new-members-only "
+                "save. Save that change for everyone instead."
+            )
+        cutoff = requirement.new_member_cutoff_date
+        if cutoff is not None and effective_date <= cutoff:
+            raise ValueError(
+                f"The effective date must be after this requirement's existing "
+                f"cutoff ({cutoff}), or the earlier standard would grade nobody."
+            )
+        changed = {
+            key: value
+            for key, value in updates.items()
+            if key not in self._SPLIT_FORBIDDEN_FIELDS
+            and getattr(requirement, key) != value
+        }
+        if not changed:
+            raise ValueError(
+                "Nothing would change for new members: no field differs from the "
+                "current requirement."
+            )
+
+        mapper = sa_inspect(TrainingRequirement)
+        values = {
+            attr.key: copy.deepcopy(getattr(requirement, attr.key))
+            for attr in mapper.column_attrs
+            if attr.key not in self._SPLIT_EXCLUDED_COLUMNS
+        }
+        values.update(copy.deepcopy(changed))
+        new_requirement = TrainingRequirement(
+            organization_id=requirement.organization_id,
+            created_by=created_by,
+            new_member_cutoff_date=effective_date,
+            existing_member_deadline=None,
+            applies_to_joined_before=None,
+            **values,
+        )
+        requirement.applies_to_joined_before = effective_date
+        self.db.add(new_requirement)
+        return new_requirement
+
+    async def _catch_up_join_date(
+        self,
+        user_id: UUID,
+        organization_id: UUID,
+        requirements: Sequence[TrainingRequirement],
+    ) -> Optional[date]:
+        """The member's ``member_join_date``, read without loading the row.
+
+        Only a catch-up period needs it here — applicability was settled when
+        ``requirements`` were chosen — so a page with none skips the query and
+        keeps the per-page read count where it was before grandfathering.
+        """
+        if not any(r.existing_member_deadline for r in requirements):
+            return None
+        from app.services.training_compliance import join_date_from
+
+        row = (
+            await self.db.execute(
+                select(User.hire_date, User.created_at).where(
+                    User.id == str(user_id),
+                    User.organization_id == str(organization_id),
+                )
+            )
+        ).first()
+        if row is None:
+            return None
+        return join_date_from(row[0], row[1])
+
     async def get_applicable_requirements(
         self, user_id: UUID, organization_id: UUID, year: Optional[int] = None
     ) -> List[TrainingRequirement]:
@@ -1483,22 +1658,23 @@ class TrainingService:
         result = await self.db.execute(query)
         requirements = result.scalars().all()
 
-        # Filter requirements applicable to this user
-        user_membership_type = getattr(user, "membership_type", None) or "active"
-        applicable_requirements = []
-        for req in requirements:
-            if req.applies_to_all:
-                applicable_requirements.append(req)
-            elif req.required_membership_types:
-                # Check if user's membership type matches
-                if user_membership_type in req.required_membership_types:
-                    applicable_requirements.append(req)
-            elif req.required_roles:
-                # Check if user has any of the required roles
-                if any(role_id in user_role_ids for role_id in req.required_roles):
-                    applicable_requirements.append(req)
+        # The shared definition, so /my-training, the matrix and the
+        # dashboard agree on who a requirement grades — including its
+        # grandfathering dates.
+        from app.services.training_compliance import (
+            member_join_date,
+            requirement_applies_to_member,
+        )
 
-        return applicable_requirements
+        user_membership_type = getattr(user, "membership_type", None) or "active"
+        join_date = member_join_date(user)
+        return [
+            req
+            for req in requirements
+            if requirement_applies_to_member(
+                req, user_membership_type, user_role_ids, join_date=join_date
+            )
+        ]
 
     async def get_expiring_certifications(
         self,

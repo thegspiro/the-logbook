@@ -167,8 +167,15 @@ const TrainingProgramsPage: React.FC = () => {
     try {
       if (isEdit && id) {
         const updated = await trainingService.updateRequirement(id, data);
-        setRequirements((prev) => prev.map((r) => (r.id === id ? updated : r)));
-        toast.success('Requirement updated');
+        if (updated.id !== id) {
+          // Saved for new members only: the original was narrowed and a copy
+          // created, so both rows changed — reload rather than patch one in.
+          await loadData();
+          toast.success('Saved for new members. The current standard stays in place for existing members.');
+        } else {
+          setRequirements((prev) => prev.map((r) => (r.id === id ? updated : r)));
+          toast.success('Requirement updated');
+        }
       } else {
         const created = await trainingService.createRequirement(data as TrainingRequirementCreate);
         setRequirements((prev) => [...prev, created]);

@@ -1127,6 +1127,7 @@ class TestEvaluateRequirementDetailFields:
             "active_months",
             "cert_expired",
             "blocks_activity",
+            "catch_up_deadline",
         }
         assert set(result.keys()) == expected_fields
 

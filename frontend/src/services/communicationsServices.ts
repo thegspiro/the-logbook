@@ -274,6 +274,8 @@ export interface ComplianceMatrixCell {
   window_end?: string | null;
   /** The date this cell was judged against; overrides the matrix-level as_of. */
   as_of?: string | null;
+  /** With status "catch_up": the date an existing member has until. */
+  catch_up_deadline?: string | null;
 }
 
 export interface ComplianceMatrixMember {

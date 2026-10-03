@@ -397,6 +397,11 @@ class TrainingRequirementBase(BaseModel):
     required_roles: Optional[List[str]] = None
     required_positions: Optional[List[str]] = None
     required_membership_types: Optional[List[str]] = None
+    # Grandfathering — see the model. No cutoff: applies to everyone. Cutoff
+    # without a deadline: members who joined before it are exempt. Cutoff with
+    # a deadline: they have until the deadline.
+    new_member_cutoff_date: Optional[date] = None
+    existing_member_deadline: Optional[date] = None
     start_date: Optional[date] = None
     due_date: Optional[date] = None
     time_limit_days: Optional[int] = Field(None, ge=1)
@@ -463,8 +468,35 @@ def requirement_config_warning(obj: object) -> Optional[str]:
     return None
 
 
+def grandfathering_error(
+    new_member_cutoff_date: Optional[date],
+    existing_member_deadline: Optional[date],
+) -> Optional[str]:
+    """Why a cutoff/deadline pair is invalid, or None.
+
+    A deadline without a cutoff names no group of "existing members" for it to
+    protect, so it would silently do nothing. Shared by the create schema and
+    the update endpoint, which validates the merged row rather than the patch.
+    """
+    if existing_member_deadline and not new_member_cutoff_date:
+        return (
+            "existing_member_deadline needs new_member_cutoff_date: set the date "
+            "that separates existing members from new ones"
+        )
+    return None
+
+
 class TrainingRequirementCreate(TrainingRequirementBase):
     """Schema for creating a new training requirement"""
+
+    @model_validator(mode="after")
+    def validate_grandfathering(self) -> "TrainingRequirementCreate":
+        error = grandfathering_error(
+            self.new_member_cutoff_date, self.existing_member_deadline
+        )
+        if error:
+            raise ValueError(error)
+        return self
 
     @model_validator(mode="after")
     def validate_quantity_for_type(self) -> "TrainingRequirementCreate":
@@ -480,8 +512,25 @@ class TrainingRequirementCreate(TrainingRequirementBase):
         return self
 
 
+class RequirementChangeScope(str, Enum):
+    """Who an edit to a requirement applies to."""
+
+    # Edit the requirement in place — everyone it grades sees the change.
+    EVERYONE = "everyone"
+    # Keep the original for members who joined before ``effective_date`` and
+    # create a copy carrying the edit for everyone who joined on or after it.
+    NEW_MEMBERS_ONLY = "new_members_only"
+
+
 class TrainingRequirementUpdate(BaseModel):
     """Schema for updating a training requirement"""
+
+    # Not stored: tells the endpoint whether to edit in place or split. The
+    # default keeps the behavior every existing client was written against.
+    apply_to: RequirementChangeScope = RequirementChangeScope.EVERYONE
+    # With NEW_MEMBERS_ONLY: members who joined on or after this date get the
+    # edited standard. Defaults to the department's today.
+    effective_date: Optional[date] = None
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
@@ -515,6 +564,8 @@ class TrainingRequirementUpdate(BaseModel):
     required_roles: Optional[List[str]] = None
     required_positions: Optional[List[str]] = None
     required_membership_types: Optional[List[str]] = None
+    new_member_cutoff_date: Optional[date] = None
+    existing_member_deadline: Optional[date] = None
     start_date: Optional[date] = None
     due_date: Optional[date] = None
     time_limit_days: Optional[int] = Field(None, ge=1)
@@ -550,6 +601,9 @@ class TrainingRequirementResponse(TrainingRequirementBase, UTCResponseBase):
     created_at: datetime
     updated_at: datetime
     created_by: Optional[UUID] = None
+    # Read-only: set by a "new members only" edit on the original, which then
+    # grades only members who joined before this date.
+    applies_to_joined_before: Optional[date] = None
     # Non-blocking flag: set when the requirement has no target for its type
     # (e.g. a Course requirement with no course linked). Surfaced in the officer
     # UI so a requirement that can never be completed is caught, even though
@@ -614,6 +668,9 @@ class RequirementProgress(BaseModel):
     due_date: Optional[date]
     due_date_type: Optional[DueDateType] = None
     days_until_due: Optional[int] = None  # Negative if overdue
+    # Set when an existing member is inside the requirement's catch-up period
+    # and has not met it yet; due_date then carries the same date.
+    catch_up_deadline: Optional[date] = None
 
 
 class ComplianceSummary(BaseModel):
