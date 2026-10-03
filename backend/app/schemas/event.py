@@ -192,6 +192,23 @@ class EventSettingsUpdate(BaseModel):
     outreach_roles: Optional[List[OutreachRole]] = None
     request_pipeline: Optional[RequestPipelineUpdate] = None
     defaults: Optional[EventDefaultsUpdate] = None
+    # Event type -> position id whose members take an attendance request
+    # neither the organizer nor the alternate can. A null value clears that
+    # type back to the default (the Secretary). Merged key by key, like the
+    # other mappings here.
+    attendance_request_fallback_positions: Optional[Dict[str, Optional[str]]] = None
+
+    @field_validator("attendance_request_fallback_positions")
+    @classmethod
+    def _check_fallback_positions(cls, value):
+        if value is None:
+            return value
+        for event_type, position_id in value.items():
+            if event_type not in _EVENT_TYPES:
+                raise ValueError(f"Unknown event type: {event_type}")
+            if position_id is not None and not (0 < len(position_id) <= 36):
+                raise ValueError("Invalid position id")
+        return value
 
 
 # Event Schemas
@@ -328,6 +345,13 @@ class EventCreate(EventBase):
     # event, so the service strips it before building the row.
     training_details: Optional[TrainingSessionAttach] = None
 
+    # Who runs the event. Omitted, the organizer is the member creating it;
+    # the alternate is optional. Changing either afterwards is a transfer
+    # (POST /events/{id}/transfer), not an edit, so the people involved are
+    # told and a recurring series can move as a whole.
+    organizer_id: Optional[UUID] = None
+    alternate_organizer_id: Optional[UUID] = None
+
     @model_validator(mode="after")
     def validate_dates(self) -> "EventCreate":
         if self.end_datetime <= self.start_datetime:
@@ -413,6 +437,26 @@ class EventCancel(BaseModel):
     )
 
 
+class EventTransferRequest(BaseModel):
+    """Hand an event to a new organizer and alternate.
+
+    ``scope`` "future" carries the handover to every upcoming occurrence of a
+    recurring series (and its parent); past occurrences keep their organizer.
+    On a one-off event the two scopes are the same.
+    """
+
+    organizer_id: UUID
+    # Explicit null clears the alternate; omitted means the same.
+    alternate_organizer_id: Optional[UUID] = None
+    scope: str = Field("this", pattern="^(this|future)$")
+
+
+class EventTransferResponse(BaseModel):
+    updated_count: int
+    organizer_id: UUID
+    alternate_organizer_id: Optional[UUID] = None
+
+
 class UserRSVPSummary(UTCResponseBase):
     """The calling member's own RSVP, echoed back on the event detail response.
 
@@ -469,6 +513,16 @@ class EventResponse(EventBase, UTCResponseBase):
     # events.manage — None on every other response, for a creator outside the
     # caller's organization, and for rows predating the column.
     created_by_name: Optional[str] = None
+    # Who runs the event and their stand-in. The names are resolved on the
+    # detail endpoint for a caller who may hand the event over — its organizer,
+    # its alternate or an events manager — and are None for everyone else.
+    organizer_id: Optional[UUID] = None
+    alternate_organizer_id: Optional[UUID] = None
+    organizer_name: Optional[str] = None
+    alternate_organizer_name: Optional[str] = None
+    # Decided here, not in the client (CLAUDE.md #29): may this caller decide
+    # the event's attendance requests and transfer it. Detail endpoint only.
+    can_manage_organizers: bool = False
     updated_by: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
@@ -1140,6 +1194,9 @@ class RecurringEventCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     event_type: str = Field(default="other")
+    # See EventCreate: applied to every occurrence in the series.
+    organizer_id: Optional[UUID] = None
+    alternate_organizer_id: Optional[UUID] = None
     location_id: Optional[UUID] = None
     location: Optional[str] = Field(None, max_length=300)
     location_details: Optional[str] = None

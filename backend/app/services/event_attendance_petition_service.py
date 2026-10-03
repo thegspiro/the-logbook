@@ -2,9 +2,10 @@
 Event attendance petitions.
 
 A member who was at an event but has no check-in (no signal, a dead phone, a
-QR code nobody put up) asks to be recorded as present. The event's organizer —
-or anyone holding ``events.manage`` — confirms the times and approves it, or
-rejects it with a reason.
+QR code nobody put up) asks to be recorded as present. The event's organizer or
+alternate — or anyone holding ``events.manage`` — confirms the times and
+approves it, or rejects it with a reason. Who is *asked* is narrower than who
+may decide: see ``EventOrganizerService.attendance_request_recipients``.
 
 Approval writes the same manager override the attendance screen writes (see
 ``EventService.override_rsvp_attendance``), so crediting stays on its one path:
@@ -19,12 +20,10 @@ from datetime import timezone as dt_timezone
 from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from loguru import logger
-from sqlalchemy import case, select
+from sqlalchemy import case, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from app.api.dependencies import user_has_permission
 from app.core.config import settings
 from app.core.utils import generate_uuid
 from app.models.event import (
@@ -46,6 +45,10 @@ from app.services.email_policy import (
     department_required_kinds,
     member_receives_email,
 )
+from app.services.event_organizer_service import (
+    EventOrganizerService,
+    can_manage_organizers,
+)
 from app.services.event_service import (
     EventService,
     attendance_is_finalized,
@@ -58,8 +61,6 @@ from app.utils.org_timezone import format_in_org_timezone
 # monthly compliance reconciliation, short enough that the organizer can still
 # remember who was in the room. Owner decision, 2026-09-30.
 PETITION_WINDOW_DAYS = 30
-
-REVIEW_PERMISSION = "events.manage"
 
 # In-app categories. Metadata carries petition_id so the reviewers' prompts can
 # be archived once any one of them decides.
@@ -83,10 +84,9 @@ def effective_end(event: Event) -> datetime:
 
 
 def can_review(event: Event, reviewer: User) -> bool:
-    """The organizer, or anyone the department trusts to correct attendance."""
-    if event.created_by and str(event.created_by) == str(reviewer.id):
-        return True
-    return user_has_permission(reviewer, REVIEW_PERMISSION)
+    """The organizer or alternate, or anyone the department trusts to correct
+    attendance."""
+    return can_manage_organizers(event, reviewer)
 
 
 class EventAttendancePetitionService:
@@ -171,8 +171,8 @@ class EventAttendancePetitionService:
         event = await self.get_event(event_id, reviewer.organization_id)
         if not can_review(event, reviewer):
             raise PermissionError(
-                "Only the event's organizer or an event manager can review "
-                "attendance requests"
+                "Only the event's organizer, its alternate or an event manager "
+                "can review attendance requests"
             )
         pending_first = case(
             (EventAttendancePetition.status == AttendancePetitionStatus.PENDING, 0),
@@ -375,8 +375,8 @@ class EventAttendancePetitionService:
     ) -> None:
         if not can_review(event, reviewer):
             raise PermissionError(
-                "Only the event's organizer or an event manager can review "
-                "attendance requests"
+                "Only the event's organizer, its alternate or an event manager "
+                "can review attendance requests"
             )
         # The point of a petition is that someone else vouches for you.
         if str(petition.user_id) == str(reviewer.id):
@@ -390,41 +390,118 @@ class EventAttendancePetitionService:
     # ------------------------------------------------------------------
 
     async def _reviewers_to_notify(self, event: Event, member: User) -> List[User]:
-        """The organizer; failing that, everyone holding events.manage.
+        """The organizer and alternate; failing both, the department's fallback.
 
         Any holder of events.manage may decide, but prompting all of them for
-        every request would bury the organizer's own task under everyone
-        else's. The fallback covers an event whose organizer has left or was
-        never recorded, where nobody would otherwise hear of it.
+        every request buries the organizer's own task under everyone else's
+        inbox. The fallback chain covers an event whose organizers have left
+        or are the member asking, where nobody would otherwise hear of it.
         """
-        organization_id = str(event.organization_id)
-        skip = str(member.id)
-        if event.created_by and str(event.created_by) != skip:
-            creator = (
+        return await EventOrganizerService(self.db).attendance_request_recipients(
+            event, exclude_user_id=str(member.id)
+        )
+
+    async def redirect_pending(
+        self, event_ids: Iterable[str], organization_id: str
+    ) -> int:
+        """Re-address the open requests on *event_ids* after a transfer.
+
+        Prompts held by somebody no longer asked are archived, and whoever the
+        request now routes to is prompted, so a request raised before the
+        handover does not sit with somebody who no longer runs the event.
+        """
+        ids = [str(e) for e in event_ids]
+        if not ids:
+            return 0
+        organization_id = str(organization_id)
+        pending = (
+            await self.db.execute(
+                select(
+                    EventAttendancePetition.id,
+                    EventAttendancePetition.event_id,
+                    EventAttendancePetition.user_id,
+                ).where(
+                    EventAttendancePetition.event_id.in_(ids),
+                    EventAttendancePetition.organization_id == organization_id,
+                    EventAttendancePetition.status == AttendancePetitionStatus.PENDING,
+                )
+            )
+        ).all()
+        redirected = 0
+        # Plain ids, and each request reloaded on its own turn: a failed
+        # notice rolls the session back, which expires every loaded row, so
+        # anything carried over from the previous turn could not be read.
+        for petition_id, event_id, user_id in pending:
+            petition = (
                 await self.db.execute(
-                    select(User).where(
-                        User.id == str(event.created_by),
-                        User.organization_id == organization_id,
-                        User.is_active,
+                    select(EventAttendancePetition)
+                    .where(
+                        EventAttendancePetition.id == petition_id,
+                        EventAttendancePetition.organization_id == organization_id,
+                        EventAttendancePetition.status
+                        == AttendancePetitionStatus.PENDING,
                     )
+                    .execution_options(populate_existing=True)
                 )
             ).scalar_one_or_none()
-            if creator is not None:
-                return [creator]
+            event = (
+                await self.db.execute(
+                    select(Event)
+                    .where(
+                        Event.id == event_id, Event.organization_id == organization_id
+                    )
+                    .execution_options(populate_existing=True)
+                )
+            ).scalar_one_or_none()
+            member = (
+                await self.db.execute(
+                    select(User)
+                    .where(User.id == user_id, User.organization_id == organization_id)
+                    .execution_options(populate_existing=True)
+                )
+            ).scalar_one_or_none()
+            if petition is None or event is None or member is None:
+                continue
+            recipients = await self._reviewers_to_notify(event, member)
+            wanted = {str(u.id) for u in recipients}
+            now = datetime.now(dt_timezone.utc).replace(microsecond=0)
+            prompted = set()
+            for prompt in await self._open_prompts(petition):
+                if str(prompt.recipient_id) in wanted:
+                    prompted.add(str(prompt.recipient_id))
+                else:
+                    # Same archival the decision path does: gone from the
+                    # bell, kept in history.
+                    prompt.expires_at = now
+                    prompt.read = True
+                    prompt.read_at = prompt.read_at or now
+            await self.db.commit()
+            # Only the reviewers who were not already asked: an organizer who
+            # kept the role through the handover is not prompted twice.
+            newcomers = [u for u in recipients if str(u.id) not in prompted]
+            if newcomers:
+                await self._notify_reviewers(event, petition, member, newcomers)
+            redirected += 1
+        return redirected
 
+    async def _open_prompts(
+        self, petition: EventAttendancePetition
+    ) -> List[NotificationLog]:
+        now = datetime.now(dt_timezone.utc)
         result = await self.db.execute(
-            select(User)
-            .options(selectinload(User.positions))
-            .where(
-                User.organization_id == organization_id,
-                User.is_active,
+            select(NotificationLog).where(
+                NotificationLog.organization_id == str(petition.organization_id),
+                NotificationLog.channel == NotificationChannel.IN_APP,
+                NotificationLog.category == REVIEW_PROMPT_CATEGORY,
+                or_(
+                    NotificationLog.expires_at.is_(None),
+                    NotificationLog.expires_at > now,
+                ),
+                NotificationLog.notification_metadata["petition_id"].as_string()
+                == str(petition.id),
             )
         )
-        return [
-            user
-            for user in result.scalars().all()
-            if str(user.id) != skip and user_has_permission(user, REVIEW_PERMISSION)
-        ]
+        return list(result.scalars().all())
 
     async def _organization(self, organization_id: str) -> Optional[Organization]:
         return (
@@ -434,10 +511,15 @@ class EventAttendancePetitionService:
         ).scalar_one_or_none()
 
     async def _notify_reviewers(
-        self, event: Event, petition: EventAttendancePetition, member: User
+        self,
+        event: Event,
+        petition: EventAttendancePetition,
+        member: User,
+        recipients: Optional[List[User]] = None,
     ) -> None:
         try:
-            recipients = await self._reviewers_to_notify(event, member)
+            if recipients is None:
+                recipients = await self._reviewers_to_notify(event, member)
             if not recipients:
                 return
             names = await self.display_names([member.id], event.organization_id)
