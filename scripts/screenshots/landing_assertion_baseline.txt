@@ -432,7 +432,6 @@
 14-05-nominations-tab
 14-06-candidate-form
 14-07-eligibility-roster
-14-16-election-settings
 14-17-election-results
 14-18-paper-batches
 14-19-forensics-report
