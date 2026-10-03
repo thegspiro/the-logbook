@@ -12072,7 +12072,7 @@ export const SHOTS = [
     line: 2618,
     anchor:
       "Screenshot of the Compliance Matrix showing a grid with member names on rows",
-    alt: "The Compliance Matrix triage rail opened from the dashboard's non-compliant deep link: the Non-compliant + at risk only chip, members grouped by standing worst first, and Bram Hollis's detail with each requirement's figure — 44 of 24 hours, Nothing on file, 1 of 1 shifts",
+    alt: "The Compliance Matrix triage rail opened from the dashboard's non-compliant deep link: the Non-compliant + at risk only chip, members grouped by standing worst first, and Bram Hollis's detail with each requirement's figure — 44 of 24 hours, Nothing on file, 0 of 1 shifts",
     // Re-shot 2026-09-24: the icon grid this pictured was replaced by the
     // triage rail. Opened through the dashboard's deep link so the status chip
     // it adds is in frame; the same image fills the two placeholders that asked

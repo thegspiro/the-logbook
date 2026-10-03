@@ -1,5 +1,59 @@
 # Screenshot currency
 
+## Watchdog check-in: rebased onto main, one new commit audited, two shots re-shot, 2026-10-03
+
+This branch had drifted five commits behind `main` (merge-base `1e352a68b`):
+`ea939c38d` ("Let a training requirement exempt members who joined before it",
+PR #2878) plus its own three merge-main commits and the final merge commit
+`812b15cd4`. Rebased cleanly — none touch a file this branch's own commits
+modify.
+
+`ea939c38d` adds requirement "grandfathering": a new `catch_up` compliance
+tone/status, a substantially rewritten `RequirementModal.tsx` (new "Existing
+Members" policy section) and a new `ChangeScopeDialog.tsx`. Checked every
+screen this sweep's diff touched against what each shot actually frames:
+
+- **`02-92-requirement-evaluation-period`** — the new "Existing Members"
+  section is appended *after* `#req-include-current-month` in the DOM; the
+  shot scrolls that field to centre and captures the dialog's visible region,
+  so the new section falls outside the frame. Unaffected.
+- **`02-16-requirements`**, `SchedulingReportsPage`'s compliance tab
+  (`03-14-scheduling-reports`), `MyTrainingPage`, `CompliancePrintPage`'s
+  `cellMark` — all gate the new UI on `catch_up_deadline`/`grandfatheringSummary`
+  being set on the data, and the seeded demo requirements carry neither (the
+  feature is new), so nothing renders differently for them. Unaffected.
+- **`02-66-compliance-matrix`** — **stale.** `ComplianceMatrixTab.tsx`'s
+  legend row iterates a **fixed** tone list that now unconditionally includes
+  `CellTone.CATCH_UP` ("Catching up"), regardless of any member's data. Every
+  capture of this card now shows a fifth legend entry the old image lacks.
+  Re-shot.
+- **`02-65-print-compliance`** — **stale.** The caption line under the printed
+  table is a static string that now unconditionally reads `✓ met · ◐ in
+  progress · ✗ not started · Exp expired · Due existing member, before their
+  catch-up deadline · — does not apply to this member`, regardless of data.
+  Re-shot.
+- `PipelineEditModals.tsx`'s new "Members already enrolled" fieldset (shown
+  only when adding a requirement to a phase, not editing a link) has no
+  existing manifest entry — nothing to re-shoot.
+
+Re-shooting `02-66` also surfaced that the demo's `Quarterly Live Fire Drill`
+figure for Bram Hollis had drifted from the `1 of 1 shifts` the alt text
+quoted to `0 of 1 shifts` (seeded shift data isn't deterministic run to run);
+corrected the alt text in both `manifest.mjs` and the two places it's applied
+in `02-training.md` to match what the new image actually shows.
+
+Re-shooting `02-65` also happened to fix an unrelated, pre-existing staleness
+nothing had caught: its summary cards had drifted from `100% COMPLETE` /
+`PARTIALLY COMPLETE` / `NOT STARTED` (what the old, 9/25-dated capture shows)
+to the `CompliancePrintPage.tsx` that ships today, which reads `m.standing`
+and labels them `COMPLIANT` / `AT RISK` / `NON-COMPLIANT`. Whatever commit
+made that change predates this sweep's window and was never caught because
+nothing had re-shot this placeholder since. Fixed as a side effect of the
+re-shoot above; not chased further than this one image.
+
+`audit_images.py --baseline scripts/screenshots/audit_baseline.txt` reports no
+new findings (582 images checked).
+
 ## Watchdog check-in: rebased onto main, three new commits audited, 2026-10-03
 
 This branch had drifted three commits behind `main` (merge-base `2f08531b9`

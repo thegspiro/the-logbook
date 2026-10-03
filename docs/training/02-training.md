@@ -946,7 +946,7 @@ At risk, Compliant — worst first, and you step through them one at a time.
 The redesign, and why the grid went, is under
 [The Compliance Matrix is a queue you can work](#the-compliance-matrix-is-a-queue-you-can-work-2026-09-05) below.
 
-![The Compliance Matrix triage rail opened from the dashboard's non-compliant deep link: the Non-compliant + at risk only chip, members grouped by standing worst first, and Bram Hollis's detail with each requirement's figure — 44 of 24 hours, Nothing on file, 1 of 1 shifts](./images/02-66-compliance-matrix.png)
+![The Compliance Matrix triage rail opened from the dashboard's non-compliant deep link: the Non-compliant + at risk only chip, members grouped by standing worst first, and Bram Hollis's detail with each requirement's figure — 44 of 24 hours, Nothing on file, 0 of 1 shifts](./images/02-66-compliance-matrix.png)
 
 > **Hint:** Use this view for annual reporting and to identify which members need attention before compliance deadlines.
 
@@ -2701,7 +2701,7 @@ ordered worst-first, and stepped through one at a time, with the numbers behind
 each status on the row: _"6 of 24 hours"_, _"Lapsed 41 days ago"_, _"Expires in
 26 days"_.
 
-![The Compliance Matrix triage rail opened from the dashboard's non-compliant deep link: the Non-compliant + at risk only chip, members grouped by standing worst first, and Bram Hollis's detail with each requirement's figure — 44 of 24 hours, Nothing on file, 1 of 1 shifts](./images/02-66-compliance-matrix.png)
+![The Compliance Matrix triage rail opened from the dashboard's non-compliant deep link: the Non-compliant + at risk only chip, members grouped by standing worst first, and Bram Hollis's detail with each requirement's figure — 44 of 24 hours, Nothing on file, 0 of 1 shifts](./images/02-66-compliance-matrix.png)
 
 ### ⚠️ Your compliance percentages may move
 
