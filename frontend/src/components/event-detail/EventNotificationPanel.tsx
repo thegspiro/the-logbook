@@ -58,7 +58,7 @@ export const EventNotificationPanel: React.FC<EventNotificationPanelProps> = ({
   timezone,
 }) => {
   return (
-    <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+    <div className="card p-6">
       <h2 className="text-theme-text-primary mb-4 flex items-center gap-2 text-lg font-medium">
         <Send className="h-5 w-5" />
         Notifications

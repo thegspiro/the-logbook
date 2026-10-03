@@ -72,7 +72,7 @@ export const EventRSVPSection: React.FC<EventRSVPSectionProps> = ({
   return (
     <>
       {/* Attendance List */}
-      <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+      <div className="card p-6">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-theme-text-primary text-lg font-medium">Attendance ({rsvps.length})</h2>
           {rsvps.length > 0 && (

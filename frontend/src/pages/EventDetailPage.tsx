@@ -1311,7 +1311,7 @@ export const EventDetailPage: React.FC = () => {
           {/* Main Content */}
           <div className="space-y-6 lg:col-span-2">
             {/* Event Details */}
-            <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+            <div className="card p-6">
               <h2 className="text-theme-text-primary mb-4 text-lg font-medium">Event Details</h2>
 
               {event.is_cancelled && (
@@ -1452,7 +1452,7 @@ export const EventDetailPage: React.FC = () => {
                 event the scheduler had touched, since its bookkeeping keys
                 count towards the length but never render. */}
             {event.custom_fields && hasVisibleCustomFields(event, trainingSessionReported) && (
-              <div className="bg-theme-surface rounded-lg border-l-4 border-purple-600 p-6 shadow-sm backdrop-blur-xs">
+              <div className="card border-l-4 border-l-purple-600 p-6">
                 <div className="mb-4 flex items-center">
                   <svg
                     className="mr-2 h-6 w-6 text-purple-600"
@@ -1648,7 +1648,7 @@ export const EventDetailPage: React.FC = () => {
 
             {/* Linked Elections */}
             {linkedElections.length > 0 && (
-              <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+              <div className="card p-6">
                 <h2 className="text-theme-text-primary mb-4 text-lg font-medium">Linked Elections</h2>
                 <div className="space-y-3">
                   {linkedElections.map((election) => (
@@ -1679,7 +1679,7 @@ export const EventDetailPage: React.FC = () => {
 
             {/* User's RSVP Status */}
             {event.user_rsvp_status && (
-              <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+              <div className="card p-6">
                 <h2 className="text-theme-text-primary mb-4 text-lg font-medium">Your RSVP</h2>
                 <div className="flex items-center space-x-4">
                   <RSVPStatusBadge status={event.user_rsvp_status} />
@@ -1778,7 +1778,7 @@ export const EventDetailPage: React.FC = () => {
           <div className="space-y-6">
             {/* Stats */}
             {stats && (
-              <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+              <div className="card p-6">
                 <h2 className="text-theme-text-primary mb-4 text-lg font-medium">Statistics</h2>
                 <div className="space-y-3">
                   <div className="flex justify-between">
@@ -1839,7 +1839,7 @@ export const EventDetailPage: React.FC = () => {
 
             {/* Event Info */}
             {hasEventInformation && (
-              <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+              <div className="card p-6">
                 <h2 className="text-theme-text-primary mb-4 text-lg font-medium">Event Information</h2>
                 <div className="space-y-3">
                   {event.requires_rsvp && (
