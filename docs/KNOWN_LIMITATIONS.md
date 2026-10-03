@@ -3995,17 +3995,17 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   numbers for every org currently using profiles — a dedicated fix, not a
   drive-by.
 - **A requirement with zero currently-applicable members renders as a
-  failing 0% (CMP4-4, LOW).** `ComplianceOfficerDashboard.tsx:433-438`
-  colors `requirement_analysis.compliance_pct` red below 50%, including the
-  `0.0` CMP4-1 now emits whenever a scoped requirement currently applies to
-  no active member. This is the per-_requirement_ counterpart to TR4-4 above
-  (which is about the per-_member_ side) — and per that entry's own
-  precedent, `complianceMatrixModel.ts`'s `rollUpRequirements` already
-  returns `null` ("not applicable") for exactly this shape at the
-  requirement level, so a fix here has working in-repo precedent to follow:
-  widen `AnnualReportRequirement.compliance_pct`
-  (`frontend/src/types/training.ts:2585`) to `number | null` and render a
-  muted "N/A" instead of a red percentage.
+  failing 0% (CMP4-4, LOW) — ✅ fixed 2026-09-29, workflow review W29-4.**
+  `ComplianceOfficerDashboard.tsx` colored `requirement_analysis.compliance_pct`
+  red below 50%, including the `0.0` CMP4-1 emits whenever a scoped
+  requirement currently applies to no active member — the per-_requirement_
+  counterpart to TR4-4 above. Fixed without widening the backend contract or
+  `AnnualReportRequirement.compliance_pct`'s type: the dashboard now checks
+  `req.members_total === 0` directly and renders a muted "Not applicable"
+  instead of reading `compliance_pct` at all in that case
+  (`ComplianceOfficerDashboard.tsx:436-437`; `docs/workflow-review/W29-compliance.md`
+  W29-4; re-verified against current code by `docs/security-review/CMP-20-compliance.md`
+  pass 6).
 
 Full detail, line citations, and the "considered, not changed" rationale for
 why CMP4-1 deliberately left the per-member zero-denominator case alone (see

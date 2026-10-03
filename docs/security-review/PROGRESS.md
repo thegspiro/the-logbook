@@ -16,6 +16,38 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (this branch, not yet numbered at commit time)** — branch
+`claude/security-review-feature20-pass6`, Feature 20 (Compliance), pass 6.
+Confirmed via the GitHub API before starting: no open PR whose head branch
+starts with `claude/security-review-` existed, and PR #2863 (Feature 19,
+Skills testing, pass 6, recorded below) is merged.
+
+Not a zero-delta pass — real commits landed in this feature's seven in-scope
+files since pass 5 (an org-local-"today" change, the shared email redesign,
+a new unrelated-feature helper in the shared `training_compliance.py`, and a
+copy-only toast change), all reviewed with no new finding. One standing flag
+(CMP4-4) was found fixed by W29's workflow review, outside this rotation.
+
+**0 fixed by this pass, 0 new findings.** Full completion gate: flake8/
+black/isort clean, `validate_migrations.py --strict` at 498 revisions/single
+head, 429 `-k compliance` backend tests passed, 138 targeted tests passed
+(identical to pass 4), frontend typecheck/lint clean. Full write-up:
+[`CMP-20-compliance.md`](./CMP-20-compliance.md)'s **Pass 6** section.
+Rotation row 20 → ✅ (pending PR merge). Next: Feature 21 (Admin hours).
+
+<details>
+<summary>Superseded — prior Open PR note (cleared: Feature 19 PR #2863 merged, before Feature 20 pass 6 started), preserved for history</summary>
+
+None. Confirmed via the GitHub API before starting this iteration: no open PR
+whose head branch starts with `claude/security-review-` exists, and PR #2863
+(Feature 19, Skills testing, pass 6, recorded below) is merged. Rotation row
+19 confirmed ✅. Next: Feature 20 (Compliance).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 6, PR #2863, merged), preserved for history</summary>
+
 **PR [#2863](https://github.com/thegspiro/the-logbook/pull/2863)** — branch `claude/security-review-feature19-pass1`, Feature 19
 (Skills testing), pass 6. Confirmed via the GitHub API before starting: no
 open PR whose head branch starts with `claude/security-review-` existed, and
@@ -52,6 +84,8 @@ passed (identical count to pass 5), frontend typecheck/lint clean. Full
 write-up: [`SKT-19-skills-testing.md`](./SKT-19-skills-testing.md)'s **Pass 6**
 section. Rotation row 19 → ✅ (pending PR merge). Next: Feature 20
 (Compliance).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 6, PR #2862, merged), preserved for history</summary>
@@ -16951,7 +16985,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
@@ -24768,3 +24802,47 @@ passed, 1 pre-existing skip (identical count to pass 5); `npm run typecheck`
 clean; `npm run lint` 0 errors/0 warnings. Full write-up:
 [`SKT-19-skills-testing.md`](./SKT-19-skills-testing.md)'s **Pass 6** section.
 Rotation row 19 → ✅ (pending PR merge). Next: Feature 20 (Compliance).
+
+### 2026-10-03 — Feature 20 (Compliance, pass 6): 0 fixed by this pass, 1 standing flag closed externally, 0 new findings
+
+Picked up this iteration of the `/security-review` rotation. Confirmed via
+the GitHub API before starting: no open PR whose head branch starts with
+`claude/security-review-` existed, and PR #2863 (Feature 19, Skills testing,
+pass 6) is merged. Rotation row 19 confirmed ✅.
+
+Not a zero-delta pass — real commits landed in Feature 20's seven in-scope
+files since pass 5's merge (PR #2583): a department-local-"today" change
+replacing `date.today()` with `resolve_org_today(db, organization_id)` across
+three call sites (all org-scoped, never client-supplied), the shared
+"solid-tab" email redesign rewriting the compliance report email onto
+`wrap_email_body`/`facts()` (CS-9's escaping re-verified intact by reading
+`wrap_email_body`'s own body, not trusted from its comment), a new
+org-scoped `count_active_requirements` helper added to the shared
+`training_compliance.py` for an unrelated onboarding-guidance feature (not
+called from this feature's own files), and a copy-only toast-wording change.
+Re-enumerated both endpoint files from scratch: 20/20 routes unchanged, all
+gated by `require_permission(...)`.
+
+**CMP4-4 is now fixed — by W29's workflow review (`docs/workflow-review/W29-compliance.md`),
+not by this rotation.** Pass 4 had flagged the backend's `0.0` fallback for a
+zero-applicable-member requirement reading as a failing red percentage, and
+deliberately left the display decision to a UI call. W29-4 made that call:
+confirmed directly in the current tree that `ComplianceOfficerDashboard.tsx`
+now renders "Not applicable" when `members_total === 0` instead of a red 0%.
+The other three standing flags this pass re-verified unchanged by direct
+code read rather than re-citing prior prose: CMP4-2 (`required_positions`
+still an unhandled applicability dimension), CMP4-3 (annual report still not
+profile-aware), CMP4-5 (`required_roles` still compared as position ids
+against a column every write path stores as rank slugs). CMP2-1 (notify
+settings unwired) and CS-8/CS-9 (attestation dual-control, monthly-report
+windowing) re-confirmed open-by-design, unchanged.
+
+**0 fixed by this pass itself, 0 new findings.** Full completion gate:
+flake8/black/isort clean on the 7 in-scope backend files,
+`validate_migrations.py --strict` at 498 revisions/single head (no
+compliance-table migration landed since pass 5), 429 `-k compliance` backend
+tests passed (1 pre-existing skip), the 6 targeted compliance-officer/report
+test files at 138 passed (identical count to pass 4), frontend
+typecheck/lint clean. Full write-up:
+[`CMP-20-compliance.md`](./CMP-20-compliance.md)'s **Pass 6** section.
+Rotation row 20 → ✅ (pending PR merge). Next: Feature 21 (Admin hours).
