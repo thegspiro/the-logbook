@@ -239,7 +239,12 @@ class Organization(Base):
     # Settings JSON for extensibility — MutableDict ensures SQLAlchemy detects
     # in-place mutations to nested dicts, preventing silent commit no-ops.
     settings = Column(MutableDict.as_mutable(JSON), default=dict)
-    active = Column(Boolean, default=True, index=True)
+    # server_default matches what the migrations give this column. Without it,
+    # a table built by create_all() — the fast-path install, and the test
+    # database — has no column default, so a raw-SQL insert that omits
+    # `active` stores NULL, and every `if not org.active` check then treats a
+    # brand-new department as deactivated.
+    active = Column(Boolean, default=True, server_default="1", index=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
