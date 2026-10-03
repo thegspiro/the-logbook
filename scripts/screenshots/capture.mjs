@@ -388,10 +388,15 @@ async function captureFrame(page, shot) {
         height: document.documentElement.scrollHeight,
       };
     }
-    // boundingBox() is document-space, so the viewport rect has to be too.
+    // boundingBox() is viewport-relative (Playwright measures it against the
+    // main frame's current viewport, not the document), so the viewport rect
+    // has to be too — offsetting it by scrollX/scrollY compared box coordinates
+    // that already started at 0 against a frame that had moved, which failed
+    // every scrolled, non-fullPage, non-selector shot with an `expect` even
+    // when the subject was genuinely on screen.
     return {
-      x: window.scrollX,
-      y: window.scrollY,
+      x: 0,
+      y: 0,
       width: window.innerWidth,
       height: window.innerHeight,
     };
