@@ -1392,8 +1392,8 @@ To enable rolling recurrence:
 2. Under **Duration**, tick **Rolling 12-month cycle**. It is a checkbox rather
    than an option in a list, and ticking it replaces the series end-date field —
    the two are alternatives, not settings you combine
-3. The note beneath confirms what will happen: "New occurrences are created
-   automatically to maintain a 12-month horizon"
+3. The note beneath confirms what will happen: "New occurrences are added
+   automatically so the series always runs 12 months ahead"
 
 ![The recurrence controls with the rolling 12-month cycle ticked](./images/04-38-rolling-recurrence.png)
 
@@ -1408,8 +1408,8 @@ Officers can now delete an entire recurring event series at once:
 3. Because the event recurs, the confirmation dialog offers a choice:
    **Delete only this event** or **Delete all events in this series**. Pick the
    second
-4. The confirm button changes to **Delete Entire Series**; click it. **Go Back**
-   leaves everything alone
+4. The confirm button changes to **Delete Entire Series**; click it. **Keep
+   Event** leaves everything alone
 
 > **Corrected 2026-08-10.** There is no "Delete Series" menu item — the choice
 > lives inside the Delete Event dialog, and only appears on a recurring event.
