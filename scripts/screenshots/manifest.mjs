@@ -10830,7 +10830,7 @@ export const SHOTS = [
     doc: "07-documents-forms.md",
     line: 639,
     anchor: "Review** on a phone, a submission open",
-    alt: "Suggestions → Review on a phone with a submission open: the list has scrolled away above, and the screen shows the submission's title, box, details and screenshots heading, then the Disposition and Internal note, above the mobile bottom navigation",
+    alt: "Suggestions → Review on a phone with a submission open: the list has scrolled away above, and the screen shows the submission's title, box and details, then the Disposition and Internal note, above the mobile bottom navigation. This submission has no attachments, so no Screenshots heading appears",
     route: "/suggestions?tab=review",
     auth: "secretary",
     viewport: "mobile",
