@@ -140,7 +140,11 @@ presence of the loop:
   - evoc_level: `EvocLevelUpdate` (training_program_id)
   - membership: `ProspectUpdate` (referred_by — the protected set lists the
     relationship name `referrer`, not the FK column `referred_by`)
-  - forms: `FormFieldUpdate` (condition_field_id — within-form ref)
+  - forms: `FormFieldUpdate` (condition_field_id — within-form ref) — **closed
+    2026-10-02** by the W60 workflow-review pass (`FormsService._condition_error`,
+    called from `add_field`/`update_field`, now refuses a `condition_field_id`
+    that isn't a field on the same form; see `docs/security-review/FORM-26-forms.md`
+    pass 5)
   - finance (6, all keep own org_id, none name-projected): `update_budget_category`
     (parent_category_id), `update_budget` (station_id), `update_approval_chain`
     (budget_category_id), `update_chain_step` (email_template_id),

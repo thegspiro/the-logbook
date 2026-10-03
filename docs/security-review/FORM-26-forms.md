@@ -1,6 +1,148 @@
 # Security Review — Forms
 
-**Prefix:** `FORM` · **Iteration:** 26 · **Reviewed:** 2026-08-27 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4) · **PR:** [#1908](https://github.com/thegspiro/the-logbook/pull/1908) (pass 1), [#2085](https://github.com/thegspiro/the-logbook/pull/2085) (pass 2)
+**Prefix:** `FORM` · **Iteration:** 26 · **Reviewed:** 2026-08-27 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03 (pass 5) · **PR:** [#1908](https://github.com/thegspiro/the-logbook/pull/1908) (pass 1), [#2085](https://github.com/thegspiro/the-logbook/pull/2085) (pass 2)
+
+---
+
+## Pass 5 (2026-10-03) — BXC-1 closed by other work; branching logic re-verified, 0 new findings
+
+**Scope:** loaded prior art (`CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+`docs/module-audit/forms.md`, `docs/app-review/forms.md`, this file's passes
+1-4) before touching code. File sizes since pass 4: `endpoints/forms.py` 784 L
+(unchanged), `public/forms.py` 236 L (unchanged), `forms_service.py` 2,985 L
+(as pass 4 left it) → 3,308 L (+323), `models/forms.py` 347 L (unchanged),
+`schemas/forms.py` 424 L → 427 L (+3). `git log --since=2026-09-13` on this
+module's five files shows exactly three commits: a repo-wide history
+merge that touches these files only as part of an unrelated, full-tree squash
+(no semantic diff to them), a date/timezone fix (`FormsService`'s "submissions
+this month" count now bounded at the department's local midnight rather than
+UTC, via `resolve_scheduling_timezone`/`local_day_start_utc` — a correctness
+fix, not security-relevant, no client-facing data exposure or auth change),
+and `4c7d69be3` ("docs(workflow-review): W60 Forms — 10 fixed, 1 flagged") —
+a workflow-review pass (different rotation, functional/UX-focused) that did
+the real work in this module since pass 4: full-depth conditional-visibility
+("branching") support, with the backend side in `forms_service.py`
+(`_condition_matches`, `_visible_field_ids`, `_condition_error`) and its
+required frontend twin `frontend/src/utils/formVisibility.ts`. All five files
+re-read in full this pass rather than diffed, and the W60 diff itself read in
+full against the two files it touched here (`forms_service.py`,
+`schemas/forms.py`).
+
+### BXC-1 — re-verified as already closed by other work (doc correction, not a new fix)
+
+Every prior pass (module audit through pass 4) left BXC-1 open as a
+correctness-only residual: `FormField.condition_field_id` was written through
+`create_form`/`add_field`/`update_field` with no same-form check, but was
+judged not a security gap because it was _never dereferenced server-side_ —
+only client-side rendering read it, against a soft `String(36)` reference
+with no DB `ForeignKey` and no org id of its own.
+
+Both halves of that reasoning changed under W60, for a functional reason
+(closing a UX hole, not a security one), and the result closes BXC-1 as a
+side effect:
+
+- **It is now dereferenced server-side.** `_visible_field_ids`/
+  `_condition_matches` walk the `condition_field_id` chain in
+  `_sanitize_submission_data` and both `required`-field validators
+  (`forms_service.py:218-232`, `:1151-1163`, `:1345-1357`) to decide which
+  fields a hidden branch excuses from their `required` check — this is new
+  server-side dereferencing of exactly the field BXC-1 was about.
+- **A same-form check now exists.** `_condition_error`
+  (`forms_service.py:493-528`) is called from both `add_field` (:989-992) and
+  `update_field` (:1037-1043) and refuses (400) a `condition_field_id` that
+  isn't a field on the same form, that names a section header, or that would
+  create a cycle (self- or mutual-reference through any chain length).
+
+Re-verified this closes the gap cleanly rather than opening a new one: every
+lookup `_condition_error`/`_visible_field_ids`/`_condition_matches` perform is
+against `form.fields` — a collection already reached through an org-scoped
+`form` (fetched by id + `organization_id` before either function is called)
+— so there is no new client-supplied id reaching an unscoped query, and no
+path from a foreign-org field id to a response or a write. The old
+reasoning's "never a leak or crash" conclusion still holds; it no longer
+needs to, because the dangling-reference case it was defending against can't
+occur any more. `docs/app-review/forms.md` (two BXC-1 notes) and
+`docs/module-audit/forms.md`'s equivalent entry still describe the old,
+now-superseded state; both corrected in this pass to point here rather than
+carry a second, stale record of a now-closed item.
+
+**Noted, not flagged (self-inflicted, not a new finding):** `_visible_field_ids`'s
+`is_shown` recurses one call per level of a branching chain. `_condition_error`
+blocks a cycle but not chain _length_, so a `forms.manage` user could in
+principle build a chain deep enough to hit Python's recursion limit on their
+own org's data. This needs hundreds of sequential single-field edits by
+someone who already holds `forms.manage` and would only affect that user's
+own organization's form — not a privilege-escalation or cross-tenant
+concern, and not a realistic UI path (the builder's own field count is
+nowhere near that scale in practice). Not flagged to `KNOWN_LIMITATIONS.md`;
+noted here so a future pass doesn't need to re-derive it.
+
+### Re-verified this pass (unchanged, all hold)
+
+- **FORM-1/FORM-2** (`_entity_in_org` gates `member_id`/`item_id`/`event_id`)
+  — re-read `_process_equipment_assignment`, `_process_event_registration`;
+  unchanged.
+- **FORM-3/FORM-6** (`MULTISELECT` option-membership validation;
+  `_is_empty_value`) — intact, and `_is_empty_value`'s required-field check
+  now gates on `_visible_field_ids` membership rather than the single-rule
+  `_is_field_visible` at the two call sites that validate a submission
+  (`submit_form`, `submit_public_form`) — confirmed this is the W60-1 fix,
+  not a weakening: a field hidden by its own rule OR by an ancestor's rule is
+  excused either way, matching the frontend's `getVisibleFieldIds`.
+- **FORM-5** (`require_authentication`/`allow_multiple_submissions`, cross-org
+  404 for a foreign-org authenticated submitter) — intact in
+  `public/forms.py`.
+- **FORM-7/FORM-9** (`safe_error_detail`/`sanitize_error_message` on every
+  client-facing error path) — all six sites (plus the seventh,
+  non-exception-shaped one from pass 2's correction) still route through one
+  or the other.
+- **FORM-8** (`apply_updates` on `update_form`/`update_field`/
+  `update_integration`) — intact; `update_field`'s new condition-clearing
+  branch (W60-3: an explicit null wipes `condition_operator`/`condition_value`
+  alongside `condition_field_id`) runs _before_ `apply_updates` and does not
+  bypass it.
+- **FORM-10** (duplicate-submission check is a locking read,
+  `.with_for_update()`, confirmed present at `forms_service.py:1332-1340`) —
+  unchanged.
+- **FORM-11** (event-request `status_token` dropped from the dict persisted to
+  `integration_result`) — unchanged; re-grepped the file for `status_token`,
+  the only hit is the comment documenting its deliberate exclusion
+  (`forms_service.py:3156`).
+- **FORM-12** (`form_id` path segment ignored by submission by-id ops) — still
+  flagged, not a security boundary (unchanged reasoning); not re-litigated.
+- **Route inventory** — all 22 `endpoints/forms.py` routes re-enumerated;
+  same permission set as pass 4 (`forms.view`/`forms.manage`, with
+  `submit_form` and `GET /member-lookup` on bare `get_current_user` by
+  design). No new route.
+- **Tenant isolation** — every by-id read/update/delete still filters
+  `organization_id` or resolves through an org-scoped parent; the new
+  branching code introduces no new client-supplied FK (it only ever reads
+  `condition_field_id` against the current, already org-scoped `form.fields`).
+- **LIKE escaping** — `get_forms`/`search_members`, unchanged, both still use
+  `like_pattern()` + `escape=LIKE_ESCAPE_CHAR`.
+- **CSV export (Pitfall #15)** — n/a, unchanged (grepped, zero matches).
+- **JSON column mutation (Pitfall #12)** — unchanged; every write to
+  `submission.integration_result`/`integration.field_mappings`/
+  `progress.action_result` remains a full-value reassignment.
+- **Schema validation** — `FormFieldUpdate.condition_operator` now carries the
+  same `pattern="^(equals|not_equals|contains|not_empty|is_empty)$"` that
+  `FormFieldCreate` already had (W60-9's tightening); `condition_value` on
+  both schemas is `max_length=500`. Defense-in-depth only — `_condition_matches`
+  already treated an unrecognised operator as "passes" (fail closed), so this
+  closes the input-validation gap without changing runtime behavior for a
+  well-formed request.
+
+### Completion gate (pass 5)
+
+| Check                                             | Result                                                         |
+| ------------------------------------------------- | -------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                     | ✅ 0 violations                                                |
+| `black --check app/ tests/ alembic/`              | ✅ clean, 1849 files unchanged                                 |
+| `isort --check-only app/ tests/ alembic/`         | ✅ clean (isort 9.0.1, matches CI's pin)                       |
+| `python3 scripts/validate_migrations.py --strict` | ✅ PASSED — 508 revisions, single head, no migration this pass |
+| `pytest tests/ -q -k form`                        | ✅ 623 passed, 1 skipped (pywebpush, environment-only)         |
+| `npm run typecheck`                               | ✅ 0 errors                                                    |
+| `npm run lint`                                    | ✅ exit 0, no warnings                                         |
 
 ---
 
