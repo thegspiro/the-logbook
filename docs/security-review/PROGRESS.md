@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Branch `claude/security-review-frontend-shared`**, Feature 34 (Frontend
-shared), pass 7 — PR opening. 0 fixes, 0 new findings; both standing HIGH
+**PR [#2915](https://github.com/thegspiro/the-logbook/pull/2915)** —
+branch `claude/security-review-frontend-shared`, Feature 34 (Frontend
+shared), pass 7. 0 fixes, 0 new findings; both standing HIGH
 findings (FE3-34-2, FE3-34-5) and FE5-34-1's flagged broader ask
 re-confirmed still open, unchanged, at their current lines. 11 files differ
 from pass 6's baseline; all read in full — a `logout()`/`endSessionLocally()`
@@ -30,7 +31,8 @@ new `api.get` calls found zero new cache-exclusion gaps. Gate:
 whole-tree typecheck/lint clean, 389 scoped frontend tests passed
 (docs-only diff — no source file changed, so the full suite was not
 required per CLAUDE.md), `validate_migrations.py --strict` passed (511
-revisions, single head), 19 + 311 backend tests passed. Full write-up:
+revisions, single head), 19 + 311 backend tests passed. Subscribed for
+CI/review events. Full write-up:
 [`FE7-34-frontend-shared.md`](./FE7-34-frontend-shared.md).
 
 <details>
