@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#PENDING](https://github.com/thegspiro/the-logbook/pull/PENDING)** —
+**PR [#2906](https://github.com/thegspiro/the-logbook/pull/2906)** —
 branch `claude/security-review-core-infra-pass5`, Feature 33 (Core
 infrastructure), pass 5. 0 fixes, 0 new findings; both of CI3-33's flagged
 owner-decision items (CI3-33-3 HIGH, CI3-33-4 LOW) re-confirmed still open,

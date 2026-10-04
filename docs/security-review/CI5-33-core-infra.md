@@ -1,6 +1,6 @@
 # Security Review — Feature 33: Core Infrastructure (pass 5)
 
-**Prefix:** `CI5` · **Iteration:** 33 · **Reviewed:** 2026-10-04 · **PR:** TBD
+**Prefix:** `CI5` · **Iteration:** 33 · **Reviewed:** 2026-10-04 · **PR:** [#2906](https://github.com/thegspiro/the-logbook/pull/2906)
 
 **Backend:** `app/core/security_middleware.py` (1,741 L, up from pass 4's
 1,732 L), `app/core/config.py` (1,341 L, up from pass 4's 1,041 L —
