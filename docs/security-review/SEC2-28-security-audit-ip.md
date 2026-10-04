@@ -1,8 +1,8 @@
 # Security Review — Security, Audit & IP
 
 **Prefix:** `SEC2` · **Iteration:** 28 · **Reviewed:** 2026-08-27 (pass 1, PR
-#1911), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4) · **PR:**
-#1911 (pass 1)
+#1911), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4, and a
+pass-4 addendum, PR #2515), 2026-10-04 (pass 5) · **PR:** #1911 (pass 1)
 
 **Backend:** `app/api/v1/endpoints/security_monitoring.py` (677 L),
 `app/api/v1/endpoints/ip_security.py` (555 L), `app/api/v1/endpoints/audit_logs.py`
@@ -1042,3 +1042,166 @@ backend tests 165/165 passed; full suite 12,490 passed, 1 skipped
 (env-only); frontend `tsc --noEmit` 0 errors, `eslint --max-warnings 10` 0
 errors/warnings) verified the same tree state this file's Pass 4 gate above
 already covers, and is not duplicated here.
+
+---
+
+## Pass 5 (2026-10-04)
+
+Watchdog pickup: confirmed via `list_pull_requests` (state=open) that no
+`claude/security-review-*` PR exists; PR #2892 (Feature 27, Integrations,
+pass 5) had already merged (`bf0a45a6`). `git log --since="2026-09-13"`
+against all nine files this doc covers plus the four frontend surfaces
+(`modules/ip-security/`, `AuditLogPage.tsx`, `ErrorMonitoringPage.tsx`,
+`adminServices.ts`) found real touches in three commits, each read in full
+rather than assumed clean from the commit message:
+
+- **`audit_logs.py` gained an actor-username resolution join** (part of an
+  unrelated elections-focused commit, `7aa34054`). Most callers of
+  `log_audit_event`/`log_event` pass `user_id` and never `username`, so the
+  stored column was NULL on the bulk of rows and the admin screen attributed
+  everything to "system." The endpoint now resolves the acting user's
+  username at read time via `_actor_join` — an **org-scoped** outer join
+  (`User.id == AuditLog.user_id AND User.organization_id == caller's org`) —
+  across `list_audit_logs`, its count query, and `get_audit_log_entry`.
+  Checked against checklist dimension 3 (XC-3) specifically because a join
+  added to an org-scoped endpoint is exactly the shape that can silently
+  widen a read: confirmed the join's org filter lives in the `ON` clause
+  (not a separate unscoped join followed by a `WHERE`), so a cross-tenant
+  `user_id` resolves to no row and `username` stays NULL rather than naming
+  the other org's user. Also checked for row multiplication/loss from the
+  join (a LEFT OUTER JOIN on a to-one relationship can't fan out, and the
+  count query uses the identical join) and for the LIKE-escape invariant
+  (`_ACTOR_USERNAME.ilike(like, escape=LIKE_ESCAPE_CHAR)` — intact, still
+  routed through `like_pattern()`/`LIKE_ESCAPE_CHAR`). All of this is
+  already guard-tested by the commit's own
+  `tests/test_w50_audit_username.py`, which includes
+  `test_list_leaves_username_null_only_without_actor` asserting the
+  cross-tenant case by name ("Cross-tenant user_id: org-scoped join must not
+  name the outsider") — re-ran it directly rather than trusting the
+  assertion's docstring. **Verified good, no finding.**
+- **`error_logs.py`'s `POST /errors/log` gained a path-based discard**
+  (`c78a3eca`, unrelated to this feature — a suggestion-box privacy fix). A
+  failure report naming the member who triggered it on the anonymous side of
+  the suggestion box used to land on the Error Monitoring page with that
+  member's identity attached. `is_excluded_client_path` (from
+  `core/error_reporting.py`, also checked) now causes the route to discard
+  such a report with a quiet 2xx rather than persisting it — read the
+  prefix-match logic directly rather than trusting the commit message; it is
+  an anchored `startswith()` over a small fixed tuple, not a regex, so there
+  is no backtracking/ReDoS surface and no new path-injection concern (the
+  path is compared, never executed or interpolated). **Verified good, no
+  finding** — this strictly removes a PII leak from the error log rather
+  than opening anything.
+- **`frontend/src/modules/ip-security/services/api.ts` was rewritten to send
+  snake_case bodies** (`b576d9ae`, a correctness fix: the request schemas
+  have no alias generator, so the camelCase bodies the service had been
+  sending were silently dropped or 422'd). Read the full diff: every field
+  is still sourced from the typed `data` argument the caller passed in (no
+  new client-controlled field reaches the backend that wasn't already
+  intended to), and the new regression tests
+  (`test_ip_security_request_schemas.py`,
+  `modules/ip-security/services/api.test.ts`) pin both the accepted
+  snake_case shape and those schemas' real rejection of the old camelCase
+  one. **Verified good, no finding.**
+- Three further commits touched only frontend copy/wording in this
+  feature's pages (`dae52284`, `12f20440`) or `adminServices.ts` far from
+  `securityService` (`653b4906`, adding a pagination helper for an unrelated
+  leave/waiver list) — read each diff; none changes a permission gate, a
+  query filter, or a request/response shape this feature's findings depend
+  on. `dae52284`'s copy change is also worth noting on its own terms: it
+  corrects `MyIPExceptionsPage.tsx`'s subtitle to stop claiming an approved
+  exception grants geo-blocked access, which is the UI-facing half of
+  SEC2-28-5 below — the backend gap SEC2-28-5 describes is unchanged, but
+  the page no longer misleads a member about what approval does.
+
+### Re-verified — every prior finding holds, nothing regressed
+
+Re-read the actual current code for each (not assumed from the doc):
+
+- **SEC-1 through SEC-9** (module audit) and **SEC2-28-1 through SEC2-28-4,
+  SEC2-28-9, SEC2-28-11** (all previously FIXED): re-confirmed intact —
+  hash v4 covers `event_category`/`severity`; genesis-head anchor + tail-
+  truncation checkpoint cross-check; `security_alerts` org-scoped on all
+  four methods; `GEOIP_FAIL_CLOSED` + private-IP-first +
+  `GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT`; keyed-row rehash fails closed +
+  `AUDIT_ALLOW_CHAIN_REHASH` break-glass; `BlockedAccessAttempt` written
+  alongside the audit log; `add_blocked_country` updates in place;
+  `audit_ship_service.py`'s watermark read still carries
+  `.with_for_update()`; the module-audit doc's corrected SEC-9 claim about
+  `get_all_active_allowed_ips` still reads accurately.
+- **SEC2-28-5** (HIGH, flagged) — still open, unchanged.
+  `IPBlockingMiddleware.__call__` (`security_middleware.py:1341`) still
+  calls `geoip.is_ip_blocked(client_ip, set())` with a hardcoded empty set
+  at the only production call site. Still needs the owner decision from
+  pass 1; still mirrored in `KNOWN_LIMITATIONS.md`.
+- **SEC2-28-6** (LOW, flagged) — still open, unchanged.
+  `request_ip_exception`'s existing-exception check
+  (`ip_security_service.py:88-104`) is still a plain read-then-insert, no
+  row lock, no unique constraint.
+- **SEC2-28-7** (HIGH, flagged) — still open, unchanged. Re-grepped
+  `securityService` (`frontend/src/services/adminServices.ts`): still
+  re-exported from `services/api.ts`, still called from zero components.
+  The `EXPORT_ENDPOINTS`/`Content-Length` gate in
+  `security_middleware.py:1716-1719` and the `organization_id=NULL`
+  brute-force-alert exclusion (`detect_brute_force` → `_add_alert`, both in
+  `services/security_monitoring.py`) are both unchanged.
+- **SEC2-28-10** (HIGH, flagged) — still open, unchanged.
+  `AuditLogger.create_log_entry`'s "last row" read
+  (`core/audit.py:206-210`) is still a plain, non-locking
+  `SELECT ... ORDER BY id DESC LIMIT 1` inside a SAVEPOINT. No schema change
+  landed for the dedicated "chain head" row this finding's correct-shaped
+  fix would need; still an owner decision, still mirrored in
+  `KNOWN_LIMITATIONS.md`.
+- **Dead detector code** (pass 3) — `analyze_request`, `_check_rate_limit`,
+  `_check_injection_patterns` in `services/security_monitoring.py`:
+  re-grepped across `app/` outside the file itself; still zero production
+  callers. Still flagged, not fixed.
+
+### Route inventory — re-enumerated, 34 routes, all correctly gated
+
+Re-counted directly from the route decorators in all four endpoint files
+(13 in `security_monitoring.py`, 12 in `ip_security.py`, 3 in
+`audit_logs.py`, 6 in `error_logs.py` = 34), rather than trusting pass 4's
+table. Every route's method, path, auth dependency, permission string, and
+org-scoping is unchanged from pass 4's table above — no route was added,
+removed, or re-gated since. (Pass 4's prose said "35 routes"; its own table
+has 34 rows, so that was a pre-existing off-by-one in the narration, not a
+route this pass found newly missing or added — noted here rather than
+silently repeated, but not itself a security finding and not retroactively
+edited into pass 4's dated section.)
+
+### No new findings this pass
+
+**0 fixed, 0 new findings.** Every code change since pass 4 was read in full
+and found to be either a correctness/privacy fix with no security
+regression (the three above, all verified good) or outside this feature's
+files. All five previously-open items (SEC2-28-5, SEC2-28-6, SEC2-28-7,
+SEC2-28-10, the dead-detector-code note) remain open, correctly described
+in both this file and `KNOWN_LIMITATIONS.md`, and still need the owner
+decisions or larger builds their write-ups describe — none is a drive-by
+fix.
+
+### Guard tests added (Pass 5)
+
+None — no code changed this pass. The three commits reviewed above already
+carry their own regression tests (`test_w50_audit_username.py`,
+`test_ip_security_request_schemas.py`,
+`modules/ip-security/services/api.test.ts`), re-run as part of this pass's
+completion gate below rather than duplicated.
+
+### Completion gate (Pass 5)
+
+No code changed this pass (re-verification only). Ran the gate against the
+full repo per this file's established practice; `npm ci` was required first
+since this worktree's `node_modules` was not yet populated (fresh worktree,
+not a defect).
+
+| Check                                                                                                                                                    | Result                              |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                            | clean                               |
+| `black --check app/ tests/ alembic/`                                                                                                                     | clean (1,853 files)                 |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                | clean                               |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                        | PASSED — 509 revisions, single head |
+| backend tests, scope (audit/audit_ship/error_log/ip_security/privilege_ceiling/security_middleware/security_monitoring/suspicious_ip/w50_audit_username) | 268 passed                          |
+| frontend `npm run typecheck` (`tsc-native.mjs --noEmit`)                                                                                                 | 0 errors                            |
+| frontend `npm run lint` (`eslint --max-warnings 10`)                                                                                                     | 0 errors/warnings                   |
