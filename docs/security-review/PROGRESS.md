@@ -16,6 +16,37 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#PENDING](https://github.com/thegspiro/the-logbook/pull/PENDING)** —
+branch `claude/security-review-core-infra-pass5`, Feature 33 (Core
+infrastructure), pass 5. 0 fixes, 0 new findings; both of CI3-33's flagged
+owner-decision items (CI3-33-3 HIGH, CI3-33-4 LOW) re-confirmed still open,
+unchanged. All 30 prior findings across CI/CI2/CI3/CI4 re-verified correct;
+CI4-33-1's `EXPORT_ENDPOINTS` drift guard test confirmed actually preventing
+drift in practice (an unrelated PR landed a new export route and the
+matching set entry in the same commit). Gate: flake8/black/isort clean,
+`validate_migrations.py --strict` passed (509 revisions, single head), 241 +
+364 scoped backend tests passed, 141 cross-cutting guard tests passed, full
+backend suite passed (12,493 passed, 1 pre-existing skip), frontend
+typecheck/lint clean (fresh worktree, `npm ci` run once). Subscribed for
+CI/review events. Full write-up:
+[`CI5-33-core-infra.md`](./CI5-33-core-infra.md).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #2900's merge, Feature 32, Locations & kiosk, pass 5 — the state this pass's PR conflicted with), preserved for history</summary>
+
+**None.** PR [#2900](https://github.com/thegspiro/the-logbook/pull/2900)
+(Feature 32, Locations & kiosk, pass 5) merged clean, touching real
+application code (1 fix — LOC5-32-1). Independently re-confirmed via
+`list_pull_requests` (state=open) at the start of this iteration that no
+`claude/security-review-*` PR exists now (only #2902 and #2903, both
+unrelated app-review/style work). Rotation row 32 stays ✅. Next: Feature 33
+(Core infrastructure) — picked up by this iteration, recorded above.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 32, Locations & kiosk, pass 5, PR #2900, before it merged), preserved for history</summary>
+
 **PR [#2900](https://github.com/thegspiro/the-logbook/pull/2900)** — branch
 `claude/security-review-locations-kiosk-pass5`, Feature 32 (Locations &
 kiosk), pass 5. 1 fix (LOC5-32-1 — the now-live `GET /locations/{id}/display`
@@ -26,6 +57,8 @@ scoped backend tests passed, full backend suite passed (15,696 passed, 21
 pre-existing skips), frontend typecheck/lint clean. Subscribed for
 CI/review events. Full write-up:
 [`LOC5-32-locations-kiosk.md`](./LOC5-32-locations-kiosk.md).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #2899's merge, Feature 31, Scheduled tasks, pass 5 — the state this pass's PR conflicted with), preserved for history</summary>
@@ -17400,7 +17433,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
-| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
+| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ✅     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
@@ -17409,6 +17442,56 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-04 — Feature 33 (Core infrastructure, pass 5) — 0 fixed, 0 flagged (new); both CI3-33 flagged items re-confirmed open
+
+Watchdog pickup. Independently re-confirmed via `list_pull_requests`
+(state=open) that no `claude/security-review-*` PR exists — only #2902
+(app-review A5, course cohorts) and #2903 (frontend card-utility style),
+both unrelated to this rotation. Rotation row 33 was the first `⬜` (rows 31
+and 32 were already `✅`, PR #2899 and PR #2900 having both merged before
+this iteration started). This worktree had no `node_modules` installed at
+all; ran `npm ci` from the repo root once (never `rm package-lock.json &&
+npm install`, per CLAUDE.md) before the frontend half of the gate.
+
+Loaded `CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`, and all four prior
+passes (`CI-33-core-infra.md`, `CI2-33-core-infra.md`, `CI3-33-core-infra.md`,
+`CI4-33-core-infra.md`) first. 1,076 commits landed on `main` since pass 4's
+merge (`cf50593c8`); of those, exactly 11 touch this feature's three declared
+files (2 in `security_middleware.py`, 1 in `database.py`, 8 in `config.py`).
+Every one of those 11 commits' diff to the in-scope file was read in full:
+a deliberate, narrowly-scoped privacy feature suppressing access-log lines
+for the anonymous suggestion-box routes (checked for — and found no —
+interaction with rate-limiting or abuse detection, which are untouched); a
+correctness fix to the UTC-stamp listener avoiding a second SELECT inside a
+SQLAlchemy refresh handler; an `EXPORT_ENDPOINTS` addition that is CI4-33-1's
+own guard test visibly doing its job (an unrelated PR added a new export
+route and the matching set entry in the same commit, which only happens if
+their local run failed the guard test first); and a 7-commit "email link
+domain" feature letting an admin override where password-reset/ballot links
+point, read in full and found solid — gated behind a permission granted to no
+default role, the override value checked against an allowlist of hosts the
+server already serves (so it cannot redirect to a look-alike domain), scoped
+to the deployment's own organization rather than the caller's, and using
+`copy.deepcopy()` for its JSON-column write (Pitfall #12-compliant).
+
+**0 new findings.** All 30 prior findings across CI/CI2/CI3/CI4 re-verified
+still correct at or near their documented locations. Both of CI3-33's
+flagged, owner-decision items re-confirmed still open, unchanged:
+`REGISTRATION_REQUIRES_APPROVAL` (HIGH) still has no reader anywhere
+(fresh grep: only the declaration and the still-inaccurate docstring);
+`RATE_LIMIT_PER_MINUTE`/`MAX_FILE_SIZE`/`STORAGE_TYPE`/`DB_POOL_MIN` (LOW)
+still have none either. Both `KNOWN_LIMITATIONS.md` rows are unchanged and
+accurate — not re-edited.
+
+Gate: flake8/black/isort clean (isort 9.0.1, already at CI's pin), 509
+Alembic revisions, single head, no duplicate ids. 241 feature-scoped +
+364 touched-since-pass-4 backend tests passed, 141 cross-cutting guard
+tests passed, full backend suite **12,493 passed, 1 pre-existing skip** (0
+failed). Frontend `npm run typecheck` and `npm run lint` both clean (0
+errors/warnings) after the fresh-worktree `npm ci`. Rotation row 33 is now
+`✅`. Next: Feature 34 (Frontend shared) — the last row before the rotation
+wraps to 00 for its next full pass.
 
 ### 2026-10-04 — Feature 32 (Locations & kiosk, pass 5) — 1 fixed, 0 flagged; LOC-3's dead endpoint is dead no longer
 
