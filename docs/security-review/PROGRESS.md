@@ -16,6 +16,35 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2899](https://github.com/thegspiro/the-logbook/pull/2899)** — branch
+`claude/security-review-scheduled-tasks-pass5`, Feature 31 (Scheduled
+tasks), pass 5. Confirmed via `list_pull_requests` (state=open) that no
+`claude/security-review-*` PR existed before starting — PR #2898 (Feature
+30, Onboarding, pass 5) had already merged. Docs-only: 0 fixed, 0 new
+findings; 5 standing findings re-confirmed unchanged, plus a cross-track
+re-verification that app-review's HIGH `CRON-40` (scheduler claim-renewal
+race) is still open in `main.py`. Gate: flake8/black/isort clean,
+`validate_migrations.py --strict` passed (509 revisions, single head), 221
+scoped backend tests passed, frontend typecheck/lint clean. Subscribed for
+CI/review events. Full write-up:
+[`CRON5-31-scheduled-tasks.md`](./CRON5-31-scheduled-tasks.md).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #2898's merge, Feature 30, Onboarding, pass 5 — the state this pass's PR conflicted with), preserved for history</summary>
+
+**None.** PR [#2898](https://github.com/thegspiro/the-logbook/pull/2898)
+(Feature 30, Onboarding, pass 5) merged clean, touching real application
+code (6 backend/frontend fixes-verified-good, 0 new findings — see the
+superseded note below for detail). Re-confirmed via `list_pull_requests`
+(state=open) at the start of this iteration that no `claude/security-review-*`
+PR exists. Rotation row 30 stays ✅. Next: Feature 31 (Scheduled tasks) —
+picked up by this iteration, recorded above in the Log.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 30, Onboarding, pass 5, PR #2898, before it merged), preserved for history</summary>
+
 **PR [#2898](https://github.com/thegspiro/the-logbook/pull/2898)** — branch
 `claude/security-review-onboarding-pass5`,
 Feature 30 (Onboarding), pass 5. Watchdog pickup: independently confirmed via
@@ -42,6 +71,8 @@ flake8/black/isort clean (isort 9.0.1, CI's pin), `validate_migrations.py
 --strict` passed (509 revisions, single head), 255 scoped backend tests
 passed, `npm ci` (fresh worktree) then frontend typecheck/lint clean, 442
 scoped frontend tests passed. Subscribed for CI/review events.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 29, Reports & analytics, pass 7, PR #2897, after it merged), preserved for history</summary>
@@ -17346,6 +17377,72 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-04 — Feature 31 (Scheduled tasks, pass 5) — 0 fixed, 0 new findings; app-review's CRON-40 re-verified still open
+
+Watchdog pickup. Confirmed via `list_pull_requests` (state=open) that no
+`claude/security-review-*` PR existed before starting — PR #2898 (Feature
+30, Onboarding, pass 5) had already merged. Cleared the Open PR row for it
+above (real application code, not docs-only, so recorded rather than
+silently cleared — see the superseded note above). Rotation row 31 was the
+first `⬜`.
+
+Not a zero-delta pass — `scheduled_tasks.py` grew from pass 4's 6,084 L/44
+runners to 6,452 L/47 runners: three new tasks
+(`run_property_return_reminders`, `run_inventory_audit_digest`,
+`run_prospect_attendance_advance`) plus a repo-wide rewiring of every email
+send in this file onto a new shared `email_policy.py` preference module and
+a new `org_timezone.py` org-local-"today" module. All three new tasks and
+both new helper modules read in full against all seven checklist
+dimensions, not spot-checked: all org-scoped correctly (two via
+`_for_each_org`'s active-org filter, the third — `prospect_attendance_
+advance` — reproduces the same `Organization.active.isnot(False)` +
+per-org commit/rollback shape by hand, citing CRON2-31-10's precedent), no
+injection surface, HTML-escaped free text, and the new digest task
+correctly avoids the CRON-31-7 anti-pattern (only records its weekly-send
+timestamp when the email actually succeeded). `main.py`'s own +27-line diff
+since pass 4 is unrelated to the scheduler (a link-domain listener and a
+public branding router sharing the same `lifespan()` function) — the
+scheduler's own code has zero diff since pass 4.
+
+**Closed a gap between the two review tracks rather than finding a new
+defect.** `docs/app-review/scheduled-tasks.md`'s pass 5 (2026-09-09) flagged
+HIGH — `main.py`'s claim renewal is an unconditional `SET`, not a
+compare-and-swap, so a worker that loses its scheduler claim during an
+overrunning first batch takes it back without ever learning it lost it,
+permanently double-running every task. This feature's own pass 4
+(2026-09-13, four days later) reviewed the same code and did not name that
+finding. Re-verified directly against current `main.py`: still present,
+unchanged, already mirrored in `KNOWN_LIMITATIONS.md` as HIGH/Open — not
+re-applied here, since the project already made the "needs an owner
+decision on the claim-renewal protocol" call and nothing changes that
+analysis. Noted for the record (and flagged directly to the user in this
+iteration's report): a complete, tested fix for this exact finding exists
+unmerged on branch `claude/cron-40-scheduler-claim-cas`, authored the same
+day as this pass, with no pull request open — belongs to the app-review
+track, not touched or adopted here.
+
+Every other standing finding re-confirmed open, unchanged at its current
+(shifted) line number: CRON2-31-12 (`MeetingActionItem` branch still has no
+org-active filter), CRON2-31-13 (`admin_hours_auto_close` still has no
+audit trail), CRON-31-7 (`run_end_of_shift_summary` can still mark "sent"
+without delivery), CRON-31-8 (`run_event_reminders` still stamps a
+zero-recipient interval, by design), CRON4-31-2 (manual `/run-task` still
+has no per-task lock against the scheduler's own run). Registry re-verified
+47/47 via direct Python import, no drift. `system.run_tasks` re-confirmed
+granted to no `DEFAULT_POSITIONS`/`OPERATIONAL_RANKS` entry.
+
+Gate: flake8/black/isort clean over `app/ tests/ alembic/` (isort 9.0.1, CI's
+pin, already installed); `validate_migrations.py --strict` passed (509
+revisions, single head — one migration landed in this window,
+`20260924_2304_b1eb0458782a` for `inventory_nfc_audit_digests`, reviewed and
+sound); 221 scoped backend tests passed across 19 files; `npm ci` (fresh
+worktree) then frontend `tsc --noEmit`/`eslint --max-warnings 10` both 0
+errors. Full write-up:
+[`CRON5-31-scheduled-tasks.md`](./CRON5-31-scheduled-tasks.md).
+
+Rotation row 31 → ✅ (pending PR merge). Next: Feature 32 (Locations &
+kiosk).
 
 ### 2026-10-04 — Feature 28 (Security, audit & IP, pass 5) — 0 fixed, 0 new findings
 
