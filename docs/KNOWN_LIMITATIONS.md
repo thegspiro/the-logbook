@@ -3776,16 +3776,8 @@ same reason as above: converging the two requires either rewriting
 per-member loop, or explicitly re-scoping what each report claims to
 measure — a product/architecture decision, not a drive-by.
 
-## CRON2-31-12/13 — Two Scheduled-Task Gaps Left Open by This Rotation's Pass (2026-08-27)
+## CRON2-31-13 — A Scheduled-Task Gap Left Open by This Rotation's Pass (2026-08-27)
 
-- **`run_action_item_reminders` has no org loop at all**
-  (`scheduled_tasks.py`), so it was never in scope for the CRON-2
-  deactivated-org fix or its regression test — it queries
-  `MeetingActionItem`/`MinutesActionItem` platform-wide with no join back
-  to `Organization.active`. Latent today (nothing sets `Organization.active
-= False` yet). Closing it means joining two different action-item tables
-  through two different parent tables (`Meeting`, `MeetingMinutes`) to
-  `Organization` — a structural change, not a drive-by.
 - **`run_admin_hours_auto_close` has no audit trail**
   (`admin_hours_service.py`'s `auto_close_stale_sessions`) — force-closes a
   member's open admin-hours session (a money-adjacent paid-hours state
@@ -3794,7 +3786,7 @@ measure — a product/architecture decision, not a drive-by.
   the admin-hours feature to make deliberately.
 
 See `docs/security-review/CRON2-31-scheduled-tasks.md` for the full pass
-(12 findings fixed, these 2 flagged).
+(12 findings fixed, 2 flagged, one of those since fixed).
 
 ## CRON-31-7/8 — Two More Scheduled-Task Dedup Trade-offs, and a Redis-Down Fallback (2026-08-31)
 

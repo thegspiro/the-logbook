@@ -904,7 +904,7 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
 
     from app.models.meeting import ActionItemStatus, MeetingActionItem
     from app.models.minute import ActionItem as MinutesActionItem
-    from app.models.minute import MinutesActionItemStatus
+    from app.models.minute import MeetingMinutes, MinutesActionItemStatus
 
     todays = await _org_todays(db)
     fallback_today = org_today(None)
@@ -913,9 +913,14 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
     three_days = max(todays.values(), default=fallback_today) + timedelta(days=3)
     total_reminders = 0
 
+    # Both sweeps run platform-wide, so each joins back to its organization
+    # and skips a deactivated one, as the per-org jobs do (CRON2-31-12).
     # ── Meeting action items ──
     meeting_items = await db.execute(
-        select(MeetingActionItem).where(
+        select(MeetingActionItem)
+        .join(Organization, Organization.id == MeetingActionItem.organization_id)
+        .where(
+            Organization.active.isnot(False),
             MeetingActionItem.status.in_(
                 [ActionItemStatus.OPEN.value, ActionItemStatus.IN_PROGRESS.value]
             ),
@@ -964,7 +969,10 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
     minutes_items = await db.execute(
         select(MinutesActionItem)
         .options(selectinload(MinutesActionItem.minutes))
+        .join(MeetingMinutes, MeetingMinutes.id == MinutesActionItem.minutes_id)
+        .join(Organization, Organization.id == MeetingMinutes.organization_id)
         .where(
+            Organization.active.isnot(False),
             MinutesActionItem.status.in_(
                 [
                     MinutesActionItemStatus.PENDING.value,
