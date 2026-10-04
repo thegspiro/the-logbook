@@ -261,7 +261,7 @@ export const MemberAuditHistoryPage: React.FC = () => {
 
         {/* Timeline List */}
         {entries.length === 0 && !loading ? (
-          <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+          <div className="card p-6">
             <div className="py-12 text-center">
               <div className="text-theme-text-muted mb-4 text-4xl">&#128221;</div>
               <p className="text-theme-text-primary mb-2 text-lg font-semibold">No audit history found</p>
