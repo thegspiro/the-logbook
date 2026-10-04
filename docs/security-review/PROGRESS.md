@@ -16,6 +16,20 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2900](https://github.com/thegspiro/the-logbook/pull/2900)** — branch
+`claude/security-review-locations-kiosk-pass5`, Feature 32 (Locations &
+kiosk), pass 5. 1 fix (LOC5-32-1 — the now-live `GET /locations/{id}/display`
+redacts `event_description`, matching its public sibling), 0 flagged. Gate:
+flake8/black/isort clean, `validate_migrations.py --strict` passed (509
+revisions, single head), repo-tenancy guard suite passed (75 tests), 564
+scoped backend tests passed, full backend suite passed (15,696 passed, 21
+pre-existing skips), frontend typecheck/lint clean. Subscribed for
+CI/review events. Full write-up:
+[`LOC5-32-locations-kiosk.md`](./LOC5-32-locations-kiosk.md).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #2899's merge, Feature 31, Scheduled tasks, pass 5 — the state this pass's PR conflicted with), preserved for history</summary>
+
 **None.** PR [#2899](https://github.com/thegspiro/the-logbook/pull/2899)
 (Feature 31, Scheduled tasks, pass 5) merged clean (`7a7d6622`,
 "security(scheduled-tasks): pass 5"), touching only
@@ -26,6 +40,8 @@ clearing this row. Independently re-confirmed via `list_pull_requests`
 (state=open) at the start of this iteration that no
 `claude/security-review-*` PR exists now. Rotation row 31 stays ✅. Next:
 Feature 32 (Locations & kiosk) — picked up by this iteration.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 31, Scheduled tasks, pass 5, PR #2899, before it merged), preserved for history</summary>
