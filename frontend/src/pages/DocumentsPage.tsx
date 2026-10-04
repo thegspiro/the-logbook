@@ -615,7 +615,9 @@ const DocumentsPage: React.FC = () => {
                         className={`h-8 w-8 ${folder.color || 'text-amber-700 dark:text-amber-400'} transition-transform group-hover:scale-110`}
                       />
                       <div className="min-w-0 flex-1">
-                        <h3 className="text-theme-text-primary truncate font-semibold">{folder.name}</h3>
+                        <h3 className="text-theme-text-primary line-clamp-2 font-semibold break-words">
+                          {folder.name}
+                        </h3>
                         <p className="text-theme-text-muted mt-1 text-sm">{folder.description || 'No description'}</p>
                         <p className="text-theme-text-muted mt-2 text-xs">
                           {folder.document_count} {folder.document_count === 1 ? 'document' : 'documents'}
@@ -671,7 +673,7 @@ const DocumentsPage: React.FC = () => {
                       <div className="flex items-start space-x-3">
                         <File className="h-8 w-8 shrink-0 text-amber-700 dark:text-amber-400" />
                         <div className="min-w-0 flex-1">
-                          <h3 className="text-theme-text-primary truncate font-semibold">{doc.name}</h3>
+                          <h3 className="text-theme-text-primary line-clamp-2 font-semibold break-words">{doc.name}</h3>
                           {doc.description && (
                             <p className="text-theme-text-muted mt-1 line-clamp-2 text-sm">{doc.description}</p>
                           )}
@@ -693,7 +695,7 @@ const DocumentsPage: React.FC = () => {
                                 e.stopPropagation();
                                 void handleDownloadDocument(doc);
                               }}
-                              className="text-theme-text-muted p-1 transition-all hover:text-amber-700 sm:opacity-0 sm:group-hover:opacity-100 dark:hover:text-amber-400"
+                              className="text-theme-text-muted p-1 transition-all hover:text-amber-700 dark:hover:text-amber-400 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100"
                               title="Download document"
                             >
                               <Download className="h-4 w-4" />
@@ -705,7 +707,7 @@ const DocumentsPage: React.FC = () => {
                                 e.stopPropagation();
                                 setDeleteConfirm(doc.id);
                               }}
-                              className="text-theme-text-muted p-1 transition-all hover:text-red-800 sm:opacity-0 sm:group-hover:opacity-100 dark:hover:text-red-400"
+                              className="text-theme-text-muted p-1 transition-all hover:text-red-800 dark:hover:text-red-400 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100"
                               title="Delete document"
                             >
                               <Trash2 className="h-4 w-4" />

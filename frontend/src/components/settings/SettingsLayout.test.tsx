@@ -27,6 +27,7 @@ interface Overrides {
   onSectionChange?: (key: Key) => void;
   onSubPageChange?: (key: Page) => void;
   width?: 'standard' | 'wide';
+  inHub?: boolean;
 }
 
 function renderLayout({
@@ -35,6 +36,7 @@ function renderLayout({
   onSectionChange = vi.fn(),
   onSubPageChange = vi.fn(),
   width,
+  inHub,
 }: Overrides = {}): void {
   render(
     <SettingsLayout<Key, Page>
@@ -46,6 +48,7 @@ function renderLayout({
       navLabel="Test settings sections"
       title="Test Settings"
       {...(width ? { width } : {})}
+      {...(inHub ? { inHub } : {})}
     >
       <p>Content for {activeSection}</p>
     </SettingsLayout>
@@ -156,6 +159,30 @@ describe('SettingsLayout', () => {
       expect(column.className).toContain('max-w-[1600px]');
       expect(container.className).toContain('max-w-[1600px]');
       expect(container.className).not.toContain('max-w-6xl');
+    });
+  });
+
+  // On a phone the shell sits inside AppLayout's padded main column, so a side
+  // padding of its own was a second gutter: with the body card and a section's
+  // group cards inside it, a setting row was left 185px of a 320px screen.
+  // Inside an administration hub it keeps that padding, so it lines up with the
+  // hub header above it. Desktop padding is the same either way.
+  describe('side gutter', () => {
+    it('adds no side padding of its own on a phone', () => {
+      renderLayout();
+
+      const { container } = widthCaps();
+      expect(container.className).toContain('px-0');
+      expect(container.className).not.toMatch(/(^|\s)px-4(\s|$)/);
+      expect(container.className).toContain('sm:px-6');
+    });
+
+    it('keeps the hub gutter when it renders inside an administration hub', () => {
+      renderLayout({ inHub: true });
+
+      const { container } = widthCaps();
+      expect(container.className).toMatch(/(^|\s)px-4(\s|$)/);
+      expect(container.className).toContain('sm:px-6');
     });
   });
 

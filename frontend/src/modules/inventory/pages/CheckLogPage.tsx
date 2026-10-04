@@ -219,9 +219,7 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
               onClick={() => setWindowDates(option)}
               aria-pressed={windowDates === option}
               className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                windowDates === option
-                  ? 'bg-blue-600 text-white'
-                  : 'text-theme-text-muted hover:text-theme-text-primary'
+                windowDates === option ? 'bg-red-800 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
               }`}
             >
               Last {option}
@@ -241,7 +239,7 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
               aria-pressed={effectiveView === 'grid'}
               className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
                 effectiveView === 'grid'
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-red-800 text-white'
                   : 'text-theme-text-muted hover:text-theme-text-primary'
               }`}
             >
@@ -253,7 +251,7 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
               aria-pressed={effectiveView === 'log'}
               className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
                 effectiveView === 'log'
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-red-800 text-white'
                   : 'text-theme-text-muted hover:text-theme-text-primary'
               }`}
             >

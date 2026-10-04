@@ -109,3 +109,13 @@ class TestLocationDisplayInfo:
 
         assert len(result.current_events) == 2
         assert result.has_overlap is True
+
+    async def test_event_description_is_redacted(self, monkeypatch):
+        """LOC5-32-1: this endpoint gained a real caller (RoomCheckInPage's
+        `getCurrentCheckIns`) without closing the redaction gap its public
+        sibling already closed. `_event()`'s `description` is non-empty, so a
+        regression that reinstates `event_description=event.description`
+        fails this rather than passing by coincidence on an empty field."""
+        result = await _call(monkeypatch, [_event()])
+
+        assert result.current_events[0]["event_description"] is None

@@ -1559,7 +1559,9 @@ async def lifespan(app: FastAPI):
         """Claim a one-time background task using Redis SETNX. Returns True if claimed."""
         try:
             if cache_manager.is_connected and cache_manager.redis_client:
-                key = f"startup_task:{task_name}"
+                from app.core.background_claim import claim_key
+
+                key = claim_key(task_name)
                 claimed = await cache_manager.redis_client.set(
                     key, str(_worker_pid), nx=True, ex=ttl
                 )
@@ -1568,6 +1570,35 @@ async def lifespan(app: FastAPI):
             pass
         # If Redis is unavailable, fall back to running on all workers
         return True
+
+    async def _renew_background_task_claim(task_name: str, ttl: int) -> bool:
+        """Extend this worker's claim; False means it no longer holds it.
+
+        The renewal is a compare-and-swap against the stored PID rather than a
+        plain ``SET``, because a plain SET silently takes the claim back from
+        whichever worker owns it now — see app/core/background_claim.py for the
+        trace. A caller that gets False must stop the work it thought it owned.
+
+        An unreachable Redis returns True, matching the fail-open posture of
+        `_try_claim_background_task` directly above: with no Redis there is no
+        coordination to be had either way, and stopping instead would silence
+        every scheduled notification on every worker during a Redis blip —
+        strictly worse than the duplicate sends it would avoid.
+        """
+        from app.core.background_claim import renew_claim
+
+        if not (cache_manager.is_connected and cache_manager.redis_client):
+            return True
+        try:
+            return await renew_claim(
+                cache_manager.redis_client, task_name, str(_worker_pid), ttl
+            )
+        except Exception as e:
+            logger.warning(
+                f"Could not renew the '{task_name}' claim (worker PID "
+                f"{_worker_pid}): {e}. Continuing — see _renew_background_task_claim."
+            )
+            return True
 
     # Defer audit log verification to background (only in production, don't block startup)
     if settings.ENVIRONMENT == "production":
@@ -1688,17 +1719,31 @@ async def lifespan(app: FastAPI):
         interval = 60  # Check every minute for responsive delivery
         claim_ttl = interval + 60  # Redis claim TTL
         await asyncio.sleep(10)  # Let the server finish starting
-        # Retry claiming periodically — a previous worker may have died
-        # leaving a stale Redis key that hasn't expired yet.
-        while not await _try_claim_background_task(
-            "scheduled_email_loop", ttl=claim_ttl
-        ):
-            logger.debug(
-                f"Scheduled email loop waiting for claim (worker PID {_worker_pid}) "
-                f"- another worker may be handling it, retrying in {interval}s"
-            )
-            await asyncio.sleep(interval)
-        logger.info(f"Scheduled email processor started (worker PID {_worker_pid})")
+        # Outer loop: a worker that loses the claim returns here and waits for
+        # it again rather than exiting. Exiting would leave the deployment with
+        # no email processor at all once the winner dies, which is a worse
+        # failure than the duplicate-processing this guard exists to stop.
+        while True:
+            # Retry claiming periodically — a previous worker may have died
+            # leaving a stale Redis key that hasn't expired yet.
+            while not await _try_claim_background_task(
+                "scheduled_email_loop", ttl=claim_ttl
+            ):
+                logger.debug(
+                    f"Scheduled email loop waiting for claim (worker PID {_worker_pid}) "
+                    f"- another worker may be handling it, retrying in {interval}s"
+                )
+                await asyncio.sleep(interval)
+            logger.info(f"Scheduled email processor started (worker PID {_worker_pid})")
+            await _run_scheduled_email_cycles(interval, claim_ttl)
+
+    async def _run_scheduled_email_cycles(interval: int, claim_ttl: int) -> None:
+        """Process due emails until this worker stops owning the claim.
+
+        Returns when the claim is gone, which sends the caller back to waiting
+        for it. Split out from the loop above so that standing down is a plain
+        ``return`` rather than a flag threaded through two nested loops.
+        """
         while True:
             try:
                 from app.core.database import async_session_factory
@@ -1714,16 +1759,18 @@ async def lifespan(app: FastAPI):
                         )
             except Exception as e:
                 logger.error(f"Scheduled email loop error: {e}")
-            # Renew the Redis claim so other workers don't start a duplicate loop
-            if cache_manager.is_connected and cache_manager.redis_client:
-                try:
-                    await cache_manager.redis_client.set(
-                        "startup_task:scheduled_email_loop",
-                        str(_worker_pid),
-                        ex=claim_ttl,
-                    )
-                except Exception:
-                    pass
+            # Extend the claim only while it is still ours. A plain SET here
+            # takes it back from whichever worker holds it now, which seats a
+            # second processor permanently.
+            if not await _renew_background_task_claim(
+                "scheduled_email_loop", claim_ttl
+            ):
+                logger.warning(
+                    f"Scheduled email processor standing down (worker PID "
+                    f"{_worker_pid}): the claim is no longer ours. Another "
+                    "worker has it; waiting to reacquire."
+                )
+                return
             await asyncio.sleep(interval)
 
     _scheduler_task = asyncio.create_task(_scheduled_email_loop())
@@ -1735,7 +1782,6 @@ async def lifespan(app: FastAPI):
     async def _scheduled_task_loop():
         """Background loop that runs periodic tasks (shift reminders, event
         reminders, etc.) so they work out-of-the-box without external cron."""
-        from app.core.database import async_session_factory
         from app.services.scheduled_tasks import TASK_INTERVALS_SECONDS, TASK_RUNNERS
 
         # Built from TASK_INTERVALS_SECONDS (the single source of truth in
@@ -1750,17 +1796,39 @@ async def lifespan(app: FastAPI):
         claim_ttl = check_interval + 120
         await asyncio.sleep(30)  # Let server fully start
 
-        while not await _try_claim_background_task(
-            "scheduled_task_loop", ttl=claim_ttl
-        ):
-            logger.debug(
-                f"Scheduled task loop waiting for claim " f"(worker PID {_worker_pid})"
+        # Outer loop: a worker that loses the claim comes back here and waits
+        # for it rather than exiting, so the deployment still has a runner once
+        # the winner dies. `task_schedule` is kept across the wait on purpose —
+        # its timestamps are `time.monotonic()`, which stays valid, and
+        # rebuilding it would make every task due at once all over again.
+        while True:
+            while not await _try_claim_background_task(
+                "scheduled_task_loop", ttl=claim_ttl
+            ):
+                logger.debug(
+                    f"Scheduled task loop waiting for claim "
+                    f"(worker PID {_worker_pid})"
+                )
+                await asyncio.sleep(check_interval)
+
+            logger.info(f"Scheduled task runner started " f"(worker PID {_worker_pid})")
+            await _run_scheduled_task_cycles(
+                task_schedule, TASK_RUNNERS, check_interval, claim_ttl
             )
-            await asyncio.sleep(check_interval)
 
-        logger.info(f"Scheduled task runner started " f"(worker PID {_worker_pid})")
+    async def _run_scheduled_task_cycles(
+        task_schedule: list,
+        task_runners: dict,
+        check_interval: int,
+        claim_ttl: int,
+    ) -> None:
+        """Run due tasks until this worker stops owning the claim.
 
+        Returns on claim loss, which sends the caller back to waiting for it.
+        """
         import time
+
+        from app.core.database import async_session_factory
 
         while True:
             now = time.monotonic()
@@ -1772,7 +1840,7 @@ async def lifespan(app: FastAPI):
                 if (now - last_run) < interval:
                     continue
 
-                runner = TASK_RUNNERS.get(task_name)
+                runner = task_runners.get(task_name)
                 if not runner:
                     continue
 
@@ -1800,16 +1868,32 @@ async def lifespan(app: FastAPI):
 
                 entry[2] = now
 
-            # Renew Redis claim
-            if cache_manager.is_connected and cache_manager.redis_client:
-                try:
-                    await cache_manager.redis_client.set(
-                        "startup_task:scheduled_task_loop",
-                        str(_worker_pid),
-                        ex=claim_ttl,
+                # Renew inside the batch, not only at the end of it. On the
+                # first pass every task is due at once — `last_run` seeds to
+                # 0.0 and `time.monotonic()` is seconds since boot, so on a
+                # host up longer than the longest interval the whole set runs
+                # back to back, each one iterating every organization and
+                # sending email. That batch can outlast the TTL, and a lapsed
+                # claim is what lets a second worker in. Renewing per task
+                # keeps the claim alive through a long batch, so the overrun
+                # stops being a handover at all.
+                if not await _renew_background_task_claim(
+                    "scheduled_task_loop", claim_ttl
+                ):
+                    logger.warning(
+                        f"Scheduled task runner standing down mid-batch "
+                        f"(worker PID {_worker_pid}) after '{task_name}': the "
+                        "claim is no longer ours. Another worker has it."
                     )
-                except Exception:
-                    pass
+                    return
+
+            if not await _renew_background_task_claim("scheduled_task_loop", claim_ttl):
+                logger.warning(
+                    f"Scheduled task runner standing down (worker PID "
+                    f"{_worker_pid}): the claim is no longer ours. Another "
+                    "worker has it; waiting to reacquire."
+                )
+                return
             await asyncio.sleep(check_interval)
 
     _cron_task = asyncio.create_task(_scheduled_task_loop())
@@ -1841,13 +1925,21 @@ async def lifespan(app: FastAPI):
                 await _task
             except asyncio.CancelledError:
                 pass
-    # Release Redis claims so the next worker starts immediately.
+    # Release our own Redis claims so the next worker starts immediately
+    # instead of waiting out the TTL. Ownership-checked for the same reason
+    # renewal is: an unconditional DEL frees a claim a *live* sibling worker is
+    # still running under, and several workers then race to replace it. This
+    # worker drops only what it holds.
     if cache_manager.is_connected and cache_manager.redis_client:
-        try:
-            await cache_manager.redis_client.delete("startup_task:scheduled_email_loop")
-            await cache_manager.redis_client.delete("startup_task:scheduled_task_loop")
-        except Exception:
-            pass
+        from app.core.background_claim import release_claim
+
+        for _claim in ("scheduled_email_loop", "scheduled_task_loop"):
+            try:
+                await release_claim(
+                    cache_manager.redis_client, _claim, str(_worker_pid)
+                )
+            except Exception as e:
+                logger.debug(f"Could not release the '{_claim}' claim: {e}")
     await ws_manager.stop_listener()
     await geoip_invalidation_listener.stop()
     await link_domain_listener.stop()

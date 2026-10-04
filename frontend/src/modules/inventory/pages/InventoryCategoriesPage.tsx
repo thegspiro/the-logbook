@@ -221,7 +221,10 @@ const InventoryCategoriesPage: React.FC = () => {
           </p>
         </div>
         {canManage && (
-          <button onClick={openCreateModal} className="btn-info btn-md flex items-center gap-2">
+          <button
+            onClick={openCreateModal}
+            className="btn-info btn-md flex shrink-0 items-center gap-2 whitespace-nowrap"
+          >
             <Plus className="h-4 w-4" /> Add Category
           </button>
         )}

@@ -11,7 +11,7 @@ interface AdminHoursSectionProps {
 
 const AdminHoursSection: React.FC<AdminHoursSectionProps> = ({ adminHoursSummary, adminHoursCompliance }) => {
   return (
-    <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+    <div className="card p-6">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-theme-text-primary text-lg font-semibold">Administrative Hours</h2>
         <Link

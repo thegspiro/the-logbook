@@ -845,7 +845,7 @@ function RoomCard({
         <div className="flex min-w-0 items-center gap-3">
           <DoorOpen className="text-theme-text-muted h-4 w-4 shrink-0" />
           <div className="min-w-0">
-            <p className="text-theme-text-primary truncate text-sm font-medium">
+            <p className="text-theme-text-primary line-clamp-2 text-sm font-medium">
               {room.name}
               {room.room_number ? ` #${room.room_number}` : ''}
             </p>
@@ -870,7 +870,7 @@ function RoomCard({
             </button>
           )}
           {(onEdit || onDelete) && (
-            <div className="flex items-center gap-0.5 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+            <div className="flex items-center gap-0.5 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100">
               {onEdit && (
                 <button
                   onClick={() => onEdit(room)}
@@ -903,7 +903,7 @@ function RoomCard({
         >
           {copied ? <Check className="h-3 w-3 text-green-500" /> : <Monitor className="h-3 w-3" />}
           <span className="truncate font-mono">/display/{room.display_code}</span>
-          {!copied && <Copy className="h-3 w-3 sm:opacity-0 sm:group-hover:opacity-100" />}
+          {!copied && <Copy className="h-3 w-3 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100" />}
         </button>
       )}
       {showQR && kioskUrl && (
@@ -1458,7 +1458,7 @@ export default function LocationsPage() {
                         No rooms added yet. Add rooms for QR check-in and event scheduling.
                       </p>
                     ) : (
-                      <div className="card-grid gap-2">
+                      <div className="card-grid items-start gap-2 [--card-grid-min:18rem]">
                         {stationRooms.map((room) => (
                           <RoomCard
                             key={room.id}
@@ -1485,7 +1485,7 @@ export default function LocationsPage() {
           {rooms.has('__other__') && (
             <div className="card p-5">
               <h3 className="text-theme-text-primary mb-3 text-lg font-semibold">Other Locations</h3>
-              <div className="card-grid gap-2">
+              <div className="card-grid items-start gap-2 [--card-grid-min:18rem]">
                 {(rooms.get('__other__') || []).map((room) => (
                   <RoomCard
                     key={room.id}

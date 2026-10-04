@@ -291,7 +291,7 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
                     type="button"
                     onClick={() => onRequestDelete(item.id)}
                     disabled={saving}
-                    className="text-theme-text-muted flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md transition-all hover:text-red-600 sm:opacity-0 sm:group-hover:opacity-100 dark:hover:text-red-400"
+                    className="text-theme-text-muted flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md transition-all hover:text-red-600 dark:hover:text-red-400 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100"
                     aria-label="Delete item"
                   >
                     <Trash2 className="h-4 w-4" />

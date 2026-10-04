@@ -465,10 +465,20 @@
        would need each track to be 1rem wider than a third of the row minus
        gaps, which cannot fit for any gap up to gap-6 (1.5rem).
 
-     The gap is a default; a `gap-*` at the call site overrides it. */
+     The gap is a default; a `gap-*` at the call site overrides it.
+
+     A grid of compact cards, with no action footer to fit, may lower the
+     floor with `[--card-grid-min:18rem]`: at 18rem two columns fit a 1024px
+     tablet's content area, where 20rem left one 640px-wide card per row.
+     Only where every title still fits: on the past-events, course, shift
+     template and platoon cards it clamped titles that 20rem showed whole,
+     and a full title beats a second column. */
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, max(20rem, calc(100% / 3 - 1rem))), 1fr));
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(min(100%, max(var(--card-grid-min, 20rem), calc(100% / 3 - 1rem))), 1fr)
+  );
 }
 
 /* --- Buttons --- (#4 press effect, #5 shadow elevation, #6 smooth multi-property transitions) */
@@ -554,46 +564,40 @@
 
 /* --- Standardized Button Sizes (#79) --- */
 @utility btn-sm {
-  @apply rounded-md px-2.5 py-1.5 text-xs;
+  @apply inline-flex items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs;
 
-  /* Grow to the 44px touch minimum on phones. Applied inside the query so
-     desktop button density is untouched; inline-flex centres the label in the
-     taller box, which a plain min-height would leave sitting at the top for
-     anchors styled as buttons. */
+  /* Flex at every width, not only on phones. Preflight makes an <svg> a
+     block, so in a block button an icon stacked above its label from 768px
+     up — the store catalog's Edit and Archive drew that way on every tablet.
+     Grow to the 44px touch minimum on phones only, so desktop button density
+     is untouched. */
   @media (max-width: 767px) {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
     min-height: 44px;
   }
 }
 
 @utility btn-md {
-  @apply rounded-lg px-4 py-2 text-sm;
+  @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm;
 
-  /* Grow to the 44px touch minimum on phones. Applied inside the query so
-     desktop button density is untouched; inline-flex centres the label in the
-     taller box, which a plain min-height would leave sitting at the top for
-     anchors styled as buttons. */
+  /* Flex at every width, not only on phones. Preflight makes an <svg> a
+     block, so in a block button an icon stacked above its label from 768px
+     up — the store catalog's Edit and Archive drew that way on every tablet.
+     Grow to the 44px touch minimum on phones only, so desktop button density
+     is untouched. */
   @media (max-width: 767px) {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
     min-height: 44px;
   }
 }
 
 @utility btn-lg {
-  @apply rounded-lg px-6 py-3 text-base;
+  @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-6 py-3 text-base;
 
-  /* Grow to the 44px touch minimum on phones. Applied inside the query so
-     desktop button density is untouched; inline-flex centres the label in the
-     taller box, which a plain min-height would leave sitting at the top for
-     anchors styled as buttons. */
+  /* Flex at every width, not only on phones. Preflight makes an <svg> a
+     block, so in a block button an icon stacked above its label from 768px
+     up — the store catalog's Edit and Archive drew that way on every tablet.
+     Grow to the 44px touch minimum on phones only, so desktop button density
+     is untouched. */
   @media (max-width: 767px) {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
     min-height: 44px;
   }
 }

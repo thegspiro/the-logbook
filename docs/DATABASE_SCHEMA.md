@@ -9747,7 +9747,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `logo` | LONGTEXT | yes |  |  |  |
 | `type` | VARCHAR(50) | yes |  | `'fire_department'` |  |
 | `settings` | JSON | yes |  | `dict()` |  |
-| `active` | BOOL | yes | IDX | `True` |  |
+| `active` | BOOL | yes | IDX | `1` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 

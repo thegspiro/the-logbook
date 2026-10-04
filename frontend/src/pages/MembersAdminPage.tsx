@@ -505,7 +505,7 @@ export const MembersAdminPage: React.FC = () => {
               onClick={() => setViewMode('by-member')}
               className={`min-h-11 border px-4 py-2 text-sm font-medium ${
                 viewMode === 'by-member'
-                  ? 'z-10 border-blue-600 bg-blue-600 text-white'
+                  ? 'z-10 border-red-800 bg-red-800 text-white'
                   : 'bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover'
               } focus:ring-theme-focus-ring rounded-l-lg focus:z-10 focus:ring-2`}
             >
@@ -516,7 +516,7 @@ export const MembersAdminPage: React.FC = () => {
               onClick={() => setViewMode('by-role')}
               className={`min-h-11 border px-4 py-2 text-sm font-medium ${
                 viewMode === 'by-role'
-                  ? 'z-10 border-blue-600 bg-blue-600 text-white'
+                  ? 'z-10 border-red-800 bg-red-800 text-white'
                   : 'bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover'
               } focus:ring-theme-focus-ring rounded-r-lg focus:z-10 focus:ring-2`}
             >

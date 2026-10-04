@@ -1,7 +1,195 @@
 # Application Review — Course Cohorts & Syllabus
 
 **Prefix:** `CC` · **Iteration:** A5 · **Reviewed:** 2026-08-05 (pass 1),
-2026-08-08 (pass 2)
+2026-08-08 (pass 2), 2026-10-03 (pass 3)
+
+> **Finding ids continue at CC-5.** CC-1…CC-4 are taken by passes 1–2 below.
+> Note the `CC-` prefix is shared with other review tracks — the same collision
+> recorded against `CRON-`, `SF-` and `AUTH-` elsewhere.
+
+## Pass 3 (2026-10-03) — the shift endpoint
+
+`POST /cohorts/{id}/shift` and `shift_remaining` did not exist at pass 2: the
+endpoint count went 14 → 15 and the service 1442 → 1544 lines. The rest of the
+module was re-verified rather than re-derived. **2 fixes, 1 flagged.**
+
+Both fixes are in the newest code, and both are the same shape as CC-4 — a path
+added later that diverges from the convention established beside it in the same
+file. Worth noting for its own sake: the two defects are each invisible to the
+tests that covered the endpoint, by construction.
+
+### CC-5 — MED — A shift across a daylight-saving transition moved every class an hour in local time — ✅ FIXED
+
+**What:** `shift_remaining` added the delta to the stored **UTC instant**:
+
+```python
+cohort_class.scheduled_start = cohort_class.scheduled_start + delta
+```
+
+**Where:** `backend/app/services/course_cohort_service.py:952` (pre-fix).
+
+**Impact:** classes are stored UTC (`training.py:1060`, `DateTime(timezone=True)`)
+and displayed local, so adding exact elapsed hours holds the UTC clock still and
+moves the wall clock whenever the offset changes underneath it. Measured for
+`America/New_York`:
+
+|                                | local                        | UTC               |
+| ------------------------------ | ---------------------------- | ----------------- |
+| 19:00 class, 29 Oct 2026 (EDT) | `2026-10-29 19:00`           | `23:00Z`          |
+| after `days=7`, as written     | **`2026-11-05 18:00`** (EST) | `23:00Z`          |
+| after `days=7`, intended       | `2026-11-05 19:00`           | `00:00Z` next day |
+
+A recruit school delayed a week over the November change has every remaining
+class an hour earlier than the officer set and than members were told, and
+`_sync_event` pushes the wrong time onto the linked event, so the RSVP and
+check-in window move with it. March shifts it the other way.
+
+**Reachable from the UI, not just the API.** `CohortDetailPage.tsx:134` calls
+`courseCohortService.shiftClasses` from a days input, so this is the ordinary
+path an officer takes to push a cohort back after a snow day — not an
+integrator-only surface.
+
+This is precisely the failure pass 1 singled out as _avoided_ — it praised
+`resolve_class_datetimes` for computing the local date first and called the
+naive alternative out by name: _"adding `timedelta` to a UTC datetime would
+silently shift every class after the transition by an hour."_ The newer endpoint
+reintroduced it, 40 lines from a `_get_org_timezone` helper it did not call.
+
+**Fix:** `_shift_local_days` converts to the organization's zone, adds the delta
+there (arithmetic on an aware datetime moves the naive fields and leaves the zone
+alone, so the wall clock is preserved), and converts back — the same local-first
+order `resolve_class_datetimes` uses. It also normalizes the input: a value read
+back from the driver is naive-and-already-UTC while one built in Python is aware,
+and both reach this function.
+
+**Guarded:** `test_a_shift_across_the_dst_change_keeps_the_local_class_time`
+asserts the wall clock and additionally asserts the offset really changed, so it
+cannot pass against the broken arithmetic. Mutation-verified: restoring
+`value + delta` fails it with `'2026-11-05 18:00' == '2026-11-05 19:00'`.
+
+**Why two passes missed it:** the endpoint postdates them. But the existing
+tests would not have caught it either — they shift 1 Oct → 8 Oct, which crosses
+no transition, and assert `.date()` only, never the hour.
+
+### CC-6 — MED — An attendance refusal part-way down the list left the cohort half-shifted and committed — ✅ FIXED
+
+**What:** the loop mutated each class and then called `_sync_event`, which goes
+through `EventService.update_event` — and that **commits on the same session**
+(`event_service.py:946`). `update_event` also raises the attendance lock for any
+change to `start_datetime`/`end_datetime` on a finalized event
+(`event_service.py:875-880`, `ATTENDANCE_SENSITIVE_UPDATE_FIELDS`).
+
+**Where:** `course_cohort_service.py:951-956` (pre-fix); the endpoint's
+`attendance_lock_http_error` mapping at `course_cohorts.py:477`.
+
+**Impact:** the classes are processed `order_by(sequence)`, so the first
+finalized class aborts the run — after every earlier class has already been
+moved _and committed_ by the previous iteration's `update_event`. The officer
+gets a 409 whose text says the change was refused, and the schedule is in fact
+half-moved, with no indication of how far it got (`moved` is never returned on
+the error path). It is reachable in ordinary use rather than exotically: the
+lock bites on classes that already happened, and `from_sequence` exists
+specifically to reach back into those (CC-7).
+
+**Fix:** `_assert_shiftable` resolves the batch's events in one org-scoped query
+and raises the same sentinel refusal before anything is mutated, so the
+operation either moves every class or none. The error is built from a count and
+fixed text only, per `attendance_locked_error`'s contract that the sentence
+reaches the client verbatim.
+
+Honest bound on the fix: it closes the refusal path, which is the one that
+triggers in practice. It does not make the loop atomic in general — that would
+need `update_event` not to commit, and it is shared by many callers — so a
+failure from another cause can still leave a partial shift. Recorded rather
+than papered over.
+
+**Guarded:** `test_a_finalized_class_refuses_the_shift_before_moving_anything`
+asserts the raise, that `update_event` is never awaited, that the first class's
+datetime is untouched, and that nothing committed. Mutation-verified by removing
+the pre-check call.
+
+### CC-7 — LOW — `from_sequence` silently includes classes that already happened — 🚩 FLAGGED
+
+**What:** the sequence bound **replaces** the future-only bound rather than
+narrowing it:
+
+```python
+if data.from_sequence:
+    query = query.where(CourseCohortClass.sequence >= data.from_sequence)
+else:
+    query = query.where(CourseCohortClass.scheduled_start > now)
+```
+
+**Where:** `course_cohort_service.py:985-988`.
+
+**API-only today.** The shift control in `CohortDetailPage.tsx:134` sends
+`days` and nothing else, so no UI reaches this branch — it is available to any
+`training.manage` holder calling the endpoint directly, and to integrators.
+That lowers how often it can bite without settling whether the behaviour is
+wanted, which is why it is a flag rather than a fix.
+
+**Impact:** the method's own docstring claimed _"Only future, non-cancelled
+classes move. Classes that already happened keep their dates."_ That is true of
+the `else` branch and false of the other one, so `from_sequence=1` moves the
+whole cohort including delivered classes. With CC-6 fixed, any such class whose
+attendance is **finalized** now refuses the batch; one that happened but was
+never finalized still moves silently.
+
+**Why flagged, not fixed:** whether that is wrong is a product call, and the two
+readings lead to opposite changes. Re-shifting "from class 5 onward" after a
+syllabus correction, including a class that slipped past its date unfinalized,
+is a plausible intended use — in which case the filter is right. If an officer
+should never be able to move a delivered class, the fix is to intersect the two
+bounds, which narrows existing behaviour. I corrected the **docstring** to
+describe what the code does (a doc fix, in scope) and left the behaviour alone.
+
+**Also re-verified — and pass 2's count is now wrong.** Pass 2 flagged _three_
+catalog-course joins as lacking the CC-1 org predicate. Checked individually,
+it is **two**:
+
+| Site                            | Join predicate                              | State               |
+| ------------------------------- | ------------------------------------------- | ------------------- |
+| `list_cohorts` (`:1415`)        | FK only                                     | still open          |
+| `_syllabus` / detail (`:1499`)  | FK **and** `TrainingCourse.organization_id` | closed since pass 2 |
+| `list_member_cohorts` (`:1601`) | FK only                                     | still open          |
+
+Unchanged in substance: not a live leak, for the reason pass 2 gave — the FK is
+org-validated at write and never repointed — and still the CC-1 remediation not
+carried across for consistency. CC-2 (location UI) and CC-3 (`fold=0` NIT) are
+unchanged.
+
+### Pass 3 completion gate
+
+| Check                            | Result                                                                                 |
+| -------------------------------- | -------------------------------------------------------------------------------------- |
+| `npm run typecheck`              | ✅ 0 errors (no frontend change)                                                       |
+| `flake8 app/ tests/`             | ✅ 0 violations                                                                        |
+| `black --check app/ tests/`      | ✅ 1342 files unchanged                                                                |
+| `isort --check-only app/ tests/` | ✅ clean                                                                               |
+| `npm run lint`                   | ✅ 0 errors                                                                            |
+| Docs link check                  | ✅ 419 files, 0 broken                                                                 |
+| Dependent backend tests          | ✅ **196 passed** — the eight files importing `CourseCohortService` or naming a cohort |
+| Whole backend suite              | ✅ **15,689 passed, 21 skipped, 0 failed** in 8:43                                     |
+
+**A note on the sandbox, because an earlier version of this section drew the
+wrong conclusion from it and a later reader should not inherit that.** The
+whole-suite run first came back as 472 failures in 10:37, and this file recorded
+that the suite had outgrown the session's limits and blamed DB-backed tests
+added over the preceding three weeks. That was wrong on both counts. Two stale
+things in the review sandbox accounted for all of it:
+
+| Stale                                                                                           | Symptom                                                                                                                                       | Resolution                                              |
+| ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| Schema built against `main` of 2026-09-10, not rebuilt after the checkout moved on 1165 commits | 472 failures (`Unknown column 'nfc_badge_check_in_enabled'`) **and** most of the runtime — a test erroring through the ORM is not a fast test | `alembic upgrade head`, then `scripts/repair_schema.py` |
+| starlette **1.6.0** installed against the repo's pinned **1.7.0**                               | 2 failures: malformed-port host rejection, and an `anyio` deprecation raised on importing the test client                                     | `pip install starlette==1.7.0`                          |
+
+After both, the same third ran **2 failed → then 0** in 2:43, and the full suite
+finished in 8:43. Neither fix touched the repository: `requirements.txt` already
+pins the right starlette, and the host-spoofing assertion is correct for that
+pin — relaxing it to match a stale sandbox would have deleted a real security
+check. The lesson worth keeping is procedural: **rebuild the schema after
+moving the checkout**, and distrust a mass failure in files the diff cannot
+reach before concluding anything about the suite.
 
 ## Pass 2 (2026-08-08) — six-lens sweep
 

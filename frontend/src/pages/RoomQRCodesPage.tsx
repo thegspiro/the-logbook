@@ -175,14 +175,18 @@ function QRCard({
     <div
       className={`card flex flex-col items-center text-center print:border-gray-300 ${isSign ? 'qr-sign p-8' : 'qr-card p-4'}`}
     >
-      <div className={`flex items-center gap-1.5 ${isSign ? 'mb-1' : 'mb-2'}`}>
-        <Icon className="text-theme-text-muted h-4 w-4 shrink-0 print:hidden" aria-hidden="true" />
-        <h3
-          className={`text-theme-text-primary font-semibold print:text-black ${isSign ? 'text-3xl font-bold' : 'text-sm'}`}
-        >
-          {title}
-        </h3>
-      </div>
+      {/* The icon is inline in the heading rather than a flex sibling, so a
+          title that wraps keeps it beside its first line instead of leaving it
+          stranded at the left edge of a centred block. */}
+      <h3
+        className={`text-theme-text-primary font-semibold print:text-black ${isSign ? 'mb-1 text-3xl font-bold' : 'mb-2 text-sm'}`}
+      >
+        <Icon
+          className="text-theme-text-muted mr-1.5 inline h-4 w-4 align-[-0.125em] print:hidden"
+          aria-hidden="true"
+        />
+        {title}
+      </h3>
       {isSign && subtitle && <p className="text-theme-text-secondary mb-4 text-lg print:text-black">{subtitle}</p>}
       {/* bg-white intentional for QR code readability in dark mode */}
       <div ref={qrContainerRef} className="rounded-lg bg-white p-2">

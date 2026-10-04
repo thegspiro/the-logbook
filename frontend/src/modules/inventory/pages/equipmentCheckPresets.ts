@@ -59,19 +59,72 @@ export const POSITIONS = [
   'volunteer',
 ] as const;
 
+/**
+ * Apparatus type codes a checklist can be written for, in the backend's own
+ * vocabulary (`DefaultApparatusType` in app/models/apparatus.py), which is also
+ * every type the basic-apparatus screen offers. A type-level checklist matches
+ * a vehicle by this exact code, so the list must be the stored one: it used to
+ * offer "tower" and "chief", which no vehicle can carry, and omit quint, squad,
+ * command and the rest, which a department could not write a checklist for.
+ */
 export const APPARATUS_TYPES = [
   'engine',
   'ladder',
-  'ambulance',
+  'quint',
   'rescue',
+  'ambulance',
+  'squad',
   'tanker',
   'brush',
-  'tower',
   'hazmat',
-  'boat',
-  'chief',
+  'command',
   'utility',
+  'boat',
+  'atv',
+  'staff',
+  'reserve',
+  'other',
 ] as const;
+
+const APPARATUS_TYPE_LABELS: Record<string, string> = {
+  engine: 'Engine',
+  ladder: 'Ladder / Aerial',
+  quint: 'Quint',
+  rescue: 'Rescue',
+  ambulance: 'Ambulance',
+  squad: 'Squad',
+  tanker: 'Tanker / Tender',
+  brush: 'Brush / Wildland',
+  hazmat: 'HazMat',
+  command: 'Command',
+  utility: 'Utility',
+  boat: 'Boat',
+  atv: 'ATV / UTV',
+  staff: 'Staff vehicle',
+  reserve: 'Reserve',
+  other: 'Other',
+};
+
+export function apparatusTypeLabel(code: string): string {
+  return APPARATUS_TYPE_LABELS[code] ?? code.charAt(0).toUpperCase() + code.slice(1).replace(/_/g, ' ');
+}
+
+/**
+ * The type choices for one department: the standard codes, then any custom
+ * type its own vehicles carry, then the value already saved on the checklist
+ * being edited — kept even when it is no longer offered (an older checklist
+ * written for "tower"), so opening it does not silently blank the field.
+ */
+export function apparatusTypeOptions(
+  fleetTypes: readonly string[],
+  currentType: string
+): { value: string; label: string }[] {
+  const codes: string[] = [...APPARATUS_TYPES];
+  for (const code of [...fleetTypes, currentType]) {
+    if (code && !codes.includes(code)) codes.push(code);
+  }
+  return codes.map((value) => ({ value, label: apparatusTypeLabel(value) }));
+}
 
 // ============================================================================
 // Vehicle presets — pre-built compartment templates by apparatus type
