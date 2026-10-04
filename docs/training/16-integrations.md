@@ -661,7 +661,9 @@ matched by the report's **Email** column against their Logbook email (ignoring
 case and spaces; deleted members are skipped). A member who cannot be matched
 yet is listed under **User Mappings**, and is matched automatically on a later
 sync once their email is on file — unless an officer has already set or cleared
-that mapping by hand. Synced completions wait under **Imports** for an officer
+that mapping by hand. To map one by hand, pick the member from the user's
+dropdown under **Mappings → Users** _(2026-10-04)_; their waiting completions
+move to that member immediately. Synced completions wait under **Imports** for an officer
 to import them, as for every provider.
 
 > **Screenshot needed:**

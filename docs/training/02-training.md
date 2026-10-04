@@ -1895,12 +1895,23 @@ training categories**. Picking one saves immediately; setting it back to **Not
 mapped** unmaps it. Cards still unmapped are outlined in amber, and a mapped one
 carries a green **Mapped** — with **(auto)** when the sync matched it for you.
 
-The **Users** tab lists each external user with their email and external id, and
-**Mapped** / **(auto)** once matched. An unmapped user shows a **Map User**
-button that, as of 2026-10-04, does nothing — the same dead-button defect the
-category dropdown fixed. Users are matched automatically by email on each sync,
-so the practical fix for an unmatched member is to put the email the provider
-uses on their profile; a hand mapping still needs the API.
+The **Users** tab lists each external user with their email and external id,
+**Mapped** / **(auto)** once matched, and a **dropdown of your members** (name and
+member number) _(2026-10-04)_. Picking a member saves immediately, and that
+user's completions still waiting under **Imports** move to that member at once —
+including ones older than the provider's sync window, which a later sync would
+never bring back. Setting it back to **Not mapped** unmaps the user and takes
+their waiting completions off the member again. Completions already imported keep
+the member they were imported to. A deleted member cannot be chosen.
+
+Users are also matched automatically by email on each sync, so putting the email
+the provider uses on the member's profile still works — but once you set or clear
+a mapping by hand, sync leaves it alone.
+
+> **The dropdown replaced a dead button** _(2026-10-04)_. Until then an unmapped
+> user showed a **Map User** button with nothing behind it, and the Users tab came
+> back **empty** for any provider where at least one user was already mapped (a
+> server error in the list, hidden by the screen). Both are fixed.
 
 > **The dropdown replaced a dead button** _(2026-08-11)_. Until then an unmapped
 > category showed a **Map Category** button with nothing behind it: clicking it

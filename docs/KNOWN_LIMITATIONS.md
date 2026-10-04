@@ -495,8 +495,14 @@ guides can point at one place and an owner can decide it.
   Training Integrations page, an unmapped provider user shows a **Map User**
   button with no click handler (`ExternalTrainingPage.tsx`). A provider user
   that does not match a member by email can only be mapped through the API
-  (`PATCH /training/external/providers/{id}/user-mappings/{mapping_id}`). The
-  training guides say so. **Open — needs a mapping dialog.**
+  (`PATCH /training/external/providers/{id}/user-mappings/{mapping_id}`).
+  ✅ **Resolved 2026-10-04:** each user now has a member dropdown, as categories
+  do. The fix also repaired two endpoint defects the button had hidden: both
+  user-mapping endpoints selected the `User.full_name` property as a column and
+  answered 500 once any mapping had a member (so the Users tab came back
+  empty), and an explicit `internal_user_id: null` was ignored, so a mapping
+  could not be cleared. Mapping now also moves the user's not-yet-imported
+  records to the member (`test_external_training_user_mapping.py`).
 - **Email Templates — the redesign banner still says to press Reset.** The
   blue banner on Communications → Email Templates reads "Templates you have
   never edited already use it — press Reset on any you have customised to

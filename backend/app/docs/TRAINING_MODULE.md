@@ -1651,7 +1651,11 @@ POST   /api/v1/training/external/providers/{id}/imports/bulk
 4. **Process Records**: Each record is normalized and stored as ExternalTrainingImport
 5. **Auto-Map Users**: System attempts to match external users by email
 6. **Auto-Map Categories**: System attempts to match categories by name
-7. **Review Mappings**: Admin reviews and fixes unmapped users/categories
+7. **Review Mappings**: Admin reviews and fixes unmapped users/categories from
+   each card's dropdown. Mapping a user by hand (`PATCH …/user-mappings/{id}`)
+   also moves that user's not-yet-imported records to the chosen member, or
+   detaches them on an explicit `internal_user_id: null`; imported records keep
+   their member _(2026-10-04)_
 8. **Import Records**: Records are imported as TrainingRecords
 
 ### Provider Configuration

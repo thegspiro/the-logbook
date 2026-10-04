@@ -650,10 +650,13 @@ After syncing, you may need to map external users and categories to your interna
   members skipped). An unmatched user is retried on every later sync, so adding
   the member's email to their profile is usually the fix — unless an officer has
   set or cleared that mapping by hand
-- **There is no working way to map a user by hand in the app.** An unmapped user
-  shows a **Map User** button with nothing behind it (verified 2026-10-04);
-  mapping one manually still means calling
-  `PATCH /training/external/providers/{id}/user-mappings/{mapping_id}`
+- **Map a user by hand** _(2026-10-04)_ from the **Users** tab under Mappings:
+  each external user has a dropdown of your members, and picking one saves
+  immediately. The user's completions still waiting under Imports move to that
+  member at once; **Not mapped** unmaps them and detaches those waiting
+  completions. Imported completions are never moved. (Until 2026-10-04 this was
+  a **Map User** button with nothing behind it, and the Users tab came back empty
+  once any user was mapped.)
 
 #### Category Mapping
 

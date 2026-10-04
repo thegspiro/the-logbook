@@ -140,9 +140,10 @@ will meet first:
   training records. Approving that credit needs `training.manage`.
 - **Target Solutions.** It syncs hourly from its Training Records API,
   matching members by email, with a daily 30-day review.
-- **Mapping provider users.** The **Map User** button on External Training
-  does nothing yet. Users who do not match by email must be mapped through
-  the API.
+- **Mapping provider users.** Under External Training → **Mappings →
+  Users**, pick the member from each user's dropdown; their waiting
+  completions move to that member at once. (This replaced a **Map User**
+  button that did nothing, fixed on 2026-10-04.)
 
 ### Scheduling and admin hours
 

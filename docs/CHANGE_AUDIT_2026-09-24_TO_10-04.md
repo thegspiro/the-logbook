@@ -508,7 +508,8 @@ is no longer true). The new entries:
 
 - New: _Found by the September 24 – October 4 Documentation Pass_, with five
   items:
-  - the dead **Map User** button on External Training;
+  - the dead **Map User** button on External Training (since fixed in this
+    pull request, with the two endpoint defects it hid);
   - the stale Reset banner on Email Templates (since fixed in this pull
     request);
   - NFC hashes depending on `ENCRYPTION_SALT`;
