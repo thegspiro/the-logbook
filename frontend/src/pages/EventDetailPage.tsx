@@ -1387,9 +1387,9 @@ export const EventDetailPage: React.FC = () => {
                 event the scheduler had touched, since its bookkeeping keys
                 count towards the length but never render. */}
             {event.custom_fields && hasVisibleCustomFields(event, trainingSessionReported) && (
-              <div className="card border-l-4 border-l-purple-600 p-6">
+              <div className="card p-6">
                 <div className="mb-4 flex items-center">
-                  <BookOpen className="mr-2 h-6 w-6 text-purple-600" aria-hidden="true" />
+                  <BookOpen className="mr-2 h-5 w-5" aria-hidden="true" />
                   <h2 className="text-theme-text-primary text-lg font-medium">
                     {event.event_type === EventTypeEnum.TRAINING ? 'Training Session Details' : 'Event Details'}
                   </h2>
