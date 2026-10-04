@@ -211,6 +211,13 @@ const ComplianceTab: React.FC<{ startDate: string; endDate: string; tz: string }
               <div key={a.apparatusId} className="card p-4">
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-theme-text-primary text-sm font-semibold">{a.apparatusName}</span>
+                  {/* Zero checks on a truck nothing applies to is not the same
+                  as zero checks on one somebody skipped. */}
+                  {a.hasChecklist === false && (
+                    <span className="bg-theme-surface text-theme-text-secondary rounded-full px-1.5 py-0.5 text-xs">
+                      No checklist applies
+                    </span>
+                  )}
                   {a.hasDeficiency && (
                     <span className="rounded-full bg-red-500/10 px-1.5 py-0.5 text-xs text-red-700 dark:text-red-400">
                       Deficiency

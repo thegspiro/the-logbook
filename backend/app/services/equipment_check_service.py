@@ -5012,11 +5012,24 @@ class EquipmentCheckService:
         # All org apparatus drive the per-apparatus deficiency stats below;
         # this set already covers every apparatus referenced by the checks.
         all_app_q = await self.db.execute(
-            select(Apparatus).where(
+            select(Apparatus)
+            .options(selectinload(Apparatus.apparatus_type))
+            .where(
                 Apparatus.organization_id == organization_id,
             )
         )
         all_apparatus = all_app_q.scalars().all()
+
+        # An apparatus no checklist reaches has nothing to be missing, and
+        # without this its zero checks read the same as a truck nobody
+        # checked. Same resolution the readiness board uses.
+        from app.services.equipment_readiness_service import (
+            EquipmentReadinessService,
+        )
+
+        with_checklists = await EquipmentReadinessService(
+            self.db
+        ).apparatus_with_checklists(organization_id, all_apparatus)
 
         # Per-apparatus stats
         app_stats: Dict[str, Dict[str, Any]] = {}
@@ -5034,6 +5047,7 @@ class EquipmentCheckService:
                 "fail_count": 0,
                 "has_deficiency": bool(a.has_deficiency),
                 "deficiency_since": a.deficiency_since,
+                "has_checklist": aid in with_checklists,
             }
 
         total_items_sum = 0
