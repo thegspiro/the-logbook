@@ -177,9 +177,19 @@ class TrainingCategory(Base):
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
-    # Relationships
+    # Relationships. ``remote_side`` belongs on the many-to-one side: placed on
+    # the collection, as it once was here, it turns ``subcategories`` into the
+    # parent and ``parent_category`` into the child list. No cascade: a parent
+    # going away leaves its children as top-level categories, which is what
+    # the FK's SET NULL says too.
+    parent_category = relationship(
+        "TrainingCategory",
+        remote_side=[id],
+        back_populates="subcategories",
+    )
     subcategories = relationship(
-        "TrainingCategory", backref="parent_category", remote_side=[id]
+        "TrainingCategory",
+        back_populates="parent_category",
     )
 
     __table_args__ = (
