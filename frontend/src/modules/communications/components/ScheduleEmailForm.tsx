@@ -255,7 +255,7 @@ const ScheduleEmailForm: React.FC<ScheduleEmailFormProps> = ({ templates, onClos
           <button
             type="submit"
             disabled={isSaving}
-            className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-md bg-red-800 px-4 py-2 text-sm text-white hover:bg-red-900 disabled:opacity-50"
           >
             <Send className="h-4 w-4" />
             {isSaving ? 'Scheduling...' : 'Schedule Email'}

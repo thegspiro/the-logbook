@@ -4252,7 +4252,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => openAddSurface(key)}
-                  className="flex min-h-7.5 flex-shrink-0 items-center gap-1.5 rounded-md bg-blue-600 px-2.5 text-xs font-semibold text-white hover:bg-blue-700"
+                  className="flex min-h-7.5 flex-shrink-0 items-center gap-1.5 rounded-md bg-red-800 px-2.5 text-xs font-semibold text-white hover:bg-red-900"
                 >
                   <Plus className="h-3.5 w-3.5" aria-hidden="true" /> Add items
                 </button>
@@ -4579,7 +4579,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                       </button>
                       <button
                         type="button"
-                        className="min-h-[44px] rounded-md bg-blue-600 px-4 text-sm font-semibold text-white disabled:opacity-40"
+                        className="min-h-[44px] rounded-md bg-red-800 px-4 text-sm font-semibold text-white disabled:opacity-40"
                         disabled={!bulkPasteValues[key]?.trim() || bulkItemPending[key]}
                         onClick={() => void handleBulkPaste(idx)}
                       >
@@ -4689,7 +4689,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                             type="button"
                             disabled={bulkItemPending[key] ?? false}
                             onClick={() => void handleBulkPaste(idx, { source: 'compose', checkType: composeType })}
-                            className="flex min-h-7 items-center gap-1 rounded-md bg-blue-600 px-3 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
+                            className="flex min-h-7 items-center gap-1 rounded-md bg-red-800 px-3 text-xs font-semibold text-white hover:bg-red-900 disabled:opacity-40"
                           >
                             {(bulkItemPending[key] ?? false) && <Loader2 className="h-3 w-3 animate-spin" />}
                             {(bulkItemPending[key] ?? false) ? 'Adding…' : 'Add all'}
@@ -5470,7 +5470,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               type="button"
               onClick={() => void handleSave(true)}
               disabled={saving || !publishReady}
-              className="flex min-h-10 items-center gap-2 rounded-lg bg-blue-600 px-3.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 max-md:min-h-11 max-md:min-w-11"
+              className="flex min-h-10 items-center gap-2 rounded-lg bg-red-800 px-3.5 text-sm font-semibold text-white transition-colors hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50 max-md:min-h-11 max-md:min-w-11"
             >
               <CheckCircle2 className="h-4 w-4" /> Publish
             </button>
@@ -6305,7 +6305,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void applyCsvImport()}
-                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                className="rounded-md bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
               >
                 Import {csvPreview.length} Items
               </button>
