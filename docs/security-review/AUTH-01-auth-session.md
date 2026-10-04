@@ -932,6 +932,17 @@ have the identical exposure), not specific to TOTP replay, and the right
 fix (an idempotency-key mechanism, or a "re-show last-issued codes" path) is
 a product decision this pass is not making unilaterally in an auth path.
 
+**Follow-up (2026-10-04): FIXED with an idempotency key**, the option the
+owner chose. `verify-setup` and `recovery-codes` accept `Idempotency-Key`; a
+retry with the same key and code from the same member within ten minutes is
+answered with the set already issued, before the spent code is checked. The
+replay is bound to the member, the endpoint and a hash of the code (a
+different code under the same key is a 422), the stored response is
+encrypted with the application key, and a set replaced since or MFA turned
+off since is never replayed. Requests without the header behave as before.
+See `app/core/issued_secrets.py` and
+`backend/tests/test_mfa_recovery_code_replay.py`.
+
 **Guard test:** `TestTotpConsumedAcrossMfaRoutes` in
 `backend/tests/test_auth_mfa_endpoints.py` —
 `test_code_used_at_recovery_codes_route_cannot_replay_at_login` drives the

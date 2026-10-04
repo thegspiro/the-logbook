@@ -128,6 +128,17 @@ require MFA for the whole department from **Settings → Authentication**
   (`POST /auth/mfa/recovery-codes`, requires a current TOTP code). The new set
   replaces the old one (previous codes stop working) and is shown once. The
   Security card warns when codes are running low (≤3) or exhausted.
+- **A lost response is retry-safe (AUTH-7).** `verify-setup` and
+  `recovery-codes` accept an `Idempotency-Key` header. A retry with the same
+  key and the same authenticator code, from the same member, within 10
+  minutes, returns the set already issued instead of failing on the spent
+  code. A key reused with a different code is refused (422), and a set
+  replaced since, or MFA turned off since, is never replayed. The issued
+  response is held encrypted with the application key, in Redis when it is
+  connected (so any worker can answer the retry) and otherwise in a bounded
+  per-process map (`app/core/issued_secrets.py`). Requests without the
+  header behave as before. `MfaSettingsCard` sends one key per attempt and
+  reuses it when the same code is submitted again.
 
 ### Admin MFA Reset
 

@@ -6,6 +6,7 @@ Endpoints for user authentication, registration, and session management.
 
 import copy
 import secrets
+from typing import Annotated
 from urllib.parse import urlencode
 
 from fastapi import (
@@ -13,6 +14,7 @@ from fastapi import (
     BackgroundTasks,
     Cookie,
     Depends,
+    Header,
     HTTPException,
     Request,
     status,
@@ -34,6 +36,9 @@ from app.core.captcha import require_captcha
 from app.core.config import settings
 from app.core.database import database_manager, get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
+from app.core.issued_secrets import recall as recall_issued_secret
+from app.core.issued_secrets import remember as remember_issued_secret
+from app.core.issued_secrets import validate_idempotency_key
 from app.core.permissions import (
     expand_legacy_permissions,
     get_rank_default_permissions,
@@ -1068,14 +1073,42 @@ async def mfa_setup(
     return {"secret": secret, "qr_code_url": uri}
 
 
+def _replay_is_current(user: User, replayed: dict) -> bool:
+    """Whether a remembered recovery-code set is still the member's live set.
+
+    A replay must never hand back codes that no longer work: if the set was
+    replaced since (another regeneration) or MFA was turned off, the stored
+    response is stale and the request is handled as if it carried no key.
+    Codes the member has since spent are absent from the stored hashes, so the
+    test is that every live hash belongs to the replayed set.
+    """
+    live = set(user.mfa_backup_codes or [])
+    codes = replayed.get("recovery_codes")
+    if not user.mfa_enabled or not live or not isinstance(codes, list):
+        return False
+    return live <= {mfa_service.hash_recovery_code(str(c)) for c in codes}
+
+
 @router.post("/mfa/verify-setup", dependencies=[rate_limit_login()])
 async def mfa_verify_setup(
     data: MFAVerify,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ):
-    """Confirm enrollment: verify a code, enable MFA, return recovery codes."""
+    """Confirm enrollment: verify a code, enable MFA, return recovery codes.
+
+    A retry carrying the same ``Idempotency-Key`` and code gets the same codes
+    back for a short window (AUTH-7). It is answered before the checks below
+    because by then MFA is enabled and the authenticator code is spent.
+    """
+    key = validate_idempotency_key(idempotency_key)
+    replayed = await recall_issued_secret(
+        user_id=str(current_user.id), scope="mfa_verify_setup", key=key, body=data.code
+    )
+    if replayed is not None and _replay_is_current(current_user, replayed):
+        return replayed
     if current_user.mfa_enabled:
         raise HTTPException(status_code=400, detail="MFA is already enabled")
     if not current_user.mfa_secret:
@@ -1094,6 +1127,17 @@ async def mfa_verify_setup(
         mfa_service.hash_recovery_code(c) for c in recovery_codes
     ]
     await db.commit()
+    # Kept as soon as the set is committed, so a response lost to anything
+    # after this point (the audit write, the notice, the network) can still
+    # be recovered by a retry. Shown once otherwise.
+    response = {"recovery_codes": recovery_codes}
+    await remember_issued_secret(
+        user_id=str(current_user.id),
+        scope="mfa_verify_setup",
+        key=key,
+        body=data.code,
+        response=response,
+    )
 
     await log_audit_event(
         db=db,
@@ -1115,8 +1159,7 @@ async def mfa_verify_setup(
         ),
         background_tasks=background_tasks,
     )
-    # Recovery codes are shown exactly once.
-    return {"recovery_codes": recovery_codes}
+    return response
 
 
 @router.post("/mfa/disable", dependencies=[rate_limit_login()])
@@ -1185,13 +1228,25 @@ async def mfa_regenerate_recovery_codes(
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ):
     """Regenerate the member's MFA recovery codes after verifying a code.
 
     The new set replaces the old one (any previously issued codes stop
-    working) and is returned exactly once. Requires a current authenticator
-    code to confirm the member still controls the device.
+    working) and is returned once. Requires a current authenticator code to
+    confirm the member still controls the device. A retry carrying the same
+    ``Idempotency-Key`` and code gets the same set back for a short window
+    rather than failing on the spent code (AUTH-7).
     """
+    key = validate_idempotency_key(idempotency_key)
+    replayed = await recall_issued_secret(
+        user_id=str(current_user.id),
+        scope="mfa_recovery_codes",
+        key=key,
+        body=data.code,
+    )
+    if replayed is not None and _replay_is_current(current_user, replayed):
+        return replayed
     if not current_user.mfa_enabled:
         raise HTTPException(status_code=400, detail="MFA is not enabled")
     if not await _verify_and_consume_totp(db, current_user, data.code):
@@ -1207,6 +1262,17 @@ async def mfa_regenerate_recovery_codes(
         mfa_service.hash_recovery_code(c) for c in recovery_codes
     ]
     await db.commit()
+    # Kept as soon as the set is committed, so a response lost to anything
+    # after this point (the audit write, the notice, the network) can still
+    # be recovered by a retry. Shown once otherwise.
+    response = {"recovery_codes": recovery_codes}
+    await remember_issued_secret(
+        user_id=str(current_user.id),
+        scope="mfa_recovery_codes",
+        key=key,
+        body=data.code,
+        response=response,
+    )
 
     await log_audit_event(
         db=db,
@@ -1229,8 +1295,7 @@ async def mfa_regenerate_recovery_codes(
         ),
         background_tasks=background_tasks,
     )
-    # New recovery codes are shown exactly once.
-    return {"recovery_codes": recovery_codes}
+    return response
 
 
 @router.get("/mfa/policy", response_model=MFAPolicy)
