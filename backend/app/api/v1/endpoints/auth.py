@@ -90,6 +90,7 @@ from app.services.auth_service import (
 )
 from app.services.branding_service import get_primary_branding
 from app.services.security_monitoring import security_monitor
+from app.utils.password_expiry import is_password_expired
 from app.utils.security_notifications import notify_security_event
 
 router = APIRouter()
@@ -172,8 +173,6 @@ async def _build_current_user_dict(user: User, db: AsyncSession) -> dict:
     Shared by the login endpoint (inline in response) and GET /auth/me.
     Eagerly loads positions if not already loaded.
     """
-    from datetime import datetime, timezone
-
     # Eager-load positions if the relationship wasn't already loaded
     user_result = await db.execute(
         select(User).where(User.id == user.id).options(selectinload(User.positions))
@@ -195,16 +194,7 @@ async def _build_current_user_dict(user: User, db: AsyncSession) -> dict:
     all_permissions = expand_legacy_permissions(all_permissions)
 
     # HIPAA password age check
-    password_expired = False
-    max_age_days = settings.HIPAA_MAXIMUM_PASSWORD_AGE_DAYS
-    if max_age_days > 0 and user.password_changed_at:
-        pwd_changed = (
-            user.password_changed_at.replace(tzinfo=timezone.utc)
-            if user.password_changed_at.tzinfo is None
-            else user.password_changed_at
-        )
-        age = (datetime.now(timezone.utc) - pwd_changed).days
-        password_expired = age >= max_age_days
+    password_expired = is_password_expired(user)
 
     # Organization timezone
     org_result = await db.execute(

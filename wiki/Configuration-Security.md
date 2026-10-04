@@ -20,17 +20,25 @@ Configure security settings for The Logbook, including authentication, encryptio
 
 ## Password Policy
 
-| Setting            | Default       | Description                          |
-| ------------------ | ------------- | ------------------------------------ |
-| Minimum length     | 12 characters | Configurable                         |
-| Requires uppercase | Yes           | At least one uppercase letter        |
-| Requires lowercase | Yes           | At least one lowercase letter        |
-| Requires number    | Yes           | At least one digit                   |
-| Requires special   | Yes           | At least one special character       |
-| Password history   | 12            | Cannot reuse last 12 passwords       |
-| Max password age   | 90 days       | Forced change after 90 days          |
-| Lockout threshold  | 5 attempts    | Account locked after 5 failed logins |
-| Lockout duration   | 15 minutes    | Auto-unlock after 15 minutes         |
+| Setting            | Default       | Description                            |
+| ------------------ | ------------- | -------------------------------------- |
+| Minimum length     | 12 characters | Configurable                           |
+| Requires uppercase | Yes           | At least one uppercase letter          |
+| Requires lowercase | Yes           | At least one lowercase letter          |
+| Requires number    | Yes           | At least one digit                     |
+| Requires special   | Yes           | At least one special character         |
+| Password history   | 12            | Cannot reuse last 12 passwords         |
+| Max password age   | 90 days       | Forced change after 90 days, see below |
+| Lockout threshold  | 5 attempts    | Account locked after 5 failed logins   |
+| Lockout duration   | 15 minutes    | Auto-unlock after 15 minutes           |
+
+**Password expiry is enforced by the server, after a grace period.** Past
+`HIPAA_MAXIMUM_PASSWORD_AGE_DAYS`, the browser sends a member straight to the
+change-password screen. The API refuses everything except the password change
+`HIPAA_PASSWORD_EXPIRY_GRACE_DAYS` (default 14) after the member is first told,
+either by the daily `notify_expired_passwords` notice (in-app and email) or by
+their first request after expiry. Turning this on does not lock anyone out on
+upgrade day: everyone's grace starts at their own notice.
 
 ---
 

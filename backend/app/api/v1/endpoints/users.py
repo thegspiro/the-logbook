@@ -2189,6 +2189,7 @@ async def admin_reset_password(
     # otherwise the HIPAA minimum password age check would block their required change.
     if not reset_data.force_change:
         user.password_changed_at = datetime.now(timezone.utc)
+        user.password_expiry_notified_at = None
 
     # Revoke all existing sessions to force re-login with the new password
     sessions_result = await db.execute(

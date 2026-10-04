@@ -448,6 +448,12 @@ SCHEDULE = {
         "recommended_time": "00:45",
         "cron": "45 0 * * *",
     },
+    "notify_expired_passwords": {
+        "description": "Tell members whose password has expired, once, by email and in-app; the API refuses it a grace period later",
+        "frequency": "daily",
+        "recommended_time": "07:50",
+        "cron": "50 7 * * *",
+    },
     "expire_ip_exceptions": {
         "description": "Mark approved IP allowlist/blocklist exceptions past their valid_until as expired (nothing else recomputes the stored status)",
         "frequency": "daily",
@@ -6283,6 +6289,82 @@ async def run_reap_expired_sessions(db: AsyncSession) -> Dict[str, Any]:
     return {"task": "reap_expired_sessions", "deleted": deleted}
 
 
+async def run_notify_expired_passwords(db: AsyncSession) -> Dict[str, Any]:
+    """Tell each member whose password has expired, once, and start their grace.
+
+    AUTH-15: the API refuses an expired password
+    ``HIPAA_PASSWORD_EXPIRY_GRACE_DAYS`` after the member was told, so the
+    telling has to reach members who are not signing in. In-app and by email
+    (security notices are always sent). ``password_expiry_notified_at`` makes
+    it once per expiry: it is cleared when the password changes.
+    """
+    from app.core.config import settings
+    from app.models.user import UserStatus
+    from app.utils.password_expiry import password_change_deadline
+    from app.utils.security_notifications import notify_security_event
+
+    max_age_days = settings.HIPAA_MAXIMUM_PASSWORD_AGE_DAYS
+    if max_age_days <= 0:
+        return {"task": "notify_expired_passwords", "notified": 0}
+
+    now = datetime.now(timezone.utc)
+    expired_before = now - timedelta(days=max_age_days)
+    # Ids, not instances: a rollback after one member's failure expires every
+    # loaded object, and an async session cannot lazy-load them back.
+    pairs = (
+        await db.execute(
+            select(User.id, User.organization_id)
+            .join(Organization, Organization.id == User.organization_id)
+            .where(
+                Organization.active.isnot(False),
+                User.status == UserStatus.ACTIVE,
+                User.deleted_at.is_(None),
+                User.password_hash.is_not(None),
+                User.password_changed_at <= expired_before,
+                User.password_expiry_notified_at.is_(None),
+            )
+            .order_by(User.organization_id)
+        )
+    ).all()
+
+    notified = 0
+    for user_id, org_id in pairs:
+        try:
+            user = await db.get(User, user_id)
+            org = await db.get(Organization, org_id)
+            if user is None:
+                continue
+            user.password_expiry_notified_at = now
+            deadline = password_change_deadline(user)
+            when = (
+                f"{deadline:%B} {deadline.day}, {deadline.year}" if deadline else "soon"
+            )
+            await notify_security_event(
+                db,
+                user,
+                subject="Your password has expired",
+                message=(
+                    f"Your password is more than {max_age_days} days old. "
+                    f"Change it from your account settings by {when} (UTC); "
+                    "after that you will not be able to use The Logbook until "
+                    "you do."
+                ),
+                action_url="/account",
+                org=org,
+            )
+            # Committed per member, so a notice that went out is never sent
+            # again because a later one failed.
+            await db.commit()
+            notified += 1
+        except Exception as exc:
+            await db.rollback()
+            logger.error(f"Expired-password notice failed for user {user_id}: {exc}")
+
+    if notified:
+        logger.info("Sent {} expired-password notice(s)", notified)
+    return {"task": "notify_expired_passwords", "notified": notified}
+
+
 async def run_expire_ip_exceptions(db: AsyncSession) -> Dict[str, Any]:
     """Mark approved IP exceptions past their valid_until as EXPIRED.
 
@@ -6438,6 +6520,7 @@ TASK_RUNNERS = {
     "admin_hours_auto_close": run_admin_hours_auto_close,
     "expire_ip_exceptions": run_expire_ip_exceptions,
     "reap_expired_sessions": run_reap_expired_sessions,
+    "notify_expired_passwords": run_notify_expired_passwords,
     "membership_inactivity_warnings": run_membership_inactivity_warnings,
     "shift_pattern_generation": run_shift_pattern_generation,
     "swap_offer_expiry": run_swap_offer_expiry,
@@ -6492,6 +6575,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "admin_hours_auto_close": 1800,
     "expire_ip_exceptions": 86400,
     "reap_expired_sessions": 86400,
+    "notify_expired_passwords": 86400,
     "membership_inactivity_warnings": 86400,
     "recert_resets": 86400,
     "enrollment_expiry": 86400,

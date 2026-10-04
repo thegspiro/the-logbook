@@ -30,6 +30,7 @@ from app.core.security import (
 from app.models.user import Organization, PasswordHistory, Role
 from app.models.user import Session as UserSession
 from app.models.user import User, UserStatus
+from app.utils.password_expiry import is_password_expired
 
 RESET_TOKEN_EXPIRY_MINUTES = 30
 
@@ -331,20 +332,13 @@ class AuthService:
         user.last_login_at = datetime.now(timezone.utc)
         await self.db.flush()
 
-        # Check password age - warn but don't block (frontend handles redirect)
-        max_age_days = settings.HIPAA_MAXIMUM_PASSWORD_AGE_DAYS
-        if max_age_days > 0 and user.password_changed_at:
-            pwd_changed = (
-                user.password_changed_at.replace(tzinfo=timezone.utc)
-                if user.password_changed_at.tzinfo is None
-                else user.password_changed_at
+        # An expired password still signs in: get_current_user decides when it
+        # stops being accepted (the grace period in app/utils/password_expiry).
+        if is_password_expired(user):
+            logger.warning(
+                f"User {user.username} signed in with an expired password. "
+                "Password change required."
             )
-            age = (datetime.now(timezone.utc) - pwd_changed).days
-            if age >= max_age_days:
-                logger.warning(
-                    f"User {user.username} password expired ({age} days old, "
-                    f"max {max_age_days}). Password change required."
-                )
 
         return user, None
 
@@ -759,6 +753,7 @@ class AuthService:
         # Update password
         user.password_hash = hash_password(new_password)
         user.password_changed_at = datetime.now(timezone.utc)
+        user.password_expiry_notified_at = None
         user.must_change_password = False
         user.failed_login_attempts = 0
         user.locked_until = None
@@ -1056,6 +1051,7 @@ class AuthService:
         # Set new password and clear token
         user.password_hash = hash_password(new_password)
         user.password_changed_at = datetime.now(timezone.utc)
+        user.password_expiry_notified_at = None
         user.must_change_password = False
         user.password_reset_token = None
         user.password_reset_expires_at = None

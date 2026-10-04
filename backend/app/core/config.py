@@ -10,7 +10,7 @@ from functools import lru_cache
 from urllib.parse import quote, urlsplit
 
 from loguru import logger
-from pydantic import PrivateAttr, field_validator, model_validator
+from pydantic import Field, PrivateAttr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -249,6 +249,11 @@ class Settings(BaseSettings):
     HIPAA_MAXIMUM_PASSWORD_AGE_DAYS: int = (
         90  # Max days before password must be changed
     )
+    # Days an expired password keeps working, counted from when the member is
+    # first told it expired, before the API refuses everything but the
+    # password change (AUTH-15). The browser still sends them to the change
+    # screen at once; this window is for API clients, and for the rollout.
+    HIPAA_PASSWORD_EXPIRY_GRACE_DAYS: int = Field(default=14, ge=0)
     HIPAA_AUDIT_RETENTION_DAYS: int = 2555  # 7-year audit log retention (§164.312(b))
     # Where the weekly retention job writes gzipped JSONL exports of purged
     # audit rows. Include this directory in backups (see docs/BACKUP.md) —

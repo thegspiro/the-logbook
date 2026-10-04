@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**287 tables · 4719 columns · 932 foreign keys**
+**287 tables · 4720 columns · 932 foreign keys**
 
 ---
 
@@ -657,7 +657,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`prospects`](#prospects) | `Prospect` | 17 | Prospective member – someone who has expressed interest in joining |
 | [`sessions`](#sessions) | `Session` | 10 | User session model for tracking active sessions |
 | [`user_positions`](#user_positions) | _(association table)_ | 4 |  |
-| [`users`](#users) | `User` | 59 | User model with comprehensive authentication and profile support. |
+| [`users`](#users) | `User` | 60 | User model with comprehensive authentication and profile support. |
 
 ---
 
@@ -9952,6 +9952,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `mfa_last_timestep` | INTEGER | yes |  |  |  |
 | `password_changed_at` | DATETIME | yes |  |  |  |
 | `must_change_password` | BOOL | no |  | `0` |  |
+| `password_expiry_notified_at` | DATETIME | yes |  |  |  |
 | `failed_login_attempts` | INTEGER | yes |  | `0` |  |
 | `locked_until` | DATETIME | yes |  |  |  |
 | `password_reset_token` | VARCHAR(128) | yes | IDX |  |  |
