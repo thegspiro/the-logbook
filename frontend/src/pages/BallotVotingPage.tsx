@@ -19,8 +19,9 @@
  * 7. Success confirmation displayed
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { DialogPanel } from '../components/ux/DialogPanel';
+import { VerifyReceipt } from '../components/VerifyReceipt';
 import { electionService } from '../services/api';
 import type {
   BallotElection,
@@ -29,7 +30,7 @@ import type {
   BallotItemVote,
   BallotSubmissionResponse,
 } from '../types/election';
-import { getErrorMessage } from '../utils/errorHandling';
+import { toAppError } from '../utils/errorHandling';
 import { formatDate } from '../utils/dateFormatting';
 import { BallotChoice } from '../constants/enums';
 import { VoteType } from '../constants/enums';
@@ -72,22 +73,98 @@ const captureTokenFromUrl = (): string => {
   return token;
 };
 
+/**
+ * The backend's `detail` for a failed lookup, without the "(Error code: …)"
+ * suffix `getErrorMessage` appends. A voter on the public page has no IT desk
+ * to quote a code to, and the suffix broke the equality that picks a friendly
+ * sentence for a used link (W50-52) — so every comparison below is against
+ * the bare sentence the service returns.
+ */
+const publicErrorText = (err: unknown, fallback: string): string => toAppError(err).message || fallback;
+
+/**
+ * The public ballot's error card is read by a member, not an officer. The
+ * generic "if you think this is a mistake, contact your secretary" footer is
+ * wrong under the detail sentences the service returns for a dead token after
+ * close or reopen (W50-44) and for a link a reminder retired (W50-27): nothing
+ * is a mistake, and the reader may be the secretary. Each of those states
+ * gets its own sentence and either its own hint or none.
+ */
+type LoadError = { message: string; hint: string | null };
+
+const CONTACT_SECRETARY_HINT = "If you think this is a mistake, contact your organization's secretary.";
+const REOPENED_PREFIX = 'This election was closed and reopened';
+
+const describeLoadError = (detail: string): LoadError => {
+  if (detail === 'This ballot has already been fully submitted') {
+    return {
+      message: 'This ballot has already been submitted. Each voting link can only be used once.',
+      hint: CONTACT_SECRETARY_HINT,
+    };
+  }
+  if (detail === 'Voting has closed' || detail === 'Voting has ended') {
+    return {
+      message: 'Voting has closed for this election.',
+      hint: 'Results will be shared by your organization.',
+    };
+  }
+  if (detail.startsWith(REOPENED_PREFIX)) {
+    return {
+      message:
+        'This election was closed and reopened, so this ballot link no longer works. Ask your secretary for a new ballot link.',
+      hint: null,
+    };
+  }
+  if (detail === 'This link was replaced by a newer ballot email') {
+    return {
+      message:
+        'This link was replaced by a newer ballot email. Open your most recent ballot email and use the link there.',
+      hint: null,
+    };
+  }
+  return { message: detail, hint: CONTACT_SECRETARY_HINT };
+};
+
+/**
+ * Shown on the form and the submitted card of a token minted by
+ * send-test-ballot. Without it a preview and the real ballot are identical
+ * (W50-18), and an officer's test submission looked like a counted vote.
+ */
+const TestBallotBanner: React.FC = () => (
+  <div role="status" aria-label="Test ballot notice" className="alert-warning mb-6 text-left">
+    <p className="text-theme-alert-warning-title font-semibold">TEST BALLOT</p>
+    <p className="text-theme-alert-warning-text text-sm">
+      This is a preview. Votes cast here are recorded for testing only and are not counted toward the election results.
+    </p>
+  </div>
+);
+
 export const BallotVotingPage: React.FC = () => {
   const tz = useTimezone();
-  const [token] = useState<string>(captureTokenFromUrl);
+  const [token, setToken] = useState<string>(captureTokenFromUrl);
 
   const [election, setElection] = useState<BallotElection | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [isTest, setIsTest] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loadErrorHint, setLoadErrorHint] = useState<string | null>(CONTACT_SECRETARY_HINT);
   const [choices, setChoices] = useState<Record<string, ItemChoice>>({});
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitResult, setSubmitResult] = useState<BallotSubmissionResponse | null>(null);
 
+  // StrictMode mounts twice in development, and each mount ran the lookup —
+  // two POSTs per page load against a public endpoint capped at 10/min that
+  // every voter on the same address shares (W50-43). One token, one lookup;
+  // a new token from the hashchange listener below still gets its own.
+  const lookedUpTokenRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (token) {
+      if (lookedUpTokenRef.current === token) return;
+      lookedUpTokenRef.current = token;
       void loadBallot();
     } else {
       setError('This link has no voting token. Open the ballot link from your email.');
@@ -96,13 +173,30 @@ export const BallotVotingPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
+  // A link pasted into a tab already on /ballot only changes the fragment,
+  // which is not a navigation: without this the page ignored it and left the
+  // token sitting in the address bar (W50-52). Capturing scrubs it again.
+  useEffect(() => {
+    const onHashChange = () => {
+      const next = captureTokenFromUrl();
+      if (next) setToken(next);
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
   const loadBallot = async () => {
     try {
       setLoading(true);
       setError(null);
-      const { election: electionData, candidates: candidateData } = await electionService.lookupBallot(token);
+      const {
+        election: electionData,
+        candidates: candidateData,
+        is_test: testBallot,
+      } = await electionService.lookupBallot(token);
       setElection(electionData);
       setCandidates(candidateData);
+      setIsTest(testBallot === true);
 
       // Initialize choices with 'abstain' for all ballot items
       const initialChoices: Record<string, ItemChoice> = {};
@@ -111,12 +205,11 @@ export const BallotVotingPage: React.FC = () => {
       }
       setChoices(initialChoices);
     } catch (err: unknown) {
-      const detail = getErrorMessage(err, "Couldn't load your ballot. The link may have expired or be invalid.");
-      if (detail === 'This ballot has already been fully submitted') {
-        setError('This ballot has already been submitted. Each voting link can only be used once.');
-      } else {
-        setError(detail);
-      }
+      const { message, hint } = describeLoadError(
+        publicErrorText(err, "Couldn't load your ballot. The link may have expired or be invalid.")
+      );
+      setError(message);
+      setLoadErrorHint(hint);
     } finally {
       setLoading(false);
     }
@@ -219,7 +312,7 @@ export const BallotVotingPage: React.FC = () => {
       setSubmitted(true);
       setShowConfirmation(false);
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Failed to submit ballot. Try again.'));
+      setError(publicErrorText(err, 'Failed to submit ballot. Try again.'));
       setShowConfirmation(false);
     } finally {
       setSubmitting(false);
@@ -303,9 +396,7 @@ export const BallotVotingPage: React.FC = () => {
           <div className="mb-4 text-5xl text-red-600">!</div>
           <h1 className="text-theme-text-primary mb-2 text-xl font-bold">Unable to Load Ballot</h1>
           <p className="text-theme-text-secondary">{error}</p>
-          <p className="text-theme-text-muted mt-4 text-sm">
-            If you think this is a mistake, contact your organization's secretary.
-          </p>
+          {loadErrorHint && <p className="text-theme-text-muted mt-4 text-sm">{loadErrorHint}</p>}
         </div>
       </main>
     );
@@ -329,15 +420,24 @@ export const BallotVotingPage: React.FC = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h1 className="text-theme-text-primary mb-2 text-2xl font-bold">Ballot Submitted</h1>
+          <h1 className="text-theme-text-primary mb-2 text-2xl font-bold">
+            {isTest ? 'Test Ballot Submitted' : 'Ballot Submitted'}
+          </h1>
+          {isTest && <TestBallotBanner />}
           <p className="text-theme-text-secondary mb-4">{submitResult.message}</p>
           <div className="bg-theme-surface-secondary text-theme-text-muted rounded-lg p-4 text-sm">
-            <p>Your ballot has been securely recorded.</p>
+            <p>
+              {isTest
+                ? 'This was a test ballot. It was recorded for preview only and is not counted toward the results.'
+                : 'Your ballot has been securely recorded.'}
+            </p>
             {submitResult.receipt_hashes && submitResult.receipt_hashes.length > 0 && (
               <div className="border-theme-surface-border mt-3 border-t pt-3">
                 <p className="text-theme-text-secondary mb-1 font-medium">Vote Receipt</p>
                 <p className="mb-2 text-xs">
-                  Save this receipt to verify your vote was counted. It cannot reveal how you voted.
+                  {isTest
+                    ? 'This receipt verifies the test vote was recorded, not counted. It cannot reveal how you voted.'
+                    : 'Save this receipt to verify your vote was counted. It cannot reveal how you voted.'}
                 </p>
                 {submitResult.receipt_hashes.map((hash, i) => (
                   <code key={i} className="bg-theme-surface mb-1 block rounded px-2 py-1 font-mono text-xs break-all">
@@ -348,6 +448,11 @@ export const BallotVotingPage: React.FC = () => {
             )}
             <p className="mt-2">You may close this page.</p>
           </div>
+          {election && (
+            <div className="mt-4">
+              <VerifyReceipt electionId={election.id} />
+            </div>
+          )}
         </div>
       </main>
     );
@@ -372,6 +477,7 @@ export const BallotVotingPage: React.FC = () => {
 
       {/* Ballot Content */}
       <main id="main-content" className="mx-auto max-w-2xl px-4 py-8">
+        {isTest && <TestBallotBanner />}
         {error && (
           <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-500/30 dark:bg-red-500/10">
             <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
@@ -549,14 +655,17 @@ export const BallotVotingPage: React.FC = () => {
 
                   {/* Write-in option */}
                   {election.allow_write_ins && (
-                    <div
-                      className={`rounded-lg border p-3 transition-colors ${
-                        itemChoice?.choice === BallotChoice.WRITE_IN
-                          ? 'border-purple-300 bg-purple-50 dark:border-purple-500/30 dark:bg-purple-500/10'
-                          : 'border-theme-surface-border hover:border-purple-300 hover:bg-purple-50 dark:hover:bg-purple-500/10'
-                      }`}
-                    >
-                      <label className="flex cursor-pointer items-center gap-3">
+                    <div>
+                      {/* The bordered card is the label, as for every other
+                          option: with only the inner row clickable the
+                          write-in target was 24px tall (W50-52). */}
+                      <label
+                        className={`mobile-touch-row cursor-pointer gap-3 rounded-lg border p-3 transition-colors ${
+                          itemChoice?.choice === BallotChoice.WRITE_IN
+                            ? 'border-purple-300 bg-purple-50 dark:border-purple-500/30 dark:bg-purple-500/10'
+                            : 'border-theme-surface-border hover:border-purple-300 hover:bg-purple-50 dark:hover:bg-purple-500/10'
+                        }`}
+                      >
                         <input
                           type="radio"
                           name={`item-${item.id}`}
@@ -613,8 +722,12 @@ export const BallotVotingPage: React.FC = () => {
 
         {/* Security notice */}
         <div className="text-theme-text-muted mt-8 text-center text-xs">
-          <p>Your vote is securely recorded.</p>
+          <p>{isTest ? 'Votes cast on this test ballot are not counted.' : 'Your vote is securely recorded.'}</p>
           <p>This voting link is unique to you. Do not share it with others.</p>
+        </div>
+
+        <div className="mt-6">
+          <VerifyReceipt electionId={election.id} />
         </div>
       </main>
 
@@ -686,7 +799,7 @@ export const BallotVotingPage: React.FC = () => {
                 type="button"
                 onClick={() => setShowConfirmation(false)}
                 disabled={submitting}
-                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-md border px-4 py-2 disabled:opacity-50"
+                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover mobile-touch-target rounded-md border px-4 py-2 disabled:opacity-50"
               >
                 Change Ballot
               </button>
@@ -696,7 +809,7 @@ export const BallotVotingPage: React.FC = () => {
                   void handleConfirmSubmit();
                 }}
                 disabled={submitting}
-                className="rounded-md bg-red-700 px-6 py-2 font-semibold text-white hover:bg-red-800 disabled:opacity-50"
+                className="mobile-touch-target rounded-md bg-red-700 px-6 py-2 font-semibold text-white hover:bg-red-800 disabled:opacity-50"
               >
                 {submitting ? 'Submitting...' : 'Cast Ballot'}
               </button>

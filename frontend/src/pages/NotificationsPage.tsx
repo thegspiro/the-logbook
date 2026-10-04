@@ -684,7 +684,7 @@ const NotificationsPage: React.FC = () => {
             onClick={() => handleTabChange('inbox')}
             role="tab"
             aria-selected={activeTab === 'inbox'}
-            className={`flex items-center space-x-2 rounded-md px-4 py-2 text-sm font-medium transition-colors max-md:min-h-[44px] ${
+            className={`touch:min-h-[44px] flex items-center space-x-2 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
               activeTab === 'inbox' ? 'bg-orange-700 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
             }`}
           >
@@ -704,7 +704,7 @@ const NotificationsPage: React.FC = () => {
               onClick={() => handleTabChange('rules')}
               role="tab"
               aria-selected={activeTab === 'rules'}
-              className={`rounded-md px-4 py-2 text-sm font-medium transition-colors max-md:min-h-[44px] ${
+              className={`touch:min-h-[44px] rounded-md px-4 py-2 text-sm font-medium transition-colors ${
                 activeTab === 'rules'
                   ? 'bg-orange-700 text-white'
                   : 'text-theme-text-muted hover:text-theme-text-primary'
@@ -718,7 +718,7 @@ const NotificationsPage: React.FC = () => {
               onClick={() => handleTabChange('templates')}
               role="tab"
               aria-selected={activeTab === 'templates'}
-              className={`rounded-md px-4 py-2 text-sm font-medium transition-colors max-md:min-h-[44px] ${
+              className={`touch:min-h-[44px] rounded-md px-4 py-2 text-sm font-medium transition-colors ${
                 activeTab === 'templates'
                   ? 'bg-orange-700 text-white'
                   : 'text-theme-text-muted hover:text-theme-text-primary'
@@ -732,7 +732,7 @@ const NotificationsPage: React.FC = () => {
               onClick={() => handleTabChange('log')}
               role="tab"
               aria-selected={activeTab === 'log'}
-              className={`rounded-md px-4 py-2 text-sm font-medium transition-colors max-md:min-h-[44px] ${
+              className={`touch:min-h-[44px] rounded-md px-4 py-2 text-sm font-medium transition-colors ${
                 activeTab === 'log' ? 'bg-orange-700 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
               }`}
             >
@@ -748,7 +748,7 @@ const NotificationsPage: React.FC = () => {
                 <p className="text-theme-text-muted text-sm">
                   {myUnreadCount > 0 ? `${myUnreadCount} unread` : 'All caught up'}
                 </p>
-                <label className="text-theme-text-muted flex cursor-pointer items-center gap-1.5 text-xs select-none max-md:min-h-[44px]">
+                <label className="text-theme-text-muted touch:min-h-[44px] flex cursor-pointer items-center gap-1.5 text-xs select-none">
                   <input
                     type="checkbox"
                     checked={showRead}
@@ -763,7 +763,7 @@ const NotificationsPage: React.FC = () => {
                   onClick={() => {
                     void handleMarkAllInboxRead();
                   }}
-                  className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors max-md:min-h-[44px]"
+                  className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover touch:min-h-[44px] inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors"
                 >
                   <CheckCheck className="h-4 w-4" />
                   Mark all as read
@@ -1028,7 +1028,7 @@ const NotificationsPage: React.FC = () => {
                   onClick={() => {
                     void handleMarkAllRead();
                   }}
-                  className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors max-md:min-h-[44px]"
+                  className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover touch:min-h-[44px] inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors"
                 >
                   <CheckCheck className="h-4 w-4" />
                   Mark all as read
@@ -1127,7 +1127,7 @@ const NotificationsPage: React.FC = () => {
                     void handleLoadMoreLogs();
                   }}
                   disabled={loadingMoreLogs}
-                  className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors disabled:opacity-50 max-md:min-h-[44px]"
+                  className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover touch:min-h-[44px] inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors disabled:opacity-50"
                 >
                   {loadingMoreLogs ? (
                     <>

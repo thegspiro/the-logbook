@@ -125,6 +125,21 @@ describe('MinutesPage links meetings to their minutes (W51)', () => {
     expect(await screen.findByText('7')).toBeInTheDocument();
   });
 
+  // W52-5: the tile counted meeting action items only, so open items recorded
+  // in minutes left it at 0.
+  it('counts open action items from meetings and minutes together', async () => {
+    mockGetSummary.mockResolvedValue({
+      total_meetings: 2,
+      meetings_this_month: 1,
+      open_action_items: 2,
+      pending_approval: 0,
+    });
+    mockGetStats.mockResolvedValue({ total: 1, this_month: 1, open_action_items: 6, pending_approval: 0 });
+    renderWithRouter(<MinutesPage />);
+
+    expect(await screen.findByText('8')).toBeInTheDocument();
+  });
+
   it('opens existing minutes instead of writing a second set', async () => {
     const user = userEvent.setup();
     renderWithRouter(<MinutesPage />);

@@ -277,7 +277,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({ notification, onMar
               <button
                 key={action.label}
                 onClick={() => void handleNavigate(action.url)}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors max-md:min-h-[44px] ${
+                className={`touch:min-h-[44px] inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                   idx === 0
                     ? 'bg-orange-700 text-white hover:bg-orange-800'
                     : 'border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover border'
@@ -289,7 +289,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({ notification, onMar
             ))}
             <button
               onClick={handlePinClick}
-              className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors max-md:min-h-[44px] ${
+              className={`touch:min-h-[44px] inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors ${
                 notification.pinned
                   ? 'border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:border-orange-600 dark:bg-orange-900/20 dark:text-orange-400 dark:hover:bg-orange-900/30'
                   : 'border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'

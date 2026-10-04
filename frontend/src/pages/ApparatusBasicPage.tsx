@@ -343,7 +343,7 @@ export default function ApparatusBasicPage() {
                         onClick={() => openEdit(apparatus)}
                         title="Edit"
                         aria-label={`Edit ${apparatus.name}`}
-                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-2 transition-colors"
+                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover touch-target-phone rounded-lg p-2 transition-colors"
                       >
                         <Pencil className="h-4 w-4" aria-hidden="true" />
                       </button>
@@ -353,7 +353,7 @@ export default function ApparatusBasicPage() {
                         }}
                         title="Delete"
                         aria-label={`Delete ${apparatus.name}`}
-                        className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-red-500/10 hover:text-red-500"
+                        className="text-theme-text-muted touch-target-phone rounded-lg p-2 transition-colors hover:bg-red-500/10 hover:text-red-500"
                       >
                         <Trash2 className="h-4 w-4" aria-hidden="true" />
                       </button>

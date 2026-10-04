@@ -89,7 +89,7 @@ export const ApprovalChainEditDialog: React.FC<ApprovalChainEditDialogProps> = (
             onChange={(e) => setDescription(e.target.value)}
           />
         </div>
-        <label className="text-theme-text-primary flex items-start gap-2 text-sm max-md:min-h-[44px]">
+        <label className="text-theme-text-primary touch:min-h-[44px] flex items-start gap-2 text-sm">
           <input
             type="checkbox"
             className="form-checkbox mt-0.5"

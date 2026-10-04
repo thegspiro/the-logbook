@@ -71,7 +71,15 @@ const CREDITED_HOURS_BASIS =
 const DETAIL_ROW_CLASS = 'text-theme-text-secondary flex items-center gap-2 text-sm';
 const DETAIL_ICON_CLASS = 'text-theme-text-muted h-3.5 w-3.5 shrink-0';
 const FOOTER_BUTTON_CLASS =
-  'inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 px-3 text-sm font-medium whitespace-nowrap';
+  'inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 px-3 text-sm font-medium whitespace-nowrap @max-[18rem]:px-2';
+/* A 320px phone leaves the card ~240px: "Going", "Not Going" and the 44px
+   calendar button do not fit side by side with their icons and the full
+   padding, and the calendar button was clipped off the card edge. Below 18rem
+   the RSVP icons go, the padding tightens and the calendar button takes a
+   labelled row of its own beneath them. The footer wraps, so a further control
+   (the "Cancel" beside a changing RSVP) also drops to a new line rather than
+   pushing anything out of the card. */
+const FOOTER_ICON_CLASS = 'h-4 w-4 @max-[18rem]:hidden';
 
 const EventListCardBase: React.FC<EventListCardProps> = ({
   event,
@@ -142,7 +150,7 @@ const EventListCardBase: React.FC<EventListCardProps> = ({
 
   return (
     <div
-      className={`card relative flex flex-col overflow-hidden transition-all hover:border-red-300 hover:shadow-md ${
+      className={`card @container relative flex flex-col overflow-hidden transition-all hover:border-red-300 hover:shadow-md ${
         presentation?.accentClass ?? ''
       } ${isSelected ? 'border-red-300 ring-2 ring-red-500/50' : ''}`}
     >
@@ -200,7 +208,7 @@ const EventListCardBase: React.FC<EventListCardProps> = ({
         >
           <Link
             to={`/events/${event.id}/edit`}
-            className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700 shadow-sm transition-colors hover:bg-blue-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 max-md:min-h-[44px] max-md:px-4 dark:bg-blue-500/20 dark:text-blue-300 dark:hover:bg-blue-500/30"
+            className="touch:min-h-[44px] inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700 shadow-sm transition-colors hover:bg-blue-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 max-md:px-4 dark:bg-blue-500/20 dark:text-blue-300 dark:hover:bg-blue-500/30"
             aria-label={`Edit ${event.title}`}
           >
             <Pencil className="h-3 w-3" aria-hidden="true" />
@@ -209,7 +217,7 @@ const EventListCardBase: React.FC<EventListCardProps> = ({
           <button
             type="button"
             onClick={() => onDuplicate(event.id)}
-            className="bg-theme-surface-modal text-theme-text-muted hover:bg-theme-surface-hover rounded-full p-1.5 shadow-sm transition-colors hover:text-blue-600 max-md:min-h-[44px] max-md:min-w-[44px] max-md:items-center max-md:justify-center dark:hover:text-blue-400"
+            className="bg-theme-surface-modal text-theme-text-muted hover:bg-theme-surface-hover touch:min-h-[44px] touch:min-w-[44px] rounded-full p-1.5 shadow-sm transition-colors hover:text-blue-600 max-md:items-center max-md:justify-center dark:hover:text-blue-400"
             title="Duplicate event"
             aria-label={`Duplicate ${event.title}`}
           >
@@ -226,8 +234,10 @@ const EventListCardBase: React.FC<EventListCardProps> = ({
         >
           {/* The manager chips sit in this corner from md up, so the clearance
               they need belongs on the title block alone — on the whole body it
-              also stole 96px from every detail row below. */}
-          <div className={`flex items-start justify-between gap-2 ${canManage ? 'md:pr-24' : ''}`}>
+              also stole 96px from every detail row below. On a touch screen the
+              chips grow to 44px (~117px with the corner offset), so the
+              clearance grows with them. */}
+          <div className={`flex items-start justify-between gap-2 ${canManage ? 'md:touch:pr-32 md:pr-24' : ''}`}>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 {event.event_type === EventTypeEnum.TRAINING && (
@@ -338,7 +348,7 @@ const EventListCardBase: React.FC<EventListCardProps> = ({
       </Link>
 
       {/* Outside the anchor above, or every button press would also navigate. */}
-      <div className="border-theme-surface-border bg-theme-surface-secondary flex items-center gap-2 border-t px-5 py-3">
+      <div className="border-theme-surface-border bg-theme-surface-secondary flex flex-wrap items-center gap-2 border-t px-5 py-3 @max-[18rem]:gap-1.5 @max-[18rem]:px-4">
         {urgency === 'live' ? (
           <Link to={`/events/${event.id}/check-in`} className={`btn-success ${FOOTER_BUTTON_CLASS}`}>
             <QrCode className="h-4 w-4" aria-hidden="true" />
@@ -376,7 +386,7 @@ const EventListCardBase: React.FC<EventListCardProps> = ({
                   disabled={rsvpLoading}
                   className={`${urgency === 'action' ? 'btn-primary' : 'btn-secondary'} ${FOOTER_BUTTON_CLASS}`}
                 >
-                  <Check className="h-4 w-4" aria-hidden="true" />
+                  <Check className={FOOTER_ICON_CLASS} aria-hidden="true" />
                   Going
                 </button>
               )}
@@ -387,7 +397,7 @@ const EventListCardBase: React.FC<EventListCardProps> = ({
                   disabled={rsvpLoading}
                   className={`btn-secondary ${FOOTER_BUTTON_CLASS}`}
                 >
-                  <X className="h-4 w-4" aria-hidden="true" />
+                  <X className={FOOTER_ICON_CLASS} aria-hidden="true" />
                   Not Going
                 </button>
               )}
@@ -417,11 +427,16 @@ const EventListCardBase: React.FC<EventListCardProps> = ({
         <button
           type="button"
           onClick={() => downloadICSFile(event)}
-          className="btn-secondary text-theme-text-muted hover:text-theme-text-primary inline-flex h-11 w-11 shrink-0 items-center justify-center p-0"
+          className="btn-secondary text-theme-text-muted hover:text-theme-text-primary inline-flex h-11 w-11 shrink-0 items-center justify-center gap-1.5 p-0 @max-[18rem]:w-full @max-[18rem]:text-sm"
           aria-label={`Add ${event.title} to calendar`}
           title="Add to calendar"
         >
           <CalendarPlus className="h-4 w-4" aria-hidden="true" />
+          {/* On a narrow card this takes a row of its own, where an unlabelled
+              icon stretched across the card would read as a broken button. */}
+          <span className="hidden @max-[18rem]:inline" aria-hidden="true">
+            Add to calendar
+          </span>
         </button>
       </div>
     </div>
