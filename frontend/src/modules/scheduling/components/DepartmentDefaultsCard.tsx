@@ -28,7 +28,7 @@ export const DepartmentDefaultsCard: React.FC<DepartmentDefaultsCardProps> = ({ 
   const overtimeId = useId();
 
   return (
-    <div className="card-secondary space-y-5 p-5">
+    <div className="card-secondary space-y-5 p-4 sm:p-5">
       <h3 className="text-theme-text-primary text-base font-semibold">Department Defaults</h3>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

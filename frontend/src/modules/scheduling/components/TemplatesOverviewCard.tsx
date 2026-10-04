@@ -21,7 +21,7 @@ export const TemplatesOverviewCard: React.FC<TemplatesOverviewCardProps> = ({ te
   const activeTemplates = templates.filter((t) => t.is_active);
 
   return (
-    <div className="card-secondary p-5">
+    <div className="card-secondary p-4 sm:p-5">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-theme-text-primary text-base font-semibold">Shift Templates</h3>
         <button

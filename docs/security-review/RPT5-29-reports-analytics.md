@@ -332,3 +332,191 @@ pass 2's precedent for the identical E712 pattern, which also added no test.
 | `npm run typecheck` (frontend)                                                             | ✅ 0 errors                                                  |
 | `npm run lint` (frontend)                                                                  | ✅ 0 errors, 0 warnings                                      |
 | `npx vitest run src/modules/reports` (scoped)                                              | ✅ **42 passed** (5 files)                                   |
+
+---
+
+## Pass 7 (2026-10-04) — real delta since pass 6, one finding strengthened with new evidence, 0 fixes
+
+**Prefix:** `RPT5` (continued) · **Rotation pass:** 7 · **PR:** (this PR)
+
+### Step 0 / provenance
+
+Re-verified via `list_pull_requests` (state=open) that no `claude/security-review-*`
+PR existed before starting: PR #2892 (Feature 27, Integrations, pass 5) and
+PR #2896 (Feature 28, Security/audit/IP, pass 5) had both already merged — both
+docs-only (0 application-code changes), so per this rotation's own rule there
+was nothing to record from either merge; `PROGRESS.md`'s stale "Open PR" row
+(still naming #2896) is cleared in this same commit, per the skill's own
+framing of that row as narrative that lags `main` until its PR merges. Rotation
+row 29 was the first `⬜`.
+
+### Scope — this is not a zero-delta pass
+
+Unlike pass 6, real commits touched this feature's files in the interim:
+23 non-merge commits since pass 6's merge (2026-09-13) touch at least one of
+the ten files, plus three apparent "Merge pull request" commits
+(`0430faa0`, `bad9fff0`, `703c5123`) that are squash/rebase history-boundary
+artifacts in this shallow clone — each shows a full-tree "file added" diff
+against a commit with no recorded parent, the same shape prior passes'
+`f8fdd1a` already documented, confirmed by `git log --format="%H %P"` on one
+of them returning no parent hash. These three are not real diffs and are
+excluded below.
+
+Every one of the 23 real commits was read in full (`git show <sha> -- <these
+ten files>`), not sampled:
+
+- **`9937d652`** (workflow review W17) — label previews/prints now encode the
+  applicant's **short id**, never their public status-token (which was the
+  applicant's only credential for their own status page). **Verified good —
+  a real credential-exposure fix, already landed, holds.**
+- **`c1e30031`** — new organization-shared label "setups" (`LabelService.
+list_setups`/`save_setup`/`delete_setup`, `organizations.settings.
+label_setups`). Verified: `save_setup`/`delete_setup` lock the organization
+  row (`.with_for_update()`) and use `copy.deepcopy()` before mutating nested
+  JSON (Pitfall #12 satisfied), cap at `MAX_LABEL_SETUPS = 20`, and the
+  endpoint (`inventory.py` — outside this feature's own file list, but
+  calling into this feature's service) validates a client-supplied
+  `printer_id` in-org via `LabelPrinterService.get_printer()` before storing
+  it (Pitfall 14c, with its own comment citing the pitfall). **Verified
+  good.**
+- **`8a0d9eaf`** — `start_position` bounded `1..SHEET_LABELS_PER_PAGE` via
+  `Field(ge=1, le=...)`. **Verified good.**
+- **`6e68f7d9`**, **`999a7195`** — new inventory label fields and a new
+  `storage_areas` label module; both org-scope their queries
+  (`StorageArea.organization_id == org_id`, `Location.organization_id ==
+org_id`) and the new module is gated `("inventory.manage",)` in
+  `MODULE_LABELS`, matching the commit's own claim. A cross-org id is
+  silently excluded (not in the org-scoped `areas` dict), not an error —
+  consistent with this file's existing `_filter_ids` pattern elsewhere.
+  **Verified good.**
+- **`ccef747b`, `da6db5c0`, `6850d691`, `f8c3bea4`, `4a6f6737`** — the
+  department's-local-date sweep (CLAUDE.md's date-handling rules) reaching
+  `reports_service.py`, `dashboard.py` and `dashboard_widget_service.py`.
+  Every date now resolves through `resolve_org_today`/`resolve_scheduling_
+timezone`/`local_date`, called with the same `organization_id` the function
+  already received — no new cross-tenant surface, no behavior change beyond
+  the stated UTC-vs-local correction. **Verified good** — also closes the
+  "empty set reads 100%" Pitfall #29 corollary for `/dashboard/admin-summary`
+  (`880191a5`: `training_pct` is now `None`, not a vacuous
+  `compute_org_compliance_pct` result, when `count_active_requirements`
+  is zero).
+- **`653b4906`** — `AttendanceDashboardService` now shares `attendance_
+window`/`tally_attendance` (`membership_tier_service.py`) with the ballot
+  eligibility check, closing exactly the kind of two-screens-disagree gap
+  Pitfall #29 describes, for voting-attendance percentages. Same org id
+  threaded through as before. **Verified good.**
+- **`09b3b887`, `647fa149`, `2adfc33c`** (apiCache.ts touch only) — CSS
+  layout (`card-grid`), copy text, and an unrelated feature's cache-pin
+  addition. Re-confirmed this feature's own two pins
+  (`/dashboard/action-items`, `/analytics/export`) are still present
+  (`frontend/src/utils/apiCache.ts:100,133`) and untouched by any of these.
+  **No finding.**
+- **`61e9ad49`, `9aba1a20`, `9a9ad6a9`** — apiCache.ts touches from unrelated
+  features (NFC tracking, suggestion boxes); same re-confirmation as above.
+  **No finding.**
+
+### RPT5-29-5 — MEDIUM — `training_summary`'s `requirement_breakdown` does not honor the new requirement-grandfathering rules, widening RPT5-29-1's divergence with a third axis — 🚩 FLAGGED (new evidence for RPT5-29-1, not a new architectural question)
+
+**What:** `ea939c38` ("Let a training requirement exempt members who joined
+before it") added `new_member_cutoff_date`/`existing_member_deadline` to
+`TrainingRequirement` and routed "every screen that decides who a requirement
+grades" through `training_compliance.py`'s `requirement_applies_to_user`/
+`catch_up_deadline`/`member_join_date` — explicitly including, per its own
+commit message, "the compliance status report." It does: `reports_service.
+_generate_compliance_status` (`reports_service.py:1148-1243`) now calls all
+three helpers per member/requirement, correctly exempting a grandfathered
+member from `graded`/`overdue_items` and reporting their requirement as an
+`upcoming_deadlines` entry instead.
+
+**`_generate_training_summary`'s sibling `requirement_breakdown` section
+(`reports_service.py:255-430`, specifically 358-421) was not touched by that
+commit and calls none of the three helpers.** It still computes
+`completed_by_req`/`enrolled_count` via two aggregate SQL queries scoped only
+to `ProgramEnrollment.status` and `TrainingRequirement.active` — no per-member
+join-date or role check, so a member a requirement is configured to exempt (or
+place in catch-up) is still counted in `enrolled_count`'s denominator as
+someone the requirement grades, same as before `ea939c38` existed.
+
+**Where:** `reports_service.py:358-421` (the gap); `reports_service.py:1148-
+1243` (the sibling that was updated, for contrast); `training_compliance.
+py:743,794,885` (the three helpers); `ea939c38`'s own commit message (what it
+says it updated — `training_summary` is not named).
+
+**Why the existing guard test doesn't catch this:** `tests/
+test_requirement_grandfathering.py::test_every_caller_in_app_passes_a_join_date`
+is an AST sweep for calls to a fixed name set (`_NEEDS_JOIN_DATE` —
+`requirement_applies_to_member`, `evaluate_member_requirement`, four others)
+that are missing a `join_date=` keyword. It cannot see a call site that never
+calls any of those functions at all, which is exactly this gap's shape — the
+same blind spot CLAUDE.md Pitfall #29 itself describes ("nothing raising,
+nothing failing a test").
+
+**Failure scenario:** a department grandfathers an existing roster into a new
+annual-training standard (`existing_member_deadline` policy, say a 2026
+deadline). A member hired before the cutoff, mid-catch-up, is correctly
+excluded from `compliance_status`'s percentage and shown an upcoming
+deadline instead — and simultaneously counted as an unmet "non-compliant"
+contributor to `training_summary`'s `requirement_breakdown` completion % for
+the identical requirement, on the identical report-generation request if a
+caller runs both report types. This is RPT5-29-1's own scenario
+(`docs/security-review/RPT5-29-reports-analytics.md`'s Pass-5 finding),
+reproduced with a concrete, dated trigger rather than a hypothetical one.
+
+**Impact:** correctness/trust, same class as RPT5-29-1 — not a cross-tenant
+leak (both queries are independently org-scoped) and not an authorization
+bypass. MEDIUM because it is now a live, reachable divergence (grandfathering
+shipped this pass; it was description-only before) rather than a theoretical
+one, and because the two screens disagreeing on grading rules for an
+identical requirement is the specific shape a chief trusts least.
+
+**Fix:** not applied — this is new evidence for RPT5-29-1's already-flagged
+question, not a separate one with its own simpler answer. `requirement_
+breakdown`'s aggregate SQL (batch counts across all members/requirements at
+once) and `compliance_status`'s per-member loop are structurally different
+shapes; converging them means either rewriting `requirement_breakdown` as a
+per-member loop (the same complexity `_generate_compliance_status` already
+pays, for a count-only report) or deciding `requirement_breakdown` measures a
+narrower concept ("program-enrollment completion, before grandfathering") and
+labeling it as such — the exact two options RPT5-29-1 already lists. A
+security-review drive-by is the wrong place to pick between them, per
+CLAUDE.md Pitfall #29's own guidance. Mirrored into `docs/KNOWN_LIMITATIONS.md`
+(amends the existing RPT5-29-1 entry rather than adding a new one).
+
+### Everything else re-verified unchanged
+
+All 30 routes re-enumerated from source (table in pass 4, gates unchanged);
+zero `.like`/`.ilike`/`csv.writer`/`csv.DictWriter` across all ten files;
+`SavedReportUpdate`'s `apply_updates` fix (RPT5-29-2) still at
+`reports.py:246`; the six `.is_(True)`/`.is_(False)` conversions (RPT5-29-3)
+still clean, zero `# noqa: E712` across `dashboard.py`/`attendance_dashboard_
+service.py`; `MAX_LABELS_PER_JOB = 500`, `MAX_ACTIVE_SAVED_REPORTS_PER_ORG =
+200`, `ExtraLine`'s `max_length=100`, and `/analytics/export`'s `.limit(1000)`
+all still present; `PII_REPORT_PERMISSIONS` still covers all 8 PII-bearing
+report types with no new ungated generator added; `SavedReport.created_by`
+and `LabelPrinter.created_by_id` (`ondelete="SET NULL"`) both still
+`nullable=True`; migration chain at 509 revisions, single head, `validate_
+migrations.py --strict` passes. `RPT2-29-2` (saved-report scheduling has no
+reader), `LBL-29-2` (`GET /label-printers` authentication-only, deliberate),
+`LBL-29-4` (no PDF label-count cap), `DASH-2` (`GET /dashboard/stats` has no
+frontend caller), and `RPT-5c`/`RPT-6` (inventory float, hardcoded
+`last_inspection_date`, double-enrollment completion-% overcounting) are all
+re-confirmed unchanged — none re-litigated.
+
+### Guard tests
+
+None added. RPT5-29-5 is new evidence for an already-flagged architectural
+question (RPT5-29-1), not a mechanical fix with an invariant to pin — same
+reasoning RPT5-29-1 itself gives for having no guard test.
+
+### Completion gate
+
+| Check                                                                                                        | Result                                  |
+| ------------------------------------------------------------------------------------------------------------ | --------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                | ✅ 0 violations                         |
+| `black --check app/ tests/ alembic/`                                                                         | ✅ 1853 files unchanged                 |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.1`, matches CI's pin)                                 | ✅ clean                                |
+| `python3 scripts/validate_migrations.py --strict`                                                            | ✅ passed, single head (509 revisions)  |
+| `pytest tests/ -q -k "reports or label or analytics or dashboard or attendance_dashboard or grandfathering"` | ✅ **719 passed, 1 skipped** (0 failed) |
+| `npm run typecheck` (frontend)                                                                               | ✅ 0 errors                             |
+| `npm run lint` (frontend)                                                                                    | ✅ 0 errors, 0 warnings                 |
+| `npx vitest run src/modules/reports` (scoped)                                                                | ✅ **42 passed** (5 files)              |

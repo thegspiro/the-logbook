@@ -922,7 +922,14 @@ jobs:
   frontend-e2e:
     name: Frontend E2E (Playwright)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Deliberately ~1.6x measured, not the 4-6x the note at the top of this
+    # file sets as the rule: 4x of a ~28.5 min suite is nearly two hours of
+    # held runner, which defeats the point of catching a hang early. 30 was
+    # worse in the other direction — about 1.05x, under two minutes of
+    # headroom — and a slow runner spent it, cancelling #2890 mid-suite twice
+    # with every test passing. Sharding with `--shard` is the durable fix,
+    # since this margin erodes with every route added; 45 buys room until then.
+    timeout-minutes: 45
     # No `needs:` — see the note on backend-test-integration.
     defaults:
       run:

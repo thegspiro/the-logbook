@@ -1,10 +1,309 @@
-# Security Review — Onboarding (passes 3-4)
+# Security Review — Onboarding (passes 3-5)
 
 **Prefix:** `ONB3` · **Iteration:** 30 (rotation pass 3; prior: module-audit
 iteration 25, app-review B25 (4 passes), security-review pass 1 — PR #1913 +
 follow-up (`docs/security-review/ONB2-30-onboarding.md`), security-review
 pass 2 — PR #2093 (`docs/security-review/ONB-30-onboarding.md`))
-· **Reviewed:** 2026-09-06/07 · **PR:** [#2358](https://github.com/thegspiro/the-logbook/pull/2358)
+· **Reviewed:** 2026-09-06/07 (pass 3), 2026-09-13 (pass 4), 2026-10-04
+(pass 5) · **PR:** [#2358](https://github.com/thegspiro/the-logbook/pull/2358)
+(pass 3), [#2521](https://github.com/thegspiro/the-logbook/pull/2521)
+(pass 4)
+
+---
+
+## Pass 5 (2026-10-04)
+
+**Method: delta-focused re-verification**, per the rotation's established
+pass-3+ convention. Pass 4's baseline is PR #2521's head commit
+(`abd4fefc`, merged `2026-09-13T20:57:11Z` into `main` at `543445c0`). This
+worktree's shallow clone did not carry that commit (older than its fetch
+horizon), so it was fetched directly (`git fetch origin abd4fefc... --depth=1`)
+and diffed against current `origin/main` rather than assumed reachable.
+
+1. Read `CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md` (passes 4-6,
+   whose 13 standing sweep classes are whole-codebase and therefore cover
+   this feature's files too), `docs/module-audit/onboarding.md` and
+   `docs/app-review/onboarding.md` in full — both are fully superseded by
+   this file's passes 1-4, no item in either is open that is not already
+   tracked here (confirmed by reading both end to end, not assumed from
+   their own "re-confirmed" language).
+2. `git diff --stat` from pass 4's baseline against `origin/main`, scoped to
+   this feature's file list (`onboarding.py`, `services/onboarding.py`,
+   `models/onboarding.py`, `utils/onboarding_security.py`,
+   `template_service.py`, `org_template_service.py`,
+   `org_template_registry.py`, `email_test_helper.py`,
+   `microsoft_oauth.py`, `email_providers.py`, and
+   `frontend/src/modules/onboarding/`). **No diff** in `models/onboarding.py`,
+   `utils/onboarding_security.py`, `template_service.py`,
+   `org_template_service.py`, `org_template_registry.py`,
+   `microsoft_oauth.py` — confirmed empty via `git diff --stat`, so every
+   pass 3/4 finding scoped to those files is re-confirmed with the same
+   confidence as a fresh read.
+3. **Read in full, end to end:** the diffs to `onboarding.py` (46 lines),
+   `services/onboarding.py` (4 lines), `email_providers.py` (80 lines),
+   `email_test_helper.py` (4 lines) — small enough that sampling would have
+   added nothing. Also read in full: `suggestion_service.py`'s
+   `seed_compliance_box` (new call site from `services/onboarding.py`) and
+   `email_service.py`'s `_cloudflare_endpoint`/`is_valid_cloudflare_account_id`
+   use (the send-time consumer of `email_providers.py`'s new validator),
+   neither of which is in this feature's own file list but both of which a
+   one-line addition in this feature's files now calls into.
+4. **Re-enumerated all 24 routes** by grepping every `@router.get/post`
+   decorator against the current file and re-reading each route's guard
+   chain directly — see Route inventory. 24/24, unchanged shape from pass 4.
+5. **Frontend**, 52 files changed (1,382 insertions / 428 deletions) —
+   almost all wording/UX/accessibility polish and a password-strength UI
+   addition mirroring server-side rules that already existed
+   (`core/security.py`'s sequential/repeated-character checks). Swept (not
+   read line-by-line, matching pass 3/4's stated judgment that this class of
+   frontend risk is server-enforced) for the same four risk classes:
+   `window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`, secrets
+   written to `localStorage`/`sessionStorage`, and any raised/removed
+   client-side cap that a server-side cap doesn't independently enforce —
+   **0 hits** on all four. Read in full rather than swept: the diffs to
+   `AdminUserCreation.tsx`, `OrganizationSetup.tsx`, `api-client.ts`,
+   `errorHandler.ts`, and `useOnboardingSession.ts` (the files touching
+   session lifecycle, password validation, or error-message construction)
+   because those are the shapes a sweep's keyword list would not catch.
+
+### What changed, and why each is verified good (no new finding)
+
+1. **`services/onboarding.py`: `create_organization` now seeds a default
+   "Compliance" suggestion box** (`SuggestionService.seed_compliance_box`,
+   new call after `_create_default_roles`). Read in full: org-scoped on
+   both its existence check and its position lookup (`organization_id ==
+str(organization_id)` on both queries, where `organization_id` is the
+   just-created org's own id — not client-suppliable), flushes without
+   committing (same transaction as the org it belongs to, consistent with
+   every other step of `create_organization`), and sets `is_active=False`
+   when no position holds the `compliance_officer` slug rather than
+   assigning a reviewer that doesn't exist. No new grant, no new
+   client-controlled input — `compliance_officer` is a pre-existing
+   `DEFAULT_POSITIONS` entry in `app/core/permissions.py`, unchanged by this
+   diff. **Verified good.**
+2. **`onboarding.py` / `email_providers.py`: Cloudflare account ID
+   validation centralized into one function
+   (`is_valid_cloudflare_account_id`, `[a-f0-9]{32}`) and checked at three
+   points** — the onboarding `/test/email` connection test
+   (`email_test_helper.py`), `invalid_for_enabled` (the settings-save
+   pre-flight check both `/session/email` and the post-setup settings
+   screen route through), and `email_service.py:930`'s `_cloudflare_endpoint`
+   at **send time**, immediately before the account id is interpolated into
+   the Cloudflare API URL. This closes the exact gap checklist item §4's
+   "stored outbound URLs are re-validated at send time" asks about, for a
+   value that previously had three independent regex copies (one per call
+   site) rather than one. The regex is anchored (`fullmatch`) and rejects
+   any value containing `/`, `.`, or non-hex characters, so a malformed
+   account id cannot alter the URL path or redirect the request to a
+   different host. **Verified good** — a correctness/consolidation fix that
+   also closes a latent TOCTOU gap (the write-time and send-time checks
+   could previously drift since they were different regex literals; now
+   they are the same function).
+3. **`onboarding.py` / `email_providers.py`: a stored config with
+   `platform: "cloudflare"` and `enabled: true` now requires `from_email`,
+   `cloudflare_account_id` and `cloudflare_api_token` to be present
+   (`missing_for_enabled`), and a present-but-malformed account id is
+   rejected at save time too (`invalid_for_enabled`)** — previously only the
+   Microsoft-OAuth branch of `invalid_for_enabled` existed; Cloudflare had no
+   completeness check at all, so a config missing its account id would save
+   as "enabled" and then silently fail to send (or, before this pass's
+   verified-good item 2 made the check universal, could in principle have
+   sent to a malformed URL). Data-integrity fix, not a new input-validation
+   gap: no new client-controlled field reaches a dangerous sink, this makes
+   an existing one fail at save time instead of at send time. **Verified
+   good.**
+4. **`onboarding.py` `verify_email_configuration`: a self-hosted/other SMTP
+   config with a username but no password is now rejected with a clear
+   error** instead of silently being read by `test_smtp_connection` as "no
+   authentication" and reported as a successful connection test. Narrows,
+   rather than touches, the already-flagged ONB-30-3 SMTP-SSRF gap below —
+   it changes what counts as _complete_, not what hosts/ports are reachable.
+   **Verified good.**
+5. **`onboarding.py` `reset_onboarding`: the response now clears the
+   caller's `access_token`/`refresh_token`/`csrf_token` cookies**
+   (`_clear_auth_cookies`, imported from `app.api.v1.endpoints.auth` — the
+   same helper `/auth/logout` already uses). Before this, a reset performed
+   while authenticated as the just-deleted System Owner left stale auth
+   cookies in the browser, which made every subsequent request (including
+   the next `/onboarding/start`) fail `get_optional_current_user`'s lookup
+   for a user row that no longer existed — not a security regression in
+   either direction (the cookies named a user who no longer exists, so they
+   authenticate nothing; clearing them is strictly a correctness fix for the
+   "start again" flow `/reset`'s own response promises). **Verified good.**
+6. **Frontend: `OrganizationSetup.tsx`'s session-initialization effect no
+   longer retries automatically on failure.** Previously, a failed
+   `initializeSession()` left `sessionLoading` at `false`, which re-triggered
+   the same `useEffect`, which could fail again — a tight client-side retry
+   loop the pass's own commit message says reached "about 75 requests a
+   second" into the rate-limited `/start` endpoint after a reset left stale
+   credentials in the browser. Fixed with a `useRef` latch
+   (`sessionAttempted`) that lets the effect run at most once per mount; a
+   manual retry now requires an explicit Continue click. This is a
+   client-side self-inflicted-DoS fix, not a backend change — relevant here
+   because it was hammering this feature's own `_rate_limit_onboarding_start`
+   dependency, and the rate limiter itself (server-side, unaffected by this
+   client fix) is what had been containing the blast radius rather than
+   this becoming a real abuse vector. **Verified good.**
+7. **Frontend: `AdminUserCreation.tsx`'s password-strength checklist gained
+   two checks (`noSequence`/`noRepeat`) that mirror
+   `core/security.py`'s existing server-side rejection of sequential
+   (`123`, `abc`) and repeated-character runs** — confirmed server-enforced
+   already (`backend/app/core/security.py:151-190`, unchanged by this
+   delta), so this closes a UX gap (a password rejected only after submit)
+   rather than adding a new security boundary. Also added: an effect that
+   auto-advances past this step if `/status` reports `admin_user.completed`,
+   fixing a dead-end on Back navigation after the account already exists —
+   reads `GET /onboarding/status`, which is unauthenticated by design and
+   unaffected. **Verified good.**
+
+None of the above, nor anything else in the delta, touches
+`create_system_owner`'s lock (ONB3-30-3, confirmed still present at
+`services/onboarding.py:1348-1350` — both the `OnboardingStatus` parent-row
+lock and the `select(User.id).limit(1).with_for_update()` locking-read
+existence check), `get_or_create_session`/`_require_owner_authority`
+(confirmed still present and unchanged at `onboarding.py:696-765`), or
+`validate_session`'s sliding-TTL renewal (confirmed still present and
+unchanged, `onboarding.py:879`).
+
+## Re-verification of pass 1-4 findings (all hold, no regressions)
+
+Every still-open item was re-checked against current code directly, not
+re-derived from the write-up:
+
+- **ONB3-30-3** (System Owner creation race) — ✅ **FIXED, re-confirmed
+  intact.** Both halves of the lock (`.with_for_update()` on
+  `OnboardingStatus`, and the existence check itself as a locking read) are
+  present at `services/onboarding.py:1348-1350`, unchanged since pass 4.
+  `tests/test_onboarding_owner_race.py` (both the integration test and
+  `TestTheLockIsDeclared`'s source-level assertions) still passes.
+- **ONBOARD-7** (onboarding-status singleton race) — ✅ **FIXED, re-confirmed
+  intact.** Unique `singleton` column and `begin_nested()` retry loop still
+  present (`services/onboarding.py:252,337,364`).
+- **ONB-7** (role editor accepts client-controlled `permissions`/`priority`/
+  `is_custom`/arbitrary `module_id` keys) — 🚩 **re-confirmed OPEN, unchanged.**
+  `save_session_roles` (`onboarding.py:2442`) and `expand_module_checkboxes`
+  (`onboarding.py:2331`) are byte-identical to pass 4 (no diff in this
+  pass's `git diff --stat`). Still a product decision (clamping priority,
+  rejecting system-role re-mint, allowlisting `module_id` would change what
+  the legitimate onboarding role editor can express), not a drive-by fix.
+- **ONB2-30-8** (sliding 30-minute session TTL, no absolute cap; three GET
+  routes slide it with `require_csrf=False`) — 🚩 **re-confirmed OPEN,
+  unchanged.** `onboarding.py:879`'s renewal and the three routes'
+  `validate_session(request, db, require_csrf=False)` calls at
+  `/system-info`, `/security-check`, `/database-check` are unchanged.
+- **ONB-30-3** (`/test/email`'s self-hosted SMTP path has no SSRF/
+  private-network protection) — 🚩 **re-confirmed OPEN, unchanged in its
+  core gap.** `test_smtp_connection` (`email_test_helper.py:87`) still
+  connects to a fully client-supplied `smtpHost`/`smtpPort` via raw
+  `smtplib` with no hostname/IP validation — narrowed only in scope by this
+  pass's item 4 above (a username-without-password config is now rejected
+  before the connection is even attempted, which does not change which
+  hosts/ports are reachable). Not fixed for the same reason as every prior
+  pass: blocking private IPs would break the legitimate on-premises SMTP
+  relay case this app's audience uses.
+- **ONB-8 audit-durability residual** (`reset_initiated` logged in the same
+  transaction as `/reset`'s deletes) — 🚩 **re-confirmed OPEN, unchanged.**
+  Confirmed directly at `onboarding.py:2787-2800`; the new cookie-clearing
+  response (item 5 above) is constructed after this `try` block's logic and
+  does not change the transaction boundary.
+- **ONB-1 through ONB-6, ONB-9, ONB2-30-1 through ONB2-30-7, ONB3-30-1,
+  ONB3-30-2** — all ✅ **FIXED/verified-good, re-confirmed intact**, via the
+  byte-identical-file check for the files they live in (no diff this pass in
+  `models/onboarding.py`, `utils/onboarding_security.py`,
+  `template_service.py`, `org_template_service.py`,
+  `org_template_registry.py`), and by direct re-read for the portions of
+  `onboarding.py`/`services/onboarding.py` not touched by this pass's six
+  items above.
+- **Duplicate `role.id` within one `/session/roles` payload raises an
+  unhandled `IntegrityError` → 500** — 🚩 re-confirmed OPEN, unchanged (no
+  dedup logic in current `save_session_roles`, same as pass 3/4).
+- **`POST /organization` missing the `except Exception` its twin
+  `/session/organization` has** — re-confirmed unchanged (cosmetic
+  robustness gap, not a security issue).
+- **`ITTeamMemberRequest.email` is `str`, not `EmailStr`** — re-confirmed
+  unchanged, intentionally loose.
+
+## Route inventory (re-enumerated, 24/24)
+
+Re-walked every `@router.get`/`@router.post` decorator in current
+`onboarding.py` and read each handler's guard chain directly. Unchanged from
+pass 3/4's table for every route. No route lost or gained a compensating
+control; no route outside the documented 24 carries none.
+
+| Route                        | Auth                                                                                                | Unchanged since                      |
+| ---------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `GET /status`                | none (rate-limited, ONB-8 minimal post-completion response)                                         | pass 2                               |
+| `POST /start`                | none (rate-limited; `_require_owner_authority` once an owner exists)                                | pass 4                               |
+| `GET /system-info`           | `validate_session(require_csrf=False)` (rate-limited)                                               | pass 2                               |
+| `GET /security-check`        | `validate_session(require_csrf=False)` (rate-limited)                                               | pass 2                               |
+| `GET /database-check`        | `validate_session(require_csrf=False)` (rate-limited; generic error)                                | pass 2                               |
+| `POST /organization`         | none (session not yet mintable; single-org guard)                                                   | pass 2                               |
+| `POST /system-owner`         | `validate_session` (rate-limited; locked single-owner guard, ONB3-30-3)                             | pass 4 (lock)                        |
+| `POST /modules`              | `validate_session` (`needs_onboarding()`)                                                           | pass 2                               |
+| `POST /notifications`        | `validate_session` (`needs_onboarding()`)                                                           | pass 2                               |
+| `POST /complete`             | `validate_session` (`needs_onboarding()`; one-way latch; email-completeness pre-flight)             | pass 3                               |
+| `POST /test/email`           | `validate_session` (rate-limited; SMTP SSRF gap open, ONB-30-3)                                     | pass 2                               |
+| `POST /session/department`   | `validate_session` (`needs_onboarding()`)                                                           | pass 2                               |
+| `POST /session/email`        | `validate_session` (`needs_onboarding()`; encrypted at rest; completeness pre-flight)               | pass 3                               |
+| `POST /session/file-storage` | `validate_session` (`needs_onboarding()`; encrypted at rest)                                        | pass 1                               |
+| `POST /session/auth`         | `validate_session` (`needs_onboarding()`)                                                           | pass 1                               |
+| `POST /session/it-team`      | `validate_session` (`needs_onboarding()`; capped 50)                                                | pass 1                               |
+| `POST /session/stations`     | `validate_session` (`needs_onboarding()`; capped 50)                                                | pass 2                               |
+| `POST /session/apparatus`    | `validate_session` (`needs_onboarding()`; capped 100)                                               | pass 2                               |
+| `POST /session/modules`      | `validate_session` (`needs_onboarding()`; module allowlist)                                         | pass 1                               |
+| `POST /session/organization` | `validate_session` (`needs_onboarding()`; single-org guard)                                         | pass 2                               |
+| `POST /session/roles`        | `validate_session` (`needs_onboarding()`; outer cap 200, per-role `permissions` cap 50; ONB-7 open) | pass 3 (cap)                         |
+| `POST /session/positions`    | delegates to `/session/roles` (inherits all guards)                                                 | pass 1                               |
+| `GET /session/data`          | `validate_session` (CSRF required; allowlisted fields only)                                         | pass 1                               |
+| `POST /reset`                | `validate_session` (rate-limited; `_require_owner_authority`; audit log; now clears auth cookies)   | pass 4 (authority); pass 5 (cookies) |
+
+24/24 accounted for.
+
+## Findings
+
+**0 new findings this pass.** Six real changes landed in this feature's own
+files since pass 4 (items 1-7 above, minus one UI-only/accessibility change
+not itemized); every one is a correctness or security-hardening fix already
+shipped and verified good, not a new vulnerability. Every previously-open
+finding (ONB-7, ONB2-30-8, ONB-30-3, the ONB-8 audit-durability residual, the
+duplicate-role-id 500) was re-verified unchanged against current code. Every
+previously-fixed finding (ONB3-30-3, ONBOARD-7, ONB-1 through ONB-9,
+ONB2-30-1 through ONB2-30-8, ONB3-30-1, ONB3-30-2) was re-confirmed intact.
+
+## Schema & migration notes
+
+No new model or column in this feature's own tables
+(`onboarding_status`, `onboarding_sessions`, `onboarding_checklist` — all
+unchanged since pass 2). `validate_migrations.py --strict`: 509 revisions
+(up from pass 4's 444 — unrelated feature work across the rest of the
+rotation), single head `d058b5e7c1f4`, no duplicate ids.
+
+## Guard tests added
+
+None. No new finding to close a class on this pass; the six real changes
+above are each either already covered by existing guard tests
+(`test_onboarding_owner_race.py`, `test_onboarding_request_caps.py`) or are
+correctness fixes with no security-boundary shape that this rotation's
+existing guard-test conventions cover (e.g. a client-side retry-loop fix, an
+added-field completeness check).
+
+## Completion gate (pass 5)
+
+| Check                                                                                             | Result                                         |
+| ------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `python3 -m flake8 app/ tests/ alembic/` (7.4.1, with `flake8-pytest-style` 2.2.0; CI pins 7.3.0) | ✅ 0 violations                                |
+| `python3 -m black --check app/ tests/ alembic/` (26.5.1, matches CI's pin)                        | ✅ clean, 1853 files unchanged                 |
+| `python3 -m isort --check-only app/ tests/ alembic/` (9.0.1, matches CI's pin)                    | ✅ clean                                       |
+| `python3 scripts/validate_migrations.py --strict`                                                 | ✅ 509 revisions, single head `d058b5e7c1f4`   |
+| `pytest tests/ -q -k "onboard or org_template or template_service"`                               | ✅ 255 passed, 1 skipped (pywebpush, env-only) |
+| `npm ci` (this worktree's `node_modules` was unpopulated — fresh worktree)                        | ✅ installed clean (621 packages)              |
+| `npm run typecheck` (aliased 7.0.2 compiler, `tsc-native.mjs`)                                    | ✅ 0 errors                                    |
+| `npm run lint` (`--max-warnings 10`)                                                              | ✅ 0 errors, 0 warnings                        |
+| `npx vitest run src/modules/onboarding` (scoped)                                                  | ✅ 442 passed (31 files)                       |
+
+No application code changed this pass — every item above is a
+re-verification or a read of already-shipped code, so there is no fix diff
+to run a behavior-neutrality check against.
 
 ---
 
