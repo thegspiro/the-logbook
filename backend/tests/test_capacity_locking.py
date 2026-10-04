@@ -744,7 +744,7 @@ class TestMembershipTierEligibility:
 class TestRoomBookingLocking:
     """EV-26: a room's overlap check is a read-then-write like a seat cap, over
     a time range instead of a count. The booking lock is per organization (see
-    RoomBookingLock's docstring for why not per room), and update_event must
+    OrganizationLock's docstring for why not per room), and update_event must
     take it before its event-row lock so every path locks in one order.
     ``test_room_booking_race.py`` drives both on real connections."""
 
@@ -765,4 +765,19 @@ class TestRoomBookingLocking:
         ), (
             "update_event locks its event row; taking the booking lock after "
             "it inverts the order every other booker uses."
+        )
+
+
+class TestProgramEnrollmentLocking:
+    """enroll_member's duplicate-ACTIVE check is a read-then-insert. It runs
+    under the department's enrollment lock with a locking read;
+    ``test_program_enrollment_race.py`` drives it on real connections."""
+
+    def test_the_duplicate_check_is_locked_and_reads_locked(self):
+        from app.services.training_program_service import TrainingProgramService
+
+        source = _source_of(TrainingProgramService.enroll_member)
+        assert "PROGRAM_ENROLLMENT" in source
+        assert source.index("lock_organization_scope(") < source.index(
+            "with_for_update()"
         )

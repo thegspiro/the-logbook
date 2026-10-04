@@ -1,8 +1,9 @@
-"""add room booking locks
+"""add organization locks
 
-One row per organization, locked by LocationService to serialize room
-booking decisions (EV-26). Rows are created on first use by the lock
-statement itself, so there is nothing to backfill.
+One row per (organization, scope), locked to serialize a read-then-write
+decision per department: room booking (EV-26) and program enrollment. Rows
+are created on first use by the lock statement itself, so there is nothing
+to backfill.
 
 Revision ID: 3b7918cce37c
 Revises: edf608b5a8ea
@@ -29,16 +30,17 @@ def _has_table(table: str) -> bool:
 def upgrade() -> None:
     # A fresh install builds this from the model via create_all before
     # stamping head; only an upgrading one needs it created here.
-    if _has_table("room_booking_locks"):
+    if _has_table("organization_locks"):
         return
     op.create_table(
-        "room_booking_locks",
+        "organization_locks",
         sa.Column(
             "organization_id",
             sa.String(36),
             sa.ForeignKey("organizations.id", ondelete="CASCADE"),
             primary_key=True,
         ),
+        sa.Column("scope", sa.String(50), primary_key=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -49,4 +51,4 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # The rows carry no data: they exist only to be locked.
-    op.execute("DROP TABLE IF EXISTS room_booking_locks")
+    op.execute("DROP TABLE IF EXISTS organization_locks")

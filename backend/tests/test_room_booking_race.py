@@ -79,7 +79,7 @@ async def _cleanup(org_id: str) -> None:
             for statement in (
                 "DELETE FROM events WHERE organization_id = :o",
                 "DELETE FROM locations WHERE organization_id = :o",
-                "DELETE FROM room_booking_locks WHERE organization_id = :o",
+                "DELETE FROM organization_locks WHERE organization_id = :o",
                 "DELETE FROM users WHERE organization_id = :o",
                 "DELETE FROM organizations WHERE id = :o",
             ):

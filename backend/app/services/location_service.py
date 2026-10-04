@@ -9,16 +9,16 @@ from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy import and_, func, or_, select
-from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.utils import generate_display_code
 from app.models.event import Event
 from app.models.facilities import Facility, FacilityRoom
-from app.models.location import Location, RoomBookingLock
+from app.models.location import Location
 from app.models.user import Organization
 from app.schemas.location import LocationCreate, LocationUpdate
+from app.utils.org_locks import ROOM_BOOKING, lock_organization_scope
 from app.utils.org_scoping import assert_in_org
 
 
@@ -287,23 +287,11 @@ class LocationService:
     async def lock_room_bookings(self, organization_id: str) -> None:
         """Serialize room booking decisions for this organization (EV-26).
 
-        Held until the caller's transaction ends. Upsert rather than
-        SELECT ... FOR UPDATE so the first booking an organization ever makes
-        creates the row it locks: ON DUPLICATE KEY UPDATE takes an exclusive
-        lock on the row whether it inserted it or found it.
-
-        A caller that will also lock an event row must take this first. Every
-        booking path takes it before any event lock, so the order is the same
-        everywhere; see ``EventService.update_event``.
+        Held until the caller's transaction ends. A caller that will also
+        lock an event row must take this first; see
+        ``EventService.update_event``.
         """
-        statement = mysql_insert(RoomBookingLock).values(
-            organization_id=str(organization_id)
-        )
-        await self.db.execute(
-            statement.on_duplicate_key_update(
-                organization_id=statement.inserted.organization_id
-            )
-        )
+        await lock_organization_scope(self.db, organization_id, ROOM_BOOKING)
 
     async def check_overlapping_events(
         self,

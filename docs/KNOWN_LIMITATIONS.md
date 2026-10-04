@@ -3290,26 +3290,6 @@ the whole file on one bad row vs. import what's valid and report the rest)
 is a product decision, not a drive-by fix. (Security review TR-17 residual,
 `docs/security-review/TR-17-training-core.md`.)
 
-## Training — `enroll_member`'s Duplicate-Active-Enrollment Guard Is a Race (2026-08-26)
-
-`TrainingProgramService.enroll_member` checks for an existing ACTIVE
-enrollment (SELECT), then inserts a new `ProgramEnrollment` row — with no
-unique constraint or row lock backing the check. Two concurrent enroll
-calls for the same (user, program) pair can both pass the SELECT before
-either commits, producing two ACTIVE enrollment rows for the same member on
-the same program.
-
-Data-integrity, not a tenant-isolation or capacity-abuse issue — no
-cross-org effect, and the practical impact is a duplicate enrollment record
-rather than anything security-relevant.
-
-Not fixed: closing it needs a schema change (a partial unique index on
-`(user_id, program_id)` where `status = 'active'`, or an equivalent
-row-locking guard matching CLAUDE.md Pitfall #27's shape), which this
-rotation's process reserves for a flagged item rather than a drive-by
-fix inside an unrelated finding. (Security review TR-17 residual,
-`docs/security-review/TR-17-training-core.md`.)
-
 ## Training — `GET /training/records` Has No Pagination (2026-08-29)
 
 Unlike the rest of the codebase's per-record list endpoints (e.g.
@@ -4641,13 +4621,13 @@ of this one.
 ## EV-26 — Room Booking Serializes Per Department; Two Departments Can Still Collide (2026-10-04)
 
 **Accepted residual.** The double-booking race is fixed: every booking path
-takes the department's `room_booking_locks` row before checking for an
-overlap, reads events with a locking read, and `update_event` takes that lock
-before its own event-row lock (`tests/test_room_booking_race.py`). The lock is
-per department rather than per room because the locking range read over
-`events` takes InnoDB gap locks that two rooms can share, which deadlocked
-bookings of different rooms in the same way `test_storefront_order_deadlock.py`
-documents for the store.
+takes the department's `organization_locks` row (scope `room_booking`) before
+checking for an overlap, reads events with a locking read, and `update_event`
+takes that lock before its own event-row lock
+(`tests/test_room_booking_race.py`). The lock is per department rather than per
+room because the locking range read over `events` takes InnoDB gap locks that
+two rooms can share, which deadlocked bookings of different rooms in the same
+way `test_storefront_order_deadlock.py` documents for the store.
 
 What a per-department lock cannot cover is two _departments_ on one
 installation booking at the same moment, when the last room of one and the
@@ -4656,7 +4636,8 @@ index with no events between them. Both then hold the same gap, and InnoDB
 breaks the cycle by failing one request with a deadlock (1213); the officer
 retries. It needs two departments booking in the same few milliseconds, and it
 fails loudly rather than double-booking. The same residual exists for the
-store's per-department lock.
+store's per-department lock, and for program enrollment, which takes the same
+kind of lock (scope `program_enrollment`) around its duplicate check.
 
 ## Prospects — Seven Drawer Fields Have Readers and No Producer (2026-09-24, resolved 2026-09-24)
 

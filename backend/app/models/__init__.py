@@ -259,7 +259,7 @@ from app.models.legal import (
     LegalDocumentType,
     LegalRevisionStatus,
 )
-from app.models.location import Location, RoomBookingLock
+from app.models.location import Location
 from app.models.mcp_service_key import McpServiceKey
 from app.models.medical_screening import (
     ScreeningRecord,
@@ -315,6 +315,7 @@ from app.models.notification import (
 from app.models.onboarding import OnboardingStatus
 from app.models.operational_rank import OperationalRank
 from app.models.org_chart import OrgChartNode, OrgChartNodeHolder
+from app.models.organization_lock import OrganizationLock
 from app.models.organization_officer import OrganizationOfficer
 from app.models.public_portal import (
     PublicPortalAccessLog,
@@ -441,7 +442,7 @@ __all__ = [
     "EmailTemplateType",
     # Location models
     "Location",
-    "RoomBookingLock",
+    "OrganizationLock",
     # Public Portal models
     "PublicPortalConfig",
     "PublicPortalAPIKey",

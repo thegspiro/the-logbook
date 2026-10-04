@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**287 tables · 4720 columns · 932 foreign keys**
+**287 tables · 4721 columns · 932 foreign keys**
 
 ---
 
@@ -379,7 +379,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`locations`](#locations) | `Location` | 22 | Location model for managing physical spaces |
-| [`room_booking_locks`](#room_booking_locks) | `RoomBookingLock` | 2 | One row per organization, locked to serialize room booking decisions. |
 
 ### Mcp_Service_Key
 
@@ -482,6 +481,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`org_chart_node_holders`](#org_chart_node_holders) | `OrgChartNodeHolder` | 6 | One person leadership listed in a seat by hand. |
 | [`org_chart_nodes`](#org_chart_nodes) | `OrgChartNode` | 14 | One seat on the department's organizational chart. |
+
+### Organization_Lock
+
+<sub>`app/models/organization_lock.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`organization_locks`](#organization_locks) | `OrganizationLock` | 3 | One row per (organization, scope), taken with an exclusive lock. |
 
 ### Organization_Officer
 
@@ -5931,17 +5938,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - UNIQUE `uq_locations_facility_room_id` (`facility_room_id`)
 
-### `room_booking_locks`
-
-**RoomBookingLock** · `app/models/location.py`
-
-> One row per organization, locked to serialize room booking decisions. Booking a room is a read-then-write: look for an overlapping event, then insert one. Two coordinators booking the same room both read "free" unless the decision is serialized (CLAUDE.md pitfall #27, EV-26). The lock is per organization rather than per room on purpose. The overlap read has to be a locking read to see bookings committed since the request's snapshot, and a locking range read over ``events`` takes gap locks that two *different* rooms can share; per-room parents left two bookings of different rooms deadlocking on each other's inserts, the shape ``test_storefront_order_deadlock.py`` documents for the store. A table of its own rather than the ``organizations`` row: every insert into a table with an org foreign key takes a shared lock on that row, so an exclusive lock there would stall every write in the department and deadlock against paths, such as an RSVP, that lock an event first. Nothing references this table, so locking it touches nothing else.
-
-| Column | Type | Null | Key | Default | References |
-|---|---|---|---|---|---|
-| `organization_id` | VARCHAR(36) | no | PK, FK |  | → `organizations.id` ON DELETE CASCADE |
-| `created_at` | DATETIME | yes |  | `now()` |  |
-
 ## Mcp_Service_Key
 
 ### `mcp_service_keys`
@@ -6894,6 +6890,20 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `ix_org_chart_nodes_org_parent` (`organization_id`, `parent_id`)
+
+## Organization_Lock
+
+### `organization_locks`
+
+**OrganizationLock** · `app/models/organization_lock.py`
+
+> One row per (organization, scope), taken with an exclusive lock. For a check that cannot be made safe by locking a single parent row: booking a room (EV-26) or enrolling a member in a program, where the check is a range read. That read has to be a locking read to see rows committed since the request's snapshot (CLAUDE.md pitfall #27), and a locking range read takes InnoDB gap locks that two *different* parents can share, so locking per room or per program let unrelated decisions deadlock on each other's inserts (the failure ``test_storefront_order_deadlock.py`` documents for the store). Not the ``organizations`` row: every insert into a table with an org foreign key takes a shared lock on it, so an exclusive lock there would stall every write in the department and deadlock against paths that lock something else first. Nothing references this table. Taken through ``app.utils.org_locks.lock_organization_scope``, which creates the row on first use.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `organization_id` | VARCHAR(36) | no | PK, FK |  | → `organizations.id` ON DELETE CASCADE |
+| `scope` | VARCHAR(50) | no | PK |  |  |
+| `created_at` | DATETIME | yes |  | `now()` |  |
 
 ## Organization_Officer
 
@@ -10485,6 +10495,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `org_call_responses` | `organization_id` | CASCADE | no |
 | `org_calls` | `organization_id` | CASCADE | no |
 | `org_chart_nodes` | `organization_id` | CASCADE | no |
+| `organization_locks` | `organization_id` | CASCADE | no |
 | `organization_officers` | `organization_id` | CASCADE | no |
 | `pledges` | `organization_id` | CASCADE | no |
 | `positions` | `organization_id` | CASCADE | no |
@@ -10503,7 +10514,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `reorder_receipts` | `organization_id` | CASCADE | no |
 | `reorder_requests` | `organization_id` | CASCADE | no |
 | `return_requests` | `organization_id` | CASCADE | no |
-| `room_booking_locks` | `organization_id` | CASCADE | no |
 | `saved_ballot_templates` | `organization_id` | CASCADE | no |
 | `saved_reports` | `organization_id` | CASCADE | no |
 | `scheduled_emails` | `organization_id` | CASCADE | no |
