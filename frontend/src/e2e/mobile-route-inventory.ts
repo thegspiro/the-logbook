@@ -770,6 +770,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
+    path: '/members/print-id-cards',
+    source: 'src/modules/membership/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
     path: '/members/scan',
     source: 'src/modules/membership/routes.tsx',
     coverage: 'workflow',

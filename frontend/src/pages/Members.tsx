@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Download,
   Printer,
+  CreditCard,
   RotateCcw,
 } from 'lucide-react';
 import { userService } from '../services/api';
@@ -46,6 +47,10 @@ const Members: React.FC = () => {
   // mean nothing to a member looking someone up. A member without the grant
   // gets a directory; a coordinator gets the management table unchanged.
   const canManageMembers = checkPermission('members.manage');
+  // Selecting members exists to print their badges or ID cards, which the
+  // officer who issues ID credentials does too; exporting the selection stays
+  // with members.manage.
+  const canPrintBadges = canManageMembers || checkPermission('members.manage_id_cards');
   const { formatRank } = useRanks();
   // Adding and importing answer to users.create, not members.manage. Both
   // buttons navigate to tabs on MembersAdminHub, which gates them on the same
@@ -567,7 +572,7 @@ const Members: React.FC = () => {
             </div>
 
             {/* Bulk action bar (#33) */}
-            {canManageMembers && selectedIds.size > 0 && (
+            {canPrintBadges && selectedIds.size > 0 && (
               <div className="mb-3 hidden items-center gap-3 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-2 md:flex">
                 <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
                   {selectedIds.size} selected
@@ -581,12 +586,21 @@ const Members: React.FC = () => {
                     Print Badges
                   </button>
                   <button
-                    onClick={handleExportCSV}
-                    className="inline-flex items-center gap-1 rounded-sm bg-blue-600 px-3 py-1.5 text-xs text-white transition-colors hover:bg-blue-700"
+                    onClick={() => void navigate(`/members/print-id-cards?ids=${[...selectedIds].join(',')}`)}
+                    className="inline-flex items-center gap-1 rounded-sm bg-emerald-700 px-3 py-1.5 text-xs text-white transition-colors hover:bg-emerald-800"
                   >
-                    <Download className="h-3 w-3" />
-                    Export Selected
+                    <CreditCard className="h-3 w-3" />
+                    Print ID Cards
                   </button>
+                  {canManageMembers && (
+                    <button
+                      onClick={handleExportCSV}
+                      className="inline-flex items-center gap-1 rounded-sm bg-blue-600 px-3 py-1.5 text-xs text-white transition-colors hover:bg-blue-700"
+                    >
+                      <Download className="h-3 w-3" />
+                      Export Selected
+                    </button>
+                  )}
                   <button
                     onClick={() => setSelectedIds(new Set())}
                     className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1.5 text-xs transition-colors"
@@ -603,7 +617,7 @@ const Members: React.FC = () => {
                 <table className="w-full">
                   <thead className="bg-theme-input-bg border-theme-surface-border border-b">
                     <tr>
-                      {canManageMembers && (
+                      {canPrintBadges && (
                         <th scope="col" className="w-10 py-3 pr-1 pl-4">
                           <input
                             type="checkbox"
@@ -685,7 +699,7 @@ const Members: React.FC = () => {
                         onClick={(e) => handleRowClick(e, member.id)}
                         className={`hover:bg-theme-surface-secondary cursor-pointer transition-colors ${selectedIds.has(member.id) ? 'bg-blue-500/5' : ''}`}
                       >
-                        {canManageMembers && (
+                        {canPrintBadges && (
                           <td className="w-10 py-4 pr-1 pl-4">
                             <input
                               type="checkbox"

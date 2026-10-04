@@ -104,7 +104,7 @@ def validate_symbology(symbology: str) -> str:
     return symbology
 
 
-def _draw_qr(canvas_obj, value: str, x: float, y: float, size: float) -> None:
+def draw_qr(canvas_obj, value: str, x: float, y: float, size: float) -> None:
     """Draw a QR symbol with its lower-left corner at (x, y), *size* square.
 
     QrCodeWidget reports its own natural bounds, so the drawing is scaled to
@@ -154,7 +154,7 @@ def printable_label_value(
     return ""
 
 
-def _fit_code128(
+def fit_code128(
     code128, value: str, initial_width: float, max_width: float, bar_height: float
 ):
     """Build a barcode without shrinking modules below the scanner-safe floor.
@@ -191,7 +191,7 @@ def _fit_code128(
     return barcode
 
 
-def _fit_qr_size(available_height: float, available_width: float) -> float:
+def fit_qr_size(available_height: float, available_width: float) -> float:
     """Largest square that fits the space left for the symbol.
 
     A QR version 2 symbol is 25 modules plus 4 modules of quiet zone per side;
@@ -456,12 +456,12 @@ def _render_sheet(
 
         symbol_bottom = y + padding + 8
         if symbology == SYMBOLOGY_QR:
-            size = _fit_qr_size(y_cursor - symbol_bottom - 2, usable_w)
-            _draw_qr(c, barcode_value, x + (label_w - size) / 2, symbol_bottom, size)
+            size = fit_qr_size(y_cursor - symbol_bottom - 2, usable_w)
+            draw_qr(c, barcode_value, x + (label_w - size) / 2, symbol_bottom, size)
         else:
             bar_height = 0.35 * inch
             bar_width_unit = 0.008 * inch
-            barcode_obj = _fit_code128(
+            barcode_obj = fit_code128(
                 code128, barcode_value, bar_width_unit, usable_w, bar_height
             )
             barcode_x = x + (label_w - barcode_obj.width) / 2
@@ -534,9 +534,7 @@ def _render_thermal(
         barcode_obj = (
             None
             if symbology == SYMBOLOGY_QR
-            else _fit_code128(
-                code128, barcode_value, bar_width_unit, self_w, bar_height
-            )
+            else fit_code128(code128, barcode_value, bar_width_unit, self_w, bar_height)
         )
 
         y_cursor = content_h - padding
@@ -578,8 +576,8 @@ def _render_thermal(
 
         barcode_y = padding + barcode_text_size + 4
         if barcode_obj is None:
-            size = _fit_qr_size(y_cursor - barcode_y - 2, self_w)
-            _draw_qr(c, barcode_value, padding + (self_w - size) / 2, barcode_y, size)
+            size = fit_qr_size(y_cursor - barcode_y - 2, self_w)
+            draw_qr(c, barcode_value, padding + (self_w - size) / 2, barcode_y, size)
         else:
             barcode_x = padding + (self_w - barcode_obj.width) / 2
             barcode_obj.drawOn(c, barcode_x, barcode_y)

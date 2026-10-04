@@ -207,7 +207,16 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/members/:userId', label: 'Member profile' },
       { path: '/members/:userId/training', label: 'Member training history', module: 'training' },
       { path: '/members/:userId/id-card', label: 'Member ID card' },
-      { path: '/members/print-labels', label: 'Print member labels', permission: 'members.view' },
+      {
+        path: '/members/print-labels',
+        label: 'Print member labels',
+        anyPermission: ['members.manage', 'members.manage_id_cards'],
+      },
+      {
+        path: '/members/print-id-cards',
+        label: 'Print member ID cards',
+        anyPermission: ['members.manage', 'members.manage_id_cards'],
+      },
       { path: '/members/scan', label: 'Scan a member ID', anyPermission: ['users.view', 'members.manage'] },
       { path: '/members/check-in-station', label: 'Check-in station', permission: 'members.check_in' },
       { path: '/members/admin', label: 'Members administration hub', permission: 'members.manage' },

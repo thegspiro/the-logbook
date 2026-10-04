@@ -149,6 +149,19 @@ async def _build_facility_specs(db, org_id, ids, extra_lines):
     return specs, 0
 
 
+def member_badge_value(user) -> str:
+    """What a member's printed badge encodes: the membership number, or a
+    short form of the id for a member without one.
+
+    One definition for the label sheet and the CR80 ID card, so a member's
+    sticker and their plastic card always scan as the same person. The
+    frontend mirror is ``matchesMemberBadgeCode`` in ``utils/memberBadgeCode.ts``.
+    """
+    return _first_scannable_identifier(
+        user.membership_number, fallback=_short_id(user.id)
+    )
+
+
 async def _build_member_specs(db, org_id, ids, extra_lines):
     from app.models.user import User
 
@@ -161,13 +174,10 @@ async def _build_member_specs(db, org_id, ids, extra_lines):
     specs = []
     for u in rows.all():
         name = " ".join(filter(None, [u.first_name, u.last_name])) or "Member"
-        barcode = _first_scannable_identifier(
-            u.membership_number, fallback=_short_id(u.id)
-        )
         specs.append(
             LabelSpec(
                 name=name,
-                barcode_value=barcode,
+                barcode_value=member_badge_value(u),
                 asset_tag=u.membership_number,
             )
         )
@@ -269,7 +279,14 @@ MODULE_LABELS: Dict[str, Tuple[Tuple[str, ...], SpecBuilder]] = {
         _build_prospect_specs,
     ),
     "facilities": (("facilities.view", "facilities.manage"), _build_facility_specs),
-    "membership": (("members.view", "members.manage"), _build_member_specs),
+    # Not members.view, which every seeded position holds: a member label is a
+    # badge that scans as that member, and printing one for a colleague is
+    # the same act as opening their ID card — limited to the officers who
+    # manage member records or issue ID credentials.
+    "membership": (
+        ("members.manage", "members.manage_id_cards"),
+        _build_member_specs,
+    ),
     # Manage-only like inventory: the storage-areas screen is, and printing
     # can assign a barcode to an area that lacks one.
     "storage_areas": (("inventory.manage",), _build_storage_area_specs),

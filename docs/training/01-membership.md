@@ -1811,6 +1811,41 @@ own scan. **Historical rows are
 not rewritten** — a `qr_scan` recorded before this really was written by the QR
 path.
 
+## Printing Plastic ID Cards _(2026-10-04)_
+
+Members → select members → **Print ID Cards**, with `members.manage` or
+`members.manage_id_cards`. The page produces a PDF with one card side per page
+at exactly CR80 size (3.375 × 2.125 in, the standard ID card). Any ID card
+printer accepts that through its ordinary driver — Zebra ZC/ZXP, HID Fargo,
+Evolis, Magicard, Entrust Datacard — with no plug-in to install.
+
+| Option      | Choices                     | When to pick it                                                    |
+| ----------- | --------------------------- | ------------------------------------------------------------------ |
+| Orientation | Landscape, Portrait         | Portrait suits vertical clip and lanyard holders                   |
+| Sides       | Front only, Front and back  | Front and back puts the code and a return address on the back      |
+| Code        | Barcode (Code 128), QR code | Barcode for USB/handheld scanners, QR for phone and tablet cameras |
+
+The page opens on the **department layout**. Changing an option affects only
+that print; **Save as department layout** makes it the starting point for
+whoever prints next. The back's "If found, please return to" text uses the
+department's mailing address (or its physical address) and phone number from
+Organization settings.
+
+To print: open the PDF, choose the card printer, pick the CR80 / ID-1 card size
+if the driver asks, and print at **100% / Actual size** — "Fit to page" shrinks
+the barcode. For two-sided cards turn on duplex in the printer's options, or
+print and flip by hand; pages alternate front, back, front, back. Print one
+**Test card** first to check alignment. Cards print in black only, so they come
+out the same on a monochrome ribbon as on a colour one.
+
+**Who may print badges changed.** The sticker-label badges at
+`/members/print-labels`, and colleague ID cards, now need `members.manage` or
+`members.manage_id_cards`. Before this, any member holding the directory
+permission (`members.view`, which every position has) could print a badge that
+scans as a colleague.
+
+---
+
 ## A Member Profile No Longer Shows Everyone's Gear _(2026-08-24)_
 
 **The Assigned Inventory table used to render on every member profile, for

@@ -242,6 +242,11 @@ class TestModuleRegistry:
     #: printing can assign a barcode to an area that lacks one.
     MANAGE_ONLY_MODULES = {"inventory", "storage_areas"}
 
+    #: Member labels are badges that scan as the member, so printing one for
+    #: a colleague is limited like opening their ID card: members.manage or
+    #: the ID-credential grant, never the members.view every position holds.
+    BADGE_MODULES = {"membership": {"members.manage", "members.manage_id_cards"}}
+
     def test_every_module_accepts_its_manage_grant(self):
         """A manage-only user must be able to print.
 
@@ -257,7 +262,9 @@ class TestModuleRegistry:
     def test_view_grant_is_registered_except_where_deliberately_manage_only(self):
         for module, (permissions, _) in ls.MODULE_LABELS.items():
             actions = {p.split(".")[-1] for p in permissions}
-            if module in self.MANAGE_ONLY_MODULES:
+            if module in self.BADGE_MODULES:
+                assert set(permissions) == self.BADGE_MODULES[module], module
+            elif module in self.MANAGE_ONLY_MODULES:
                 assert actions == {"manage"}, (
                     f"{module} is manage-only by policy; registering a view "
                     "grant here reopens the page gate through this endpoint"
@@ -316,6 +323,20 @@ class TestAuthorizeModule:
 
         # The quartermaster still prints.
         _authorize_module(self._user("inventory.manage"), "inventory")
+
+    def test_members_view_alone_cannot_print_member_badges(self):
+        """A member badge scans as that member; the directory grant every
+        position holds must not print one for a colleague."""
+        from fastapi import HTTPException
+
+        from app.api.v1.endpoints.labels import _authorize_module
+
+        with pytest.raises(HTTPException) as exc:
+            _authorize_module(self._user("members.view", "users.view"), "membership")
+        assert exc.value.status_code == 403
+
+        _authorize_module(self._user("members.manage"), "membership")
+        _authorize_module(self._user("members.manage_id_cards"), "membership")
 
     def test_unknown_module_is_not_found(self):
         from fastapi import HTTPException
