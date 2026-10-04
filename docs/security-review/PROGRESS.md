@@ -16,6 +16,46 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (this PR)** — branch `claude/security-review-reports-analytics-pass7`,
+Feature 29 (Reports & analytics), pass 7. Watchdog pickup: confirmed via
+`list_pull_requests` (state=open) that no `claude/security-review-*` PR
+existed before starting — PR #2892 (Feature 27, Integrations, pass 5) and
+PR #2896 (Feature 28, Security/audit & IP, pass 5) had both already merged,
+both docs-only (0 application-code changes), so neither is a recordable
+event per this file's own rule; cleared below. Rotation row 29 was the first
+`⬜`. **Not a zero-delta pass** — 23 real non-merge commits touched this
+feature's ten files since pass 6 (2026-09-13); every one read in full. All
+verified good except one: `ea939c38` ("let a training requirement exempt
+members who joined before it") routed `_generate_compliance_status` through
+`training_compliance.py`'s shared grandfathering helpers but left its
+sibling `_generate_training_summary`'s `requirement_breakdown` untouched —
+new, concrete evidence for the already-flagged RPT5-29-1 (Pitfall #29 shape),
+recorded as RPT5-29-5 and folded into the same `KNOWN_LIMITATIONS.md` entry
+rather than opened as a separate question. 0 fixes (nothing in the delta was
+a safe mechanical fix); every pass 2-6 finding re-verified intact, none
+regressed. Gate: flake8/black/isort clean (isort 9.0.1, CI's pin),
+`validate_migrations.py --strict` passed (509 revisions, single head),
+719 scoped backend tests passed (1 skipped, environment-only), frontend
+typecheck/lint clean, 42 scoped frontend tests passed. Subscribed for
+CI/review events.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 28, Security, audit & IP, pass 5, PR #2896, merged, docs-only — nothing to record), preserved for history</summary>
+
+**None.** PR [#2896](https://github.com/thegspiro/the-logbook/pull/2896)
+(Feature 28, Security, audit & IP, pass 5) merged clean (`c531e063`,
+"security(security-audit-ip): pass 5"), touching only `docs/security-review/
+SEC2-28-security-audit-ip.md` and `PROGRESS.md` — no application code, so
+per this file's own "a docs-only PR is not a recordable event" rule there is
+nothing to log beyond clearing this row. Rotation row 28 stays ✅. Next:
+Feature 29 (Reports & analytics) — picked up by this same watchdog check,
+recorded above.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 28, Security, audit & IP, pass 5, PR #2896, before it merged), preserved for history</summary>
+
 **PR [#2896](https://github.com/thegspiro/the-logbook/pull/2896)** — branch
 `claude/security-review-security-audit-ip-pass5`, Feature 28 (Security,
 audit & IP), pass 5. Watchdog pickup: confirmed via `list_pull_requests`
@@ -31,6 +71,8 @@ and all previously-fixed ones intact. Gate: flake8/black/isort clean,
 `validate_migrations.py --strict` passed (509 revisions, no migration
 this pass), 268 scoped backend tests passed, frontend typecheck/lint
 clean. Subscribed for CI/review events.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 5, PR #2892, after it merged), preserved for history</summary>
@@ -17243,7 +17285,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
-| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
+| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
@@ -25604,3 +25646,87 @@ errors, `npm run lint` exit 0. Full write-up:
 [`INT-27-integrations.md`](./INT-27-integrations.md)'s **Pass 5** section.
 Rotation row 27 → ✅ (pending PR merge). Next: Feature 28 (Security, audit
 & IP).
+
+---
+
+### 2026-10-04 — Feature 29 (Reports & analytics, pass 7) — real delta, 0 fixes, one finding strengthened
+
+Watchdog pickup: confirmed via `list_pull_requests` (state=open) that no PR
+whose head branch starts with `claude/security-review-` existed before
+starting. PR #2892 (Feature 27, Integrations, pass 5) and PR #2896
+(Feature 28, Security/audit & IP, pass 5) had both already merged by the
+time this check ran; both were docs-only (0 application-code changes), so
+neither is a recordable event per this file's own rule — the stale "Open
+PR" row (still naming #2896) is cleared in this same commit rather than
+given its own PR. Rotation row 29 was the first `⬜`.
+
+Loaded all four prior findings files (`RPT-29-reports-analytics-pass3.md`,
+`RPT2-29-reports-analytics.md`, `RPT4-29-reports-analytics.md`,
+`RPT5-29-reports-analytics.md` — the chronologically latest, continued as
+this pass's "Pass 7" section) plus `CHECKLIST.md` and the `SEC-00` baseline
+before reading any code.
+
+**Not a zero-delta pass, unlike pass 6.** 23 real non-merge commits touched
+at least one of this feature's ten files since pass 6 merged (2026-09-13);
+each read in full via `git show`. (Three additional commits with "Merge
+pull request" titles — `0430faa0`, `bad9fff0`, `703c5123` — are squash/
+rebase history-boundary artifacts in this shallow clone, the same shape
+prior passes' `f8fdd1a` documented, and were excluded after confirming each
+has no recorded parent commit.) All 23 verified good — a real
+credential-exposure fix already landed (`9937d652`, label previews/prints
+no longer encode the applicant's public status-token), a new
+organization-shared label-setup feature with correct org-scoping/
+`copy.deepcopy`/row-locking/cap/FK-validation (`c1e30031`), bounded new
+fields (`8a0d9eaf`), a new org-scoped `storage_areas` label module
+(`999a7195`), and a department's-local-date correctness sweep across
+`reports_service.py`/`dashboard.py`/`dashboard_widget_service.py`/
+`attendance_dashboard_service.py` that also closed a Pitfall #29 "empty set
+reads 100%" gap on `/dashboard/admin-summary` — except one.
+
+**New finding: RPT5-29-5 (MEDIUM, flagged).** `ea939c38` ("let a training
+requirement exempt members who joined before it") routed
+`_generate_compliance_status` through `training_compliance.py`'s shared
+grandfathering helpers (`requirement_applies_to_user`/`catch_up_deadline`/
+`member_join_date`) but left its sibling `_generate_training_summary`'s
+`requirement_breakdown` section untouched — it still counts a
+grandfathered-exempt member as unmet for the identical requirement
+`compliance_status` now correctly excludes. This is RPT5-29-1's own
+already-flagged Pitfall #29 divergence (two reports computing the same
+"compliance" metric by different rules), now reachable with a concrete,
+shipped trigger rather than a hypothetical one, and invisible to
+`tests/test_requirement_grandfathering.py`'s own guard sweep (which only
+catches a call to the shared helpers missing `join_date=`, not a report
+that never calls them at all). Folded into the existing RPT5-29-1 entry in
+`KNOWN_LIMITATIONS.md` rather than opened as a separate architectural
+question — the two closing options are the same ones RPT5-29-1 already
+names. Not fixed: converging the two report shapes (aggregate SQL vs.
+per-member loop) or re-scoping what each claims to measure is a product/
+architecture decision, not a drive-by.
+
+Everything else re-verified unchanged and holding: all 30 routes'
+auth/permission gates (table unchanged since pass 4); zero `.like`/
+`.ilike`/`csv.writer` across all ten files; `SavedReportUpdate`'s
+`apply_updates` fix (RPT5-29-2); the six E712 conversions (RPT5-29-3); the
+dead `reportExportService` deletion (RPT5-29-4) stays deleted;
+`MAX_LABELS_PER_JOB`, `MAX_ACTIVE_SAVED_REPORTS_PER_ORG`, `ExtraLine`'s
+length bound, and `/analytics/export`'s `.limit(1000)` all present;
+`PII_REPORT_PERMISSIONS` still covers all 8 PII-bearing report types;
+`apiCache.ts`'s two pins (`/dashboard/action-items`, `/analytics/export`)
+untouched by the several unrelated-feature commits that also touched that
+file; the one `ondelete="SET NULL"` FK each on `SavedReport` and
+`LabelPrinter` both still `nullable=True`. `RPT2-29-2`, `LBL-29-2`,
+`LBL-29-4`, `DASH-2`, `RPT-5c`/`RPT-6` all re-confirmed unchanged, not
+re-litigated.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean over
+`app/ tests/ alembic/` (isort 9.0.1, CI's pin); `validate_migrations.py
+--strict` passed (509 revisions, single head, no migration of this
+feature's own this pass); scoped backend tests (`-k "reports or label or
+analytics or dashboard or attendance_dashboard or grandfathering"`) 719
+passed, 1 skipped (environment-only — `pywebpush`); frontend `npm run
+typecheck` 0 errors; `npm run lint` 0 errors/0 warnings; scoped frontend
+suite (`npx vitest run src/modules/reports`) 42 passed (5 files). Findings
+doc: [`RPT5-29-reports-analytics.md`](./RPT5-29-reports-analytics.md)'s
+**Pass 7** section. `docs/KNOWN_LIMITATIONS.md`'s RPT5-29-1 entry amended
+with RPT5-29-5's evidence rather than a new entry added. Rotation row 29 →
+✅ (pending PR merge). Next: Feature 30 (Onboarding).
