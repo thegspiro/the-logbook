@@ -319,7 +319,7 @@ const ComplianceMatrixTab: React.FC = () => {
     // role="status" nests one status inside another, and a screen reader
     // announces only the inner one.
     return (
-      <div className="mx-auto max-w-full px-4 py-6 sm:px-6 lg:px-8">
+      <div className="py-6">
         <SkeletonPage rows={6} />
       </div>
     );
@@ -327,7 +327,7 @@ const ComplianceMatrixTab: React.FC = () => {
 
   if (error || !matrix) {
     return (
-      <div className="mx-auto max-w-7xl px-4 py-8">
+      <div className="py-8">
         <div className="alert-danger" role="alert">
           {error || 'No data available'}
         </div>
@@ -337,7 +337,7 @@ const ComplianceMatrixTab: React.FC = () => {
 
   if (requirements.length === 0) {
     return (
-      <div className="mx-auto max-w-7xl px-4 py-8">
+      <div className="py-8">
         <EmptyState
           icon={AlertTriangle}
           title="No active training requirements"
@@ -392,7 +392,7 @@ const ComplianceMatrixTab: React.FC = () => {
   const stepNoun = axis === 'members' ? 'Member' : 'Requirement';
 
   return (
-    <div className="mx-auto max-w-full px-4 py-6 sm:px-6 lg:px-8">
+    <div className="py-6">
       <div className="card overflow-hidden">
         {/* Header — what this is, and which way round it is being read */}
         <div className="border-theme-surface-border flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between">

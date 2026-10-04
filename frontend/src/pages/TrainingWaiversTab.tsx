@@ -192,7 +192,7 @@ const TrainingWaiversTab: React.FC = () => {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+    <div className="py-6">
       {/* Summary Cards */}
       <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div className="card p-4">
@@ -215,12 +215,21 @@ const TrainingWaiversTab: React.FC = () => {
 
       {/* Filters */}
       <div className="mb-4 flex flex-wrap gap-3">
-        <div className="border-theme-surface-border flex overflow-hidden rounded-lg border">
+        {/* Five segments are wider than a 320px phone; the strip scrolls rather
+            than clipping "Inactive" off its end. */}
+        <div
+          className="border-theme-surface-border hscroll flex max-w-full rounded-lg border"
+          role="group"
+          aria-label="Waiver status"
+          data-mobile-scroll-region
+        >
           {(['all', 'active', 'future', 'expired', 'inactive'] as const).map((f) => (
             <button
               key={f}
+              type="button"
               onClick={() => setStatusFilter(f)}
-              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+              aria-pressed={statusFilter === f}
+              className={`touch-target-phone px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
                 statusFilter === f
                   ? 'bg-red-800 text-white'
                   : 'bg-theme-surface text-theme-text-muted hover:text-theme-text-primary'
@@ -353,7 +362,7 @@ const TrainingWaiversTab: React.FC = () => {
       <div className="mt-4 text-center">
         <Link
           to="/members/admin/waivers"
-          className="text-sm text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+          className="inline-flex min-h-11 items-center text-sm text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
         >
           Open full Waiver Management page (includes meetings & shifts)
         </Link>

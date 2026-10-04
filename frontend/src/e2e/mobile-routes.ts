@@ -199,6 +199,73 @@ export const ALL_ROUTES: RouteCheck[] = [
   { path: '/documents', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/members/1/training', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/admin/audit-log', maxSmallTargets: 0, maxTinyText: 0, permissions: ['audit.view'] },
+  // The rest of Training Administration's tabs. Every one of these brought its
+  // own padded page container into the hub's column and was indented twice on
+  // a phone; `expectText` names something only that tab's body renders, since
+  // the hub's tab strip carries every tab's label on every visit.
+  {
+    path: '/training/admin?page=dashboard&tab=overview',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Training Officer Dashboard',
+  },
+  {
+    path: '/training/admin?page=dashboard&tab=expiring-certs',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Expiring Certifications',
+  },
+  {
+    path: '/training/admin?page=dashboard&tab=waivers',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Total',
+  },
+  {
+    path: '/training/admin?page=records&tab=submissions',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Review Submissions',
+  },
+  {
+    path: '/training/admin?page=records&tab=sessions',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Create Training Session',
+  },
+  {
+    path: '/training/admin?page=records&tab=shift-reports',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Shift Completion Reports',
+  },
+  {
+    path: '/training/admin?page=skills-testing&tab=templates',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Tests This Month',
+  },
+  {
+    path: '/training/admin?page=skills-testing&tab=tests',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'No test records found',
+  },
+  {
+    path: '/training/admin?page=enhancements&tab=reports',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Reports & Analytics',
+  },
   {
     path: '/training/admin?page=dashboard&tab=compliance',
     maxSmallTargets: 0,
@@ -368,6 +435,12 @@ export const ALL_ROUTES: RouteCheck[] = [
   // listed as states: arrival alone measures Visibility and nothing else. The
   // hub header above it is the shared AdminHubFrame one, and this is the entry
   // that first measured it at 390px with a primary action beside the title.
+  {
+    path: '/events/admin?tab=past_events',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['events.manage'],
+  },
   {
     path: '/events/admin?tab=settings',
     maxSmallTargets: 0,
