@@ -11,7 +11,7 @@ from typing import Dict, List, Optional
 from uuid import UUID
 
 from loguru import logger
-from sqlalchemy import func, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -1836,15 +1836,21 @@ class ShiftCompletionService:
     async def get_officer_analytics(
         self,
         organization_id: UUID,
+        officer_id: Optional[str] = None,
     ) -> dict:
-        """Get org-wide shift report analytics for training officers.
+        """Shift report analytics: aggregate totals, per-trainee summary,
+        report status counts, and monthly trend data.
 
-        Returns aggregate totals, per-trainee summary, report status
-        counts, and monthly trend data.
+        With ``officer_id`` every figure covers only the reports that officer
+        filed — the "Written by me" summary. Without it the figures are
+        department-wide, which the endpoint serves only to holders of
+        ``training.view_analytics``.
         """
         org_filter = [
             ShiftCompletionReport.organization_id == str(organization_id),
         ]
+        if officer_id is not None:
+            org_filter.append(ShiftCompletionReport.officer_id == str(officer_id))
 
         # Aggregate totals (exclude drafts from counts)
         active_filter = org_filter + [
@@ -1920,7 +1926,9 @@ class ShiftCompletionService:
             )
             .where(*active_filter)
             .group_by("month")
-            .order_by("month")
+            # Newest first so LIMIT keeps the latest six; ascending kept the
+            # department's *first* six months for ever once it had seven.
+            .order_by(desc("month"))
             .limit(6)
         )
         monthly = [
@@ -1929,7 +1937,7 @@ class ShiftCompletionService:
                 "reports": r.reports or 0,
                 "hours": float(r.hours or 0),
             }
-            for r in monthly_result.all()
+            for r in reversed(monthly_result.all())
         ]
 
         return {

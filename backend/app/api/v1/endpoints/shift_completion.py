@@ -6,6 +6,7 @@ Auto-updates pipeline requirement progress for shift/call/hour requirements.
 """
 
 from datetime import date
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from loguru import logger
@@ -281,13 +282,30 @@ async def get_my_shift_stats(
 
 @router.get("/officer-analytics")
 async def get_officer_analytics(
+    scope: Literal["mine", "department"] = Query("mine"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("training.manage")),
 ):
-    """Get org-wide shift report analytics for training officers."""
+    """Shift report analytics.
+
+    ``scope=mine`` (the default) covers only the reports the caller filed.
+    ``scope=department`` covers every officer's and needs
+    ``training.view_analytics`` as well: every company officer holds
+    ``training.manage`` to file reports, and the department's totals are for
+    its leadership. Until 2026-10-04 this endpoint was department-wide for
+    every caller, under a screen titled "Your reporting summary".
+    """
+    if scope == "department" and not _has_permission(
+        "training.view_analytics", _collect_user_permissions(current_user)
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Department-wide analytics need the training.view_analytics permission",
+        )
     service = ShiftCompletionService(db)
     return await service.get_officer_analytics(
         organization_id=current_user.organization_id,
+        officer_id=(str(current_user.id) if scope == "mine" else None),
     )
 
 

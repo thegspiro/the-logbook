@@ -1673,3 +1673,60 @@ class TestNoSelfReports:
         # the finalizer — the trainee themselves.
         d = setup_shift_with_crew
         assert await self._draft_for_training_slot(db_session, d, d["crew_1"]) == 0
+
+
+class TestOfficerAnalyticsScope:
+    """ "Written by me" covers the caller's reports; department covers all."""
+
+    async def _file(self, svc, d, officer_id, trainee_id, shift_date, hours):
+        await svc.create_report(
+            organization_id=uuid.UUID(d["org_id"]),
+            officer_id=uuid.UUID(officer_id),
+            trainee_id=trainee_id,
+            shift_date=shift_date,
+            hours_on_shift=hours,
+        )
+
+    async def test_scoped_to_the_officer_who_filed(
+        self, db_session, setup_shift_with_crew
+    ):
+        d = setup_shift_with_crew
+        svc = ShiftCompletionService(db_session)
+        today = date.today()
+        await self._file(svc, d, d["officer_id"], d["crew_1"], today, 12.0)
+        # crew_1 files one about crew_2: someone else's report.
+        await self._file(svc, d, d["crew_1"], d["crew_2"], today, 6.0)
+
+        mine = await svc.get_officer_analytics(
+            uuid.UUID(d["org_id"]), officer_id=d["officer_id"]
+        )
+        department = await svc.get_officer_analytics(uuid.UUID(d["org_id"]))
+
+        assert mine["total_reports"] == 1
+        assert mine["total_hours"] == 12.0
+        assert [t["trainee_id"] for t in mine["trainees"]] == [d["crew_1"]]
+        assert department["total_reports"] == 2
+        assert department["total_hours"] == 18.0
+
+    async def test_monthly_trend_keeps_the_latest_six_months(
+        self, db_session, setup_shift_with_crew
+    ):
+        d = setup_shift_with_crew
+        svc = ShiftCompletionService(db_session)
+        first = date.today().replace(day=1)
+        for back in range(8):
+            month = first
+            for _ in range(back):
+                month = (month - timedelta(days=1)).replace(day=1)
+            await self._file(svc, d, d["officer_id"], d["crew_1"], month, 1.0)
+
+        months = [
+            m["month"]
+            for m in (await svc.get_officer_analytics(uuid.UUID(d["org_id"])))[
+                "monthly"
+            ]
+        ]
+        assert len(months) == 6
+        assert months == sorted(months)
+        # Ascending-then-LIMIT kept the oldest six and dropped this month.
+        assert months[-1] == first.strftime("%Y-%m")

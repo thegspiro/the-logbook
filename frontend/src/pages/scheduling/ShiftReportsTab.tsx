@@ -79,13 +79,16 @@ import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useOverlaySurface } from '../../hooks/useOverlaySurface';
 import { EmptyState } from '../../components/ux/EmptyState';
 
-type ViewMode = 'my-reports' | 'filed-by-me' | 'create' | 'pending-review' | 'flagged' | 'drafts';
+type ViewMode = 'my-reports' | 'filed-by-me' | 'department' | 'create' | 'pending-review' | 'flagged' | 'drafts';
 
 export const ShiftReportsTab: React.FC = () => {
   const { user, checkPermission } = useAuthStore();
   const userId = user?.id;
   const tz = useTimezone();
   const canManage = checkPermission('training.manage');
+  // Department-wide totals are a leadership view. Every company officer holds
+  // training.manage to file reports, so it cannot be what gates them.
+  const canViewDepartment = canManage && checkPermission('training.view_analytics');
   const isOnline = useOnlineStatus();
   const [pendingOfflineCount, setPendingOfflineCount] = useState(0);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -104,6 +107,7 @@ export const ShiftReportsTab: React.FC = () => {
     const viewParam = searchParams.get('view') as ViewMode | null;
     if (viewParam === 'my-reports') return 'my-reports';
     if (viewParam && canManage && OFFICER_VIEWS.includes(viewParam)) return viewParam;
+    if (viewParam === 'department' && canViewDepartment) return 'department';
     return canManage ? 'filed-by-me' : 'my-reports';
   };
 
@@ -306,6 +310,8 @@ export const ShiftReportsTab: React.FC = () => {
       if (viewMode === 'my-reports') {
         const data = await shiftCompletionService.getMyReports();
         setReports(data);
+      } else if (viewMode === 'department') {
+        setReports([]);
       } else if (viewMode === 'filed-by-me') {
         const data = await shiftCompletionService.getReportsByOfficer();
         setReports(data);
@@ -340,15 +346,17 @@ export const ShiftReportsTab: React.FC = () => {
         .catch(() => {
           /* stats not critical */
         });
-    } else if (viewMode === 'filed-by-me' && canManage) {
+    } else if ((viewMode === 'filed-by-me' && canManage) || (viewMode === 'department' && canViewDepartment)) {
+      // Cleared first so one view never shows a frame of the other's figures.
+      setOfficerAnalytics(null);
       shiftCompletionService
-        .getOfficerAnalytics()
+        .getOfficerAnalytics(viewMode === 'department' ? 'department' : 'mine')
         .then(setOfficerAnalytics)
         .catch(() => {
           /* analytics not critical */
         });
     }
-  }, [viewMode, canManage]);
+  }, [viewMode, canManage, canViewDepartment]);
 
   // Load members for draft edit forms
   useEffect(() => {
@@ -876,7 +884,20 @@ export const ShiftReportsTab: React.FC = () => {
   };
 
   const renderOfficerDashboard = () => {
-    if (!officerAnalytics || officerAnalytics.total_reports === 0) return null;
+    if (!officerAnalytics) return null;
+    const isDepartment = viewMode === 'department';
+    if (officerAnalytics.total_reports === 0) {
+      // "Written by me" has its list's own empty state beneath; the
+      // department view has no list, so it has to say something itself.
+      return isDepartment ? (
+        <EmptyState
+          icon={BarChart3}
+          className="border-theme-surface-border rounded-xl border border-dashed"
+          title="No reports filed yet"
+          description="Department totals appear here once officers file shift reports."
+        />
+      ) : null;
+    }
     const maxReports = Math.max(...officerAnalytics.monthly.map((m) => m.reports), 1);
     const draftCount = officerAnalytics?.status_counts?.['draft'] ?? 0;
     const pendingCount = officerAnalytics?.status_counts?.['pending_review'] ?? 0;
@@ -889,12 +910,16 @@ export const ShiftReportsTab: React.FC = () => {
     return (
       <div className="card space-y-4 p-4 sm:p-5">
         <h2 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
-          <BarChart3 className="h-4 w-4 text-violet-500" aria-hidden="true" /> Your reporting summary
+          <BarChart3 className="h-4 w-4 text-violet-500" aria-hidden="true" />{' '}
+          {isDepartment ? 'Department reporting summary' : 'Your reporting summary'}
         </h2>
+        {isDepartment && (
+          <p className="text-theme-text-muted -mt-2 text-xs">Every officer&apos;s reports, not only yours.</p>
+        )}
         <div className={`grid grid-cols-2 gap-3 ${tileGrid}`}>
           <div className="rounded-lg border border-violet-500/15 bg-violet-500/5 p-3 text-center">
             <p className="text-2xl font-bold text-violet-600 dark:text-violet-400">{officerAnalytics.total_reports}</p>
-            <p className="text-theme-text-muted mt-0.5 text-xs">Reports written</p>
+            <p className="text-theme-text-muted mt-0.5 text-xs">{isDepartment ? 'Reports filed' : 'Reports written'}</p>
           </div>
           <div className="rounded-lg border border-blue-500/15 bg-blue-500/5 p-3 text-center">
             <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
@@ -1518,6 +1543,19 @@ export const ShiftReportsTab: React.FC = () => {
             >
               Written by me
             </button>
+            {canViewDepartment && (
+              <button
+                onClick={() => setViewMode('department')}
+                className={`inline-flex shrink-0 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
+                  viewMode === 'department'
+                    ? 'bg-violet-600 text-white'
+                    : 'text-theme-text-secondary hover:text-theme-text-primary'
+                }`}
+                title="Every officer's reports, summed across the department"
+              >
+                <BarChart3 className="h-3.5 w-3.5" aria-hidden="true" /> Department
+              </button>
+            )}
             {config?.report_review_required && (
               <button
                 onClick={() => setViewMode('pending-review')}
@@ -1573,7 +1611,7 @@ export const ShiftReportsTab: React.FC = () => {
 
       {/* Analytics dashboards */}
       {viewMode === 'my-reports' && renderTraineeDashboard()}
-      {viewMode === 'filed-by-me' && renderOfficerDashboard()}
+      {(viewMode === 'filed-by-me' || viewMode === 'department') && renderOfficerDashboard()}
 
       {/* Encryption notice for officers */}
       {canManage && viewMode === 'create' && (
@@ -2179,8 +2217,8 @@ export const ShiftReportsTab: React.FC = () => {
         </div>
       )}
 
-      {/* Reports List */}
-      {viewMode !== 'create' && (
+      {/* Reports List — the department view is totals only */}
+      {viewMode !== 'create' && viewMode !== 'department' && (
         <>
           {viewMode === 'drafts' && !loading && reports.length > 0 && (
             <div className="mb-3 flex items-center justify-between">

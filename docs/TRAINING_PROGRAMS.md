@@ -2110,7 +2110,9 @@ Trainees can acknowledge shift reports and add their own comments via `POST /{re
 
 **Officer Analytics** (`GET /training/shift-reports/officer-analytics`):
 
-- Org-wide totals: reports, hours, calls, average rating
+- `?scope=mine` (default): the caller's own reports only — the **Written by me** summary
+- `?scope=department`: every officer's reports — the **Department** view; 403 without `training.view_analytics` _(2026-10-04)_
+- Totals: reports, hours, calls, average rating
 - Per-trainee breakdown table
 - Status counts (draft/pending/approved/flagged)
 - Monthly trend data
@@ -2133,7 +2135,7 @@ Trainees can acknowledge shift reports and add their own comments via `POST /{re
 POST   /api/v1/training/shift-reports/                                  Create report (officer)
 GET    /api/v1/training/shift-reports/my-reports                        Trainee's received reports
 GET    /api/v1/training/shift-reports/my-stats                          Trainee's aggregate stats
-GET    /api/v1/training/shift-reports/officer-analytics                 Org-wide analytics (officer)
+GET    /api/v1/training/shift-reports/officer-analytics                 Own analytics; ?scope=department needs training.view_analytics
 GET    /api/v1/training/shift-reports/by-officer                        Officer's filed reports
 GET    /api/v1/training/shift-reports/pending-review                    Reports awaiting review
 GET    /api/v1/training/shift-reports/drafts                            Auto-created drafts

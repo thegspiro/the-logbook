@@ -667,6 +667,15 @@ TRAINING_VIEW_ALL = Permission(
     "View all training records across organization",
     PermissionCategory.TRAINING,
 )
+# Department-wide shift-report analytics: every officer's reports summed, a
+# per-trainee table and the monthly trend. Split from training.manage
+# (2026-10-04) because every company officer holds that to file reports, and
+# the department's totals are a leadership view, not a line officer's.
+TRAINING_VIEW_ANALYTICS = Permission(
+    "training.view_analytics",
+    "View department-wide shift report analytics",
+    PermissionCategory.TRAINING,
+)
 
 
 # Admin Hours
@@ -838,6 +847,7 @@ ALL_PERMISSIONS: list[Permission] = [
     MEMBERS_CREATE,
     # Training (additional)
     TRAINING_VIEW_ALL,
+    TRAINING_VIEW_ANALYTICS,
     # Admin Hours
     ADMIN_HOURS_VIEW,
     ADMIN_HOURS_LOG,
@@ -1372,6 +1382,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             SETTINGS_MANAGE_CONTACT_VISIBILITY.name,
             TRAINING_MANAGE.name,
             TRAINING_CONFIGURE.name,
+            TRAINING_VIEW_ANALYTICS.name,
             COMPLIANCE_MANAGE.name,
             SCHEDULING_MANAGE.name,
             SCHEDULING_ASSIGN.name,
@@ -1443,6 +1454,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             MEMBERS_CREATE.name,
             TRAINING_MANAGE.name,
             TRAINING_CONFIGURE.name,
+            TRAINING_VIEW_ANALYTICS.name,
             COMPLIANCE_MANAGE.name,
             SCHEDULING_MANAGE.name,
             SCHEDULING_ASSIGN.name,
@@ -1508,6 +1520,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             MEMBERS_CREATE.name,
             TRAINING_MANAGE.name,
             TRAINING_CONFIGURE.name,
+            TRAINING_VIEW_ANALYTICS.name,
             COMPLIANCE_MANAGE.name,
             SCHEDULING_MANAGE.name,
             SCHEDULING_ASSIGN.name,
@@ -1856,6 +1869,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             TRAINING_MANAGE.name,
             TRAINING_CONFIGURE.name,
             TRAINING_VIEW_ALL.name,
+            TRAINING_VIEW_ANALYTICS.name,
             COMPLIANCE_VIEW.name,
             COMPLIANCE_MANAGE.name,
             SCHEDULING_VIEW.name,
@@ -2423,6 +2437,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             TRAINING_MANAGE.name,
             TRAINING_CONFIGURE.name,
             TRAINING_VIEW_ALL.name,
+            TRAINING_VIEW_ANALYTICS.name,
             COMPLIANCE_VIEW.name,
             COMPLIANCE_MANAGE.name,
             SCHEDULING_VIEW.name,

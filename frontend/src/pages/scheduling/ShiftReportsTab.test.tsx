@@ -18,6 +18,7 @@ const mockGetOfficerAnalytics = vi.fn();
 const mockGetShiftCrewStatus = vi.fn();
 const mockGetShift = vi.fn();
 let canManage = true;
+let canViewAnalytics = false;
 
 vi.mock('../../services/api', () => ({
   shiftCompletionService: {
@@ -62,7 +63,7 @@ vi.mock('../../hooks/useTimezone', () => ({
 vi.mock('../../stores/authStore', () => ({
   useAuthStore: () => ({
     user: { id: 'user-1', first_name: 'Dana', last_name: 'Ruiz' },
-    checkPermission: () => canManage,
+    checkPermission: (p: string) => (p === 'training.view_analytics' ? canViewAnalytics : canManage),
   }),
 }));
 
@@ -79,6 +80,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   searchParams = new URLSearchParams();
   canManage = true;
+  canViewAnalytics = false;
   mockGetMyReports.mockResolvedValue([]);
   mockGetFiledReports.mockResolvedValue([]);
   mockGetDraftReports.mockResolvedValue([]);
@@ -329,5 +331,58 @@ describe('ShiftReportsTab — the author is not on their own crew list', () => {
     expect(await screen.findByText('Sam Ortiz')).toBeInTheDocument();
     expect(screen.queryByText('Dana Ruiz')).not.toBeInTheDocument();
     expect(screen.getByText('(1 of 1 selected)')).toBeInTheDocument();
+  });
+});
+
+describe('ShiftReportsTab — department totals are a leadership view', () => {
+  const totals: OfficerShiftAnalytics = {
+    total_reports: 9,
+    total_hours: 108,
+    total_calls: 30,
+    avg_rating: null,
+    status_counts: {},
+    trainees: [],
+    monthly: [],
+  };
+
+  // The defect: "Written by me" rendered the whole department's totals
+  // under "Your reporting summary", to every officer who files reports.
+  it("asks only for the viewer's own figures under Written by me", async () => {
+    renderWithRouter(<ShiftReportsTab />);
+
+    await screen.findByRole('button', { name: 'Written by me' });
+    expect(mockGetOfficerAnalytics).toHaveBeenCalledWith('mine');
+    expect(mockGetOfficerAnalytics).not.toHaveBeenCalledWith('department');
+  });
+
+  it('offers no Department view to an officer without the analytics permission', async () => {
+    renderWithRouter(<ShiftReportsTab />);
+
+    await screen.findByRole('button', { name: 'Written by me' });
+    expect(screen.queryByRole('button', { name: /Department/ })).not.toBeInTheDocument();
+  });
+
+  it('ignores ?view=department for an officer without the permission', async () => {
+    searchParams = new URLSearchParams('view=department');
+    renderWithRouter(<ShiftReportsTab />);
+
+    expect(await screen.findByText('No reports filed yet')).toBeInTheDocument();
+    expect(mockGetOfficerAnalytics).not.toHaveBeenCalledWith('department');
+  });
+
+  it('shows leadership the department totals under their own heading, with no list', async () => {
+    canViewAnalytics = true;
+    mockGetOfficerAnalytics.mockImplementation((scope: string) =>
+      Promise.resolve(scope === 'department' ? totals : null)
+    );
+    renderWithRouter(<ShiftReportsTab />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /Department/ }));
+
+    expect(await screen.findByRole('heading', { name: 'Department reporting summary' })).toBeInTheDocument();
+    expect(screen.getByText('9')).toBeInTheDocument();
+    expect(screen.getByText('Reports filed')).toBeInTheDocument();
+    expect(mockGetOfficerAnalytics).toHaveBeenCalledWith('department');
+    expect(screen.queryByRole('heading', { name: /Reports you've written/ })).not.toBeInTheDocument();
   });
 });
