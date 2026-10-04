@@ -16,6 +16,20 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2899](https://github.com/thegspiro/the-logbook/pull/2899)
+(Feature 31, Scheduled tasks, pass 5) merged clean (`7a7d6622`,
+"security(scheduled-tasks): pass 5"), touching only
+`docs/security-review/CRON5-31-scheduled-tasks.md`, `KNOWN_LIMITATIONS.md`
+and `PROGRESS.md` — no application code, so per this file's own "a
+docs-only PR is not a recordable event" rule there is nothing to log beyond
+clearing this row. Independently re-confirmed via `list_pull_requests`
+(state=open) at the start of this iteration that no
+`claude/security-review-*` PR exists now. Rotation row 31 stays ✅. Next:
+Feature 32 (Locations & kiosk) — picked up by this iteration.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 31, Scheduled tasks, pass 5, PR #2899, before it merged), preserved for history</summary>
+
 **PR [#2899](https://github.com/thegspiro/the-logbook/pull/2899)** — branch
 `claude/security-review-scheduled-tasks-pass5`, Feature 31 (Scheduled
 tasks), pass 5. Confirmed via `list_pull_requests` (state=open) that no
@@ -28,6 +42,8 @@ race) is still open in `main.py`. Gate: flake8/black/isort clean,
 scoped backend tests passed, frontend typecheck/lint clean. Subscribed for
 CI/review events. Full write-up:
 [`CRON5-31-scheduled-tasks.md`](./CRON5-31-scheduled-tasks.md).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #2898's merge, Feature 30, Onboarding, pass 5 — the state this pass's PR conflicted with), preserved for history</summary>
@@ -17366,8 +17382,8 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
-| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
-| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
+| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
+| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 
@@ -17377,6 +17393,67 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-04 — Feature 32 (Locations & kiosk, pass 5) — 1 fixed, 0 flagged; LOC-3's dead endpoint is dead no longer
+
+Watchdog pickup. Independently re-confirmed via `list_pull_requests`
+(state=open) that no `claude/security-review-*` PR exists — PR #2899
+(Feature 31, Scheduled tasks, pass 5) had already merged, docs-only (only
+`CRON5-31-scheduled-tasks.md`, `KNOWN_LIMITATIONS.md` and `PROGRESS.md`), so
+per this file's own rule nothing to log beyond clearing that row (done
+above). Rotation row 32 was the first `⬜`. This worktree was also a day
+behind `origin/main` (missing PR #2899's own merge) at the start — rebased
+onto latest `origin/main` before branching, rather than reviewing stale code.
+
+Not a zero-diff pass — real new code landed in this feature's surface since
+pass 4 (`f9c67bdf6`, PR #2527): member ID card ("badge") check-in at a
+room's public kiosk (new `nfc_badge_check_in_enabled` column/toggle, a new
+public `POST .../badge-tap` endpoint, `NfcTagService.kiosk_check_in`), and —
+separately — the four-pass-old dead endpoint (`GET /locations/{id}/display`,
+tracked as LOC-3 since 2026-08-08) picked up a real caller
+(`RoomCheckInPage.tsx`, where a room's own NFC tag sends a member's phone).
+Both read in full against all seven checklist dimensions, not spot-checked;
+15 routes re-enumerated (13 at pass 4, +2 new).
+
+The new badge-tap surface is org-scoped end to end with no client-supplied
+organization id on the path, data-minimized in its response (first name +
+last initial only), dual rate-limited (per-IP and per-room), re-checks both
+its on/off switches fresh on every tap, and shipped with its own 34-test
+suite (`tests/test_kiosk_badge_tap.py`) written alongside the feature —
+verified, not re-authored. The two new permission grants
+(`locations.manage_nfc_tags`, `apparatus.manage_nfc_tags`) are seeded onto
+existing installs by a migration that is additions-only and evidence-gated,
+matching CLAUDE.md Pitfall #23 exactly.
+
+**1 fix — LOC5-32-1 (LOW/MED).** The now-live display endpoint shipped
+without closing the redaction gap `KNOWN_LIMITATIONS.md`'s LOC-3 entry had
+made the explicit condition for giving it a caller: it still returned
+`event_description=event.description` while its public sibling has nulled
+the same field since pass 1. Fixed to match (the current caller doesn't
+read the field, so no functional loss); the endpoint's other two previously
+tracked gaps were re-examined rather than copied forward — the
+`is_valid`/`can_check_in` hardcode is confirmed correct (the feeding query
+already applies the precise canonical window), and the missing `timezone`
+field stays open but low-priority (no current consumer). `KNOWN_LIMITATIONS.md`'s
+LOC-3 entry rewritten to record all three outcomes. Guard test:
+`tests/test_location_display_endpoint.py::TestLocationDisplayInfo::
+test_event_description_is_redacted`.
+
+Every prior-pass finding (LOC-1 through LOC-32-5, the pass-3 `_age_days`/
+`_short_staffed_shifts` addendum) re-verified intact by reading the current
+code directly. Full write-up:
+[`LOC5-32-locations-kiosk.md`](./LOC5-32-locations-kiosk.md).
+
+Gate: flake8/black/isort clean over `app/ tests/ alembic/` (isort 9.0.1,
+CI's pin); `validate_migrations.py --strict` passed (509 revisions, single
+head); repo-tenancy's 8-file guard suite passed (75 tests); 564 scoped
+backend tests passed (1 skipped, pre-existing); full backend suite passed
+(15,696 passed, 21 skipped, all pre-existing/environment-only, 0 failed);
+fresh `npm ci` from the repo root, then frontend typecheck/lint both clean
+(0 errors, 0 warnings).
+
+Rotation row 32 → ✅ (pending PR merge). Next: Feature 33 (Core
+infrastructure).
 
 ### 2026-10-04 — Feature 31 (Scheduled tasks, pass 5) — 0 fixed, 0 new findings; app-review's CRON-40 re-verified still open
 
