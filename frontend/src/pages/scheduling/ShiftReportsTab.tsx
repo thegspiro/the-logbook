@@ -106,6 +106,10 @@ export const ShiftReportsTab: React.FC = () => {
     const viewParam = searchParams.get('view') as ViewMode | null;
     if (viewParam === 'my-reports') return 'my-reports';
     if (viewParam && canManage && OFFICER_VIEWS.includes(viewParam)) return viewParam;
+    // The server lists only the caller's own drafts to anyone without
+    // training.manage, so the view is safe to open for an acting Shift
+    // Officer arriving from a finalization notice.
+    if (viewParam === 'drafts') return 'drafts';
     if (viewParam === 'department' && canViewDepartment) return 'department';
     return canManage ? 'filed-by-me' : 'my-reports';
   };
@@ -191,15 +195,41 @@ export const ShiftReportsTab: React.FC = () => {
   const [traineeStats, setTraineeStats] = useState<TraineeShiftStats | null>(null);
   const [officerAnalytics, setOfficerAnalytics] = useState<OfficerShiftAnalytics | null>(null);
   const [draftBadgeCount, setDraftBadgeCount] = useState(0);
+  // A member without training.manage who is the Shift Officer of the linked
+  // shift. The server lets exactly that officer file the shift's reports and
+  // complete the drafts assigned to them, so the tab offers those two things
+  // and nothing else.
+  const [filesAsShiftOfficer, setFilesAsShiftOfficer] = useState(false);
 
-  // Load draft count badge for managers
+  // Draft count badge. Without training.manage the server returns only the
+  // caller's own drafts, which is what makes this safe to ask for everyone.
   useEffect(() => {
-    if (!canManage) return;
     shiftCompletionService
       .getDraftReports()
       .then((drafts) => setDraftBadgeCount(drafts.length))
       .catch(() => {});
-  }, [canManage, viewMode]);
+  }, [viewMode]);
+
+  useEffect(() => {
+    if (canManage || !linkedShiftId) return;
+    let cancelled = false;
+    schedulingService
+      .getShift(linkedShiftId)
+      .then((shift) => {
+        if (cancelled || !userId || String(shift.shift_officer_id ?? '') !== String(userId)) return;
+        setFilesAsShiftOfficer(true);
+        setViewMode('create');
+      })
+      .catch(() => {
+        /* not this member's shift to file — they keep their own view */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canManage, linkedShiftId, userId]);
+
+  // Shown the officer's switch only when there is something behind it.
+  const showOfficerSwitch = !canManage && (filesAsShiftOfficer || draftBadgeCount > 0 || viewMode === 'drafts');
 
   // Load config for visibility and rating settings
   useEffect(() => {
@@ -665,7 +695,9 @@ export const ShiftReportsTab: React.FC = () => {
       setMemberCalls({});
       setCrewLoadError(false);
       setExpandedTraineeId(null);
-      setViewMode(asDraft ? 'drafts' : 'filed-by-me');
+      // "Written by me" is a training.manage view; an acting Shift Officer
+      // returns to their own.
+      setViewMode(asDraft ? 'drafts' : canManage ? 'filed-by-me' : 'my-reports');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, asDraft ? 'Failed to save drafts' : 'Failed to submit reports'));
     } finally {
@@ -1361,19 +1393,22 @@ export const ShiftReportsTab: React.FC = () => {
             )}
 
             {/* Draft edit actions */}
-            {viewMode === 'drafts' && report.review_status === 'draft' && canManage && editingDraftId !== report.id && (
-              <div className="pt-2">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleEditDraft(report);
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
-                >
-                  <Pencil className="h-4 w-4" /> Complete Draft
-                </button>
-              </div>
-            )}
+            {viewMode === 'drafts' &&
+              report.review_status === 'draft' &&
+              (canManage || report.officer_id === userId) &&
+              editingDraftId !== report.id && (
+                <div className="pt-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEditDraft(report);
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
+                  >
+                    <Pencil className="h-4 w-4" /> Complete Draft
+                  </button>
+                </div>
+              )}
 
             {/* Inline draft edit form */}
             {editingDraftId === report.id && (
@@ -1535,11 +1570,46 @@ export const ShiftReportsTab: React.FC = () => {
             <FileText className="h-5 w-5 text-violet-700 dark:text-violet-300" aria-hidden="true" />
           </div>
           <div>
-            <h2 className="text-theme-text-primary text-lg font-semibold">Shift reports about you</h2>
+            <h2 className="text-theme-text-primary text-lg font-semibold">
+              {viewMode === 'create'
+                ? 'File this shift’s reports'
+                : viewMode === 'drafts'
+                  ? 'Reports to finish'
+                  : 'Shift reports about you'}
+            </h2>
             <p className="text-theme-text-muted text-sm">
-              Feedback your officers write after shifts you worked. Open a report to read it and acknowledge it.
+              {viewMode === 'create' || viewMode === 'drafts'
+                ? 'You were the Shift Officer, so the crew’s reports are yours to file.'
+                : 'Feedback your officers write after shifts you worked. Open a report to read it and acknowledge it.'}
             </p>
           </div>
+        </div>
+      )}
+      {showOfficerSwitch && viewMode !== 'create' && (
+        <div className="segmented-group inline-flex items-center gap-1">
+          {(
+            [
+              ['my-reports', 'About me'],
+              ['drafts', 'Drafts'],
+            ] as const
+          ).map(([mode, label]) => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
+                viewMode === mode
+                  ? 'bg-violet-600 text-white'
+                  : 'text-theme-text-secondary hover:text-theme-text-primary'
+              }`}
+            >
+              {label}
+              {mode === 'drafts' && draftBadgeCount > 0 && viewMode !== 'drafts' && (
+                <span className="ml-1 rounded-full bg-blue-600 px-1.5 py-0.5 text-xs leading-none font-bold text-white">
+                  {draftBadgeCount}
+                </span>
+              )}
+            </button>
+          ))}
         </div>
       )}
 

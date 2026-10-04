@@ -2098,3 +2098,165 @@ class TestTypeSpecificCallCredit:
         )
         await db_session.refresh(progress)
         assert progress.progress_value == 2
+
+
+class TestShiftOfficerFilesWithoutTrainingManage:
+    """The assigned Shift Officer files and completes their own shift's
+    reports without training.manage — and gets nothing beyond that shift."""
+
+    @staticmethod
+    def _user(user_id, org_id, *permissions):
+        return SimpleNamespace(
+            id=user_id,
+            organization_id=org_id,
+            username=f"u-{user_id[:6]}",
+            positions=[SimpleNamespace(permissions=list(permissions))],
+            rank=None,
+        )
+
+    async def test_officer_may_load_the_crew_and_file(
+        self, db_session, setup_shift_with_crew
+    ):
+        from app.api.v1.endpoints import shift_completion as ep
+        from app.schemas.shift_completion import BatchShiftReportCreate
+
+        d = setup_shift_with_crew
+        officer = self._user(d["officer_id"], d["org_id"])  # no permissions
+        crew = await ep.get_shift_crew_status(
+            d["shift_id"], db=db_session, current_user=officer
+        )
+        assert {m["user_id"] for m in crew} >= {d["crew_1"], d["crew_2"]}
+
+        result = await ep.batch_create_shift_reports(
+            BatchShiftReportCreate(
+                shift_id=d["shift_id"],
+                shift_date=d["shift_date"],
+                hours_on_shift=12.0,
+                crew_member_ids=[d["crew_1"]],
+            ),
+            db=db_session,
+            current_user=officer,
+        )
+        assert result["created"] == 1
+
+    async def test_another_crew_member_is_refused(
+        self, db_session, setup_shift_with_crew
+    ):
+        from fastapi import HTTPException
+
+        from app.api.v1.endpoints import shift_completion as ep
+
+        d = setup_shift_with_crew
+        member = self._user(d["crew_1"], d["org_id"])
+        with pytest.raises(HTTPException) as exc:
+            await ep.get_shift_crew_status(
+                d["shift_id"], db=db_session, current_user=member
+            )
+        assert exc.value.status_code == 403
+
+    async def test_officer_of_one_shift_gets_nothing_unlinked(
+        self, db_session, setup_shift_with_crew
+    ):
+        from fastapi import HTTPException
+
+        from app.api.v1.endpoints import shift_completion as ep
+        from app.schemas.shift_completion import ShiftCompletionReportCreate
+
+        d = setup_shift_with_crew
+        officer = self._user(d["officer_id"], d["org_id"])
+        with pytest.raises(HTTPException) as exc:
+            await ep.create_shift_report(
+                ShiftCompletionReportCreate(
+                    trainee_id=d["crew_1"],
+                    shift_date=d["shift_date"],
+                    hours_on_shift=4.0,
+                ),
+                db=db_session,
+                current_user=officer,
+            )
+        assert exc.value.status_code == 403
+
+    async def test_a_shift_id_from_another_department_never_matches(
+        self, db_session, setup_shift_with_crew
+    ):
+        from fastapi import HTTPException
+
+        from app.api.v1.endpoints import shift_completion as ep
+
+        d = setup_shift_with_crew
+        # Same user id, but presenting as a member of a different org.
+        outsider = self._user(d["officer_id"], str(uuid.uuid4()))
+        with pytest.raises(HTTPException) as exc:
+            await ep.get_shift_crew_status(
+                d["shift_id"], db=db_session, current_user=outsider
+            )
+        assert exc.value.status_code == 403
+
+    async def test_drafts_list_shows_only_their_own(
+        self, db_session, setup_shift_with_crew
+    ):
+        from app.api.v1.endpoints import shift_completion as ep
+
+        d = setup_shift_with_crew
+        svc = ShiftCompletionService(db_session)
+        for author, trainee in (
+            (d["officer_id"], d["crew_1"]),
+            (d["crew_1"], d["crew_2"]),
+        ):
+            await svc.create_report(
+                organization_id=uuid.UUID(d["org_id"]),
+                officer_id=uuid.UUID(author),
+                trainee_id=trainee,
+                shift_date=d["shift_date"],
+                hours_on_shift=12.0,
+                shift_id=d["shift_id"],
+                review_status="draft",
+            )
+        officer = self._user(d["officer_id"], d["org_id"])
+        drafts = await ep.get_draft_reports(db=db_session, current_user=officer)
+        assert [r.officer_id for r in drafts] == [d["officer_id"]]
+
+        manager = self._user(d["crew_2"], d["org_id"], "training.manage")
+        assert len(await ep.get_draft_reports(db=db_session, current_user=manager)) == 2
+
+    async def test_officer_completes_their_draft_but_not_one_off_their_shift(
+        self, db_session, setup_shift_with_crew
+    ):
+        from fastapi import HTTPException
+
+        from app.api.v1.endpoints import shift_completion as ep
+        from app.schemas.shift_completion import ShiftCompletionReportUpdate
+
+        d = setup_shift_with_crew
+        svc = ShiftCompletionService(db_session)
+        draft = await svc.create_report(
+            organization_id=uuid.UUID(d["org_id"]),
+            officer_id=uuid.UUID(d["officer_id"]),
+            trainee_id=d["crew_1"],
+            shift_date=d["shift_date"],
+            hours_on_shift=12.0,
+            shift_id=d["shift_id"],
+            review_status="draft",
+        )
+        officer = self._user(d["officer_id"], d["org_id"])
+        updated = await ep.update_shift_report(
+            str(draft.id),
+            ShiftCompletionReportUpdate(officer_narrative="Solid first tour"),
+            db=db_session,
+            current_user=officer,
+        )
+        assert updated.officer_narrative == "Solid first tour"
+
+        # The officer seat moves on: the draft is no longer theirs to touch.
+        await db_session.execute(
+            text("UPDATE shifts SET shift_officer_id = :o WHERE id = :id"),
+            {"o": d["crew_2"], "id": d["shift_id"]},
+        )
+        with pytest.raises(HTTPException) as exc:
+            await ep.update_shift_report(
+                str(draft.id),
+                ShiftCompletionReportUpdate(officer_narrative="edit"),
+                db=db_session,
+                current_user=officer,
+            )
+        assert exc.value.status_code == 403

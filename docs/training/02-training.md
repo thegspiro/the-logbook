@@ -1207,6 +1207,17 @@ what the shift already knows.
 > linked to a shift are unaffected. Stored as
 > `settings.shift_reports.authorship = "shift_officer"`.
 
+> **Only the Shift Officer sees File Shift Report** _(2026-10-04)_. The
+> button on a finished shift's detail panel is shown to that shift's assigned
+> Shift Officer and nobody else — scheduling managers included, who still file
+> from **Shift Reports → New report**. The Shift Officer can file their own
+> shift's reports and complete the drafts assigned to them **without** the
+> `training.manage` permission, so an acting officer in the seat is not stuck:
+> the button opens the form, and a **Drafts** switch appears beside "Shift
+> reports about you" when they have drafts to finish. That grant reaches only
+> their own shift — no other shift, and none of the review, analytics or
+> listing screens.
+
 > **You are never on your own crew list** _(2026-10-04)_. A report is an
 > officer's account of someone else's shift, and one about yourself would
 > credit your own hours, calls and ratings toward your own requirements with

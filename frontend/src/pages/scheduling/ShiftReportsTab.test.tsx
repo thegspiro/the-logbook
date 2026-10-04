@@ -507,3 +507,74 @@ describe('ShiftReportsTab — reports filed by the officer on the rig', () => {
     expect(await screen.findByText(/No recent shifts where you were the Shift Officer/)).toBeInTheDocument();
   });
 });
+
+describe('ShiftReportsTab — an acting Shift Officer without training.manage', () => {
+  beforeEach(() => {
+    canManage = false;
+    mockGetShift.mockReset();
+    mockGetShiftCrewStatus.mockReset();
+    mockGetShift.mockResolvedValue({
+      id: 'sh1',
+      shift_date: '2026-10-03',
+      start_time: '2026-10-03T11:00:00Z',
+      end_time: '2026-10-03T23:00:00Z',
+      apparatus_name: 'Engine 5',
+      shift_officer_id: 'user-1',
+      call_count: 0,
+    });
+    mockGetShiftCrewStatus.mockResolvedValue([
+      { user_id: 'u2', user_name: 'Sam Ortiz', has_active_enrollment: false, has_existing_report: false },
+    ]);
+  });
+
+  it("opens the report form from their own shift's File Shift Report button", async () => {
+    searchParams = new URLSearchParams('shift=sh1');
+    renderWithRouter(<ShiftReportsTab />);
+
+    expect(await screen.findByText('New Shift Completion Report')).toBeInTheDocument();
+    expect(await screen.findByText('Sam Ortiz')).toBeInTheDocument();
+  });
+
+  it('keeps a member who was not the Shift Officer on their own view', async () => {
+    mockGetShift.mockResolvedValue({ id: 'sh1', shift_date: '2026-10-03', shift_officer_id: 'someone-else' });
+    searchParams = new URLSearchParams('shift=sh1');
+    renderWithRouter(<ShiftReportsTab />);
+
+    expect(await screen.findByRole('heading', { name: 'Shift reports about you' })).toBeInTheDocument();
+    await waitFor(() => expect(mockGetShift).toHaveBeenCalled());
+    expect(screen.queryByText('New Shift Completion Report')).not.toBeInTheDocument();
+  });
+
+  it('offers their own drafts and lets them complete one', async () => {
+    mockGetDraftReports.mockResolvedValue([
+      {
+        id: 'd1',
+        organization_id: 'org-1',
+        shift_date: '2026-10-03',
+        trainee_id: 'u2',
+        officer_id: 'user-1',
+        trainee_name: 'Sam Ortiz',
+        hours_on_shift: 12,
+        calls_responded: 2,
+        review_status: 'draft',
+        trainee_acknowledged: false,
+        created_at: '2026-10-03T23:00:00Z',
+        updated_at: '2026-10-03T23:00:00Z',
+      },
+    ]);
+    renderWithRouter(<ShiftReportsTab />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /Drafts/ }));
+    expect(await screen.findByRole('heading', { name: 'Reports to finish' })).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('button', { name: /Sam Ortiz/ }));
+    expect(screen.getByRole('button', { name: /Complete Draft/ })).toBeInTheDocument();
+  });
+
+  it('shows no officer switch to a member with nothing to file', async () => {
+    renderWithRouter(<ShiftReportsTab />);
+
+    await screen.findByRole('heading', { name: 'Shift reports about you' });
+    await waitFor(() => expect(mockGetDraftReports).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: /Drafts/ })).not.toBeInTheDocument();
+  });
+});

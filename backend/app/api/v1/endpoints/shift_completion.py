@@ -10,6 +10,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from loguru import logger
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -21,6 +22,7 @@ from app.api.dependencies import (
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
+from app.models.training import Shift
 from app.models.user import User
 from app.schemas.shift_completion import (
     BatchReviewRequest,
@@ -51,6 +53,44 @@ def _apply_trainee_visibility(report, visibility: dict) -> None:
     if not visibility.get("show_skills_observed", True):
         report.skills_observed = None
     report.reviewer_notes = None
+
+
+def _manages_training(user: User) -> bool:
+    return _has_permission("training.manage", _collect_user_permissions(user))
+
+
+async def _is_officer_of_shift(db: AsyncSession, user: User, shift_id) -> bool:
+    """Whether ``user`` is the assigned Shift Officer of ``shift_id``.
+
+    Org-scoped: a shift id from another department never matches.
+    """
+    if not shift_id:
+        return False
+    officer = (
+        await db.execute(
+            select(Shift.shift_officer_id).where(
+                Shift.id == str(shift_id),
+                Shift.organization_id == str(user.organization_id),
+            )
+        )
+    ).scalar_one_or_none()
+    return bool(officer) and str(officer) == str(user.id)
+
+
+async def _authorize_report_filing(db: AsyncSession, user: User, shift_id) -> None:
+    """``training.manage``, or being the shift's assigned Shift Officer.
+
+    The officer on the rig files that shift's reports, and an acting officer —
+    a senior firefighter in the officer seat — often holds no training
+    permission at all. Being assigned officer of *this* shift is the whole
+    grant: it reaches no other shift, no other department's report, and none
+    of the review, analytics or listing endpoints, which keep
+    ``training.manage``. Mirrors ``_authorize_shift_management`` in
+    scheduling.py, which lets the same officer close the shift out.
+    """
+    if _manages_training(user) or await _is_officer_of_shift(db, user, shift_id):
+        return
+    raise HTTPException(status_code=403, detail="Insufficient permissions")
 
 
 @router.get("/shift-preview/{shift_id}/{trainee_id}")
@@ -84,14 +124,16 @@ async def preview_shift_data(
 async def create_shift_report(
     data: ShiftCompletionReportCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("training.manage")),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Submit a shift completion report for a trainee.
     Auto-updates pipeline requirement progress.
     Only shift officers / training officers can submit.
     If report_review_required is enabled, sets review_status to pending_review.
+    The shift's own Shift Officer may file without training.manage.
     """
+    await _authorize_report_filing(db, current_user, data.shift_id)
     # Check if review is required for this organization
     config_service = TrainingModuleConfigService(db)
     config = await config_service.get_config(current_user.organization_id)
@@ -138,9 +180,13 @@ async def create_shift_report(
 async def get_shift_crew_status(
     shift_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("training.manage")),
+    current_user: User = Depends(get_current_user),
 ):
-    """Get crew members for a shift with enrollment and report status."""
+    """Get crew members for a shift with enrollment and report status.
+
+    Readable by the shift's own Shift Officer, who needs it to file.
+    """
+    await _authorize_report_filing(db, current_user, shift_id)
     service = ShiftCompletionService(db)
     try:
         return await service.get_shift_crew_status(
@@ -163,13 +209,15 @@ async def get_shift_crew_status(
 async def batch_create_shift_reports(
     data: BatchShiftReportCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("training.manage")),
+    current_user: User = Depends(get_current_user),
 ):
     """Create shift reports for all crew members on a shift.
 
     Non-trainees get hours/calls credit only.
-    Trainees with evaluations get full evaluation data.
+    Trainees with evaluations get full evaluation data. The shift's own Shift
+    Officer may file without training.manage; an unlinked batch still needs it.
     """
+    await _authorize_report_filing(db, current_user, data.shift_id)
     config_service = TrainingModuleConfigService(db)
     config = await config_service.get_config(current_user.organization_id)
     if data.save_as_draft:
@@ -448,20 +496,25 @@ async def get_flagged_reports(
 @router.get("/drafts", response_model=list[ShiftCompletionReportResponse])
 async def get_draft_reports(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("training.manage")),
+    current_user: User = Depends(get_current_user),
 ):
     """Get auto-created draft shift completion reports awaiting officer input.
 
     Drafts are created automatically when a shift is finalized for
-    trainees with active program enrollments.
+    trainees with active program enrollments. Without training.manage the
+    caller sees only drafts assigned to them — a Shift Officer completing
+    their own shift's drafts — never the department's.
     """
-    return await _get_reports_by_review_status("draft", db, current_user)
+    drafts = await _get_reports_by_review_status("draft", db, current_user)
+    if _manages_training(current_user):
+        return drafts
+    return [d for d in drafts if str(d.officer_id) == str(current_user.id)]
 
 
 @router.post("/drafts/submit-all")
 async def submit_all_drafts(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("training.manage")),
+    current_user: User = Depends(get_current_user),
 ):
     """Submit all draft reports at once.
 
@@ -481,8 +534,16 @@ async def submit_all_drafts(
 
     submitted = 0
     failed = 0
+    manages = _manages_training(current_user)
     for draft in drafts:
         if draft.officer_id != str(current_user.id):
+            continue
+        # Without training.manage, only drafts on a shift the caller is the
+        # Shift Officer of: a draft assigned to someone who has since lost
+        # the permission and the officer seat is not theirs to release.
+        if not manages and not await _is_officer_of_shift(
+            db, current_user, draft.shift_id
+        ):
             continue
         try:
             await service.update_report(
@@ -563,15 +624,24 @@ async def update_shift_report(
     report_id: str,
     data: ShiftCompletionReportUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("training.manage")),
+    current_user: User = Depends(get_current_user),
 ):
     """Update a draft shift completion report.
 
     Officers use this to complete auto-created drafts with ratings,
     narratives, and skills before submitting. Training pipeline progress is
-    triggered only when review_status transitions to approved.
+    triggered only when review_status transitions to approved. The service
+    allows only the filing officer; without training.manage the report must
+    also be on a shift the caller is the Shift Officer of.
     """
     service = ShiftCompletionService(db)
+    if not _manages_training(current_user):
+        existing = await service.get_report(
+            report_id, organization_id=current_user.organization_id
+        )
+        if not existing:
+            raise HTTPException(status_code=404, detail="Report not found")
+        await _authorize_report_filing(db, current_user, existing.shift_id)
     try:
         update_fields = data.model_dump(exclude_unset=True)
         report = await service.update_report(

@@ -2948,8 +2948,12 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
               {/* Quick Actions — checklists and shift report */}
               {(() => {
                 const shiftEnded = shift.end_time && new Date(shift.end_time).getTime() <= Date.now();
-                const isOfficer = user?.id === shift.shift_officer_id;
-                const showReportBtn = shiftEnded && (isOfficer || canManage);
+                // The officer on the rig files the shift's reports, so only they
+                // are offered the button. Shown to everyone with scheduling
+                // rights it read as something a regular member could do, and
+                // most of them cannot; leadership still files from the Shift
+                // Reports tab.
+                const showReportBtn = shiftEnded && isShiftOfficer;
                 const showChecklistLink = equipmentCheckSummaries.some((s) => !isShiftCheckCompleted(s));
 
                 if (!showReportBtn && !showChecklistLink) return null;
