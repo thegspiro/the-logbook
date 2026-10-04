@@ -144,18 +144,17 @@ is written to the audit log with the old and new value.
 app is just referring to someone: shifts and scheduling, events and check-in,
 the member directory and profiles, dashboards and greetings, notifications and
 emails, inventory assignments, messages, pickers and search, the member ID
-card, the attendance list in meeting minutes, and the photo-use consent
-roster. Searching for either name
-finds the member. Minutes record the name when they are drafted, so changing
-a preferred name later does not rewrite minutes already on file.
+card, the attendance list in meeting minutes, the photo-use consent roster,
+and medical screening records. Searching for either name finds the member.
+Minutes record the name when they are drafted, so changing a preferred name
+later does not rewrite minutes already on file.
 
 **Where the legal name stays.** Anything that may go to a government body or
 has to match an ID keeps the legal first name: reports and every CSV/PDF
 export, training records, certificates and compliance reports, skills testing
 records, elections and ballots, legal documents, signed forms, property
-custody and return records, and the audit log. The
-member's profile shows the legal name under the preferred one so officers can
-always see both.
+custody and return records, and the audit log. The member's profile shows the
+legal name under the preferred one so officers can always see both.
 
 ---
 
