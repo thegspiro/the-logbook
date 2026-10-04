@@ -1495,7 +1495,7 @@ interface TrainingEnhancementsTabProps {
 
 export const TrainingEnhancementsTab: React.FC<TrainingEnhancementsTabProps> = ({ activeTab }) => {
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+    <div className="py-6">
       {activeTab === 'recertification' && <RecertificationSection />}
       {activeTab === 'competency' && <CompetencySection />}
       {activeTab === 'instructors' && <InstructorsSection />}
