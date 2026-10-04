@@ -26,7 +26,11 @@ import redis.asyncio as redis
 
 from app.core.background_claim import claim_key, release_claim, renew_claim
 
-pytestmark = [pytest.mark.integration]
+# Marked per class, not per module: the ownership tests need a real Redis and
+# belong to the integration job, but the policy and source-guard tests need
+# nothing external and should run in the no-database unit job too — a
+# module-level `integration` hid the cheapest guards in this file from it
+# (CLAUDE.md pitfall #30b).
 
 _OURS = "4242"
 _THEIRS = "9999"
@@ -50,6 +54,7 @@ def task_name():
     return f"test_claim_{uuid.uuid4().hex}"
 
 
+@pytest.mark.integration
 class TestRenewalRequiresOwnership:
     async def test_the_owner_can_extend_its_own_claim(self, client, task_name):
         key = claim_key(task_name)
@@ -106,6 +111,7 @@ class TestRenewalRequiresOwnership:
         assert await client.exists(key) == 0, "renewal created the key it did not own"
 
 
+@pytest.mark.integration
 class TestReleaseRequiresOwnership:
     """Shutdown drops its own claim and leaves a live sibling's alone.
 
@@ -137,6 +143,7 @@ class TestReleaseRequiresOwnership:
         assert await release_claim(client, task_name, _OURS) is False
 
 
+@pytest.mark.unit
 class TestRenewalPolicyIsTheCallersChoice:
     async def test_a_redis_failure_propagates(self, task_name):
         """The helper reports mechanism; `main.py` decides fail-open.
@@ -168,6 +175,7 @@ class TestRenewalPolicyIsTheCallersChoice:
         assert await renew_claim(Replying(), task_name, _OURS, 120) is expected
 
 
+@pytest.mark.unit
 class TestTheLoopsActOnTheAnswer:
     """Source guards. The loops live in `main.py`'s lifespan closure and are
     not callable from a test without standing up the whole app, so the
