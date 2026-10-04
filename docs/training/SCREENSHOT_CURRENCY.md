@@ -1,5 +1,129 @@
 # Screenshot currency
 
+## Watchdog check-in: rebased onto main, 13 new commits audited, 6 stale shots re-shot, 2026-10-04
+
+This branch had drifted 13 commits behind `main` (merge-base `9a3114d76`, through
+PRs #2885–#2892). Rebased cleanly before this session began; nothing to
+resolve there. The 13, newest first:
+
+- `bf0a45a69` (`security(integrations): pass 5`) and its merge/record commits
+  touch only `docs/security-review/INT-27-integrations.md` and
+  `docs/security-review/PROGRESS.md` — nothing for this sweep.
+- `80a4ec3a8`, `2c9d74fc5`, `8dc5a2f7f`, `0a1133507` are merge commits (PRs
+  #2889/#2888/#2887 plus a main-merge inside one of them). Diffed each against
+  its own first parent: none carry anything beyond their already-listed
+  constituent commits. `f5eec723e`'s diff against its first parent is large
+  (111 files) only because it merges `origin/main` into a feature branch —
+  confirmed `ea939c38d`, the requirement-grandfathering commit a prior entry
+  below already audited, is an ancestor of `e2ff2d544`, i.e. already in `main`
+  before this window, not new content.
+- `531b1daaf` widens `primaryFillContrast.test.ts`'s own timeout (5s → 30s);
+  no application code touched. Nothing for this sweep.
+- `6b9843682` rewrites one backend test's assertion to match
+  `User.is_active`'s new SQL; no application code touched. Nothing for this
+  sweep.
+- `60855c344` (lets PROBATIONARY members sign in and be scheduled) touches
+  only `backend/app/models/user.py`, `scheduling_service.py`,
+  `shift_eligibility_service.py` and `nfc_tag_service.py` — no frontend file,
+  so nothing for a screenshot to picture differently.
+- `df5696db3` adds a sign-in notice to `PublicFormPage.tsx` for a form that
+  needs authentication (`require_authentication` OR
+  `!allow_multiple_submissions`). Checked against `10-11-public-form-dark`,
+  the only shot that opens a public form: the demo's one `is_public` form
+  (`Community Event Request`) is seeded with `require_authentication: false`
+  and never sets `allow_multiple_submissions`, which defaults `true` on the
+  backend schema — so `formNeedsSignIn` evaluates `false` and the notice never
+  renders for it. Unaffected.
+- `f9435c53f` reworks the NFC writer/hint on `EventQRCodePage`,
+  `AdminHoursQRCodePage` and `AdminHoursPage`. Checked every screen with an
+  existing shot, by looking at the images rather than trusting the diff:
+  - `04-04-event-qr-code` is a *viewport* capture (`fullPage` unset → false),
+    1440×900, and the committed image already ends right at the bottom of the
+    QR code box — the Instructions list and the NFC section both sit below the
+    fold in both the old and new code. Unaffected.
+  - `19-41-my-admin-hours` is `fullPage: true` and does carry the page-header
+    `NfcTapButton` this commit relabels (`"Tap Tag"` → `"Tap a tag to clock
+    in"`) — but `NfcTapButton` "renders nothing when Web NFC is unavailable"
+    (its own docstring), and the capture harness runs headless Chromium over
+    `http://localhost`, which has neither Chrome-on-Android nor HTTPS. The
+    button was never in either image. Unaffected.
+  - No manifest entry captures `AdminHoursQRCodePage` or the apparatus
+    `ShiftDetailPanel`'s NFC card at all.
+  - The guide's own officer-facing NFC section (`04-events-meetings.md`) does
+    describe the old, always-open "Write to an NFC tag" control by name, and
+    that text is now wrong: the control is unconditionally permission-gated
+    (`events.manage`/`admin_hours.manage`) and starts collapsed behind a new
+    "Set up an NFC tag" toggle. No screenshot of it exists — the guide already
+    explains why: Web NFC cannot be exercised by headless Chromium — so this
+    is a text-only fix, applied directly (see the `04-events-meetings.md`
+    diff on this branch).
+- `d8b66c4e1` (`docs(workflow-review): W51 Meeting minutes`) rewrites
+  `MinutesPage.tsx` substantially: meeting dates now go through
+  `formatCalendarDate`/`formatTimeOfDay` instead of being printed as the raw
+  `meeting_date` string, the "Pending Approval" tile reads from the minutes
+  service's own stats instead of the meeting summary's, a meeting that already
+  has minutes grows a new "open the minutes" link, and the meeting-type
+  dropdown drops from offering all 8 minutes types to the 5 a meeting record
+  actually accepts (`docs/KNOWN_LIMITATIONS.md`'s new W51-4 entry). **Stale,
+  confirmed by the committed image itself**: it showed the unformatted
+  `2026-09-21 at 18:30`, exactly the raw-string rendering this commit
+  replaced. Re-shot `04-14-meeting-minutes`. Also fixed the guide's own
+  "Creating Minutes" steps, which still listed Trustee/Executive/Annual among
+  the offered meeting types and still said "Click **Create Minutes**" for a
+  button labelled **Record Minutes** (that rename predates this window —
+  `git log -S` puts it at #2709 — left as pre-existing, out of this sweep).
+- `fb78d866e` ("Fix Training Setup and compliance config layout on phones")
+  — the mobile-only parts (320/390px padding, touch targets, heading-level
+  fixes) reach no captured shot: no manifest entry targets `viewport:
+  "mobile"` on any Training Setup or compliance-config route, confirmed
+  against the full list of `mobile`-viewport ids. Three changes in the same
+  commit are **not** mobile-gated, though, and all three are stale:
+  - `ComplianceRequirementsConfigPage.tsx`'s "compliant" / "at risk" /
+    "non-compliant" preview text moved `green-600`/`yellow-600`/`red-600` →
+    `green-800`/`amber-800`/`red-800` — the same AA-contrast-floor class of
+    fix CLAUDE.md's 2026-09-07 note describes for `btn-success`/`btn-warning`/
+    `btn-info` — and the Profiles tab's edit/delete icon buttons moved to the
+    `btn-icon` utility, which adds a 44px minimum size unconditionally, not
+    only under `max-md:`. Re-shot `02-66-compliance-thresholds`,
+    `08-69-compliance-requirements-config` (same default Thresholds tab) and
+    `08-70-compliance-profiles`; the darker status-word colours and the
+    larger, more-spaced icon buttons are both visible in the new captures.
+  - `HistoricalImportPage.tsx` and `ExternalTrainingPage.tsx` each lost their
+    own page container's side padding (`mx-auto max-w-7xl px-4 py-8
+    sm:px-6 lg:px-8` → `py-6`, and `p-6` → `py-6`) — both pages render only
+    inside Training Administration's own padded hub column and were
+    double-indented. The removal isn't gated to small viewports, so the
+    desktop capture's content shifts flush with the hub header above it.
+    Measured against the committed images before re-shooting: `Import
+    Historical Training`'s heading sat ~32px right of `ADMINISTRATION` above
+    it, and `External Training Integrations`' sat ~24px right of it — both now
+    align. Re-shot `02-02-historical-import-preview` and
+    `02-42-external-integrations`.
+  - Everything else in the commit (`h3`→`h2`/`h4`→`h3` heading-level fixes,
+    new `aria-label`s, `min-h-10`→`min-h-11` on the hub's own quick-action
+    buttons, mobile-only `touch-target-phone`/`mobile-touch-target` additions)
+    produces no visible change at the 1440×900 width every affected shot is
+    captured at. `CreatePipelinePage.tsx`'s own padding fix is moot for this
+    sweep regardless — nothing captures the Pipelines tab, nor `tab=courses`
+    or `tab=metrics`.
+
+**Re-seeding note.** Capturing the six re-shots needed a from-scratch demo
+department, and the first seed run tripped the admin-password-reset limiter
+(5 per 5 minutes, 15-minute lockout) after an earlier interrupted run had
+already used part of its quota against the same IP — the seeder's own
+in-process pacing (`Throttle` in `seed_demo_data.py`) can't see a previous
+process's calls, only its own. Rather than wait out a lockout the seeder's own
+comments say normal runs never trigger, the local backend was restarted with
+`RATE_LIMIT_ENABLED=false` (permitted outside production;
+`ENVIRONMENT=testing` here) for this disposable stack, and the re-seed
+completed in under two minutes. Not a finding — a one-off consequence of
+restarting a seed run mid-flight, noted in case a future session hits the same
+wait.
+
+`audit_images.py --baseline scripts/screenshots/audit_baseline.txt` reports no
+new findings, both before and after the re-shoots (582 images checked each
+time).
+
 ## Watchdog check-in: rebased onto main, three new commits audited, 2026-10-03 (2)
 
 This branch had drifted three commits behind `main` (merge-base `812b15cd4`):
