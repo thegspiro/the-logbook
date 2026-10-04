@@ -244,7 +244,7 @@ const TrainingSessionLinkageCard: React.FC<TrainingSessionLinkageCardProps> = ({
     </div>
   );
 
-  const cardClass = 'bg-theme-surface rounded-lg border-l-4 border-red-600 p-6 shadow-sm backdrop-blur-xs';
+  const cardClass = 'card border-l-4 border-l-red-600 p-6';
 
   if (!session) {
     return (

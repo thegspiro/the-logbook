@@ -35,7 +35,7 @@ export const EventAttendeesCard: React.FC<EventAttendeesCardProps> = ({ attendee
   const total = goingCount ?? attendees.length;
 
   return (
-    <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+    <div className="card p-6">
       <h2 className="text-theme-text-primary mb-4 flex items-center gap-2 text-lg font-medium">
         <Users className="h-5 w-5" aria-hidden="true" />
         Who&apos;s going{total > 0 ? ` (${total})` : ''}
