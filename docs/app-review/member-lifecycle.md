@@ -168,16 +168,16 @@ code directly, which is the ELEC-5/CI-5 check applied to this file.
 
 ### Pass 3 completion gate
 
-| Check                       | Result                                               |
-| --------------------------- | ---------------------------------------------------- |
-| `npm run typecheck`         | ✅ 0 errors (no frontend change)                     |
-| `flake8 app/ tests/`        | ✅ 0 violations                                      |
-| `black --check app/ tests/` | ✅ unchanged                                         |
-| `isort --check-only`        | ✅ clean                                             |
-| `npm run lint`              | ✅ 0 errors                                          |
-| Docs link check             | ✅ 0 broken                                          |
-| Lifecycle-related tests     | ✅ **257 passed, 1 skipped**                         |
-| Whole backend suite         | 1 failure, caused by this pass and fixed — see below |
+| Check                       | Result                                                                  |
+| --------------------------- | ----------------------------------------------------------------------- |
+| `npm run typecheck`         | ✅ 0 errors (no frontend change)                                        |
+| `flake8 app/ tests/`        | ✅ 0 violations                                                         |
+| `black --check app/ tests/` | ✅ unchanged                                                            |
+| `isort --check-only`        | ✅ clean                                                                |
+| `npm run lint`              | ✅ 0 errors                                                             |
+| Docs link check             | ✅ 0 broken                                                             |
+| Lifecycle-related tests     | ✅ **257 passed, 1 skipped**                                            |
+| Whole backend suite         | ✅ **15,723 passed, 21 skipped, 0 failed** after the baseline fix below |
 
 **The whole-suite run found a failure the targeted selection could not.**
 `test_org_scoping_ratchet.py::test_baseline_has_no_stale_entries` went red on
