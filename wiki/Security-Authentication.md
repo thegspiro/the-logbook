@@ -115,6 +115,27 @@ The ledger is keyed on IP address only and holds no account or member data.
 Redis-backed and shared across workers, with a capped, evicted per-process
 fallback.
 
+### Account Lockout, Unlock and the Sign-In Audit Trail _(2026-10-04)_
+
+After `MAX_LOGIN_ATTEMPTS` (5) consecutive failures, password or second
+factor, an account is locked for `ACCOUNT_LOCKOUT_DURATION_MINUTES` (15). With
+`ACCOUNT_LOCKOUT_REVEAL=False` (the default) the sign-in screen still answers
+"Incorrect username or password", so it never confirms that an account exists.
+The lock is visible instead to the people who can lift it: the **Members**
+admin page shows "Sign-in locked until …" to `members.manage` holders, with an
+**Unlock** action (`POST /users/{id}/unlock`). Unlocking clears the failure
+count and is audited as `account_unlocked`. Resetting the password also clears
+the lock.
+
+Every sign-in event is written to the tamper-evident audit log under category
+`authentication`: `login` (with `method`: `password`, `password+totp` or
+`password+recovery_code`), `login_failed` (with `reason` and `stage`),
+`account_locked` on the attempt that sets the lock, and `logout`. A failure
+against an identifier that matches no account is recorded with no member and
+no organization, and the identifier itself is not stored, because members
+type passwords into that box. The security dashboard's "failed logins in the
+last hour" counts the organization's `login_failed` rows.
+
 ---
 
 ## OAuth

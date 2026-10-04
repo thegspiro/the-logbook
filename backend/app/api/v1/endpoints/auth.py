@@ -34,6 +34,13 @@ from app.api.dependencies import (
 from app.core.audit import log_audit_event
 from app.core.captcha import require_captcha
 from app.core.config import settings
+from app.core.constants import (
+    AUDIT_CATEGORY_AUTHENTICATION,
+    AUDIT_EVENT_ACCOUNT_LOCKED,
+    AUDIT_EVENT_LOGIN,
+    AUDIT_EVENT_LOGIN_FAILED,
+    AUDIT_EVENT_LOGOUT,
+)
 from app.core.database import database_manager, get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.issued_secrets import recall as recall_issued_secret
@@ -75,7 +82,12 @@ from app.schemas.auth import (
 from app.schemas.organization import AppearanceSettings, AuthSettings
 from app.schemas.user import normalize_bottom_nav_slots
 from app.services import mfa_service
-from app.services.auth_service import RESET_TOKEN_EXPIRY_MINUTES, AuthService
+from app.services.auth_service import (
+    AUTH_FAILURE_ACCOUNT_LOCKED,
+    RESET_TOKEN_EXPIRY_MINUTES,
+    AuthFailure,
+    AuthService,
+)
 from app.services.branding_service import get_primary_branding
 from app.services.security_monitoring import security_monitor
 from app.utils.security_notifications import notify_security_event
@@ -661,6 +673,74 @@ async def register(
     return response
 
 
+async def _audit_sign_in(
+    db: AsyncSession,
+    request: Request,
+    event_type: str,
+    severity: str,
+    event_data: dict,
+    *,
+    user_id: str | None,
+    organization_id: str | None,
+    username: str | None = None,
+) -> None:
+    """Write one sign-in event to the audit trail (W02-3).
+
+    HIPAA §164.312(b) audit controls cover sign-in, and the security
+    dashboard's failed-login figure counts these rows. A failure against an
+    identifier that matches no account has no member and no organization,
+    so it is written platform-level (both NULL) rather than guessed into a
+    tenant. ``create_log_entry`` uses a savepoint and swallows its own
+    errors, so a failed audit write never changes the sign-in outcome.
+    """
+    await log_audit_event(
+        db=db,
+        event_type=event_type,
+        event_category=AUDIT_CATEGORY_AUTHENTICATION,
+        severity=severity,
+        event_data=event_data,
+        user_id=user_id,
+        username=username,
+        organization_id=organization_id,
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+
+
+async def _audit_refused_sign_in(
+    db: AsyncSession, request: Request, failure: AuthFailure, *, stage: str
+) -> None:
+    """Audit a refused sign-in, and the lockout it caused, then commit.
+
+    The caller raises next, and ``get_db`` rolls back on an exception, so
+    the rows are committed here or they are lost.
+    """
+    await _audit_sign_in(
+        db,
+        request,
+        AUDIT_EVENT_LOGIN_FAILED,
+        "warning",
+        {"reason": failure.reason, "stage": stage},
+        user_id=failure.user_id,
+        organization_id=failure.organization_id,
+    )
+    if failure.locked_now:
+        await _audit_sign_in(
+            db,
+            request,
+            AUDIT_EVENT_ACCOUNT_LOCKED,
+            "warning",
+            {
+                "stage": stage,
+                "max_attempts": settings.MAX_LOGIN_ATTEMPTS,
+                "lockout_minutes": settings.ACCOUNT_LOCKOUT_DURATION_MINUTES,
+            },
+            user_id=failure.user_id,
+            organization_id=failure.organization_id,
+        )
+    await db.commit()
+
+
 @router.post(
     "/login",
     dependencies=[rate_limit_login(), Depends(enforce_suspicious_ip)],
@@ -717,6 +797,12 @@ async def login(
             await record_auth_failure(login_ip)
         except Exception:
             logger.debug("suspicious-IP counter update failed on login failure")
+        await _audit_refused_sign_in(
+            db,
+            request,
+            auth_service.last_auth_failure or AuthFailure("unknown"),
+            stage="password",
+        )
         raise CodedHTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=auth_error or "Incorrect username or password",
@@ -726,6 +812,16 @@ async def login(
 
     # Check if user is active
     if not user.is_active:
+        await _audit_refused_sign_in(
+            db,
+            request,
+            AuthFailure(
+                "account_inactive",
+                user_id=str(user.id),
+                organization_id=str(user.organization_id),
+            ),
+            stage="password",
+        )
         raise CodedHTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is inactive. Please contact an administrator.",
@@ -783,6 +879,17 @@ async def login(
             detail="Service temporarily unavailable. Please try again in a few moments.",
             error_code=ErrorCode.SYS_DB_UNAVAILABLE,
         )
+
+    await _audit_sign_in(
+        db,
+        request,
+        AUDIT_EVENT_LOGIN,
+        "info",
+        {"method": "password"},
+        user_id=str(user.id),
+        organization_id=str(user.organization_id),
+        username=user.username,
+    )
 
     # SEC: Tokens are transported exclusively via httpOnly cookies.
     # Do not include tokens in the JSON body to prevent XSS exfiltration.
@@ -956,19 +1063,33 @@ async def mfa_login(
     if locked_until and locked_until.tzinfo is None:
         locked_until = locked_until.replace(tzinfo=timezone.utc)
     if locked_until and locked_until > now:
+        await _audit_refused_sign_in(
+            db,
+            request,
+            AuthFailure(
+                AUTH_FAILURE_ACCOUNT_LOCKED,
+                user_id=str(user.id),
+                organization_id=str(user.organization_id),
+            ),
+            stage="second_factor",
+        )
         raise invalid
 
     verified = False
+    method = None
     if data.code:
         verified = await _verify_and_consume_totp(db, user, data.code)
+        method = "password+totp" if verified else None
     if not verified and data.recovery_code:
         verified = await _verify_and_consume_recovery_code(db, user, data.recovery_code)
+        method = "password+recovery_code" if verified else None
 
     if not verified:
         # Count the failed second factor toward the account lockout, mirroring
         # the password-step logic in AuthService.authenticate_user.
         user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
-        if user.failed_login_attempts >= settings.MAX_LOGIN_ATTEMPTS:
+        locked_now = user.failed_login_attempts >= settings.MAX_LOGIN_ATTEMPTS
+        if locked_now:
             user.locked_until = now + timedelta(
                 minutes=settings.ACCOUNT_LOCKOUT_DURATION_MINUTES
             )
@@ -988,7 +1109,18 @@ async def mfa_login(
             )
         except Exception:
             logger.debug("brute-force detection failed on MFA failure")
-        await db.commit()
+        # Commits the counter above along with the audit rows.
+        await _audit_refused_sign_in(
+            db,
+            request,
+            AuthFailure(
+                "invalid_second_factor",
+                user_id=str(user.id),
+                organization_id=str(user.organization_id),
+                locked_now=locked_now,
+            ),
+            stage="second_factor",
+        )
         try:
             await record_auth_failure(get_client_ip(request))
         except Exception:
@@ -1025,6 +1157,16 @@ async def mfa_login(
         user=user,
         ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
+    )
+    await _audit_sign_in(
+        db,
+        request,
+        AUDIT_EVENT_LOGIN,
+        "info",
+        {"method": method},
+        user_id=str(user.id),
+        organization_id=str(user.organization_id),
+        username=user.username,
     )
 
     body: dict = {
@@ -1450,6 +1592,17 @@ async def logout(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Unable to end your session. Please close your browser and log in again.",
         )
+
+    await _audit_sign_in(
+        db,
+        request,
+        AUDIT_EVENT_LOGOUT,
+        "info",
+        {},
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+        username=current_user.username,
+    )
 
     response = JSONResponse(content={"message": "Successfully logged out"})
     _clear_auth_cookies(response)

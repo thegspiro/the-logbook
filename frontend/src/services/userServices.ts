@@ -189,6 +189,15 @@ export const userService = {
   },
 
   /**
+   * Lift a sign-in lockout before it expires (members.manage). Clears the
+   * failed-attempt count with it.
+   */
+  async adminUnlockAccount(userId: string): Promise<{ message: string }> {
+    const response = await api.post<{ message: string }>(`/users/${userId}/unlock`);
+    return response.data;
+  },
+
+  /**
    * Get notification preferences for the current user
    */
   async getNotificationPreferences(userId: string): Promise<import('../types/user').NotificationPreferences> {

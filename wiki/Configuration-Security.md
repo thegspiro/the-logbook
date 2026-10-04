@@ -30,7 +30,7 @@ Configure security settings for The Logbook, including authentication, encryptio
 | Password history   | 12            | Cannot reuse last 12 passwords       |
 | Max password age   | 90 days       | Forced change after 90 days          |
 | Lockout threshold  | 5 attempts    | Account locked after 5 failed logins |
-| Lockout duration   | 30 minutes    | Auto-unlock after 30 minutes         |
+| Lockout duration   | 15 minutes    | Auto-unlock after 15 minutes         |
 
 ---
 

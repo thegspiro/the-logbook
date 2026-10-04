@@ -35,7 +35,7 @@ from app.api.dependencies import (
 )
 from app.core.audit import log_audit_event
 from app.core.config import settings
-from app.core.constants import ROLE_MEMBER
+from app.core.constants import AUDIT_EVENT_ACCOUNT_UNLOCKED, ROLE_MEMBER
 from app.core.database import database_manager, get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.permissions import get_rank_default_permissions
@@ -811,8 +811,15 @@ def _redact_contact_fields(
     """
     payload = UserWithRolesResponse.model_validate(user)
     if is_admin:
+        # Only a lock still in force is news; an expired timestamp is history.
+        if payload.locked_until is not None and payload.locked_until <= datetime.now(
+            timezone.utc
+        ):
+            payload.locked_until = None
         return payload
 
+    # Lock state is for the people who can lift it (W02-4).
+    payload.locked_until = None
     _clear_hidden_contact_fields(payload, visibility, resolve_profile_visibility(user))
     _clear_leadership_only_fields(payload)
     return payload
@@ -2309,6 +2316,74 @@ async def admin_reset_mfa(
     await db.commit()
 
     return {"message": f"MFA has been reset for {target_username}"}
+
+
+@router.post(
+    "/{user_id}/unlock",
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(_rate_limit_admin_reset)],
+)
+async def admin_unlock_account(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Lift a sign-in lockout before it expires (workflow review W02-4).
+
+    After ``MAX_LOGIN_ATTEMPTS`` failures an account is locked, and the
+    sign-in screen deliberately cannot say so. The member calls an
+    administrator, who sees the lock on the Members page and can lift it
+    here without resetting the password. Clears the failure count with the
+    lock, so the member gets the full allowance back.
+
+    **Permissions required:** members.manage
+    """
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
+        .where(User.deleted_at.is_(None))
+        .options(selectinload(User.positions))
+        .with_for_update()
+    )
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    await _enforce_account_reset_ceiling(current_user, user, db)
+
+    locked_until = user.locked_until
+    if locked_until and locked_until.tzinfo is None:
+        locked_until = locked_until.replace(tzinfo=timezone.utc)
+    if not locked_until or locked_until <= datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This account is not locked",
+        )
+
+    user.locked_until = None
+    user.failed_login_attempts = 0
+
+    await log_audit_event(
+        db=db,
+        event_type=AUDIT_EVENT_ACCOUNT_UNLOCKED,
+        event_category="user_management",
+        severity="info",
+        event_data={
+            "target_user_id": str(user_id),
+            "target_username": user.username,
+            "locked_until": locked_until.isoformat(),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    await db.commit()
+
+    return {"message": f"{user.username} can sign in again"}
 
 
 @router.get("/{user_id}/deletion-impact", response_model=DeletionImpactResponse)
