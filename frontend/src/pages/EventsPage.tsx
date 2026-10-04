@@ -100,7 +100,7 @@ const URGENCY_TICK_MS = 60_000;
 /* One row of the overflow menu. `max-md` grows it to the 44px touch minimum
    without inflating the same menu on a desktop pointer. */
 const MENU_ITEM_CLASS =
-  'text-theme-text-primary hover:bg-theme-surface-hover flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors max-md:min-h-[44px]';
+  'text-theme-text-primary hover:bg-theme-surface-hover flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors touch:min-h-[44px]';
 
 export const EventsPage: React.FC = () => {
   const [events, setEvents] = useState<EventListItem[]>([]);
@@ -900,7 +900,7 @@ export const EventsPage: React.FC = () => {
             <div className="segmented-group inline-flex shrink-0 items-center">
               <button
                 onClick={() => setShowPastEvents(false)}
-                className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors max-md:min-h-[44px] ${
+                className={`touch:min-h-[44px] rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
                   !showPastEvents
                     ? 'bg-red-800 text-white shadow-sm'
                     : 'text-theme-text-secondary hover:text-theme-text-primary'
@@ -910,7 +910,7 @@ export const EventsPage: React.FC = () => {
               </button>
               <button
                 onClick={() => setShowPastEvents(true)}
-                className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors max-md:min-h-[44px] ${
+                className={`touch:min-h-[44px] rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
                   showPastEvents
                     ? 'bg-red-800 text-white shadow-sm'
                     : 'text-theme-text-secondary hover:text-theme-text-primary'
@@ -922,7 +922,7 @@ export const EventsPage: React.FC = () => {
             <div className="segmented-group inline-flex shrink-0 items-center">
               <button
                 onClick={() => setViewMode('list')}
-                className={`rounded-md p-1.5 transition-colors max-md:inline-flex max-md:min-h-[44px] max-md:min-w-[44px] max-md:items-center max-md:justify-center ${
+                className={`touch:min-h-[44px] touch:min-w-[44px] rounded-md p-1.5 transition-colors max-md:inline-flex max-md:items-center max-md:justify-center ${
                   viewMode === 'list'
                     ? 'bg-red-800 text-white shadow-sm'
                     : 'text-theme-text-secondary hover:text-theme-text-primary'
@@ -934,7 +934,7 @@ export const EventsPage: React.FC = () => {
               </button>
               <button
                 onClick={() => setViewMode('calendar')}
-                className={`rounded-md p-1.5 transition-colors max-md:inline-flex max-md:min-h-[44px] max-md:min-w-[44px] max-md:items-center max-md:justify-center ${
+                className={`touch:min-h-[44px] touch:min-w-[44px] rounded-md p-1.5 transition-colors max-md:inline-flex max-md:items-center max-md:justify-center ${
                   viewMode === 'calendar'
                     ? 'bg-red-800 text-white shadow-sm'
                     : 'text-theme-text-secondary hover:text-theme-text-primary'
@@ -989,7 +989,7 @@ export const EventsPage: React.FC = () => {
           >
             <button
               onClick={() => setShowMyEventsOnly((prev) => !prev)}
-              className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors max-md:min-h-[44px] ${
+              className={`touch:min-h-[44px] inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
                 showMyEventsOnly
                   ? 'border-red-600 bg-red-800 text-white shadow-sm'
                   : 'bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:text-theme-text-primary'
@@ -1022,7 +1022,7 @@ export const EventsPage: React.FC = () => {
                   setShowSavePresetInput(false);
                   setPresetName('');
                 }}
-                className="btn-secondary text-theme-text-secondary hover:text-theme-text-primary inline-flex w-full items-center justify-center gap-1.5 px-3 text-sm font-medium max-md:min-h-[44px]"
+                className="btn-secondary text-theme-text-secondary hover:text-theme-text-primary touch:min-h-[44px] inline-flex w-full items-center justify-center gap-1.5 px-3 text-sm font-medium"
                 title="Filter presets"
               >
                 <Bookmark className="h-4 w-4" aria-hidden="true" />
@@ -1116,7 +1116,7 @@ export const EventsPage: React.FC = () => {
                   typeFilter === filter
                     ? 'border-red-500 text-red-700 dark:text-red-400'
                     : 'text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border border-transparent'
-                } shrink-0 border-b-2 px-1 py-3 text-sm font-medium whitespace-nowrap max-md:min-w-[44px] sm:py-4`}
+                } touch:min-w-[44px] shrink-0 border-b-2 px-1 py-3 text-sm font-medium whitespace-nowrap sm:py-4`}
               >
                 {filter === 'all'
                   ? 'All Events'
@@ -1237,7 +1237,7 @@ export const EventsPage: React.FC = () => {
           <button
             onClick={handleExportSelectedCSV}
             disabled={selectedEvents.size === 0}
-            className="bg-theme-surface-hover text-theme-text-primary hover:bg-theme-surface-hover/80 inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 max-md:min-h-[44px]"
+            className="bg-theme-surface-hover text-theme-text-primary hover:bg-theme-surface-hover/80 touch:min-h-[44px] inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50"
           >
             <Download className="h-4 w-4" aria-hidden="true" />
             Export CSV
@@ -1246,7 +1246,7 @@ export const EventsPage: React.FC = () => {
             <button
               onClick={() => setShowCancelConfirm(true)}
               disabled={bulkActionLoading || selectedEvents.size === 0}
-              className="inline-flex items-center gap-1.5 rounded-md bg-red-100 px-3 py-1.5 text-sm font-medium text-red-700 transition-colors hover:bg-red-200 disabled:opacity-50 max-md:min-h-[44px] dark:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/30"
+              className="touch:min-h-[44px] inline-flex items-center gap-1.5 rounded-md bg-red-100 px-3 py-1.5 text-sm font-medium text-red-700 transition-colors hover:bg-red-200 disabled:opacity-50 dark:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/30"
             >
               <XCircle className="h-4 w-4" aria-hidden="true" />
               Cancel Selected
@@ -1254,7 +1254,7 @@ export const EventsPage: React.FC = () => {
           )}
           <button
             onClick={exitSelectionMode}
-            className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors max-md:min-h-[44px]"
+            className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-[44px] inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors"
           >
             <X className="h-4 w-4" aria-hidden="true" />
             Done

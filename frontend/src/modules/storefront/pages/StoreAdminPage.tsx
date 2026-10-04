@@ -237,7 +237,7 @@ const StoreAdminPage: React.FC = () => {
           {inventoryOn && (
             <Link
               to="/inventory/admin"
-              className="text-theme-text-muted hover:text-theme-text-secondary flex min-h-11 items-center gap-1 text-sm"
+              className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 flex items-center gap-1 text-sm"
             >
               <ArrowLeft className="h-4 w-4" />
               Inventory

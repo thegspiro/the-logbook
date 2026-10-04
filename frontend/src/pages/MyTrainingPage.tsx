@@ -672,7 +672,7 @@ const MyTrainingPage: React.FC = () => {
         <div className="hscroll mb-6 flex gap-2">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors max-md:min-h-[44px] ${
+            className={`touch:min-h-[44px] rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
               tab === 'overview'
                 ? 'bg-red-800 text-white'
                 : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
@@ -682,7 +682,7 @@ const MyTrainingPage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('settings')}
-            className={`flex items-center space-x-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors max-md:min-h-[44px] ${
+            className={`touch:min-h-[44px] flex items-center space-x-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
               tab === 'settings'
                 ? 'bg-red-800 text-white'
                 : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'

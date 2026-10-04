@@ -2946,6 +2946,31 @@ still offer **Start checklist**, and shift finalization still refuses to close o
 outstanding end-of-shift checks. What moved is authoring, reporting and the fleet
 views.
 
+### Checklist changes of 2026-10-03
+
+- **A failed item needs a note.** A **Fail** or **Out of service** the member
+  chose — not one a count, reading or expiry already explains — must carry a
+  note before **Submit**. Focus moves to the note field.
+- **Overall Notes no longer sticks to the bottom of the screen.** It covered
+  about a third of a phone for the whole check; only **Submit** is pinned now.
+- **My Checklists shows one confirmation.** Online it used to toast twice;
+  offline it contradicted the form's _"saved offline"_. **Fleet Readiness** now
+  counts a check as filed by the same rule My Checklists uses, so the two agree.
+  The empty state no longer implies a member is off the schedule.
+- **Template builder.** The apparatus-type list now follows the vehicle types the
+  application actually has (quint, squad, command and others are added; tower and
+  chief, which no vehicle can carry, are gone), plus your custom types and any
+  value already saved. The readiness panel names the vehicles a checklist
+  reaches and **warns when it reaches none**.
+- **Editing a live checklist unpublishes it.** A banner now says crews have lost
+  it, with a **Publish now** action, and leaving the builder asks first.
+- **Check Log failure total** was inflated by a join across every item row (one
+  failed flashlight read as "4 total failures"); it now counts its own rows.
+
+> **Screenshots:** the template builder (readiness panel, unpublished banner) and
+> the failed-item note prompt need new shots — see
+> [`SCREENSHOT_CURRENCY.md`](./SCREENSHOT_CURRENCY.md).
+
 ### Permissions were renamed
 
 `equipment_check.view` / `.manage` / `.submit` became `inventory.check_view` /

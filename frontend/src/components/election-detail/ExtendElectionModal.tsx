@@ -1,7 +1,8 @@
 import React, { useState, useCallback } from 'react';
 import { useDialog } from '../../hooks/useDialog';
+import { useConfirm } from '../../contexts/ConfirmContext';
 import DateTimeQuarterHour from '../ux/DateTimeQuarterHour';
-import { formatDateTime, formatForDateTimeInput } from '../../utils/dateFormatting';
+import { formatDateTime, formatForDateTimeInput, getTodayLocalDate, localToUTC } from '../../utils/dateFormatting';
 
 interface ExtendElectionModalProps {
   currentEndDate: string;
@@ -19,8 +20,48 @@ const ExtendElectionModal: React.FC<ExtendElectionModalProps> = ({
   timezone,
 }) => {
   const dialogRef = useDialog<HTMLDivElement>({ onClose });
+  const { confirm } = useConfirm();
 
   const [newEndDate, setNewEndDate] = useState('');
+
+  // Compared as instants: the picker holds org-zone wall time while
+  // `currentEndDate` is UTC, so a string comparison calls the same moment
+  // "different" across the offset.
+  const newEndMs = newEndDate ? new Date(localToUTC(newEndDate, timezone)).getTime() : Number.NaN;
+  const currentEndMs = new Date(currentEndDate).getTime();
+  const hasNewEnd = Number.isFinite(newEndMs);
+  const isPast = hasNewEnd && newEndMs <= Date.now();
+  const isUnchanged = hasNewEnd && newEndMs === currentEndMs;
+  const shortens = hasNewEnd && !isPast && newEndMs < currentEndMs;
+  const canSubmit = hasNewEnd && !isPast && !isUnchanged;
+
+  const validationMessage = isPast
+    ? 'That time has already passed. Voting cannot end in the past.'
+    : isUnchanged
+      ? 'This is the current end time; pick a later one to extend voting.'
+      : shortens
+        ? 'Earlier than the current end: this shortens the voting window instead of extending it.'
+        : null;
+
+  const handleSubmit = async () => {
+    if (!canSubmit) return;
+    if (shortens) {
+      // The server accepts an earlier end without comment and nobody is
+      // re-notified, so shortening has to be a deliberate decision (W50-26).
+      const ok = await confirm({
+        title: 'Shorten the voting window?',
+        message: `Voting currently closes ${formatDateTime(currentEndDate, timezone)}. Ending it at ${formatDateTime(
+          new Date(newEndMs),
+          timezone
+        )} instead cuts the window short, and members who planned to vote before the original close will lose their chance.`,
+        confirmLabel: 'Shorten voting window',
+        cancelLabel: 'Keep current end',
+        variant: 'warning',
+      });
+      if (!ok) return;
+    }
+    onSubmit(newEndDate);
+  };
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -86,7 +127,17 @@ const ExtendElectionModal: React.FC<ExtendElectionModalProps> = ({
                 value={newEndDate}
                 onChange={(val) => setNewEndDate(val)}
                 className="form-input mt-1 shadow-xs"
+                min={getTodayLocalDate(timezone)}
+                timezone={timezone}
               />
+              {validationMessage && (
+                <p
+                  data-testid="extend-end-validation"
+                  className={`mt-1 text-xs ${shortens ? 'text-amber-700 dark:text-amber-300' : 'text-red-700 dark:text-red-300'}`}
+                >
+                  {validationMessage}
+                </p>
+              )}
 
               <div className="mt-2">
                 <p className="text-theme-text-muted mb-2 text-xs">Quick extend:</p>
@@ -134,10 +185,13 @@ const ExtendElectionModal: React.FC<ExtendElectionModalProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => onSubmit(newEndDate)}
-              className="rounded-md bg-purple-600 px-4 py-2 text-white hover:bg-purple-700"
+              onClick={() => {
+                void handleSubmit();
+              }}
+              disabled={!canSubmit}
+              className="rounded-md bg-purple-600 px-4 py-2 text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Extend Election
+              {shortens ? 'Shorten Election' : 'Extend Election'}
             </button>
           </div>
         </div>

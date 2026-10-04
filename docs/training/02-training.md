@@ -300,6 +300,8 @@ If each meeting covers a different subject, you want a cohort.
 | You add a member half-way through                       | They're added to the classes still to come, not the ones that already ran.                                                                                                                                                                            |
 | You remove a member                                     | Their records and any class they already attended are kept. Upcoming classes come off their calendar.                                                                                                                                                 |
 | **Shift remaining** doesn't move everything             | It only moves classes that haven't started, and never moves cancelled ones.                                                                                                                                                                           |
+| You shift a cohort across a daylight-saving change      | _(2026-10-04)_ The shift is counted in the department's local time, so a 19:00 class that moves from 29 October to 5 November is still at 19:00. Before this fix it landed at 18:00 and the linked event, RSVP and check-in window followed it.       |
+| A class in the shift is already finalized               | _(2026-10-04)_ The whole shift is refused up front with a message. Before, classes ahead of the locked one had already moved and committed, leaving a half-moved schedule behind a 409.                                                               |
 | A class shouldn't count toward a certificate            | Turn off **Counts toward certification requirements** on that class. Members still get the hours.                                                                                                                                                     |
 | The course has no classes yet                           | Generation is refused with a clear message. Build the syllabus first.                                                                                                                                                                                 |
 | A course is capped at 200 classes                       | Past that it's a data-entry mistake rather than a course.                                                                                                                                                                                             |
@@ -799,6 +801,62 @@ When a requirement uses **Rolling** due date type with a rolling period (e.g., 1
 **Example:** A requirement of 12 hours over 12 rolling months, for a member with 3 months of leave, becomes 9 hours required (12 x 9/12).
 
 See [Membership > Leave of Absence](./01-membership.md#leave-of-absence) for details on managing leaves.
+
+### Existing Members: Exempt, Catch-Up, or "New Members Only" _(2026-10-03)_
+
+A department that raises its training standard used to turn its whole roster
+non-compliant overnight: a requirement applied to every member it matched,
+however long ago they joined. A requirement can now treat existing members
+differently from new ones. A member's **join date** is their **hire date**, or
+the date their account was created when no hire date is recorded.
+
+**On the requirement form** (Training Admin > Requirements > New or Edit), the
+**Existing Members** section offers three choices:
+
+| Choice                       | What it does                                                                                                                                                      |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Apply to everyone**        | The default and the old behaviour. Nothing changes for a requirement you leave alone                                                                              |
+| **Exempt existing members**  | Only members who joined on or after **Existing members joined before** (the cutoff date) are held to it                                                           |
+| **Give a catch-up deadline** | Existing members have until **Existing members must meet it by**. Until then an unmet requirement reads **Due** and counts neither for nor against their standing |
+
+**When you edit a requirement that already exists**, a dialog asks **who the
+change reaches**:
+
+- **Everyone** — the requirement changes for every member it applies to, starting now.
+- **New members only** — members who joined before the date you choose stay on the
+  current standard. The Logbook keeps the original (it now carries the banner
+  _"This is the earlier standard…"_) and creates a **copy** with your changes for
+  everyone who joins on or after that date. Both stay on the list and can be
+  edited separately. The option is unavailable, with the reason shown, when the
+  requirement's existing-member setting was changed in the same edit — save that
+  first.
+
+**When you add a requirement to a training program** the form asks about
+**Members already enrolled**: _hold them to it too_ (added to their progress
+now), or _only members who enroll from now on_ (recorded as **waived** for
+everyone already enrolled).
+
+Every screen that decides which requirements grade a member now uses the same
+rule with the member's join date — the dashboard, Compliance Matrix and its
+print view, the member profile's training card, My Training, the compliance
+officer report, the scheduling shift and hours report, the competency matrix,
+the forecast, and the CSV and PDF exports. Two consequences worth knowing:
+
+- A **Due** member shows as **blue** on the scheduling report's requirement
+  bars, and the print view's legend reads _"Due — existing member, before their
+  catch-up deadline"_.
+- The compliance exports and forecast used to grade every member against every
+  requirement; where a requirement does not apply to someone they now print
+  **N/A**. The dashboard, matrix and member status also now honour
+  **role-scoped** requirements, which My Training already did.
+
+Grandfathering changes and splits are written to the audit log. Nothing changes
+on upgrade: a requirement with no cutoff behaves exactly as before.
+
+> **Screenshots:** `02-16-requirements` should be re-shot once to show the
+> **Existing Members** section; two new shots are needed — the **who does this
+> change reach** dialog and the program's **Members already enrolled** choice.
+> See [`SCREENSHOT_CURRENCY.md`](./SCREENSHOT_CURRENCY.md).
 
 ---
 

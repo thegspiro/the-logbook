@@ -57,8 +57,18 @@ const CandidateResultCard: React.FC<{ candidate: CandidateResult }> = ({ candida
         )}
         <div>
           <div className="text-theme-text-primary font-medium">{candidate.candidate_name}</div>
-          {candidate.is_winner && <div className="text-sm font-medium text-green-700 dark:text-green-400">Winner</div>}
-          {candidate.is_tied && <div className="text-sm font-medium text-amber-700 dark:text-amber-400">Tied</div>}
+          {/* Under co_winners a tied candidate is also a winner; one label
+              says both rather than stacking "Winner" over "Tied" (W50-32). */}
+          {candidate.is_winner && candidate.is_tied ? (
+            <div className="text-sm font-medium text-green-700 dark:text-green-400">Co-winner (tie)</div>
+          ) : (
+            <>
+              {candidate.is_winner && (
+                <div className="text-sm font-medium text-green-700 dark:text-green-400">Winner</div>
+              )}
+              {candidate.is_tied && <div className="text-sm font-medium text-amber-700 dark:text-amber-400">Tied</div>}
+            </>
+          )}
         </div>
       </div>
 
@@ -189,10 +199,14 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
         </div>
       </div>
 
-      {/* Quorum Status — gated on the election's configured rule, not on
-          `results.quorum_met`, which the backend defaults to true (and
-          leaves true) for an election with no quorum at all. */}
-      {election.quorum_type && election.quorum_type !== 'none' && (
+      {/* Quorum Status — the backend decides (CLAUDE.md #29): `quorum_met`
+          is null for an election with no quorum rule at all, and only a
+          configured rule is reported met or not met (W50-48). */}
+      {results.quorum_met == null ? (
+        <div className="border-theme-surface-border bg-theme-surface-secondary rounded-lg border p-4">
+          <span className="text-theme-text-secondary text-sm font-medium">No quorum requirement</span>
+        </div>
+      ) : (
         <div
           className={`rounded-lg border p-4 ${
             results.quorum_met ? 'border-green-500/30 bg-green-500/10' : 'border-red-500/30 bg-red-500/10'
@@ -269,8 +283,9 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
                 {positionResult.is_tie && (
                   <div className="mb-4 rounded-md border border-amber-500/30 bg-amber-500/10 p-3" role="alert">
                     <p className="text-sm text-amber-700 dark:text-amber-300">
-                      Unresolved tie for {contestName} — no winner is declared.{' '}
-                      {TIE_POLICY_LABELS[results.tie_policy ?? 'co_winners']}
+                      {(results.tie_policy ?? 'co_winners') === 'co_winners'
+                        ? `Tie for ${contestName} — the tied candidates are declared co-winners per the election's tie policy.`
+                        : `Unresolved tie for ${contestName} — no winner is declared. ${TIE_POLICY_LABELS[results.tie_policy ?? 'co_winners'] ?? ''}`}
                     </p>
                   </div>
                 )}
