@@ -369,6 +369,14 @@ list of the store's outbound mail:
 All nine default to on, which is the behaviour the module had before the
 switches existed.
 
+**Times in these emails are the department's** _(2026-09-25)_. The
+window-opened and last-call notices printed `closes_at` with
+`strftime("… %I:%M %p UTC")`; `storefront_notification_service` now renders it
+through `format_in_org_timezone` (the organization's timezone,
+`America/New_York` when unset). The orders CSV's submitted time followed on
+2026-09-27: `to_local(...)` with the zone abbreviation (`%Z`) in place of a
+literal `UTC`.
+
 The switch is an upper bound, not a duplicate of the per-send checkbox. An
 action that offers "email members" (open, close, record vendor order) can skip
 an individual send, and a window can opt out of its own opening announcement

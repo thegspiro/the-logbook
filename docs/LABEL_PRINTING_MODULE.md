@@ -45,13 +45,17 @@ that registers no printer simply never sees the direct-print controls.
 | `apparatus`           | `apparatus.view`, `apparatus.manage`                     | unit name, identifier            |
 | `facilities`          | `facilities.view`, `facilities.manage`                   | facility name                    |
 | `membership`          | `members.view`, `members.manage`                         | member name, membership number   |
-| `prospective_members` | `prospective_members.view`, `prospective_members.manage` | applicant name, **status token** |
+| `prospective_members` | `prospective_members.view`, `prospective_members.manage` | applicant name, short record id  |
 
 > **Inventory has its own print page, and it tracks what was printed**
 > _(2026-09-23)_. `/inventory/print-labels` is not built on the shared
 > `LabelPrintPage` — it predates it and prints by **PDF**
-> (`/inventory/labels/generate`) or the browser dialog, so it does **not** offer
-> **Send to Printer**. It is also the only module that records a print:
+> (`/inventory/labels/generate`), the browser dialog, or, since 2026-09-24
+> (#2651), **Print to _printer_**: a registered network printer, through the shared
+> `POST /labels/print` with module `inventory`. Network sends are refused up
+> front while an item in the run has no stored barcode yet ("download the PDF
+> once to assign them"), because only the PDF path assigns one. It is also the
+> only module that records a print:
 > `POST /inventory/labels/mark-printed` (`inventory.manage`, 1–500 ids, org-scoped,
 > skips items with no printable value) sets `inventory_items.label_printed_at` /
 > `label_printed_by` after the user confirms the run came out. A
@@ -63,17 +67,30 @@ that registers no printer simply never sees the direct-print controls.
 > Migration `5a70c5dcd138` adds the columns with no backfill, so every existing
 > item starts as needing a label.
 
-> **An applicant label's barcode is a bearer token.** `_build_prospect_specs`
-> encodes `ProspectiveMember.status_token`, which is what
-> `GET /api/public/v1/application-status/{token}` accepts — unauthenticated. So
-> anyone who can read the barcode can read that applicant's status page. That is
-> the point (it is the applicant's own label), but it means these labels should
-> be handled like the token they carry: not left on a noticeboard, not
-> photographed into a group chat. `facilities` labels carry a facility record
-> only; shelves, racks and compartments print through `storage_areas`, whose
-> builder encodes the area's `SA-` barcode and assigns the next one in that
-> series to an area created before barcodes were mandatory, so the label always
-> carries a value the area stores.
+> **An applicant label no longer carries the status token** _(2026-09-28,
+> #2773, workflow review W17-3)_. `_build_prospect_specs` used to encode
+> `ProspectiveMember.status_token` — the applicant's only credential for the
+> unauthenticated `GET /api/public/v1/application-status/{token}`, which reads
+> the application and can withdraw it — so anyone who previewed, held or
+> photographed the label held that credential. It now encodes the short record
+> id (`_short_id`, the first 12 hex characters, upper-cased). Nothing scans a
+> prospect label back, so nothing is lost. Labels printed before the change
+> still carry the token, and the change did not rotate it, so they remain that credential —
+> destroy them rather than leave them on a noticeboard.
+
+`facilities` labels carry a facility record only; shelves, racks and
+compartments print through `storage_areas`, whose builder encodes the area's
+`SA-` barcode and assigns the next one in that series to an area created before
+barcodes were mandatory, so the label always carries a value the area stores.
+
+**Button names** _(2026-09-29, #2804)_. On the shared `LabelPrintPage` the
+direct-print button reads **Print to _printer name_** (**Print to network
+printer** until one is chosen; the code comment still calls it "Send to
+Printer"), the browser path **Print in browser** (was "Browser print dialog"),
+and the settings panel's single-label PDF **Download test label** (was "Print
+Test Label", though it never printed anything). The inventory page's own
+buttons are **PDF**, **Print Labels**, **Print to _printer name_** and
+**Download Test Label**.
 
 **Station documents** — built from live records on request and printed at the
 watch desk. Nothing is stored; these are separate from `/documents`, which is
@@ -330,6 +347,18 @@ the first:
 - link-local — this includes `169.254.169.254`, the cloud metadata endpoint
 - multicast, reserved, unspecified
 
+**Operator-approved networks only** _(2026-09-14)_. Every resolved address
+must also fall inside `LABEL_PRINTER_ALLOWED_NETWORKS`, a comma-separated list
+of IP addresses or CIDR ranges in the server's environment. It is **empty by
+default, which disables direct printing outright**: a department administrator
+can register any host on the form, but only whoever runs the server decides
+which networks it may reach. A printer outside the list is refused with "…
+does not resolve to an operator-approved label-printer network." An entry that
+does not parse is logged and ignored, so a typo narrows the boundary rather
+than widening it. The address-class checks above apply whatever the list says.
+Upgrade steps, including the compose files that do not pass the variable
+through, are in [UPGRADING.md](./UPGRADING.md#direct-label-printing-needs-an-approved-network-2026-09-14).
+
 **Resolve once, connect to the literal.** The hostname is resolved and the
 connection is made to the resulting IP, not re-resolved from the name — a
 second lookup could return a different, allowed-then-blocked address (DNS
@@ -433,12 +462,13 @@ the apparatus team's are independent and follow whoever holds the role.
 
 ## Migrations
 
-| Revision       | Adds                                                                                    |
-| -------------- | --------------------------------------------------------------------------------------- |
-| `b3e7f1a92c40` | `label_printers`                                                                        |
-| `c7d1f4a83e29` | `label_printers.language`                                                               |
-| `e4b91c7d2a58` | Merge — rejoins the label-printer and event-RSVP heads                                  |
-| `5a70c5dcd138` | `inventory_items.label_printed_at` / `label_printed_by` (inventory only) _(2026-09-23)_ |
+| Revision       | Adds                                                                                                 |
+| -------------- | ---------------------------------------------------------------------------------------------------- |
+| `b3e7f1a92c40` | `label_printers`                                                                                     |
+| `c7d1f4a83e29` | `label_printers.language`                                                                            |
+| `e4b91c7d2a58` | Merge — rejoins the label-printer and event-RSVP heads                                               |
+| `5a70c5dcd138` | `inventory_items.label_printed_at` / `label_printed_by` (inventory only) _(2026-09-23)_              |
+| `81537606ee07` | `inventory_label_prints` — one row per confirmed print (who, when, the encoded value) _(2026-09-27)_ |
 
 **Why `language` is a separate revision, not a column in the first.** The
 column was deliberately withheld until ESC/POS made it a real switch. A stored
@@ -497,7 +527,7 @@ field and prints garbage.
 
 | Situation                                                   | Behaviour                                                                                                                                                                                                                                                                                                                           |
 | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Sheet layout (`letter`) selected with a **ZPL** printer     | **Send to Printer** disabled — an Avery sheet of 30 has no meaning on a roll, so the button says so rather than offering a failure the backend would reject                                                                                                                                                                         |
+| Sheet layout (`letter`) selected with a **ZPL** printer     | **Print to _printer_** disabled — an Avery sheet of 30 has no meaning on a roll, so the button says so rather than offering a failure the backend would reject                                                                                                                                                                      |
 | Partly used Avery sheet                                     | `start_position` (1–30) on `POST /inventory/labels/generate` and on the shared `POST /labels/generate` leaves the positions before it blank on the first sheet; **Start at label** on both print pages sets it. Roll formats ignore it                                                                                              |
 | Saved inventory setups                                      | `GET` / `POST /inventory/label-setups`, `DELETE /inventory/label-setups/{id}` (`inventory.manage`) keep up to 20 named setups on the organization (`settings.label_setups.inventory`). The same name, in any case, replaces; a printer id is checked against the caller's organization before it is stored                          |
 | Print history                                               | Each confirmation writes an `inventory_label_prints` row (who, when, the encoded value) beside the latest-only `label_printed_at`; the item's history lists them                                                                                                                                                                    |

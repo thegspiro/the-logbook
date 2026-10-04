@@ -114,7 +114,7 @@ script asks when run from a terminal and will not accept a blank answer; with
 no terminal it stops before installing anything. A `localhost` or `127.0.0.1`
 URL is refused. On an existing `.env` it asks only when the value is missing or
 still `localhost` — a kept `.env` with a public `FRONTEND_URL` needs nothing.
-A production backend refuses to start with a loopback `FRONTEND_URL`; see
+A production backend refuses to start with a loopback `FRONTEND_URL` — unless `ALLOWED_ORIGINS` names a public address, in which case the first such origin is used for links instead (logged at startup; 2026-09-25); see
 [UPGRADING.md](UPGRADING.md#frontend_url-must-be-a-public-address-2026-09-25).
 
 > **Production hardening.** `./install.sh --docker` configures a production

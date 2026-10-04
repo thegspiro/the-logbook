@@ -46,6 +46,19 @@ Training requirements are individual training items that members must complete. 
 - **Checklist**: Require completing a checklist of tasks
 - **Knowledge test**: Require a passing score on a knowledge test (officer-entered score)
 
+**Existing members can be grandfathered** _(2026-10-03)_. A requirement may set
+`new_member_cutoff_date`: members whose join date (hire date, else account
+creation date) is before it are "existing members". With no
+`existing_member_deadline` they are exempt outright; with one, an unmet
+requirement reads `catch_up` until that date and counts neither for nor against
+their standing. Saving an edit with `apply_to: "new_members_only"` keeps the
+original for members who joined before the effective date
+(`applies_to_joined_before`) and creates a copy carrying the change for everyone
+after. All three columns are `NULL` on existing rows, which keeps the old
+behaviour. Field-level detail is in `backend/app/docs/TRAINING_MODULE.md`
+(TrainingRequirement → Grandfathering Fields); the officer's view is in
+[Training & Certification › Existing Members](training/02-training.md#existing-members--exempting-or-giving-a-catch-up-deadline-2026-10-03).
+
 ### Training Programs
 
 Training programs are structured pathways that group requirements together. Programs can be:
@@ -378,29 +391,31 @@ except the syllabus read and a roster member's view of their own cohort.
 The syllabus is a **template**; a cohort is a **materialized copy**. Almost
 every confusion below comes from that one distinction.
 
-| Scenario                                                     | Behavior                                                                                                                                                                                                                                                                                                                                                                               |
-| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **You reorder the classes but the dates don't change**       | Order (`sequence`) and timing (`day_offset`) are independent. Moving class 3 to the top does not move it to day 1 — it still happens on whatever day its offset says. The builder makes this visible: a class scheduled before the one above it reads _"2 days earlier"_ instead of _"2 days later"_. To re-space after reordering, edit the day offsets or run **Fill from pattern**. |
-| **You fix the syllabus and a running cohort doesn't change** | Correct and deliberate. A cohort is materialized at generation, so an in-flight recruit school is never silently re-scheduled underneath the students. The fix reaches the _next_ cohort; to change the current one, edit its classes on the cohort detail page.                                                                                                                       |
-| **You delete a class from the syllabus**                     | Running cohorts keep their copy of it (`course_class_id` becomes NULL) — it simply becomes a class that belongs only to that cohort. Nothing is unscheduled, and nobody loses credit.                                                                                                                                                                                                  |
-| **You skip a class in the preview**                          | The cohort renumbers contiguously. Skip syllabus class 4 and the cohort's class 4 is syllabus class 5. Cohort sequence numbers are per-cohort; they are not syllabus positions.                                                                                                                                                                                                        |
-| **One class fails to schedule (room double-booked)**         | Only that class fails. Generation continues, the cohort class row is created with no event, and the failure comes back as a warning. Resolve the conflict, then **Create missing events** — which only fills gaps and can never duplicate a class.                                                                                                                                     |
-| **You click "Create missing events" twice**                  | Nothing happens the second time. It only touches classes whose `event_id` is NULL.                                                                                                                                                                                                                                                                                                     |
-| **Someone deletes a generated event in the Events UI**       | The cohort still lists the class, now marked **No event**. **Create missing events** rebuilds it. The link is `SET NULL`, not `CASCADE`, precisely so this is recoverable rather than silent data loss.                                                                                                                                                                                |
-| **The course spans a DST change**                            | A 19:00 class stays at 19:00 local on both sides. Times are stored as local wall clock and resolved against the organization timezone at generation, not as a fixed UTC offset.                                                                                                                                                                                                        |
-| **Two classes roll onto the same day**                       | Weekend and blackout rolling moves each class forward independently, so two can land on the same date. The preview shows the collision — adjust an offset before generating.                                                                                                                                                                                                           |
-| **A blackout date is skipped even with the roll policy off** | Yes. "Keep the computed date" governs weekends; a blackout date is an explicit _not this day_ and always applies.                                                                                                                                                                                                                                                                      |
-| **You generate a second cohort of the same course**          | It reuses the pipeline the first cohort built (recorded on `training_courses.program_id`) rather than creating a duplicate. A member already enrolled keeps that enrollment **and their existing progress** — right for someone repeating a course, surprising if you expected a clean slate. Use **Start new cycle** on their enrollment to reset.                                    |
-| **A member can't be enrolled (unmet prerequisite)**          | They are still added to the roster and the reason comes back as a warning. The officer knows their department better than the eligibility rules do; losing an entire generation over one member would be worse.                                                                                                                                                                        |
-| **You add a member half-way through the course**             | They are RSVP'd only to classes that **have not started**. Past classes are never backfilled — that would put finished sessions on their calendar and list them as an expected no-show for training they could not have attended.                                                                                                                                                      |
-| **You withdraw a member**                                    | Their enrollment, training records, and any class they already checked into are kept. Their RSVPs on classes still to come are removed, so the course drops off their calendar and they stop counting as an expected attendee.                                                                                                                                                         |
-| **"Shift remaining" doesn't move everything**                | By default it moves only classes that haven't started — past classes are anchored to their attendance records. Cancelled classes never move. Set a starting position explicitly to shift from a specific class onward.                                                                                                                                                                 |
-| **A cancelled class is still listed**                        | Cancelling cancels the _event_ rather than deleting it, so anyone who signed up sees a cancellation rather than a class silently vanishing. The class stays on the cohort for the record.                                                                                                                                                                                              |
-| **A class's catalog course was archived**                    | The preview warns, but generation still proceeds — archiving is a soft delete and the officer may well intend it. Reactivate the course or point the class at a different one.                                                                                                                                                                                                         |
-| **Some classes shouldn't count toward a certificate**        | Set **Counts toward certification requirements** off on that syllabus class. Attendance still creates the training record and hours (counting toward general compliance), but the class won't advance the linked certificate requirements — the standard use for an informal in-house drill inside an otherwise certification-grade school.                                            |
-| **The syllabus is very long**                                | A course is capped at 200 classes, and a cohort at 200 generated classes. Past that it's a data-entry mistake, not a course.                                                                                                                                                                                                                                                           |
-| **A student wants to see their own schedule**                | Roster members can read their own cohort (`GET /training/cohorts/{id}`, and `GET /training/cohorts/mine` for the list). Everything else needs `training.manage`.                                                                                                                                                                                                                       |
-| **Generating a cohort for a course with no classes**         | Rejected with a clear error before anything is written. Build the syllabus first.                                                                                                                                                                                                                                                                                                      |
+| Scenario                                                           | Behavior                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **You reorder the classes but the dates don't change**             | Order (`sequence`) and timing (`day_offset`) are independent. Moving class 3 to the top does not move it to day 1 — it still happens on whatever day its offset says. The builder makes this visible: a class scheduled before the one above it reads _"2 days earlier"_ instead of _"2 days later"_. To re-space after reordering, edit the day offsets or run **Fill from pattern**.                                                                                                                                                                                                               |
+| **You fix the syllabus and a running cohort doesn't change**       | Correct and deliberate. A cohort is materialized at generation, so an in-flight recruit school is never silently re-scheduled underneath the students. The fix reaches the _next_ cohort; to change the current one, edit its classes on the cohort detail page.                                                                                                                                                                                                                                                                                                                                     |
+| **You delete a class from the syllabus**                           | Running cohorts keep their copy of it (`course_class_id` becomes NULL) — it simply becomes a class that belongs only to that cohort. Nothing is unscheduled, and nobody loses credit.                                                                                                                                                                                                                                                                                                                                                                                                                |
+| **You skip a class in the preview**                                | The cohort renumbers contiguously. Skip syllabus class 4 and the cohort's class 4 is syllabus class 5. Cohort sequence numbers are per-cohort; they are not syllabus positions.                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| **One class fails to schedule (room double-booked)**               | Only that class fails. Generation continues, the cohort class row is created with no event, and the failure comes back as a warning. Resolve the conflict, then **Create missing events** — which only fills gaps and can never duplicate a class.                                                                                                                                                                                                                                                                                                                                                   |
+| **You click "Create missing events" twice**                        | Nothing happens the second time. It only touches classes whose `event_id` is NULL.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **Someone deletes a generated event in the Events UI**             | The cohort still lists the class, now marked **No event**. **Create missing events** rebuilds it. The link is `SET NULL`, not `CASCADE`, precisely so this is recoverable rather than silent data loss.                                                                                                                                                                                                                                                                                                                                                                                              |
+| **The course spans a DST change**                                  | A 19:00 class stays at 19:00 local on both sides. Times are stored as local wall clock and resolved against the organization timezone at generation, not as a fixed UTC offset.                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| **Two classes roll onto the same day**                             | Weekend and blackout rolling moves each class forward independently, so two can land on the same date. The preview shows the collision — adjust an offset before generating.                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| **A blackout date is skipped even with the roll policy off**       | Yes. "Keep the computed date" governs weekends; a blackout date is an explicit _not this day_ and always applies.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| **You generate a second cohort of the same course**                | It reuses the pipeline the first cohort built (recorded on `training_courses.program_id`) rather than creating a duplicate. A member already enrolled keeps that enrollment **and their existing progress** — right for someone repeating a course, surprising if you expected a clean slate. Use **Start new cycle** on their enrollment to reset.                                                                                                                                                                                                                                                  |
+| **A member can't be enrolled (unmet prerequisite)**                | They are still added to the roster and the reason comes back as a warning. The officer knows their department better than the eligibility rules do; losing an entire generation over one member would be worse.                                                                                                                                                                                                                                                                                                                                                                                      |
+| **You add a member half-way through the course**                   | They are RSVP'd only to classes that **have not started**. Past classes are never backfilled — that would put finished sessions on their calendar and list them as an expected no-show for training they could not have attended. **The cohort's Roster tab has no Add control** — `POST /training/cohorts/{id}/members` has no caller in the UI, so this is API-only today (workflow review W27-3, KNOWN_LIMITATIONS).                                                                                                                                                                              |
+| **You withdraw a member**                                          | Their enrollment, training records, and any class they already checked into are kept. Their RSVPs on classes still to come are removed, so the course drops off their calendar and they stop counting as an expected attendee.                                                                                                                                                                                                                                                                                                                                                                       |
+| **"Shift remaining" doesn't move everything**                      | By default it moves only classes that haven't started — past classes are anchored to their attendance records. Cancelled classes never move. Set a starting position explicitly to shift from a specific class onward.                                                                                                                                                                                                                                                                                                                                                                               |
+| **"Shift remaining" across a DST change** _(fixed 2026-10-04)_     | The class keeps its local wall-clock time. `_shift_local_days` converts to the organization's zone (via `resolve_scheduling_timezone`), adds the days there, and converts back. Before, the shift added days to the stored UTC instant, so a 19:00 class on 29 October (America/New_York) moved to 18:00 on 5 November and `_sync_event` pushed that onto the linked event's RSVP and check-in window (app-review A5, CC-5).                                                                                                                                                                         |
+| **"Shift remaining" refused: attendance finalized** _(2026-10-04)_ | `_assert_shiftable` resolves the batch's events in one org-scoped query and refuses with an attendance-lock 409 — "moving N class(es) whose attendance is already finalized" — **before anything moves**. Previously classes were moved and committed one at a time, so the first locked class aborted the run with the earlier ones already moved (CC-6). Note that an explicit starting position (`from_sequence`) replaces the future-only bound rather than narrowing it, so it can reach classes that already happened but were never finalized — API-only today; see KNOWN_LIMITATIONS "CC-7". |
+| **A cancelled class is still listed**                              | Cancelling cancels the _event_ rather than deleting it, so anyone who signed up sees a cancellation rather than a class silently vanishing. The class stays on the cohort for the record.                                                                                                                                                                                                                                                                                                                                                                                                            |
+| **A class's catalog course was archived**                          | The preview warns, but generation still proceeds — archiving is a soft delete and the officer may well intend it. Reactivate the course or point the class at a different one.                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **Some classes shouldn't count toward a certificate**              | Set **Counts toward certification requirements** off on that syllabus class. Attendance still creates the training record and hours (counting toward general compliance), but the class won't advance the linked certificate requirements — the standard use for an informal in-house drill inside an otherwise certification-grade school.                                                                                                                                                                                                                                                          |
+| **The syllabus is very long**                                      | A course is capped at 200 classes, and a cohort at 200 generated classes. Past that it's a data-entry mistake, not a course.                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| **A student wants to see their own schedule**                      | Roster members can read their own cohort (`GET /training/cohorts/{id}`, and `GET /training/cohorts/mine` for the list). Everything else needs `training.manage`.                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| **Generating a cohort for a course with no classes**               | Rejected with a clear error before anything is written. Build the syllabus first.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 > **Cohort vs. recurring session — which do I want?** A _recurring training
 > session_ repeats **the same class** on a fixed cadence (monthly CPR refresher).
@@ -455,6 +470,12 @@ reminders**.
 - Customizable form fields (visible, required, label per field)
 - Status tracking: draft, pending review, approved, rejected, revision requested
 - Approved submissions automatically create TrainingRecords
+- **In-app notifications** _(2026-09-28)_: each submission awaiting review
+  prompts every active Training Officer (archived for all of them once anyone
+  decides it), and the member is told in-app when their submission is rejected,
+  approved with changes, sent back for revision, or has its approval reversed —
+  not on a plain approval. See
+  [Reviewing Submissions › Who Is Told, In-App](training/02-training.md#who-is-told-in-app-2026-09-28)
 - **Separation of duties:** an officer cannot approve their own self-reported
   training — a second officer must review it, so hours/credit can't be granted
   unchecked. (Rejecting or requesting revision on one's own submission is allowed.)
@@ -525,29 +546,38 @@ The External Training Integration feature allows organizations to connect to ext
 
 ### Supported Providers
 
-| Provider             | Description                                                             |
-| -------------------- | ----------------------------------------------------------------------- |
-| **Vector Solutions** | Fire and EMS online training platform with comprehensive course library |
-| **Target Solutions** | Public safety training, compliance tracking, and recordkeeping          |
-| **Lexipol**          | Policy acknowledgment, training bulletins, and compliance training      |
-| **I Am Responding**  | Response tracking with integrated training documentation                |
-| **Custom API**       | Connect to any training platform with a compatible REST API             |
+| Provider             | Description                                                                                                         |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| **Vector Solutions** | Fire and EMS online training platform with comprehensive course library                                             |
+| **Target Solutions** | Course and activity completions from its Training Records API (CSV report), members matched by email _(2026-09-29)_ |
+| **Lexipol**          | Policy acknowledgment, training bulletins, and compliance training                                                  |
+| **I Am Responding**  | Response tracking with integrated training documentation                                                            |
+| **Custom API**       | Connect to any training platform with a compatible REST API                                                         |
 
 ### Setting Up an Integration
 
-1. Navigate to **Training** → **Integrations** tab
+1. Navigate to **Training Admin** → **Setup** → **Integrations**
 2. Click **Add Provider**
 3. Select the provider type
 4. Enter connection details:
    - **Display Name**: Friendly name for this integration
-   - **API Base URL**: The API endpoint URL
-   - **API Key**: Your API credentials
+   - **API Base URL**: The API endpoint URL. It must not contain a key, secret
+     or token — this field is stored in plain text, and such a URL is refused
+   - **API Key**: Your API credentials (**AccessToken** for Vector Solutions)
+   - **API Secret**: required for Target Solutions
    - **Authentication Type**: API Key, Basic Auth, or OAuth 2.0
-5. Configure sync settings:
-   - **Auto-Sync**: Enable/disable automatic synchronization
-   - **Sync Interval**: How often to sync (6h, 12h, 24h, 48h, weekly)
-6. Click **Test Connection** to verify
-7. Save the provider
+5. Configure sync settings under **Sync Settings**:
+   - **Enable Auto-Sync**: turn automatic synchronization on or off
+   - **Sync Interval**: how often to sync — every hour, 6 hours, 12 hours, daily,
+     every 2 days, or weekly
+   - For **Target Solutions** the interval is labelled **Pull new completions**
+     (default every hour), and a second field, **Daily 30-day review at**
+     (default 02:00, department time), schedules a daily re-check of the last 30
+     days. Target Solutions lets a completion be recorded for a past date, which
+     a pull that only looks forward from the last sync would never ask for. See
+     [Integrations › Setting up Target Solutions](training/16-integrations.md#setting-up-target-solutions)
+6. Save the provider, then press **Test** on its card. Auto-sync runs only for an
+   active provider whose last connection test passed
 
 ### Sync Workflow
 
@@ -613,15 +643,25 @@ After syncing, you may need to map external users and categories to your interna
 #### User Mapping
 
 - External users are auto-mapped by email when possible
-- Unmapped users appear in the "Users" tab under Mappings
-- Click "Map User" to select the corresponding internal member
+- Unmapped users appear in the **Users** tab under the provider's **Mappings**
 - Once mapped, all training for that external user will apply to the member
+- For **Target Solutions**, users are matched on the completions report's
+  **Email** column against the member's email (case and spaces ignored, deleted
+  members skipped). An unmatched user is retried on every later sync, so adding
+  the member's email to their profile is usually the fix — unless an officer has
+  set or cleared that mapping by hand
+- **There is no working way to map a user by hand in the app.** An unmapped user
+  shows a **Map User** button with nothing behind it (verified 2026-10-04);
+  mapping one manually still means calling
+  `PATCH /training/external/providers/{id}/user-mappings/{mapping_id}`
 
 #### Category Mapping
 
 - External categories are auto-mapped by name when possible
-- Unmapped categories appear in the "Categories" tab under Mappings
-- Click "Map Category" to select the corresponding internal category
+- Unmapped categories appear in the **Categories** tab under Mappings
+- Pick the internal category from the card's dropdown; it saves immediately,
+  and **Not mapped** unmaps it (the old **Map Category** button was replaced on
+  2026-08-11)
 - Categories determine how imported training counts toward requirements
 
 ### Import Queue
@@ -639,7 +679,8 @@ Use **Bulk Import** to import all pending records at once, or import individual 
 
 View sync history for each provider:
 
-- Sync type (full, incremental, manual)
+- Sync type (full, incremental, manual, and `review` — the daily 30-day
+  re-check a Target Solutions provider runs)
 - Records fetched, imported, updated, skipped, failed
 - Start and end times
 - Error messages if sync failed
@@ -1179,6 +1220,15 @@ const phase2 = {
 ```
 
 ### Adding Requirements to Program
+
+When a requirement is added to a program that already has members enrolled, the
+request carries `apply_to_current_enrollments` _(2026-10-03)_. `true` (the
+default, and the previous behaviour) adds it to every current enrollment's
+progress. `false` records it as **waived** for every active or on-hold
+enrollment — a missing progress row would block their phase advancement — so
+only members who enroll later must complete it; audited as
+`program_requirement_waived_for_current_enrollees`. The UI asks this under
+**Members already enrolled** when adding, never when editing a link.
 
 ```typescript
 const programRequirement = {

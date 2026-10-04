@@ -885,6 +885,18 @@ The existing fundraising tables from migration `20260201_0017` provide a solid f
 
 ---
 
+## Dates on the department's calendar _(2026-09-26)_
+
+"Today" for the grants and fundraising dashboards, the auto-created
+equipment-inventory task's due date when a grant has no end date, and a
+compliance task's `completed_date` comes from `resolve_org_today`
+(`app/utils/org_timezone.py`) — the organization's timezone, `America/New_York`
+when unset — not the server's UTC date. Donor first/last donation dates are the
+department's calendar day of the donation timestamp. Report date-range bounds
+remain UTC; see GF-24a in `docs/KNOWN_LIMITATIONS.md`.
+
+---
+
 ## Sources & References
 
 - [FEMA Assistance to Firefighters Grants Program](https://www.fema.gov/grants/preparedness/firefighters)

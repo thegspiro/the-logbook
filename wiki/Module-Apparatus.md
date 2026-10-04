@@ -229,12 +229,25 @@ confirm. Whether a non-rostered member may check in is the existing
 `restrict_checkin_to_assigned` setting (off by default, under Scheduling →
 Settings); nothing about NFC changes it.
 
-> **The button does not appear on the room kiosk cards beside the apparatus
-> ones.** Those encode `/display/{code}`, a public unauthenticated screen keyed
-> by a non-guessable code — writing that code to a tag anyone can read hands it
-> to whoever walks past, and sending a member's phone to a wall display is not a
-> check-in. One rule (`parseNfcTagPath`) governs both what the button offers and
-> what a scan will accept.
+> **Who is offered the writer** _(2026-10-03)_. `apparatus.manage_nfc_tags`
+> (new) gates **Write NFC tag** on the apparatus cards and in the shift detail
+> panel's QR block, which until then any roster officer saw. It is seeded on the
+> President, Vice President, Chief, Deputy Chief, Assistant Chief and the
+> Apparatus Officer; migration `5bed4c485d2f` writes it onto existing
+> departments' non-empty system positions that do not already cover it. It
+> gates the client only: writing never reaches the server, and the tag carries
+> no secret.
+
+> **Room cards write a different link** _(changed 2026-10-02)_. The room kiosk
+> cards encode `/display/{code}`, a public unauthenticated screen keyed by a
+> non-guessable code, and that code is still never written to a tag. Since
+> 2026-10-02 a room card's writer (gated on `locations.manage_nfc_tags`, seeded
+> on the same leadership plus the Facilities Manager) writes
+> `/locations/{id}/check-in` instead — a signed-in page that forwards to the
+> event open in that room. One rule (`parseNfcTagPath` with the `TAG_TARGETS`
+> spec, now including `ROOM_CHECK_IN`) governs both what the button offers and
+> what a scan will accept. See
+> [Training 06 — Room door tags](https://github.com/thegspiro/the-logbook/blob/main/docs/training/06-apparatus-facilities.md#room-door-tags-2026-10-02).
 
 > **A failed write raises a toast, not a silent no-op.** The directory is a
 > print-oriented grid of fixed-size cards with no inline slot to report into,
@@ -386,3 +399,35 @@ backs the shift board, so recording a used item keeps working.
   to do with — an apparatus officer holding the apparatus and document grants
   but no facilities grant could not open a truck's own manuals. Migration
   `e6f2a7c9d148` clears the stamp from the folders already on disk.
+
+## Editing a unit, and the copy pass _(2026-09-29)_
+
+From workflow review W48 (#2848) and the plain-language pass (#2782):
+
+- **Clearing a field on edit persists.** The update endpoint applies
+  `exclude_unset`, so the form's habit of omitting emptied fields meant a
+  cleared VIN, date or number came back "Apparatus updated" with the old value
+  still stored (pitfall 1, update half). Emptied text, dates and numbers now go
+  as explicit `null`; the four `NOT NULL` columns (`unitNumber`,
+  `apparatusTypeId`, `statusId`, `minStaffing`) stay omitted, as before.
+- **`Apparatus.fuel_type` has no default.** The ORM defaulted it to
+  `FuelType.DIESEL`, so a unit nobody chose a fuel for was saved as diesel. The
+  column never had a database default, so no migration; existing rows keep what
+  they hold, including any diesel that was never chosen.
+- **The form is labelled.** All 39 labels are tied to their fields and the three
+  required-field errors to theirs; list rows name their actions after the unit
+  ("Edit E1", "Print label for E1"); the detail header wraps on a phone instead
+  of pushing Edit and Archive 85px past a 390px screen. The basic apparatus
+  dialog, its fields, each seat and each card's actions are named (the W30
+  lead).
+- **Copy.** Buttons read **Add Apparatus** / **Save Changes**, **Add Record** /
+  **Save Changes** and so on rather than Create/Update; the dates card is
+  **Expiration Dates** (was "Important Dates") on the form and the Overview; the
+  list's stat tile is **Maintenance Due**; empty tabs say what to press ("No
+  fuel logged yet. Select Add Fuel Log to record a fill-up."); deletes confirm
+  with a named action ("Remove operator", "Delete record").
+
+Equipment checklist changes from the same window (W46: the builder offers only
+Apparatus-module units, a failure needs a note, the failure-log total, and the
+Quartermaster's `inventory.check_manage`) are in
+[Inventory → September 24 – October 4, 2026](Module-Inventory#september-24--october-4-2026).

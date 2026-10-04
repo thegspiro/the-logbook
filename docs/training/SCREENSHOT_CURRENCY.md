@@ -1,5 +1,309 @@
 # Screenshot currency
 
+## Queued by the September 24 – October 4 documentation pass, 2026-10-04
+
+The 250 pull requests merged between 2026-09-24 and 2026-10-04 (#2651 –
+#2903) changed many screens. This pass checked each training guide against
+the source and **queued 122 captures. None has been taken yet.**
+
+- **84 REPLACE.** Each existing image the window made stale now has a
+  `**[SCREENSHOT — REPLACE …]**` paragraph directly under it, saying what the
+  new frame must show.
+- **38 NEW.** Each is a `> **Screenshot needed:**` placeholder, which
+  `status_report.py` counts. `SCREENSHOT_STATUS.md` was regenerated and now
+  reads 569 of 608 filled: these 38 plus the one carried phone shot
+  (`07-19`).
+
+Audit: [`CHANGE_AUDIT_2026-09-24_TO_10-04.md`](../CHANGE_AUDIT_2026-09-24_TO_10-04.md#documentation-and-media-disposition).
+
+**Read these before capturing.**
+
+- **Every desktop `/scheduling` frame carries the old subtitle.** The page
+  now reads "See the schedule, sign up for shifts, and request swaps and time
+  off" (#2780). Only frames where the line is prominent are marked REPLACE.
+  Re-shoot the rest whenever they are next touched: `03-11`, `03-44`, `03-49`,
+  `03-56`, `03-59-open-shifts-signup`, `03-63-offline-banner`,
+  `03-63-batch-report-form`.
+- **Layout moved under several screens without changing their content.**
+  - Card lists now size their columns to the grid's own width, so a tablet
+    with the sidebar open shows two columns, not three (#2880, #2893, #2903).
+  - Selected toggle buttons are primary red, not blue (#2891).
+  - Radios are round again (#2871).
+  - Settings screens drop their extra side padding on phones (#2894).
+  - Hover-only controls now show on touch tablets (#2893).
+
+  The guides' frames are desktop, so most are unaffected. Treat any
+  **tablet-width** capture as CHECK.
+- **The email shots show a shell that no longer ships.** `08-34`, `08-36`,
+  `08-56`, `08-57`, `08-58`, `08-65`, `08-66` and `08-67` are the
+  pre-2026-09-27 design. Every template now renders the solid-tab shell
+  (#2754). The 2026-09-25 email re-shoot below captured the intermediate
+  centred-masthead design (#2708), which #2754 replaced two days later.
+- **"Fire Chief" now reads "Chief"** on the seeded position and rank
+  (`d4e1a7c93b58`). Any frame that shows the seeded position list, or a member's
+  rank, as "Fire Chief" is stale. Frames were not checked one by one for this,
+  so none is marked; look for it while re-shooting.
+- **Demo data the seeder must gain** for the NEW shots:
+  - an outside-department shift and an Outside Apparatus entry (guide 03);
+  - an "I was there" request and an event with an alternate organizer
+    (guide 04);
+  - a room with badge check-in on (guides 04 and 06);
+  - a stack of same-category notifications (guide 07);
+  - a finance request no approval chain applies to (guide 11);
+  - an applicant waiting on a sign-off (guide 15);
+  - a Target Solutions provider with a mapped user (guide 16).
+
+  Shoot none of them with real credentials.
+
+**CHECK — open the image and compare; re-shoot only if the named detail is in
+frame.**
+
+| Image(s)                                                                         | What may have changed                                                          |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `00-01-login-page`                                                               | Lockout or inactivity copy (#2805)                                             |
+| `01-40-member-directory-member`                                                  | Rank column; Member # hidden when nobody is numbered (#2857)                   |
+| `03-48-settings-phone`                                                           | Seven tabs, including Outside Apparatus; full phone width (#2749, #2894)       |
+| `04-01`, `04-06`, `04-10`, `04-42`, `04-43`                                      | Card sizing; "Going"; "(times edited)" (#2778, #2779, #2880)                   |
+| `05-73`, `05-75`, `05-86`                                                        | Inventory copy pass (#2781)                                                    |
+| `07-02-new-folder-dialog`                                                        | Alt text corrected (no parent-folder selector); the frame is probably right    |
+| `07-08-notification-rules`                                                       | Empty-state and note copy (#2791)                                              |
+| `08-02-organization-settings`                                                    | **Remove logo**; phone padding (#2759, #2894)                                  |
+| `08-37`                                                                          | A Compliance Officer row on the Officers tab (#2682, #2693)                    |
+| `08-60`                                                                          | A notification stack, only if the seed produces one (#2775)                    |
+| `10-12-mobile-bottom-nav`                                                        | The Settings tab now opens My Account (#2864)                                  |
+| `12-06-application-budget-tab`                                                   | **Add Budget Item**; Match Amount (#2798)                                      |
+| `13-03-records-tab`                                                              | "Not linked to a member or prospect" (#2795)                                   |
+| `14-06`, `14-07`, `14-17`                                                        | Election copy and W50 labels (#2787, #2848)                                    |
+| `18-01`, `18-02`, `19-08-store-admin-activity`                                   | Store copy pass (#2799)                                                        |
+| `19-04`, `19-23`                                                                 | Badge check-in switch, if the harness has NFC ID Cards connected (#2868)       |
+| `19-09`, `08-78`                                                                 | Legal page intro; **Publish** (#2796)                                          |
+| `19-24`                                                                          | Events settings sidebar: the Attendance description (#2865)                    |
+| `19-41-my-admin-hours`, Admin Hours Management                                   | Edit and Withdraw on rows; the red selected tab; category badges (#2748, #2752, #2891) |
+| `20-13`                                                                          | The ballot link now renders in the applicant drawer (#2652)                    |
+
+**Cannot be produced by the capture harness as it stands:**
+
+- **The room kiosk badge tap.** It needs an NFC reader and a registered card.
+  Shoot the "Which event are you here for?" chooser instead; that part is
+  reachable by URL.
+- **The phone drawer's scroll cue.** It appears only when items sit below the
+  fold at a phone height. Set the viewport explicitly.
+
+The per-guide queue follows. Each row is the marker's own text, so the guide
+and this file cannot disagree.
+
+### [00 — getting-started](./00-getting-started.md)
+
+| Disposition | Image | What the new frame must show |
+| --- | --- | --- |
+| **REPLACE** | `00-19-change-password.png` | The requirements list is visible before typing and now has seven rules — "At least 12 characters", the four character classes, "No runs like 123 or abc" and "No character three times in a row". |
+| **REPLACE** | `00-09-account-settings.png` | The page title reads **My Account** (was User Settings), and the Appearance tab's description reads "Theme and phone navigation bar". |
+
+### [01 — membership](./01-membership.md)
+
+| Disposition | Image | What the new frame must show |
+| --- | --- | --- |
+| **REPLACE** | `01-01-member-directory.png` | The table gained a **Rank** column between the name and **Member #** (2026-09-30). Re-shoot as an officer so **Member #** is present, with at least one member whose rank is set. |
+| **REPLACE** | `01-05-add-member-form.png` | Four visible changes since the frame was taken: one **Membership Number** field whose hint reads "Leave blank to assign … automatically" (the separate Membership ID override box is gone); the **Status** and **Preferred Contact** controls are gone from Department Information; **Rank** and **Position** each carry a help line under the dropdown; and with **Set initial password** ticked, a password-rules checklist sits under the two password fields. Shoot on a department with auto-numbering on, so the hint shows a real next number. |
+| **REPLACE** | `01-08-member-audit-history.png` | Each entry now shows the time beside the date (2026-09-28). Re-shoot filtered to profile updates, on a member with at least two edits on the same day so the times differ. |
+| **REPLACE** | `01-26-print-applicant-badges.png` | The bulk buttons were renamed on 2026-09-29 — **Advance Selected**, **Hold Selected**, **Reject Selected** (they act on the selection, not on everyone). Re-shoot the same bar with two applicants selected. |
+| **REPLACE** | `01-11-create-waiver.png` | **Applies To** now holds two checkboxes — **Training Requirements** and **Meeting Attendance & Shift Requirements** — where it held three (2026-09-28). Re-shoot the Create Waiver tab with both ticked, so the line under them reads "Creates a leave of absence that automatically generates a training waiver". |
+| **REPLACE** | `01-19-create-waiver.png` | Same change as `01-11`: **Applies To** has two checkboxes, not three. Re-shoot with only **Training Requirements** ticked so the frame differs from `01-11` and shows "Creates a standalone training waiver without a leave of absence". |
+| **NEW** | — | Members Admin → Settings → Membership IDs with numbering and auto-generation on → the **Year and number** preset applied: Number pattern `{YYYY}-{SEQ}`, Minimum digits 3, **Restart the count each year** on, **The year follows** set to **Our fiscal year** starting in July and named by **The year it ends in**, and the line "The next member will be numbered 2027-001." with "Next: 2027-001" in the panel header. |
+
+### [02 — training](./02-training.md)
+
+| Disposition | Image | What the new frame must show |
+| --- | --- | --- |
+| **REPLACE** | `02-01-my-training.png` | The subtitle under **My Training** now reads "Every class, certification and training hour the department has on record for you, and how you are doing against the training you are required to complete.", and the third stat card is **Required Training** (not **Requirements**) with a hint line beneath the percentage — "3 of 4 requirements met". Re-shoot the same member and state with those two visible. |
+| **NEW** | — | My Training → as a brand-new member with no records and no requirements: the **Required Training** card reading **None assigned**, and the "Nothing is on your training record yet" panel with its three numbered ways, **Submit External Training** and **Take the short walkthrough in the Learning Center**. |
+| **NEW** | — | Training Admin → Setup → Requirements → edit a requirement → the **Existing Members** section: the three choices **Apply to everyone**, **Exempt existing members** and **Give a catch-up deadline**, with **Give a catch-up deadline** selected and **Existing members joined before** / **Existing members must meet it by** filled in, and the note beneath them. |
+| **NEW** | — | Training Admin → Setup → Requirements → edit a requirement, change its hours, press save → the **Who does this change apply to?** dialog with **New members only** selected, the **New standard applies to members who joined on or after** date showing, and **Keep editing** / **Save for new members**. |
+| **REPLACE** | `02-17-officer-dashboard.png` | The subtitle under **Training Officer Dashboard** now reads "Compliance, expiring certifications, hours, and what needs your attention" (was "Aggregated compliance, training, validation, and capacity signals"). Re-shoot the same seeded department; the widgets are otherwise unchanged. |
+| **NEW** | — | Training Admin → Dashboard → Overview on a fresh department with one course and nothing else: the **Set up training for your department** guide reading "1 of 3 steps done", step 1 ticked, steps 2–4 with their links, and the **Department Compliance** widget reading **Not set up**. |
+| **NEW** | — | `/training/approve/<token>` for a Training event that requires confirmation: **Approve training credit** above the session title, the **Course** / **Event date** / **Approve by** details, the roster table (**Member**, **Check-in**, **Check-out**, **Credited minutes**, **Approved minutes**, **Note**) with one member's approved minutes edited, and **Approve and record**. |
+| **REPLACE** | `02-65-print-compliance.png` | The summary tiles now read **Compliant / At Risk / Non-Compliant / Requirements** (were 100% Complete / Partially Complete / Not Started), headers wrap to the full requirement name instead of "ANNUAL MINIM…", unmet cells print **✗** rather than "—", and a legend sits under the table. Re-shoot the same department. |
+
+### [03 — scheduling](./03-scheduling.md)
+
+| Disposition | Image | What the new frame must show |
+| --- | --- | --- |
+| **REPLACE** | `03-01-scheduling-tabs.png` | The header subtitle under **Shift Scheduling** changed on 2026-09-29 from "Manage schedules, sign up for shifts, and handle trades" to "See the schedule, sign up for shifts, and request swaps and time off". Every desktop shot of the scheduling page carries that line — `03-04`, `03-61` and `03-62` among them; re-shoot them in the same pass. |
+| **REPLACE** | `03-05-open-shifts.png` | The tab intro changed on 2026-09-29 from "Browse available shifts … A scheduling officer will review and confirm your signup." to "Shifts with open seats. Sign up for one and it goes straight onto your schedule." Re-shoot Open Shifts as a member with the new intro visible above the list. |
+| **REPLACE** | `03-100-open-shifts-member.png` | Shot 2026-09-24, before the 2026-09-29 copy pass: the intro above the list still promises an officer will confirm the signup. Re-shoot the same member view with "Shifts with open seats. Sign up for one and it goes straight onto your schedule." |
+| **REPLACE** | `03-105-open-shifts-admin.png` | Same intro change as `03-100`; re-shoot the administrator's view with the new intro. |
+| **NEW** | — | My Shifts → Hours as a member → the "Shifts with other departments" card with two entries (one showing a start–end time range, one reading **Not counted** with its reason) and the **Log outside shift** button. |
+| **NEW** | — | My Shifts → Hours → Log outside shift → the "Log a shift with another department" dialog with Start and End filled, the **+12 hours** / **+24 hours** buttons, "Counts as 12 hours", and Department and Apparatus chosen. |
+| **NEW** | — | Scheduling Admin → Settings → Outside Apparatus → one department with two units, one turned off, and the "Add a department" field. |
+| **NEW** | — | Scheduling Reports → Member Hours → scrolled to the "Outside apparatus staffed" table and the "Shifts with other departments" list with a Reject button on a row. |
+| **NEW** | — | Shift Check-In at phone width, one hour into a shift → tap Check Out → the "Check out early?" dialog with **Stay checked in** and **Check out now**. |
+| **REPLACE** | `03-67-swap-request-dialog.png` | The Open Swap card's subtitle changed on 2026-09-29 from "Any member can pick it up" to "An officer finds cover; it stays yours until then". Re-shoot the dialog with both swap-type cards readable. |
+| **REPLACE** | `03-47-settings-desktop.png` | The section list gained a seventh entry, **Outside Apparatus** ("Other departments members ride with"), on 2026-09-27, and General's description now reads "Shift defaults, overtime, and close-out". Re-shoot with all seven sections in the list. |
+| **NEW** | — | Scheduling Admin → Settings → Notifications → the "Not in effect yet" notice above the six switches. |
+| **REPLACE** | `20-16-scheduling-admin-hub.png` | The Department settings group gained an **Outside Apparatus** card ("Other departments and units members log shifts on") on 2026-09-27, and several card descriptions were reworded on 2026-09-29 (Shift Templates: "Reusable shift setups — hours, crew seats and vehicle"; Shift Patterns: "Repeating rotations, and generating shifts from them"; Who Can Fill What: "Which positions each member is cleared for, and why"). Re-shoot the hub on a department that has scheduled shifts, so the setup guide below is not shown. |
+| **NEW** | — | Scheduling Admin hub on a fresh department with no templates → the "Set up scheduling for your department" card reading "0 of 2 required steps done", its three numbered steps with their links, and the × in the corner. |
+| **REPLACE** | `03-61-review-queue-batch.png` | The view strip's last segment, **+ New**, became a separate **New report** button beside the strip on 2026-09-28, and the page subtitle now reads "See the schedule, sign up for shifts, and request swaps and time off" (was "Manage schedules, sign up for shifts, and handle trades"). Re-shoot the same selection state. |
+| **REPLACE** | `03-62-flagged-queue.png` | Same strip and subtitle change as `03-61`; and the expanded card now shows only the reviewer's comment box, not a second generic red box above it. |
+| **NEW** | — | Scheduling → Shift Reports as a member with no reports → the "Shift reports about you" heading and the "No shift reports yet" empty state with its three cards. |
+| **NEW** | — | Scheduling → Shift Reports as a training officer → Written by me → "Your reporting summary" with its tiles (including a Drafts to finish → button), the "Reports written per month" chart, and the "Reports you've written (N)" list beginning below. |
+| **NEW** | — | Scheduling → Shift Reports at 390 px width as an officer → a report card with its status badges on their own row beneath the member's full name. |
+
+### [04 — events-meetings](./04-events-meetings.md)
+
+| Disposition | Image | What the new frame must show |
+| --- | --- | --- |
+| **NEW** | — | Events page as a regular member on a department with no upcoming events → the "No upcoming events yet" empty state with its explanation and the "Take the short walkthrough in the Learning Center" link. |
+| **REPLACE** | `04-02-event-detail.png` | Taken as an administrator, the page changed twice: the details card gained an **Organized by** row with a **Transfer event** link (2026-10-03), and every card on the page now carries the shared bordered `card` treatment instead of the borderless surface (2026-10-04). Re-shoot an upcoming event with RSVP open so the RSVP controls, the Organized by row and the bordered cards are in frame. |
+| **NEW** | — | Event detail as a member, for an event whose check-in window closed today and with no check-in recorded → the "Were you at this event but never checked in?" card with its "I was there" button. |
+| **NEW** | — | Event detail as the event's organizer → the Attendance Requests card listing one pending request (name, "Asked …", the reason, "Says they were there from … until …") with Approve and Decline. |
+| **REPLACE** | `04-04-event-qr-code.png` | The page's copy was rewritten on 2026-09-29: the line under the title now reads "Members scan this code to check themselves in", and the steps read "Members sign in if they aren't already" and "Members tap Check In to record their attendance". Re-shoot the same open-window state so those lines are in frame. |
+| **NEW** | — | Check-In QR Codes (`/locations/qr-codes`) as an administrator with the NFC ID Cards integration on → a room card showing its QR code, **Write NFC tag** and the **Badge check-in** switch. |
+| **NEW** | — | A phone after tapping a room tag while two events are in their check-in window in that room → "Which event are you here for?" with both events listed. |
+| **REPLACE** | `04-05-create-event.png` | The form gained the **Organizer** (showing "Me (default)") and **Alternate (optional)** pickers with the line "Attendance requests for this event go to the organizer and the alternate." (2026-10-03); the template hint now reads "Pick a template to pre-fill common settings, or start blank."; the check-in window options read "Flexible - Opens before the start, closes when the event ends" etc.; and the attachments note reads "Files can't be attached from the app yet." Re-shoot the full blank create form. |
+| **NEW** | — | Event detail as an administrator → the details card's "Organized by" row with the alternate's name and the "Transfer event" link; then the Transfer Event dialog on a recurring event with "This and all future events in the series" selected. |
+| **NEW** | — | Manage Events → Event settings → Attendance → the "Attendance requests" block with one select per event type, each on "Default (Secretary)". |
+| **REPLACE** | `04-35-recurring-event-form.png` | The note under the recurrence controls now reads "Each occurrence is created as its own event, which you can edit or cancel on its own." (2026-09-29), and the series end date, date-to-skip field and reminder control are now labelled. Re-shoot the same weekly pattern with a series end date. |
+| **REPLACE** | `04-08-event-analytics.png` | The subtitle under the page title now reads "Attendance and check-in rates across your events" (2026-09-29). Re-shoot the same date range. |
+| **REPLACE** | `04-09-event-templates.png` | The page's description now reads "Save common event settings to reuse when you create an event." (2026-09-29). Re-shoot the same list. |
+| **REPLACE** | `04-14-meeting-minutes.png` | The `/minutes` page changed on 2026-09-29 and 2026-10-03: the subtitle reads "Record meetings, write up their minutes, and track action items", the first tile is **Total Meetings**, the search box reads "Search by title, agenda, or notes...", dates read "Thu, Oct 1, 2026 at 7:00 PM", and each meeting card lists its minutes as links with their state. Re-shoot with at least one meeting that has approved minutes and one awaiting approval. |
+| **REPLACE** | `04-38-rolling-recurrence.png` | The note under **Rolling 12-month cycle** now reads "New occurrences are added automatically so the series always runs 12 months ahead." (2026-09-29). Re-shoot the same clipped recurrence block. |
+| **REPLACE** | `04-39-delete-event-series.png` | The dialog's cancel button now reads **Keep Event** (was **Go Back**) and its warning reads "Permanently delete "…"? Its RSVPs and attendance records are deleted too. You can't undo this." (2026-09-29). Re-shoot with **Delete all events in this series** selected. |
+
+### [05 — inventory](./05-inventory.md)
+
+| Disposition | Image | What the new frame must show |
+| --- | --- | --- |
+| **REPLACE** | `05-05-item-form-modal.png` | The form gained a help line under **Tracking Type** that follows the choice ("Individual: one record per physical item, such as a radio or an SCBA pack, tracked on its own, usually by serial number." / "Pool: one record for a stock of identical items, such as gloves or T-shirts, counted by quantity and handed out a few at a time."). Re-shoot with an Individual item in a category that requires serial numbers and maintenance, so **Serial # \*** and **Inspection Interval (days) \*** carry their required markers. |
+| **REPLACE** | `05-68-equipment-request-states.png` | The status badges and the filter now read **Awaiting review**, **Approved**, **Issued** and **Declined** (was Pending / Approved / Fulfilled / Denied), and the filter starts on **Awaiting review**. Re-shoot with **All** selected so one request in each of Awaiting review, Approved (carrying **Fulfill**) and Issued is in frame. |
+| **REPLACE** | `05-57-assign-scan-modal.png` | The dialog's intro now reads "Hand gear to this member. Find each item by scanning its label or typing its name, serial number or barcode, then choose how long they keep it.", and each **Intended duration** option carries a one-line description under its name. Re-shoot **Distribute Items** with two items staged and **Ongoing assignment** chosen, so **Review 2 Items** is enabled; a second frame with no duration chosen would show the "Choose Ongoing assignment or Temporary loan above to continue." line. |
+| **REPLACE** | `05-66-my-equipment.png` | The header now carries the line "The department equipment you are responsible for, and your requests for more.", and the third tile reads **Pending requests** (was **Pending**). Re-shoot as an ordinary member holding at least one item, with one open return notice so the tile is non-zero. |
+| **REPLACE** | `05-36-storage-areas.png` | Since this was shot the page gained **Scan shelf label**, **Put away**, **Put Away by NFC** and **Print _N_ labels** in its toolbar and a print action on each row (2026-09-24), and its subtitle now reads "Racks, shelves, and bins inside each room. Nest one inside another as needed." Leaf areas no longer show an expand toggle. Re-shoot with one area expanded to its item list. |
+| **REPLACE** | `05-87-gear-request-size.png` | The "Your size on file" line now ends "(from your profile).", and a size the department never carries reads **not stocked** rather than **none on hand**. Re-shoot the size step with **XXL** (stocked, none on hand) selected so the new notice box is in frame: "None in XXL on hand right now. — You can still submit the request. The quartermaster will decide whether to reorder, offer a substitute, or decline." |
+
+### [06 — apparatus-facilities](./06-apparatus-facilities.md)
+
+| Disposition | Image | What the new frame must show |
+| --- | --- | --- |
+| **REPLACE** | `06-01-apparatus-list.png` | The stat tile above the list reads **Maintenance Due** (was "Maint. Due"), and an empty fleet reads "No apparatus have been added yet." Re-shoot the list with the stat tiles in frame. |
+| **REPLACE** | `06-03-apparatus-detail.png` | The Overview's dates card is now **Expiration Dates** (was "Important Dates"). Re-shoot the Overview tab with that card in frame; check also that the header's **Edit** / **Archive** buttons sit as they now wrap. |
+| **REPLACE** | `06-09-facilities-dashboard.png` | The header button reads **Print Labels** (was "Print Page Labels"), and the facility cards now size by the grid's own width (`card-grid`, 2026-10-03/04), so a laptop frame with the sidebar open shows fewer, wider cards. An empty dashboard reads "No facilities yet. Select Add Facility to add one." Re-shoot at laptop width. |
+| **NEW** | — | Signed in as a member, open `/locations/<room id>/check-in` for a room with two events in their check-in window → the "Which event are you here for?" page listing both events. |
+| **REPLACE** | `06-28-facility-settings.png` | The subtitle now reads "Choose the types and statuses offered on facility and maintenance record forms.", each list's line says where its values are offered ("Offered …") instead of "Ordered as shown in facility forms.", and the add button names the value ("Add facility type" rather than "Add"). Re-shoot the same frame. |
+
+### [07 — documents-forms](./07-documents-forms.md)
+
+| Disposition | Image | What the new frame must show |
+| --- | --- | --- |
+| **REPLACE** | `07-01-documents.png` | The page subtitle now reads "SOPs, policies, forms, and other department files in one place" and the fourth total is **Added This Month** (was "This Month") _(#2785)_. Re-take Documents & Files as an administrator with the four totals, the folder cards and the search bar in frame |
+| **REPLACE** | `07-03-upload-documents.png` | The file box no longer reads "Drag and drop your file here / or click to browse"; it reads **Choose the file to upload**, and the name field's placeholder is "Optional — uses the file name if left blank" _(#2785)_. Re-take the Upload Document dialog, empty, with the file box and the name, description and folder fields in frame |
+| **REPLACE** | `07-04-forms-list.png` | The first tab now reads **Forms** (was "My Forms"), status and category badges are capitalised, and the subtitle reads "Build forms, share them publicly, and send responses to other modules" _(#2789)_. Re-take the Forms tab with at least one published public form and one draft in frame |
+| **NEW** | — | A public form at `/f/<slug>` opened in a signed-out browser, for a form whose **Allow submissions without signing in** is off: the **Sign in to submit this form** notice above the first question, naming the department, with its **Sign in** button. |
+| **REPLACE** | `07-05-form-sharing.png` | The dialog is now titled **Share Form** (was "Public Sharing Settings"), carries the **Allow submissions without signing in** checkbox under **Public Access**, and its footer reads "Anyone can submit this form without signing in." or "Only signed-in members can submit this form." followed by the globe-icon sentence _(#2789, #2811)_. Re-take it for a published public form with the box ticked, the Public URL and QR code in frame |
+| **NEW** | — | Notifications → **My Notifications** with a collapsed stack (for example "3 attendance validations", **Latest:** line, **3 unread** badge and **Mark all read**) above single notifications, then the same stack expanded showing its individual rows. |
+| **REPLACE** | `07-10-create-rule-modal.png` | The trigger dropdown now also offers **Equipment Request Update** _(#2767)_, and the note under it reads "To stop it for the whole department, switch off **every** rule for this trigger — any one left on keeps it running. Members set their own email and text preferences separately." _(#2791)_. Re-take Create Notification Rule with **Event Reminder** chosen and that note in frame; never save |
+| **REPLACE** | `07-11-new-message-form.png` | The **Persistent** checkbox now reads **Keep in inbox after it is read** _(#2790)_. Re-take New message with the audience and scheduling fields and the four checkboxes in frame; never post |
+| **NEW** | — | Communications → **Member Emails & Texts** as an administrator: the **Always sent** cards, then **Members can turn off** with one card's **Require for every member** switch on and badged **Required by your department**, and the top of the **Text messages** section. |
+| **NEW** | — | Settings → **Notifications** as a member: **Email Notifications** on, the **Emails you can turn off** list with **Event reminders** switched off, and **Always emailed to you** below it. |
+| **REPLACE** | `07-15-suggestion-submit-anonymous.png` | A hint now sits under **Screenshots (optional, up to 5)**: "PNG, JPEG, WebP or GIF, up to 10 MB each. Larger images are scaled down to 2560 pixels on the longest side, and animated GIFs keep only their first frame." _(#2830)_. Same state as before, with that hint in frame |
+| **REPLACE** | `07-24-suggestion-notification-rule.png` | Re-shot 2026-09-25, before the rule note's second sentence was reworded to "To stop it for the whole department, switch off **every** rule for this trigger — any one left on keeps it running. Members set their own email and text preferences separately." _(#2791)_. Same state: **Suggestion Submitted** chosen, never saved |
+
+### [08 — admin-reports](./08-admin-reports.md)
+
+| Disposition | Image | What the new frame must show |
+| --- | --- | --- |
+| **REPLACE** | `08-06-reports.png` | The header subtitle now reads "Run department reports and export them to CSV or PDF", the info panel is titled **How Reports Work**, every card's description is rewritten (see the table above), and on a tablet the grid sizes to its own width — two columns at 1024px with the sidebar open. Capture at laptop width with the **All Reports** filter. |
+| **REPLACE** | `08-08-public-portal.png` | The Configuration tab now shows only **Rate Limiting** and the **Security Best Practices** notice (now at AAA contrast, and themed in dark mode) — the Allowed Origins and Caching sections are gone. The disabled banner reads "The portal is disabled. External websites can't read any of your data until you enable it, create an API key, and turn on the fields to share under Data Control." There was never a domain or branding setting; the caption should not promise one. |
+| **REPLACE** | `08-56-template-discard.png` | The preview pane shows the retired centred-masthead shell (re-shot 2026-09-25); since 2026-09-27 every template renders in the solid-tab shell — accent tab naming the category, title on a tinted card, white message card, centred footer _(#2754)_. The editor also has no **CSS Styles** box any more. Same state: unsaved edits, **Discard** beside **Save** |
+| **REPLACE** | `08-57-template-reset-dialog.png` | The dialog's message now reads "Restores the subject, HTML body, plain-text body, styles and footer choice to the defaults. Your CC/BCC settings are kept. You cannot undo this." _(#2790)_, and the preview behind it is the solid-tab shell _(#2754)_. Same state, never confirmed |
+| **NEW** | — | Communications → Email Templates → **Templates**, a template with a backup selected: the **Previous version (before the redesign)** panel above the editor with **Load this wording** and **Show the old wording**, and the solid-tab preview beside it. |
+| **REPLACE** | `08-58-template-send-test.png` | The preview pane shows the retired centred-masthead shell (re-shot 2026-09-25); since 2026-09-27 every template renders in the solid-tab shell — accent tab naming the category, title on a tinted card, white message card, centred footer _(#2754)_. Same state: **Send Test to Me** under the preview |
+| **REPLACE** | `08-36-template-search.png` | The preview pane shows the retired centred-masthead shell (re-shot 2026-09-25); since 2026-09-27 every template renders in the solid-tab shell — accent tab naming the category, title on a tinted card, white message card, centred footer _(#2754)_. Same state: the list filtered to "welcome" |
+| **REPLACE** | `08-34-email-templates.png` | The preview pane shows the retired centred-masthead shell (re-shot 2026-09-25); since 2026-09-27 every template renders in the solid-tab shell — accent tab naming the category, title on a tinted card, white message card, centred footer _(#2754)_. Same state: the categories with **Templates** active |
+| **REPLACE** | `08-64-email-footers-tab.png` | The tab now opens with the **Department contact details** card, and each footer has separate **Phone**, **Email** and **Website** switches showing the value each would print _(#2760)_. Re-take with the contact card and the first footer's switches in frame; never save |
+| **REPLACE** | `08-65-template-footer-selector.png` | The preview pane shows the retired centred-masthead shell (re-shot 2026-09-25); since 2026-09-27 every template renders in the solid-tab shell — accent tab naming the category, title on a tinted card, white message card, centred footer _(#2754)_. Same state: **Closes with** set to Public |
+| **REPLACE** | `08-66-template-variable-palette.png` | The preview pane shows the retired centred-masthead shell (re-shot 2026-09-25); since 2026-09-27 every template renders in the solid-tab shell — accent tab naming the category, title on a tinted card, white message card, centred footer _(#2754)_. Same state: the palette expanded |
+| **REPLACE** | `08-67-email-preview-design.png` | Shows the retired centred-masthead shell. The frame must show the solid-tab shell _(#2754)_: the **Shift Assignment** preview's accent tab and its right-hand note, the title on the tinted card, the message card, and — once re-taken — the alt and caption should name those instead of "centred masthead and fact panel" |
+| **NEW** | — | Settings → Organization → Profile at laptop width, with the **Timezone** select open on the department's zone, beside the department name — the one setting this section asks every administrator to check. |
+
+### [10 — mobile-pwa](./10-mobile-pwa.md)
+
+| Disposition | Image | What the new frame must show |
+| --- | --- | --- |
+| **NEW** | — | My Account → Appearance on a 390px phone, scrolled to **Phone navigation bar**: the **Left of Add** and **Right of Add** selects (one set to Training), the **Use the default tabs** link, and the bottom bar beneath showing the chosen tab. |
+| **NEW** | — | The navigation drawer open on a 390px phone as an officer, with items below the fold: the fade at the bottom edge and the floating **More** chevron. |
+
+### [11 — finance](./11-finance.md)
+
+| Disposition | Image | What the new frame must show |
+| --- | --- | --- |
+| **REPLACE** | `11-01-finance-dashboard.png` | The header subtitle now reads "Budgets, spending, and requests at a glance"; the Quick Links begin with **Approvals** for a `finance.approve` holder, and the dues link is titled **Dues** ("Track member dues and payments"). Capture as the Treasurer so the Approvals link and the linked Pending Approvals card both show. |
+| **REPLACE** | `11-06-approval-chains.png` | The page subtitle now reads "Set who approves purchase requests, expense reports, and check requests", and an expanded chain now carries an **Add step** button, a pencil (**Edit chain**) beside the trash icon in its header, and on each step **Move up** / **Move down**, **Edit step** and **Delete step** controls. Capture one chain expanded with two or three steps, one of them an Email approver. |
+| **NEW** | — | Finance → Settings → Approval Chains → expand a chain → **Add step**, with Step type **Approval**, Approver type **Email**, an approver email filled in, the **Allow self-approval by email** box and the **Auto-approve under ($)** field visible, and the help text under Approver type readable. |
+| **NEW** | — | Finance → Approvals as the Treasurer, with three or four waiting requests of mixed types (purchase request, expense report, check request) showing the Request, Type, Requested by, Amount, Step and Submitted columns and the Approve / Deny buttons on each row. |
+| **NEW** | — | A purchase request detail page in Pending Approval with no approval chain configured, viewed by the Treasurer: the "No approval chain applies to this request. Approve or deny it here." panel with its Approve and Deny buttons, and the approval timeline reading "This request has no approval steps." |
+| **REPLACE** | `11-08-create-purchase-request.png` | The subtitle now reads "Saved as a draft. Submit it for approval from the next page.", the budget field is labelled **Budget** (was Budget Category), the description placeholder reads "What you're buying and why", and the button is **Create Request**. |
+| **REPLACE** | `11-12-purchase-request-detail.png` | The action buttons read **Submit for Approval** / **Cancel Request**, a pending request now shows the yellow "Waiting on … You can approve or deny this step." panel with **Approve** and **Deny** to a `finance.approve` holder, and a draft's timeline reads "Approval steps are added when you submit this request." Capture a pending request as the Treasurer (not the requester). |
+| **REPLACE** | `11-10-create-expense-report.png` | The subtitle now reads "Saved as a draft. Submit it for approval from the next page." and the empty line-item list reads "No line items yet. Use “Add Item” to add each expense."; the expense type list is unchanged. |
+| **REPLACE** | `11-14-expense-report-detail.png` | **Submit for Approval** replaces Submit, line items show their expense type by name ("Mileage", not `mileage`), and a pending report shows the Approve / Deny panel to a `finance.approve` holder. |
+| **REPLACE** | `11-12-create-check-request.png` | The budget field is labelled **Budget** (was "Budget (Optional)"). |
+| **REPLACE** | `11-16-check-request-detail.png` | **Submit for Approval** and **Void Request** replace Submit and Void, and a pending request shows the Approve / Deny panel to a `finance.approve` holder. |
+
+### [12 — grants-fundraising](./12-grants-fundraising.md)
+
+| Disposition | Image | What the new frame must show |
+| --- | --- | --- |
+| **REPLACE** | `12-03-opportunities.png` | Each opportunity's button now reads **Start Application** (was Apply), and the subtitle reads "Browse grant programs and start an application". |
+| **REPLACE** | `12-04-create-application.png` | The subtitle now reads "Only the program name and agency are required. You can add the rest later.", the opportunity field is labelled **Grant Opportunity**, the budget-summary placeholder reads "How the grant money will be spent..." and the contacts placeholder "Names, roles, and phone or email...". |
+| **REPLACE** | `12-10-donors.png` | The subtitle now reads "Look up donors and what each has given". |
+| **REPLACE** | `12-14-fundraising-reports.png` | The tabs read **Grants** / **Fundraising**, the subtitle "Grant results and fundraising totals for the dates you choose", and the first KPI **Total Raised** (was Total Donations). |
+
+### [13 — medical-screening](./13-medical-screening.md)
+
+| Disposition | Image | What the new frame must show |
+| --- | --- | --- |
+| **REPLACE** | `13-01-medical-landing.png` | The page subtitle now reads "Set screening requirements, record screenings, and see which ones expire soon." |
+| **REPLACE** | `13-05-add-requirement.png` | The submit button reads **Add Requirement** (was Create), and the note under Applies to Roles reads "Not enforced yet — this requirement applies to every active member and prospect, whatever roles you list here." |
+| **REPLACE** | `13-07-add-record-linkage-notice.png` | The amber notice is reworded ("Not linked to a member or prospect. You can't choose who a screening is for here, …") and the submit button reads **Add Record** (was Create). |
+
+### [14 — elections](./14-elections.md)
+
+| Disposition | Image | What the new frame must show |
+| --- | --- | --- |
+| **REPLACE** | `14-01-elections-list.png` | The subtitle under **Elections** now reads "Create elections, send ballots and publish results" for an elections manager ("See elections and their results" for a member); it read "Manage elections and view results" (2026-09-29). Re-shoot the same list as an administrator. |
+| **REPLACE** | `19-25-ballot-template-settings-before.png` | **[SCREENSHOT — REPLACE `19-25-ballot-template-settings-before.png` and `19-26-ballot-template-settings-after.png`.** The details card changed on 2026-09-30: **Voting Method** reads "One choice per voter" (before) and "Ranked choice" (after) instead of "Simple Majority" / "Ranked Choice", and a new **Winner** row shows the victory condition — in this example "Supermajority (67% of votes)" on both frames, which is the hazard the paragraph below describes. Re-shoot the same draft before and after applying the template. |
+| **REPLACE** | `14-16-election-settings.png` | The **Defaults** section (default voting method, victory condition, anonymity, write-ins) was removed on 2026-09-29 because the create form never read it; its sections are now **Proxy Voting**, **Features**, **Test Ballot** and **Security**. Re-shoot the settings page so its section list no longer shows Defaults, and update the caption, which still says "default rule toggles". |
+
+### [15 — prospective-members](./15-prospective-members.md)
+
+| Disposition | Image | What the new frame must show |
+| --- | --- | --- |
+| **REPLACE** | `15-04-kanban-board.png` | **[SCREENSHOT — REPLACE `15-04-kanban-board.png` (low priority).** Each card's status badge now shows the label (**Active**, **On Hold**) instead of the raw value ("active", "on hold") — 2026-09-29. The same applies to `15-01`, `15-02-board-truncated` and guide 01's `01-10`; re-shoot them in the same pass. |
+| **NEW** | — | Sign-offs page as an officer holding the Chief position → one applicant card on a "Chief and President approval" stage, with the pills reading "Chief: waiting" and "President: signed", and the **Sign as Chief** button. |
+| **REPLACE** | `15-09-convert-modal.png` | The frame still shows the Regular Member / Administrative cards and a **Send welcome email with login credentials** checkbox. Step 2 now opens with **Member class** and **Starting status** dropdowns (pre-filled, with the "Pre-filled from this pipeline's conversion settings…" line under them), and the checkbox is replaced by the **How will they get their password?** group of three radio buttons. Re-shoot step 2 for a Regular applicant on a department with email set up, scrolled so the class/status pair and the password group are both in frame. |
+| **REPLACE** | `15-10-pipeline-settings.png` | Two changes below the Inactivity Timeout card: a new **When an Applicant Becomes a Member** card (Operational applicants / Administrative applicants, each with **Member class** and **Starting status**, and **Save Conversion Settings**) sits between it and the status-page card (2026-09-30); and the status-page card's copy now reads "Let applicants check their application status through a public link", with help text naming the "Show this stage on the public status page" checkbox and the Enable Status Page stage (2026-09-29). Re-shoot the same full page. |
+| **REPLACE** | `15-11-table-bulk-actions.png` | The bar's buttons now read **Advance Selected**, **Hold Selected** and **Reject Selected** (2026-09-29). Re-shoot the same selection in Table view. |
+| **NEW** | — | Public Application Status page for an active applicant → the "Withdraw your application?" dialog open over the "No longer interested?" card, Reason filled in, with **Withdraw Application** and **Keep My Application**. |
+
+### [16 — integrations](./16-integrations.md)
+
+| Disposition | Image | What the new frame must show |
+| --- | --- | --- |
+| **NEW** | — | Training Admin → Setup → Integrations → add a Target Solutions provider: the form with **API Base URL** `https://app.targetsolutions.com/tsapp/api/`, **API Key** and **API Secret \*** filled with placeholder values, and under **Sync Settings** **Enable Auto-Sync** on, **Pull new completions** set to **Every hour** and **Daily 30-day review at** 02:00. Use a demo key, never a real one. |
+
+### [17 — privacy-data-rights](./17-privacy-data-rights.md)
+
+| Disposition | Image | What the new frame must show |
+| --- | --- | --- |
+| **REPLACE** | `17-04-profile-as-member.png` | Two things in this frame changed on 2026-09-30: the **ID Card** button at the top right is gone (an ordinary member no longer gets a colleague's ID card), and the Contact Information panel now reads "No contact details shared. This member has not added any, or your department keeps them private." Re-shoot the same profile as the same ordinary member. |
+
+### [18 — storefront](./18-storefront.md)
+
+| Disposition | Image | What the new frame must show |
+| --- | --- | --- |
+| **REPLACE** | `18-03-order-windows.png` | The window row's buttons now read **Open ordering** / **Close ordering** and **Record vendor order** (or **Update vendor order** once recorded); counts read "1 order" / "3 orders" rather than "order(s)". |
+| **REPLACE** | `18-04-my-orders-unpaid.png` | The payment line now reads "Include **ORD-…** as the reference on your payment." (was "Reference ORD-… on your payment"), and item counts read "1 item" / "3 items". |
+| **REPLACE** | `19-06-store-admin-orders.png` | The export button reads **Export CSV** (was Export), the bulk control **New status for selected orders** (was Bulk status), and rows read "1 item" / "2 items". |
+
 ## Suggestion boxes re-shot after notifications, history, board and delete, 2026-09-25
 
 The suggestion-box shots in guide 07 predated four changes to those screens:

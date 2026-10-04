@@ -12,8 +12,18 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
 
 ### 🔄 Recent-change handoff
 
+**[Change audit — 2026-09-24 through 2026-10-04](./CHANGE_AUDIT_2026-09-24_TO_10-04.md)**
+is the current release handoff. 250 pull requests and 62 migrations (head
+`d058b5e7c1f4`), most of them fixes from the new browser-driven
+[workflow review](./workflow-review/README.md), plus a plain-language pass over
+every module's wording. Every email template was reset to one design;
+probationary members can sign in; inventory NFC tags, room door tags, outside
+shifts, "I was there" requests and a finance Approvals screen are new. It
+carries the Alembic route, the permission movements, and the screenshot
+(84 replace, 38 new) and YouTube disposition.
+
 **[Change audit — 2026-09-15 through 2026-09-23](./CHANGE_AUDIT_2026-09-15_TO_09-23.md)**
-is the current release handoff. 40 pull requests and four migrations (head
+was the previous handoff. 40 pull requests and four migrations (head
 `5a70c5dcd138`): **suggestion boxes** with structural anonymity, meeting stages
 that advance on **finalized** attendance and bind a coordinator's own Advance,
 inventory **label tracking** with print-by-filter, server-side conditional

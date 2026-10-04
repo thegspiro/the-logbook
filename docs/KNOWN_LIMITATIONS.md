@@ -484,6 +484,46 @@ named ("N modules you did not enable are hidden") with a control to reveal
 them, so a department that cannot find Inventory learns it is off rather than
 concluding the permission does not exist.
 
+## Found by the September 24 – October 4 Documentation Pass (2026-10-04)
+
+Five items surfaced while bringing the guides up to date with the window's
+pull requests (`docs/CHANGE_AUDIT_2026-09-24_TO_10-04.md`). None is new
+behaviour from that window except where noted; each is recorded here so the
+guides can point at one place and an owner can decide it.
+
+- **External Training — the Map User button does nothing.** On the External
+  Training Integrations page, an unmapped provider user shows a **Map User**
+  button with no click handler (`ExternalTrainingPage.tsx`). A provider user
+  that does not match a member by email can only be mapped through the API
+  (`PATCH /training/external/providers/{id}/user-mappings/{mapping_id}`). The
+  training guides say so. **Open — needs a mapping dialog.**
+- **Email Templates — the redesign banner still says to press Reset.** The
+  blue banner on Communications → Email Templates reads "Templates you have
+  never edited already use it — press Reset on any you have customised to
+  adopt it." Since migration `15c5bc7700aa` (#2754) every template already uses
+  the solid-tab design, edited or not, so the advice now only discards a
+  department's own wording. Earlier wording is restored from the template's
+  **Previous version (before the redesign)** panel, not from Reset. The guides
+  warn about the banner. **Open — the banner should be removed or reworded.**
+- **NFC tag and ID-card hashes depend on `ENCRYPTION_SALT`.** Every NFC tag
+  UID and member card UID is stored only as a SHA-256 peppered with the
+  installation's encryption salt (`nfc_tag_service.py`). Changing
+  `ENCRYPTION_SALT` therefore orphans every registered tag and card: taps stop
+  matching and each must be registered again. `docs/KEY_ROTATION.md` already
+  says not to change the salt; this is one more reason. **Accepted.**
+- **Probationary counts as active only where `User.is_active` is read**
+  (#2886). Sign-in, scheduling, messaging recipients and the other
+  `is_active` callers now admit probationary and junior members. About forty
+  other places compare `status == ACTIVE` by hand — training compliance,
+  certification alerts, rosters, reports, meeting quorum, administrative
+  continuity — and still leave them out. Some (quorum, continuity) may be
+  right to, depending on bylaws. **Pending an owner decision per site.**
+- **Another member's ID card is gated in the screens, not the API** (#2860).
+  The profile's **ID Card** button and the card page now require
+  `members.manage` or `members.manage_id_cards` for someone else's card, but
+  the shared label page `/members/print-labels` still prints colleagues'
+  badges for anyone holding `members.view`. **Open.**
+
 ## Room Kiosk Badge Check-In — A Copied Card Works With Nobody Watching (2026-10-03)
 
 **Accepted by the owner on 2026-10-02.** A room with **Badge check-in** on
@@ -1332,7 +1372,7 @@ that added the purchase request, expense report and check request shots.
 | Guide section             | What exists                                                                                                                              | State                |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
 | Create Budget form        | `financeStore.createBudget` over a working API, **no component calls it**. `BudgetsPage` is read-only — it has no create control at all. | ❌ Store action only |
-| Add Approval Step form    | `ApprovalChainsSettingsPage` renders a chain's steps and offers no way to add, edit or remove one.                                       | ❌ Not built         |
+| Add Approval Step form    | Built 2026-09-29 (#2839): `ApprovalChainsSettingsPage` adds, edits, deletes and reorders steps, and edits a chain.                       | ✅ Built             |
 | Create Dues Schedule form | `financeStore.createDuesSchedule`, **no component calls it**.                                                                            | ❌ Store action only |
 | QuickBooks export mapping | `GET/POST/PUT /finance/export/mappings` and the `qbAccountName` types exist; no page, no route, no consumer.                             | ❌ API + types only  |
 | Export logs               | `GET /finance/export/logs` and an `ExportLog` interface; no page, no route, no consumer.                                                 | ❌ API + types only  |
@@ -5463,6 +5503,11 @@ needs a decision rather than a patch:
     the next shift's start.
 - **W46-13 — Fail and Out of service carry no required note.** An item marked
   out of service takes the rig off the fleet board with no reason recorded.
+  ✅ Resolved 2026-10-04 (#2882): the check form now requires a note on a Fail
+  or Out of service the member chose (one a count, reading or expiry already
+  explains is exempt) before it submits. The requirement is enforced by the
+  form only; the server still accepts a failed item without a note from a
+  direct API call.
 - **W46-14 — The seeded Quartermaster holds no `inventory.check_*` grant.**
   ✅ Resolved: the owner granted `inventory.check_manage` (authoring only),
   seeded and backfilled by migration `f73b449bdb8b` — see "The seeded
