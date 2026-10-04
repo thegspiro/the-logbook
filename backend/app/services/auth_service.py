@@ -443,9 +443,6 @@ class AuthService:
             new_refresh_token = create_refresh_token(token_data)
 
             # Rotate and immediately invalidate the token that was just used.
-            # Clear legacy grace data so it cannot be used by older code paths.
-            session.previous_refresh_token = None
-            session.previous_refresh_expires_at = None
             session.token = new_access_token
             session.refresh_token = new_refresh_token
             session.expires_at = datetime.now(timezone.utc) + timedelta(

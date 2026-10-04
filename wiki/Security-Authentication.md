@@ -325,9 +325,9 @@ over a session for 30 seconds after every legitimate refresh. Presenting any
 stale refresh token is now treated as replay/theft and **revokes all of that
 user's sessions** (logout everywhere). Concurrent refreshes from multiple tabs
 that previously slid through the grace window will now trip this — an accepted
-trade. The `REFRESH_ROTATION_GRACE_SECONDS` setting and the
-`user_sessions.previous_refresh_token` column still exist but are no longer
-consulted; the column is actively nulled on each rotation.
+trade. The `REFRESH_ROTATION_GRACE_SECONDS` setting and the columns behind it
+were removed on 2026-10-04; a `.env` that still sets it boots and logs that the
+setting has no effect.
 
 ### Deactivated Organizations Cannot Log In _(2026-08-12)_
 

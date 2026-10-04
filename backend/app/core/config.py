@@ -73,6 +73,18 @@ def _is_private_network_url(url: str) -> bool:
     return addr.is_private or addr.is_link_local
 
 
+# Settings that no longer do anything. pydantic-settings refuses an unknown
+# key in a .env file, so deleting a setting outright would stop every
+# installation whose .env still names it from booting. Each retired name is
+# accepted, ignored and reported once instead.
+RETIRED_SETTINGS: dict[str, str] = {
+    "REFRESH_ROTATION_GRACE_SECONDS": (
+        "the refresh-token grace window was removed on 2026-08-12; a reused "
+        "refresh token always revokes the session"
+    ),
+}
+
+
 class Settings(BaseSettings):
     """
     Application settings loaded from environment variables
@@ -211,9 +223,6 @@ class Settings(BaseSettings):
         30  # Short-lived access tokens (use refresh flow)
     )
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
-    # Grace window during which a just-rotated refresh token is still accepted,
-    # so concurrent legitimate refreshes don't trip replay detection. Keep short.
-    REFRESH_ROTATION_GRACE_SECONDS: int = 30
 
     # Password Policy
     PASSWORD_MIN_LENGTH: int = 12
@@ -833,6 +842,19 @@ class Settings(BaseSettings):
 
     # IP Logging
     IP_LOGGING_ENABLED: bool = True  # Log all request IPs with geo info
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_retired_settings(cls, data):
+        if isinstance(data, dict):
+            for name, why in RETIRED_SETTINGS.items():
+                if name in data:
+                    data.pop(name)
+                    logger.warning(
+                        f"{name} is set but no longer has any effect ({why}). "
+                        "Remove it from the environment."
+                    )
+        return data
 
     @field_validator("COOKIE_SECURE", mode="before")
     @classmethod

@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**287 tables · 4721 columns · 932 foreign keys**
+**287 tables · 4719 columns · 932 foreign keys**
 
 ---
 
@@ -655,7 +655,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`password_history`](#password_history) | `PasswordHistory` | 4 | Password history for HIPAA compliance (§164.312(d)) |
 | [`positions`](#positions) | `Position` | 11 | Corporate Position model for permission-based access control. |
 | [`prospects`](#prospects) | `Prospect` | 17 | Prospective member – someone who has expressed interest in joining |
-| [`sessions`](#sessions) | `Session` | 12 | User session model for tracking active sessions |
+| [`sessions`](#sessions) | `Session` | 10 | User session model for tracking active sessions |
 | [`user_positions`](#user_positions) | _(association table)_ | 4 |  |
 | [`users`](#users) | `User` | 59 | User model with comprehensive authentication and profile support. |
 
@@ -9865,8 +9865,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
 | `token` | VARCHAR(512) | no | UQ, UQ-IDX |  |  |
 | `refresh_token` | VARCHAR(512) | yes | IDX |  |  |
-| `previous_refresh_token` | VARCHAR(512) | yes | IDX |  |  |
-| `previous_refresh_expires_at` | DATETIME | yes |  |  |  |
 | `ip_address` | VARCHAR(45) | yes |  |  |  |
 | `user_agent` | TEXT | yes |  |  |  |
 | `geo_location` | JSON | yes |  |  |  |
@@ -9877,7 +9875,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `ix_sessions_expires_at` (`expires_at`)
-- `ix_sessions_previous_refresh_token` (`previous_refresh_token`)
 - `ix_sessions_refresh_token` (`refresh_token`)
 - UNIQUE `ix_sessions_token` (`token`)
 - `ix_sessions_user_id` (`user_id`)
