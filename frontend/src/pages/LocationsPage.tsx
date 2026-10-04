@@ -1458,7 +1458,7 @@ export default function LocationsPage() {
                         No rooms added yet. Add rooms for QR check-in and event scheduling.
                       </p>
                     ) : (
-                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                      <div className="card-grid gap-2">
                         {stationRooms.map((room) => (
                           <RoomCard
                             key={room.id}
@@ -1485,7 +1485,7 @@ export default function LocationsPage() {
           {rooms.has('__other__') && (
             <div className="card p-5">
               <h3 className="text-theme-text-primary mb-3 text-lg font-semibold">Other Locations</h3>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="card-grid gap-2">
                 {(rooms.get('__other__') || []).map((room) => (
                   <RoomCard
                     key={room.id}

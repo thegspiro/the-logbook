@@ -35,6 +35,8 @@ import type {
 } from '../types/training';
 import toast from 'react-hot-toast';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { getErrorMessage } from '@/utils/errorHandling';
+import { grandfatheringSummary } from '@/utils/requirementGrandfathering';
 
 type FilterSource = 'all' | 'department' | 'state' | 'national';
 
@@ -154,6 +156,8 @@ const TrainingRequirementsPage: React.FC = () => {
         period_end_day: requirement.period_end_day,
         include_current_month: requirement.include_current_month,
         category_ids: requirement.category_ids,
+        new_member_cutoff_date: requirement.new_member_cutoff_date,
+        existing_member_deadline: requirement.existing_member_deadline,
       };
 
       const created = await trainingService.createRequirement(newReq);
@@ -185,8 +189,15 @@ const TrainingRequirementsPage: React.FC = () => {
     try {
       if (isEdit && id) {
         const updated = await trainingService.updateRequirement(id, data);
-        setRequirements(requirements.map((r) => (r.id === id ? updated : r)));
-        toast.success('Requirement updated');
+        if (updated.id !== id) {
+          // Saved for new members only: the original was narrowed and a copy
+          // created, so both rows changed — reload rather than patch one in.
+          await fetchData();
+          toast.success('Saved for new members. The current standard stays in place for existing members.');
+        } else {
+          setRequirements(requirements.map((r) => (r.id === id ? updated : r)));
+          toast.success('Requirement updated');
+        }
       } else {
         const created = await trainingService.createRequirement(data as TrainingRequirementCreate);
         setRequirements([...requirements, created]);
@@ -195,8 +206,10 @@ const TrainingRequirementsPage: React.FC = () => {
       setShowCreateModal(false);
       setSelectedRequirement(null);
       setTemplateSeed(null);
-    } catch (_error) {
-      toast.error('Failed to save requirement');
+    } catch (error: unknown) {
+      // The backend explains a refused save (e.g. a new-members-only save on
+      // a requirement that already holds the earlier standard); say so.
+      toast.error(getErrorMessage(error, 'Failed to save requirement'));
     }
   };
 
@@ -240,7 +253,7 @@ const TrainingRequirementsPage: React.FC = () => {
               onClick={() => {
                 void fetchData();
               }}
-              className="bg-theme-surface-hover hover:bg-theme-surface-secondary text-theme-text-primary rounded-lg p-2 transition-colors"
+              className="btn-icon bg-theme-surface-hover hover:bg-theme-surface-secondary text-theme-text-primary transition-colors"
               aria-label="Refresh requirements"
             >
               <RefreshCcw className="h-5 w-5" aria-hidden="true" />
@@ -316,7 +329,7 @@ const TrainingRequirementsPage: React.FC = () => {
           {filteredRequirements.length === 0 ? (
             <div className="card p-12 text-center">
               <FileText className="text-theme-text-muted mx-auto mb-4 h-16 w-16" aria-hidden="true" />
-              <h3 className="text-theme-text-primary mb-2 text-xl font-semibold">No Requirements Found</h3>
+              <h2 className="text-theme-text-primary mb-2 text-xl font-semibold">No Requirements Found</h2>
               <p className="text-theme-text-muted mb-6">
                 {searchTerm ? 'Try adjusting your search or filters' : 'Create a requirement, or start from a template'}
               </p>
@@ -466,7 +479,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex-1">
             <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-              <h3 className="text-theme-text-primary text-lg font-bold">{requirement.name}</h3>
+              <h2 className="text-theme-text-primary text-lg font-bold">{requirement.name}</h2>
               {requirement.requirement_type && (
                 <span className="text-theme-text-primary rounded-sm bg-green-700 px-2 py-1 text-xs font-semibold">
                   {getRequirementTypeLabel(requirement.requirement_type)}
@@ -565,6 +578,12 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
                 <div className="text-theme-text-secondary flex items-center space-x-2">
                   <Tag className="h-4 w-4" aria-hidden="true" />
                   <span>{getCategoryNames()}</span>
+                </div>
+              )}
+              {grandfatheringSummary(requirement) && (
+                <div className="text-theme-text-secondary flex items-center space-x-2">
+                  <Users className="h-4 w-4" aria-hidden="true" />
+                  <span>{grandfatheringSummary(requirement)}</span>
                 </div>
               )}
             </div>
@@ -757,7 +776,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
 
 const DetailSection: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <div>
-    <h4 className="text-theme-text-primary mb-3 font-semibold">{title}</h4>
+    <h3 className="text-theme-text-primary mb-3 font-semibold">{title}</h3>
     <div className="space-y-2">{children}</div>
   </div>
 );
@@ -947,9 +966,9 @@ const TemplateModal: React.FC<{
       <div ref={dialogRef} className="modal-panel max-h-[80dvh] w-full max-w-4xl overflow-y-auto p-6">
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <h3 id="template-modal-title" className="text-theme-text-primary text-xl font-bold">
+            <h2 id="template-modal-title" className="text-theme-text-primary text-xl font-bold">
               Select a Template
-            </h3>
+            </h2>
             <p className="text-theme-text-muted mt-1">
               Start from a common standard — you can review and adjust everything before saving
             </p>
@@ -970,7 +989,7 @@ const TemplateModal: React.FC<{
               onClick={() => onSelect(template)}
               className="card hover:bg-theme-surface-hover p-4 text-left"
             >
-              <h4 className="text-theme-text-primary mb-2 font-semibold">{template.name}</h4>
+              <h3 className="text-theme-text-primary mb-2 font-semibold">{template.name}</h3>
               <p className="text-theme-text-muted mb-3 text-sm">{template.description}</p>
               <div className="flex flex-wrap items-center gap-2 space-x-2">
                 <span

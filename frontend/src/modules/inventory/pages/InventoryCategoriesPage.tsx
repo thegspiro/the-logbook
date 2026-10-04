@@ -265,7 +265,7 @@ const InventoryCategoriesPage: React.FC = () => {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="card-grid gap-4">
           {categories.map((cat) => (
             <div key={cat.id} className="card-secondary flex flex-col p-5">
               <div className="mb-3 flex items-start justify-between">

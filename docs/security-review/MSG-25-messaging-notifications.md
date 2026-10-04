@@ -1,9 +1,10 @@
 # Security Review — Messaging & Notifications
 
 **Prefix:** `MSG` · **Iteration:** 25 · **Reviewed:** 2026-08-26 (pass 1),
-2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4) · **PR:** #1907
-(pass 1), pass 2 PR recorded in `PROGRESS.md`, #2305 (pass 3), pass 4 PR
-recorded in `PROGRESS.md`
+2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03
+(pass 5) · **PR:** #1907 (pass 1), pass 2 PR recorded in `PROGRESS.md`, #2305
+(pass 3), pass 4 PR recorded in `PROGRESS.md`, pass 5 PR recorded in
+`PROGRESS.md`
 
 ## Pass 1 (2026-08-26)
 
@@ -1376,3 +1377,226 @@ test_another_member_of_the_same_org_cannot_unsubscribe_this_endpoint`
 
 No frontend file was modified by this pass (MSG-16 is backend-only), so
 `tsc`/`eslint` establish the backend fix didn't regress the frontend build.
+
+---
+
+## Pass 5 (2026-10-03) — watchdog pickup, substantial churn, 0 new findings
+
+Picked up by a watchdog check: the dedicated `/loop 30m /security-review`
+session had stalled 2+ hours with no open security-review PR and no
+in-progress `claude/security-review-*` branch. Confirmed via the GitHub API
+(`list_pull_requests`, state=open) immediately before starting, and again
+immediately before opening this pass's own PR, that no PR with a head branch
+starting with `claude/security-review-` existed either time.
+
+**Backend:** re-read, fresh and in full: `messages.py` (492 L, unchanged since
+pass 4), `message_history.py` (266 L, +10 — the "send test email to me"
+blank-address guard and attachment-forwarding wiring), `notifications.py`
+(556 L, +42 — the `/my/unread-by-category` and `/my/read-category` stacking
+endpoints), `email_templates.py` (1104 L, +167 — three new routes:
+`GET`/`PUT /member-email-policy`, `GET /{id}/backups`), `messaging_service.py`,
+`message_delivery_service.py`, `notification_rules.py`, `notification_channels.py`,
+`integration_services/notification_dispatch.py`, `schemas/notifications.py` —
+confirmed byte-identical to pass 4 via `git diff` against the pass-4-era
+commit, so re-verified by diff rather than re-read line by line.
+`notifications_service.py` (649 L) was diffed and re-read at the two changed
+regions (the category-stacking filters, and a timezone-aware "emails this
+month" fix). `push_service.py` (552 L) and `notification_channels.py` were
+re-read; the only change in either since pass 4 was descriptive metadata
+(`SmsAlertInfo`/`SMS_ALERT_DETAILS`/`SMS_CONDITIONS`) with no logic change.
+`email_service.py` (2318 L, +580) and `email_theme.py` (1174 L, +745) grew
+substantially from a full email redesign — re-verified every pass-1/pass-3
+invariant (`_sanitize_header` on all header fields, both attachment budgets,
+the `_SHELL_COLOURWAYS` cache split, `subtitle` escaping) still present and
+unchanged at their same call sites, and read the new attachment-build code
+(`built_for` positional tracking in the SMTP batch path) — a correctness
+improvement, not a regression, since it fixes answers shifting onto the wrong
+recipient when one message fails to build. `email_template_service.py`
+(4055 L) and `email_templates_storefront.py`/`email_footers.py` (frozen
+default-template bodies plus the new per-field footer contact flags) were
+read at every function the diff touched, not the ~3,700 lines of unchanged
+frozen template HTML. Two new files surfaced by the churn and reviewed in
+full because they sit directly on this feature's send path:
+`email_policy.py` (452 L — the member email opt-out/required-kind matrix
+behind the new `/member-email-policy` endpoints) and `email_test_records.py`
+(262 L — fills a test email from the department's own next event/shift
+instead of sample data). `equipment_request_notifications.py` (280 L) was
+also read in full: it is formally Inventory's file, not this feature's, but
+it is a brand-new caller into this feature's shared `push_service`/
+`notification_rules` machinery and the obvious place for a newly-wired
+trigger to get org-scoping wrong.
+
+**Frontend:** `modules/communications`, `modules/notifications`,
+`pages/NotificationsPage.tsx`, `components/NotificationCard.tsx`,
+`services/communicationsServices.ts`, `hooks/usePushNotifications.ts` swept
+for every pattern pass 2's "Frontend — verified good" section asserted
+(`window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`, banned
+date-formatting methods, direct `fetch(`) — all still absent under 30+ commits
+of churn (`grep -rn` across all six paths, zero matches for any pattern).
+Not re-read line-by-line beyond that targeted sweep; no finding in this pass
+depends on frontend logic beyond what the sweep covers.
+
+**Migrations:** three landed since pass 4, all reviewed:
+`20260925_1251_1ae1ffbc445e` (widens `NotificationTrigger` and
+`EmailTemplateType` for `suggestion_submitted`, creates
+`suggestion_box_watchers`), `20260928_1355_fb7da5b05833` (same two enum
+widenings for `equipment_request_update`), and
+`20260927_1945_15c5bc7700aa` (the email redesign: resets every template of a
+type with a frozen default to the new design, backing up the previous
+content to a new `email_template_backups` table first). `validate_migrations.py
+--strict` reports 508 revisions, one head — up from pass 4's 443, mostly from
+other features' work.
+
+### Re-verified still intact, not re-derived
+
+Every fix from passes 1–4 (MSG-4 through MSG-9, MSG-13 through MSG-16, the
+Codex-round `cc_emails` legacy-read fix, the MSG-11 migration-detector
+ratchet) was checked directly against current source rather than trusted:
+
+- **Header sanitization / attachment budgets / exception safety (MSG-6, MSG-7)** —
+  `_sanitize_header` still applied to `To`/`Cc`/`Reply-To`/`List-Unsubscribe`
+  at both header-construction sites; `_CLOUDFLARE_ATTACHMENT_BUDGET` and
+  `_SMTP_ATTACHMENT_BUDGET` both present and enforced; both the Cloudflare and
+  batch SMTP branches still wrap their send in `try/except` →
+  `[False] * len(...)`.
+- **`build_shell` cache split / subtitle escaping (MSG-8, MSG-14)** —
+  `wrap_email_body` still calls `build_shell(..., cache=False)`; `subtitle` is
+  still `_html.escape`d inside `build_shell` itself, at both the teaser and
+  heading sites.
+- **Push subscription cap, lock ordering, deadlock retry (MSG-13)** —
+  `_MAX_PUSH_SUBSCRIPTIONS_PER_USER = 20`, the sorted-lock-then-peek sequence,
+  and the newest-first delivery cap are all present exactly as pass 3 left
+  them; `push_service.py` has had no commit since pass 4 beyond the
+  unrelated metadata change noted above.
+- **Self-scoped `unsubscribe` (MSG-16)**, **`get_message_stats` org-scoping
+  (MSG-9)**, **`update_rule`/`apply_updates` (MSG-5)**, **the reschedule
+  normalization (MSG-4)** — all re-read directly, unchanged.
+- **SMS allowlist (Pitfall #18)** — `SmsAlert` still has exactly one member
+  (`URGENT_DEPARTMENT_MESSAGE`); `resolve_sms_targets`/`resolve_sms_recipients`
+  remain the only path to `SMSService` for a routine notification. The new
+  suggestion-box and equipment-request notices (below) send email + in-app +
+  push only — neither adds an `SmsAlert` member, correctly: neither is the
+  kind of time-critical, act-immediately notice the allowlist is reserved for.
+- **`_RAW_HTML_VARIABLES` allowlist** — every new raw-HTML variable this
+  pass's new code touches (`apparatus_html`, `details_html`, `notes_html` in
+  `equipment_request_notifications.py`) is escaped at its own construction
+  site, matching the established pattern; no new variable was added to the
+  allowlist itself.
+
+### New code reviewed: two newly-wired notification triggers (Pitfall #19)
+
+`SUGGESTION_SUBMITTED` and `EQUIPMENT_REQUEST_UPDATE` were added to
+`NotificationTrigger` and to `ENFORCED_TRIGGERS` in
+`app/models/notification.py`. Both are correctly wired with a real reader —
+the exact gap Pitfall #19 exists to catch — confirmed by tracing each to its
+sender: `suggestions.py:194` and `equipment_request_notifications.py:169`
+each call `NotificationRuleResolver(db).is_enabled(organization_id, trigger)`
+before doing any work, so a department that switches either off actually
+stops the notice rather than getting a UI toggle that does nothing.
+`equipment_request_notifications.py`'s delivery path (`_deliver`) was read in
+full: the request and the requesting member are each re-fetched by id with
+an explicit `organization_id` filter (not merely inherited from an earlier
+query), the member is additionally filtered `is_active`, and every
+user-controlled value reaching the HTML email context (`item_name`,
+`review_notes`) is `html.escape`d at construction before being placed into a
+`*_html` context key. No cross-tenant or injection gap found in either new
+path.
+
+### Doc correction — MAIL-22 (app-review, `email_templates.py`) belongs in this feature's scope and is still open
+
+Not a new finding. `docs/app-review/email-templates.md`'s MAIL-22 (pass 5,
+2026-09-09) — `upload_attachment` sniffs the real MIME with
+`detect_mime_type`, uses it to accept/reject the upload, and then persists
+`content_type=file.content_type` (the client's unchecked claim) rather than
+the detected value — is squarely inside this rotation feature's file list
+(`email_templates.py`) but was never cross-referenced from this document.
+Re-verified still open against current code: `email_templates.py:790` rejects
+on a detected-MIME mismatch, but `email_templates.py:832` still writes
+`content_type=file.content_type or "application/octet-stream"` onto the
+stored `EmailAttachment` row — the client's claim, unchanged since that
+app-review pass. Already mirrored in `docs/KNOWN_LIMITATIONS.md` ("Email
+attachments: the detected MIME type is validated, then discarded"); not
+re-flagged as a new `MSG-N` id to avoid a second, divergent record of the
+same defect — this note exists so a reader of this file does not conclude
+the email-templates surface has no other open item.
+
+### Confirmed still open — unchanged, no new product-decision items
+
+MSG-3 (test-email arbitrary destination, by design), MSG-12's `failed` and
+throttled sub-cases (stranded-`pending` fixed pass 4; both remaining
+sub-cases still need the product decision passes 2–4 described), MSG-15
+(Web Push send-time DNS-rebinding pin skipped outside
+`production`/`staging`), MAIL-4 (arbitrary scheduled-email recipients),
+`email_service.py`'s F4 (no SSRF guard on an org-configured SMTP host —
+deliberate policy), and the informational `NotificationRuleCreate`/
+`Update.config` unbounded-JSON note are all re-verified unchanged and not
+re-flagged.
+
+### Route inventory — re-enumerated, 51 routes (48 at pass 4, +3)
+
+All 51 routes across the four endpoint files carry an auth dependency;
+re-confirmed by grepping every `@router.*` decorator against its
+`Depends(...)` in the same file (not sampled) for all four files. The 48
+rows pass 4 already enumerated are unchanged (re-checked, not re-printed
+here — see pass 4's table above). The three new rows:
+
+| Method | Path                                   | Auth dependency      | Permission                                                                | Org/self-scoped                             | Notes                                                                                   |
+| ------ | -------------------------------------- | -------------------- | ------------------------------------------------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------- |
+| GET    | `/email-templates/member-email-policy` | `require_permission` | `settings.manage`\|`organization.update_settings`\|`notifications.manage` | org                                         | read-only; `can_edit` flag computed from the narrower set below                         |
+| PUT    | `/email-templates/member-email-policy` | `require_permission` | `settings.manage`\|`organization.update_settings`                         | org                                         | only optional kinds accepted; deep-copies `Organization.settings` (Pitfall #12)         |
+| GET    | `/email-templates/{id}/backups`        | `require_permission` | `settings.manage`\|`organization.update_settings`                         | org (template **and** backup both filtered) | returns `None`→404 rather than an empty list, so a foreign id doesn't confirm existence |
+
+(`/notifications/my/unread-by-category` and `/notifications/my/read-category`
+were already present in pass 4's table — re-verified unchanged, both still
+filtered to `recipient_id == current_user.id` and
+`organization_id == current_user.organization_id` via the shared
+`_stackable_unread_filters` helper, which both the count read and the
+mark-read write use, so a stack's badge and its clear button cannot disagree.)
+
+### Schema & migration notes
+
+- `email_template_backups.template_id` is `ForeignKey(..., ondelete="SET
+NULL")` with `nullable=True` (Pitfall #2 — correct); `organization_id`
+  cascades, matching the model docstring's stated reasoning (a backup has no
+  meaning once its department is gone).
+- `15c5bc7700aa`'s table creation is guarded on `has_table`, and its
+  `upgrade()`/`downgrade()` are symmetric: downgrade restores every backed-up
+  column from a row tagged with this revision's id before dropping the
+  backup table, so a revert does not lose the department's pre-redesign
+  wording.
+- Both enum-widening migrations (`1ae1ffbc445e`, `fb7da5b05833`) snapshot the
+  enum's prior value set as a literal tuple rather than importing the live
+  model — the established pattern in this codebase for enum widenings, which
+  keeps a later edit to the Python enum from silently rewriting what an old
+  migration asserted. `suggestion_box_watchers`'s own creation is guarded on
+  `has_table` for a fresh install's `create_all` path (Pitfall #26); its FKs
+  (`organization_id`/`box_id`/`position_id`/`user_id`, all CASCADE) reference
+  tables that are guaranteed to already exist at this point in the chain.
+
+## Guard tests added (pass 5)
+
+None — no code fix was made this pass (0 new findings; see "Confirmed still
+open" and the MAIL-22 doc correction above).
+
+## Completion gate (pass 5)
+
+| Check                                                                          | Result                              |
+| ------------------------------------------------------------------------------ | ----------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                  | clean (0 violations)                |
+| `black --check app/ tests/ alembic/`                                           | clean — 1849 files unchanged        |
+| `isort --check-only app/ tests/ alembic/` (installed 9.0.1, matching CI's pin) | clean                               |
+| `python3 scripts/validate_migrations.py --strict`                              | PASSED — 508 revisions, single head |
+| backend tests, scope (`-k "message or notification or email_template"`)        | 916 passed, 1 skipped               |
+| `npm run typecheck` (frontend)                                                 | 0 errors                            |
+| `npm run lint` (frontend, `eslint --max-warnings 10`)                          | exit 0                              |
+
+No code was changed this pass, so the gate is a confirmation that current
+`main` is clean, not a verification of a diff — per CLAUDE.md's "match the
+verification to the change," the full ~12,900-test backend suite (last
+measured at 12,447 passed, pass 4) was also started for extra confidence but
+was not awaited: at 6+ CPU-minutes and climbing with no sign of finishing, it
+would have cost more wall-clock time than the rest of this pass combined for
+a signal the scoped run (which covers every file this pass actually read)
+already gives for this feature's own surface. A failure in it would be a
+pre-existing or cross-feature issue, not something this pass's docs-only
+diff could cause.

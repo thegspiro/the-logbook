@@ -97,6 +97,9 @@ async def _user(db, org_id: str, first: str, permissions=()) -> str:
     return user_id
 
 
+_SAME_AS_CREATOR = object()
+
+
 async def _event(
     db,
     org_id: str,
@@ -105,7 +108,12 @@ async def _event(
     ended_ago: timedelta = timedelta(hours=3),
     cancelled: bool = False,
     finalized: bool = False,
+    organizer=_SAME_AS_CREATOR,
+    alternate=None,
+    event_type: str = "training",
 ) -> str:
+    """Raw insert, so the organizer is set the way the migration backfills an
+    existing row: to its creator, unless the test names somebody else."""
     event_id = _uid()
     end = datetime.now(timezone.utc) - ended_ago
     await db.execute(
@@ -113,17 +121,22 @@ async def _event(
             "INSERT INTO events (id, organization_id, title, event_type, "
             "start_datetime, end_datetime, requires_rsvp, is_mandatory, "
             "is_cancelled, is_draft, reminder_schedule, check_in_window_type, "
-            "created_by, attendance_finalized_at) "
-            "VALUES (:id, :org, 'Ladder Drill', 'training', :start, :end, 0, 0, "
-            ":cancelled, 0, '[24]', 'flexible', :creator, :fin)"
+            "created_by, organizer_id, alternate_organizer_id, "
+            "attendance_finalized_at) "
+            "VALUES (:id, :org, 'Ladder Drill', :type, :start, :end, 0, 0, "
+            ":cancelled, 0, '[24]', 'flexible', :creator, :organizer, :alternate, "
+            ":fin)"
         ),
         {
             "id": event_id,
             "org": org_id,
+            "type": event_type,
             "start": end - timedelta(hours=2),
             "end": end,
             "cancelled": 1 if cancelled else 0,
             "creator": created_by,
+            "organizer": created_by if organizer is _SAME_AS_CREATOR else organizer,
+            "alternate": alternate,
             "fin": datetime.now(timezone.utc) if finalized else None,
         },
     )

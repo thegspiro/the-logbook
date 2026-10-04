@@ -113,8 +113,18 @@ class TestResolveDisplayNames:
         assert _display_name(None) is None
 
 
-def _event(created_by="organizer-1", finalized_by="chief-1"):
-    return SimpleNamespace(created_by=created_by, attendance_finalized_by=finalized_by)
+def _event(
+    created_by="organizer-1",
+    finalized_by="chief-1",
+    organizer_id=None,
+    alternate_organizer_id=None,
+):
+    return SimpleNamespace(
+        created_by=created_by,
+        attendance_finalized_by=finalized_by,
+        organizer_id=organizer_id,
+        alternate_organizer_id=alternate_organizer_id,
+    )
 
 
 def _caller(*permissions):
@@ -184,3 +194,34 @@ class TestWhichNamesACallerMaySee:
         """checkPermission honours "*" and "events.*"; so must this."""
         assert "created_by_name" in _names_to_resolve(_event(), _caller("*"))
         assert "created_by_name" in _names_to_resolve(_event(), _caller("events.*"))
+
+
+class TestOrganizerPairNames:
+    """The organizer and alternate are named to whoever may hand the event
+    over — an events manager, or either of the two themselves."""
+
+    def test_a_manager_is_told_both(self):
+        event = _event(organizer_id="olive-1", alternate_organizer_id="alex-1")
+
+        wanted = _names_to_resolve(event, _caller("events.manage"))
+
+        assert wanted["organizer_name"] == "olive-1"
+        assert wanted["alternate_organizer_name"] == "alex-1"
+
+    def test_the_alternate_without_events_manage_is_told_both(self):
+        event = _event(organizer_id="olive-1", alternate_organizer_id="caller-1")
+
+        wanted = _names_to_resolve(event, _caller("events.view"))
+
+        assert wanted["organizer_name"] == "olive-1"
+        assert wanted["alternate_organizer_name"] == "caller-1"
+        # The creator stays an events.manage detail.
+        assert "created_by_name" not in wanted
+
+    def test_a_plain_member_is_told_neither(self):
+        event = _event(organizer_id="olive-1", alternate_organizer_id="alex-1")
+
+        wanted = _names_to_resolve(event, _caller("events.view"))
+
+        assert "organizer_name" not in wanted
+        assert "alternate_organizer_name" not in wanted

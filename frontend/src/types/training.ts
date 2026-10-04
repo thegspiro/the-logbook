@@ -2,6 +2,7 @@
  * Training type definitions
  */
 
+import type { RequirementChangeScope } from '../constants/enums';
 import type { Event } from './event';
 
 export type TrainingType =
@@ -709,6 +710,14 @@ export interface TrainingRequirement {
   required_roles?: string[];
   required_positions?: string[];
   required_membership_types?: string[];
+  // Grandfathering. No cutoff: applies to everyone. Cutoff without a deadline:
+  // members who joined before it are exempt. Cutoff with a deadline: they have
+  // until the deadline, and an unmet one does not count against them before it.
+  new_member_cutoff_date?: string | null;
+  existing_member_deadline?: string | null;
+  // Read-only, set by a "new members only" edit on the original: it grades
+  // only members who joined before this date.
+  applies_to_joined_before?: string | null;
   start_date?: string;
   due_date?: string;
   time_limit_days?: number;
@@ -760,6 +769,8 @@ export interface TrainingRequirementCreate {
   required_roles?: string[] | undefined;
   required_positions?: string[] | undefined;
   required_membership_types?: string[] | undefined;
+  new_member_cutoff_date?: string | null | undefined;
+  existing_member_deadline?: string | null | undefined;
   start_date?: string | undefined;
   due_date?: string | undefined;
   time_limit_days?: number | undefined;
@@ -777,6 +788,11 @@ export interface TrainingRequirementCreate {
 }
 
 export interface TrainingRequirementUpdate {
+  // Not stored. `new_members_only` keeps the requirement as it is for members
+  // who joined before `effective_date` and creates a copy carrying the edit for
+  // everyone after; the response is that copy.
+  apply_to?: RequirementChangeScope | undefined;
+  effective_date?: string | undefined;
   name?: string;
   description?: string | null | undefined;
   requirement_type?: RequirementType;
@@ -801,6 +817,8 @@ export interface TrainingRequirementUpdate {
   required_roles?: string[] | undefined;
   required_positions?: string[] | undefined;
   required_membership_types?: string[] | undefined;
+  new_member_cutoff_date?: string | null | undefined;
+  existing_member_deadline?: string | null | undefined;
   start_date?: string | undefined;
   due_date?: string | undefined;
   time_limit_days?: number | undefined;
@@ -856,6 +874,8 @@ export interface RequirementProgress {
   due_date?: string;
   due_date_type?: DueDateType;
   days_until_due?: number; // Negative if overdue
+  /** Set while an existing member's catch-up period runs; due_date matches it. */
+  catch_up_deadline?: string | null;
 }
 
 // ==================== Training Program Types ====================
@@ -999,6 +1019,10 @@ export interface ProgramRequirementCreate {
   // Send true only when this caller just created `requirement_id` for the
   // program — it lets unlinking delete the requirement as well.
   owns_requirement?: boolean;
+  // Not stored. False waives the requirement for every member already enrolled
+  // (active or on hold), so only later enrollees must complete it. Omitted
+  // means true, which is what adding a requirement always did.
+  apply_to_current_enrollments?: boolean;
   sort_order?: number;
   program_specific_description?: string;
   custom_deadline_days?: number;
@@ -1902,6 +1926,12 @@ export interface RequirementDetail {
   active_months?: number;
   cert_expired?: boolean;
   blocks_activity?: boolean;
+  /**
+   * Set while an existing member's catch-up period runs and the requirement is
+   * unmet: due_date carries the same date, and the requirement is left out of
+   * the met/total summary until it passes.
+   */
+  catch_up_deadline?: string | null;
 }
 
 export interface MyTrainingSummary {

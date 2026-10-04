@@ -88,6 +88,15 @@ const MET_STATUSES = new Set(['completed', 'verified']);
  */
 export const isMetTone = (tone: CellTone): boolean => tone === CellTone.MET || tone === CellTone.SOON;
 
+/**
+ * Does this cell count toward the member's standing at all?
+ *
+ * A catch-up cell does not, either way — the backend's `tally_standing()`
+ * leaves it out of both met and total, and the tally here must equal the
+ * backend's or the row contradicts the standing printed beside it.
+ */
+export const isGradedTone = (tone: CellTone): boolean => tone !== CellTone.CATCH_UP;
+
 /** A number the UI can print: 18, not 18.0; 7.5 stays 7.5. */
 const num = (value: number): string => (Number.isInteger(value) ? String(value) : String(Math.round(value * 10) / 10));
 
@@ -122,6 +131,7 @@ export const daysUntilExpiry = (cell: ComplianceMatrixCell, asOf: string): numbe
   calendarDaysBetween(cell.expiry_date, asOf);
 
 export const toneOf = (cell: ComplianceMatrixCell, asOf: string): CellTone => {
+  if (cell.status === 'catch_up') return CellTone.CATCH_UP;
   if (cell.status === 'expired') return CellTone.LAPSED;
   if (MET_STATUSES.has(cell.status)) {
     const days = daysUntilExpiry(cell, asOf);
@@ -166,10 +176,14 @@ const progressLabelOf = (cell: ComplianceMatrixCell, tone: CellTone, asOf: strin
   // exists but is unfinished. Falling through to "Nothing recorded" denied the
   // very record the amber tone beside it was derived from.
   if (cell.status === 'in_progress') return 'Started, not yet complete';
+  if (tone === CellTone.CATCH_UP) return 'Existing member · not yet met';
   return 'Nothing recorded';
 };
 
 const dateLabelOf = (cell: ComplianceMatrixCell, tone: CellTone): string => {
+  if (tone === CellTone.CATCH_UP && cell.catch_up_deadline) {
+    return `Due by ${formatCalendarDate(cell.catch_up_deadline)}`;
+  }
   if (cell.expiry_date) {
     const formatted = formatCalendarDate(cell.expiry_date);
     return tone === CellTone.LAPSED ? `Lapsed ${formatted}` : `Expires ${formatted}`;
@@ -260,8 +274,9 @@ export const evaluateMember = (
   const cells = (member.requirements ?? []).map((cell) =>
     evaluateCell(cell, requirementsById.get(cell.requirement_id), asOf)
   );
-  const met = cells.filter((c) => isMetTone(c.tone)).length;
-  const total = cells.length;
+  const graded = cells.filter((c) => isGradedTone(c.tone));
+  const met = graded.filter((c) => isMetTone(c.tone)).length;
+  const total = graded.length;
   return {
     member,
     cells,
@@ -298,9 +313,12 @@ export const rollUpRequirements = (
   requirements.map((requirement) => {
     // A requirement that does not apply to a member is absent from their row
     // entirely, so the denominator is who it was actually asked of.
+    // A member still inside their catch-up period is not behind on it, and
+    // not part of the denominator, until the deadline passes.
     const applicable = members
       .map((m) => ({ member: m, cell: m.cells.find((c) => c.cell.requirement_id === requirement.id) }))
-      .filter((entry): entry is { member: EvaluatedMember; cell: EvaluatedCell } => !!entry.cell);
+      .filter((entry): entry is { member: EvaluatedMember; cell: EvaluatedCell } => !!entry.cell)
+      .filter((entry) => isGradedTone(entry.cell.tone));
     const met = applicable.filter((e) => isMetTone(e.cell.tone)).length;
     const total = applicable.length;
     return {

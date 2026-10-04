@@ -558,6 +558,9 @@ export const RequirementFormModal: React.FC<{
   const [requiredCourses, setRequiredCourses] = useState<string[]>(req?.required_courses ?? []);
   const [recencyDays, setRecencyDays] = useState<number | undefined>(req?.recency_days ?? undefined);
   const [isRequired, setIsRequired] = useState(link?.is_required !== false);
+  // Only asked when adding: whether members already enrolled take on the new
+  // requirement too. Defaults to yes, which is what adding always did.
+  const [applyToCurrent, setApplyToCurrent] = useState(true);
   const [allowsExternal, setAllowsExternal] = useState(req?.allows_external_credit === true);
   const [submitting, setSubmitting] = useState(false);
   const { courses, loading: coursesLoading, error: coursesError } = useCourseLibrary();
@@ -590,6 +593,7 @@ export const RequirementFormModal: React.FC<{
         sort_order: sortOrder,
         // The department owns this one; unlinking must not delete it.
         owns_requirement: false,
+        apply_to_current_enrollments: applyToCurrent,
       });
       toast.success('Requirement linked');
       onSaved();
@@ -653,6 +657,7 @@ export const RequirementFormModal: React.FC<{
           sort_order: sortOrder,
           // Created here for this program, so unlinking may clean it up.
           owns_requirement: true,
+          apply_to_current_enrollments: applyToCurrent,
         });
         toast.success('Requirement added');
       }
@@ -879,6 +884,31 @@ export const RequirementFormModal: React.FC<{
         <input type="checkbox" checked={isRequired} onChange={(e) => setIsRequired(e.target.checked)} />
         Required to complete the phase
       </label>
+      {!link && (
+        <fieldset className="space-y-2">
+          <legend className="form-label">Members already enrolled</legend>
+          <label className="text-theme-text-secondary flex items-start gap-2 text-sm">
+            <input
+              type="radio"
+              name="apply-to-current-enrollments"
+              className="mt-1"
+              checked={applyToCurrent}
+              onChange={() => setApplyToCurrent(true)}
+            />
+            <span>Hold them to it too — it is added to their progress now</span>
+          </label>
+          <label className="text-theme-text-secondary flex items-start gap-2 text-sm">
+            <input
+              type="radio"
+              name="apply-to-current-enrollments"
+              className="mt-1"
+              checked={!applyToCurrent}
+              onChange={() => setApplyToCurrent(false)}
+            />
+            <span>Only members who enroll from now on — it is recorded as waived for everyone already enrolled</span>
+          </label>
+        </fieldset>
+      )}
     </ModalShell>
   );
 };

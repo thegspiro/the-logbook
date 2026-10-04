@@ -993,6 +993,9 @@ async def add_requirement_to_program(
     """
     Add a requirement to a training program or phase
 
+    ``apply_to_current_enrollments`` (default true) decides whether members
+    already enrolled must complete it too; false waives it for them.
+
     **Authentication required**
     **Requires permission: training.manage**
     """
@@ -1008,10 +1011,34 @@ async def add_requirement_to_program(
     program_requirement, error = await service.add_requirement_to_program(
         program_requirement_data=requirement_link,
         organization_id=current_user.organization_id,
+        acting_user_id=str(current_user.id),
     )
 
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+
+    if not requirement_link.apply_to_current_enrollments:
+        # Waiving a requirement for a whole cohort at once is the kind of
+        # change a compliance officer is asked to account for.
+        await log_audit_event(
+            db=db,
+            event_type="program_requirement_waived_for_current_enrollees",
+            event_category="training",
+            severity="info",
+            event_data={
+                "program_id": str(program_id),
+                "requirement_id": str(requirement_link.requirement_id),
+                "phase_id": (
+                    str(requirement_link.phase_id)
+                    if requirement_link.phase_id
+                    else None
+                ),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+            organization_id=str(current_user.organization_id),
+        )
+        await db.commit()
 
     return program_requirement
 

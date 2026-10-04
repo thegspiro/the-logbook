@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.api.v1.endpoints import messages as messages_endpoint
+from app.models.user import ACTIVE_ACCOUNT_STATUSES
 from app.services.messaging_service import MessagingService
 
 
@@ -104,7 +105,10 @@ class TestTargetedUsers:
         query = db.execute.await_args.args[0]
         sql = str(query)
         assert "users.organization_id = :organization_id_1" in sql
-        assert "users.status = :status_1" in sql
+        # Probationary members are current members and receive messages too;
+        # the filter is User.is_active, whose statuses are this one tuple.
+        assert "users.status IN" in sql
+        assert set(query.compile().params["status_1"]) == set(ACTIVE_ACCOUNT_STATUSES)
         assert "users.deleted_at IS NULL" in sql
 
 

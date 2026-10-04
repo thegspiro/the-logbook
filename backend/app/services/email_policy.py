@@ -261,6 +261,7 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
         includes=(
             "Attendance to validate after an event",
             "A member asked to be marked present at your event",
+            "You were made an event's organizer or alternate, or relieved of it",
             "An event request was assigned to you",
         ),
         rationale="The task also waits in the bell and on the event.",

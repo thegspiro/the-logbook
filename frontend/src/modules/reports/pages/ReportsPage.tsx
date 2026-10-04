@@ -527,7 +527,7 @@ export const ReportsPage: React.FC = () => {
         )}
 
         {/* Reports Grid */}
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="card-grid gap-6">
           {filteredReports.map((report) => {
             const Icon = ICON_MAP[report.icon] ?? FileText;
             const isGenerating = generatingReportType === REPORT_TYPE_MAP[report.id];

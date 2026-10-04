@@ -17,8 +17,19 @@ import { parseNfcTagPath } from '../../constants/nfc';
  * documentation as much as a control — this is a pure action, and a permanently
  * dead button in the page header on every desktop and iPhone is worse than an
  * absent one.
+ *
+ * Icon-only on phones by default, for page headers where it sits beside other
+ * actions. A page where tapping a tag *is* the main thing a member came to do
+ * passes `label`, which shows at every width — an unlabelled icon gives a
+ * member no reason to think it starts their timer.
  */
-export const NfcTapButton: React.FC = () => {
+interface NfcTapButtonProps {
+  /** Visible at every width when given; otherwise "Tap Tag" from 640px up. */
+  label?: string | undefined;
+  className?: string | undefined;
+}
+
+export const NfcTapButton: React.FC<NfcTapButtonProps> = ({ label, className = '' }) => {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [rejected, setRejected] = useState(false);
@@ -79,11 +90,11 @@ export const NfcTapButton: React.FC = () => {
       <button
         type="button"
         onClick={handleOpen}
-        className="btn-secondary btn-auto inline-flex items-center justify-center gap-2"
+        className={`btn-secondary btn-auto inline-flex items-center justify-center gap-2 ${className}`}
         title="Tap an NFC tag to check in or clock in"
       >
         <Nfc className="h-4 w-4" aria-hidden="true" />
-        <span className="hidden sm:inline">Tap Tag</span>
+        {label ? <span>{label}</span> : <span className="hidden sm:inline">Tap Tag</span>}
       </button>
 
       <Modal isOpen={open} onClose={handleClose} title="Tap an NFC tag" size="sm">

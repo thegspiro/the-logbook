@@ -1456,14 +1456,14 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/training/admin',
     source: 'src/modules/training/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'setup page, all seven tabs, and the compliance matrix, measured through the mobile presentation ratchet',
   },
   {
     path: '/training/compliance-config',
     source: 'src/modules/training/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'all four sections, measured through the mobile presentation ratchet',
   },
   {
     path: '/training/officer',

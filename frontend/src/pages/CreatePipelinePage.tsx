@@ -393,7 +393,7 @@ const StepInfo: React.FC<{
     </div>
 
     <div>
-      <label className="flex items-center space-x-2">
+      <label className="mobile-touch-target flex items-center justify-start space-x-2">
         <input
           type="checkbox"
           id="is-template"
@@ -535,7 +535,7 @@ const StepPhases: React.FC<{
                     <HelpText>Target time to finish this phase. Optional.</HelpText>
                   </div>
                   <div>
-                    <label className="text-theme-text-secondary flex items-center space-x-2 text-sm">
+                    <label className="text-theme-text-secondary mobile-touch-target flex items-center justify-start space-x-2 text-sm">
                       <input
                         type="checkbox"
                         checked={phase.requires_manual_advancement}
@@ -1553,13 +1553,17 @@ const CreatePipelinePage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen">
-      <div data-page-main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
+    // Rendered only as the Pipelines tab of Training Administration, whose
+    // content column already supplies the side padding. A page container of
+    // its own here stacked a second 16-32px on each side and left 241px of a
+    // 320px phone for the wizard, which pushed the step bar off screen.
+    <div>
+      <div data-page-main className="mx-auto max-w-4xl py-6">
         {/* Header */}
         <div className="mb-8 flex items-center space-x-4">
           <button
             onClick={() => void navigate('/training/programs')}
-            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded-lg p-2"
+            className="btn-icon text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface shrink-0"
             aria-label="Back to programs"
           >
             <ArrowLeft className="h-5 w-5" />
@@ -1574,7 +1578,9 @@ const CreatePipelinePage: React.FC = () => {
         </div>
 
         {/* Step indicator */}
-        <div className="bg-theme-surface mb-8 flex items-center rounded-lg p-3">
+        {/* Five 44px steps and their connectors fit a 320px phone only with
+            the spacing tightened below sm; the labels are sr-only there. */}
+        <div className="bg-theme-surface mb-8 flex items-center rounded-lg p-2 sm:p-3">
           {wizardSteps.map((step, i) => {
             const StepIcon = step.icon;
             const isActive = step.key === currentStep;
@@ -1583,14 +1589,16 @@ const CreatePipelinePage: React.FC = () => {
             return (
               <React.Fragment key={step.key}>
                 {i > 0 && (
-                  <div className={`mx-2 h-0.5 flex-1 ${isComplete ? 'bg-red-500' : 'bg-theme-surface-border'}`} />
+                  <div
+                    className={`mx-0.5 h-0.5 flex-1 sm:mx-2 ${isComplete ? 'bg-red-500' : 'bg-theme-surface-border'}`}
+                  />
                 )}
                 <button
                   onClick={() => {
                     if (i <= stepIndex || canGoNext()) setCurrentStep(step.key);
                   }}
                   aria-current={isActive ? 'step' : undefined}
-                  className={`flex items-center space-x-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  className={`touch-target-phone flex shrink-0 items-center space-x-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                     isActive
                       ? 'bg-red-800 text-white'
                       : isComplete
@@ -1607,7 +1615,7 @@ const CreatePipelinePage: React.FC = () => {
         </div>
 
         {/* Step content */}
-        <div className="card-secondary mb-6 p-6">
+        <div className="card-secondary mb-6 p-4 sm:p-6">
           {error && (
             <div className="mb-4 rounded-sm border border-red-500 bg-red-500/10 px-4 py-3 text-red-700 dark:text-red-400">
               {error}
@@ -1664,7 +1672,7 @@ const CreatePipelinePage: React.FC = () => {
           <button
             onClick={goBack}
             disabled={stepIndex === 0}
-            className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover flex items-center space-x-2 rounded-lg px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50"
+            className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover flex min-h-11 items-center space-x-2 rounded-lg px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <ArrowLeft className="h-4 w-4" />
             <span>Back</span>

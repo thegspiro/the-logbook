@@ -57,6 +57,7 @@ from app.schemas.training import (
     ComplianceSummary,
     DuplicateWarning,
     HistoricalImportConfirmRequest,
+    RequirementChangeScope,
     RequirementProgress,
     TrainingCategoryCreate,
     TrainingCategoryResponse,
@@ -72,6 +73,7 @@ from app.schemas.training import (
     TrainingRequirementResponse,
     TrainingRequirementUpdate,
     UserTrainingStats,
+    grandfathering_error,
 )
 from app.services.integration_services.notification_dispatch import (
     notify_entity_created,
@@ -79,6 +81,7 @@ from app.services.integration_services.notification_dispatch import (
 )
 from app.services.qualification_service import QualificationService
 from app.services.training_compliance import (
+    CATCH_UP_STATUS,
     _find_matching_profile,
     _load_compliance_config,
     classify_standing,
@@ -86,7 +89,9 @@ from app.services.training_compliance import (
     evaluate_member_requirement_detail,
     get_org_include_current_month,
     get_requirement_date_window,
-    requirement_applies_to_member,
+    member_join_date,
+    requirement_applies_to_user,
+    tally_standing,
 )
 from app.services.training_service import TrainingService
 from app.services.training_waiver_service import fetch_org_waivers, fetch_user_waivers
@@ -120,10 +125,14 @@ async def get_training_dashboard_summary(
     recent_start = today - timedelta(days=30)
     cutoff = today + timedelta(days=expiration_days)
 
+    # positions eager-loaded: the applicability check reads each member's
+    # role ids, and a lazy load per member raises MissingGreenlet here.
     members = list(
         (
             await db.execute(
-                select(User).where(
+                select(User)
+                .options(selectinload(User.positions))
+                .where(
                     User.organization_id == org_id,
                     User.status == UserStatus.ACTIVE,
                     User.compliance_exempt == False,  # noqa: E712
@@ -173,21 +182,23 @@ async def get_training_dashboard_summary(
     risk_counts: dict[str, int] = {str(req.id): 0 for req in requirements}
     applicable_counts: dict[str, int] = {str(req.id): 0 for req in requirements}
     for member in members:
-        applicable = [
-            r
-            for r in requirements
-            if requirement_applies_to_member(r, member.membership_type or "active")
-        ]
+        applicable = [r for r in requirements if requirement_applies_to_user(r, member)]
+        join_date = member_join_date(member)
         unmet: list[str] = []
         for req in applicable:
-            applicable_counts[str(req.id)] += 1
             req_status, _, _ = _evaluate_member_requirement(
                 req,
                 by_user.get(str(member.id), []),
                 today,
                 waivers=waivers.get(str(member.id), []),
                 org_include_current_month=include_current,
+                join_date=join_date,
             )
+            # Inside an existing member's catch-up period the requirement is
+            # neither unmet nor part of the at-risk denominator.
+            if req_status == CATCH_UP_STATUS:
+                continue
+            applicable_counts[str(req.id)] += 1
             if req_status != TrainingStatus.COMPLETED.value:
                 unmet.append(str(req.id))
                 risk_counts[str(req.id)] += 1
@@ -1366,10 +1377,64 @@ async def create_requirement(
         new_requirement.due_date = None
 
     db.add(new_requirement)
+    await db.flush()
+    if new_requirement.new_member_cutoff_date is not None:
+        await _audit_grandfathering(
+            db,
+            current_user,
+            new_requirement,
+            "training_requirement_grandfathering_set",
+            before=None,
+        )
     await db.commit()
     await db.refresh(new_requirement)
 
     return new_requirement
+
+
+def _grandfathering_snapshot(requirement: TrainingRequirement) -> dict:
+    """The fields that decide which members a requirement exempts."""
+    return {
+        field: (value.isoformat() if value else None)
+        for field in (
+            "new_member_cutoff_date",
+            "existing_member_deadline",
+            "applies_to_joined_before",
+        )
+        for value in [getattr(requirement, field)]
+    }
+
+
+async def _audit_grandfathering(
+    db: AsyncSession,
+    current_user: User,
+    requirement: TrainingRequirement,
+    event_type: str,
+    before: dict | None,
+    extra: dict | None = None,
+) -> None:
+    """Record a change to who a requirement grades.
+
+    Logged separately from an ordinary edit because it can move a whole roster
+    in or out of compliance at once, and "who exempted the existing members,
+    and when" is the question a compliance officer will be asked.
+    """
+    await log_audit_event(
+        db=db,
+        event_type=event_type,
+        event_category="training",
+        severity="info",
+        event_data={
+            "requirement_id": str(requirement.id),
+            "requirement_name": requirement.name,
+            "before": before,
+            "after": _grandfathering_snapshot(requirement),
+            **(extra or {}),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+        organization_id=str(current_user.organization_id),
+    )
 
 
 @router.patch(
@@ -1386,22 +1451,36 @@ async def update_requirement(
 
     Requires training officer permissions.
 
+    ``apply_to`` decides who the edit reaches. ``everyone`` (the default)
+    edits the requirement in place. ``new_members_only`` leaves this
+    requirement unchanged for members who joined before ``effective_date``
+    (default: today) and creates a copy carrying the edit for members who
+    joined on or after it; the response is that new copy.
+
     **Authentication required**
     **Requires permission: training.manage**
     """
-    result = await db.execute(
+    updates = requirement_update.model_dump(exclude_unset=True)
+    apply_to = updates.pop("apply_to", RequirementChangeScope.EVERYONE)
+    effective_date = updates.pop("effective_date", None)
+    splitting = apply_to == RequirementChangeScope.NEW_MEMBERS_ONLY
+
+    query = (
         select(TrainingRequirement)
         .where(TrainingRequirement.id == str(requirement_id))
         .where(TrainingRequirement.organization_id == current_user.organization_id)
     )
-    requirement = result.scalar_one_or_none()
+    if splitting:
+        # Two concurrent splits of one requirement would each create a copy
+        # and leave two "new member" standards behind; the lock serializes
+        # them so the second sees applies_to_joined_before and is refused.
+        query = query.with_for_update()
+    requirement = (await db.execute(query)).scalar_one_or_none()
 
     if not requirement:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Requirement not found"
         )
-
-    updates = requirement_update.model_dump(exclude_unset=True)
 
     if "required_courses" in updates:
         try:
@@ -1416,6 +1495,49 @@ async def update_requirement(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
             )
+
+    if splitting:
+        before = _grandfathering_snapshot(requirement)
+        try:
+            new_requirement = TrainingService(db).split_requirement_for_new_members(
+                requirement,
+                updates,
+                effective_date
+                or await resolve_org_today(db, current_user.organization_id),
+                created_by=str(current_user.id),
+            )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+            )
+        if (
+            new_requirement.due_date_type not in (None, DueDateType.FIXED_DATE)
+            and new_requirement.due_date is not None
+        ):
+            new_requirement.due_date = None
+        await db.flush()
+        await _audit_grandfathering(
+            db,
+            current_user,
+            requirement,
+            "training_requirement_split_for_new_members",
+            before=before,
+            extra={
+                "new_requirement_id": str(new_requirement.id),
+                "changed_fields": sorted(updates.keys()),
+            },
+        )
+        await db.commit()
+        await db.refresh(new_requirement)
+        return new_requirement
+
+    error = grandfathering_error(
+        updates.get("new_member_cutoff_date", requirement.new_member_cutoff_date),
+        updates.get("existing_member_deadline", requirement.existing_member_deadline),
+    )
+    if error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    before = _grandfathering_snapshot(requirement)
 
     # Update fields
     for field, value in updates.items():
@@ -1440,6 +1562,14 @@ async def update_requirement(
     ):
         requirement.due_date = None
 
+    if _grandfathering_snapshot(requirement) != before:
+        await _audit_grandfathering(
+            db,
+            current_user,
+            requirement,
+            "training_requirement_grandfathering_changed",
+            before=before,
+        )
     await db.commit()
     await db.refresh(requirement)
 
@@ -1541,9 +1671,6 @@ async def get_compliance_summary(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
-    user_role_ids = [str(r.id) for r in target_user.roles] if target_user.roles else []
-    member_membership_type = target_user.membership_type or "active"
-
     # Check if member is exempt from compliance tracking
     is_exempt = bool(target_user.compliance_exempt)
 
@@ -1577,9 +1704,7 @@ async def get_compliance_summary(
     # membership-type match as its own inclusion criterion. See
     # requirement_applies_to_member's docstring.
     requirements = [
-        req
-        for req in all_requirements
-        if requirement_applies_to_member(req, member_membership_type, user_role_ids)
+        req for req in all_requirements if requirement_applies_to_user(req, target_user)
     ]
 
     # Pre-fetch all completed records for the user (no date filter —
@@ -1594,20 +1719,20 @@ async def get_compliance_summary(
     # Fetch waivers
     waivers = await fetch_user_waivers(db, str(org_id), str(user_id))
 
-    # Evaluate each applicable requirement using the shared evaluator
-    requirements_met = 0
-    requirements_total = len(requirements)
-
-    for req in requirements:
-        status_val, _, _ = _evaluate_member_requirement(
+    # Evaluate each applicable requirement using the shared evaluator. A
+    # requirement inside the member's catch-up period counts neither way.
+    join_date = member_join_date(target_user)
+    requirements_met, requirements_total = tally_standing(
+        _evaluate_member_requirement(
             req,
             member_records,
             today,
             waivers=waivers,
             org_include_current_month=org_include_current,
-        )
-        if status_val == "completed":
-            requirements_met += 1
+            join_date=join_date,
+        )[0]
+        for req in requirements
+    )
 
     # Determine compliance status
     certs_expiring_soon = stats.expiring_soon
@@ -2569,7 +2694,9 @@ class RequirementStatusItem(BaseModel):
 
     requirement_id: str
     requirement_name: str
-    status: str  # "completed", "in_progress", "expired", "not_started"
+    # "completed", "in_progress", "expired", "not_started", or "catch_up" for an
+    # existing member's unmet requirement before its catch-up deadline.
+    status: str
     completion_date: str | None = None
     expiry_date: str | None = None
     # Countable requirement types (hours, shifts, calls, courses) report how
@@ -2592,6 +2719,8 @@ class RequirementStatusItem(BaseModel):
     # would read a certificate as comfortably valid when it is in fact inside
     # the renewal window today.
     as_of: str | None = None
+    # Set with status "catch_up": the date the existing member has until.
+    catch_up_deadline: str | None = None
 
 
 class MemberComplianceRow(BaseModel):
@@ -2866,9 +2995,8 @@ async def get_compliance_matrix(
     for member in members:
         member_records = records_by_user.get(member.id, [])
         member_waivers = waivers_by_user.get(str(member.id), [])
-        member_membership_type = member.membership_type or "active"
+        join_date = member_join_date(member)
         req_statuses = []
-        completed_count = 0
 
         # A compliance profile narrows which requirements grade this member and
         # can override the thresholds. compute_org_compliance_pct — which feeds
@@ -2899,7 +3027,7 @@ async def get_compliance_matrix(
             # Skip requirements not applicable to this member. See
             # requirement_applies_to_member's docstring for why this is a
             # shared helper rather than another ad-hoc reimplementation.
-            if not requirement_applies_to_member(req, member_membership_type):
+            if not requirement_applies_to_user(req, member):
                 continue
 
             ev = evaluate_member_requirement_detail(
@@ -2908,13 +3036,11 @@ async def get_compliance_matrix(
                 today,
                 waivers=member_waivers,
                 org_include_current_month=org_include_current,
+                join_date=join_date,
             )
 
             if ev.as_of and (as_of is None or ev.as_of < as_of):
                 as_of = ev.as_of
-
-            if ev.status == TrainingStatus.COMPLETED.value:
-                completed_count += 1
 
             req_statuses.append(
                 RequirementStatusItem(
@@ -2931,6 +3057,7 @@ async def get_compliance_matrix(
                     window_start=ev.window_start,
                     window_end=ev.window_end,
                     as_of=ev.as_of,
+                    catch_up_deadline=ev.catch_up_deadline,
                 )
             )
 
@@ -2938,7 +3065,10 @@ async def get_compliance_matrix(
         # active requirement in the org. Dividing by the latter understated a
         # member whose membership type exempts them from some of them — they
         # could meet everything asked of them and still read below 100%.
-        applicable_total = len(req_statuses)
+        # A cell in its catch-up period is shown but counts neither way.
+        completed_count, applicable_total = tally_standing(
+            item.status for item in req_statuses
+        )
         standing, pct = classify_standing(
             completed_count,
             applicable_total,
@@ -3023,6 +3153,7 @@ async def get_member_period_status(
 
     members_result = await db.execute(
         select(User)
+        .options(selectinload(User.positions))
         .where(
             User.organization_id == org_id,
             User.status == UserStatus.ACTIVE,
@@ -3072,7 +3203,6 @@ async def get_member_period_status(
     for member in members:
         member_records = records_by_user.get(member.id, [])
         member_waivers = waivers_by_user.get(str(member.id), [])
-        member_membership_type = member.membership_type or "active"
         member_name = (
             f"{member.last_name}, {member.first_name}"
             if member.last_name
@@ -3108,23 +3238,20 @@ async def get_member_period_status(
             continue
 
         applicable = [
-            req
-            for req in requirements
-            if requirement_applies_to_member(req, member_membership_type)
+            req for req in requirements if requirement_applies_to_user(req, member)
         ]
-        met = 0
-        for req in applicable:
-            req_status, _, _ = _evaluate_member_requirement(
+        join_date = member_join_date(member)
+        met, total = tally_standing(
+            _evaluate_member_requirement(
                 req,
                 member_records,
                 today,
                 waivers=member_waivers,
                 org_include_current_month=org_include_current,
-            )
-            if req_status == TrainingStatus.COMPLETED.value:
-                met += 1
-
-        total = len(applicable)
+                join_date=join_date,
+            )[0]
+            for req in applicable
+        )
         pct = (met / total * 100) if total else 100.0
         if total == 0:
             status_color = "green"

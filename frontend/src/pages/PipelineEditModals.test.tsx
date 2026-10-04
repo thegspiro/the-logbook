@@ -108,11 +108,28 @@ describe('RequirementFormModal', () => {
         is_required: true,
         sort_order: 2,
         owns_requirement: false,
+        apply_to_current_enrollments: true,
       })
     );
     // The department's requirement is reused as-is, not cloned.
     expect(mockCreateRequirementEnhanced).not.toHaveBeenCalled();
     expect(onSaved).toHaveBeenCalledTimes(1);
+  });
+
+  it('can hold only future enrollees to a newly linked requirement', async () => {
+    const user = userEvent.setup();
+    renderModal();
+
+    await user.click(await screen.findByRole('radio', { name: /CPR\/BLS Certification/ }));
+    await user.click(screen.getByRole('radio', { name: /Only members who enroll from now on/ }));
+    await user.click(screen.getByRole('button', { name: 'Link requirement' }));
+
+    await waitFor(() =>
+      expect(mockAddProgramRequirement).toHaveBeenCalledWith(
+        'prog-1',
+        expect.objectContaining({ requirement_id: 'req-cpr', apply_to_current_enrollments: false })
+      )
+    );
   });
 
   it('blocks picking a requirement the program already has', async () => {

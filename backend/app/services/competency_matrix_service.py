@@ -18,6 +18,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.training import (
     RequirementFrequency,
@@ -28,9 +29,13 @@ from app.models.training import (
 )
 from app.models.user import User, UserStatus
 from app.services.training_compliance import (
+    CATCH_UP_STATUS,
     apply_recency,
+    catch_up_deadline,
     certification_record_matches,
     get_org_include_current_month,
+    member_join_date,
+    requirement_applies_to_user,
 )
 from app.services.training_period import (
     effective_include_current_month,
@@ -103,6 +108,7 @@ class CompetencyMatrixService:
         # Get active, non-exempt members
         user_query = (
             select(User)
+            .options(selectinload(User.positions))
             .where(User.organization_id == str(organization_id))
             .where(User.status == UserStatus.ACTIVE)
             .where(User.compliance_exempt == False)  # noqa: E712
@@ -146,6 +152,10 @@ class CompetencyMatrixService:
         expiring_soon_count = 0
         expired_count = 0
         not_started_count = 0
+        # Cells that grade nobody: the requirement does not apply to the member
+        # (type, role, grandfathering cutoff), or an existing member is still
+        # inside its catch-up period. Shown, but kept out of readiness.
+        ungraded_count = 0
 
         # Build matrix
         requirement_list = [
@@ -165,9 +175,19 @@ class CompetencyMatrixService:
             user_records = records_by_user.get(uid, [])
             member_waivers = waivers_by_user.get(uid, [])
             statuses = {}
+            join_date = member_join_date(member)
 
             for req in requirements:
                 rid = str(req.id)
+                if not requirement_applies_to_user(req, member):
+                    statuses[rid] = {
+                        "status": "not_applicable",
+                        "expiration_date": None,
+                        "completion_date": None,
+                        "details": None,
+                    }
+                    ungraded_count += 1
+                    continue
                 status_info = self._evaluate_requirement_status(
                     req,
                     user_records,
@@ -176,11 +196,23 @@ class CompetencyMatrixService:
                     waivers=member_waivers,
                     org_include_current_month=org_include_current,
                 )
+                deadline = catch_up_deadline(req, join_date, today)
+                if deadline is not None and status_info["status"] not in (
+                    "current",
+                    "expiring_soon",
+                ):
+                    status_info = {
+                        **status_info,
+                        "status": CATCH_UP_STATUS,
+                        "details": f"Existing member: due by {deadline.isoformat()}",
+                    }
                 statuses[rid] = status_info
 
                 # Count
                 s = status_info["status"]
-                if s == "current":
+                if s == CATCH_UP_STATUS:
+                    ungraded_count += 1
+                elif s == "current":
                     current_count += 1
                 elif s == "expiring_soon":
                     expiring_soon_count += 1
@@ -197,7 +229,7 @@ class CompetencyMatrixService:
                 }
             )
 
-        total_cells = len(members) * len(requirements)
+        total_cells = len(members) * len(requirements) - ungraded_count
         readiness = (
             ((current_count + expiring_soon_count) / total_cells * 100)
             if total_cells > 0

@@ -101,7 +101,7 @@ export const ManualEntrySettingsPanel: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="text-theme-text-primary text-lg font-semibold">Manual Shift Entry</h3>
+          <h2 className="text-theme-text-primary text-lg font-semibold">Manual Shift Entry</h2>
           <p className="text-theme-text-muted mt-1 text-sm">
             Configure the manual shift report form for departments without the scheduling module.
           </p>
@@ -142,7 +142,7 @@ export const ManualEntrySettingsPanel: React.FC = () => {
           <div className="card space-y-4 p-4">
             <div className="flex items-center gap-2">
               <Truck className="text-theme-text-muted h-4 w-4" />
-              <h4 className="text-theme-text-primary text-sm font-medium">Apparatus</h4>
+              <h3 className="text-theme-text-primary text-sm font-medium">Apparatus</h3>
             </div>
 
             <label className="flex cursor-pointer items-center gap-3">
@@ -202,7 +202,7 @@ export const ManualEntrySettingsPanel: React.FC = () => {
           <div className="card space-y-4 p-4">
             <div className="flex items-center gap-2">
               <Clock className="text-theme-text-muted h-4 w-4" />
-              <h4 className="text-theme-text-primary text-sm font-medium">Default Shift Times</h4>
+              <h3 className="text-theme-text-primary text-sm font-medium">Default Shift Times</h3>
             </div>
             <p className="text-theme-text-muted text-sm">
               Pre-fill the start time and shift duration to speed up data entry. Officers can always override these.
