@@ -305,7 +305,7 @@ const EquipmentKitsPage: React.FC = () => {
             Create kit templates to issue multiple items to members at once.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-3 whitespace-nowrap">
           <label className="text-theme-text-secondary flex cursor-pointer items-center gap-2 text-sm">
             <input
               type="checkbox"
@@ -344,17 +344,31 @@ const EquipmentKitsPage: React.FC = () => {
         <div className="card-grid gap-4">
           {kits.map((kit) => (
             <div key={kit.id} className={`card-secondary flex flex-col p-5 ${!kit.active ? 'opacity-60' : ''}`}>
-              <div className="mb-3 flex items-start justify-between">
-                <div className="flex min-w-0 items-center gap-2.5">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-purple-500/10">
-                    <BoxSelect className="h-4 w-4 text-purple-500" />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="text-theme-text-primary line-clamp-2 font-semibold">{kit.name}</h3>
-                    {!kit.active && <span className="text-theme-text-muted text-xs">Inactive</span>}
-                  </div>
+              <div className="mb-3 flex min-w-0 items-center gap-2.5">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-purple-500/10">
+                  <BoxSelect className="h-4 w-4 text-purple-500" />
                 </div>
-                <div className="flex shrink-0 items-center gap-1">
+                <div className="min-w-0">
+                  <h3 className="text-theme-text-primary line-clamp-2 font-semibold">{kit.name}</h3>
+                  {!kit.active && <span className="text-theme-text-muted text-xs">Inactive</span>}
+                </div>
+              </div>
+              {kit.description && (
+                <p className="text-theme-text-secondary mb-3 line-clamp-2 text-sm">{kit.description}</p>
+              )}
+              {/* Actions share the footer with the item count. Four icons beside
+                  the title left it ~100px on a two-column tablet grid, which
+                  clamped "Structural Firefighting Turnout Gear Kit" to two words. */}
+              <div className="text-theme-text-muted border-theme-surface-border mt-auto flex items-center gap-2 border-t pt-2 text-xs">
+                <Package className="h-3.5 w-3.5 shrink-0" />
+                <span>
+                  {/* The list response carries item_count, not the line items
+                      themselves — reading length off the absent array showed
+                      every kit as holding nothing. */}
+                  {kit.line_items?.length ?? kit.item_count ?? 0} item
+                  {(kit.line_items?.length ?? kit.item_count ?? 0) !== 1 ? 's' : ''}
+                </span>
+                <div className="ml-auto flex shrink-0 items-center gap-1">
                   <button
                     onClick={() => void openDetailModal(kit)}
                     aria-label={`View ${kit.name}`}
@@ -390,17 +404,6 @@ const EquipmentKitsPage: React.FC = () => {
                     </>
                   )}
                 </div>
-              </div>
-              {kit.description && (
-                <p className="text-theme-text-secondary mb-3 line-clamp-2 text-sm">{kit.description}</p>
-              )}
-              <div className="text-theme-text-muted border-theme-surface-border mt-auto flex items-center gap-2 border-t pt-2 text-xs">
-                <Package className="h-3.5 w-3.5" />
-                {/* The list response carries item_count, not the line items
-                    themselves — reading length off the absent array showed
-                    every kit as holding nothing. */}
-                {kit.line_items?.length ?? kit.item_count ?? 0} item
-                {(kit.line_items?.length ?? kit.item_count ?? 0) !== 1 ? 's' : ''}
               </div>
             </div>
           ))}

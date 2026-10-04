@@ -1451,7 +1451,11 @@ const IntegrationsPage: React.FC = () => {
         {/* Search & Filters */}
         <div className="card mb-6 p-4" role="search" aria-label="Search and filter integrations">
           <div className="flex flex-col items-center gap-4 md:flex-row">
-            <div className="relative w-full flex-1 md:max-w-md">
+            {/* A floor on the search box: the category pills are a wrapping row
+                whose max-content width is the whole set, so without one the
+                pills kept their single line and squeezed the search to ~80px
+                on a 1024px tablet. With it, the pills wrap instead. */}
+            <div className="relative w-full flex-1 md:max-w-md md:min-w-64">
               <Search
                 className="text-theme-text-muted absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2 transform"
                 aria-hidden="true"

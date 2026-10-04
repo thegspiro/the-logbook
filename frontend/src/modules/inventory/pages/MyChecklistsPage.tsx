@@ -576,13 +576,13 @@ export const MyChecklistsPage: React.FC = () => {
                         : 'border-theme-surface-border bg-theme-surface'
                     }`}
                   >
-                    <div className="mb-2 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Truck className="text-theme-text-muted h-4 w-4" />
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <Truck className="text-theme-text-muted h-4 w-4 shrink-0" />
                         <span className="text-theme-text-primary text-sm font-medium">{checklist.apparatusName}</span>
                       </div>
                       <span
-                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                        className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${
                           checklist.checkTiming === 'start_of_shift'
                             ? 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-400'
                             : 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-400'
@@ -860,7 +860,7 @@ export const MyChecklistsPage: React.FC = () => {
                             </span>
                           </div>
                         </div>
-                        <Play className="text-theme-text-muted h-4 w-4 transition-opacity sm:opacity-0 sm:group-hover:opacity-100" />
+                        <Play className="text-theme-text-muted h-4 w-4 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100" />
                       </button>
                     ))}
                   </div>

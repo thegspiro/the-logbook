@@ -207,7 +207,9 @@ export const ShiftTemplatesPage: React.FC = () => {
   });
 
   return (
-    <div className="mx-auto max-w-7xl p-6">
+    // Vertical padding only: this renders inside SchedulingPlanningPage, which
+    // already pads the sides; the doubled gutter took 48px from every card.
+    <div className="mx-auto max-w-7xl py-6">
       {/* Header */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -317,25 +319,29 @@ export const ShiftTemplatesPage: React.FC = () => {
                 .filter((t) => categoryFilter === 'all' || (t.category || 'standard') === categoryFilter)
                 .map((template) => (
                   <div key={template.id} className="card-secondary p-5">
-                    <div className="mb-3 flex items-start justify-between">
-                      <div className="flex items-center gap-2">
+                    {/* Badges sit under the title rather than beside it: beside
+                        it they took a third of a tablet-width card, broke
+                        "Specialty Vehicle" across two lines, and wrapped the
+                        title to three. */}
+                    <div className="mb-3 flex flex-col gap-2">
+                      <div className="flex items-start gap-2">
                         {template.color && (
                           <div
-                            className="h-3 w-3 rounded-full"
+                            className="mt-2 h-3 w-3 shrink-0 rounded-full"
                             style={{ backgroundColor: template.color }}
                             aria-hidden="true"
                           />
                         )}
                         <h3 className="text-theme-text-primary text-lg font-semibold">{template.name}</h3>
                       </div>
-                      <div className="flex flex-wrap items-center justify-end gap-1">
+                      <div className="flex flex-wrap items-center gap-1 empty:hidden">
                         {(() => {
                           const cat = TEMPLATE_CATEGORIES.find((c) => c.value === (template.category || 'standard'));
                           if (cat && cat.value !== 'standard') {
                             const CatIcon = cat.icon;
                             return (
                               <span
-                                className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${
+                                className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium whitespace-nowrap ${
                                   cat.value === 'specialty'
                                     ? 'bg-orange-500/10 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400'
                                     : 'bg-purple-500/10 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400'
