@@ -741,7 +741,7 @@ const RecertificationSection: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="text-theme-text-primary text-lg font-semibold">Recertification Pathways</h3>
+          <h2 className="text-theme-text-primary text-lg font-semibold">Recertification Pathways</h2>
           <p className="text-theme-text-muted text-sm">
             Define renewal requirements for expiring certifications (NREMT, ACLS, etc.)
           </p>
@@ -769,7 +769,7 @@ const RecertificationSection: React.FC = () => {
 
       {pathways.length === 0 ? (
         <EmptyState
-          headingLevel={4}
+          headingLevel={3}
           icon={Award}
           title="No recertification pathways configured yet."
           description="Create pathways to define how members renew expiring certifications."
@@ -780,7 +780,7 @@ const RecertificationSection: React.FC = () => {
             <div key={pathway.id} className="card-secondary p-4">
               <div className="flex items-start justify-between">
                 <div>
-                  <h4 className="text-theme-text-primary font-medium">{pathway.name}</h4>
+                  <h3 className="text-theme-text-primary font-medium">{pathway.name}</h3>
                   {pathway.description && <p className="text-theme-text-muted mt-1 text-sm">{pathway.description}</p>}
                   <div className="text-theme-text-muted mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
                     <span>Type: {pathway.renewal_type}</span>
@@ -806,7 +806,7 @@ const RecertificationSection: React.FC = () => {
 
       {renewalTasks.length > 0 && (
         <div className="mt-6">
-          <h4 className="text-theme-text-primary mb-3 text-sm font-medium">Active Renewal Tasks</h4>
+          <h3 className="text-theme-text-primary mb-3 text-sm font-medium">Active Renewal Tasks</h3>
           <div className="space-y-2">
             {renewalTasks.map((task) => (
               <div
@@ -867,7 +867,7 @@ const CompetencySection: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="text-theme-text-primary text-lg font-semibold">Competency Matrices</h3>
+          <h2 className="text-theme-text-primary text-lg font-semibold">Competency Matrices</h2>
           <p className="text-theme-text-muted text-sm">
             Define required skill levels by position (Dreyfus model: novice to expert)
           </p>
@@ -892,7 +892,7 @@ const CompetencySection: React.FC = () => {
 
       {matrices.length === 0 ? (
         <EmptyState
-          headingLevel={4}
+          headingLevel={3}
           icon={TrendingUp}
           title="No competency matrices configured."
           description="Create matrices to map positions to required skill levels per NFPA 1021/1041."
@@ -901,7 +901,7 @@ const CompetencySection: React.FC = () => {
         <div className="grid gap-4 md:grid-cols-2">
           {matrices.map((matrix) => (
             <div key={matrix.id} className="card-secondary p-4">
-              <h4 className="text-theme-text-primary font-medium">{matrix.name}</h4>
+              <h3 className="text-theme-text-primary font-medium">{matrix.name}</h3>
               <p className="text-theme-text-muted mt-1 text-xs">Position: {matrix.position}</p>
               <p className="text-theme-text-muted text-xs">Skills: {matrix.skill_requirements.length} requirements</p>
             </div>
@@ -942,7 +942,7 @@ const InstructorsSection: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="text-theme-text-primary text-lg font-semibold">Instructor Qualifications</h3>
+          <h2 className="text-theme-text-primary text-lg font-semibold">Instructor Qualifications</h2>
           <p className="text-theme-text-muted text-sm">Track who is qualified to instruct and evaluate per NFPA 1041</p>
         </div>
         <button
@@ -956,7 +956,7 @@ const InstructorsSection: React.FC = () => {
 
       {qualifications.length === 0 ? (
         <EmptyState
-          headingLevel={4}
+          headingLevel={3}
           icon={BookOpen}
           title="No instructor qualifications recorded."
           description="Add qualifications to track who can instruct which courses and evaluate which skills."
@@ -1081,7 +1081,7 @@ const EffectivenessSection: React.FC = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-theme-text-primary text-lg font-semibold">Training Effectiveness</h3>
+        <h2 className="text-theme-text-primary text-lg font-semibold">Training Effectiveness</h2>
         <p className="text-theme-text-muted text-sm">
           Kirkpatrick Model evaluation: Reaction, Learning, Behavior, Results
         </p>
@@ -1095,7 +1095,7 @@ const EffectivenessSection: React.FC = () => {
           return (
             <div key={item.level} className="card-secondary p-4 text-center">
               <Icon className={`mx-auto mb-2 h-8 w-8 ${item.color}`} />
-              <h4 className="text-theme-text-primary text-sm font-medium">{item.level}</h4>
+              <h3 className="text-theme-text-primary text-sm font-medium">{item.level}</h3>
               <p className="text-theme-text-muted mt-1 text-xs">{item.desc}</p>
               <div className="border-theme-surface-border mt-2 border-t pt-2">
                 <span className="text-theme-text-primary text-lg font-semibold">{count}</span>
@@ -1109,14 +1109,14 @@ const EffectivenessSection: React.FC = () => {
 
       {evaluations.length === 0 ? (
         <EmptyState
-          headingLevel={4}
+          headingLevel={3}
           icon={BarChart3}
           title="No effectiveness evaluations recorded yet."
           description="Members can submit post-training surveys. Pre/post assessments measure knowledge gain."
         />
       ) : (
         <div>
-          <h4 className="text-theme-text-primary mb-3 text-sm font-medium">Recent Evaluations</h4>
+          <h3 className="text-theme-text-primary mb-3 text-sm font-medium">Recent Evaluations</h3>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -1182,7 +1182,7 @@ const MultiAgencySection: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="text-theme-text-primary text-lg font-semibold">Multi-Agency Training</h3>
+          <h2 className="text-theme-text-primary text-lg font-semibold">Multi-Agency Training</h2>
           <p className="text-theme-text-muted text-sm">
             Joint exercises, mutual aid drills, and regional training per NFPA 1500 / NIMS
           </p>
@@ -1198,7 +1198,7 @@ const MultiAgencySection: React.FC = () => {
 
       {exercises.length === 0 ? (
         <EmptyState
-          headingLevel={4}
+          headingLevel={3}
           icon={Globe}
           title="No multi-agency exercises recorded."
           description="Log joint training exercises with other departments, mutual aid drills, and regional exercises."
@@ -1209,7 +1209,7 @@ const MultiAgencySection: React.FC = () => {
             <div key={exercise.id} className="card-secondary p-4">
               <div className="flex items-start justify-between">
                 <div>
-                  <h4 className="text-theme-text-primary font-medium">{exercise.exercise_name}</h4>
+                  <h3 className="text-theme-text-primary font-medium">{exercise.exercise_name}</h3>
                   <div className="text-theme-text-muted mt-1 flex items-center space-x-3 text-xs">
                     <span className="capitalize">{exercise.exercise_type.replace(/_/g, ' ')}</span>
                     <span>{formatDate(exercise.exercise_date, tz)}</span>
@@ -1315,7 +1315,7 @@ const ReportsSection: React.FC = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-theme-text-primary text-lg font-semibold">Reports & Analytics</h3>
+        <h2 className="text-theme-text-primary text-lg font-semibold">Reports & Analytics</h2>
         <p className="text-theme-text-muted text-sm">
           Export compliance reports, individual training records, and view predictive forecasts
         </p>
@@ -1328,7 +1328,7 @@ const ReportsSection: React.FC = () => {
           className="card-secondary hover:bg-theme-surface-hover p-4 text-left"
         >
           <Download className="mb-2 h-6 w-6 text-blue-500" />
-          <h4 className="text-theme-text-primary text-sm font-medium">Compliance Report</h4>
+          <h3 className="text-theme-text-primary text-sm font-medium">Compliance Report</h3>
           <p className="text-theme-text-muted mt-1 text-xs">
             Department-wide compliance status for all members and requirements
           </p>
@@ -1340,7 +1340,7 @@ const ReportsSection: React.FC = () => {
           className="card-secondary hover:bg-theme-surface-hover p-4 text-left"
         >
           <Download className="mb-2 h-6 w-6 text-green-500" />
-          <h4 className="text-theme-text-primary text-sm font-medium">Hours Summary</h4>
+          <h3 className="text-theme-text-primary text-sm font-medium">Hours Summary</h3>
           <p className="text-theme-text-muted mt-1 text-xs">
             Training hours by member, category, and type for state reporting
           </p>
@@ -1352,7 +1352,7 @@ const ReportsSection: React.FC = () => {
           className="card-secondary hover:bg-theme-surface-hover p-4 text-left"
         >
           <Download className="mb-2 h-6 w-6 text-yellow-500" />
-          <h4 className="text-theme-text-primary text-sm font-medium">Certification Report</h4>
+          <h3 className="text-theme-text-primary text-sm font-medium">Certification Report</h3>
           <p className="text-theme-text-muted mt-1 text-xs">
             All certifications with expiration status and renewal tracking
           </p>
@@ -1362,7 +1362,7 @@ const ReportsSection: React.FC = () => {
       <div className="border-theme-surface-border border-t pt-6">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h4 className="text-theme-text-primary text-sm font-medium">Member Records (All Members)</h4>
+            <h3 className="text-theme-text-primary text-sm font-medium">Member Records (All Members)</h3>
             <p className="text-theme-text-muted text-xs">
               Every member&apos;s completed training records for the selected period
             </p>
@@ -1407,7 +1407,7 @@ const ReportsSection: React.FC = () => {
       <div className="border-theme-surface-border border-t pt-6">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h4 className="text-theme-text-primary text-sm font-medium">Compliance Forecast</h4>
+            <h3 className="text-theme-text-primary text-sm font-medium">Compliance Forecast</h3>
             <p className="text-theme-text-muted text-xs">
               Predictive 30/60/90 day compliance based on expiring certifications
             </p>
