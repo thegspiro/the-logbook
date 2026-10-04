@@ -16,24 +16,35 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#2885](https://github.com/thegspiro/the-logbook/pull/2885)** — branch
-`claude/security-review-forms-pass5`, Feature 26 (Forms), pass 5. Watchdog
-pickup: the dedicated loop session had stalled ~2 hours (PR #2884 merged
-19:51 UTC; this check ran 21:48 UTC) with no open security-review PR and no
-in-progress branch; confirmed via `list_pull_requests` (state=open) that no
-`claude/security-review-*` PR existed before starting. 0 fixed, 0 new
-findings — every pass 1-4 fix (FORM-1 through FORM-12) re-verified intact.
-One standing item closed as a side effect of other work: BXC-1
-(`condition_field_id`, open since the original module audit) is now closed
-by the 2026-10-02 W60 workflow-review pass's same-form/cycle validation and
-server-side dereferencing; `docs/app-review/forms.md` and
-`CROSS-CUTTING.md`'s BXC-1 batch-list corrected to point here. Gate:
-flake8/black/isort clean, `validate_migrations.py --strict` passed (508
-revisions, no migration this pass), 623 scoped backend tests passed,
-frontend typecheck/lint clean. Subscribed for CI/review events.
+**PR [#2892](https://github.com/thegspiro/the-logbook/pull/2892)** — branch
+`claude/security-review-integrations-pass5`, Feature 27 (Integrations),
+pass 5. Watchdog pickup: confirmed via `list_pull_requests` (state=open)
+that no `claude/security-review-*` PR existed before starting — PR #2885
+(Feature 26, Forms, pass 5) and PR #2886 (an unrelated fix) were already
+merged. 0 fixed, 0 new findings — every pass 1-4 finding (INT-1 through
+INT-11) re-verified intact, including the three standing flags (INT-5
+uninvoked webhook allowlist, INT-9 Google Calendar's bypass of the shared
+HTTP hardening, INT-11 Salesforce's unreachable "clear the refresh token"
+control). New this pass: reviewed `app/mcp/tools/writes.py`'s three MCP
+write tools against this feature's org-scoping/domain-pinning rigor, per
+Feature 23 pass 12's note that this surface was this feature's scope — no
+gap found. Gate: flake8/black/isort clean, `validate_migrations.py
+--strict` passed (509 revisions, no migration this pass), repo-tenancy +
+MCP guard tests passed, 3548 scoped backend tests passed, frontend
+typecheck/lint clean. Subscribed for CI/review events.
 
 <details>
-<summary>Superseded — prior Open PR note (Feature 25, Messaging & notifications, pass 5, PR #2884, merged, before this watchdog pickup), preserved for history</summary>
+<summary>Superseded — prior Open PR note (Feature 26, Forms, pass 5, PR #2885, merged, before this watchdog pickup), preserved for history</summary>
+
+**None.** PR [#2885](https://github.com/thegspiro/the-logbook/pull/2885)
+(Feature 26, Forms, pass 5) had already merged by the time this watchdog
+check ran. Rotation row 26 stays ✅. Next: Feature 27 (Integrations) —
+picked up by this same watchdog check, recorded above.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 25, Messaging & notifications, pass 5, PR #2884, merged, before the Feature 26 pass-5 watchdog pickup recorded above), preserved for history</summary>
 
 **None.** PR [#2884](https://github.com/thegspiro/the-logbook/pull/2884)
 (Feature 25, Messaging & notifications, pass 5) had already merged by the
