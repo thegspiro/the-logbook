@@ -2518,13 +2518,11 @@ Capt. Davis conducts a final evaluation session with Alex, reviews her performan
 
 Alex's membership status is now eligible for upgrade from **Probationary** to **Active** (see [Membership Management — Member Lifecycle](./01-membership.md)). The compliance matrix shows Alex green across all requirements.
 
-> **A finished programme disappears from the dashboard _(2026-08-12)_.** There
-> is a **Program Completed!** banner in the dashboard's enrollment card, but
-> nothing can reach it: the dashboard asks only for **active** enrollments, so a
-> programme drops off the list the moment it completes rather than being shown
-> as finished. Check a member's completion on their enrollment itself, or on the
-> compliance matrix, not on their dashboard. See
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#training--the-program-completed-banner-is-unreachable-2026-08-12).
+> **A finished programme disappears from the dashboard.** The dashboard's
+> enrollment card lists only **active** enrollments, so a programme drops off
+> the list the moment it completes rather than being shown as finished. Check a
+> member's completion on their enrollment itself, or on the compliance matrix,
+> not on their dashboard.
 
 **Edge case — insufficient hours:** If Alex had only accumulated 38 of the required 40 supervised hours, the system would show 95% on that requirement (38/40). Capt. Davis can navigate to the requirement detail to see exactly which shifts contributed hours: a table listing each shift date, officer, hours credited, and call types. This transparency helps identify whether additional shifts need to be scheduled.
 

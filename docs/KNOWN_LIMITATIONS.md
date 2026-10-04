@@ -108,7 +108,6 @@ entry stays only while code, tests or `CLAUDE.md` still cite it by name.
 | --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Requirement grandfathering reads a missing hire date as the account's creation date**                                     | Accepted (owner to note, 2026-10-03)                                               | A requirement's `new_member_cutoff_date` separates existing members from new ones by join date: `hire_date`, else the UTC date the account was created (`training_compliance.member_join_date`). A roster imported into The Logbook without hire dates therefore reads every imported member as having joined on the import day. If that day falls on or after a cutoff, veterans are graded as new members. Before relying on a cutoff, record hire dates for the existing roster, or choose a cutoff earlier than the import. Members already enrolled in a training program are governed separately, by the per-program `apply_to_current_enrollments` choice made when a requirement is added to it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | **`BIANNUAL` requirement frequency has no date window**                                                                     | Verify                                                                             | `training_compliance.py` sums lifetime totals for hours/shift/call requirements on a `BIANNUAL` cadence instead of a 2-year window. Confirm `BIANNUAL` is only used with expiry-bearing certs; otherwise add a 2-year window.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| **`enrolled_count` is a placeholder**                                                                                       | Open (small feature)                                                               | `TrainingProgramsPage` shows a hardcoded "0 enrolled" — there is no `enrolled_count` on the program response yet. Wiring it is a small backend + schema addition (the per-program enrollments endpoint `GET /training/programs/programs/{id}/enrollments` now exists to source it).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | **No knowledge-test engine (officer-entered scores only)**                                                                  | Open (feature)                                                                     | `knowledge_test` requirements are satisfied by an officer entering a pass/fail or score % on the requirement (pass/fail derived from `passing_score`, `max_attempts` enforced, attempts recorded). There is no online test-taking flow — question bank, delivery, or auto-grading. That is a deliberate future project; the current support is the lightweight groundwork.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | **`GET /training/skills-testing/tests`, `GET .../tests/export/csv`, and `GET /templates` have no pagination or result cap** | Open (LOW/MED, security review SKT3-2, 2026-09-04, scope widened twice 2026-09-10) | `list_tests` (`app/api/v1/endpoints/skills_testing.py`) — open to every member, not just officers — builds no `.limit()` into its query, and `SkillsTestingTestRecordsTab.tsx`'s default "All" filter calls it with zero params, fetching the org's entire non-practice skill-test history (plus a batch user/template fetch and, for non-officers, a per-row disclosure resolution) on every unfiltered load. `export_tests_csv` (`training.manage`-gated) shares the identical unbounded base query with no default filter, then expands every row (or every criterion, for `detail=criteria`) into an in-memory CSV buffer. No data-exposure risk (every row is already org-scoped, and the export is officer-only) — this is a resource-exhaustion/latency concern that scales with an organization's accumulated testing history. Closing it needs a paging contract for the list endpoint (`limit`/`offset` or cursor, plus matching frontend pagination) and a bounded-filter requirement or genuine streaming for the export, and paging or bounded summary columns for `list_templates` (`app/api/v1/endpoints/skills_testing.py`), which loads every template's full `sections` JSON before filtering by visibility and counting sections/criteria in Python — a product decision and coordinated frontend change, not a same-commit fix.           |
 | **Skill-template `sections`/`criteria` have no per-template item cap**                                                      | Open (LOW/MED, security review SKT4-1, 2026-09-10)                                 | `SkillTemplateCreate.sections` (`app/schemas/skills_testing.py`) and `SkillTemplateSectionSchema.criteria` have no `max_length`, unlike this repo's own `RankReorderRequest.ranks` (`app/schemas/operational_rank.py`), which caps at `MAX_RANKS_PER_REORDER = 500` specifically because the global request-body byte ceiling alone can admit roughly a million small items. A `training.manage`-gated caller can submit a template with an unbounded number of sections/criteria, which Pydantic fully materializes and the create/update handlers persist, dump, and later iterate for scoring and CSV export. `SkillCriterionSchema.checklist_items` (also `Optional[List[str]]`, no `max_length`) shares the same gap one level deeper — capping only the outer two lists would leave this reproducible with one section, one criterion, and millions of checklist-item strings. Closing it needs a chosen `max_length` informed by what a real department's largest evaluation sheet looks like — a content decision, not a same-commit fix.                                                                                                                                                                                                                                                                                                             |
@@ -1037,8 +1036,6 @@ Their placeholders are deliberately left open.
 
 | Guide section                     | What the guide pictures                                                                                                | What exists                                                                                                                                                                                                           | State                          |
 | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| Facility **Utilities** section    | Utility accounts (electric, gas, water) with the latest reading, monthly cost and a usage trend chart                  | Nine `facilitiesService` methods over `/facilities/utility-accounts` and `/utility-readings`, **zero UI consumers**. `FacilityDetailPage` renders seven sections and Utilities is not one of them.                    | ❌ API + service only          |
-| Facility **Capital Projects**     | Project list with name, budget, status badge and timeline bar                                                          | Five `facilitiesService` methods over `/facilities/capital-projects`, **zero UI consumers**.                                                                                                                          | ❌ API + service only          |
 | Apparatus **NFPA Compliance tab** | Applicable standards with per-standard compliance status (green check / red X), last assessment date and next due date | `ApparatusOverviewTab.tsx:242` renders a single card reading "Tracking Enabled" when the flag is set. There is no standards list, no status, no dates. The flag's only other consumer is a checkbox on the edit form. | ⚠️ Flag only, no tab           |
 | Apparatus **deficiency banner**   | A banner at the top of the detail page with the deficiency date and a link to the failed equipment check               | A "Deficiency" badge beside the status badge, on both the list row and the detail header. `deficiencySince` is on the TypeScript type and is **never rendered**; there is no banner and no link to the check.         | ⚠️ Badge only, no date or link |
 
@@ -1146,7 +1143,6 @@ that added the purchase request, expense report and check request shots.
 | Guide section             | What exists                                                                                                                              | State                |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
 | Create Budget form        | `financeStore.createBudget` over a working API, **no component calls it**. `BudgetsPage` is read-only — it has no create control at all. | ❌ Store action only |
-| Add Approval Step form    | `ApprovalChainsSettingsPage` renders a chain's steps and offers no way to add, edit or remove one.                                       | ❌ Not built         |
 | Create Dues Schedule form | `financeStore.createDuesSchedule`, **no component calls it**.                                                                            | ❌ Store action only |
 | QuickBooks export mapping | `GET/POST/PUT /finance/export/mappings` and the `qbAccountName` types exist; no page, no route, no consumer.                             | ❌ API + types only  |
 | Export logs               | `GET /finance/export/logs` and an `ExportLog` interface; no page, no route, no consumer.                                                 | ❌ API + types only  |
@@ -1437,18 +1433,6 @@ end-of-shift equipment checklist applies to this shift" instead of leaving the
 equipment row out, and the compliance report marks an apparatus "No checklist
 applies" (`has_checklist`) rather than showing zero checks that read like
 missed ones.
-
-## Shift Reports — Auto-Progressed Requirements Are Not Shown (2026-08-10)
-
-Filing a report credits hours, shifts and calls toward matching pipeline
-requirements, and the report records which ones in `requirements_progressed`.
-Nothing displays it. The column is not in `ShiftCompletionReportResponse`, so
-it never reaches the browser, and no view — card, expanded body, review modal —
-has a place for it.
-
-The training guide claimed the reports list carried "a status indicator showing
-which requirements were auto-progressed"; corrected 2026-08-10 to say where the
-credit can actually be seen, which is the member's enrolment progress.
 
 ## Shift Reports — Flagged Reports Are Unreachable With Review Off (2026-08-10)
 
@@ -1768,25 +1752,6 @@ summary rather than committing — worth doing, and not something to bolt onto a
 documentation pass. The guide now says plainly that there is no confirmation
 step.
 
-## Training — No Warning When a Session Is Ahead of Your Phase (2026-08-11)
-
-Not implemented. `02-training.md` described a dialog shown to a member who
-RSVPs to a session tied to a phase they have not reached — "the session belongs
-to a later phase", with **Proceed anyway** and **Cancel** — and asked for a
-screenshot of it.
-
-Nothing of the sort exists. `TrainingSession.phase_id` is stored, echoed back by
-the read endpoints and used to credit attendance, and that is the whole of it:
-no service consults it when a member RSVPs or checks in, and no component
-renders a warning. Searching the codebase for the wording, and reading the
-session service and its endpoints, turns up nothing on either side.
-
-The guide now says what actually happens — you may attend a session for any
-phase, and the hours are recorded — so the documentation is no longer wrong. The
-feature itself is a real one worth having, but it is a change to the RSVP path
-across the API and the UI, not a screenshot, and building it here would have
-been a feature shipped under cover of a documentation task.
-
 ## Scheduling — The Compliance Report Counts Member-Requirement Pairs (2026-08-10)
 
 `SchedulingReportsPage.tsx` computes the **Total Members** card as
@@ -1858,31 +1823,6 @@ Two related facts worth carrying:
 - **npm keeps a per-workspace copy of each declared range inside the lock and
   trusts it over the manifest.** When that copy goes stale, `npm ls` reports the
   tree as invalid while `npm ci` still exits 0 — a silent refusal to re-resolve.
-
-## Training — The "Program Completed!" Banner Is Unreachable (2026-08-12)
-
-`Dashboard.tsx` renders a green **Program Completed!** line in an enrollment
-card when `enrollment.status === 'completed'`. Nothing can reach it: the only
-caller of `getMyEnrollments` is that same page, and it asks for
-`getMyEnrollments('active')` — a status filter passed through to
-`/training/programs/enrollments/me`. A completed enrollment is therefore never
-in the list the card is rendered from, and the string appears nowhere else in
-the frontend.
-
-Confirmed against a real completed enrollment: the demo member's Driver /
-Operator pipeline is now finished at 100% (seeded, so the completed state has
-data behind it at last), and it is simply absent from the dashboard rather than
-shown with the banner.
-
-Two readings, and picking between them is a product decision rather than a
-correctness fix — which is why this is recorded rather than patched:
-
-- The dashboard _should_ surface recently completed programs, and the filter is
-  the bug. A member finishing a programme currently sees it vanish.
-- The banner is vestigial from before the filter and should be deleted.
-
-`docs/training/02-training.md` asked for a screenshot of this banner; that
-placeholder is retired. Needs an owner decision.
 
 ## Integrations — No Detail Page, No Error History, No Event Triggers (2026-08-12)
 
