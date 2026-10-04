@@ -70,7 +70,7 @@ from app.utils.checklist import (
     prune_done_ids,
     to_storage,
 )
-from app.utils.json_ids import normalize_id_list
+from app.utils.json_ids import json_array_contains, normalize_id_list
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_all_in_org
 from app.utils.org_timezone import (
@@ -639,9 +639,8 @@ class TrainingProgramService:
                 TrainingRequirement.requirement_type == requirement_type
             )
         if position:
-            # Check if position is in the required_positions JSONB array
             query = query.where(
-                TrainingRequirement.required_positions.contains([position])
+                json_array_contains(TrainingRequirement.required_positions, position)
             )
 
         result = await self.db.execute(query.order_by(TrainingRequirement.name))
@@ -3380,7 +3379,7 @@ class TrainingProgramService:
                 )
                 .where(
                     RequirementProgress.enrollment_id == enrollment.id,
-                    TrainingRequirement.category_ids.contains([str(category_id)]),
+                    json_array_contains(TrainingRequirement.category_ids, category_id),
                 )
             )
             for progress, requirement in rows_result.all():
