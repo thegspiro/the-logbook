@@ -18,7 +18,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from app.api.v1.endpoints import course_cohorts as cohort_endpoints
-from app.models.event import EventRSVP
+from app.models.event import Event, EventRSVP
 from app.models.training import (
     CohortClassStatus,
     CohortMemberStatus,
@@ -881,6 +881,25 @@ class TestRescheduleAndCancel:
         assert updated.cancellation_reason == "Instructor ill"
 
 
+_NY = ZoneInfo("America/New_York")
+
+
+def _shift_queue(cohort, rows, locked_events=()):
+    """Results `shift_remaining` consumes, in order.
+
+    `get_cohort`, the class list, then the attendance pre-check's event lookup.
+    The department's zone does not appear here: `_utc_department` above mocks
+    the resolver module-wide, so that lookup issues no query.
+    """
+    return RecordingSession(
+        [
+            _one(cohort),
+            _scalars(rows),
+            _scalars(list(locked_events)),
+        ]
+    )
+
+
 class TestShiftRemaining:
     async def test_moves_each_class_by_the_requested_days(self):
         cohort = _cohort(str(uuid4()))
@@ -890,7 +909,7 @@ class TestShiftRemaining:
         second = _cohort_class(
             cohort, 2, start=datetime(2026, 10, 3, 23, 0, tzinfo=timezone.utc)
         )
-        db = RecordingSession([_one(cohort), _scalars([first, second])])
+        db = _shift_queue(cohort, [first, second])
         svc = CourseCohortService(db)
 
         with patch(
@@ -912,7 +931,7 @@ class TestShiftRemaining:
         row = _cohort_class(
             cohort, 1, start=datetime(2026, 10, 8, 23, 0, tzinfo=timezone.utc)
         )
-        db = RecordingSession([_one(cohort), _scalars([row])])
+        db = _shift_queue(cohort, [row])
         svc = CourseCohortService(db)
 
         with patch(
@@ -928,6 +947,85 @@ class TestShiftRemaining:
     async def test_zero_days_is_rejected_by_the_schema(self):
         with pytest.raises(ValueError, match="must not be zero"):
             CohortShiftRequest(days=0)
+
+    async def test_a_shift_across_the_dst_change_keeps_the_local_class_time(
+        self, monkeypatch
+    ):
+        """CC-5. A weather delay moves the date, never the hour.
+
+        19:00 on 29 October is 23:00 UTC under EDT. Seven days on the zone is
+        EST, so adding the delta to the UTC instant leaves 23:00 UTC reading
+        **18:00** local — every member's class quietly an hour earlier, and the
+        generated event moved with it. Asserting on `.date()` alone, as the two
+        tests above do, cannot see this: only the wall clock shows it.
+
+        This test has to name its own zone. `_utc_department` pins the resolver
+        to UTC for the whole module, and under UTC a local-day shift and a
+        UTC-instant shift are the same operation — so left on the module
+        default this assertion would be unsatisfiable rather than merely weak
+        (CLAUDE.md pitfall #28a).
+        """
+        monkeypatch.setattr(
+            "app.services.course_cohort_service.resolve_scheduling_timezone",
+            AsyncMock(return_value=_NY),
+        )
+        cohort = _cohort(str(uuid4()))
+        start_local = datetime(2026, 10, 29, 19, 0, tzinfo=_NY)
+        row = _cohort_class(cohort, 1, start=start_local.astimezone(timezone.utc))
+        db = _shift_queue(cohort, [row])
+        svc = CourseCohortService(db)
+
+        with patch(
+            "app.services.course_cohort_service.EventService"
+        ) as event_service_cls:
+            event_service_cls.return_value.update_event = AsyncMock()
+            await svc.shift_remaining(cohort.id, CohortShiftRequest(days=7), ORG, ACTOR)
+
+        moved_local = row.scheduled_start.astimezone(_NY)
+        assert moved_local.strftime("%Y-%m-%d %H:%M") == "2026-11-05 19:00"
+        # The offset really did change underneath it — otherwise this test
+        # would pass against the broken arithmetic too.
+        assert start_local.utcoffset() != moved_local.utcoffset()
+        assert (row.scheduled_end - row.scheduled_start) == timedelta(hours=3)
+
+    async def test_a_finalized_class_refuses_the_shift_before_moving_anything(self):
+        """CC-6. The refusal has to arrive before the first write.
+
+        `_sync_event` goes through `EventService.update_event`, which commits on
+        this same session. A lock found partway down the list would therefore
+        leave the earlier classes moved *and committed* while the endpoint
+        returns a 409 saying nothing happened — a half-shifted schedule the
+        officer has no way to see.
+        """
+        cohort = _cohort(str(uuid4()))
+        first = _cohort_class(
+            cohort, 1, start=datetime(2026, 10, 1, 23, 0, tzinfo=timezone.utc)
+        )
+        second = _cohort_class(
+            cohort, 2, start=datetime(2026, 10, 3, 23, 0, tzinfo=timezone.utc)
+        )
+        untouched = first.scheduled_start
+        finalized = Event(
+            id="evt-1",
+            organization_id=str(ORG),
+            title="Class 1",
+            attendance_finalized_at=datetime(2026, 10, 2, 0, 0, tzinfo=timezone.utc),
+        )
+        db = _shift_queue(cohort, [first, second], locked_events=[finalized])
+        svc = CourseCohortService(db)
+
+        with patch(
+            "app.services.course_cohort_service.EventService"
+        ) as event_service_cls:
+            event_service_cls.return_value.update_event = AsyncMock()
+            with pytest.raises(ValueError, match="ATTENDANCE_LOCKED"):
+                await svc.shift_remaining(
+                    cohort.id, CohortShiftRequest(days=7), ORG, ACTOR
+                )
+            event_service_cls.return_value.update_event.assert_not_awaited()
+
+        assert first.scheduled_start == untouched
+        db.commit.assert_not_awaited()
 
 
 class TestRosterManagement:

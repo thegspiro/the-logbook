@@ -31,7 +31,7 @@ from loguru import logger
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.event import EventRSVP
+from app.models.event import Event, EventRSVP
 from app.models.location import Location
 from app.models.training import (
     CohortClassStatus,
@@ -62,7 +62,11 @@ from app.schemas.course_cohort import (
 from app.schemas.event import EventUpdate
 from app.schemas.training_program import ProgramEnrollmentCreate
 from app.schemas.training_session import TrainingSessionCreate
-from app.services.event_service import EventService
+from app.services.event_service import (
+    EventService,
+    attendance_is_finalized,
+    attendance_locked_error,
+)
 from app.services.location_service import LocationService
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
@@ -76,6 +80,30 @@ from app.utils.scheduling_dates import (
 # Bounds the generation transaction. A syllabus longer than this is a data-entry
 # mistake, not a course.
 MAX_GENERATED_CLASSES = 200
+
+
+def _shift_local_days(value: datetime, delta: timedelta, tz: ZoneInfo) -> datetime:
+    """Move a stored UTC instant by whole days of *local* time.
+
+    A weather delay moves a 19:00 class to 19:00 on a later date. Adding the
+    delta to the UTC instant instead moves it by exact elapsed hours, so a
+    shift that crosses a DST transition lands an hour out — a 19:00 class
+    becomes 18:00 after the November change and 20:00 after the March one.
+    `resolve_class_datetimes` already builds every generated class this way
+    (local wall clock first, convert second); this keeps rescheduling on the
+    same footing rather than quietly undoing it.
+
+    Arithmetic on an aware datetime is applied to its naive fields and leaves
+    the zone alone, so adding the delta in `tz` preserves the wall clock and
+    the conversion back to UTC picks up whichever offset the new date is in.
+
+    A value read back from the driver is naive and already UTC (MySQL
+    ``datetime`` carries no offset); one built in Python is usually aware.
+    Both arrive here, so the shape is normalized rather than assumed.
+    """
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return (value.astimezone(tz) + delta).astimezone(timezone.utc)
 
 
 def _counts_toward_certification(value: Optional[bool]) -> bool:
@@ -924,10 +952,25 @@ class CourseCohortService:
         organization_id: UUID,
         actor_id: UUID,
     ) -> int:
-        """Shift upcoming classes by N days — weather, instructor illness, etc.
+        """Shift classes by N days of local time — weather, instructor illness.
 
-        Only future, non-cancelled classes move. Classes that already happened
-        keep their dates, because their attendance records are anchored to them.
+        Which classes move depends on the request, and the two cases differ in
+        a way worth stating plainly, because only one of them is "upcoming":
+
+        * no ``from_sequence`` — every non-cancelled class still in the future.
+        * ``from_sequence = n`` — every non-cancelled class from position *n*,
+          **including ones that have already happened**. The sequence bound
+          replaces the future-only bound rather than narrowing it, so this is
+          the case that can move a class members already attended.
+
+        A class whose event has finalized attendance is refused either way, and
+        refused for the whole batch before anything moves: finalize derived the
+        credited durations from the event's clock and those minutes are already
+        in the hours ledger.
+
+        Days are local days. A delay moves the date and leaves the wall clock
+        alone, so a 19:00 class is still 19:00 after a shift that crosses a
+        daylight-saving transition.
         """
         cohort = await self.get_cohort(cohort_id, organization_id)
         if not cohort:
@@ -947,14 +990,62 @@ class CourseCohortService:
         result = await self.db.execute(query.order_by(CourseCohortClass.sequence))
         rows = list(result.scalars().all())
 
+        # Refuse the whole shift before moving anything. `_sync_event` goes
+        # through `EventService.update_event`, which commits on this same
+        # session — so a lock discovered partway down the list would leave
+        # every class before it already moved and committed while the caller
+        # receives a 409 reporting that nothing happened.
+        await self._assert_shiftable(rows, organization_id)
+
+        # The shared resolver rather than `ZoneInfo(await _get_org_timezone(...))`:
+        # a timezone typed into org settings by hand can be nonsense, and this
+        # one falls back to the scheduling default instead of raising a
+        # `ZoneInfoNotFoundError` that the endpoint would surface as a 500.
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
         delta = timedelta(days=data.days)
         for cohort_class in rows:
-            cohort_class.scheduled_start = cohort_class.scheduled_start + delta
-            cohort_class.scheduled_end = cohort_class.scheduled_end + delta
+            cohort_class.scheduled_start = _shift_local_days(
+                cohort_class.scheduled_start, delta, tz
+            )
+            cohort_class.scheduled_end = _shift_local_days(
+                cohort_class.scheduled_end, delta, tz
+            )
             await self._sync_event(cohort_class, organization_id, actor_id)
 
         await self.db.commit()
         return len(rows)
+
+    async def _assert_shiftable(
+        self, rows: Sequence[CourseCohortClass], organization_id: UUID
+    ) -> None:
+        """Raise if any of these classes has an event whose attendance is closed.
+
+        One query for the whole set rather than one per class, and before the
+        first write rather than during it — see the caller. Only classes that
+        reached an event can be locked; one never generated has no credited
+        durations to contradict.
+        """
+        event_ids = [str(row.event_id) for row in rows if row.event_id]
+        if not event_ids:
+            return
+
+        result = await self.db.execute(
+            select(Event).where(
+                Event.id.in_(event_ids),
+                Event.organization_id == str(organization_id),
+            )
+        )
+        locked = sum(
+            1 for event in result.scalars().all() if attendance_is_finalized(event)
+        )
+        if locked:
+            # Built from a count and fixed text only: this sentence reaches the
+            # client verbatim, bypassing `safe_error_detail`.
+            raise ValueError(
+                attendance_locked_error(
+                    f"moving {locked} class(es) whose attendance is already finalized"
+                )
+            )
 
     async def update_cohort(
         self, cohort_id: UUID, data: CourseCohortUpdate, organization_id: UUID
