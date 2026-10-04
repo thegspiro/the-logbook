@@ -149,10 +149,18 @@ async def get_asset_widgets(
     )
     widgets: list[AssetWidget] = []
 
-    if "inventory" in enabled and (
-        user_has_permission(current_user, "inventory.manage")
-        or user_has_permission(current_user, "settings.manage")
-    ):
+    # Two questions, the same pairing the apparatus block below documents at
+    # length. Authority for these figures is `inventory.manage` or
+    # `settings.manage`. But every widget here links into `/inventory*`, and
+    # those routes gate on `inventory.manage` *alone*, so a delegated
+    # `settings.manage` role holding no inventory grant was handed five tiles
+    # whose only action is Access Denied.
+    #
+    # Here the destination gate is the stricter of the two and subsumes the
+    # authority one, which is why this reads as a single condition rather than
+    # the two the sibling blocks need. If `/inventory*` ever widens to accept
+    # `settings.manage`, the `or` has to come back with it.
+    if "inventory" in enabled and user_has_permission(current_user, "inventory.manage"):
         inventory = InventoryService(db)
         summary = await inventory.get_inventory_summary(org_id)
         low_stock = await inventory.get_low_stock_items(org_id)
@@ -213,7 +221,12 @@ async def get_asset_widgets(
                     module="inventory",
                     title="Expiring lots",
                     count=int(expiring or 0),
-                    href="/inventory/lots?expiresWithin=30",
+                    # `/inventory/lots` has never been a route: the catch-all in
+                    # App.tsx swallowed it and bounced the click back to the
+                    # dashboard, so the tile read as inert. The expiring-supply
+                    # page is the real destination and already defaults to a
+                    # 30-day horizon, matching this count's window.
+                    href="/inventory/admin/checklists/supply",
                     empty_state="No stocked lots expire in the next 30 days.",
                     severity="warning",
                 ),
@@ -222,7 +235,9 @@ async def get_asset_widgets(
                     module="inventory",
                     title="Equipment requests",
                     count=int(requests or 0),
-                    href="/inventory/requests?status=pending",
+                    # `/inventory/requests` is an API path, not a route; the
+                    # page lives under `/inventory/admin/requests`.
+                    href="/inventory/admin/requests",
                     empty_state="No equipment requests are waiting for review.",
                 ),
                 AssetWidget(
@@ -313,7 +328,13 @@ async def get_asset_widgets(
                     module="apparatus",
                     title="Maintenance due",
                     count=int(fleet["maintenance_due_soon"]),
-                    href="/apparatus/maintenance?dueWithin=30",
+                    # `/apparatus/maintenance` is an API path only — there is no
+                    # such route, so the catch-all bounced this click back to
+                    # the dashboard. The fleet board is the nearest real
+                    # destination and surfaces the same due/overdue tallies in
+                    # its summary strip. A dedicated maintenance view is
+                    # flagged rather than invented here.
+                    href="/apparatus",
                     empty_state="No apparatus maintenance is due in the next 30 days.",
                     severity="warning",
                 ),
@@ -323,9 +344,22 @@ async def get_asset_widgets(
     # Same reasoning as apparatus: `facilities.view` is a baseline member
     # grant, while overdue work orders and compliance deadlines are facility
     # management reporting.
-    if "facilities" in enabled and (
-        user_has_permission(current_user, "facilities.manage")
-        or user_has_permission(current_user, "settings.manage")
+    #
+    # And the same destination-reachability pairing as the two blocks above:
+    # every widget here links into `/facilities*`, which the routes gate on
+    # `facilities.view` OR `facilities.manage`, so a delegated
+    # `settings.manage` role holding neither was handed four tiles that answer
+    # Access Denied.
+    _may_open_facilities = user_has_permission(
+        current_user, "facilities.view"
+    ) or user_has_permission(current_user, "facilities.manage")
+    if (
+        "facilities" in enabled
+        and _may_open_facilities
+        and (
+            user_has_permission(current_user, "facilities.manage")
+            or user_has_permission(current_user, "settings.manage")
+        )
     ):
         today = await department_today()
         maintenance = await db.scalar(
@@ -390,14 +424,17 @@ async def get_asset_widgets(
                     empty_state="No facility compliance deadlines are due soon.",
                     severity="warning",
                 ),
-                AssetWidget(
-                    id="facilities-maintenance",
-                    module="facilities",
-                    title="Maintenance due",
-                    count=int(maintenance or 0),
-                    href="/facilities/maintenance?status=due",
-                    empty_state="No facility maintenance is overdue.",
-                ),
+                # There is deliberately no second maintenance widget here.
+                # `facilities-maintenance` used to render this same `maintenance`
+                # count — the one `due_date <= today` query, i.e. overdue — under
+                # the title "Maintenance due", with an empty state that said
+                # "overdue" and an `href` of `?status=due` that
+                # `MaintenanceListPage` does not accept (its filter is
+                # all/pending/completed/overdue), so the tile duplicated its
+                # neighbour's number and filtered nothing. Reporting genuine
+                # upcoming-but-not-yet-overdue maintenance needs a second query
+                # *and* a `due` filter on that page; both are flagged rather
+                # than guessed at here.
             ]
         )
 
@@ -498,6 +535,12 @@ class OperationsDashboard(BaseModel):
 # settings.manage gate.  It is also mirrored by the frontend widget registry.
 OPERATIONS_SECTION_PERMISSIONS: dict[str, tuple[str, ...]] = {
     "operational_readiness": ("scheduling.manage",),
+    # Documentation only — `_has_any` is never called with this entry. The
+    # section is assembled item by item, each behind the one permission that
+    # owns its data source, and then emitted only if any item survived. That is
+    # strictly finer than the union below, so the union is the published
+    # contract (wiki/API-Reference.md) rather than the control. Keep the two in
+    # step when adding an exception item.
     "critical_exceptions": (
         "meetings.manage",
         "minutes.manage",
@@ -731,7 +774,10 @@ async def get_operations_dashboard(
                 count=count,
                 oldest_age_days=_age_days(oldest, local_today, org_tz),
                 most_urgent="Oldest delivery failure" if count else None,
-                href="/notifications/manage?status=failed",
+                # `/notifications/manage` is not a route — the notifications
+                # module declares `/notifications` only, so this bounced off
+                # the catch-all.
+                href="/notifications?status=failed",
             )
         )
     if exception_items:
@@ -772,7 +818,13 @@ async def get_operations_dashboard(
     if "events" in enabled and _has_any(
         current_user, OPERATIONS_SECTION_PERMISSIONS["upcoming_command_dates"]
     ):
-        boundary = local_midnight + timedelta(days=30)
+        # 30 department days, not 30×24h. Adding the delta to `local_midnight`
+        # — already a UTC instant — lands on 23:00 or 01:00 local across a DST
+        # transition, which moves an event in that hour into or out of the
+        # window. Shift the local date and re-resolve midnight instead.
+        boundary = datetime.combine(
+            local_today + timedelta(days=30), time.min, org_tz
+        ).astimezone(timezone.utc)
         result = await db.execute(
             select(func.count(Event.id), func.min(Event.start_datetime)).where(
                 Event.organization_id == org_id,
@@ -835,7 +887,11 @@ async def get_operations_dashboard(
                         label=f"Training records ({current_count - previous_count:+d})",
                         severity="info",
                         count=current_count,
-                        href="/training/reports",
+                        # `/training/reports` has never existed. The training
+                        # administration hub is the real home for this, and
+                        # this is the same target `/training/officer`
+                        # redirects to.
+                        href="/training/admin?page=dashboard&tab=overview",
                     )
                 ],
             )
@@ -1341,6 +1397,12 @@ async def get_community_engagement(
                 select(Event.id).where(
                     Event.organization_id == org_id,
                     Event.event_type.in_(public_types),
+                    # `total_public_events` excludes cancelled events, so an
+                    # attendee tally that counted them described a different
+                    # population than the event count sitting beside it — a
+                    # department that cancelled a fundraiser after check-in
+                    # read more attendees than it had events to hold them.
+                    Event.is_cancelled.is_(False),
                 )
             ),
         )
@@ -1358,6 +1420,7 @@ async def get_community_engagement(
                 select(Event.id).where(
                     Event.organization_id == org_id,
                     Event.event_type.in_(public_types),
+                    Event.is_cancelled.is_(False),
                 )
             ),
         )
