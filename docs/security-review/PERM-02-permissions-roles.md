@@ -593,7 +593,7 @@ route their client-supplied FKs (`parent_id`, `position_id`, holder
 
 ### Findings
 
-### PERM-5 — MED — Nothing stops a low-privileged position manager from permanently demoting a higher one — 🚩 FLAGGED
+### PERM-5 — MED — Nothing stops a low-privileged position manager from permanently demoting a higher one — ✅ FIXED (2026-10-04)
 
 **What:** the three user↔position assignment routes are gated on
 `users.update_positions` OR `members.assign_positions` (OR two legacy names),
@@ -659,6 +659,17 @@ options are not equivalent and the owner should pick:
    `*` a restore path that does not require already holding it.
 
 Mirrored into `docs/KNOWN_LIMITATIONS.md`.
+
+**Resolution (2026-10-04): FIXED with the narrow "last `*` holder" guard**,
+the option the owner chose. `assert_positions_retain_administrator`, which all
+three assignment routes already call, now also refuses a change that takes `*`
+from the organization's only active holder of it, whatever else the
+remaining members hold. A member manager can still offboard a departing chief
+once a position carrying `*` has been given to someone else; status changes
+and archiving are not guarded this way because the member keeps their
+positions and gets `*` back on restore. The count is the one W11-8 made safe
+under concurrency (organization `admin_continuity` lock plus a locking read).
+Tests: `TestLastWildcardHolder` in `backend/tests/test_admin_continuity.py`.
 
 ### PERM-6 — LOW — Two read-only permissions were classified as write-tier — ✅ FIXED
 

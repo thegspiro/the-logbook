@@ -14,6 +14,7 @@ from app.models.organization_lock import OrganizationLock
 # One scope per decision, so unrelated decisions do not wait on each other.
 ROOM_BOOKING = "room_booking"
 PROGRAM_ENROLLMENT = "program_enrollment"
+ADMIN_CONTINUITY = "admin_continuity"
 
 
 async def lock_organization_scope(

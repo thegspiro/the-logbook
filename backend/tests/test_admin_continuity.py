@@ -253,3 +253,56 @@ class TestAssertRoleChangeRetainsAdministrator:
             [ADMIN_PERMISSION, "events.view"],
             action="edit",
         )
+
+
+class TestLastWildcardHolder:
+    """PERM-5: '*' cannot be re-granted except by a holder, nor minted, so a
+    position change may not take it from the organization's only holder even
+    while another member keeps members.manage."""
+
+    async def test_rejects_stripping_the_only_wildcard_holder(self, db_session):
+        org = await _make_org(db_session)
+        owner = await _make_position(db_session, org, "IT Manager", ["*"])
+        coordinator = await _make_position(
+            db_session, org, "Membership Coordinator", [ADMIN_PERMISSION]
+        )
+        chief = await _make_user(db_session, org, "chief", [owner])
+        await _make_user(db_session, org, "coordinator", [coordinator])
+
+        with pytest.raises(LastAdministratorError, match="full administrative"):
+            await assert_positions_retain_administrator(
+                db_session, org.id, chief.id, set()
+            )
+
+    async def test_allows_it_once_another_member_holds_the_wildcard(self, db_session):
+        org = await _make_org(db_session)
+        owner = await _make_position(db_session, org, "IT Manager", ["*"])
+        chief = await _make_user(db_session, org, "chief", [owner])
+        await _make_user(db_session, org, "successor", [owner])
+
+        # Offboarding a departing chief stays possible.
+        await assert_positions_retain_administrator(db_session, org.id, chief.id, set())
+
+    async def test_allows_a_change_that_keeps_the_wildcard(self, db_session):
+        org = await _make_org(db_session)
+        owner = await _make_position(db_session, org, "IT Manager", ["*"])
+        chief = await _make_user(db_session, org, "chief", [owner])
+
+        await assert_positions_retain_administrator(db_session, org.id, chief.id, {"*"})
+
+    async def test_an_inactive_wildcard_holder_does_not_count(self, db_session):
+        org = await _make_org(db_session)
+        owner = await _make_position(db_session, org, "IT Manager", ["*"])
+        coordinator = await _make_position(
+            db_session, org, "Membership Coordinator", [ADMIN_PERMISSION]
+        )
+        chief = await _make_user(db_session, org, "chief", [owner])
+        await _make_user(db_session, org, "coordinator", [coordinator])
+        await _make_user(
+            db_session, org, "retired", [owner], status=UserStatus.INACTIVE
+        )
+
+        with pytest.raises(LastAdministratorError):
+            await assert_positions_retain_administrator(
+                db_session, org.id, chief.id, set()
+            )
