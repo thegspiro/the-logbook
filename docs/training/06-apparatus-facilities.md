@@ -715,22 +715,11 @@ The Equipment Check system provides structured vehicle and equipment inspections
 
 ### Key Points for Apparatus & Facilities Users
 
-- **Deficiency tracking**: When any equipment check item fails, the apparatus is automatically flagged as deficient (`has_deficiency = true`, `deficiency_since` records the date). The deficiency badge appears on the apparatus list and detail pages
+- **Deficiency tracking**: When any equipment check item fails, the apparatus is automatically flagged as deficient. A **Deficiency** badge appears beside the status badge, on the apparatus list row and the detail header. The badge is the whole indicator: it does not show when the deficiency began or link to the failed check. Find the check in **Inventory Administration > Checklist Reports** (`/inventory/admin/checklists/reports`). A healthy apparatus simply carries no badge.
 - **Auto-clear**: When a subsequent full check passes all items, the deficiency flag is automatically cleared
 - **Failure notifications**: Failed check items trigger in-app notifications to shift officers and configurable roles (e.g., apparatus maintenance officer)
 - **Cross-reference**: Equipment check reports are accessible from both the Inventory module (**Inventory Administration > Checklist Reports**, `/inventory/admin/checklists/reports`) and the apparatus detail page
-
-> **Corrected 2026-08-12.** The **Deficiency badge is real** and appears on
-> both the list row and the detail header. The **date is not**:
-> `deficiencySince` is on the TypeScript type and is never rendered, so no
-> screen shows when the deficiency began. There is also no green "OK" badge —
-> a healthy apparatus simply carries no deficiency badge. Recorded in [Apparatus & Facilities — Four Guide Sections With No Screen](../KNOWN_LIMITATIONS.md#apparatus--facilities--four-guide-sections-with-no-screen-2026-08-08).
-
-> **Corrected 2026-08-12.** There is no deficiency **banner** — only the badge
-> described above, beside the status badge — and no link from the apparatus to
-> the equipment check that failed. Reach the check from **Inventory
-> Administration > Checklist Reports** (`/inventory/admin/checklists/reports`)
-> instead — this was _Scheduling > Check Reports_ until 2026-08-31. Recorded in [Apparatus & Facilities — Four Guide Sections With No Screen](../KNOWN_LIMITATIONS.md#apparatus--facilities--four-guide-sections-with-no-screen-2026-08-08).
+- **Lightweight apparatus**: Deficiency flags need the full Apparatus module. A department that tracks vehicles in the lightweight apparatus list gets no badge.
 
 ### Edge Cases — Equipment Checks
 

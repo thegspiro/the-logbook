@@ -858,11 +858,12 @@ apparatus reference. The apparatus-compliance report is inherently a
 full-Apparatus-module feature — it iterates `apparatus` rows — so it was already
 empty for those departments and loses nothing.
 
-**Deficiency flags are full-Apparatus only.** `has_deficiency` lives on the
-`apparatus` row, so a `BasicApparatus` department gets no deficiency badge from a
-failed check. That is a real gap, but it is a _feature_ gap in the lightweight
-table rather than a defect, and closing it would mean adding safety state to
-`basic_apparatus` — a product decision, not a patch.
+**Deficiency flags are full-Apparatus only — accepted (owner decision
+2026-10-04).** `has_deficiency` lives on the `apparatus` row, so a
+`BasicApparatus` department gets no deficiency badge from a failed check. The
+owner chose to leave it there: the full Apparatus module provides the flag, and
+adding safety state to `basic_apparatus` waits until a lightweight department
+asks for it. The apparatus guide says so.
 
 ## Multi-Tenant Isolation & Module Audit (2026-07-25)
 
@@ -1023,10 +1024,9 @@ Same shape as the Member Lifecycle row above — the API is built, the screen is
 not — so they are recorded rather than papered over with an approximate image.
 Their placeholders are deliberately left open.
 
-| Guide section                     | What the guide pictures                                                                                                | What exists                                                                                                                                                                                                           | State                          |
-| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| Apparatus **NFPA Compliance tab** | Applicable standards with per-standard compliance status (green check / red X), last assessment date and next due date | `ApparatusOverviewTab.tsx:242` renders a single card reading "Tracking Enabled" when the flag is set. There is no standards list, no status, no dates. The flag's only other consumer is a checkbox on the edit form. | ⚠️ Flag only, no tab           |
-| Apparatus **deficiency banner**   | A banner at the top of the detail page with the deficiency date and a link to the failed equipment check               | A "Deficiency" badge beside the status badge, on both the list row and the detail header. `deficiencySince` is on the TypeScript type and is **never rendered**; there is no banner and no link to the check.         | ⚠️ Badge only, no date or link |
+| Guide section                     | What the guide pictures                                                                                                | What exists                                                                                                                                                                                                           | State                |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| Apparatus **NFPA Compliance tab** | Applicable standards with per-standard compliance status (green check / red X), last assessment date and next due date | `ApparatusOverviewTab.tsx:242` renders a single card reading "Tracking Enabled" when the flag is set. There is no standards list, no status, no dates. The flag's only other consumer is a checkbox on the edit form. | ⚠️ Flag only, no tab |
 
 Verified 2026-08-08 by counting non-test consumers of each service method under
 `frontend/src`, and by reading the render bodies rather than trusting the type
@@ -1035,7 +1035,9 @@ declared, which is exactly what makes this class of gap easy to miss.
 
 The guide text has **not** been rewritten here. Two of these are one component
 away from being true, and deciding between "build the screen" and "cut the
-section" is a product call, not a documentation fix.
+section" is a product call, not a documentation fix. The deficiency banner was
+decided on 2026-10-04: no banner, and the guide now describes the badge as it
+is.
 
 ## Medical Screening — The Add Record Form Attaches to Nobody (2026-08-08)
 
