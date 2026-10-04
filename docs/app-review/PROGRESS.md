@@ -2472,5 +2472,5 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   row it caused, and that row was the only one in `audit_logs`. A probe that
   writes _through a service_ must clean up what the service wrote. Gate: tsc 0 ·
   flake8 0 · black/isort clean · eslint 0 · docs links 422 files 0 broken ·
-  lifecycle-related tests **257 passed, 1 skipped**. See member-lifecycle.md →
+  lifecycle-related tests **257 passed, 1 skipped**. **The whole-suite run caught one failure the targeted selection could not:** LIFE-6's org filter resolved a query `test_org_scoping_ratchet` had frozen in its baseline, so that entry went stale and the ratchet's both-directions check went red. Line removed (215 → 214 entries). The lesson is procedural — the pre-commit hook and the lifecycle selection both passed, because neither covers a check that sweeps the repo for a query _shape_; a change touching a globally-policed pattern wants the whole suite. See member-lifecycle.md →
   Pass 3. Next: A7 dashboard & action items.

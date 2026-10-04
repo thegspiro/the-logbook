@@ -168,16 +168,33 @@ code directly, which is the ELEC-5/CI-5 check applied to this file.
 
 ### Pass 3 completion gate
 
-| Check                       | Result                               |
-| --------------------------- | ------------------------------------ |
-| `npm run typecheck`         | ✅ 0 errors (no frontend change)     |
-| `flake8 app/ tests/`        | ✅ 0 violations                      |
-| `black --check app/ tests/` | ✅ unchanged                         |
-| `isort --check-only`        | ✅ clean                             |
-| `npm run lint`              | ✅ 0 errors                          |
-| Docs link check             | ✅ 0 broken                          |
-| Lifecycle-related tests     | ✅ **257 passed, 1 skipped**         |
-| Whole backend suite         | see the PROGRESS entry for this pass |
+| Check                       | Result                                               |
+| --------------------------- | ---------------------------------------------------- |
+| `npm run typecheck`         | ✅ 0 errors (no frontend change)                     |
+| `flake8 app/ tests/`        | ✅ 0 violations                                      |
+| `black --check app/ tests/` | ✅ unchanged                                         |
+| `isort --check-only`        | ✅ clean                                             |
+| `npm run lint`              | ✅ 0 errors                                          |
+| Docs link check             | ✅ 0 broken                                          |
+| Lifecycle-related tests     | ✅ **257 passed, 1 skipped**                         |
+| Whole backend suite         | 1 failure, caused by this pass and fixed — see below |
+
+**The whole-suite run found a failure the targeted selection could not.**
+`test_org_scoping_ratchet.py::test_baseline_has_no_stale_entries` went red on
+LIFE-6: the ratchet freezes the unscoped by-id queries that existed on
+2026-09-06, and adding the org filter resolved one of them, so its baseline
+entry went stale. The test checks **both** directions and said exactly what to
+do — _"If you fixed them, delete the lines"_ — so the line is gone
+(`tests/org_scoping_baseline.txt`, 215 → 214 entries) and the ratchet's 12
+tests pass.
+
+Worth drawing the procedural lesson rather than just the fix: the pre-commit
+hook passed, and so did the 257-test lifecycle selection, because neither
+covers a check that sweeps the whole repository for a query _shape_. A one-line
+org filter is exactly the kind of change whose only observer is the global
+ratchet. CLAUDE.md's "match the verification to the change" still holds — but
+when a change touches a pattern the repo polices globally, the whole suite is
+the matching verification.
 
 **One self-inflicted failure worth recording.** The first lifecycle run showed
 4 failures in `test_audit_retention_archival.py`. They were not a regression:
