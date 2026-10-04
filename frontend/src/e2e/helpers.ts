@@ -638,6 +638,30 @@ const routes = ({
   ['**/api/v1/event-requests/forms**', () => ({ forms: [], total: 0, skip: 0, limit: 50 })],
   ['**/api/v1/admin-hub/events/metrics', eventMetricSettings],
   ['**/api/v1/admin-hub/training/metrics', trainingMetricSettings],
+  // Scheduling Notifications fails closed on a rules response that is not a
+  // list — every switch reading "off" would hide an enabled notification — so
+  // the catch-all `{}` left that settings section measuring its load-error
+  // panel instead of its switches. One enabled preset, so a switch renders on.
+  [
+    '**/api/v1/notifications/rules**',
+    () => ({
+      rules: [
+        {
+          id: 'rule-1',
+          organization_id: 'org-1',
+          name: 'New Assignment',
+          trigger: 'schedule_change',
+          category: 'scheduling',
+          channel: 'email',
+          enabled: true,
+          enforced: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      ],
+      total: 1,
+    }),
+  ],
 ];
 
 /**

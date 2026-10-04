@@ -255,7 +255,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
       {/* ─── General Tab ─── */}
       {activeTab === 'general' && (
         <div className="space-y-6">
-          <div className="card-secondary p-5">
+          <div className="card-secondary p-4 sm:p-5">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h3 className="text-theme-text-primary flex items-center gap-2 text-base font-semibold">
@@ -292,7 +292,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
           </div>
 
           {feature && (
-            <div className="card-secondary p-5">
+            <div className="card-secondary p-4 sm:p-5">
               <h3 className="text-theme-text-primary text-base font-semibold">Overtime advisory</h3>
               <p className="text-theme-text-muted mt-1 text-sm">
                 Warn, without blocking, when you assign a member whose scheduled hours within the window exceed the
@@ -341,7 +341,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
           )}
 
           {feature && (
-            <div className="card-secondary p-5">
+            <div className="card-secondary p-4 sm:p-5">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <h3 className="text-theme-text-primary text-base font-semibold">Automatic shift generation</h3>
@@ -398,7 +398,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
           )}
 
           {feature && (
-            <div className="card-secondary space-y-4 p-5">
+            <div className="card-secondary space-y-4 p-4 sm:p-5">
               <h3 className="text-theme-text-primary text-base font-semibold">Shift close-out rules</h3>
               {!feature.require_end_of_shift_checks && (
                 <div className="text-theme-text-secondary rounded-lg border border-sky-500/20 bg-sky-500/5 p-3 text-sm">
@@ -413,7 +413,9 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
               )}
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-theme-text-primary flex items-center gap-2 text-sm font-medium">
+                  {/* Wraps so the badge drops under the label on a phone rather than
+                      squeezing it to one word per line. */}
+                  <p className="text-theme-text-primary flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium">
                     Require end-of-shift equipment checks
                     <span className="rounded-full bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-sky-700 uppercase dark:text-sky-300">
                       Recommended
@@ -618,7 +620,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
           />
 
           {/* Apparatus Inventory */}
-          <div className="card-secondary p-5">
+          <div className="card-secondary p-4 sm:p-5">
             <h3 className="text-theme-text-primary mb-3 text-base font-semibold">Apparatus Inventory</h3>
             {normalizedApparatusList.length === 0 ? (
               <p className="text-theme-text-muted text-sm">

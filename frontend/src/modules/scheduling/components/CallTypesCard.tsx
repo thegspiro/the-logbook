@@ -185,7 +185,7 @@ export const CallTypesCard: React.FC<CallTypesCardProps> = ({ types, usage, lock
   };
 
   return (
-    <div className="card-secondary p-5">
+    <div className="card-secondary p-4 sm:p-5">
       <h3 className="text-theme-text-primary text-base font-semibold">Call types</h3>
       <p className="text-theme-text-muted mt-1 text-sm">
         The categories officers count calls under at close-out. Rename them to match how your department reports; calls
