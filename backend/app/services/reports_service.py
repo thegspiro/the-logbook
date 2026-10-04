@@ -31,7 +31,9 @@ from app.models.training import (
     ProgramEnrollment,
     RequirementProgress,
     RequirementProgressStatus,
+    Shift,
     ShiftCompletionReport,
+    ShiftStatus,
     TrainingCourse,
     TrainingRecord,
     TrainingRequirement,
@@ -1324,9 +1326,53 @@ class ReportsService:
         call_service = CallTrackingService(self.db)
         tracking = await call_service.get_settings(str(organization_id))
         if tracking.get("mode") == CallTrackingMode.COUNT_ONLY:
-            return await self._generate_call_volume_from_counts(
+            report = await self._generate_call_volume_from_counts(
                 organization_id, period_start, period_end, call_service
             )
+        else:
+            report = await self._generate_call_volume_from_reports(
+                organization_id, period_start, period_end, call_service
+            )
+        # Both sources are written when a shift is finalized, so a period
+        # read before its last shift is closed out under-reports. Say so
+        # rather than present a short number as final (SCHED-11).
+        report["unfinalized_shifts"] = await self._count_unfinalized_shifts(
+            organization_id, period_start, period_end
+        )
+        return report
+
+    async def _count_unfinalized_shifts(
+        self, organization_id: UUID, period_start: date, period_end: date
+    ) -> int:
+        """Shifts in the period that have started but not been closed out.
+
+        A shift that has not started yet has no calls to be missing, and a
+        cancelled one never will.
+        """
+        return int(
+            (
+                await self.db.execute(
+                    select(func.count(Shift.id)).where(
+                        Shift.organization_id == str(organization_id),
+                        Shift.shift_date >= period_start,
+                        Shift.shift_date <= period_end,
+                        Shift.start_time <= datetime.now(timezone.utc),
+                        Shift.is_finalized.is_(False),
+                        Shift.status != ShiftStatus.CANCELLED,
+                    )
+                )
+            ).scalar()
+            or 0
+        )
+
+    async def _generate_call_volume_from_reports(
+        self,
+        organization_id: UUID,
+        period_start: date,
+        period_end: date,
+        call_service: "CallTrackingService",
+    ) -> Dict[str, Any]:
+        """Call volume for a department on detailed tracking."""
 
         reports_result = await self.db.execute(
             select(ShiftCompletionReport).where(

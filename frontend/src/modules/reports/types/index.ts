@@ -460,6 +460,11 @@ export interface CallVolumeReport {
   counts_unit_responses?: boolean;
   /** Apparatus id to unit number or name, for `summary.by_apparatus_runs`. */
   apparatus_labels?: Record<string, string>;
+  /**
+   * Shifts in the period that have started but not been closed out. Calls are
+   * recorded at close-out, so a non-zero count means the figures will grow.
+   */
+  unfinalized_shifts?: number;
 }
 
 // ============================================================================

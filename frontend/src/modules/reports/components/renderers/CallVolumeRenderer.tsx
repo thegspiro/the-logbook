@@ -53,8 +53,18 @@ export const CallVolumeRenderer: React.FC<Props> = ({ data }) => {
     },
   ];
 
+  const unfinalized = data.unfinalized_shifts ?? 0;
+
   return (
     <div>
+      {unfinalized > 0 && (
+        <p className="alert-warning mb-4 text-sm" role="status">
+          <strong>Preliminary.</strong> {unfinalized} {unfinalized === 1 ? 'shift' : 'shifts'} in this period{' '}
+          {unfinalized === 1 ? 'has' : 'have'} not been closed out yet. Calls are counted at close-out, so these figures
+          will go up.
+        </p>
+      )}
+
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard label={totalLabel} value={summary.total_calls} />
         <StatCard label={perDayLabel} value={summary.avg_calls_per_day.toFixed(1)} />

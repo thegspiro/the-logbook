@@ -104,3 +104,27 @@ describe('runs by unit', () => {
     expect(screen.queryByText('Runs by Unit:')).not.toBeInTheDocument();
   });
 });
+
+describe('preliminary marker', () => {
+  it('says the figures are preliminary while shifts are still open', () => {
+    render(<CallVolumeRenderer data={report({ unfinalized_shifts: 2 })} />);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      /Preliminary\..*2 shifts in this period have not been closed out/
+    );
+  });
+
+  it('uses the singular for one shift', () => {
+    render(<CallVolumeRenderer data={report({ unfinalized_shifts: 1 })} />);
+    expect(screen.getByRole('status')).toHaveTextContent(/1 shift in this period has not/);
+  });
+
+  it('says nothing once every shift is closed out', () => {
+    render(<CallVolumeRenderer data={report({ unfinalized_shifts: 0 })} />);
+    expect(screen.queryByText(/Preliminary/)).not.toBeInTheDocument();
+  });
+
+  it('says nothing for an older backend that does not send the count', () => {
+    render(<CallVolumeRenderer data={report()} />);
+    expect(screen.queryByText(/Preliminary/)).not.toBeInTheDocument();
+  });
+});
