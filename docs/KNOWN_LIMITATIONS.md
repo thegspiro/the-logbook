@@ -531,7 +531,14 @@ guides can point at one place and an owner can decide it.
   The profile's **ID Card** button and the card page now require
   `members.manage` or `members.manage_id_cards` for someone else's card, but
   the shared label page `/members/print-labels` still prints colleagues'
-  badges for anyone holding `members.view`. **Open.**
+  badges for anyone holding `members.view`.
+  ✅ **Resolved 2026-10-04:** the label API's `membership` module and
+  `/members/print-labels` now require `members.manage` or
+  `members.manage_id_cards`, matching the card page
+  (`test_label_service.py::test_members_view_alone_cannot_print_member_badges`).
+  The card's contents — name and membership number — remain directory
+  information that `members.view` reads; what is gated is the assembled,
+  scannable badge.
 
 ## Room Kiosk Badge Check-In — A Copied Card Works With Nobody Watching (2026-10-03)
 

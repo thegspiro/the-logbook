@@ -78,6 +78,12 @@ from are directory information `GET /users/{id}/with-roles` serves to
 is unaffected — `/members/scan` and the check-in station resolve a code without
 rendering anyone's card.
 
+**Printing badges follows the same rule** _(2026-10-04)_. Member labels
+(`/members/print-labels` and the label API's `membership` module) require
+`members.manage` or `members.manage_id_cards`. They accepted `members.view`,
+so any member could print a colleague's badge even after the card page
+refused to show it.
+
 **Badges for unnumbered members scan** _(2026-09-28)_. A badge printed for a
 member with no membership number carries a short id, and neither **Scan Member
 ID** nor the in-app badge scanner recognised it — the department's own badge

@@ -394,8 +394,11 @@ The **ID Card** button on a colleague's profile, and the card page itself, now
 require `members.manage` or `members.manage_id_cards` when the card is not
 your own. A member keeps their own card. Positions holding only `members.view`
 lose the button on other members' profiles; grant `members.manage_id_cards` to
-anyone who prints or checks badges for others. The bulk member-label page is
-not yet gated the same way — see `KNOWN_LIMITATIONS.md`.
+anyone who prints or checks badges for others. Printing member badges
+(**Print Badges** on the member list, `/members/print-labels`, and the label
+API's `membership` module) follows the same rule from 2026-10-04: a position
+holding only `members.view` can no longer print them, and a script calling
+`/api/v1/labels/*` with `module: "membership"` as such a member now receives 403.
 
 ### Close any election that is OPEN before you upgrade (2026-09-30)
 

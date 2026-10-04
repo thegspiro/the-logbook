@@ -291,9 +291,10 @@ reports no drift.
   `settings.manage`. Before, any signed-in member could list and create API
   keys and edit the published-fields whitelist.
 - **Another member's ID card (#2860).** Now requires `members.manage` or
-  `members.manage_id_cards`. This is a frontend gate:
-  `/members/print-labels` with `members.view` still prints colleagues' badges
-  (recorded in `KNOWN_LIMITATIONS.md`).
+  `members.manage_id_cards`. #2860 gated only the screens, which left
+  `/members/print-labels` and the label API printing colleagues' badges for
+  `members.view`; this pull request closes that, so badge printing follows
+  the same rule.
 - **Applicant labels (#2773, W17-3).** They no longer encode the applicant's
   status token. Badges printed earlier should be destroyed.
 - **Anonymous suggestions (#2830).** Their submissions and follow-ups are
@@ -514,7 +515,7 @@ is no longer true). The new entries:
     request);
   - NFC hashes depending on `ENCRYPTION_SALT`;
   - the probationary checks left for an owner decision;
-  - the API-side gap in the ID-card gate.
+  - the API-side gap in the ID-card gate (since fixed in this pull request).
 - Updated: W46-13 is marked resolved by #2882, and the Finance "Add Approval
   Step form — Not built" row is marked built by #2839.
 

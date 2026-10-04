@@ -44,8 +44,16 @@ that registers no printer simply never sees the direct-print controls.
 | `storage_areas`       | `inventory.manage`                                       | area name, parent/location trail |
 | `apparatus`           | `apparatus.view`, `apparatus.manage`                     | unit name, identifier            |
 | `facilities`          | `facilities.view`, `facilities.manage`                   | facility name                    |
-| `membership`          | `members.view`, `members.manage`                         | member name, membership number   |
+| `membership`          | `members.manage`, `members.manage_id_cards`              | member name, membership number   |
 | `prospective_members` | `prospective_members.view`, `prospective_members.manage` | applicant name, short record id  |
+
+**Member labels follow the ID-card rule** _(2026-10-04)_: a member label is a
+badge — its barcode is what the scanner and check-in station accept — so the
+`membership` module requires `members.manage` or `members.manage_id_cards`, the
+same grants the ID card page requires for someone else's card. It accepted
+`members.view`, a baseline grant, so any member could print a colleague's badge
+through `POST /labels/generate`, `/labels/preview` or `/labels/print` while the
+card page refused them. `/members/print-labels` carries the same gate.
 
 > **Inventory has its own print page, and it tracks what was printed**
 > _(2026-09-23)_. `/inventory/print-labels` is not built on the shared
