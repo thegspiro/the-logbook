@@ -22,7 +22,7 @@ that makes every runner's own correctness moot.
 > structural problem recorded for `SF-` and `AUTH-` on the same day; giving each
 > track its own prefix is an owner call.
 
-### CRON-40 — HIGH — The scheduler's claim renewal never checks it still owns the claim, so workers permanently double-run every task — 🚩 FLAGGED
+### CRON-40 — HIGH — The scheduler's claim renewal never checked it still owns the claim, so workers permanently double-ran every task — ✅ FIXED (2026-10-04)
 
 **What:** `_scheduled_task_loop` claims the right to be the scheduler with a
 Redis `SETNX` (`main.py:1739`), then renews it at the bottom of each iteration
@@ -74,25 +74,67 @@ that overruns the TTL; this is read from the code path, and the three facts abov
 are each individually verified in the source. Said plainly so the next reader
 does not inherit it as measured.
 
-**Fix — not applied, deliberately.** This is background-worker coordination in
-production startup code, and every remedy changes how workers agree on who
-schedules. Three options, not equivalent:
+**Fixed 2026-10-04 (option 1 below, plus the part of option 2 that is not a
+band-aid).** The remedy was flagged rather than applied at the time because
+this is worker coordination in production startup code; it was then
+implemented on request.
 
-1. **Compare-and-swap the renewal, and stand down when it fails** — renew via a
-   Lua script (or `WATCH`/`GET`-then-`SET`) that extends the TTL _only_ if the
-   stored value is still this worker's PID, and `break` out of the run loop when
-   it is not. This is the correct fix: it makes losing the claim recoverable
-   instead of invisible. It is also the only option that closes the ownership
-   hole rather than making it less likely.
-2. **Renew before and during the batch, not only after it** — cheap, and reduces
-   the lapse window, but a batch longer than the TTL still lapses and the
-   unconditional re-set still steals the claim back. A mitigation, not a fix.
-3. **Raise `claim_ttl`** — a band-aid that trades a longer blind spot after a
-   genuine worker death for a smaller chance of overrun.
+`app/core/background_claim.py` holds the mechanism. `renew_claim` extends the
+TTL through a Lua script **only while the stored value is still this worker's
+PID**, so the check and the extension are a single atomic step — reading the
+key and then extending it in two calls reopens the same window on a smaller
+scale. Both loops now `return` to their claim-waiting state when renewal
+reports loss.
 
-Option 1 with a guard test (a fake Redis whose value changes underneath the
-loop, asserting the loop exits) is the recommended shape. Mirrored into
-`KNOWN_LIMITATIONS.md`.
+Three details worth recording, because each was a decision rather than a
+transcription of the option above:
+
+- **Stand down, do not exit.** The option said `break` out of the run loop. A
+  bare break leaves that worker with no scheduler for the life of the process,
+  so when the winner dies the deployment has none at all — a worse failure than
+  the duplication being fixed. Both loops instead return to waiting and can
+  reacquire. `task_schedule` is deliberately kept across the wait: its stamps
+  are `time.monotonic()`, which stays valid, and rebuilding it would make every
+  task due at once again.
+- **Renew inside the batch too** — option 2, which on its own was correctly
+  judged a mitigation. Combined with the compare-and-swap it stops being one:
+  the first-pass overrun (all 43 due at once, `last_run` seeded to `0.0`) no
+  longer lapses the claim, so there is no handover to recover from rather than
+  merely a recoverable one. Without this the fix would be correct but churny —
+  the overrunning worker would hand off, and its replacement, whose own
+  `last_run` is also `0.0`, would overrun in turn.
+- **An unreachable Redis still fails open**, matching
+  `_try_claim_background_task` directly above it and the trade-off recorded
+  under "Re-verified, still open". With no Redis there is no coordination to be
+  had; stopping instead would silence every scheduled notification on every
+  worker during a blip, which is worse than the duplicate sends. The policy
+  lives at the call site in `main.py`; `renew_claim` raises and does not guess.
+
+**The same defect class in the shutdown path was found while fixing this, and
+is fixed with it.** Shutdown deleted both claim keys with a bare `delete`, so a
+worker exiting freed whichever claim was in them — including one a _live_
+sibling was still running under, leaving the key contested by every worker on
+its next pass. `release_claim` drops only what this worker holds. This was not
+in the original finding; the source guard written for the renewal is what
+surfaced it.
+
+**Guarded** by `tests/test_scheduler_claim_renewal.py` (17 tests). The
+ownership half runs against **real Redis** rather than a fake: the condition
+_is_ a Lua script, so a stand-in would assert a re-implementation of the
+semantics instead of the semantics. The fake appears only for the two things
+real Redis cannot be asked to do on demand — fail, and answer in a different
+reply type. Mutation-verified three ways:
+
+| Reverted to                                           | Caught by                                                                           |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| the unconditional `SET` renewal (the original defect) | 3 behavioural tests, incl. one asserting the other worker's PID is still in the key |
+| a plain `SET` renewal at the call site in `main.py`   | 3 source guards                                                                     |
+| the bare `delete` at shutdown                         | 1 source guard                                                                      |
+
+Still **not reproduced end to end** — that needs a multi-worker deployment and
+an overrunning batch — so what is demonstrated is the renewal's ownership
+semantics and the loops' use of them, not the original double-run in situ. Said
+plainly so the next reader does not inherit more than was shown.
 
 ### Verified good this pass
 
