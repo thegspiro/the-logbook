@@ -432,7 +432,9 @@ const AdminHoursPage: React.FC = () => {
           <h1 className="text-theme-text-primary text-3xl font-bold">My Admin Hours</h1>
           <p className="text-theme-text-secondary mt-1">Log your administrative hours and see what has been approved</p>
         </div>
-        <NfcTapButton />
+        {/* self-start: in the column this header stacks into on a phone, a
+            stretched button read as an empty full-width bar. */}
+        <NfcTapButton label="Tap a tag to clock in" className="self-start sm:self-auto" />
       </div>
 
       {/* Active Session Card */}

@@ -253,7 +253,7 @@ const TrainingRequirementsPage: React.FC = () => {
               onClick={() => {
                 void fetchData();
               }}
-              className="bg-theme-surface-hover hover:bg-theme-surface-secondary text-theme-text-primary rounded-lg p-2 transition-colors"
+              className="btn-icon bg-theme-surface-hover hover:bg-theme-surface-secondary text-theme-text-primary transition-colors"
               aria-label="Refresh requirements"
             >
               <RefreshCcw className="h-5 w-5" aria-hidden="true" />
@@ -329,7 +329,7 @@ const TrainingRequirementsPage: React.FC = () => {
           {filteredRequirements.length === 0 ? (
             <div className="card p-12 text-center">
               <FileText className="text-theme-text-muted mx-auto mb-4 h-16 w-16" aria-hidden="true" />
-              <h3 className="text-theme-text-primary mb-2 text-xl font-semibold">No Requirements Found</h3>
+              <h2 className="text-theme-text-primary mb-2 text-xl font-semibold">No Requirements Found</h2>
               <p className="text-theme-text-muted mb-6">
                 {searchTerm ? 'Try adjusting your search or filters' : 'Create a requirement, or start from a template'}
               </p>
@@ -479,7 +479,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex-1">
             <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-              <h3 className="text-theme-text-primary text-lg font-bold">{requirement.name}</h3>
+              <h2 className="text-theme-text-primary text-lg font-bold">{requirement.name}</h2>
               {requirement.requirement_type && (
                 <span className="text-theme-text-primary rounded-sm bg-green-700 px-2 py-1 text-xs font-semibold">
                   {getRequirementTypeLabel(requirement.requirement_type)}
@@ -776,7 +776,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
 
 const DetailSection: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <div>
-    <h4 className="text-theme-text-primary mb-3 font-semibold">{title}</h4>
+    <h3 className="text-theme-text-primary mb-3 font-semibold">{title}</h3>
     <div className="space-y-2">{children}</div>
   </div>
 );
@@ -966,9 +966,9 @@ const TemplateModal: React.FC<{
       <div ref={dialogRef} className="modal-panel max-h-[80dvh] w-full max-w-4xl overflow-y-auto p-6">
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <h3 id="template-modal-title" className="text-theme-text-primary text-xl font-bold">
+            <h2 id="template-modal-title" className="text-theme-text-primary text-xl font-bold">
               Select a Template
-            </h3>
+            </h2>
             <p className="text-theme-text-muted mt-1">
               Start from a common standard — you can review and adjust everything before saving
             </p>
@@ -989,7 +989,7 @@ const TemplateModal: React.FC<{
               onClick={() => onSelect(template)}
               className="card hover:bg-theme-surface-hover p-4 text-left"
             >
-              <h4 className="text-theme-text-primary mb-2 font-semibold">{template.name}</h4>
+              <h3 className="text-theme-text-primary mb-2 font-semibold">{template.name}</h3>
               <p className="text-theme-text-muted mb-3 text-sm">{template.description}</p>
               <div className="flex flex-wrap items-center gap-2 space-x-2">
                 <span

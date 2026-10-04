@@ -126,6 +126,19 @@ const AAA_CONTRAST_BUDGET: Record<string, number> = {
   // severity badges already sit. Call sites are held to AA by policy.
   '/admin/audit-log': 2,
   '/events/1/monitoring': 1,
+  // Training Setup's Import History tab, measured the first time it went on the
+  // pass. Every node sits on the selected match-strategy card, a red-600/10
+  // tint: the option's red-700 title and its muted hint (light), and the
+  // required-column names in red-800 (light and high-contrast). All AA-clean,
+  // which this file asserts at zero — the column names were red-500 and failed
+  // AA outright until this entry was added — and short of 7:1 on the tint.
+  '/training/admin?page=setup&tab=import': 9,
+  // The compliance rules page. Six of the seven nodes are its two bg-blue-600
+  // fills, the active section tab and Save Configuration, at 5.24:1 in every
+  // theme; blue-800 would clear 7:1, but this page's blue accent is a palette
+  // decision for the screen rather than one a layout fix should take. The
+  // seventh is the amber-700 "not in effect yet" note under Grace Period.
+  '/training/compliance-config': 7,
   // Five event-type badges counted in the light and high-contrast themes (clean
   // in dark): the `text-*-800` on `bg-*-100` pastels from
   // `getEventTypeBadgeColor` in utils/eventHelpers.ts, used wherever an event

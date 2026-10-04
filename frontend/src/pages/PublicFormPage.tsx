@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useParams } from 'react-router';
+import { Link, useParams } from 'react-router';
 import DOMPurify from 'dompurify';
 import { publicFormsService } from '../services/api';
 import type { PublicFormDef, PublicFormField } from '../services/api';
-import { getErrorMessage } from '../utils/errorHandling';
+import { getErrorMessage, toAppError } from '../utils/errorHandling';
+import { useAuthStore } from '../stores/authStore';
 import { FieldType } from '../constants/enums';
 import TimeQuarterHour from '../components/ux/TimeQuarterHour';
 import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
@@ -30,6 +31,23 @@ const PublicFormPage = () => {
   // Honeypot ref - hidden from real users, bots will fill it
   const honeypotRef = useRef<HTMLInputElement>(null);
   const captcha = useCaptcha('form_submit');
+
+  // This page is outside ProtectedRoute, so nothing else resolves the session
+  // here. loadUser only calls the server when the has_session flag is set, so
+  // a visitor who has never signed in costs no request.
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const [sessionChecked, setSessionChecked] = useState(isAuthenticated);
+  // Set when the server refuses a submission for want of a sign-in, which a
+  // stale has_session flag can make the check above miss.
+  const [signInRefused, setSignInRefused] = useState(false);
+
+  useEffect(() => {
+    if (useAuthStore.getState().isAuthenticated) return;
+    void useAuthStore
+      .getState()
+      .loadUser()
+      .finally(() => setSessionChecked(true));
+  }, []);
 
   useEffect(() => {
     if (slug) {
@@ -106,6 +124,7 @@ const PublicFormPage = () => {
     } catch (err: unknown) {
       const msg = getErrorMessage(err, "Your response wasn't sent. Try again.");
       setError(msg);
+      if (toAppError(err).status === 401) setSignInRefused(true);
       // Provider tokens are single-use: a rejected submission must solve a new
       // challenge, or every retry replays a token the server already burned.
       captcha.reset();
@@ -376,6 +395,13 @@ const PublicFormPage = () => {
 
   if (!form) return null;
 
+  // Mirrors the public submit endpoint: a form that allows one response per
+  // person needs a signed-in identity to enforce that, so it refuses
+  // anonymous visitors whatever require_authentication says. Said up front,
+  // before the visitor fills in answers the server would then discard.
+  const formNeedsSignIn = form.require_authentication || !form.allow_multiple_submissions;
+  const showSignInNotice = signInRefused || (formNeedsSignIn && sessionChecked && !isAuthenticated);
+
   return (
     <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to min-h-screen bg-linear-to-br px-4 py-8">
       <main id="main-content" className="mx-auto max-w-2xl">
@@ -395,6 +421,24 @@ const PublicFormPage = () => {
           }}
           className="bg-theme-surface rounded-xl p-8 shadow-lg"
         >
+          {showSignInNotice && (
+            <div className="alert-info mb-6" role="note" aria-labelledby="public-form-signin-title">
+              <p id="public-form-signin-title" className="text-theme-text-primary text-sm font-semibold">
+                Sign in to submit this form
+              </p>
+              <p className="text-theme-text-secondary mt-1 text-sm">
+                {form.organization_name ? clean(form.organization_name) : 'This department'} accepts responses to this
+                form from signed-in members only. Sign in before you start, and you will come back to this page.
+              </p>
+              <Link
+                to="/login"
+                state={{ from: { pathname: `/f/${slug ?? ''}` } }}
+                className="btn-primary mobile-touch-target mt-3 inline-flex items-center"
+              >
+                Sign in
+              </Link>
+            </div>
+          )}
           {error && (
             <div className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 p-4">
               <p className="text-sm text-red-700 dark:text-red-400">{error}</p>

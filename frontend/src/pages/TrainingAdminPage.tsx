@@ -600,7 +600,7 @@ export const TrainingAdminPage: React.FC = () => {
                 key={action.label}
                 type="button"
                 onClick={() => handleTabChange(action.tab)}
-                className="focus:ring-theme-focus-ring text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover min-h-10 rounded-md border px-3 py-2 text-sm font-medium focus:ring-2 focus:outline-hidden"
+                className="focus:ring-theme-focus-ring text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover min-h-11 rounded-md border px-3 py-2 text-sm font-medium focus:ring-2 focus:outline-hidden"
               >
                 {action.label}
               </button>

@@ -4,7 +4,7 @@ Meeting Minutes Service
 Business logic for meeting minutes management.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
 from typing import List, Optional
 from uuid import UUID
 
@@ -43,6 +43,7 @@ from app.schemas.minute import (
 from app.services.separation_of_duties import assert_different_person
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
+from app.utils.org_timezone import resolve_scheduling_timezone
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 
@@ -966,15 +967,19 @@ class MinuteService:
         elif minutes_type == MinutesMeetingType.COMMITTEE:
             section_defaults = DEFAULT_COMMITTEE_SECTIONS
 
-        meeting_date_dt = (
-            datetime.combine(
+        # The meeting's date and start time are the department's wall clock,
+        # not UTC. Combining them as UTC put a 7 PM meeting at 2 PM, and a
+        # meeting with no start time at UTC midnight — the evening before, for
+        # any department west of Greenwich (W51-1).
+        if meeting.meeting_date:
+            org_tz = await resolve_scheduling_timezone(self.db, organization_id)
+            meeting_date_dt = datetime.combine(
                 meeting.meeting_date,
-                meeting.start_time or datetime.min.time(),
-                tzinfo=timezone.utc,
-            )
-            if meeting.meeting_date
-            else datetime.now(timezone.utc)
-        )
+                meeting.start_time or time.min,
+                tzinfo=org_tz,
+            ).astimezone(timezone.utc)
+        else:
+            meeting_date_dt = datetime.now(timezone.utc)
 
         minutes = MeetingMinutes(
             id=generate_uuid(),

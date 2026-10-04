@@ -8,6 +8,8 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatShortDateTime } from '../utils/dateFormatting';
 import { NfcTagWriter } from '../components/nfc/NfcTagWriter';
+import { NfcTapHint } from '../components/nfc/NfcTapHint';
+import { useAuthStore } from '../stores/authStore';
 import { buildEventCheckInUrl } from '../constants/nfc';
 
 /**
@@ -20,6 +22,9 @@ import { buildEventCheckInUrl } from '../constants/nfc';
  */
 const EventQRCodePage: React.FC = () => {
   const { id: eventId } = useParams<{ id: string }>();
+  // Any member may open this page; writing a tag for the event is the
+  // organizer's job, the same people who can edit the event.
+  const canWriteTags = useAuthStore((s) => s.checkPermission)('events.manage');
   const userTz = useTimezone();
 
   const [loading, setLoading] = useState(true);
@@ -197,7 +202,12 @@ const EventQRCodePage: React.FC = () => {
               </ol>
             </div>
 
-            {checkInUrl && <NfcTagWriter url={checkInUrl} targetLabel={qrData.event_name} />}
+            <NfcTapHint action="check in" />
+            {checkInUrl && canWriteTags && (
+              <div className="print:hidden">
+                <NfcTagWriter url={checkInUrl} targetLabel={qrData.event_name} />
+              </div>
+            )}
           </div>
         ) : (
           <div className="text-center">

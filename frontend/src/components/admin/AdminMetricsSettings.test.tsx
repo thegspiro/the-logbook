@@ -113,6 +113,16 @@ describe('AdminMetricsSettings', () => {
     expect(screen.queryByText('Slot 1 · phone')).not.toBeInTheDocument();
   });
 
+  // A switch with no name is announced as just "switch, on": nothing says what
+  // turning it off would do. The sentence beside it is not its label.
+  it('names the audience switch for assistive technology', async () => {
+    renderPanel();
+
+    expect(
+      await screen.findByRole('switch', { name: 'Apply these four metrics to everyone who can see this page' })
+    ).toBeChecked();
+  });
+
   it('lists an unavailable metric with its reason and no way to choose it', async () => {
     renderPanel();
 

@@ -233,18 +233,32 @@ value picked for the old one. The operator list's blank entry read "Always show
 state, so a screen reader could not tell which type was selected.
 **Fix:** `role="radio"` with `aria-checked`. Asserted in the builder test.
 
-### W60-11 — MED — The public page lets a visitor fill in the whole form before saying they must sign in — FLAGGED
+### W60-11 — MED — The public page lets a visitor fill in the whole form before saying they must sign in — ✅ FIXED (2026-10-03)
 
 **Saw (API driven; page read from code):** a new form defaults to
 `require_authentication = true`. The public link opens to anyone. Before the
 Share toggle, the anonymous submit got
-`401 Authentication is required to submit this form`. `PublicFormPage` shows
-that only after Submit, with no sign-in link, so the visitor's answers are
+`401 Authentication is required to submit this form`. `PublicFormPage` showed
+that only after Submit, with no sign-in link, so the visitor's answers were
 wasted.
-**Options:** say so above the form and offer a sign-in link that returns to
-`/f/<slug>`; or default new public forms to anonymous submission. The second
-changes who can submit, so it is the owner's decision. Mirrored into
-`docs/KNOWN_LIMITATIONS.md`.
+**Decision:** the owner chose the notice over changing the default, so who may
+submit is unchanged.
+**Fix:**
+
+- `PublicFormPage` resolves the session the way `ProtectedRoute` does
+  (`loadUser`, which calls the server only when `has_session` is set).
+- When the form needs a signed-in member (`require_authentication`, or one
+  response per person) and the visitor is not one, a notice above the
+  questions says so. Its Sign in button returns to `/f/<slug>` after sign-in.
+- The notice also appears if the server still refuses a submission with 401,
+  for example after a stale session.
+- Tests: the "sign-in notice" block in `PublicFormPage.test.tsx`; three of its
+  five tests fail without the change.
+- **Driven:** a signed-out visitor saw the notice and followed Sign in. After
+  signing in as `member` they landed back on the form, with no notice, and
+  submitted. The submission is recorded under that member. At 390×844 the
+  button is 44px tall and nothing overflows. With anonymous submission
+  re-enabled, no notice appears.
 
 ## Behaviour changes to know about
 

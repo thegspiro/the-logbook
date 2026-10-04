@@ -1418,6 +1418,19 @@ or with gloves on.
 > does any room without a kiosk code. Migration `5bed4c485d2f` writes these
 > grants onto existing departments' seeded positions.
 
+> **What a member sees, and what an officer sees** _(2026-10-03)_. On
+> `/events/:id/qr-code` and `/admin-hours/categories/:id/qr-code` every viewer
+> gets one line — "Have an NFC tag here? Tap it with your phone to check in"
+> (or "to clock in or out") — because reading a tag needs nothing but a phone,
+> an iPhone included. The writer appears only to the officers who own the
+> target (`events.manage`, `admin_hours.manage`), and everywhere it appears,
+> the shift panel included, it starts closed behind a **Set up an NFC tag**
+> link. Before this a member opening either page on a phone got a full card of
+> tag-writing instructions and a large **Write tag** button — or, on an iPhone,
+> a sentence telling them to switch to Chrome on Android. The line is worded
+> conditionally because the page cannot know whether a tag has gone up, and is
+> left off the printed sheet for the same reason.
+
 ### Where the reader appears
 
 **Tap Tag** (`NfcTapButton`) reads a tag while the app is already open, and

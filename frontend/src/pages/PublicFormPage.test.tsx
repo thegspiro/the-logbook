@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Routes, Route } from 'react-router';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router';
 import type { PublicFormDef } from '../services/api';
 
 const mockGetForm = vi.fn();
@@ -25,6 +25,7 @@ vi.mock('../hooks/useCaptcha', () => ({
 }));
 
 import PublicFormPage from './PublicFormPage';
+import { useAuthStore } from '../stores/authStore';
 
 const field = (
   id: string,
@@ -162,5 +163,82 @@ describe('PublicFormPage branching (workflow review W60)', () => {
     await user.click(screen.getByRole('checkbox', { name: 'AEMT' }));
 
     expect(screen.queryByLabelText(/EMT card number/)).not.toBeInTheDocument();
+  });
+});
+
+const LoginProbe = () => {
+  const location = useLocation();
+  return <p>login from {(location.state as { from?: { pathname?: string } } | null)?.from?.pathname}</p>;
+};
+
+const renderWithLogin = () =>
+  render(
+    <MemoryRouter initialEntries={['/f/abc123']}>
+      <Routes>
+        <Route path="/f/:slug" element={<PublicFormPage />} />
+        <Route path="/login" element={<LoginProbe />} />
+      </Routes>
+    </MemoryRouter>
+  );
+
+// W60-11: a form that needs a signed-in member said so only after Submit,
+// with no way to sign in, so a visitor's answers were thrown away.
+describe('PublicFormPage sign-in notice', () => {
+  beforeEach(() => {
+    localStorage.removeItem('has_session');
+    useAuthStore.setState({ user: null, isAuthenticated: false });
+    mockGetForm.mockReset();
+    mockSubmitForm.mockReset();
+  });
+
+  it('tells a signed-out visitor up front and links to sign-in and back', async () => {
+    const user = userEvent.setup();
+    mockGetForm.mockResolvedValue({ ...form, require_authentication: true });
+    renderWithLogin();
+
+    expect(await screen.findByText('Sign in to submit this form')).toBeInTheDocument();
+    await user.click(screen.getByRole('link', { name: 'Sign in' }));
+    expect(screen.getByText('login from /f/abc123')).toBeInTheDocument();
+  });
+
+  it('shows it for a one-response-per-person form, which also needs a sign-in', async () => {
+    mockGetForm.mockResolvedValue({ ...form, require_authentication: false, allow_multiple_submissions: false });
+    renderWithLogin();
+
+    expect(await screen.findByText('Sign in to submit this form')).toBeInTheDocument();
+  });
+
+  it('stays away from a form open to anonymous visitors', async () => {
+    mockGetForm.mockResolvedValue(form);
+    renderWithLogin();
+
+    expect(await screen.findByText('Request a Public Event')).toBeInTheDocument();
+    expect(screen.queryByText('Sign in to submit this form')).not.toBeInTheDocument();
+  });
+
+  it('stays away from a signed-in member', async () => {
+    useAuthStore.setState({ isAuthenticated: true });
+    mockGetForm.mockResolvedValue({ ...form, require_authentication: true });
+    renderWithLogin();
+
+    expect(await screen.findByText('Request a Public Event')).toBeInTheDocument();
+    expect(screen.queryByText('Sign in to submit this form')).not.toBeInTheDocument();
+  });
+
+  it('appears when the server refuses a submission for want of a sign-in', async () => {
+    const user = userEvent.setup();
+    mockGetForm.mockResolvedValue(form);
+    mockSubmitForm.mockRejectedValue({
+      isAxiosError: true,
+      message: 'Request failed with status code 401',
+      response: { status: 401, data: { detail: 'Authentication is required to submit this form.' } },
+    });
+    renderWithLogin();
+
+    await user.type(await screen.findByLabelText(/Your Name/), 'Pat');
+    await user.type(screen.getByLabelText(/Email Address/), 'pat@example.com');
+    await user.click(screen.getByRole('button', { name: /Submit/ }));
+
+    expect(await screen.findByText('Sign in to submit this form')).toBeInTheDocument();
   });
 });

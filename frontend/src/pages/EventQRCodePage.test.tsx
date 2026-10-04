@@ -5,6 +5,7 @@ import { renderWithRouter, mockQRCheckInData, createMockApiError } from '../test
 import EventQRCodePage from './EventQRCodePage';
 import type { QRCheckInData } from '../types/event';
 import * as apiModule from '../services/api';
+import { useAuthStore } from '../stores/authStore';
 
 // Mock the API module
 vi.mock('../services/api', () => ({
@@ -471,6 +472,35 @@ describe('EventQRCodePage', () => {
         const printButton = screen.getByRole('button', { name: /print qr code/i });
         expect(printButton).toHaveAccessibleName();
       });
+    });
+  });
+
+  describe('NFC', () => {
+    beforeEach(() => {
+      vi.mocked(eventService.getQRCheckInData).mockReset();
+      vi.mocked(eventService.getQRCheckInData).mockResolvedValue(mockQRCheckInData);
+    });
+
+    afterEach(() => {
+      useAuthStore.setState({ user: null });
+    });
+
+    // A member needs to know a tag works like the QR code — not how to write one.
+    it('shows a member one line about tapping, and no tag writer', async () => {
+      useAuthStore.setState({ user: { permissions: ['events.view'] } as never });
+      renderWithRouter(<EventQRCodePage />);
+
+      expect(await screen.findByText(/Tap it with your phone to check in/)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Set up an NFC tag/ })).not.toBeInTheDocument();
+    });
+
+    it('offers an organizer the tag writer, closed', async () => {
+      useAuthStore.setState({ user: { permissions: ['events.manage'] } as never });
+      renderWithRouter(<EventQRCodePage />);
+
+      const trigger = await screen.findByRole('button', { name: /Set up an NFC tag/ });
+      expect(trigger).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.getByText(/Tap it with your phone to check in/)).toBeInTheDocument();
     });
   });
 });
