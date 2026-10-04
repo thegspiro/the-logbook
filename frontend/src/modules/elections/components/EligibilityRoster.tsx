@@ -353,7 +353,7 @@ export const EligibilityRoster: React.FC<EligibilityRosterProps> = ({ electionId
                         aria-pressed={isActive}
                         className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
                           isActive
-                            ? 'bg-blue-600 text-white'
+                            ? 'bg-red-800 text-white'
                             : 'bg-theme-surface-secondary text-theme-text-muted hover:bg-theme-surface-hover'
                         }`}
                       >

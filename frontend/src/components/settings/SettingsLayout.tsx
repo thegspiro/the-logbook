@@ -106,6 +106,15 @@ interface SettingsLayoutProps<K extends string, S extends string> {
    * design decision, a hundred is the drift this component was written to end.
    */
   width?: 'standard' | 'wide';
+  /**
+   * Set when the screen renders inside an administration hub's frame (Events
+   * settings is a tab of the Events hub), so its content lines up with the hub
+   * header above it. Otherwise the shell adds no side padding of its own on a
+   * phone: AppLayout's main column already supplies 16px, and a second 16px
+   * here, plus the body card and a section's group cards, left a setting row
+   * 185px of a 320px screen.
+   */
+  inHub?: boolean;
   children: React.ReactNode;
 }
 
@@ -125,6 +134,7 @@ export function SettingsLayout<K extends string, S extends string = string>({
   backLabel = 'Go back',
   showBreadcrumbs = false,
   width = 'standard',
+  inHub = false,
   children,
 }: SettingsLayoutProps<K, S>) {
   const current = sections.find((section) => section.key === activeSection);
@@ -132,7 +142,9 @@ export function SettingsLayout<K extends string, S extends string = string>({
   const hasSubPages = subPages.length > 0;
 
   return (
-    <div className={`mx-auto px-4 py-8 sm:px-6 lg:px-8 ${width === 'wide' ? 'max-w-[1600px]' : 'max-w-6xl'}`}>
+    <div
+      className={`mx-auto py-8 sm:px-6 lg:px-8 ${inHub ? 'px-4' : 'px-0'} ${width === 'wide' ? 'max-w-[1600px]' : 'max-w-6xl'}`}
+    >
       {/* One content column at every settings screen, replacing the max-w-4xl /
           5xl / 6xl / 1600px the nine screens had drifted into. `wide` is the
           single documented exception — see the prop. Both caps are applied
@@ -227,7 +239,7 @@ export function SettingsLayout<K extends string, S extends string = string>({
             </nav>
           ) : null}
 
-          <div data-page-main className="card min-w-0 flex-1 p-4 sm:p-6">
+          <div data-page-main className="card min-w-0 flex-1 p-3 sm:p-6">
             {children}
           </div>
         </div>

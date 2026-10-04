@@ -58,7 +58,7 @@ export const EventNotificationPanel: React.FC<EventNotificationPanelProps> = ({
   timezone,
 }) => {
   return (
-    <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+    <div className="card p-6">
       <h2 className="text-theme-text-primary mb-4 flex items-center gap-2 text-lg font-medium">
         <Send className="h-5 w-5" />
         Notifications
@@ -125,7 +125,7 @@ export const EventNotificationPanel: React.FC<EventNotificationPanelProps> = ({
           <button
             onClick={() => onShowNotifyConfirm(true)}
             disabled={sendingNotification}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-transparent bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-xs transition-colors hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none disabled:opacity-50"
+            className="btn-info btn-md inline-flex w-full items-center justify-center gap-2 font-medium"
           >
             <Send className="h-4 w-4" />
             {sendingNotification ? 'Sending...' : 'Send Notification'}
@@ -140,13 +140,13 @@ export const EventNotificationPanel: React.FC<EventNotificationPanelProps> = ({
               <button
                 onClick={onSendNotification}
                 disabled={sendingNotification}
-                className="inline-flex flex-1 items-center justify-center rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+                className="btn-info btn-sm inline-flex flex-1 items-center justify-center text-sm font-medium"
               >
                 {sendingNotification ? 'Sending...' : 'Confirm & Send'}
               </button>
               <button
                 onClick={() => onShowNotifyConfirm(false)}
-                className="text-theme-text-secondary bg-theme-surface-secondary hover:bg-theme-surface-hover inline-flex flex-1 items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors"
+                className="btn-secondary btn-sm inline-flex flex-1 items-center justify-center text-sm font-medium"
               >
                 Cancel
               </button>

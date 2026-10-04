@@ -22,7 +22,7 @@ export const EventAttachmentsList: React.FC<EventAttachmentsListProps> = ({
 }) => {
   if (attachments.length === 0) {
     return (
-      <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+      <div className="card p-6">
         <h2 className="text-theme-text-primary mb-4 flex items-center gap-2 text-lg font-medium">
           <Paperclip className="h-5 w-5" />
           Attachments
@@ -38,7 +38,7 @@ export const EventAttachmentsList: React.FC<EventAttachmentsListProps> = ({
   }
 
   return (
-    <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+    <div className="card p-6">
       <h2 className="text-theme-text-primary mb-4 flex items-center gap-2 text-lg font-medium">
         <Paperclip className="h-5 w-5" />
         Attachments ({attachments.length})

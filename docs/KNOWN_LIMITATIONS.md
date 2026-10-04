@@ -4131,6 +4131,30 @@ they measure training-_program_ enrollment completion, distinct from the
 org-wide annual-requirement compliance the dashboard and compliance-matrix
 report.
 
+**Widened, not narrowed, by a later feature commit (2026-10-04, security
+review pass 7):** `ea939c38` ("Let a training requirement exempt members who
+joined before it") added per-requirement grandfathering
+(`new_member_cutoff_date`/`existing_member_deadline`) and routed "every
+screen that decides who a requirement grades" through `training_compliance.
+py`'s shared `requirement_applies_to_user`/`catch_up_deadline`/
+`member_join_date` helpers — explicitly including `_generate_compliance_
+status` (`reports_service.py:1148-1243`), which now correctly exempts or
+catches-up a grandfathered member. **`_generate_training_summary`'s sibling
+`requirement_breakdown` section (`reports_service.py:358-421`) was not
+updated and calls none of the three helpers** — it still counts a
+grandfathered-exempt member as unmet in its per-requirement completion
+percentage, the identical requirement `compliance_status` now excludes. This
+is RPT5-29-1's own scenario, now reachable with a concrete, shipped trigger
+rather than a hypothetical one, and is invisible to `tests/
+test_requirement_grandfathering.py`'s own guard sweep, which only flags a
+call to one of the three helpers that omits `join_date=` — not a report that
+never calls any of them. See `docs/security-review/RPT5-29-reports-
+analytics.md`, RPT5-29-5, for the full analysis. Still not fixed, for the
+same reason as above: converging the two requires either rewriting
+`requirement_breakdown`'s aggregate-SQL shape into `compliance_status`'s
+per-member loop, or explicitly re-scoping what each report claims to
+measure — a product/architecture decision, not a drive-by.
+
 ## CRON2-31-12/13 — Two Scheduled-Task Gaps Left Open by This Rotation's Pass (2026-08-27)
 
 - **`run_action_item_reminders` has no org loop at all**
