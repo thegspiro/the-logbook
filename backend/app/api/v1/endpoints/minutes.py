@@ -99,6 +99,7 @@ async def list_minutes(
             status=m.status if isinstance(m.status, str) else m.status.value,
             location=m.location,
             called_by=m.called_by,
+            meeting_id=m.meeting_id,
             motions_count=len(m.motions) if m.motions else 0,
             action_items_count=len(m.action_items) if m.action_items else 0,
             open_action_items=sum(

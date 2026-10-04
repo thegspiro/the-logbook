@@ -21,13 +21,14 @@ import {
   ChevronUp,
 } from 'lucide-react';
 import { useAuthStore } from '../../../stores/authStore';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { meetingsService } from '../../../services/api';
 import type { MeetingRecord, MeetingsSummary } from '../../../services/api';
 import { minutesService } from '../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { toDisplayString } from '../../../utils/displayValue';
-import type { MeetingType } from '../types/minutes';
+import type { MeetingType, MinutesListItem, MinutesStats } from '../types/minutes';
+import { formatCalendarDate, formatTimeOfDay } from '../../../utils/dateFormatting';
 import TimeQuarterHour from '../../../components/ux/TimeQuarterHour';
 import { asArray } from '../../../utils/asArray';
 import { useConfirm } from '../../../contexts/ConfirmContext';
@@ -71,6 +72,23 @@ const MEETING_TYPES: { value: MeetingType; label: string; color: string }[] = [
   { value: 'other', label: 'Other', color: 'bg-theme-surface-secondary text-theme-text-primary' },
 ];
 
+/**
+ * The types a meeting record accepts. `meetings.meeting_type` is a database
+ * ENUM of these five; trustee, executive and annual exist only on minutes
+ * (`meeting_minutes.meeting_type`), so offering them here produced a 422
+ * every time (W51-4). Adding them to meetings needs a migration — see
+ * docs/KNOWN_LIMITATIONS.md.
+ */
+const MEETING_RECORD_TYPES: readonly MeetingType[] = ['business', 'special', 'committee', 'board', 'other'];
+const MEETING_RECORD_TYPE_OPTIONS = MEETING_TYPES.filter((t) => MEETING_RECORD_TYPES.includes(t.value));
+
+const MINUTES_STATUS_LABELS: Record<string, string> = {
+  draft: 'Draft',
+  submitted: 'Awaiting approval',
+  approved: 'Approved',
+  rejected: 'Returned for changes',
+};
+
 const MinutesPage: React.FC = () => {
   const navigate = useNavigate();
   const { confirm } = useConfirm();
@@ -82,6 +100,11 @@ const MinutesPage: React.FC = () => {
   // Data state
   const [meetings, setMeetings] = useState<MeetingRecord[]>([]);
   const [summary, setSummary] = useState<MeetingsSummary | null>(null);
+  // Minutes by the meeting they were written from, newest first. Without
+  // these the page could create minutes but never lead back to them (W51-2).
+  const [minutesByMeeting, setMinutesByMeeting] = useState<Map<string, MinutesListItem[]>>(new Map());
+  const [minutesStats, setMinutesStats] = useState<MinutesStats | null>(null);
+  const [openingMeetingId, setOpeningMeetingId] = useState<string | null>(null);
 
   // Loading / error state
   const [loading, setLoading] = useState(true);
@@ -127,12 +150,21 @@ const MinutesPage: React.FC = () => {
       if (searchQuery.trim()) {
         params.search = searchQuery.trim();
       }
-      const [meetingsRes, summaryRes] = await Promise.all([
+      const [meetingsRes, summaryRes, minutesList, stats] = await Promise.all([
         meetingsService.getMeetings(params),
         meetingsService.getSummary(),
+        minutesService.listAllMinutes(),
+        minutesService.getStats(),
       ]);
       setMeetings(asArray(meetingsRes.meetings));
       setSummary(summaryRes);
+      const byMeeting = new Map<string, MinutesListItem[]>();
+      for (const item of [...minutesList].sort((a, b) => b.created_at.localeCompare(a.created_at))) {
+        if (!item.meeting_id) continue;
+        byMeeting.set(item.meeting_id, [...(byMeeting.get(item.meeting_id) ?? []), item]);
+      }
+      setMinutesByMeeting(byMeeting);
+      setMinutesStats(stats);
     } catch {
       setError('Unable to load meetings. Check your connection and try again.');
     } finally {
@@ -174,10 +206,33 @@ const MinutesPage: React.FC = () => {
         notes: '',
       });
       await fetchData();
-    } catch {
-      setCreateError('Unable to create the meeting. Make sure it has a title and a date, then try again.');
+    } catch (err: unknown) {
+      setCreateError(
+        getErrorMessage(err, 'Unable to create the meeting. Make sure it has a title and a date, then try again.')
+      );
     } finally {
       setCreating(false);
+    }
+  };
+
+  // Opens the meeting's existing minutes rather than writing a second set;
+  // only a meeting with none gets new minutes (W51-3).
+  const handleOpenMinutes = async (meetingId: string) => {
+    const existing = minutesByMeeting.get(meetingId)?.[0];
+    if (existing) {
+      void navigate(`/minutes/${existing.id}`);
+      return;
+    }
+    if (openingMeetingId) return;
+    setOpeningMeetingId(meetingId);
+    try {
+      const minutes = await minutesService.createFromMeeting(meetingId);
+      toast.success('Minutes created from meeting');
+      void navigate(`/minutes/${minutes.id}`);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to create minutes from this meeting'));
+    } finally {
+      setOpeningMeetingId(null);
     }
   };
 
@@ -281,7 +336,9 @@ const MinutesPage: React.FC = () => {
           </div>
           <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Pending Approval</p>
-            <p className="mt-1 text-2xl font-bold text-orange-700">{summary?.pending_approval ?? 0}</p>
+            {/* Minutes awaiting approval, as the minutes service counts them —
+                the meeting summary's own figure never moved (W51-2). */}
+            <p className="mt-1 text-2xl font-bold text-orange-700">{minutesStats?.pending_approval ?? 0}</p>
           </div>
         </div>
 
@@ -319,7 +376,7 @@ const MinutesPage: React.FC = () => {
                 className="form-input"
               >
                 <option value="all">All Types</option>
-                {MEETING_TYPES.map((t) => (
+                {MEETING_RECORD_TYPE_OPTIONS.map((t) => (
                   <option key={t.value} value={t.value}>
                     {t.label}
                   </option>
@@ -386,8 +443,15 @@ const MinutesPage: React.FC = () => {
                         {meeting.meeting_date && (
                           <div className="flex items-center space-x-1">
                             <Calendar className="h-4 w-4" />
-                            <span>{meeting.meeting_date}</span>
-                            {meeting.start_time && <span>at {meeting.start_time.slice(0, 5)}</span>}
+                            <span>
+                              {formatCalendarDate(meeting.meeting_date, {
+                                weekday: 'short',
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                              })}
+                            </span>
+                            {meeting.start_time && <span>at {formatTimeOfDay(meeting.start_time)}</span>}
                           </div>
                         )}
                         {meeting.location && (
@@ -406,6 +470,19 @@ const MinutesPage: React.FC = () => {
                       {meeting.notes && (
                         <p className="text-theme-text-secondary mt-2 line-clamp-2 text-sm">{meeting.notes}</p>
                       )}
+                      {(minutesByMeeting.get(meeting.id) ?? []).map((m) => (
+                        <Link
+                          key={m.id}
+                          to={`/minutes/${m.id}`}
+                          className="mt-2 flex items-center gap-1.5 text-sm font-medium text-cyan-800 hover:underline dark:text-cyan-400"
+                        >
+                          <BookOpen className="h-4 w-4" aria-hidden="true" />
+                          <span>{m.title}</span>
+                          <span className="text-theme-text-muted font-normal">
+                            · {MINUTES_STATUS_LABELS[m.status] ?? m.status}
+                          </span>
+                        </Link>
+                      ))}
                       <div className="text-theme-text-muted mt-3 flex items-center gap-4 text-xs">
                         <span>
                           {meeting.attendee_count} attendee{meeting.attendee_count !== 1 ? 's' : ''}
@@ -437,28 +514,31 @@ const MinutesPage: React.FC = () => {
                       <div className="ml-4 flex items-center gap-1">
                         <button
                           onClick={() => {
-                            void (async () => {
-                              try {
-                                const minutes = await minutesService.createFromMeeting(meeting.id);
-                                toast.success('Minutes created from meeting');
-                                void navigate(`/minutes/${minutes.id}`);
-                              } catch {
-                                toast.error('Failed to create minutes from this meeting');
-                              }
-                            })();
+                            void handleOpenMinutes(meeting.id);
                           }}
-                          className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-cyan-500/10 hover:text-cyan-800 dark:hover:text-cyan-400"
-                          title="Create minutes from this meeting"
+                          disabled={openingMeetingId === meeting.id}
+                          className="text-theme-text-muted touch-target-phone rounded-lg p-2 transition-colors hover:bg-cyan-500/10 hover:text-cyan-800 disabled:opacity-50 dark:hover:text-cyan-400"
+                          title={
+                            minutesByMeeting.has(meeting.id)
+                              ? 'Open the minutes of this meeting'
+                              : 'Create minutes from this meeting'
+                          }
+                          aria-label={
+                            minutesByMeeting.has(meeting.id)
+                              ? `Open the minutes of ${meeting.title}`
+                              : `Create minutes from ${meeting.title}`
+                          }
                         >
-                          <BookOpen className="h-4 w-4" />
+                          <BookOpen className="h-4 w-4" aria-hidden="true" />
                         </button>
                         <button
                           onClick={() => {
                             void handleDeleteMeeting(meeting.id);
                           }}
                           disabled={deletingId === meeting.id}
-                          className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-red-500/10 hover:text-red-700 disabled:opacity-50"
+                          className="text-theme-text-muted touch-target-phone rounded-lg p-2 transition-colors hover:bg-red-500/10 hover:text-red-700 disabled:opacity-50"
                           title="Delete meeting"
+                          aria-label={`Delete ${meeting.title}`}
                         >
                           {deletingId === meeting.id ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
@@ -595,10 +675,18 @@ const MinutesPage: React.FC = () => {
           <div className="fixed inset-0 z-50 overflow-y-auto">
             <div className="flex min-h-screen items-center justify-center px-4">
               <div className="modal-overlay" aria-hidden="true" />
-              <div ref={dialogRef} className="modal-panel relative w-full max-w-2xl">
+              <div
+                ref={dialogRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="create-minutes-title"
+                className="modal-panel relative w-full max-w-2xl"
+              >
                 <div className="px-6 pt-5 pb-4">
                   <div className="mb-4 flex items-center justify-between">
-                    <h3 className="text-theme-text-primary text-lg font-medium">Record Meeting Minutes</h3>
+                    <h3 id="create-minutes-title" className="text-theme-text-primary text-lg font-medium">
+                      Record Meeting Minutes
+                    </h3>
                     <button
                       onClick={() => setShowCreateModal(false)}
                       className="text-theme-text-muted hover:text-theme-text-primary"
@@ -652,7 +740,7 @@ const MinutesPage: React.FC = () => {
                           }
                           className="form-input"
                         >
-                          {MEETING_TYPES.map((t) => (
+                          {MEETING_RECORD_TYPE_OPTIONS.map((t) => (
                             <option key={t.value} value={t.value}>
                               {t.label}
                             </option>
@@ -752,7 +840,7 @@ const MinutesPage: React.FC = () => {
                     onClick={() => {
                       void handleCreateMeeting();
                     }}
-                    disabled={creating || !minutesForm.title.trim()}
+                    disabled={creating || !minutesForm.title.trim() || !minutesForm.meetingDate}
                     className="flex items-center space-x-2 rounded-lg bg-cyan-700 px-4 py-2 text-white transition-colors hover:bg-cyan-800 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {creating && <Loader2 className="h-4 w-4 animate-spin" />}

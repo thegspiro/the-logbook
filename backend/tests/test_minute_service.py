@@ -15,9 +15,12 @@ Covers:
   - Cross-module bridge (create_from_meeting)
 """
 
-from datetime import datetime, timezone
+from datetime import date, datetime
+from datetime import time as dt_time
+from datetime import timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -1354,6 +1357,63 @@ class TestGetStats:
 
 
 class TestCreateFromMeeting:
+    @pytest.fixture(autouse=True)
+    def _department_timezone(self):
+        # The meeting's date and time are read on the department's calendar;
+        # the review install's department is in Chicago.
+        with patch(
+            "app.services.minute_service.resolve_scheduling_timezone",
+            AsyncMock(return_value=ZoneInfo("America/Chicago")),
+        ):
+            yield
+
+    @pytest.mark.unit
+    async def test_meeting_time_is_read_on_the_department_clock(
+        self, service, mock_db, org_id, user_id
+    ):
+        """W51-1: a 7 PM meeting on 10 March was stored as 19:00 UTC and
+        shown as 2 PM in Chicago."""
+        mock_meeting = MagicMock(
+            title="March Business Meeting",
+            meeting_type="business",
+            meeting_date=date(2026, 3, 10),
+            start_time=dt_time(19, 0),
+            attendees=[],
+            event_id=None,
+        )
+        mock_db.execute.return_value = MagicMock(
+            scalar_one_or_none=MagicMock(return_value=mock_meeting)
+        )
+
+        await service.create_from_meeting(uuid4(), org_id, user_id)
+
+        created = mock_db.add.call_args[0][0]
+        # CDT (UTC-5) is in force from 8 March 2026.
+        assert created.meeting_date == datetime(2026, 3, 11, 0, 0, tzinfo=timezone.utc)
+
+    @pytest.mark.unit
+    async def test_meeting_with_no_time_stays_on_its_own_date(
+        self, service, mock_db, org_id, user_id
+    ):
+        """W51-1: a meeting with only a date was stored at UTC midnight,
+        which in Chicago is the evening before."""
+        mock_meeting = MagicMock(
+            title="October Business Meeting",
+            meeting_type="business",
+            meeting_date=date(2026, 10, 1),
+            start_time=None,
+            attendees=[],
+            event_id=None,
+        )
+        mock_db.execute.return_value = MagicMock(
+            scalar_one_or_none=MagicMock(return_value=mock_meeting)
+        )
+
+        await service.create_from_meeting(uuid4(), org_id, user_id)
+
+        created = mock_db.add.call_args[0][0]
+        local = created.meeting_date.astimezone(ZoneInfo("America/Chicago"))
+        assert local.date() == date(2026, 10, 1)
 
     @pytest.mark.unit
     async def test_create_from_meeting_success(self, service, mock_db, org_id, user_id):
