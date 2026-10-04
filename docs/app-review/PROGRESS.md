@@ -2404,5 +2404,14 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   arithmetics are identical — left on the module default the assertion would
   have been unsatisfiable rather than weak (pitfall #28a). Gate: tsc 0 ·
   flake8 0 · black 1342 unchanged · isort clean · eslint 0 · docs links 419
-  files 0 broken · cohort/syllabus/date suites **108 passed**. See
-  course-cohorts.md → Pass 3. Next: A6 member lifecycle & offboarding.
+  files 0 broken · **196 passed** across every test file that imports
+  `CourseCohortService` or names a cohort (eight files, listed in the findings
+  file). **The whole backend suite did not complete here and that is recorded
+  rather than glossed:** it now collects 15,709 tests (12,325 on 2026-09-10)
+  and no longer finishes inside the session's 30-minute ceiling — splitting it
+  in thirds did not help either, the first third alone ran past ten minutes, so
+  the slowdown is per-test and points at DB-backed tests added over the last
+  three weeks rather than at this diff. The changed service has exactly two
+  importers in `app/`, both covered by those eight files, and CI still gates
+  the full suite on the branch. See course-cohorts.md → Pass 3.
+  Next: A6 member lifecycle & offboarding.
