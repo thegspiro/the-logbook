@@ -1,8 +1,9 @@
 /**
  * Documents Module Routes
  *
- * To disable the documents module, simply remove or comment out
- * the call to getDocumentsRoutes() in App.tsx.
+ * Documents is an essential module: it is always on and carries no module
+ * gate. Who sees which folder is decided per folder on the server
+ * (`DocumentsService._folder_admits_user`), not by this route.
  */
 
 import React, { Suspense } from 'react';

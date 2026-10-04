@@ -5613,6 +5613,25 @@ nothing about which behaviour is wanted.
 reach and have the UI warn when a requested shift would move a class whose date
 has passed. See [`docs/app-review/course-cohorts.md`](./app-review/course-cohorts.md) → Pass 3.
 
+## Documents — Folders Cannot Be Restricted or Managed From the Screen (2026-10-04)
+
+Found driving W53 (`docs/workflow-review/W53-documents.md`, W53-4).
+
+- **What the screen offers:** Create Folder takes a name and a description,
+  so every folder made there is visible to all members. Nothing on the screen
+  renames, moves or deletes a folder.
+- **What the API already supports:**
+  - restricting a folder: `PATCH /documents/folders/{id}` with `visibility`,
+    `allowed_roles` or `required_permissions`;
+  - moving one: `parent_id`;
+  - deleting one: `DELETE /documents/folders/{id}`.
+- **The result:** a department cannot create its own leadership-only folder,
+  or tidy a misnamed one, without the API.
+- **Decisions needed before building it:**
+  - which visibility options to offer (leadership, owner, roles);
+  - what deleting a non-empty folder does;
+  - whether system folders may be renamed or moved.
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area

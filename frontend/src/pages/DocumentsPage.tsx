@@ -17,6 +17,7 @@ import {
   ArrowLeft,
   Upload,
   Download,
+  Lock,
 } from 'lucide-react';
 import {
   documentsService,
@@ -41,6 +42,17 @@ const DOCUMENTS_PAGE_SIZE = 50;
 // rows at every breakpoint (1, 2 and 3 across) rather than leave a ragged tail.
 const FOLDER_PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 300;
+
+/**
+ * How a restricted folder is described to the people who file into it. The
+ * server enforces these (`_folder_admits_user`); the label only says so, so a
+ * secretary can tell a members' folder from a leadership-only one before
+ * uploading a departure clearance into it (W53-3).
+ */
+const RESTRICTED_FOLDER_LABEL: Record<string, string> = {
+  leadership: 'Leadership only',
+  owner: 'Owner and leadership only',
+};
 
 const DocumentsPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
@@ -622,6 +634,12 @@ const DocumentsPage: React.FC = () => {
                         <p className="text-theme-text-muted mt-2 text-xs">
                           {folder.document_count} {folder.document_count === 1 ? 'document' : 'documents'}
                         </p>
+                        {folder.visibility && RESTRICTED_FOLDER_LABEL[folder.visibility] && (
+                          <p className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-amber-800 dark:text-amber-300">
+                            <Lock className="h-3 w-3" aria-hidden="true" />
+                            {RESTRICTED_FOLDER_LABEL[folder.visibility]}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </button>
@@ -903,13 +921,20 @@ const DocumentsPage: React.FC = () => {
 
         {/* Upload Modal */}
         {canManage && showUploadModal && (
-          <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div
+            className="fixed inset-0 z-50 overflow-y-auto"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="upload-document-title"
+          >
             <div className="flex min-h-screen items-center justify-center px-4">
               <div className="modal-overlay" aria-hidden="true" />
               <DialogPanel onClose={() => setShowUploadModal(false)} className="relative w-full max-w-lg">
                 <div className="px-6 pt-5 pb-4">
                   <div className="mb-4 flex items-center justify-between">
-                    <h3 className="text-theme-text-primary text-lg font-medium">Upload Document</h3>
+                    <h3 id="upload-document-title" className="text-theme-text-primary text-lg font-medium">
+                      Upload Document
+                    </h3>
                     <button
                       onClick={() => setShowUploadModal(false)}
                       className="text-theme-text-muted hover:text-theme-text-primary"
@@ -925,15 +950,19 @@ const DocumentsPage: React.FC = () => {
                       {/* No drop handler is wired to this box, so the copy
                           does not offer drag and drop. */}
                       <p className="text-theme-text-primary mb-3 font-medium">Choose the file to upload</p>
+                      {/* sr-only, not hidden: a display:none input takes no
+                          focus, so the keyboard could never choose a file and
+                          Upload stayed disabled (W53-1). The label shows the
+                          focus ring the input cannot. */}
                       <input
                         type="file"
-                        className="hidden"
+                        className="peer sr-only"
                         id="file-upload"
                         onChange={(e) => setUploadForm({ ...uploadForm, file: e.target.files?.[0] || null })}
                       />
                       <label
                         htmlFor="file-upload"
-                        className="inline-flex cursor-pointer items-center rounded-lg bg-amber-700 px-4 py-2 text-white transition-colors hover:bg-amber-800"
+                        className="peer-focus-visible:ring-theme-focus-ring inline-flex cursor-pointer items-center rounded-lg bg-amber-700 px-4 py-2 text-white transition-colors peer-focus-visible:ring-2 hover:bg-amber-800"
                       >
                         Choose File
                       </label>
@@ -991,6 +1020,9 @@ const DocumentsPage: React.FC = () => {
                         {folders.map((f) => (
                           <option key={f.id} value={f.id}>
                             {f.name}
+                            {f.visibility && RESTRICTED_FOLDER_LABEL[f.visibility]
+                              ? ` (${RESTRICTED_FOLDER_LABEL[f.visibility]?.toLowerCase()})`
+                              : ''}
                           </option>
                         ))}
                       </select>
@@ -1117,7 +1149,13 @@ const DocumentsPage: React.FC = () => {
 
         {/* Delete Confirmation Modal */}
         {canManage && deleteConfirm && (
-          <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div
+            className="fixed inset-0 z-50 overflow-y-auto"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="delete-document-title"
+            aria-describedby="delete-document-body"
+          >
             <div className="flex min-h-screen items-center justify-center px-4">
               <div className="modal-overlay" aria-hidden="true" />
               <DialogPanel onClose={() => setDeleteConfirm(null)} className="relative w-full max-w-sm">
@@ -1127,8 +1165,10 @@ const DocumentsPage: React.FC = () => {
                       <AlertCircle className="h-6 w-6 text-red-700 dark:text-red-400" />
                     </div>
                     <div>
-                      <h3 className="text-theme-text-primary text-lg font-medium">Delete Document</h3>
-                      <p className="text-theme-text-muted mt-1 text-sm">
+                      <h3 id="delete-document-title" className="text-theme-text-primary text-lg font-medium">
+                        Delete Document
+                      </h3>
+                      <p id="delete-document-body" className="text-theme-text-muted mt-1 text-sm">
                         This permanently deletes the document and its file. You can&apos;t undo this.
                       </p>
                     </div>

@@ -106,7 +106,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W50 | An election: create, nominate, vote by ballot link, close, results    | secretary → member | `/elections`, `/ballot`                            | ✅     |
 | W51 | Meeting minutes: draft, approve, publish                              | secretary          | `/minutes`                                         | ✅     |
 | W52 | Action items: assign, work, close                                     | secretary → member | `/action-items`                                    | ✅     |
-| W53 | Documents: folders, upload, who can see what                          | secretary, member  | `/documents`                                       | ⬜     |
+| W53 | Documents: folders, upload, who can see what                          | secretary, member  | `/documents`                                       | ✅     |
 | W54 | Org chart and legal documents                                         | admin, member      | `/governance/org-chart`, `/governance/legal`       | ⬜     |
 | W55 | Messages: send to a group, the member's inbox, message administration | admin → member     | `/communications/messages`, `/messages`            | ⬜     |
 | W56 | Notification rules and logs, the in-app bell                          | admin, member      | `/notifications`                                   | ⬜     |
@@ -199,10 +199,45 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   it: "W51 October Business Meeting (event)", 1 Oct 7:00 PM, linked to the
   second set of October minutes. The "link survives a clear" half of W50-60 is
   still read from code only.
+- **Documents, a later pass** — a document's type shows as a raw MIME type
+  ("TEXT/PLAIN") in the list (W53-6).
 - **Minutes, a later pass** — the meetings list badges every meeting "Draft"
   forever (W51-9).
 
 ## Log
+
+### W53 — Documents: folders, upload, who can see what — 2026-10-04
+
+Driven as: `secretary` creating a folder and uploading files (one into a
+leadership-only folder); `member` browsing, downloading, and trying to read,
+download, search for and delete what they should not; repeated at 390×844.
+Database continued from W52.
+
+Held:
+
+- every access rule: the member saw no leadership folder, and got 404 on the
+  confidential file's read and download, nothing from search, and 403 on
+  delete;
+- double-clicks acted once;
+- delete asks first.
+
+Fixed:
+
+- W53-1 (MED — the file picker could not be reached by keyboard, so a
+  keyboard user could not upload);
+- W53-2 (LOW — the upload and delete dialogs were not announced as dialogs);
+- W53-3 (MED — nothing said which folders members cannot see);
+- W53-5 (NIT — a stale "disable by editing App.tsx" comment).
+
+Flagged: W53-4 (MED — folders cannot be restricted, renamed, moved or deleted
+from the screen, though the API supports it; in KNOWN_LIMITATIONS).
+
+Open: W53-6 (LOW — raw MIME types).
+
+Gate: typecheck and lint are clean, and 27 Documents tests pass, as does the full frontend suite (721
+files, 9086 tests). No backend change.
+
+Next: W54.
 
 ### W52 — Action items: assign, work, close — 2026-10-04
 
