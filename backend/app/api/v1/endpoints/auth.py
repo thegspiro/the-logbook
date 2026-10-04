@@ -586,9 +586,8 @@ async def register(
     Creates a new user with the provided information and returns
     authentication tokens.
 
-    Registration is disabled by default (REGISTRATION_ENABLED=false).
-    When enabled, new accounts require admin approval if
-    REGISTRATION_REQUIRES_APPROVAL is true.
+    Registration is disabled by default (REGISTRATION_ENABLED=false). When
+    enabled, a new account is active immediately; there is no approval queue.
 
     Rate limited to 5 requests per minute per IP address to prevent abuse.
 

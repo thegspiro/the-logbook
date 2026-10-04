@@ -82,6 +82,10 @@ RETIRED_SETTINGS: dict[str, str] = {
         "the refresh-token grace window was removed on 2026-08-12; a reused "
         "refresh token always revokes the session"
     ),
+    "REGISTRATION_REQUIRES_APPROVAL": (
+        "nothing ever read it; a self-registered account is active at once, and "
+        "REGISTRATION_ENABLED=false is how to keep registration closed"
+    ),
 }
 
 
@@ -376,9 +380,6 @@ class Settings(BaseSettings):
 
     # Registration control
     REGISTRATION_ENABLED: bool = False  # Disabled by default; admins create users
-    REGISTRATION_REQUIRES_APPROVAL: bool = (
-        True  # New registrations require admin approval
-    )
 
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True
