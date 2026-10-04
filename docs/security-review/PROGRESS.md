@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this PR)** — branch `claude/security-review-onboarding-pass5`,
+**PR [#2898](https://github.com/thegspiro/the-logbook/pull/2898)** — branch
+`claude/security-review-onboarding-pass5`,
 Feature 30 (Onboarding), pass 5. Watchdog pickup: independently confirmed via
 `list_pull_requests` (state=open) that no `claude/security-review-*` PR
 exists — PR #2896 (Feature 28, pass 5) and PR #2897 (Feature 29, pass 7) had
