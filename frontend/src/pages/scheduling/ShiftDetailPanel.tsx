@@ -1628,6 +1628,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                   tz={tz}
                   outstandingChecks={endOfShiftChecks.filter((c) => !isShiftCheckCompleted(c)).length}
                   requireChecks={requireEndOfShiftChecks}
+                  shiftStart={shift.start_time}
+                  shiftEnd={shift.end_time}
                   onCancel={() => setShowFinalizeChecklist(false)}
                   onFinalized={() => {
                     setShowFinalizeChecklist(false);

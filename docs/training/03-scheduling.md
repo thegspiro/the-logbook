@@ -1737,6 +1737,16 @@ checked in is listed too, with empty times for you to fill in**. That is
 deliberate: they used to be invisible, which meant no hours, no credit, and
 nothing on screen to tell the officer somebody had been missed.
 
+**Each row also has an Hours box** _(2026-10-04)_. For someone who forgot to
+check in or out, type the hours they worked instead of picking two times: the
+hours are counted from their check-in, or from the shift's scheduled start if
+they never checked in, and the end time fills itself in. Rows missing a time
+also offer **Until shift end** (forgot to check out) or **Full shift** (never
+checked in) as a single tap. The footer counts anyone still with no hours, and
+the confirm step marks them **no hours recorded**, so nobody is finalized with
+zero hours by accident. An entry over 48 hours is refused and holds **Next**
+until it is corrected.
+
 ![Close-out wizard step 1 — each member's on and off times, the combined-hours figure for the crew, one member flagged for a missing check-out and one assigned member with empty times](./images/03-75-closeout-step1-attendance.png)
 
 > **"Combined hours" is not the shift's length.** It adds up what every member
