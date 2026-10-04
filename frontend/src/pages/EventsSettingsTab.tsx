@@ -678,6 +678,7 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
       sections={SECTIONS}
       activeSection={activeSection}
       onSectionChange={setActiveSection}
+      inHub
       navLabel="Event settings sections"
       title="Event Settings"
       subtitle="How the events module behaves for this department"
