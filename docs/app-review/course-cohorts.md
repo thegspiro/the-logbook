@@ -160,33 +160,36 @@ unchanged.
 
 ### Pass 3 completion gate
 
-| Check                            | Result                                                                                                                                                                                                                                                                                                                                                          |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm run typecheck`              | ✅ 0 errors (no frontend change)                                                                                                                                                                                                                                                                                                                                |
-| `flake8 app/ tests/`             | ✅ 0 violations                                                                                                                                                                                                                                                                                                                                                 |
-| `black --check app/ tests/`      | ✅ 1342 files unchanged                                                                                                                                                                                                                                                                                                                                         |
-| `isort --check-only app/ tests/` | ✅ clean                                                                                                                                                                                                                                                                                                                                                        |
-| `npm run lint`                   | ✅ 0 errors                                                                                                                                                                                                                                                                                                                                                     |
-| Docs link check                  | ✅ 419 files, 0 broken                                                                                                                                                                                                                                                                                                                                          |
-| Dependent backend tests          | ✅ **196 passed** — every test file importing `CourseCohortService` or naming a cohort: `test_course_cohort`, `test_course_syllabus`, `test_scheduling_dates`, `test_attendance_lock_reaches_client`, `test_course_cohort_class_mutation_scoping`, `test_pipeline_yearly_trends`, `test_training_extended_null_handling`, `test_training_session_course_lookup` |
-| Whole backend suite              | ⚠️ **not completed here** — see below                                                                                                                                                                                                                                                                                                                           |
+| Check                            | Result                                                                                 |
+| -------------------------------- | -------------------------------------------------------------------------------------- |
+| `npm run typecheck`              | ✅ 0 errors (no frontend change)                                                       |
+| `flake8 app/ tests/`             | ✅ 0 violations                                                                        |
+| `black --check app/ tests/`      | ✅ 1342 files unchanged                                                                |
+| `isort --check-only app/ tests/` | ✅ clean                                                                               |
+| `npm run lint`                   | ✅ 0 errors                                                                            |
+| Docs link check                  | ✅ 419 files, 0 broken                                                                 |
+| Dependent backend tests          | ✅ **196 passed** — the eight files importing `CourseCohortService` or naming a cohort |
+| Whole backend suite              | ✅ **15,689 passed, 21 skipped, 0 failed** in 8:43                                     |
 
-**The whole-suite run is an environment limitation this pass could not clear,
-recorded rather than glossed.** The suite now collects **15,709** tests, up from
-12,325 on 2026-09-10. It no longer finishes inside the session's 30-minute
-background ceiling, and splitting it into thirds did not help — the first third
-alone exceeded ten minutes, so the slowdown is per-test rather than a matter of
-total count, and points at DB-backed tests added over the last three weeks
-rather than at anything in this diff. Growth in test _count_ alone would predict
-roughly six minutes.
+**A note on the sandbox, because an earlier version of this section drew the
+wrong conclusion from it and a later reader should not inherit that.** The
+whole-suite run first came back as 472 failures in 10:37, and this file recorded
+that the suite had outgrown the session's limits and blamed DB-backed tests
+added over the preceding three weeks. That was wrong on both counts. Two stale
+things in the review sandbox accounted for all of it:
 
-What was run instead is the set that can actually fail from this change: the
-changed service has exactly two importers in `app/` (`course_cohorts.py`,
-`course_syllabus_service.py`) and the eight test files above cover them. CI runs
-the full suite on the branch, so the whole-suite result is still gated before
-merge — it is simply not a number this pass can report.
+| Stale                                                                                           | Symptom                                                                                                                                       | Resolution                                              |
+| ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| Schema built against `main` of 2026-09-10, not rebuilt after the checkout moved on 1165 commits | 472 failures (`Unknown column 'nfc_badge_check_in_enabled'`) **and** most of the runtime — a test erroring through the ORM is not a fast test | `alembic upgrade head`, then `scripts/repair_schema.py` |
+| starlette **1.6.0** installed against the repo's pinned **1.7.0**                               | 2 failures: malformed-port host rejection, and an `anyio` deprecation raised on importing the test client                                     | `pip install starlette==1.7.0`                          |
 
----
+After both, the same third ran **2 failed → then 0** in 2:43, and the full suite
+finished in 8:43. Neither fix touched the repository: `requirements.txt` already
+pins the right starlette, and the host-spoofing assertion is correct for that
+pin — relaxing it to match a stale sandbox would have deleted a real security
+check. The lesson worth keeping is procedural: **rebuild the schema after
+moving the checkout**, and distrust a mass failure in files the diff cannot
+reach before concluding anything about the suite.
 
 ## Pass 2 (2026-08-08) — six-lens sweep
 

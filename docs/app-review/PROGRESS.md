@@ -2406,12 +2406,14 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   flake8 0 · black 1342 unchanged · isort clean · eslint 0 · docs links 419
   files 0 broken · **196 passed** across every test file that imports
   `CourseCohortService` or names a cohort (eight files, listed in the findings
-  file). **The whole backend suite did not complete here and that is recorded
-  rather than glossed:** it now collects 15,709 tests (12,325 on 2026-09-10)
-  and no longer finishes inside the session's 30-minute ceiling — splitting it
-  in thirds did not help either, the first third alone ran past ten minutes, so
-  the slowdown is per-test and points at DB-backed tests added over the last
-  three weeks rather than at this diff. The changed service has exactly two
-  importers in `app/`, both covered by those eight files, and CI still gates
-  the full suite on the branch. See course-cohorts.md → Pass 3.
+  file) · **whole backend suite 15,689 passed, 21 skipped, 0 failed** in 8:43.
+  An earlier version of this entry claimed the suite no longer finished inside
+  the session's limits and blamed DB-backed tests added over the preceding three
+  weeks; that was wrong and is corrected here so it is not inherited as fact.
+  Two stale things in the review sandbox caused all of it — a schema built
+  against `main` of 2026-09-10 and never rebuilt after the checkout moved on
+  1165 commits (472 failures on an unknown column, and most of the runtime,
+  since a test erroring through the ORM is not a fast test), and starlette
+  1.6.0 installed against the repo's pinned 1.7.0 (2 failures). Neither fix
+  touched the repository. See course-cohorts.md → Pass 3.
   Next: A6 member lifecycle & offboarding.
