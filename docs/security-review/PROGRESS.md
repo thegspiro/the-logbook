@@ -16,6 +16,22 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2899](https://github.com/thegspiro/the-logbook/pull/2899)** — branch
+`claude/security-review-scheduled-tasks-pass5`, Feature 31 (Scheduled
+tasks), pass 5. Confirmed via `list_pull_requests` (state=open) that no
+`claude/security-review-*` PR existed before starting — PR #2898 (Feature
+30, Onboarding, pass 5) had already merged. Docs-only: 0 fixed, 0 new
+findings; 5 standing findings re-confirmed unchanged, plus a cross-track
+re-verification that app-review's HIGH `CRON-40` (scheduler claim-renewal
+race) is still open in `main.py`. Gate: flake8/black/isort clean,
+`validate_migrations.py --strict` passed (509 revisions, single head), 221
+scoped backend tests passed, frontend typecheck/lint clean. Subscribed for
+CI/review events. Full write-up:
+[`CRON5-31-scheduled-tasks.md`](./CRON5-31-scheduled-tasks.md).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #2898's merge, Feature 30, Onboarding, pass 5 — the state this pass's PR conflicted with), preserved for history</summary>
+
 **None.** PR [#2898](https://github.com/thegspiro/the-logbook/pull/2898)
 (Feature 30, Onboarding, pass 5) merged clean, touching real application
 code (6 backend/frontend fixes-verified-good, 0 new findings — see the
@@ -23,6 +39,8 @@ superseded note below for detail). Re-confirmed via `list_pull_requests`
 (state=open) at the start of this iteration that no `claude/security-review-*`
 PR exists. Rotation row 30 stays ✅. Next: Feature 31 (Scheduled tasks) —
 picked up by this iteration, recorded above in the Log.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 30, Onboarding, pass 5, PR #2898, before it merged), preserved for history</summary>
