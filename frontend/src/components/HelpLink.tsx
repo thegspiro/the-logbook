@@ -5,7 +5,7 @@
  * Links can open documentation pages, tooltips, or external help resources.
  */
 
-import React, { useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import { HelpCircle, ExternalLink, X } from 'lucide-react';
 
 interface HelpLinkProps {
@@ -23,6 +23,13 @@ interface HelpLinkProps {
   tooltipPosition?: 'top' | 'bottom' | 'left' | 'right';
 }
 
+/**
+ * Height of the fixed mobile top bar (`h-16` in SideNavigation) plus a little
+ * breathing room; a popover whose top edge is above this line is hidden
+ * behind the bar.
+ */
+const TOP_BAR_CLEARANCE_PX = 72;
+
 export const HelpLink: React.FC<HelpLinkProps> = ({
   topic,
   variant = 'icon',
@@ -32,6 +39,23 @@ export const HelpLink: React.FC<HelpLinkProps> = ({
   tooltipPosition = 'top',
 }) => {
   const [showTooltip, setShowTooltip] = useState(false);
+  const [flippedBelow, setFlippedBelow] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // A popover placed above a "?" that sits in a page header opens under the
+  // fixed mobile top bar, or off the top of the viewport, and cannot be read
+  // or scrolled to. Measure once it is in the DOM and flip it below the
+  // trigger when its top edge lands in that band (W50-61).
+  useLayoutEffect(() => {
+    if (!showTooltip) {
+      setFlippedBelow(false);
+      return;
+    }
+    if (tooltipPosition !== 'top' || !panelRef.current) return;
+    if (panelRef.current.getBoundingClientRect().top < TOP_BAR_CLEARANCE_PX) {
+      setFlippedBelow(true);
+    }
+  }, [showTooltip, tooltipPosition]);
 
   // Default documentation URLs for common topics
   const getDocUrl = (): string => {
@@ -42,6 +66,7 @@ export const HelpLink: React.FC<HelpLinkProps> = ({
       dashboard: `${baseUrl}/Quick-Reference`,
       'organization-setup': `${baseUrl}/Onboarding`,
       members: `${baseUrl}/Module-Training#membership`,
+      elections: `${baseUrl}/Module-Elections`,
       events: `${baseUrl}/Quick-Reference`,
       reports: `${baseUrl}/Module-Compliance`,
       training: `${baseUrl}/Module-Training`,
@@ -62,7 +87,7 @@ export const HelpLink: React.FC<HelpLinkProps> = ({
 
   // Position classes for tooltip
   const getTooltipPositionClasses = () => {
-    switch (tooltipPosition) {
+    switch (flippedBelow ? 'bottom' : tooltipPosition) {
       case 'top':
         return 'bottom-full left-1/2 -translate-x-1/2 mb-2';
       case 'bottom':
@@ -99,7 +124,7 @@ export const HelpLink: React.FC<HelpLinkProps> = ({
 
         {/* Tooltip */}
         {showTooltip && tooltip && (
-          <div className={`absolute z-50 ${getTooltipPositionClasses()}`}>
+          <div ref={panelRef} className={`absolute z-50 ${getTooltipPositionClasses()}`}>
             <div className="card text-theme-text-primary max-w-xs p-3 text-sm shadow-xl">
               <div className="mb-2 flex items-start justify-between space-x-2">
                 <p>{tooltip}</p>

@@ -83,6 +83,11 @@ export interface Election {
   nomination_deadline?: string;
   tie_policy?: TiePolicy;
   created_by?: string;
+  // Actual close, distinct from the scheduled end_date. closed_by is null
+  // for a lifecycle (automatic) close at the scheduled end.
+  closed_at?: string | null;
+  closed_by?: string | null;
+  closed_by_name?: string | null;
   created_at: string;
   updated_at: string;
   total_votes?: number;
@@ -115,6 +120,9 @@ export interface BallotElection {
 export interface BallotLookupResponse {
   election: BallotElection;
   candidates: Candidate[];
+  // Token minted by send-test-ballot: the page shows a TEST BALLOT banner so a
+  // preview is never mistaken for the real thing (W50-18)
+  is_test?: boolean;
 }
 
 export interface ElectionListItem {
@@ -123,6 +131,7 @@ export interface ElectionListItem {
   election_type: string;
   start_date: string;
   end_date: string;
+  closed_at?: string | null;
   status: ElectionStatus;
   positions?: string[];
   total_votes?: number;
@@ -262,7 +271,12 @@ export interface BulkVoteItem {
 
 export interface VoteIntegrityResult {
   election_id: string;
+  // total_votes = counted + pending paper + test: every chained row is
+  // checked, but only counted_votes appear in the tally
   total_votes: number;
+  counted_votes: number;
+  pending_paper_votes: number;
+  test_votes: number;
   valid_signatures: number;
   unsigned_votes: number;
   tampered_votes: number;
@@ -311,7 +325,9 @@ export interface ElectionResults {
   voter_turnout_percentage: number;
   results_by_position: PositionResults[];
   overall_results: CandidateResult[];
-  quorum_met?: boolean;
+  // null means the election has no quorum rule at all (quorum_type "none"),
+  // so no surface may say "met"
+  quorum_met?: boolean | null;
   quorum_detail?: string | null;
   tie_policy?: TiePolicy;
 }
@@ -373,23 +389,35 @@ export interface ForensicsReport {
   vote_integrity: VoteIntegrityResult;
   deleted_votes: {
     count: number;
+    // Distinct voided paper batches among `records` — a voided batch is one
+    // action, not `count` voided votes
+    paper_batch_count: number;
     records: Array<{
       vote_id: string;
-      candidate_id: string;
+      // null on an anonymous election: the choice would join to the voter
+      // through the audit log's vote_id
+      candidate_id: string | null;
       position: string | null;
       deleted_at: string | null;
       deleted_by: string | null;
       deletion_reason: string | null;
+      is_manual: boolean;
+      manual_batch_id: string | null;
     }>;
   };
   rollback_history: Array<Record<string, unknown>>;
   voting_tokens: {
     total_issued: number;
     total_used: number;
+    // issued = used + superseded + expired + live
+    total_superseded: number;
+    total_expired: number;
+    total_live: number;
     records: Array<{
       token_id: string;
       used: boolean;
       used_at: string | null;
+      superseded_at: string | null;
       first_accessed_at: string | null;
       access_count: number;
       positions_voted: string[];
@@ -417,6 +445,8 @@ export interface ForensicsReport {
     ip_metadata_purged?: boolean;
   };
   voting_timeline: Record<string, number>;
+  // IANA zone the timeline's hour buckets are keyed in
+  voting_timeline_timezone: string | null;
 }
 
 // Attendance types
@@ -475,6 +505,12 @@ export interface PreMeetingPackageResponse {
 // Vote receipt verification
 export interface VoteReceiptResponse {
   verified: boolean;
+  // A test-ballot receipt verifies (the vote exists) but is never counted, so
+  // "counted" wording must key off this flag, not verified
+  counted?: boolean;
+  // A voided vote's receipt still matches a row; reported as its own flag so
+  // the page can say an officer voided it rather than "no such vote"
+  voided?: boolean;
   message: string;
   voted_at?: string | null;
   position?: string | null;
@@ -529,10 +565,12 @@ export interface BallotSubmissionResponse {
 
 export interface VoterOverride {
   user_id: string;
+  // `VoterOverrideRecord.member_name` on the backend; null when the member
+  // row has since gone.
   member_name?: string | null;
   reason: string;
   overridden_by: string;
-  overridden_by_name?: string;
+  overridden_by_name?: string | null;
   overridden_at: string;
 }
 
@@ -596,6 +634,24 @@ export interface ElectionSettings {
   // Officers (other than the recorder) who must attest a paper-ballot
   // batch before its votes count. 0 disables attestation. Default 2.
   paper_ballot_attestations_required?: number;
+  /**
+   * Read-only posture reported by GET /elections/settings. `security` is not
+   * an `ElectionSettingsUpdate` field, so echoing it back on PATCH is ignored.
+   */
+  security?: ElectionSecurityPosture | null;
+}
+
+/**
+ * Mirrors the `security` dict built in `get_election_settings`
+ * (backend `elections.py`). Only `vote_signing_key_configured` can be false
+ * today — it reports whether `VOTE_SIGNING_KEY` is set, or signatures are
+ * falling back to `SECRET_KEY` — but every row is read from here so the
+ * screen never prints a guarantee the server did not make (W50-50).
+ */
+export interface ElectionSecurityPosture {
+  vote_signing_key_configured?: boolean;
+  anonymity_salt_auto_destroy?: boolean;
+  vote_chain_hashing?: boolean;
 }
 
 // Paper-ballot batches (attestation workflow)
@@ -622,7 +678,15 @@ export interface ManualBallotBatch {
   // Physical ballots the recorder attested for the batch; null on batches
   // recorded before the count existed.
   ballots_cast?: number | null;
+  // The recorder overrode the plausibility guard; attesting officers are
+  // confirming an implausible count and the card must say so.
+  over_count_override: boolean;
   required_attestations: number;
+  // Set only when status is "voided".
+  voided_by?: string | null;
+  voided_by_name?: string | null;
+  voided_at?: string | null;
+  void_reason?: string | null;
   attestations: ManualBallotAttestation[];
   totals: ManualBallotBatchTotal[];
   total_ballots: number;
@@ -661,6 +725,8 @@ export interface RosterMember {
   has_voted: boolean;
   is_attending: boolean;
   will_receive_ballot: boolean;
+  // True once a live send or reminder delivered this member a ballot
+  ballot_sent: boolean;
   eligible_item_count: number;
   total_item_count: number;
   ineligibility_reason?: string;
@@ -676,5 +742,7 @@ export interface EligibilityRoster {
   total_ineligible: number;
   total_voted: number;
   total_overrides: number;
+  total_ballots_sent: number;
+  email_sent_at: string | null;
   roster: RosterMember[];
 }

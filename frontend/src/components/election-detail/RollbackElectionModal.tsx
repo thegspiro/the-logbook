@@ -74,7 +74,11 @@ const RollbackElectionModal: React.FC<RollbackElectionModalProps> = ({
                     </li>
                     <li>Send email notifications to all leadership members</li>
                     <li>Create an audit trail entry with your reason</li>
-                    {targetStatus.toLowerCase() === 'open' && <li>Reopen voting</li>}
+                    {targetStatus.toLowerCase() === 'open' && (
+                      <li>
+                        Reopen voting. Every ballot link already emailed stops working, so ballots must be sent again
+                      </li>
+                    )}
                   </ul>
                 </div>
               </div>

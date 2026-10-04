@@ -287,10 +287,10 @@ S01 proxy-ballot attributability (HIGH), the pre-fix audit rows (MED), the
 pre-deploy double-vote window (MED, in `docs/UPGRADING.md`), pooled
 `overall_results` on multi-item ballots (MED) and two data residuals (LOW).
 
-In progress: frontend round 2 for W50-24, 26, 29, 30, 36, 43, 46, 50, 51, 52,
-53, 56, 57, 58, 59, 61, 62, 63, 64, 73 and the frontend halves of fourteen
-backend fixes (marked `<!-- FE2 -->` in the findings file). Open: W50-74 to
-W50-82 (NIT). The manual (`docs/training/14-elections.md`) corrected on five
+Frontend round 2 (a follow-up PR after #2856 merged) fixed W50-24, 26, 29,
+30, 36, 43, 46, 50, 51, 52, 53, 56, 57, 58, 59, 61, 62, 63, 64, 73 and the
+frontend halves of fourteen backend fixes, each with a Vitest; gated clean,
+not re-driven on screen (usage limit). Open: W50-74 to W50-82 (NIT). The manual (`docs/training/14-elections.md`) corrected on five
 lines the drive contradicted.
 
 Gate: backend — the election suite 622 passed and the CI unit selection
