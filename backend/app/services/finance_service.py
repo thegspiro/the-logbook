@@ -69,7 +69,7 @@ from app.services.separation_of_duties import (
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
-from app.utils.org_timezone import resolve_scheduling_timezone
+from app.utils.org_timezone import resolve_org_today, resolve_scheduling_timezone
 from app.utils.sql_search import LIKE_ESCAPE_CHAR
 
 # The statuses that genuinely resolve a step, so a later step may become
@@ -1753,11 +1753,12 @@ class FinanceService:
         offset would regenerate the same colliding number.
         """
         fy = await self.get_fiscal_year(fiscal_year_id, org_id)
-        year = ""
         if fy and fy.start_date:
             year = str(fy.start_date.year)
         else:
-            year = str(datetime.now(timezone.utc).year)
+            # The department's year, not the server's: UTC is already next
+            # year on a US department's New Year's Eve.
+            year = str((await resolve_org_today(self.db, org_id)).year)
 
         table_map = {
             "PR": PurchaseRequest,

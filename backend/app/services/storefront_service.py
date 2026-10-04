@@ -63,7 +63,11 @@ from app.utils.embroidery import (
 )
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
-from app.utils.org_timezone import resolve_scheduling_timezone, to_local
+from app.utils.org_timezone import (
+    resolve_org_today,
+    resolve_scheduling_timezone,
+    to_local,
+)
 from app.utils.size_order import size_sort_key, sort_by_size
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 from app.utils.storefront_payments import (
@@ -1247,8 +1251,11 @@ class StorefrontService:
         MAX (not count) so a deleted order never causes a number to repeat;
         ``offset`` lets the retry allocator step past a number a concurrent
         transaction just took, which REPEATABLE READ would otherwise hide.
+
+        The year is the department's: on a US department's New Year's Eve the
+        server's UTC clock has already moved to the next year.
         """
-        year = _utcnow().year
+        year = (await resolve_org_today(self.db, organization_id)).year
         prefix = f"ORD-{year}-"
         result = await self.db.execute(
             select(StoreOrder.order_number).where(
