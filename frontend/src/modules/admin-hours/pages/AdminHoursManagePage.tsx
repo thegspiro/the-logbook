@@ -70,13 +70,13 @@ const AdminHoursManagePage: React.FC = () => {
             onClick={() => setActiveTab(tab)}
             className={`relative flex-1 rounded-md px-4 py-2 text-sm font-medium transition ${
               activeTab === tab
-                ? 'bg-blue-600 text-white'
+                ? 'bg-red-800 text-white'
                 : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover'
             }`}
           >
             {TAB_LABELS[tab]}
             {tab === 'active' && activeSessions.length > 0 && (
-              <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-blue-600 px-1.5 py-0.5 text-xs leading-none font-bold text-white">
+              <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-red-900 px-1.5 py-0.5 text-xs leading-none font-bold text-white">
                 {activeSessions.length}
               </span>
             )}

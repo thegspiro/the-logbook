@@ -509,7 +509,7 @@ export const MyChecklistsPage: React.FC = () => {
                   aria-pressed={timingFilter === value}
                   className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors sm:px-2.5 sm:py-1 ${
                     timingFilter === value
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-red-800 text-white'
                       : 'text-theme-text-muted hover:text-theme-text-primary'
                   }`}
                 >

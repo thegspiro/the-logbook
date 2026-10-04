@@ -166,7 +166,7 @@ const SupplyExpiringPage: React.FC = () => {
               type="button"
               onClick={() => setDaysAhead(w)}
               className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${
-                daysAhead === w ? 'bg-blue-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+                daysAhead === w ? 'bg-red-800 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
               }`}
             >
               {w}d
