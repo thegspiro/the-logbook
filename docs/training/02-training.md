@@ -1169,6 +1169,17 @@ what the shift already knows.
 5. The `data_sources` field records which values were carried over and which
    the officer typed, for audit.
 
+> **Reports filed by the officer on the rig** _(2026-10-04)_. **Scheduling →
+> Settings → Shift Reports → Filing & Validation → Reports are filed by the
+> officer on the rig** restricts a shift's reports to its assigned **Shift
+> Officer**: the form lists only shifts you were officer on, the server refuses
+> anyone else (including a whole batch, with the reason, rather than skipping
+> each member), and the drafts created when a shift is finalized are assigned
+> to the Shift Officer instead of whoever finalized it. A shift with no Shift
+> Officer can't have reports until one is set. Off by default; reports not
+> linked to a shift are unaffected. Stored as
+> `settings.shift_reports.authorship = "shift_officer"`.
+
 > **You are never on your own crew list** _(2026-10-04)_. A report is an
 > officer's account of someone else's shift, and one about yourself would
 > credit your own hours, calls and ratings toward your own requirements with

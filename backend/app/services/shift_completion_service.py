@@ -53,6 +53,48 @@ from app.services.shift_eligibility_service import (
 from app.services.training_program_service import TrainingProgramService
 from app.utils.org_timezone import resolve_org_today
 
+#: ``settings["shift_reports"]["authorship"]`` value under which a shift's
+#: reports are filed only by that shift's assigned Shift Officer. Anything
+#: else — including the key being absent, which is every installation that
+#: predates the setting — keeps the original rule: any ``training.manage``
+#: holder may file (CLAUDE.md pitfall #19, absence means current behaviour).
+SHIFT_OFFICER_AUTHORSHIP = "shift_officer"
+
+SHIFT_OFFICER_ONLY_MESSAGE = (
+    "Your department has each shift's reports filed by that shift's officer"
+)
+NO_SHIFT_OFFICER_MESSAGE = (
+    "Your department has each shift's reports filed by that shift's officer, "
+    "and this shift has none assigned. Set its Shift Officer first."
+)
+
+
+async def reports_filed_by_shift_officer(db: AsyncSession, organization_id) -> bool:
+    """Whether this department restricts filing to each shift's officer."""
+    from app.models.user import Organization
+
+    settings = (
+        await db.execute(
+            select(Organization.settings).where(Organization.id == str(organization_id))
+        )
+    ).scalar_one_or_none()
+    # Read defensively: settings is free-form JSON, and a malformed block must
+    # degrade to the original rule rather than refuse every report.
+    block = (
+        (settings or {}).get("shift_reports") if isinstance(settings, dict) else None
+    )
+    return (
+        isinstance(block, dict) and block.get("authorship") == SHIFT_OFFICER_AUTHORSHIP
+    )
+
+
+def require_shift_officer(shift, author_id) -> None:
+    """Raise unless ``author_id`` is ``shift``'s assigned Shift Officer."""
+    if not shift.shift_officer_id:
+        raise ValueError(NO_SHIFT_OFFICER_MESSAGE)
+    if str(shift.shift_officer_id) != str(author_id):
+        raise ValueError(SHIFT_OFFICER_ONLY_MESSAGE)
+
 
 class ShiftCompletionService:
     """Service for managing shift completion reports"""
@@ -341,6 +383,9 @@ class ShiftCompletionService:
 
             if shift.shift_date != shift_date:
                 raise ValueError("Report date does not match the " "linked shift date")
+
+            if await reports_filed_by_shift_officer(self.db, organization_id):
+                require_shift_officer(shift, officer_id)
 
             # A friendly fast path only — see the flush below, which is the
             # actual concurrency authority (Pitfall #27, matching
@@ -757,6 +802,22 @@ class ShiftCompletionService:
         if trainee_evaluations:
             for ev in trainee_evaluations:
                 eval_map[ev["user_id"]] = ev
+
+        # Checked once, up front: create_report enforces the same rule, but a
+        # batch catches its ValueError per member and would report every row
+        # as "skipped" with no reason given.
+        if shift_id and await reports_filed_by_shift_officer(self.db, organization_id):
+            shift = (
+                await self.db.execute(
+                    select(Shift).where(
+                        Shift.id == shift_id,
+                        Shift.organization_id == str(organization_id),
+                    )
+                )
+            ).scalar_one_or_none()
+            if not shift:
+                raise ValueError("Shift not found in this organization")
+            require_shift_officer(shift, officer_id)
 
         created_ids: List[str] = []
         skipped = 0

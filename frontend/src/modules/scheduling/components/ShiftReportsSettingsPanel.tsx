@@ -71,9 +71,9 @@ const SECTIONS: {
   },
   {
     key: 'post-shift',
-    label: 'Post-Shift Validation',
+    label: 'Filing & Validation',
     icon: FileText,
-    description: 'Officer review after shift ends',
+    description: 'Who files reports, and officer review after a shift',
   },
   {
     key: 'training-defaults',
@@ -110,6 +110,7 @@ const SECTIONS: {
 // ─── Defaults ──────────────────────────────────────────────────────────────
 
 const DEFAULT_SETTINGS: ShiftReportSettings = {
+  authorship: 'any_officer',
   post_shift_validation: {
     enabled: true,
     require_officer_report: false,
@@ -178,6 +179,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
         const saved = obj.shift_reports as Partial<ShiftReportSettings> | undefined;
         if (saved) {
           setSettings({
+            authorship: saved.authorship === 'shift_officer' ? 'shift_officer' : 'any_officer',
             post_shift_validation: { ...DEFAULT_SETTINGS.post_shift_validation, ...saved.post_shift_validation },
           });
         }
@@ -456,11 +458,38 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
         return (
           <div>
             <p className="text-theme-text-muted mb-4 text-sm">
-              After a shift ends, the shift officer can be notified to validate attendance, review hours, and confirm
-              call counts before the shift is finalized.
+              Who files a shift&apos;s completion reports, and whether the shift officer is prompted to validate
+              attendance, hours and call counts before the shift is finalized.
             </p>
 
             <div className="space-y-4">
+              <label className="mobile-touch-row cursor-pointer gap-3">
+                <input
+                  type="checkbox"
+                  checked={settings.authorship === 'shift_officer'}
+                  onChange={(e) => {
+                    const updated: ShiftReportSettings = {
+                      ...settings,
+                      authorship: e.target.checked ? 'shift_officer' : 'any_officer',
+                    };
+                    setSettings(updated);
+                    void saveSettings(updated);
+                  }}
+                  disabled={saving}
+                  className={checkboxClass}
+                />
+                <div>
+                  <span className="text-theme-text-primary text-sm font-medium">
+                    Reports are filed by the officer on the rig
+                  </span>
+                  <p className="text-theme-text-muted text-xs">
+                    Only the shift&apos;s assigned Shift Officer can file its completion reports, and the drafts created
+                    when a shift is finalized are assigned to them. A shift with no Shift Officer can&apos;t have
+                    reports until one is set. Reports not linked to a shift are unaffected.
+                  </p>
+                </div>
+              </label>
+
               <label className="mobile-touch-row cursor-pointer gap-3">
                 <input
                   type="checkbox"

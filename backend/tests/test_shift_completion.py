@@ -1842,3 +1842,147 @@ class TestPerMemberCalls:
         await self._batch(svc, d, {d["crew_1"]: 1})
         stored = await self._stored(db_session, d)
         assert stored[d["crew_1"]] == (1, ["medical"])
+
+
+class TestShiftOfficerAuthorship:
+    """settings.shift_reports.authorship = "shift_officer": only the shift's
+    assigned officer files its reports."""
+
+    async def _set(self, db_session, d, shift_reports):
+        await db_session.execute(
+            text("UPDATE organizations SET settings = :s WHERE id = :id"),
+            {"s": json.dumps({"shift_reports": shift_reports}), "id": d["org_id"]},
+        )
+        await db_session.flush()
+
+    async def _single(self, svc, d, author, trainee):
+        return await svc.create_report(
+            organization_id=uuid.UUID(d["org_id"]),
+            officer_id=uuid.UUID(author),
+            trainee_id=trainee,
+            shift_date=d["shift_date"],
+            hours_on_shift=12.0,
+            shift_id=d["shift_id"],
+        )
+
+    async def test_absent_setting_keeps_the_original_rule(
+        self, db_session, setup_shift_with_crew
+    ):
+        d = setup_shift_with_crew
+        svc = ShiftCompletionService(db_session)
+        # crew_1 is not the shift officer, and may file under the default.
+        assert await self._single(svc, d, d["crew_1"], d["crew_2"])
+
+    async def test_malformed_setting_degrades_to_the_original_rule(
+        self, db_session, setup_shift_with_crew
+    ):
+        d = setup_shift_with_crew
+        await self._set(db_session, d, "not-a-dict")
+        svc = ShiftCompletionService(db_session)
+        assert await self._single(svc, d, d["crew_1"], d["crew_2"])
+
+    async def test_the_shift_officer_may_file(self, db_session, setup_shift_with_crew):
+        d = setup_shift_with_crew
+        await self._set(db_session, d, {"authorship": "shift_officer"})
+        svc = ShiftCompletionService(db_session)
+        assert await self._single(svc, d, d["officer_id"], d["crew_1"])
+
+    async def test_another_officer_may_not(self, db_session, setup_shift_with_crew):
+        d = setup_shift_with_crew
+        await self._set(db_session, d, {"authorship": "shift_officer"})
+        svc = ShiftCompletionService(db_session)
+        with pytest.raises(ValueError, match="filed by that shift's officer"):
+            await self._single(svc, d, d["crew_1"], d["crew_2"])
+
+    async def test_a_shift_with_no_officer_says_so(
+        self, db_session, setup_shift_with_crew
+    ):
+        d = setup_shift_with_crew
+        await self._set(db_session, d, {"authorship": "shift_officer"})
+        await db_session.execute(
+            text("UPDATE shifts SET shift_officer_id = NULL WHERE id = :id"),
+            {"id": d["shift_id"]},
+        )
+        svc = ShiftCompletionService(db_session)
+        with pytest.raises(ValueError, match="none assigned"):
+            await self._single(svc, d, d["officer_id"], d["crew_1"])
+
+    async def test_a_batch_by_another_officer_is_refused_outright(
+        self, db_session, setup_shift_with_crew
+    ):
+        # Not "skipped" row by row: the officer needs to be told why.
+        d = setup_shift_with_crew
+        await self._set(db_session, d, {"authorship": "shift_officer"})
+        svc = ShiftCompletionService(db_session)
+        with pytest.raises(ValueError, match="filed by that shift's officer"):
+            await svc.batch_create_reports(
+                organization_id=uuid.UUID(d["org_id"]),
+                officer_id=uuid.UUID(d["crew_1"]),
+                shift_id=d["shift_id"],
+                shift_date=d["shift_date"],
+                hours_on_shift=12.0,
+                calls_responded=0,
+                call_types=None,
+                officer_narrative=None,
+                crew_member_ids=[d["crew_2"]],
+                trainee_evaluations=None,
+            )
+
+    async def _drafts(self, db_session, d, finalized_by):
+        from app.services.scheduling_service import SchedulingService
+
+        await db_session.execute(
+            text(
+                "UPDATE shift_assignments SET is_training = 1, "
+                "training_evaluator_id = :ev WHERE shift_id = :sid AND user_id = :uid"
+            ),
+            {"sid": d["shift_id"], "uid": d["crew_1"], "ev": d["crew_2"]},
+        )
+        officer = (
+            await db_session.execute(
+                text("SELECT shift_officer_id FROM shifts WHERE id = :id"),
+                {"id": d["shift_id"]},
+            )
+        ).scalar()
+        shift = SimpleNamespace(
+            id=d["shift_id"],
+            shift_date=d["shift_date"],
+            start_time=None,
+            end_time=None,
+            shift_officer_id=officer,
+        )
+        return await SchedulingService(db_session)._create_draft_reports_for_trainees(
+            shift=shift,
+            organization_id=uuid.UUID(d["org_id"]),
+            finalized_by_user_id=finalized_by,
+        )
+
+    async def test_finalize_drafts_belong_to_the_shift_officer(
+        self, db_session, setup_shift_with_crew
+    ):
+        # Not the slot's evaluator (crew_2), not the finalizer (crew_2): only
+        # the shift officer may complete a draft under this rule.
+        d = setup_shift_with_crew
+        await self._set(db_session, d, {"authorship": "shift_officer"})
+        assert await self._drafts(db_session, d, d["crew_2"]) == 1
+        author = (
+            await db_session.execute(
+                text(
+                    "SELECT officer_id FROM shift_completion_reports "
+                    "WHERE shift_id = :sid"
+                ),
+                {"sid": d["shift_id"]},
+            )
+        ).scalar()
+        assert author == d["officer_id"]
+
+    async def test_finalize_drafts_nothing_without_a_shift_officer(
+        self, db_session, setup_shift_with_crew
+    ):
+        d = setup_shift_with_crew
+        await self._set(db_session, d, {"authorship": "shift_officer"})
+        await db_session.execute(
+            text("UPDATE shifts SET shift_officer_id = NULL WHERE id = :id"),
+            {"id": d["shift_id"]},
+        )
+        assert await self._drafts(db_session, d, d["crew_2"]) == 0

@@ -36,7 +36,7 @@ import {
 import toast from 'react-hot-toast';
 import StarRating from '../../modules/scheduling/components/StarRating';
 import { shiftCompletionService, trainingModuleConfigService } from '../../services/api';
-import { userService } from '../../services/api';
+import { organizationService, userService } from '../../services/api';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 import type { ShiftRecord } from '../../modules/scheduling/services/api';
@@ -148,6 +148,10 @@ export const ShiftReportsTab: React.FC = () => {
 
   // Batch create state
   const [crewMembers, setCrewMembers] = useState<ShiftCrewMember[]>([]);
+  // Department rule: only each shift's assigned officer files its reports.
+  // The server enforces it; this only keeps the form from offering shifts the
+  // viewer would be refused on.
+  const [officerOnly, setOfficerOnly] = useState(false);
   // Per-member calls the officer typed over the derived figure, as typed.
   const [memberCalls, setMemberCalls] = useState<Record<string, string>>({});
   const [selectedCrewIds, setSelectedCrewIds] = useState<Set<string>>(new Set());
@@ -372,6 +376,21 @@ export const ShiftReportsTab: React.FC = () => {
         });
     }
   }, [viewMode]); // eslint-disable-line react-hooks/exhaustive-deps -- only load once when entering create mode
+
+  useEffect(() => {
+    if (!canManage) return;
+    organizationService
+      .getSettings()
+      .then((settings) => {
+        const block = (settings as Record<string, unknown>).shift_reports as { authorship?: unknown } | undefined;
+        setOfficerOnly(block?.authorship === 'shift_officer');
+      })
+      .catch(() => {
+        /* the server still enforces the rule */
+      });
+  }, [canManage]);
+
+  const offeredShifts = officerOnly ? shiftList.filter((s) => s.shift_officer_id === userId) : shiftList;
 
   // Load recent shifts when entering create mode without a linked shift
   useEffect(() => {
@@ -1679,7 +1698,7 @@ export const ShiftReportsTab: React.FC = () => {
                 </div>
               ) : (
                 <div className="max-h-60 space-y-1 overflow-y-auto">
-                  {shiftList
+                  {offeredShifts
                     .filter((s) => {
                       if (!shiftSearchQuery) return true;
                       const q = shiftSearchQuery.toLowerCase();
@@ -1718,8 +1737,12 @@ export const ShiftReportsTab: React.FC = () => {
                         <ChevronDown className="text-theme-text-muted h-4 w-4 -rotate-90" />
                       </button>
                     ))}
-                  {shiftList.length === 0 && (
-                    <p className="text-theme-text-muted py-6 text-center text-sm">No recent shifts found.</p>
+                  {offeredShifts.length === 0 && (
+                    <p className="text-theme-text-muted py-6 text-center text-sm">
+                      {officerOnly
+                        ? 'No recent shifts where you were the Shift Officer. Your department has each shift’s reports filed by its officer.'
+                        : 'No recent shifts found.'}
+                    </p>
                   )}
                 </div>
               )}

@@ -16,10 +16,12 @@ const mockGetConfig = vi.fn();
 const mockGetSkillNames = vi.fn();
 const mockUpdateConfig = vi.fn();
 const mockGetBasicApparatus = vi.fn();
+const mockUpdateSettings = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   organizationService: {
     getSettings: (...args: unknown[]) => mockGetSettings(...args) as unknown,
+    updateSettings: (...args: unknown[]) => mockUpdateSettings(...args) as unknown,
   },
 }));
 
@@ -73,6 +75,8 @@ beforeEach(() => {
   mockGetSkillNames.mockReset();
   mockUpdateConfig.mockReset();
   mockGetBasicApparatus.mockReset();
+  mockUpdateSettings.mockReset();
+  mockUpdateSettings.mockResolvedValue({});
 
   mockGetSettings.mockResolvedValue({});
   mockGetSkillNames.mockResolvedValue([]);
@@ -110,5 +114,38 @@ describe('ShiftReportsSettingsPanel tag lists', () => {
     // index — has not inherited its disclosure. With an index key it does.
     expect(screen.getByRole('button', { name: 'Actions for Bravo' })).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByRole('button', { name: 'Actions for Charlie' })).toHaveAttribute('aria-expanded', 'false');
+  });
+});
+
+describe('ShiftReportsSettingsPanel — who files reports', () => {
+  const openFiling = async (user: ReturnType<typeof userEvent.setup>) => {
+    const tabs = await screen.findAllByRole('button', { name: /Filing & Validation/ });
+    await user.click(tabs[0] as HTMLElement);
+  };
+
+  it('saves the officer-on-the-rig rule alongside the validation settings', async () => {
+    const user = userEvent.setup();
+    render(<ShiftReportsSettingsPanel />);
+    await openFiling(user);
+
+    const toggle = await screen.findByRole('checkbox', { name: /Reports are filed by the officer on the rig/ });
+    expect(toggle).not.toBeChecked();
+    await user.click(toggle);
+
+    expect(mockUpdateSettings).toHaveBeenCalledWith({
+      shift_reports: expect.objectContaining({
+        authorship: 'shift_officer',
+        post_shift_validation: expect.objectContaining({ enabled: true }),
+      }),
+    });
+  });
+
+  it('shows the rule as on when the department saved it', async () => {
+    mockGetSettings.mockResolvedValue({ shift_reports: { authorship: 'shift_officer' } });
+    const user = userEvent.setup();
+    render(<ShiftReportsSettingsPanel />);
+    await openFiling(user);
+
+    expect(await screen.findByRole('checkbox', { name: /Reports are filed by the officer on the rig/ })).toBeChecked();
   });
 });
