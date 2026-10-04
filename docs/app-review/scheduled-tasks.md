@@ -134,7 +134,14 @@ reply type. Mutation-verified three ways:
 Still **not reproduced end to end** — that needs a multi-worker deployment and
 an overrunning batch — so what is demonstrated is the renewal's ownership
 semantics and the loops' use of them, not the original double-run in situ. Said
-plainly so the next reader does not inherit more than was shown.
+plainly so the next reader does not inherit more than was shown. For the same
+reason, **CI's Docker container tests are the real check that the restructured
+lifespan still boots**: the loops live in `main.py`'s lifespan closure, and a
+review sandbox cannot start four workers.
+
+Gate: flake8 0 · black/isort clean · tsc 0 · eslint 0 · docs links 420 files 0
+broken · scheduler suites 56 passed · **whole backend suite 15,712 passed, 21
+skipped, 0 failed** in 8:58.
 
 ### Verified good this pass
 
