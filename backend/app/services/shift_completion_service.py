@@ -51,6 +51,7 @@ from app.services.shift_eligibility_service import (
     ShiftEligibilityService,
 )
 from app.services.training_program_service import TrainingProgramService
+from app.utils.call_type_matching import matching_call_types
 from app.utils.org_timezone import resolve_org_today
 
 #: ``settings["shift_reports"]["authorship"]`` value under which a shift's
@@ -247,6 +248,14 @@ class ShiftCompletionService:
         org = await eligibility._get_org(str(report.organization_id), for_update=True)
         in_force = eligibility.effective_call_type_slugs(org) if org else set()
         return all(isinstance(v, str) and v in in_force for v in values)
+
+    async def _org_call_types(self, organization_id) -> list:
+        """The department's call types, retired ones included."""
+        eligibility = ShiftEligibilityService(self.db)
+        org = await eligibility._get_org(str(organization_id))
+        if org is None:
+            return []
+        return eligibility.get_call_tracking_settings(org).get("call_types", [])
 
     async def _shift_has_incident_rows(self, shift_id: str) -> bool:
         """Whether this shift logged per-incident calls.
@@ -1226,6 +1235,9 @@ class ShiftCompletionService:
         requirements_progressed = []
         # Resolved on first use: only a call-type breakdown records a date.
         history_date: Optional[date] = None
+        # Likewise loaded on first use: only a type-specific requirement needs
+        # the department's call-type list.
+        org_call_types: Optional[list] = None
 
         # Find active enrollments for this trainee
         enrollment_query = select(ProgramEnrollment).where(
@@ -1281,13 +1293,14 @@ class ShiftCompletionService:
                     # Check if requirement specifies required call types
                     required_call_types = requirement.required_call_types or []
                     if required_call_types and call_types:
-                        # Count only calls matching the required types
-                        required_lower = [rct.lower() for rct in required_call_types]
-                        matching_calls = [
-                            ct
-                            for ct in call_types
-                            if isinstance(ct, str) and ct.lower() in required_lower
-                        ]
+                        # Count only calls matching the required types — by
+                        # type, not by spelling: a requirement stores slugs,
+                        # a report may hold slugs, labels or legacy text.
+                        if org_call_types is None:
+                            org_call_types = await self._org_call_types(organization_id)
+                        matching_calls = matching_call_types(
+                            call_types, required_call_types, org_call_types
+                        )
                         value_to_add = float(len(matching_calls))
                         if matching_calls:
                             call_type_detail = {

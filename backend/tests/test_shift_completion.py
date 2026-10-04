@@ -1986,3 +1986,115 @@ class TestShiftOfficerAuthorship:
             {"id": d["shift_id"]},
         )
         assert await self._drafts(db_session, d, d["crew_2"]) == 0
+
+
+class TestCallTypesNamedByRequirements:
+    """A type a requirement counts is locked against deletion, matched by type
+    — slug, label, or legacy text — and only within the department."""
+
+    async def _requirement(self, db_session, org_id, types):
+        from app.models.training import (
+            RequirementFrequency,
+            RequirementType,
+            TrainingRequirement,
+        )
+
+        db_session.add(
+            TrainingRequirement(
+                organization_id=org_id,
+                name=f"Calls {types}",
+                requirement_type=RequirementType.CALLS,
+                frequency=RequirementFrequency.ANNUAL,
+                required_calls=5,
+                required_call_types=types,
+            )
+        )
+        await db_session.flush()
+
+    async def test_slug_and_label_both_lock_the_type(
+        self, db_session, setup_shift_with_crew
+    ):
+        from app.services.call_tracking_service import CallTrackingService
+
+        d = setup_shift_with_crew
+        await self._requirement(db_session, d["org_id"], ["mva"])
+        await self._requirement(db_session, d["org_id"], ["Fire"])
+        named = await CallTrackingService(db_session).slugs_named_by_requirements(
+            d["org_id"], {"mva", "fire", "ems", "hazmat"}
+        )
+        assert named == {"mva", "fire"}
+
+    async def test_another_departments_requirement_does_not_lock(
+        self, db_session, two_orgs
+    ):
+        from app.services.call_tracking_service import CallTrackingService
+
+        org_a, org_b = two_orgs["org_a"], two_orgs["org_b"]
+        await self._requirement(db_session, org_b, ["hazmat"])
+        named = await CallTrackingService(db_session).slugs_named_by_requirements(
+            org_a, {"hazmat"}
+        )
+        assert named == set()
+
+
+class TestTypeSpecificCallCredit:
+    """A requirement counts the calls of its type however the report spelled
+    them. Exact string matching credited a slug requirement nothing from a
+    report holding the type's label."""
+
+    async def test_slug_requirement_credits_label_calls(
+        self, db_session, setup_training_org
+    ):
+        from app.models.training import (
+            ProgramEnrollment,
+            ProgramRequirement,
+            RequirementFrequency,
+            RequirementProgress,
+            RequirementType,
+            TrainingProgram,
+            TrainingRequirement,
+        )
+
+        org_id, officer_id, trainee_id = setup_training_org
+        program = TrainingProgram(organization_id=org_id, name="Driver")
+        requirement = TrainingRequirement(
+            organization_id=org_id,
+            name="MVA responses",
+            requirement_type=RequirementType.CALLS,
+            frequency=RequirementFrequency.ONE_TIME,
+            required_calls=10,
+            required_call_types=["mva"],
+        )
+        db_session.add_all([program, requirement])
+        await db_session.flush()
+        enrollment = ProgramEnrollment(
+            organization_id=org_id, user_id=trainee_id, program_id=program.id
+        )
+        db_session.add_all(
+            [
+                enrollment,
+                ProgramRequirement(
+                    program_id=program.id, requirement_id=requirement.id
+                ),
+            ]
+        )
+        await db_session.flush()
+        progress = RequirementProgress(
+            enrollment_id=enrollment.id, requirement_id=requirement.id
+        )
+        db_session.add(progress)
+        await db_session.flush()
+
+        svc = ShiftCompletionService(db_session)
+        await svc.create_report(
+            organization_id=uuid.UUID(org_id),
+            officer_id=uuid.UUID(officer_id),
+            trainee_id=trainee_id,
+            shift_date=date.today(),
+            hours_on_shift=12.0,
+            calls_responded=3,
+            # The built-in list labels mva "Motor Vehicle Accident".
+            call_types=["Motor Vehicle Accident", "Fire", "motor vehicle accident"],
+        )
+        await db_session.refresh(progress)
+        assert progress.progress_value == 2

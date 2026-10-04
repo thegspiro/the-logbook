@@ -1601,7 +1601,7 @@ class TestDeletingAUsedTypeIsRefusedServerSide:
     so the check has to exist on this side too."""
 
     @staticmethod
-    def _guard(stored_slugs, locked):
+    def _guard(stored_slugs, locked, required=()):
         """Patch the reads the guard makes: the slugs in force, the persisted
         list the cap ratchet measures, and the locked set. Raw, not the
         reader's normalized list — a slug the reader hid is still what its
@@ -1626,9 +1626,14 @@ class TestDeletingAUsedTypeIsRefusedServerSide:
                 "slugs_locked_by_history",
                 AsyncMock(return_value=set(locked)),
             ),
+            patch.object(
+                CallTrackingService,
+                "slugs_named_by_requirements",
+                AsyncMock(return_value=set(required)),
+            ),
         )
 
-    async def _save(self, incoming_slugs, stored_slugs, locked):
+    async def _save(self, incoming_slugs, stored_slugs, locked, required=()):
         from app.api.v1.endpoints.scheduling import (
             _reject_deleting_a_used_call_type,
         )
@@ -1637,9 +1642,15 @@ class TestDeletingAUsedTypeIsRefusedServerSide:
             mode=CallTrackingMode.COUNT_ONLY,
             call_types=[{"slug": s, "label": s} for s in incoming_slugs],
         )
-        a, b, s, c = self._guard(stored_slugs, locked)
-        with a, b, s, c:
+        a, b, s, c, r = self._guard(stored_slugs, locked, required)
+        with a, b, s, c, r:
             await _reject_deleting_a_used_call_type(MagicMock(), "org-1", incoming)
+
+    async def test_dropping_a_type_a_requirement_counts_is_refused(self):
+        """No calls filed under it yet, but a requirement advances members on
+        it: deleting it would stall them on calls nobody can log."""
+        with pytest.raises(ValueError, match="training requirement counts: fire"):
+            await self._save(["ems"], ["fire", "ems"], set(), required={"fire"})
 
     async def test_the_reserved_slug_does_not_deadlock_the_settings_screen(self):
         """An org that had configured `unclassified` cannot send it back — the
@@ -1672,8 +1683,8 @@ class TestDeletingAUsedTypeIsRefusedServerSide:
             mode=CallTrackingMode.COUNT_ONLY,
             call_types=[{"slug": "fire", "label": "Fire", "active": False}],
         )
-        a, b, s, c = self._guard(["fire"], {"fire"})
-        with a, b, s, c:
+        a, b, s, c, r = self._guard(["fire"], {"fire"})
+        with a, b, s, c, r:
             await _reject_deleting_a_used_call_type(MagicMock(), "org-1", incoming)
 
     async def test_an_unchanged_list_costs_no_usage_query(self):
@@ -1688,7 +1699,7 @@ class TestDeletingAUsedTypeIsRefusedServerSide:
             call_types=[{"slug": "fire", "label": "Fire"}],
         )
         locked = AsyncMock(return_value=set())
-        a, b, s, _ = self._guard(["fire"], set())
+        a, b, s, _, _r = self._guard(["fire"], set())
         with a, b, s, patch.object(
             CallTrackingService, "slugs_locked_by_history", locked
         ):
@@ -2107,6 +2118,10 @@ class TestTheEditorCannotDeleteADefaultWithHistory:
             CallTrackingService,
             "slugs_locked_by_history",
             AsyncMock(return_value=set(locked)),
+        ), patch.object(
+            CallTrackingService,
+            "slugs_named_by_requirements",
+            AsyncMock(return_value=set()),
         ):
             await _reject_deleting_a_used_call_type(MagicMock(), "org-1", incoming)
 
@@ -2147,6 +2162,10 @@ class TestTheCapIsARatchet:
         ), patch.object(
             CallTrackingService,
             "slugs_locked_by_history",
+            AsyncMock(return_value=set()),
+        ), patch.object(
+            CallTrackingService,
+            "slugs_named_by_requirements",
             AsyncMock(return_value=set()),
         ):
             await _reject_deleting_a_used_call_type(MagicMock(), "org-1", incoming)

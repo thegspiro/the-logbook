@@ -37,8 +37,9 @@ from app.models.call_tracking import (
     OrgCall,
     OrgCallResponse,
 )
-from app.models.training import Shift, ShiftCompletionReport
+from app.models.training import Shift, ShiftCompletionReport, TrainingRequirement
 from app.services.shift_eligibility_service import ShiftEligibilityService
+from app.utils.call_type_matching import call_type_key
 from app.utils.org_timezone import resolve_org_today
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
@@ -101,6 +102,39 @@ class CallTrackingService:
         """
         settings = await self.get_settings(str(organization_id))
         return {t["slug"]: t["label"] for t in settings.get("call_types", [])}
+
+    async def slugs_named_by_requirements(
+        self, organization_id: str, candidates: set
+    ) -> set:
+        """Candidate slugs a training requirement counts calls of.
+
+        Deleting one would leave the requirement naming a type the department
+        no longer has, and a member's advancement would stall on calls that
+        can no longer be logged as that type. Matched by type rather than
+        spelling (``call_type_key``), since a requirement may name a type by
+        its slug, its label, or text typed before the picker existed.
+        """
+        if not candidates:
+            return set()
+        eligibility = ShiftEligibilityService(self.db)
+        org = await eligibility._get_org(organization_id)
+        types = eligibility.get_call_tracking_settings(org)["call_types"] if org else []
+        rows = (
+            await self.db.execute(
+                select(TrainingRequirement.required_call_types).where(
+                    TrainingRequirement.organization_id == str(organization_id),
+                    TrainingRequirement.required_call_types.isnot(None),
+                )
+            )
+        ).scalars()
+        named = {
+            call_type_key(value, types)
+            for values in rows
+            if isinstance(values, list)
+            for value in values
+            if isinstance(value, str)
+        }
+        return {slug for slug in candidates if f"type:{slug}" in named}
 
     async def slugs_locked_by_history(
         self,

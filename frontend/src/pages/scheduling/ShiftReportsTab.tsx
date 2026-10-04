@@ -58,14 +58,13 @@ import { formatDateCustom, formatTime, getTodayLocalDate, toLocalDateString } fr
 import { formatHours } from '../../utils/hoursFormatting';
 import {
   DEFAULT_SKILLS,
-  DEFAULT_CALL_TYPE_OPTIONS,
   DEFAULT_COMPETENCY_LABELS,
   REVIEW_STATUS_STYLES,
   shiftHoursForOneMember,
 } from '../../modules/scheduling/constants/shiftReportConstants';
 import { ReportContentDisplay } from '../../modules/scheduling/components/ReportContentDisplay';
 import { CallTypeChips } from '../../modules/scheduling/components/CallTypeChips';
-import { orgCallTypeChoices, textCallTypeChoices } from '../../modules/scheduling/components/callTypeChoices';
+import { labelCallTypeChoices, orgCallTypeChoices } from '../../modules/scheduling/components/callTypeChoices';
 import { callTypesAreOrgSlugs, useOrgCallTypes } from '../../modules/scheduling/hooks/useCallTypeLabels';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { saveDraft, loadDraft, deleteDraft } from '../../utils/shiftReportDrafts';
@@ -216,26 +215,22 @@ export const ShiftReportsTab: React.FC = () => {
   const ratingLabel = config?.rating_label || 'Performance Rating';
   const ratingScaleType = config?.rating_scale_type || 'stars';
   const ratingScaleLabels = config?.rating_scale_labels || DEFAULT_COMPETENCY_LABELS;
-  const callTypeOptions = config?.shift_review_call_types?.length
-    ? config.shift_review_call_types
-    : DEFAULT_CALL_TYPE_OPTIONS;
-
   const orgCallTypes = useOrgCallTypes();
 
   /**
    * Which vocabulary the draft editor offers for a given report.
    *
-   * A report filed against a count-only shift stores this department's own
-   * type slugs; everything else stores what an officer typed. Offering the
-   * free-text list on the first kind is what let an edit mix the two, leaving
-   * the stored slug unselected on screen and unresolvable afterwards.
+   * Both are the department's one list. A report filed against a count-only
+   * shift stores its slugs; everything else stores text, so it is offered the
+   * same types by label. Offering slugs to a text report is what let an edit
+   * mix the two, leaving values unresolvable afterwards.
    */
   const draftCallTypeChoices = useCallback(
     (report: ShiftCompletionReport) =>
       callTypesAreOrgSlugs(report)
         ? orgCallTypeChoices(orgCallTypes, report.call_types || [])
-        : textCallTypeChoices(callTypeOptions),
-    [orgCallTypes, callTypeOptions]
+        : labelCallTypeChoices(orgCallTypes, report.call_types || []),
+    [orgCallTypes]
   );
 
   const skillOptions = useMemo(() => {

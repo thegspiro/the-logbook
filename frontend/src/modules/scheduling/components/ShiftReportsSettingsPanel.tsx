@@ -31,6 +31,7 @@ import {
   Star,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { Link } from 'react-router';
 import { organizationService } from '../../../services/api';
 import { trainingModuleConfigService } from '../../../services/trainingServices';
 import { schedulingService } from '../services/api';
@@ -39,7 +40,6 @@ import EditableTagList from './EditableTagList';
 import TagChip from './TagChip';
 import { tagChipKeys } from './tagChipKeys';
 import {
-  SAMPLE_CALL_TYPES,
   SAMPLE_SKILLS,
   SAMPLE_TASKS,
   SAMPLE_APPARATUS_SKILLS,
@@ -152,12 +152,10 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
   const [skillEvalNames, setSkillEvalNames] = useState<Set<string>>(new Set());
 
   // Editable lists for training defaults
-  const [callTypes, setCallTypes] = useState<string[]>([]);
   const [skills, setSkills] = useState<string[]>([]);
   const [tasks, setTasks] = useState<string[]>([]);
 
   // New-item inputs
-  const [newCallType, setNewCallType] = useState('');
   const [newSkill, setNewSkill] = useState('');
   const [newTask, setNewTask] = useState('');
 
@@ -197,7 +195,6 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
       try {
         const config = await trainingModuleConfigService.getConfig();
         setTrainingConfig(config);
-        setCallTypes(config.shift_review_call_types?.length ? config.shift_review_call_types : SAMPLE_CALL_TYPES);
         setSkills(config.shift_review_default_skills?.length ? config.shift_review_default_skills : SAMPLE_SKILLS);
         setTasks(config.shift_review_default_tasks?.length ? config.shift_review_default_tasks : SAMPLE_TASKS);
         setAppTypeSkills(
@@ -279,7 +276,6 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
     await runSaveTraining(
       async () => {
         const result = await trainingModuleConfigService.updateConfig({
-          shift_review_call_types: callTypes,
           shift_review_default_skills: skills,
           shift_review_default_tasks: tasks,
         });
@@ -288,7 +284,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
       'Training feedback defaults saved',
       'Failed to save training defaults'
     );
-  }, [callTypes, skills, tasks, runSaveTraining]);
+  }, [skills, tasks, runSaveTraining]);
 
   const saveAppTypeMapping = useCallback(
     async (updatedSkills: Record<string, string[]>, updatedTasks: Record<string, string[]>) => {
@@ -360,8 +356,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
 
   const trainingDirty =
     trainingConfig &&
-    (JSON.stringify(callTypes) !== JSON.stringify(trainingConfig.shift_review_call_types ?? []) ||
-      JSON.stringify(skills) !== JSON.stringify(trainingConfig.shift_review_default_skills ?? []) ||
+    (JSON.stringify(skills) !== JSON.stringify(trainingConfig.shift_review_default_skills ?? []) ||
       JSON.stringify(tasks) !== JSON.stringify(trainingConfig.shift_review_default_tasks ?? []));
 
   // ── Render ──
@@ -558,8 +553,8 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
         return (
           <div>
             <p className="text-theme-text-muted mb-4 text-sm">
-              Define the default call types, skills, and tasks that appear on the officer&apos;s shift completion report
-              form. Officers can add to these lists when filing a report.
+              Define the default skills and tasks that appear on the officer&apos;s shift completion report form.
+              Officers can add to these lists when filing a report.
             </p>
 
             {loadingTraining ? (
@@ -573,18 +568,24 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
               </p>
             ) : (
               <div className="space-y-5">
-                {/* Call Types */}
-                <TagListEditor
-                  label="Call / Incident Types"
-                  description="Incident types officers can select when recording calls responded."
-                  items={callTypes}
-                  onRemove={(i) => removeItem(callTypes, setCallTypes, i)}
-                  onMove={(i, d) => moveItem(callTypes, setCallTypes, i, d)}
-                  inputValue={newCallType}
-                  onInputChange={setNewCallType}
-                  onAdd={() => addItem(callTypes, setCallTypes, newCallType, setNewCallType)}
-                  placeholder="e.g. Structure Fire"
-                />
+                {/* Call types are the department's one list, edited with the
+                    rest of call tracking. A second, free-text list here was
+                    what let reports and training requirements disagree about
+                    what a call type was called. */}
+                <div className="border-theme-surface-border rounded-lg border p-3">
+                  <p className="text-theme-text-primary text-sm font-medium">Call types</p>
+                  <p className="text-theme-text-muted mt-0.5 text-xs">
+                    Reports, the call log and training requirements all use the department&apos;s call-type list. Add,
+                    rename or turn off types in{' '}
+                    <Link
+                      to="/scheduling/admin/settings/general"
+                      className="font-medium text-violet-700 hover:underline dark:text-violet-300"
+                    >
+                      General → Call types
+                    </Link>
+                    .
+                  </p>
+                </div>
 
                 {/* Skills */}
                 <TagListEditor

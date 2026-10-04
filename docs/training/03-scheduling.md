@@ -340,7 +340,7 @@ During a shift, officers (with the `scheduling.manage` permission) can log every
 2. Scroll to the **Calls / Runs** section (a count badge shows how many calls are logged).
 3. Click **+ Log Call** to open the inline form.
 4. Fill in the call details:
-   - **Incident type** _(required)_ — e.g., Structure Fire, EMS, MVA.
+   - **Incident type** _(required)_ — picked from the department's call types (Scheduling → Settings → General → Call types) _(2026-10-04)_. The type's name is what is stored, so NFIRS/NEMSIS exports and ePCR imports read it as before; a call logged earlier with typed wording keeps it when edited.
    - **Incident number** _(optional)_ — your CAD/run number.
    - **Dispatched / On-scene / Cleared times** _(optional)_ — entered in your local time and stored in UTC.
    - **Cancelled en route** and **Refusal (medical)** — checkboxes for those outcomes.

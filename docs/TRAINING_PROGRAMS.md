@@ -2084,7 +2084,7 @@ Auto-populated fields display an **(auto)** badge. Officers can edit values befo
 When a shift report is created (or a draft transitions to `approved`/`pending_review`), the system automatically updates requirement progress:
 
 - **SHIFTS** requirements: Incremented by 1
-- **CALLS** requirements: If `required_call_types` specified on the requirement, only matching calls count (case-insensitive). Otherwise all calls counted. Call type breakdown tracked in `progress_notes`
+- **CALLS** requirements: If `required_call_types` specified on the requirement, only calls of those types count — matched by type via `app/utils/call_type_matching.py` (slug, label or folded legacy text), not by exact spelling _(2026-10-04)_. Otherwise all calls counted. Call type breakdown tracked in `progress_notes`
 - **HOURS** requirements: Incremented by hours on shift
 
 Progress percentages and enrollment completion are automatically recalculated. **Draft reports do not trigger progress updates** — progress is deferred until the draft is completed.
@@ -2377,7 +2377,7 @@ and retries with `override=true`.
 Shift completion reports (`POST /training/shift-reports`) auto-progress program requirements when linked to an enrollment:
 
 - **SHIFTS** requirements: Incremented by 1 per report
-- **CALLS** requirements: If `required_call_types` specified on the requirement, only matching calls count (case-insensitive matching). Otherwise all calls counted. Call type breakdown tracked in `progress_notes` _(2026-03-28)_
+- **CALLS** requirements: If `required_call_types` specified on the requirement, only calls of those types count — matched by type (slug, label or folded legacy text) since 2026-10-04, case-insensitive string matching before that. Otherwise all calls counted. Call type breakdown tracked in `progress_notes` _(2026-03-28)_
 - **HOURS** requirements: Incremented by hours on shift
 
 **Shift Finalization Integration** _(2026-03-28)_: When a shift is finalized via `POST /scheduling/shifts/{id}/finalize`, the system auto-creates draft ShiftCompletionReports for all attendees with active program enrollments. Draft reports do NOT trigger pipeline progress — progress is deferred until the officer completes the draft (transitions to `approved` or `pending_review`). This prevents double-counting and ensures officer review before data impacts training pipeline.

@@ -1110,7 +1110,7 @@ Shift completion reports are filed by shift officers after each shift. They reco
 - **Skills observed** — structured list of `{skill_name, demonstrated, score (1-5), notes, comment}` entries. Each skill can be scored on a 1-5 scale: 1=Needs work, 2=Developing, 3=Competent, 4=Proficient, 5=Excellent. Scores flow through to `SkillCheckoff` records and the competency score history
 - **Tasks performed** — structured list of `{task, description, comment}` entries
 
-These reports **automatically update training program progress** for enrolled members. When a report is filed (or a draft is completed), the system credits hours, shift count, and call count toward matching requirements. Call type requirements support **case-insensitive matching** against the report's call_types array — only calls matching the required types count toward progress.
+These reports **automatically update training program progress** for enrolled members. When a report is filed (or a draft is completed), the system credits hours, shift count, and call count toward matching requirements. Call type requirements count only calls of the types they name, matched **by type rather than by spelling** _(2026-10-04)_: a requirement stores the department's call-type slugs (picked in the requirement editor's **Call types that count**), and a report's calls match whether they were stored as that slug, as the type's label, or as the same words typed before the picker existed. Until then matching was an exact case-insensitive string comparison, so a requirement naming `mva` never counted a report listing "Motor Vehicle Accident".
 
 Which requirements a report advanced is recorded on the report
 (`requirements_progressed`) but is not shown anywhere in the interface — not on
@@ -1118,6 +1118,33 @@ the card, not in the expanded body, and not in the review modal. Check the
 member's enrolment progress to see the credit land.
 
 ![Filed shift reports listing trainee, date, hours, calls and rating](./images/02-31-shift-reports-filed.png)
+
+### One call-type list _(2026-10-04)_
+
+A department has **one** list of call types, edited in **Scheduling → Settings
+→ General → Call types**: add a specialized type, rename one, turn off one that
+doesn't apply (it stops being offered but history keeps it), or delete one that
+has never been used. Everything else reads that list:
+
+| Where                                             | Stores                      |
+| ------------------------------------------------- | --------------------------- |
+| Close-out call count (count-only departments)     | the type's slug             |
+| Call log **Incident type** (detailed departments) | the type's name             |
+| Shift report **Call Types** chips, manual reports | name, or slug on count-only |
+| A calls requirement's **Call types that count**   | the type's slug             |
+
+Requirements match by type, so it doesn't matter which column a report used.
+That is what makes call-specific advancement work: pick, say, **Motor Vehicle
+Accident** on a pipeline requirement for 5 calls, and every MVA a trainee is
+credited with on a shift report counts toward it.
+
+A type a training requirement counts can't be deleted — turn it off instead,
+or take it off the requirement first.
+
+The separate free-text **Call / Incident Types** list that used to live under
+Shift Reports settings is gone. Migration `edf608b5a8ea` copied each
+department's entries into its call-type list (skipping any that already named a
+type), so nothing an officer could pick before has disappeared.
 
 ### Shift Finalization Workflow _(2026-03-28)_
 
@@ -1374,7 +1401,7 @@ shift to draw a crew from.
 - **Auto-populate edge case:** If the trainee is not found in the shift's attendance records, the preview returns zeroed data. If there are no ShiftCall records, calls_responded defaults to 0 and call_types is empty.
 - **Trainee with assignment but no attendance:** If a trainee has a shift assignment but no attendance record (e.g., they were assigned but didn't check in), the auto-populate returns zeros and the officer can manually enter hours.
 - **Report shift_date validation:** When a report is linked to a specific shift, the report's `shift_date` must match the linked shift's actual date. A mismatch returns a validation error.
-- **Call type matching:** Requirements with `required_call_types` use case-insensitive matching. "Medical" in a requirement matches "medical" in a call type. The system tracks matched types in `progress_notes` for audit.
+- **Call type matching:** Requirements with `required_call_types` match calls by type: the department's slug, its label and legacy free text that folds to either (case, spaces, underscores and hyphens ignored) all count as the same type. "Medical" in a requirement still matches "medical" on a report. The system tracks matched types in `progress_notes` for audit. See **One call-type list** below.
 - **Ad hoc reports:** Reports filed without a `shift_id` are saved as ad hoc reports — no auto-population is available, and they appear in reports as "ad hoc".
 - **Failure isolation during finalization:** If draft auto-creation fails for one trainee, the error is logged and processing continues for remaining attendees.
 - **All form sections toggled off:** When all optional sections are disabled, only core fields (trainee, shift date, hours, calls) remain on the form. The form is still submittable.

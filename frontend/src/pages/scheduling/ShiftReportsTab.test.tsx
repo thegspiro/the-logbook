@@ -461,9 +461,9 @@ describe('ShiftReportsTab — calls are counted per member', () => {
     await screen.findByLabelText('Calls for Sam Ortiz');
     await userEvent.click(screen.getByRole('button', { name: /Submit Reports \(2\)/ }));
 
-    expect(mockBatchCreate).toHaveBeenCalledWith(
-      expect.not.objectContaining({ member_call_counts: expect.anything() })
-    );
+    expect(mockBatchCreate).toHaveBeenCalledTimes(1);
+    const [payload] = mockBatchCreate.mock.calls[0] as [Record<string, unknown>];
+    expect(payload).not.toHaveProperty('member_call_counts');
   });
 });
 
