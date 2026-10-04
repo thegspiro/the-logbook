@@ -582,7 +582,7 @@ const Members: React.FC = () => {
                   </button>
                   <button
                     onClick={handleExportCSV}
-                    className="inline-flex items-center gap-1 rounded-sm bg-blue-600 px-3 py-1.5 text-xs text-white transition-colors hover:bg-blue-700"
+                    className="inline-flex items-center gap-1 rounded-sm bg-red-800 px-3 py-1.5 text-xs text-white transition-colors hover:bg-red-900"
                   >
                     <Download className="h-3 w-3" />
                     Export Selected

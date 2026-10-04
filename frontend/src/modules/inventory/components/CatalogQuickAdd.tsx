@@ -356,7 +356,7 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
           type="button"
           onClick={() => void addAsFreeText()}
           disabled={disabled || !typed}
-          className="touch:min-h-[44px] touch:min-w-[44px] flex flex-shrink-0 items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-40"
+          className="touch:min-h-[44px] touch:min-w-[44px] flex flex-shrink-0 items-center gap-1 rounded-md bg-red-800 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-900 disabled:opacity-40"
         >
           <Plus className="h-3 w-3" />
           Add

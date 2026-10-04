@@ -505,7 +505,7 @@ const EmailTemplatesPage: React.FC = () => {
               <h2 className="text-theme-text-primary text-lg font-semibold">Scheduled Emails</h2>
               <button
                 onClick={() => setShowScheduleForm(!showScheduleForm)}
-                className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+                className="flex items-center gap-2 rounded-md bg-red-800 px-4 py-2 text-sm text-white hover:bg-red-900"
               >
                 <Plus className="h-4 w-4" />
                 Schedule Email

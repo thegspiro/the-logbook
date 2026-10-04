@@ -296,7 +296,7 @@ export const SkillTestOfficerActions: React.FC<SkillTestOfficerActionsProps> = (
             <button
               onClick={() => void handleReturn()}
               disabled={returning || returnReason.trim().length < MIN_RETURN_REASON_LENGTH}
-              className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg bg-red-800 px-4 py-2 font-medium text-white transition-colors hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {returning ? 'Sending…' : 'Send back'}
             </button>
