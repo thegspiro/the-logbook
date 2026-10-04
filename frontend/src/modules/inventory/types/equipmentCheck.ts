@@ -644,6 +644,25 @@ export function isShiftCheckCompleted(summary: ShiftCheckSummary): boolean {
   return summary.isCompleted && summary.overallStatus !== 'incomplete';
 }
 
+/** `/my-checklists` statuses meaning the shift's check has been filed. */
+const SUBMITTED_CHECKLIST_STATUSES: ReadonlySet<string> = new Set([
+  'pass',
+  'passed',
+  'fail',
+  'failed',
+  'out_of_service',
+]);
+
+/**
+ * Whether a `/my-checklists` row has been filed for its shift. A failed check
+ * is filed: the failure is the officer's to follow up, not a check still owed.
+ * One rule for every screen, so "Submitted for this shift" on one page is never
+ * "1 check waiting" on another.
+ */
+export function isChecklistSubmitted(status: string): boolean {
+  return SUBMITTED_CHECKLIST_STATUSES.has(status);
+}
+
 export interface CheckItemHistory {
   checkId: string;
   shiftId: string;

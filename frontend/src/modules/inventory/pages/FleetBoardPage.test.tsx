@@ -160,6 +160,54 @@ describe('FleetBoardPage', () => {
     expect(screen.queryByText(/check waiting/)).not.toBeInTheDocument();
   });
 
+  // A filed check is done — including one that failed, whose follow-up belongs
+  // to the officer. My Checklists already reads "Submitted for this shift" for
+  // these rows; the strip used to count them as waiting by date alone.
+  it.each(['pass', 'fail', 'out_of_service'])(
+    'leaves a %s check already filed today out of the strip',
+    async (status) => {
+      mockGetMyChecklists.mockResolvedValue([
+        {
+          shiftId: 's-1',
+          shiftDate: '2026-08-11',
+          apparatusName: 'E-2',
+          templateId: 't-1',
+          templateName: 'Engine Daily Check',
+          checkTiming: 'start_of_shift',
+          status,
+        },
+      ]);
+      renderWithRouter(<FleetBoardPage />);
+      await screen.findByText('E-1');
+      expect(screen.queryByText(/check(s)? waiting/)).not.toBeInTheDocument();
+    }
+  );
+
+  it('counts only the unfiled check when one of two is already filed', async () => {
+    mockGetMyChecklists.mockResolvedValue([
+      {
+        shiftId: 's-1',
+        shiftDate: '2026-08-11',
+        apparatusName: 'E-2',
+        templateId: 't-1',
+        templateName: 'Engine Daily Check',
+        checkTiming: 'start_of_shift',
+        status: 'fail',
+      },
+      {
+        shiftId: 's-1',
+        shiftDate: '2026-08-11',
+        apparatusName: 'E-2',
+        templateId: 't-2',
+        templateName: 'Engine End of Shift',
+        checkTiming: 'end_of_shift',
+        status: 'not_started',
+      },
+    ]);
+    renderWithRouter(<FleetBoardPage />);
+    expect(await screen.findByText('You have 1 check waiting')).toBeInTheDocument();
+  });
+
   it("links the strip to the member's own checklists", async () => {
     mockGetMyChecklists.mockResolvedValue([
       {
