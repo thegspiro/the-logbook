@@ -332,7 +332,12 @@ const MinutesPage: React.FC = () => {
           </div>
           <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Open Action Items</p>
-            <p className="mt-1 text-2xl font-bold text-yellow-700">{summary?.open_action_items ?? 0}</p>
+            {/* Action items live on meetings and on minutes; each service
+                counts its own open ones, and both lists feed Action Items. The
+                meeting figure alone read 0 beside open minutes items (W52-5). */}
+            <p className="mt-1 text-2xl font-bold text-yellow-700">
+              {(summary?.open_action_items ?? 0) + (minutesStats?.open_action_items ?? 0)}
+            </p>
           </div>
           <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Pending Approval</p>

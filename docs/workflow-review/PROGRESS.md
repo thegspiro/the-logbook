@@ -105,7 +105,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | --- | --------------------------------------------------------------------- | ------------------ | -------------------------------------------------- | ------ |
 | W50 | An election: create, nominate, vote by ballot link, close, results    | secretary → member | `/elections`, `/ballot`                            | ✅     |
 | W51 | Meeting minutes: draft, approve, publish                              | secretary          | `/minutes`                                         | ✅     |
-| W52 | Action items: assign, work, close                                     | secretary → member | `/action-items`                                    | ⬜     |
+| W52 | Action items: assign, work, close                                     | secretary → member | `/action-items`                                    | ✅     |
 | W53 | Documents: folders, upload, who can see what                          | secretary, member  | `/documents`                                       | ⬜     |
 | W54 | Org chart and legal documents                                         | admin, member      | `/governance/org-chart`, `/governance/legal`       | ⬜     |
 | W55 | Messages: send to a group, the member's inbox, message administration | admin → member     | `/communications/messages`, `/messages`            | ⬜     |
@@ -199,14 +199,41 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   it: "W51 October Business Meeting (event)", 1 Oct 7:00 PM, linked to the
   second set of October minutes. The "link survives a clear" half of W50-60 is
   still read from code only.
-- **W52** — the Action Items page may show a minutes action item's due date a
-  day early, the same UTC-midnight shift W51-5 fixed on the minutes page.
-  The Minutes page's "Open action items" tile counts meeting action items only
-  (the meetings summary), not minutes action items: a minutes item left it at 0.
 - **Minutes, a later pass** — the meetings list badges every meeting "Draft"
   forever (W51-9).
 
 ## Log
+
+### W52 — Action items: assign, work, close — 2026-10-04
+
+Driven as: `secretary` adding and working items on minutes and reading Action
+Items; `member` reading, filtering and trying to close one; repeated at
+390×844. Database continued from W51.
+
+Held:
+
+- a status change made on the minutes page showed on Action Items after a
+  reload;
+- the member saw only items on approved minutes;
+- no sideways overflow on a phone.
+
+Fixed:
+
+- W52-1 (MED — due dates read a day early);
+- W52-2 (MED — an item counted overdue the evening before its due day);
+- W52-3 (MED — "Open" filtered to nothing beside an Open tile of 3);
+- W52-4 (MED — rows unreachable by keyboard);
+- W52-5 (LOW — the Minutes page's open-items tile left out minutes items, the
+  W51 lead).
+
+Flagged: W52-6 (MED — nothing can be assigned to a member, so "Assigned to me"
+never matches) and W52-7 (MED — an assignee cannot close their own item). Both
+are in KNOWN_LIMITATIONS.
+
+Gate: typecheck and lint are clean, and 44 touched frontend tests pass, as does
+the full frontend suite (715 files, 9051 tests). No backend change.
+
+Next: W53.
 
 ### W51 — Meeting minutes: draft, approve, publish — 2026-10-03
 
