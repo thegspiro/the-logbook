@@ -158,6 +158,34 @@ org-validated at write and never repointed — and still the CC-1 remediation no
 carried across for consistency. CC-2 (location UI) and CC-3 (`fold=0` NIT) are
 unchanged.
 
+### Pass 3 completion gate
+
+| Check                            | Result                                                                                                                                                                                                                                                                                                                                                          |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run typecheck`              | ✅ 0 errors (no frontend change)                                                                                                                                                                                                                                                                                                                                |
+| `flake8 app/ tests/`             | ✅ 0 violations                                                                                                                                                                                                                                                                                                                                                 |
+| `black --check app/ tests/`      | ✅ 1342 files unchanged                                                                                                                                                                                                                                                                                                                                         |
+| `isort --check-only app/ tests/` | ✅ clean                                                                                                                                                                                                                                                                                                                                                        |
+| `npm run lint`                   | ✅ 0 errors                                                                                                                                                                                                                                                                                                                                                     |
+| Docs link check                  | ✅ 419 files, 0 broken                                                                                                                                                                                                                                                                                                                                          |
+| Dependent backend tests          | ✅ **196 passed** — every test file importing `CourseCohortService` or naming a cohort: `test_course_cohort`, `test_course_syllabus`, `test_scheduling_dates`, `test_attendance_lock_reaches_client`, `test_course_cohort_class_mutation_scoping`, `test_pipeline_yearly_trends`, `test_training_extended_null_handling`, `test_training_session_course_lookup` |
+| Whole backend suite              | ⚠️ **not completed here** — see below                                                                                                                                                                                                                                                                                                                           |
+
+**The whole-suite run is an environment limitation this pass could not clear,
+recorded rather than glossed.** The suite now collects **15,709** tests, up from
+12,325 on 2026-09-10. It no longer finishes inside the session's 30-minute
+background ceiling, and splitting it into thirds did not help — the first third
+alone exceeded ten minutes, so the slowdown is per-test rather than a matter of
+total count, and points at DB-backed tests added over the last three weeks
+rather than at anything in this diff. Growth in test _count_ alone would predict
+roughly six minutes.
+
+What was run instead is the set that can actually fail from this change: the
+changed service has exactly two importers in `app/` (`course_cohorts.py`,
+`course_syllabus_service.py`) and the eight test files above cover them. CI runs
+the full suite on the branch, so the whole-suite result is still gated before
+merge — it is simply not a number this pass can report.
+
 ---
 
 ## Pass 2 (2026-08-08) — six-lens sweep
