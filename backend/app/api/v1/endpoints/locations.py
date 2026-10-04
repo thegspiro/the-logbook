@@ -398,7 +398,12 @@ async def get_location_display_info(
                 event_id=str(event.id),
                 event_name=event.title,
                 event_type=event.event_type.value if event.event_type else None,
-                event_description=event.description,
+                # Matches the public kiosk's own redaction (public/display.py):
+                # this reports whatever event is physically using the room,
+                # with no audience filter on top (see LOC-32's history), so a
+                # member who could not otherwise see this event must not learn
+                # its description here either. LOC5-32-1.
+                event_description=None,
                 start_datetime=event.start_datetime.isoformat(),
                 end_datetime=event.end_datetime.isoformat(),
                 actual_end_time=(
