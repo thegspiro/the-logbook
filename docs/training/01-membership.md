@@ -143,16 +143,18 @@ is written to the audit log with the old and new value.
 **Where it shows.** The preferred name replaces the first name wherever the
 app is just referring to someone: shifts and scheduling, events and check-in,
 the member directory and profiles, dashboards and greetings, notifications and
-emails, inventory assignments, messages, pickers and search, and the member
-ID card. Searching for either name finds the member.
+emails, inventory assignments, messages, pickers and search, the member ID
+card, and the attendance list in meeting minutes. Searching for either name
+finds the member. Minutes record the name when they are drafted, so changing
+a preferred name later does not rewrite minutes already on file.
 
 **Where the legal name stays.** Anything that may go to a government body or
 has to match an ID keeps the legal first name: reports and every CSV/PDF
 export, training records, certificates and compliance reports, skills testing
 records, elections and ballots, legal documents, signed forms and consent
-records, property custody and return records, meeting minutes, and the audit
-log. The member's profile shows the legal name under the
-preferred one so officers can always see both.
+records, property custody and return records, and the audit log. The
+member's profile shows the legal name under the preferred one so officers can
+always see both.
 
 ---
 

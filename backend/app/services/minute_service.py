@@ -950,10 +950,11 @@ class MinuteService:
                 attendees_json.append(
                     {
                         "user_id": att.user_id,
+                        # The name the member goes by, as colleagues know
+                        # them. Snapshotted, so minutes already drafted keep
+                        # the name they were drafted with.
                         "name": (
-                            f"{user.first_name} {user.last_name}"
-                            if user and user.first_name
-                            else (user.username if user else "Unknown")
+                            (user.display_name or user.username) if user else "Unknown"
                         ),
                         "present": att.present,
                         "excused": att.excused,
