@@ -386,7 +386,10 @@ class TrainingService:
         restriction", not "match nothing."
         """
         from app.models.training import RequirementType
-        from app.services.training_compliance import certification_record_matches
+        from app.services.training_compliance import (
+            certification_record_matches,
+            hours_record_counts,
+        )
 
         if req_type == RequirementType.CERTIFICATION.value:
             return certification_record_matches(requirement, record)
@@ -396,16 +399,7 @@ class TrainingService:
             return bool(record.course_id) and str(record.course_id) in course_ids
 
         if req_type == RequirementType.HOURS.value:
-            if (
-                requirement.training_type
-                and record.training_type != requirement.training_type
-            ):
-                return False
-            required_courses = getattr(requirement, "required_courses", None)
-            if required_courses:
-                course_ids = {str(c) for c in required_courses}
-                return bool(record.course_id) and str(record.course_id) in course_ids
-            return True
+            return hours_record_counts(requirement, record)
 
         if req_type in (RequirementType.SHIFTS.value, RequirementType.CALLS.value):
             return (
@@ -573,6 +567,7 @@ class TrainingService:
             apply_recency,
             catch_up_deadline,
             certification_record_matches,
+            hours_record_counts,
         )
 
         # The real day, captured before it is replaced by the evaluation
@@ -628,18 +623,7 @@ class TrainingService:
 
         # ---- HOURS ----
         if req_type == RequirementType.HOURS.value:
-            type_matched = windowed
-            if req.training_type:
-                type_matched = [
-                    r for r in windowed if r.training_type == req.training_type
-                ]
-            if req.required_courses:
-                req_courses = set(req.required_courses)
-                type_matched = [
-                    r
-                    for r in type_matched
-                    if r.course_id and str(r.course_id) in req_courses
-                ]
+            type_matched = [r for r in windowed if hours_record_counts(req, r)]
 
             completed_value = sum(r.hours_completed or 0 for r in type_matched)
             base_required = req.required_hours or 0
@@ -933,6 +917,7 @@ class TrainingService:
             apply_recency,
             catch_up_deadline,
             certification_record_matches,
+            hours_record_counts,
             recency_cutoff,
         )
 
@@ -1092,26 +1077,24 @@ class TrainingService:
                     hours_q = hours_q.where(
                         TrainingRecord.training_type == requirement.training_type
                     )
+                # The filters of hours_record_counts, applied in SQL.
+                if requirement.category_ids:
+                    hours_q = hours_q.where(
+                        TrainingRecord.category_id.in_(
+                            [str(c) for c in requirement.category_ids]
+                        )
+                    )
                 if requirement.required_courses:
                     hours_q = hours_q.where(
                         TrainingRecord.course_id.in_(requirement.required_courses)
                     )
                 completed_value = float((await self.db.execute(hours_q)).scalar() or 0)
             else:
-                hours_records = [r for r in completed_records if _in_window(r)]
-                if requirement.training_type:
-                    hours_records = [
-                        r
-                        for r in hours_records
-                        if r.training_type == requirement.training_type
-                    ]
-                if requirement.required_courses:
-                    wanted_courses = {str(c) for c in requirement.required_courses}
-                    hours_records = [
-                        r
-                        for r in hours_records
-                        if r.course_id and str(r.course_id) in wanted_courses
-                    ]
+                hours_records = [
+                    r
+                    for r in completed_records
+                    if _in_window(r) and hours_record_counts(requirement, r)
+                ]
                 completed_value = float(
                     sum(float(r.hours_completed or 0) for r in hours_records)
                 )

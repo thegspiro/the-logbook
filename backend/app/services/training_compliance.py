@@ -182,6 +182,37 @@ def apply_recency(req, records, today: date):
     return [r for r in records if is_recent_enough(req, r, today)]
 
 
+def hours_record_counts(req, record) -> bool:
+    """Whether ``record`` counts toward HOURS requirement ``req``.
+
+    The one definition (CLAUDE.md pitfall 29). My Training and the compliance
+    screens used to apply different halves of it: one narrowed by course and
+    ignored the requirement's categories, the other the reverse, so a member
+    could read "met" on one and "not met" on the other. Each criterion the
+    requirement sets narrows the pool; one it leaves unset restricts nothing,
+    so "24 hours of any training" still counts every record.
+
+    ``TrainingService._record_satisfies_requirement`` and both HOURS branches
+    of ``TrainingService`` call this; the SQL-sum path in
+    ``check_requirement_progress`` applies the same three filters in SQL.
+    """
+    if req.training_type and record.training_type != req.training_type:
+        return False
+    category_ids = getattr(req, "category_ids", None)
+    if category_ids:
+        if not record.category_id or str(record.category_id) not in {
+            str(c) for c in category_ids
+        }:
+            return False
+    required_courses = getattr(req, "required_courses", None)
+    if required_courses:
+        if not record.course_id or str(record.course_id) not in {
+            str(c) for c in required_courses
+        }:
+            return False
+    return True
+
+
 def certification_record_matches(req, record) -> bool:
     """Does ``record`` satisfy the CERTIFICATION requirement ``req``?
 
@@ -389,16 +420,9 @@ def _grade_member_requirement(
     else:
         windowed = completed
 
-    # ---- HOURS requirements: sum hours by training_type and/or category ----
+    # ---- HOURS requirements: sum hours of the records that count ----
     if req_type == RequirementType.HOURS.value:
-        type_matched = windowed
-        if req.training_type:
-            type_matched = [r for r in windowed if r.training_type == req.training_type]
-        if req.category_ids:
-            cat_set = set(req.category_ids)
-            type_matched = [
-                r for r in type_matched if r.category_id and r.category_id in cat_set
-            ]
+        type_matched = [r for r in windowed if hours_record_counts(req, r)]
 
         total_hours = sum(r.hours_completed or 0 for r in type_matched)
         required = req.required_hours or 0

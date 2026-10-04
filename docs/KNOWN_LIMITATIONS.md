@@ -4726,10 +4726,6 @@ ones skipped.
   course.** They count toward total hours; category-scoped HOURS requirements
   and COURSES requirements ignore them until details are attached and the event
   is re-finalized.
-- **The two HOURS evaluators still disagree** — `training_service.py` filters by
-  course and ignores category, `training_compliance.py` the reverse — so the
-  new records can read "met" on My Training and "not met" on a compliance card.
-  Pre-existing; more records now make it visible.
 - **A CERTIFICATION requirement can be met by name.**
   `certification_record_matches` accepts the requirement's name as a substring
   of the record's course name, so an event titled "CPR Refresher" can satisfy a
