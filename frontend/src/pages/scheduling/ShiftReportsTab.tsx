@@ -83,6 +83,7 @@ type ViewMode = 'my-reports' | 'filed-by-me' | 'create' | 'pending-review' | 'fl
 
 export const ShiftReportsTab: React.FC = () => {
   const { user, checkPermission } = useAuthStore();
+  const userId = user?.id;
   const tz = useTimezone();
   const canManage = checkPermission('training.manage');
   const isOnline = useOnlineStatus();
@@ -244,24 +245,30 @@ export const ShiftReportsTab: React.FC = () => {
   }, [config, shiftApparatusType]);
 
   // Load crew status when a shift is selected
-  const loadCrewForShift = useCallback(async (shiftId: string) => {
-    setLoadingCrew(true);
-    setCrewLoadError(false);
-    try {
-      const crew = await shiftCompletionService.getShiftCrewStatus(shiftId);
-      setCrewMembers(crew);
-      const eligible = crew.filter((m) => !m.has_existing_report);
-      setSelectedCrewIds(new Set(eligible.map((m) => m.user_id)));
-      setTraineeEvals({});
-      setCrewRemarks({});
-      setExpandedTraineeId(null);
-    } catch {
-      setCrewLoadError(true);
-      toast.error('Failed to load crew members');
-    } finally {
-      setLoadingCrew(false);
-    }
-  }, []);
+  const loadCrewForShift = useCallback(
+    async (shiftId: string) => {
+      setLoadingCrew(true);
+      setCrewLoadError(false);
+      try {
+        // The author is left off their own crew list: a report about yourself
+        // is refused server-side, and offering the checkbox would only turn it
+        // into a silently skipped row.
+        const crew = (await shiftCompletionService.getShiftCrewStatus(shiftId)).filter((m) => m.user_id !== userId);
+        setCrewMembers(crew);
+        const eligible = crew.filter((m) => !m.has_existing_report);
+        setSelectedCrewIds(new Set(eligible.map((m) => m.user_id)));
+        setTraineeEvals({});
+        setCrewRemarks({});
+        setExpandedTraineeId(null);
+      } catch {
+        setCrewLoadError(true);
+        toast.error('Failed to load crew members');
+      } finally {
+        setLoadingCrew(false);
+      }
+    },
+    [userId]
+  );
 
   // Pre-fill form when navigated with a linked shift ID
   useEffect(() => {
@@ -403,7 +410,9 @@ export const ShiftReportsTab: React.FC = () => {
       return;
     }
     if (draft.crewSelections.length > 0) {
-      setSelectedCrewIds(new Set(draft.crewSelections));
+      // A draft saved before the author was left off the list can still name
+      // them.
+      setSelectedCrewIds(new Set(draft.crewSelections.filter((id) => id !== userId)));
     }
     if (draft.crewRemarks && Object.keys(draft.crewRemarks).length > 0) {
       setCrewRemarks(draft.crewRemarks);
@@ -411,7 +420,7 @@ export const ShiftReportsTab: React.FC = () => {
     if (draft.formData.officer_narrative) {
       setForm((prev) => ({ ...prev, officer_narrative: draft.formData.officer_narrative as string }));
     }
-  }, [form.shift_id, crewMembers.length]);
+  }, [form.shift_id, crewMembers.length, userId]);
 
   // Sync offline queue when connectivity returns
   useEffect(() => {

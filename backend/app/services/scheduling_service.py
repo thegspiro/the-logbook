@@ -9089,6 +9089,20 @@ class SchedulingService:
                 if slot and slot.get("evaluator_id"):
                     officer_id = str(slot["evaluator_id"])
 
+                # A trainee who closed out their own shift (and has no
+                # evaluator named on their slot) would be drafted a report
+                # about themselves, which create_report refuses. Skip it here
+                # rather than logging that refusal as a failure; another
+                # officer can still file one.
+                if str(officer_id) == str(user_id):
+                    logger.info(
+                        "No draft report for trainee {} on shift {}: they "
+                        "finalized it themselves",
+                        user_id,
+                        shift.id,
+                    )
+                    continue
+
                 att = attendee_by_user.get(user_id)
                 hours = 0.0
                 if att and att.duration_minutes:

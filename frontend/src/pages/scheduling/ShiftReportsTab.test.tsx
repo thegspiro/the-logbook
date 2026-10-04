@@ -15,6 +15,8 @@ const mockGetUsers = vi.fn();
 const mockGetRecentShifts = vi.fn();
 const mockGetByOfficer = vi.fn();
 const mockGetOfficerAnalytics = vi.fn();
+const mockGetShiftCrewStatus = vi.fn();
+const mockGetShift = vi.fn();
 let canManage = true;
 
 vi.mock('../../services/api', () => ({
@@ -27,6 +29,7 @@ vi.mock('../../services/api', () => ({
     getReportsByOfficer: (...a: unknown[]) => mockGetByOfficer(...a) as unknown,
     getOfficerAnalytics: (...a: unknown[]) => mockGetOfficerAnalytics(...a) as unknown,
     getMyStats: () => Promise.resolve(null),
+    getShiftCrewStatus: (...a: unknown[]) => mockGetShiftCrewStatus(...a) as unknown,
   },
   trainingModuleConfigService: {
     getConfig: (...a: unknown[]) => mockGetConfig(...a) as unknown,
@@ -40,6 +43,7 @@ vi.mock('../../modules/scheduling/services/api', () => ({
   schedulingService: {
     getRecentShiftsForReports: (...a: unknown[]) => mockGetRecentShifts(...a) as unknown,
     getShifts: (...a: unknown[]) => mockGetRecentShifts(...a) as unknown,
+    getShift: (...a: unknown[]) => mockGetShift(...a) as unknown,
   },
 }));
 
@@ -295,5 +299,35 @@ describe('ShiftReportsTab — acknowledging a report about me', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Acknowledge Report' }));
 
     expect(screen.getByLabelText('Comments (optional)')).toBeInTheDocument();
+  });
+});
+
+describe('ShiftReportsTab — the author is not on their own crew list', () => {
+  beforeEach(() => {
+    mockGetShift.mockReset();
+    mockGetShiftCrewStatus.mockReset();
+    mockGetShift.mockResolvedValue({
+      id: 'sh1',
+      shift_date: '2026-10-03',
+      start_time: '2026-10-03T11:00:00Z',
+      end_time: '2026-10-03T23:00:00Z',
+      apparatus_name: 'Engine 5',
+      call_count: 0,
+    });
+    mockGetShiftCrewStatus.mockResolvedValue([
+      { user_id: 'user-1', user_name: 'Dana Ruiz', has_active_enrollment: false, has_existing_report: false },
+      { user_id: 'u2', user_name: 'Sam Ortiz', has_active_enrollment: false, has_existing_report: false },
+    ]);
+  });
+
+  // A report about yourself is refused server-side; offering the checkbox
+  // would only produce a silently skipped row.
+  it('lists the rest of the crew but not the viewer', async () => {
+    searchParams = new URLSearchParams('view=create&shift=sh1');
+    renderWithRouter(<ShiftReportsTab />);
+
+    expect(await screen.findByText('Sam Ortiz')).toBeInTheDocument();
+    expect(screen.queryByText('Dana Ruiz')).not.toBeInTheDocument();
+    expect(screen.getByText('(1 of 1 selected)')).toBeInTheDocument();
   });
 });

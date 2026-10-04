@@ -24,7 +24,7 @@ module, behind its own consent and access-control story.
 from datetime import date
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import Text, delete, func, or_, select, type_coerce, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.utils import generate_uuid
@@ -171,7 +171,11 @@ class CallTrackingService:
             conditions.append(
                 or_(
                     *[
-                        ShiftCompletionReport.call_types.like(
+                        # type_coerce, not cast: LIKE on a JSON column is
+                        # deprecated in SQLAlchemy's operator classes, and this
+                        # changes only the Python-side type — the SQL emitted
+                        # is identical, so the prefilter matches what it did.
+                        type_coerce(ShiftCompletionReport.call_types, Text).like(
                             like_pattern(slug), escape=LIKE_ESCAPE_CHAR
                         )
                         for slug in sorted(candidates)

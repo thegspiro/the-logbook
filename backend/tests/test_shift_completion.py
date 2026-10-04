@@ -1583,3 +1583,93 @@ class TestCallCountAutoPopulation:
         assert result["created"] == 2
         assert by_trainee[d["crew_1"]].calls_responded == 2
         assert by_trainee[d["crew_2"]].calls_responded == 1
+
+
+class TestNoSelfReports:
+    """A member never files a shift report about themselves."""
+
+    async def test_single_report_about_yourself_is_refused(
+        self, db_session, setup_shift_with_crew
+    ):
+        d = setup_shift_with_crew
+        svc = ShiftCompletionService(db_session)
+        with pytest.raises(ValueError, match="about yourself"):
+            await svc.create_report(
+                organization_id=uuid.UUID(d["org_id"]),
+                officer_id=uuid.UUID(d["officer_id"]),
+                trainee_id=d["officer_id"],
+                shift_date=d["shift_date"],
+                hours_on_shift=12.0,
+                shift_id=d["shift_id"],
+            )
+
+    async def test_batch_skips_the_author_and_files_the_rest(
+        self, db_session, setup_shift_with_crew
+    ):
+        d = setup_shift_with_crew
+        svc = ShiftCompletionService(db_session)
+        result = await svc.batch_create_reports(
+            organization_id=uuid.UUID(d["org_id"]),
+            officer_id=uuid.UUID(d["officer_id"]),
+            shift_id=d["shift_id"],
+            shift_date=d["shift_date"],
+            hours_on_shift=12.0,
+            calls_responded=0,
+            call_types=None,
+            officer_narrative=None,
+            crew_member_ids=[d["officer_id"], d["crew_1"]],
+            trainee_evaluations=None,
+        )
+        assert result["created"] == 1
+        assert result["skipped"] == 1
+        trainees = (
+            (
+                await db_session.execute(
+                    text(
+                        "SELECT trainee_id FROM shift_completion_reports "
+                        "WHERE shift_id = :sid"
+                    ),
+                    {"sid": d["shift_id"]},
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert trainees == [d["crew_1"]]
+
+    async def _draft_for_training_slot(self, db_session, d, finalized_by):
+        from app.services.scheduling_service import SchedulingService
+
+        await db_session.execute(
+            text(
+                "UPDATE shift_assignments SET is_training = 1 "
+                "WHERE shift_id = :sid AND user_id = :uid"
+            ),
+            {"sid": d["shift_id"], "uid": d["crew_1"]},
+        )
+        await db_session.flush()
+        shift = SimpleNamespace(
+            id=d["shift_id"],
+            shift_date=d["shift_date"],
+            start_time=None,
+            end_time=None,
+        )
+        return await SchedulingService(db_session)._create_draft_reports_for_trainees(
+            shift=shift,
+            organization_id=uuid.UUID(d["org_id"]),
+            finalized_by_user_id=finalized_by,
+        )
+
+    async def test_finalize_drafts_a_report_for_someone_elses_trainee_slot(
+        self, db_session, setup_shift_with_crew
+    ):
+        d = setup_shift_with_crew
+        assert await self._draft_for_training_slot(db_session, d, d["officer_id"]) == 1
+
+    async def test_finalize_skips_a_trainee_who_closed_out_their_own_shift(
+        self, db_session, setup_shift_with_crew
+    ):
+        # With no evaluator named on the slot the draft would be attributed to
+        # the finalizer — the trainee themselves.
+        d = setup_shift_with_crew
+        assert await self._draft_for_training_slot(db_session, d, d["crew_1"]) == 0

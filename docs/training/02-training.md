@@ -1160,6 +1160,16 @@ what the shift already knows.
 4. The `data_sources` field records which values were carried over and which
    the officer typed, for audit.
 
+> **You are never on your own crew list** _(2026-10-04)_. A report is an
+> officer's account of someone else's shift, and one about yourself would
+> credit your own hours, calls and ratings toward your own requirements with
+> nobody else's eyes on it. The form leaves you off the crew, the server
+> refuses a report whose trainee is its author (a batch skips that member and
+> files the rest), and finalizing a shift does not draft one for a trainee who
+> closed out that shift themselves and has no evaluator named on their
+> training slot. Reports about yourself filed before this change are left as
+> they are.
+
 ![A shift completion report — the hours and calls carried over from the shift, its crew listed, and the buttons that file the batch](./images/02-102-shift-report-crew-form.png)
 
 > **There is no "(auto)" badge.** The carried-over values are ordinary editable

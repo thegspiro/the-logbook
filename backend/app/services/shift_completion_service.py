@@ -305,6 +305,14 @@ class ShiftCompletionService:
     ) -> ShiftCompletionReport:
         """Create a shift completion report and update pipeline progress."""
 
+        # A report is an officer's account of somebody else's shift. One about
+        # yourself would count your own hours, calls and ratings toward your
+        # own training requirements with nobody else's eyes on it. Enforced
+        # here because every path — single, batch and the drafts finalize
+        # creates — comes through this method.
+        if str(trainee_id) == str(officer_id):
+            raise ValueError("You can't write a shift report about yourself")
+
         # Validate shift linkage when provided
         data_sources: dict = {}
         if shift_id:
