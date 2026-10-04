@@ -3819,43 +3819,6 @@ rather than bugs with an obviously-correct fix:
   Redis recovers. Mirrors the documented breached-password fail-open
   trade-off in CLAUDE.md's Attack Protection table.
 
-## LOC-3 — The Authenticated Location Display Endpoint Had a Growing Gap List; It Now Has a Caller (2026-08-27, updated 2026-10-04)
-
-`GET /locations/{id}/display` (`locations.py`) had **zero frontend callers**
-from when it was first reviewed on 2026-08-08 through the 2026-09-13 pass —
-the kiosk fetched `/api/public/v1/display/{code}` instead, a strictly better
-implementation (rate-limited, uses the canonical check-in-window helper,
-computes `is_valid` correctly, withholds event descriptions).
-
-**That changed.** The 2026-10-02/03 NFC badge check-in work gave this
-endpoint a real caller: `RoomCheckInPage.tsx`'s `getCurrentCheckIns` (a
-member's phone landing on a room's NFC tag) now calls it directly to find
-which event is open in that room. It shipped without the "bring it in line
-with its public sibling on all three points before that caller ships"
-condition this entry previously named being met in full:
-
-- **`event_description` redaction — closed by this pass**
-  (`docs/security-review/LOC5-32-locations-kiosk.md`, finding LOC5-32-1).
-  The endpoint emitted `event_description=event.description` while its
-  public sibling nulls the field; since the room-resolution query behind
-  both (`get_current_events_in_check_in_window`) applies no audience filter,
-  an authenticated member could read the description of an event they might
-  not otherwise be entitled to see. Fixed to `None`, matching the public
-  path; the current caller does not consume the field.
-- **`is_valid=True`/`can_check_in=True` hardcoded — re-examined, not a gap.**
-  `get_current_events_in_check_in_window` already filters to the precise
-  per-event canonical window (confirmed in `LOC4-32-locations-kiosk.md` and
-  re-verified this pass), so every event this loop sees genuinely is
-  checkable — the hardcoded value is correct, not a shortcut taken on faith.
-- **Missing `timezone` field — still open, now genuinely low priority.**
-  The field the public sibling populates stays unset here. The current
-  caller (`RoomCheckInPage.tsx`) renders times through its own
-  `useTimezone()` (the signed-in member's org timezone) rather than reading
-  it from this response, so today this costs nothing — but a future caller
-  of this same endpoint that does not already have a timezone source would
-  inherit the gap silently. Left open rather than fixed: adding it needs an
-  extra query with no current consumer to justify it.
-
 ## CI2-33-13 — Injection-Attempt Detection Was Never Implemented (2026-08-27)
 
 `SecurityMonitoringMiddleware`'s docstring claimed "Detect injection

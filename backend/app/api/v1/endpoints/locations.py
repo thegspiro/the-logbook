@@ -7,6 +7,7 @@ Endpoints for location management including CRUD operations and event queries.
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -18,7 +19,7 @@ from app.api.dependencies import (
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found, handle_service_errors
-from app.models.user import User
+from app.models.user import Organization, User
 from app.schemas.event import QRCheckInData
 from app.schemas.location import (
     LocationBadgeCheckInUpdate,
@@ -431,4 +432,14 @@ async def get_location_display_info(
         location_name=location.name,
         current_events=current_events,
         has_overlap=len(current_events) > 1,
+        # Same field the public kiosk sends. RoomCheckInPage reads the
+        # member's own org timezone today, but a caller without one would
+        # otherwise render these UTC times in the device's zone.
+        timezone=(
+            await db.execute(
+                select(Organization.timezone).where(
+                    Organization.id == location.organization_id
+                )
+            )
+        ).scalar_one_or_none(),
     )
