@@ -442,6 +442,12 @@ SCHEDULE = {
         "recommended_time": "*/30 * * * *",
         "cron": "*/30 * * * *",
     },
+    "reap_expired_sessions": {
+        "description": "Delete sign-in session rows 30 days after their refresh token expired (each holds an IP address and browser)",
+        "frequency": "daily",
+        "recommended_time": "00:45",
+        "cron": "45 0 * * *",
+    },
     "expire_ip_exceptions": {
         "description": "Mark approved IP allowlist/blocklist exceptions past their valid_until as expired (nothing else recomputes the stored status)",
         "frequency": "daily",
@@ -6223,6 +6229,60 @@ async def run_admin_hours_auto_close(db: AsyncSession) -> Dict[str, Any]:
     return {"task": "admin_hours_auto_close", "closed": closed}
 
 
+# Days a session row is kept after its refresh token can no longer be used.
+# Long enough to answer "where was I signed in last month", short enough that
+# an IP address and browser string do not outlive the session by years
+# (owner decision AUTH-17, 2026-10-04).
+SESSION_RETENTION_DAYS_AFTER_REFRESH_EXPIRY = 30
+_SESSION_REAP_BATCH = 1000
+
+
+async def run_reap_expired_sessions(db: AsyncSession) -> Dict[str, Any]:
+    """Delete session rows well past the point anyone could use them.
+
+    A session ends quietly when its tokens lapse, and nothing deleted the
+    row: each one kept an IP address and user agent forever, one per sign-in
+    per device. A refresh token is issued at a rotation, which also sets
+    ``expires_at`` to that moment plus the access-token lifetime, so the
+    refresh token is dead by ``expires_at + REFRESH_TOKEN_EXPIRE_DAYS``. Rows
+    past that by the retention window go. Batched, because the first run on
+    an older installation can find years of rows on a table every request
+    reads.
+    """
+    from sqlalchemy import delete
+
+    from app.core.config import settings
+    from app.models.user import Session as UserSession
+
+    cutoff = datetime.now(timezone.utc) - timedelta(
+        days=settings.REFRESH_TOKEN_EXPIRE_DAYS
+        + SESSION_RETENTION_DAYS_AFTER_REFRESH_EXPIRY
+    )
+    deleted = 0
+    while True:
+        ids = (
+            (
+                await db.execute(
+                    select(UserSession.id)
+                    .where(UserSession.expires_at < cutoff)
+                    .limit(_SESSION_REAP_BATCH)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if not ids:
+            break
+        await db.execute(delete(UserSession).where(UserSession.id.in_(ids)))
+        await db.commit()
+        deleted += len(ids)
+        if len(ids) < _SESSION_REAP_BATCH:
+            break
+    if deleted:
+        logger.info("Reaped {} expired session row(s)", deleted)
+    return {"task": "reap_expired_sessions", "deleted": deleted}
+
+
 async def run_expire_ip_exceptions(db: AsyncSession) -> Dict[str, Any]:
     """Mark approved IP exceptions past their valid_until as EXPIRED.
 
@@ -6377,6 +6437,7 @@ TASK_RUNNERS = {
     "mark_overdue_maintenance": run_mark_overdue_maintenance,
     "admin_hours_auto_close": run_admin_hours_auto_close,
     "expire_ip_exceptions": run_expire_ip_exceptions,
+    "reap_expired_sessions": run_reap_expired_sessions,
     "membership_inactivity_warnings": run_membership_inactivity_warnings,
     "shift_pattern_generation": run_shift_pattern_generation,
     "swap_offer_expiry": run_swap_offer_expiry,
@@ -6430,6 +6491,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "mark_overdue_maintenance": 86400,
     "admin_hours_auto_close": 1800,
     "expire_ip_exceptions": 86400,
+    "reap_expired_sessions": 86400,
     "membership_inactivity_warnings": 86400,
     "recert_resets": 86400,
     "enrollment_expiry": 86400,
