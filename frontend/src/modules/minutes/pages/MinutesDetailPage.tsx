@@ -826,7 +826,7 @@ export const MinutesDetailPage: React.FC = () => {
                 const isEditing = editingSection === section.key;
 
                 return (
-                  <div key={section.key} className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+                  <div key={section.key} className="card p-6">
                     <div className="mb-2 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         {canManage && isEditable && (

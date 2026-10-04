@@ -46,7 +46,7 @@ const TrainingSection: React.FC<TrainingSectionProps> = ({
   tz,
 }) => {
   return (
-    <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+    <div className="card p-6">
       {/* Compliance Summary Card */}
       {complianceSummary && (
         <div className="mb-6">
