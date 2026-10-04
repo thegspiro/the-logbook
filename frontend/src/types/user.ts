@@ -506,6 +506,8 @@ export interface ConsentRosterMember {
   user_id: string;
   first_name: string | null;
   last_name: string | null;
+  /** The name the member goes by, shown in place of first_name. */
+  preferred_name?: string | null | undefined;
   photo_url: string | null;
   rank: string | null;
   station: string | null;
