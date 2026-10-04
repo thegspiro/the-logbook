@@ -428,7 +428,7 @@ entries for most of the grants, seeded positions and permission changes.
 
 ### Corrected in this pass
 
-Seventy-six documentation files changed. Each module guide was checked against
+One hundred and one documentation files changed, fourteen of them YouTube scripts and their currency record. Each module guide was checked against
 the current source by area, and **describes the application as it is today**,
 with dated notes where someone who learned the old behaviour needs telling.
 
@@ -597,4 +597,4 @@ Results against `9a1198e79` plus this pass's documentation:
 - **Endpoints:** 1,584 documented handlers, with 0 errors and 0 warnings.
 - **Schema docs:** `--check` reports no drift.
 - **Screenshots:** 569 of 608 filled.
-- **Links:** see the commit for the final run.
+- **Links:** 424 Markdown files, 0 broken.
