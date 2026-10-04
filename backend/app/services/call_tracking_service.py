@@ -24,7 +24,7 @@ module, behind its own consent and access-control story.
 from datetime import date
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import String, cast, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.utils import generate_uuid
@@ -171,7 +171,16 @@ class CallTrackingService:
             conditions.append(
                 or_(
                     *[
-                        ShiftCompletionReport.call_types.like(
+                        # Cast, so the LIKE is a string operator on a string
+                        # expression. `like_op` is not in the JSON type's
+                        # operator classes, and SQLAlchemy 2.1 deprecates
+                        # falling back to it (InvalidRequestError in a future
+                        # release). The cast is match-identical to the bare
+                        # column here -- verified against MariaDB 10.11 -- so
+                        # the row set, and with it the FOR UPDATE locks this
+                        # function depends on, is unchanged. The exact test
+                        # stays in Python below; this is only the prefilter.
+                        cast(ShiftCompletionReport.call_types, String).like(
                             like_pattern(slug), escape=LIKE_ESCAPE_CHAR
                         )
                         for slug in sorted(candidates)

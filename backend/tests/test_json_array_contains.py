@@ -20,6 +20,8 @@ the problem. Measured against the MariaDB these tests run on:
 ``app.utils.json_ids.json_array_contains`` replaces the form at all three.
 """
 
+import ast
+import pathlib
 import uuid
 import warnings
 
@@ -100,6 +102,82 @@ class TestTheOperatorItCompilesTo:
             .compile(dialect=mysql.dialect())
         )
         assert f'"{value}"' in bound.params.values()
+
+
+#: Operators the ``JSON`` type does not claim. Using one makes SQLAlchemy fall
+#: back to the string implementation, which it deprecates and a future release
+#: raises ``InvalidRequestError`` for.
+_STRING_OPS = frozenset(
+    {"like", "ilike", "contains", "startswith", "endswith", "regexp_match"}
+)
+
+
+def _json_columns_by_model() -> dict:
+    """``{model name: {attribute names typed JSON}}``, from live mapper
+    metadata rather than a hand-maintained list, so a column added tomorrow is
+    covered without touching this file."""
+    import app.models  # noqa: F401  -- importing populates the mapper registry
+    from app.core.database import Base
+
+    found: dict = {}
+    for mapper in Base.registry.mappers:
+        for column in mapper.columns:
+            if isinstance(column.type, JSON):
+                found.setdefault(mapper.class_.__name__, set()).add(column.key)
+    return found
+
+
+@pytest.mark.unit
+def test_no_string_operator_targets_a_json_column():
+    """A ratchet over ``app/``, resolving each receiver against real column
+    types -- which is what a purely syntactic sweep cannot do, and why
+    ``test_like_escaping.py`` exempted three of these by hand for months.
+
+    Scoped honestly: it matches ``Model.attr.op(...)`` where ``Model`` is
+    spelled as the mapped class's own name. A class imported under an alias, or
+    a column reached through a variable, is not resolved -- so a clean run is a
+    floor, not proof. The remedy for a JSON array is ``json_array_contains``;
+    for a deliberate substring prefilter it is an explicit
+    ``cast(Model.col, String)``, as ``call_tracking_service`` and
+    ``events`` both do, which this check allows because the receiver is then a
+    string expression in fact and not only by fallback.
+    """
+    json_columns = _json_columns_by_model()
+    assert json_columns, "no JSON columns resolved -- the sweep would pass vacuously"
+
+    app_dir = pathlib.Path(__file__).resolve().parents[1] / "app"
+    offenders = []
+    for path in sorted(app_dir.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr in _STRING_OPS
+            ):
+                continue
+            receiver = node.func.value
+            if not (
+                isinstance(receiver, ast.Attribute)
+                and isinstance(receiver.value, ast.Name)
+            ):
+                continue
+            if receiver.attr in json_columns.get(receiver.value.id, ()):
+                rel = path.relative_to(app_dir.parent)
+                offenders.append(
+                    f"{rel}:{node.lineno} "
+                    f"({receiver.value.id}.{receiver.attr}.{node.func.attr}())"
+                )
+
+    assert not offenders, (
+        "These call a string operator on a JSON column. SQLAlchemy falls back "
+        "to the string implementation -- deprecated, and InvalidRequestError in "
+        "a future release -- and the fallback matches the serialized document, "
+        "so a multi-element array never matches and the caller's term becomes a "
+        "LIKE pattern. Use json_array_contains() for array membership, or an "
+        "explicit cast(..., String) if a substring prefilter is what you "
+        "want:\n  " + "\n  ".join(offenders)
+    )
 
 
 async def _org(db_session) -> Organization:
