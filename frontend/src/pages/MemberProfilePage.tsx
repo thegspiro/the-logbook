@@ -65,7 +65,7 @@ import { useRejoinServiceOptions } from '../hooks/useRejoinServiceOptions';
 import { ServiceHistorySection } from '../components/member-profile/ServiceHistorySection';
 import { isCertificationExpired, isCertificationExpiringSoon } from '../utils/certificationExpiry';
 import { blankToNull } from '../utils/formValues';
-import { displayNameOf, formatLegalName, givenName } from '../utils/memberName';
+import { displayNameOf, givenName } from '../utils/memberName';
 
 // Types for inventory data
 interface InventoryItem {
@@ -936,7 +936,7 @@ export const MemberProfilePage: React.FC = () => {
                 relabel or revoke a card, not even their own, and the panel
                 hides itself when the organization has cards turned off. */}
               {showIdCards && userId && (
-                <MemberIdCardsPanel userId={userId} memberName={user ? formatLegalName(user) : undefined} />
+                <MemberIdCardsPanel userId={userId} memberName={user ? displayNameOf(user) : undefined} />
               )}
 
               {/* Assigned Inventory - the member's own kit, or a quartermaster's
