@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
+from app.schemas.training_program import MemberEligibilityResponse
 from app.services.training_program_service import TrainingProgramService
 
 
@@ -33,11 +34,12 @@ class RecordingSession:
         return self._results.pop(0) if self._results else MagicMock()
 
 
-def _user(first="A", last="Member", number=None):
+def _user(first="A", last="Member", number=None, preferred=None):
     return SimpleNamespace(
         id=str(uuid4()),
         first_name=first,
         last_name=last,
+        preferred_name=preferred,
         membership_number=number,
     )
 
@@ -82,6 +84,21 @@ class TestEnrollmentEligibility:
         assert by_id[u2.id]["eligible"] is True
         # Eligible members sort first.
         assert results[0]["user_id"] == u2.id
+
+    async def test_reports_and_sorts_by_the_preferred_name(self):
+        """John "Terry" Heather is listed, and alphabetised, as Terry."""
+        terry = _user("John", "Heather", preferred="Terry")
+        sam = _user("Sam", "Adams")
+        program = _program(concurrent=True, prereqs=None)
+        svc = _svc([_scalars([terry, sam]), _rows([])], program)
+
+        results = await svc.get_enrollment_eligibility(uuid4(), uuid4())
+
+        assert [r["user_id"] for r in results] == [sam.id, terry.id]
+        row = _by_id(results)[terry.id]
+        assert row["preferred_name"] == "Terry"
+        assert row["first_name"] == "John"
+        assert MemberEligibilityResponse(**row).preferred_name == "Terry"
 
     async def test_marks_missing_prerequisite_with_names(self):
         u1, u2 = _user("Al"), _user("Bo")

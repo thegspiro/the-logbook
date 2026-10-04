@@ -22,7 +22,12 @@ export interface User {
   first_name?: string | undefined;
   middle_name?: string | undefined;
   last_name?: string | undefined;
+  /** The name the member goes by, shown in place of first_name on everyday screens. */
+  preferred_name?: string | null | undefined;
+  /** Legal name (first + last) — reports, certificates, ballots. */
   full_name?: string | undefined;
+  /** Preferred (else first) + last name — everyday references. */
+  display_name?: string | undefined;
   membership_number?: string | undefined;
   phone?: string | undefined;
   mobile?: string | undefined;
@@ -280,6 +285,8 @@ export interface UserProfileUpdate {
   first_name?: string | undefined;
   middle_name?: string | undefined;
   last_name?: string | undefined;
+  // `| null`: clearing a preferred name sends an explicit null (CLAUDE.md #1).
+  preferred_name?: string | null | undefined;
   phone?: string | undefined;
   mobile?: string | undefined;
   personal_email?: string | null | undefined;
@@ -524,6 +531,7 @@ export interface ConsentRoster {
 export interface DeletionImpact {
   user_id: string;
   full_name?: string;
+  display_name?: string;
   status: UserStatus;
   training_records: number;
   inventory_items: number;

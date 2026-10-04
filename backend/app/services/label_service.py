@@ -160,7 +160,7 @@ async def _build_member_specs(db, org_id, ids, extra_lines):
     )
     specs = []
     for u in rows.all():
-        name = " ".join(filter(None, [u.first_name, u.last_name])) or "Member"
+        name = u.display_name or "Member"
         barcode = _first_scannable_identifier(
             u.membership_number, fallback=_short_id(u.id)
         )

@@ -32,6 +32,7 @@ const AddMember: React.FC = () => {
     firstName: '',
     lastName: '',
     middleName: '',
+    preferredName: '',
     membershipNumber: '',
     dateOfBirth: '',
     street: '',
@@ -266,6 +267,7 @@ const AddMember: React.FC = () => {
         emergency_contacts: emergencyContacts,
         send_welcome_email: !useCustomPassword,
         ...(formData.middleName ? { middle_name: formData.middleName } : {}),
+        ...(formData.preferredName.trim() ? { preferred_name: formData.preferredName.trim() } : {}),
         ...(formData.membershipNumber.trim() ? { membership_number: formData.membershipNumber.trim() } : {}),
         ...(formData.primaryPhone ? { phone: formData.primaryPhone } : {}),
         ...(formData.secondaryPhone ? { mobile: formData.secondaryPhone } : {}),
@@ -418,6 +420,26 @@ const AddMember: React.FC = () => {
                 />
                 {errors.lastName && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.lastName}</p>}
               </div>
+            </div>
+
+            <div className="mt-4 md:max-w-sm">
+              <label htmlFor="add-preferredName" className="text-theme-text-primary mb-2 block text-sm font-medium">
+                Preferred Name
+              </label>
+              <input
+                type="text"
+                id="add-preferredName"
+                maxLength={100}
+                value={formData.preferredName}
+                onChange={(e) => handleInputChange('preferredName', e.target.value)}
+                className="form-input placeholder-theme-text-muted"
+                placeholder="Terry"
+                aria-describedby="add-preferredName-help"
+              />
+              <p id="add-preferredName-help" className="text-theme-text-muted mt-1 text-xs">
+                Optional. The name they go by, shown in place of the first name on shifts, events and rosters. Reports
+                and official records keep the legal first name.
+              </p>
             </div>
 
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">

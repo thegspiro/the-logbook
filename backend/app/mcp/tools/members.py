@@ -17,15 +17,20 @@ from app.mcp.tools._common import (
     parse_uuid,
 )
 from app.models.user import User, UserStatus
+from app.utils.member_names import format_legal_name
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 
 def _member(user: User) -> dict:
     return {
         "id": user.id,
-        "full_name": display_name(user),
+        # Legal name of record, as the members API reports it; ``display_name``
+        # is the name the member goes by.
+        "full_name": format_legal_name(user.first_name, user.last_name) or None,
+        "display_name": display_name(user),
         "first_name": user.first_name,
         "last_name": user.last_name,
+        "preferred_name": user.preferred_name,
         "rank": user.rank,
         "station": user.station,
         "platoon": user.platoon,
@@ -73,7 +78,7 @@ def register(server: Any) -> None:
     ) -> dict:
         """The department roster: name, rank, station, platoon, membership
         class and status, hire date and held positions for each member.
-        ``search`` matches first or last name; ``status`` is the account status
+        ``search`` matches first, preferred or last name; ``status`` is the account status
         (active, inactive, ...); ``member_class`` is operational,
         administrative or social. No contact details are included."""
         limit = clamp_limit(limit)
@@ -87,6 +92,7 @@ def register(server: Any) -> None:
             criteria.append(
                 or_(
                     User.first_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
+                    User.preferred_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
                     User.last_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
                 )
             )

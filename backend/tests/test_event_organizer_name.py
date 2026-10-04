@@ -22,6 +22,7 @@ from app.api.v1.endpoints.events import (
     _names_to_resolve,
     _resolve_display_names,
 )
+from app.models.user import User
 
 pytestmark = [pytest.mark.unit]
 
@@ -32,9 +33,13 @@ def _users(*users):
     return result
 
 
-def _user(user_id, first=None, last=None, username="jdoe"):
-    return SimpleNamespace(
-        id=user_id, first_name=first, last_name=last, username=username
+def _user(user_id, first=None, last=None, username="jdoe", preferred=None):
+    return User(
+        id=user_id,
+        first_name=first,
+        last_name=last,
+        username=username,
+        preferred_name=preferred,
     )
 
 
@@ -51,6 +56,18 @@ class TestResolveDisplayNames:
 
         assert names == {"user-1": "Sam Ortiz", "user-2": "Pat Ramirez"}
         assert db.execute.await_count == 1
+
+    async def test_a_preferred_name_is_the_name_shown(self):
+        """An organizer list is an everyday screen: "Terry Heather", not the
+        legal first name."""
+        db = AsyncMock()
+        db.execute.return_value = _users(
+            _user("user-1", "John", "Heather", preferred="Terry")
+        )
+
+        names = await _resolve_display_names(db, {"user-1"}, "org-1")
+
+        assert names == {"user-1": "Terry Heather"}
 
     async def test_an_empty_set_costs_no_query(self):
         db = AsyncMock()

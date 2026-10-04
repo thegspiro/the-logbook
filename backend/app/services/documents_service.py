@@ -35,6 +35,7 @@ from app.models.document import (
 )
 from app.models.facilities import FacilityDocument, FacilityPhoto
 from app.models.user import Organization, User
+from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
 from app.utils.org_timezone import (
@@ -1068,14 +1069,16 @@ class DocumentsService:
         uploader_names: Dict[str, str] = {}
         if user_ids:
             rows = await self.db.execute(
-                select(User.id, User.first_name, User.last_name).where(
+                select(
+                    User.id, User.first_name, User.last_name, User.preferred_name
+                ).where(
                     User.id.in_(user_ids),
                     User.organization_id == str(organization_id),
                 )
             )
             uploader_names = {
-                uid: f"{first or ''} {last or ''}".strip()
-                for uid, first, last in rows.all()
+                uid: format_display_name(first, last, preferred)
+                for uid, first, last, preferred in rows.all()
             }
 
         folder_names: Dict[str, str] = {}

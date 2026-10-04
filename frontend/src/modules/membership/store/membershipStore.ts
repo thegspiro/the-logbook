@@ -90,6 +90,8 @@ export const useMembershipStore = create<MembershipState>((set, get) => ({
         filtered = filtered.filter(
           (m) =>
             m.first_name?.toLowerCase().includes(q) ||
+            m.preferred_name?.toLowerCase().includes(q) ||
+            m.display_name?.toLowerCase().includes(q) ||
             m.last_name?.toLowerCase().includes(q) ||
             m.full_name?.toLowerCase().includes(q) ||
             m.username?.toLowerCase().includes(q) ||

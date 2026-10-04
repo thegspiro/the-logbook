@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.mcp.constants import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from app.mcp.principal import McpPrincipal
 from app.models.user import User
+from app.utils.member_names import format_display_name
 
 
 def org_uuid(principal: McpPrincipal) -> UUID:
@@ -83,11 +84,13 @@ def iso(value: Any) -> Any:
 
 
 def display_name(user: Optional[User]) -> Optional[str]:
+    """The name a member goes by (preferred name, else first, plus last)."""
     if user is None:
         return None
-    parts = [user.first_name, user.last_name]
-    name = " ".join(p for p in parts if p)
-    return name or None
+    return (
+        format_display_name(user.first_name, user.last_name, user.preferred_name)
+        or None
+    )
 
 
 async def require_member(

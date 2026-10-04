@@ -88,6 +88,7 @@ import { PositionEditor } from './PositionEditor';
 import { CrewBoardSlot } from './CrewBoardSlot';
 import { ShiftCallsSection } from './ShiftCallsSection';
 import { ShiftCloseoutWizard } from './ShiftCloseoutWizard';
+import { displayNameOf } from '../../utils/memberName';
 
 interface ShiftDetailPanelProps {
   shift: ShiftRecord;
@@ -566,7 +567,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
         err,
         'Failed to sign up for shift',
         String(user?.id ?? ''),
-        user?.first_name ? `${user.first_name} ${user.last_name ?? ''}`.trim() : 'You'
+        (user && displayNameOf(user)) || 'You'
       );
     } finally {
       setPendingFlag('signingUp', false);

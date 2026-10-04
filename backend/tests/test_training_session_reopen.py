@@ -557,7 +557,13 @@ class TestAPendingConfirmationDoesNotSweep:
             require_completion_confirmation=requires_confirmation,
         )
         user = SimpleNamespace(
-            id=member_id, first_name="Dana", last_name="Reyes", email="d@example.org"
+            id=member_id,
+            first_name="Dana",
+            last_name="Reyes",
+            display_name="Dana Reyes",
+            full_name="Dana Reyes",
+            username="dreyes",
+            email="d@example.org",
         )
         db = _db(_all([user]))
         db.add = MagicMock()

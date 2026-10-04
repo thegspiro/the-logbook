@@ -61,7 +61,9 @@ def _member(email="m@x.org", email_enabled=True, **kw):
     return SimpleNamespace(
         id="u1",
         first_name="Jane",
+        preferred_name=kw.get("preferred_name"),
         full_name="Jane Smith",
+        display_name=kw.get("display_name", "Jane Smith"),
         email=email,
         personal_email=kw.get("personal_email"),
         notification_preferences=prefs,
@@ -269,6 +271,28 @@ class TestTieredAlerts:
         # Skipped earlier tiers are marked sent (suppressed).
         assert record.alert_90_sent_at is not None
         assert record.alert_30_sent_at is not None
+
+
+class TestSalutation:
+    async def test_member_is_greeted_by_preferred_name(self, monkeypatch):
+        """An email to the member greets them by the name they go by; their
+        legal first name stays on the training record, not in the greeting."""
+        send_email = AsyncMock(return_value=(1, None))
+        monkeypatch.setattr(
+            "app.services.cert_alert_service.EmailService",
+            lambda org: SimpleNamespace(send_email=send_email),
+        )
+        record = _record(90)
+        member = _member(preferred_name="Janie", display_name="Janie Smith")
+        db = TestTieredAlerts()._db(record, member)
+
+        out = await CertAlertService(db).process_alerts("org-1")
+
+        assert out["alerts_sent"] == 1
+        kwargs = send_email.await_args.kwargs
+        assert "Hello Janie," in kwargs["html_body"]
+        assert "Hello Janie," in kwargs["text_body"]
+        assert "Jane" not in kwargs["text_body"].replace("Janie", "")
 
 
 class TestExpiredEscalation:

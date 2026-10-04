@@ -261,7 +261,7 @@ async def _notes_with_authors(
             )
         )
         names = {
-            str(user.id): user.full_name or user.username
+            str(user.id): user.display_name or user.username
             for user in result.scalars().all()
         }
     responses = []

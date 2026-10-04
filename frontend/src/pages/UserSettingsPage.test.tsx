@@ -69,8 +69,9 @@ const emailChoices: MemberEmailChoices = {
 
 // Mock auth store
 const mockEndSessionLocally = vi.fn().mockResolvedValue(undefined);
-vi.mock('../stores/authStore', () => ({
-  useAuthStore: () => ({
+const mockLoadUser = vi.hoisted(() => vi.fn());
+vi.mock('../stores/authStore', () => {
+  const state = () => ({
     user: {
       id: 'user-123',
       username: 'jdoe',
@@ -88,11 +89,14 @@ vi.mock('../stores/authStore', () => ({
       password_expired: false,
       must_change_password: false,
     },
-    loadUser: vi.fn(),
+    loadUser: mockLoadUser,
     endSessionLocally: () => mockEndSessionLocally() as unknown,
     checkPermission: () => false,
-  }),
-}));
+  });
+  // Callable and carrying getState, as the real store is: the page refreshes
+  // the signed-in user through getState after a name change.
+  return { useAuthStore: Object.assign(state, { getState: state }) };
+});
 
 // Mock theme context
 vi.mock('../contexts/ThemeContext', () => ({
@@ -286,6 +290,53 @@ describe('UserSettingsPage', () => {
     expect(screen.getByText('Emergency Contacts')).toBeInTheDocument();
     expect(screen.getByText('Appearance')).toBeInTheDocument();
     expect(screen.getByText('Notifications')).toBeInTheDocument();
+  });
+
+  describe('preferred name', () => {
+    beforeEach(() => {
+      mockLoadUser.mockReset();
+      vi.mocked(userService.updateUserProfile).mockReset();
+      vi.mocked(userService.updateUserProfile).mockImplementation((_id, data) =>
+        Promise.resolve({ ...defaultProfile, ...data } as never)
+      );
+    });
+
+    it('saves the name the member goes by and refreshes the signed-in user', async () => {
+      vi.mocked(userService.updateUserProfile).mockImplementation((_id, data) =>
+        Promise.resolve({ ...defaultProfile, ...data, display_name: 'Terry Doe' } as never)
+      );
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+
+      const input = await screen.findByLabelText('Preferred Name');
+      await user.type(input, '  Terry ');
+      await user.click(screen.getByRole('button', { name: 'Save Profile' }));
+
+      await waitFor(() => expect(userService.updateUserProfile).toHaveBeenCalledTimes(1));
+      expect(vi.mocked(userService.updateUserProfile).mock.calls[0]?.[1]).toEqual(
+        expect.objectContaining({ preferred_name: 'Terry' })
+      );
+      await waitFor(() => expect(mockLoadUser).toHaveBeenCalled());
+    });
+
+    it('sends null, not an empty string, when the box is cleared', async () => {
+      vi.mocked(userService.getUserWithRoles).mockResolvedValue({
+        ...defaultProfile,
+        preferred_name: 'Terry',
+      } as never);
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+
+      const input = await screen.findByLabelText('Preferred Name');
+      await waitFor(() => expect(input).toHaveValue('Terry'));
+      await user.clear(input);
+      await user.click(screen.getByRole('button', { name: 'Save Profile' }));
+
+      await waitFor(() => expect(userService.updateUserProfile).toHaveBeenCalledTimes(1));
+      expect(vi.mocked(userService.updateUserProfile).mock.calls[0]?.[1]).toEqual(
+        expect.objectContaining({ preferred_name: null })
+      );
+    });
   });
 
   it('should default to the Account tab', () => {

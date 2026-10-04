@@ -74,6 +74,7 @@ def _user(status=UserStatus.ACTIVE, deleted_at=None):
         first_name="Dana",
         last_name="Ruiz",
         full_name="Dana Ruiz",
+        display_name="Dana Ruiz",
         membership_number="1042",
         status=status,
         deleted_at=deleted_at,
@@ -745,7 +746,9 @@ class TestNameMapOrgScoping:
         assert "organization_id" in str(captured["stmt"].whereclause)
 
     async def test_name_map_returns_names_for_in_org_ids(self):
-        row = SimpleNamespace(id="u1", first_name="Dana", last_name="Ruiz")
+        row = SimpleNamespace(
+            id="u1", first_name="Dana", last_name="Ruiz", preferred_name=None
+        )
         db, _captured = self._capturing_db([row])
         service = NfcTagService(db)
 

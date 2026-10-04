@@ -116,6 +116,7 @@ import {
   saveEquipmentCheckDraft,
   type EquipmentCheckDraftIdentity,
 } from '../../../utils/equipmentCheckDrafts';
+import { displayNameOf } from '../../../utils/memberName';
 // ============================================================================
 // Types
 // ============================================================================
@@ -3017,7 +3018,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 // against a shift that does not exist.
                 onSubmit={previewMode ? () => undefined : () => void handleSubmit()}
                 onBack={() => setSweepScreen('walk')}
-                submittingAs={user?.first_name ? `${user.first_name} ${user.last_name ?? ''}`.trim() : 'you'}
+                submittingAs={(user && displayNameOf(user)) || 'you'}
                 submitting={submitting || alreadyFiled}
                 overallNotes={overallNotes}
                 onOverallNotesChange={setOverallNotes}

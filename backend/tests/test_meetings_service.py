@@ -318,7 +318,7 @@ class TestAttachCreatorNames:
         m1 = SimpleNamespace(created_by="u1", creator_name=None)
         m2 = SimpleNamespace(created_by="u2", creator_name=None)
         rows = MagicMock()
-        rows.all.return_value = [("u1", "Dana", "Reyes")]  # u2 out-of-org
+        rows.all.return_value = [("u1", "Dana", "Reyes", None)]  # u2 out-of-org
         db = _db([rows])
         await MeetingsService(db).attach_creator_names("org-1", [m1, m2])
         assert m1.creator_name == "Dana Reyes"

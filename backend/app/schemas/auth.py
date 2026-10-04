@@ -125,7 +125,10 @@ class CurrentUser(BaseModel):
     email: str
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    preferred_name: Optional[str] = None
+    # Legal name (first + last); display_name substitutes the preferred name.
     full_name: Optional[str] = None
+    display_name: Optional[str] = None
     organization_id: UUID
     timezone: str = Field(
         default="America/New_York", description="Organization timezone"
