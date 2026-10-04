@@ -338,7 +338,7 @@ export default function ApparatusBasicPage() {
                     </div>
                   </div>
                   {canManage && (
-                    <div className="flex items-center gap-1 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                    <div className="flex items-center gap-1 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100">
                       <button
                         onClick={() => openEdit(apparatus)}
                         title="Edit"
@@ -377,7 +377,7 @@ export default function ApparatusBasicPage() {
                         key={i}
                         className="rounded-full bg-violet-500/10 px-2 py-0.5 text-xs text-violet-700 capitalize dark:text-violet-400"
                       >
-                        {pos}
+                        {positionLabel(pos)}
                       </span>
                     ))}
                   </div>

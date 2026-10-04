@@ -2544,7 +2544,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                     <button
                       type="button"
                       onClick={() => removePhoto(item.id, idx)}
-                      className="absolute -top-2 -right-2 flex h-7 w-7 items-center justify-center rounded-full bg-red-800 text-sm text-white opacity-100 transition-opacity focus:opacity-100 focus:ring-2 focus:ring-red-800 focus:ring-offset-1 focus:outline-none sm:h-6 sm:w-6 sm:opacity-0 sm:group-hover:opacity-100"
+                      className="absolute -top-2 -right-2 flex h-7 w-7 items-center justify-center rounded-full bg-red-800 text-sm text-white opacity-100 transition-opacity focus:opacity-100 focus:ring-2 focus:ring-red-800 focus:ring-offset-1 focus:outline-none sm:h-6 sm:w-6 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100"
                       aria-label={`Remove photo ${idx + 1}`}
                     >
                       &times;

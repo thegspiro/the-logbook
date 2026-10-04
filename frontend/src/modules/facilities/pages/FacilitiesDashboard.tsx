@@ -479,9 +479,9 @@ function FacilityCard({ facility, onClick }: FacilityCardProps) {
       </div>
 
       {address && (
-        <div className="text-theme-text-secondary mb-3 flex items-center gap-1.5 text-sm">
-          <MapPin className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate">{address}</span>
+        <div className="text-theme-text-secondary mb-3 flex items-start gap-1.5 text-sm">
+          <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span className="line-clamp-2">{address}</span>
         </div>
       )}
 

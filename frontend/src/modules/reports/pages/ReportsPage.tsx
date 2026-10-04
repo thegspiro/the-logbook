@@ -486,13 +486,15 @@ export const ReportsPage: React.FC = () => {
                 screen, so the custom range could be started and not finished.
                 `min-w-0` is what lets a date input actually shrink — its
                 intrinsic width otherwise keeps the row wider than its flex
-                parent. */}
+                parent. From `sm` up the width is fixed: `form-input-sm` carries
+                `w-full`, which on a `flex-none` item resolved to the whole
+                row and pushed the end date ~180px off a tablet screen. */}
             <div className="flex w-full items-center gap-2 sm:ml-2 sm:w-auto">
               <input
                 type="date"
                 value={startDate}
                 onChange={(e) => setCustomDates(e.target.value, endDate)}
-                className="form-input-sm min-w-0 flex-1 sm:flex-none"
+                className="form-input-sm min-w-0 flex-1 sm:w-40 sm:flex-none"
                 aria-label="Reporting period start date"
               />
               <span className="text-theme-text-muted text-sm">to</span>
@@ -500,7 +502,7 @@ export const ReportsPage: React.FC = () => {
                 type="date"
                 value={endDate}
                 onChange={(e) => setCustomDates(startDate, e.target.value)}
-                className="form-input-sm min-w-0 flex-1 sm:flex-none"
+                className="form-input-sm min-w-0 flex-1 sm:w-40 sm:flex-none"
                 aria-label="Reporting period end date"
               />
             </div>
@@ -527,7 +529,7 @@ export const ReportsPage: React.FC = () => {
         )}
 
         {/* Reports Grid */}
-        <div className="card-grid gap-6">
+        <div className="card-grid gap-6 [--card-grid-min:18rem]">
           {filteredReports.map((report) => {
             const Icon = ICON_MAP[report.icon] ?? FileText;
             const isGenerating = generatingReportType === REPORT_TYPE_MAP[report.id];
