@@ -16,6 +16,16 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2892](https://github.com/thegspiro/the-logbook/pull/2892)
+(Feature 27, Integrations, pass 5) merged clean (`bf0a45a6`,
+"security(integrations): pass 5"). Watchdog pickup: confirmed via
+`list_pull_requests` (state=open) that no `claude/security-review-*` PR
+exists now, so this iteration proceeds to Feature 28 (Security, audit &
+IP) per the rotation table below, which already shows row 27 ✅.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 5, PR #2892, before it merged), preserved for history</summary>
+
 **PR [#2892](https://github.com/thegspiro/the-logbook/pull/2892)** — branch
 `claude/security-review-integrations-pass5`, Feature 27 (Integrations),
 pass 5. Watchdog pickup: confirmed via `list_pull_requests` (state=open)
@@ -32,6 +42,8 @@ gap found. Gate: flake8/black/isort clean, `validate_migrations.py
 --strict` passed (509 revisions, no migration this pass), repo-tenancy +
 MCP guard tests passed, 3548 scoped backend tests passed, frontend
 typecheck/lint clean. Subscribed for CI/review events.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 26, Forms, pass 5, PR #2885, merged, before this watchdog pickup), preserved for history</summary>
@@ -17209,7 +17221,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
@@ -17223,6 +17235,57 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-04 — Feature 28 (Security, audit & IP, pass 5) — 0 fixed, 0 new findings
+
+Watchdog pickup. Confirmed via `list_pull_requests` (state=open) that no
+`claude/security-review-*` PR existed before starting — PR #2892 (Feature
+27, Integrations, pass 5) had already merged (`bf0a45a6`). Rotation row 28
+was the first `⬜` (rows 00–27 all `✅`), matching the Open PR section's
+own "Next: Feature 28" note.
+
+`git log --since="2026-09-13"` (pass 4's addendum date) against all nine
+backend files plus the four frontend surfaces this feature covers found
+real touches in three commits, each read in full: `audit_logs.py` gained
+an org-scoped actor-username join (`7aa34054`, part of an unrelated
+elections fix — most `log_audit_event` callers never pass `username`, so
+rows resolve the acting user's name from `users` at read time now; the
+join's org filter lives in the `ON` clause, so a cross-tenant `user_id`
+never resolves a name, and the commit's own
+`test_w50_audit_username.py` already pins the cross-tenant case);
+`error_logs.py` gained a path-based discard for anonymous suggestion-box
+failure reports (`c78a3eca`, a privacy fix — stops naming the member who
+hit a 5xx on a page that's supposed to be anonymous); and
+`ip-security/services/api.ts` was rewritten to send snake_case request
+bodies (`b576d9ae`, a correctness fix — the request schemas have no alias
+generator, so the old camelCase bodies 422'd or silently dropped fields).
+All three verified good, no finding — see
+`docs/security-review/SEC2-28-security-audit-ip.md` → Pass 5 for the full
+read of each.
+
+Re-read the actual current code (not assumed from the doc) for every
+still-open item: **SEC2-28-5** (HIGH — approved IP-allowlist exceptions
+have no enforcement effect), **SEC2-28-6** (LOW — TOCTOU on the duplicate
+IP-exception check), **SEC2-28-7** (HIGH — `security_monitoring.py`'s
+alert surface has no admin UI, plus the `organization_id=NULL`
+brute-force-alert exclusion and the `Content-Length`-gated exfiltration
+gap), **SEC2-28-10** (HIGH — the audit hash chain has no write-concurrency
+control), and the dead-detector-code note (pass 3) — all re-confirmed
+unchanged, all already mirrored in `KNOWN_LIMITATIONS.md` where they need
+an owner decision rather than a drive-by fix. Re-enumerated all 34 routes
+(pass 4's prose said 35; its own table has 34 rows — a pre-existing
+narration typo, not a route change) — every gate and org-scoping
+assessment unchanged. All previously-FIXED items (SEC-1 through SEC-9,
+SEC2-28-1 through SEC2-28-4, SEC2-28-9, SEC2-28-11) re-confirmed intact.
+
+Gate: `flake8`/`black --check`/`isort --check-only` clean over
+`app/ tests/ alembic/`; `validate_migrations.py --strict` passed (509
+revisions, single head, no migration this pass); 268 scoped backend tests
+passed; frontend `npm ci` (this worktree's `node_modules` was unpopulated),
+`tsc --noEmit` 0 errors, `eslint --max-warnings 10` 0 errors/warnings.
+
+Rotation row 28 → ✅ (pending PR merge). Next: Feature 29 (Reports &
+analytics).
 
 ### 2026-10-03 — Feature 24 (Meetings & minutes, pass 5) — 0 fixed, 0 new findings, 2 flagged items re-confirmed OPEN
 
