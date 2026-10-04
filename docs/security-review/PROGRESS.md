@@ -17197,7 +17197,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
@@ -25447,3 +25447,65 @@ change this pass), 623 `-k form` backend tests passed (1 pre-existing
 skip), frontend typecheck 0 errors, `npm run lint` exit 0. Full write-up:
 [`FORM-26-forms.md`](./FORM-26-forms.md)'s **Pass 5** section. Rotation row
 26 → ✅ (pending PR merge). Next: Feature 27 (Integrations).
+
+### 2026-10-04 — Feature 27 (Integrations, pass 5): 0 fixed, 0 new findings
+
+Watchdog pickup: confirmed via `list_pull_requests` (state=open) that no PR
+whose head branch starts with `claude/security-review-` existed before
+starting — PR #2885 (Feature 26, Forms, pass 5) and PR #2886 (an unrelated
+fix) were already merged (visible at `main`'s tip). Rotation row 26
+confirmed ✅.
+
+Loaded all four prior passes' write-up before reading any code, plus
+`docs/module-audit/integrations.md` and `docs/app-review/integrations.md`
+for their open-finding history, and the `repo-tenancy` skill before touching
+anything under `backend/app/api/` or `backend/app/services/`. Only three
+commits had touched this feature's files since pass 4 (2026-09-13): two
+frontend copy/styling changes to `IntegrationsPage.tsx` (read both diffs in
+full — neither touches a config field, permission, or validator) and one
+merge commit whose diff stat is the same squashed-history artifact pass 4
+already documented. Re-verified every standing finding (INT-1 through
+INT-11) directly against current code rather than trusting that "nothing
+changed" signal — all hold at their pass-4 disposition: INT-5 (uninvoked
+webhook-domain allowlist) and INT-9 (Google Calendar bypasses the shared
+HTTP hardening) remain open/tracked, deliberately out of this review's
+scope to force-fix (the former is an owner behavior decision, the latter
+needs a `httplib2`-specific transport wrapper SEC-00's cross-cutting lane
+is the right place for); INT-11 (Salesforce's "blank the refresh token to
+switch to client credentials" has no reachable UI control) remains flagged
+— the 2026-09-29 copy commit reworded the surrounding help text but added
+no control that sends the explicit `""` the backend already knows how to
+handle, confirmed by reading the full diff.
+
+New to this pass: Feature 23's pass 12 (2026-10-03) note that "a full
+review of the MCP write-tool surface is Feature 27 (Integrations)'s scope"
+was picked up. Read `app/mcp/tools/writes.py` (all three write tools:
+`create_event_draft`, `create_meeting_action_item`,
+`create_reorder_request`) and the service methods each calls into, against
+the same org-scoping/domain-pinning rigor the rest of this feature is held
+to. All three check out: `organization_id` on the bound principal comes
+only from a hash lookup of the presented bearer key
+(`McpKeyService.authenticate`), never from a tool argument;
+`create_meeting_action_item`'s `meeting_id` resolves through an org-scoped
+parent fetch; `create_reorder_request`'s client-supplied `item_id`/
+`category_id` are validated in-org by `InventoryService._assert_reorder_fks_in_org`
+independently of (and in addition to) the medical-domain check the tool
+itself performs, so a cross-org id cannot slip through the domain check's
+org-filtered "not found" and reach storage. The write gate
+(`gate_allows`), pre-write audit (`_audit_apart(..., "attempted", ...)`,
+refusing the mutation if the audit write itself fails), and error
+sanitization (`safe_error_detail()` before anything reaches the MCP
+client) are all the same patterns already verified elsewhere in this
+feature. No finding — recorded in full in `INT-27-integrations.md`'s pass
+5 section so a future pass does not re-derive it.
+
+**0 fixed, 0 new findings.** Full completion gate: flake8/black/isort
+clean over `app/ tests/ alembic/`, `validate_migrations.py --strict`
+single head (509 revisions, no migration this pass), repo-tenancy guard
+tests + MCP tool tests passed, 3548 `-k "integration or salesforce or
+calcom or documenso or paypal or webhook or connector or mcp_key"` backend
+tests passed (21 pre-existing env-only skips), frontend typecheck 0
+errors, `npm run lint` exit 0. Full write-up:
+[`INT-27-integrations.md`](./INT-27-integrations.md)'s **Pass 5** section.
+Rotation row 27 → ✅ (pending PR merge). Next: Feature 28 (Security, audit
+& IP).
