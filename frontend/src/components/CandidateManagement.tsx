@@ -14,8 +14,18 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { blankToNull } from '../utils/formValues';
 import { UserStatus, ElectionStatus } from '../constants/enums';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { ballotItemTitlesById, isBallotItemOption } from '../utils/electionHelpers';
 
 const inputClass = 'form-input mt-1 block shadow-xs px-3 text-sm';
+
+// Mirrors CANDIDATE_STATEMENT_MAX_LENGTH in backend/app/schemas/election.py;
+// the column is TEXT, so the schema's max_length is the only server-side bound
+// and an over-length statement is a 422 there.
+const STATEMENT_MAX_LENGTH = 5000;
+
+const StatementHint: React.FC<{ value: string }> = ({ value }) => (
+  <p className="text-theme-text-muted mt-1 text-xs">{STATEMENT_MAX_LENGTH - value.length} characters remaining</p>
+);
 
 interface CandidateManagementProps {
   electionId: string;
@@ -40,7 +50,7 @@ const emptyCandidateForm: CandidateFormState = {
 
 export const CandidateManagement: React.FC<CandidateManagementProps> = ({ electionId, election }) => {
   const { confirm } = useConfirm();
-  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [allCandidates, setCandidates] = useState<Candidate[]>([]);
   const [members, setMembers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -71,6 +81,16 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({ electi
       setLoading(false);
     }
   };
+
+  // The backend materialises a ballot item's Approve/Deny choices as
+  // Candidate rows on the item's first vote. They are options, not nominees:
+  // an officer editing or removing one would rename or delete cast votes, so
+  // they never reach this list (W50-24).
+  const itemTitles = useMemo(() => ballotItemTitlesById(election.ballot_items), [election.ballot_items]);
+  const candidates = useMemo(
+    () => allCandidates.filter((c) => !isBallotItemOption(c, itemTitles)),
+    [allCandidates, itemTitles]
+  );
 
   // Members already added as candidates
   const candidateUserIds = useMemo(() => new Set(candidates.map((c) => c.user_id).filter(Boolean)), [candidates]);
@@ -231,6 +251,12 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({ electi
   }
 
   const isClosed = election.status === ElectionStatus.CLOSED || election.status === ElectionStatus.CANCELLED;
+  // A write-in that exists once voting has started was typed by a voter and
+  // is what their vote points at; renaming or removing it would alter the
+  // ballot record. Spelling variants are consolidated with Merge Write-Ins,
+  // which leaves the vote rows untouched.
+  const votingStarted = election.status === ElectionStatus.OPEN || (election.total_votes ?? 0) > 0;
+  const isReadOnlyWriteIn = (candidate: Candidate) => votingStarted && candidate.is_write_in;
 
   return (
     <div className="bg-theme-surface rounded-lg p-6 backdrop-blur-xs">
@@ -357,9 +383,11 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({ electi
                 value={formData.statement}
                 onChange={(e) => setFormData((prev) => ({ ...prev, statement: e.target.value }))}
                 rows={3}
+                maxLength={STATEMENT_MAX_LENGTH}
                 className={inputClass}
                 placeholder="Candidate's statement or platform..."
               />
+              <StatementHint value={formData.statement} />
             </div>
 
             <div>
@@ -466,9 +494,11 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({ electi
                           value={formData.statement}
                           onChange={(e) => setFormData((prev) => ({ ...prev, statement: e.target.value }))}
                           rows={2}
+                          maxLength={STATEMENT_MAX_LENGTH}
                           className="form-input shadow-xs"
                           placeholder="Statement..."
                         />
+                        <StatementHint value={formData.statement} />
                         <div className="flex gap-2">
                           <button
                             type="button"
@@ -510,7 +540,10 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({ electi
                           )}
                         </div>
 
-                        {!isClosed && (
+                        {!isClosed && isReadOnlyWriteIn(candidate) && (
+                          <span className="text-theme-text-muted ml-4 text-xs">Cast by a voter — read-only</span>
+                        )}
+                        {!isClosed && !isReadOnlyWriteIn(candidate) && (
                           <div className="ml-4 flex items-center gap-2">
                             <button
                               type="button"

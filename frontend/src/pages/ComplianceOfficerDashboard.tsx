@@ -33,6 +33,7 @@ import { complianceOfficerService, reportExportService } from '../services/train
 import { formatDate } from '../utils/dateFormatting';
 import { formatHours, formatHoursExact, sumHoursToQuarter } from '../utils/hoursFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
+import { expectArray } from '../utils/asArray';
 import { useTimezone } from '../hooks/useTimezone';
 import type {
   ISOReadiness,
@@ -41,6 +42,37 @@ import type {
   ComplianceAttestation,
   ComplianceForecast,
 } from '../types/training';
+
+/*
+ * Every section on this dashboard reports a figure an officer acts on — a
+ * compliance percentage, an ISO readiness score, a forecast — so a response
+ * that is not its declared shape (a captive portal's HTML page answering 200)
+ * is verified here and sent to the section's own error message. Substituting
+ * empty values would print "0% compliant" as though it were measured, and
+ * reading the body unchecked took the whole Training hub down instead.
+ */
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
+
+const isAnnualReport = (value: unknown): value is AnnualComplianceReport => {
+  if (!isRecord(value)) return false;
+  const summary = value.executive_summary;
+  const adminHours = value.admin_hours_summary;
+  return (
+    isRecord(summary) &&
+    typeof summary.overall_compliance_pct === 'number' &&
+    Array.isArray(value.member_compliance) &&
+    Array.isArray(value.requirement_analysis) &&
+    isRecord(adminHours) &&
+    Array.isArray(adminHours.by_category) &&
+    [
+      'effectiveness_summary',
+      'instructor_summary',
+      'recertification_summary',
+      'multi_agency_summary',
+      'record_completeness',
+    ].every((key) => isRecord(value[key]))
+  );
+};
 
 type ActiveSection = 'annual-report' | 'iso-readiness' | 'record-completeness' | 'attestations' | 'forecast';
 
@@ -70,7 +102,7 @@ const ComplianceOfficerDashboard: React.FC<ComplianceOfficerDashboardProps> = ({
       <div className="mb-6 flex justify-end">
         <button
           onClick={() => void navigate('/training/compliance-config')}
-          className="bg-theme-input-bg text-theme-text-secondary hover:bg-theme-surface-hover flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+          className="bg-theme-input-bg text-theme-text-secondary hover:bg-theme-surface-hover flex min-h-11 items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
           title="Compliance Requirements Configuration"
         >
           <Settings className="h-4 w-4" />
@@ -105,6 +137,7 @@ const AnnualReportSection: React.FC = () => {
       setLoading(true);
       setError(null);
       const data = await complianceOfficerService.getAnnualReport(year);
+      if (!isAnnualReport(data)) throw new TypeError('The annual report response was not a report');
       setReport(data);
     } catch {
       setError('Failed to load annual compliance report');
@@ -561,6 +594,9 @@ const ISOReadinessSection: React.FC = () => {
       try {
         setLoading(true);
         const result = await complianceOfficerService.getISOReadiness();
+        if (!isRecord(result) || !Array.isArray(result.categories)) {
+          throw new TypeError('The ISO readiness response was not a readiness summary');
+        }
         setData(result);
       } catch {
         setError('Failed to load ISO readiness data');
@@ -666,6 +702,9 @@ const RecordCompletenessSection: React.FC = () => {
       try {
         setLoading(true);
         const result = await complianceOfficerService.getRecordCompleteness();
+        if (!isRecord(result) || !Array.isArray(result.fields)) {
+          throw new TypeError('The record completeness response was not a summary');
+        }
         setData(result);
       } catch {
         setError('Failed to load record completeness data');
@@ -755,7 +794,7 @@ const AttestationsSection: React.FC = () => {
       try {
         setLoading(true);
         const data = await complianceOfficerService.getAttestations();
-        setAttestations(data);
+        setAttestations(expectArray(data, 'attestation history'));
       } catch {
         setError('Failed to load attestation history');
       } finally {
@@ -974,7 +1013,7 @@ const ForecastSection: React.FC = () => {
       try {
         setLoading(true);
         const data = await reportExportService.getComplianceForecast();
-        setForecasts(data);
+        setForecasts(expectArray(data, 'compliance forecast'));
       } catch {
         setError('Failed to load compliance forecast');
       } finally {

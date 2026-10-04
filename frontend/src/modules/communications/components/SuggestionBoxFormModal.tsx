@@ -140,7 +140,7 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({ box, op
               administrator.
             </p>
           </div>
-          <label className="text-theme-text-primary flex items-start gap-2 text-sm max-md:min-h-[44px]">
+          <label className="text-theme-text-primary touch:min-h-[44px] flex items-start gap-2 text-sm">
             <input
               type="checkbox"
               className="form-checkbox mt-0.5"
@@ -155,7 +155,7 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({ box, op
               </span>
             </span>
           </label>
-          <label className="text-theme-text-primary flex items-center gap-2 text-sm max-md:min-h-[44px]">
+          <label className="text-theme-text-primary touch:min-h-[44px] flex items-center gap-2 text-sm">
             <input
               type="checkbox"
               className="form-checkbox"
@@ -164,7 +164,7 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({ box, op
             />
             Accepting submissions
           </label>
-          <label className="text-theme-text-primary flex items-start gap-2 text-sm max-md:min-h-[44px]">
+          <label className="text-theme-text-primary touch:min-h-[44px] flex items-start gap-2 text-sm">
             <input
               type="checkbox"
               className="form-checkbox mt-0.5"

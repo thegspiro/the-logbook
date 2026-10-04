@@ -6,12 +6,12 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router';
+import { Link } from 'react-router';
 import { CheckCircle2, Clock, Filter, ClipboardList, Loader2 } from 'lucide-react';
 import { dashboardService } from '../services/api';
 import type { ActionItemSummary } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
-import { formatDate } from '../utils/dateFormatting';
+import { calendarDaysFromToday, formatCalendarDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { EmptyState } from '../components/ux';
 
@@ -39,13 +39,24 @@ const MEETING_PRIORITY_LABELS: Record<string, string> = {
   '2': 'urgent',
 };
 
+const CLOSED_STATUSES: readonly string[] = ['completed', 'cancelled'];
+
+const isOpen = (item: ActionItemSummary): boolean => !CLOSED_STATUSES.includes(item.status);
+
+/**
+ * "Open" means not yet done, across both sources: meeting items store `open`,
+ * minutes items `pending`, and both can be `in_progress` or (minutes)
+ * `overdue`. Sent to the API as a status it matched exactly, "Open" found
+ * meeting items only — zero rows beside an Open tile reading 3 (W52-3).
+ */
+const OPEN_FILTER = 'open';
+
 const priorityLabel = (item: ActionItemSummary): string | undefined =>
   item.priority && item.source === 'meeting'
     ? (MEETING_PRIORITY_LABELS[item.priority] ?? item.priority)
     : item.priority;
 
 const ActionItemsPage: React.FC = () => {
-  const navigate = useNavigate();
   const tz = useTimezone();
   const [items, setItems] = useState<ActionItemSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,10 +73,10 @@ const ActionItemsPage: React.FC = () => {
     try {
       setLoading(true);
       const data = await dashboardService.getActionItems({
-        ...(statusFilter ? { status_filter: statusFilter } : {}),
+        ...(statusFilter && statusFilter !== OPEN_FILTER ? { status_filter: statusFilter } : {}),
         ...(assignedToMe ? { assigned_to_me: assignedToMe } : {}),
       });
-      setItems(data);
+      setItems(statusFilter === OPEN_FILTER ? data.filter(isOpen) : data);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -73,23 +84,26 @@ const ActionItemsPage: React.FC = () => {
     }
   };
 
+  // A due date is a calendar day (a meeting item's DATE, or a minutes item's
+  // UTC midnight), so it is compared with today on the department's calendar.
+  // Measuring it against the clock counted an item overdue from the evening
+  // before it was due, anywhere west of UTC (W52-2).
+  const daysUntilDue = (dueDate?: string): number | null => (dueDate ? calendarDaysFromToday(dueDate, tz) : null);
+
   const getDueDateClass = (dueDate?: string) => {
-    if (!dueDate) return 'text-theme-text-muted';
-    const due = new Date(dueDate);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const diff = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    if (diff < 0) return 'text-red-700 dark:text-red-400 font-semibold';
-    if (diff <= 3) return 'text-orange-700 dark:text-orange-400';
+    const days = daysUntilDue(dueDate);
+    if (days === null) return 'text-theme-text-muted';
+    if (days < 0) return 'text-red-700 dark:text-red-400 font-semibold';
+    if (days <= 3) return 'text-orange-700 dark:text-orange-400';
     return 'text-theme-text-secondary';
   };
 
   const overdue = items.filter((i) => {
-    if (!i.due_date) return false;
-    return new Date(i.due_date) < new Date() && !['completed', 'cancelled'].includes(i.status);
+    const days = daysUntilDue(i.due_date);
+    return days !== null && days < 0 && isOpen(i);
   }).length;
 
-  const open = items.filter((i) => !['completed', 'cancelled'].includes(i.status)).length;
+  const open = items.filter(isOpen).length;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -128,13 +142,13 @@ const ActionItemsPage: React.FC = () => {
             className="form-input-sm"
           >
             <option value="">All Statuses</option>
-            <option value="open">Open</option>
+            <option value={OPEN_FILTER}>Open (not done)</option>
             <option value="pending">Pending</option>
             <option value="in_progress">In Progress</option>
             <option value="completed">Completed</option>
           </select>
         </div>
-        <label className="text-theme-text-secondary flex cursor-pointer items-center gap-2 text-sm max-md:min-h-[44px]">
+        <label className="text-theme-text-secondary touch:min-h-[44px] flex cursor-pointer items-center gap-2 text-sm">
           <input
             type="checkbox"
             checked={assignedToMe}
@@ -167,16 +181,12 @@ const ActionItemsPage: React.FC = () => {
       ) : (
         <div className="space-y-2">
           {items.map((item) => (
-            <div
+            // A link, not a clickable div: the row was unreachable by keyboard
+            // and unannounced to a screen reader (W52-4).
+            <Link
               key={`${item.source}-${item.id}`}
-              className="card-secondary hover:bg-theme-surface-hover cursor-pointer p-4"
-              onClick={() => {
-                if (item.source === 'meeting') {
-                  void navigate(`/minutes`);
-                } else {
-                  void navigate(`/minutes/${item.source_id}`);
-                }
-              }}
+              to={item.source === 'meeting' ? '/minutes' : `/minutes/${item.source_id}`}
+              className="card-secondary hover:bg-theme-surface-hover block p-4"
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0 flex-1">
@@ -204,14 +214,16 @@ const ActionItemsPage: React.FC = () => {
                   {item.due_date ? (
                     <div className={`text-sm ${getDueDateClass(item.due_date)}`}>
                       <Clock className="mr-1 inline h-3 w-3" />
-                      {formatDate(item.due_date, tz)}
+                      {/* A calendar day: formatting it in the department's zone
+                          showed the day before (W52-1). */}
+                      {formatCalendarDate(item.due_date)}
                     </div>
                   ) : (
                     <span className="text-theme-text-muted text-xs">No due date</span>
                   )}
                 </div>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       )}

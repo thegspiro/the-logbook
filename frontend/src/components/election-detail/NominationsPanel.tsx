@@ -1,10 +1,13 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { electionService, userService } from '../../services/api';
 import type { Candidate, Election } from '../../types/election';
 import type { User } from '../../types/user';
 import { UserStatus } from '../../constants/enums';
 import { getErrorMessage } from '../../utils/errorHandling';
+import { useConfirm } from '../../contexts/ConfirmContext';
+import { useTimezone } from '../../hooks/useTimezone';
+import { formatDateTime } from '../../utils/dateFormatting';
 
 interface NominationsPanelProps {
   electionId: string;
@@ -28,9 +31,12 @@ const NominationsPanel: React.FC<NominationsPanelProps> = ({
   const [members, setMembers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const positionRef = useRef<HTMLSelectElement>(null);
   const [position, setPosition] = useState('');
   const [nomineeId, setNomineeId] = useState('');
   const [statement, setStatement] = useState('');
+  const { confirm } = useConfirm();
+  const tz = useTimezone();
 
   const positions = election.positions ?? [];
 
@@ -61,16 +67,29 @@ const NominationsPanel: React.FC<NominationsPanelProps> = ({
     if (!position) return;
     try {
       setSubmitting(true);
-      await electionService.createNomination(electionId, {
+      const created = await electionService.createNomination(electionId, {
         position,
         // '' = self-nomination; omit the field entirely (Pitfall #1: || not ??)
         nominee_user_id: nomineeId || undefined,
         statement: statement.trim() || undefined,
       });
-      toast.success('Nomination submitted');
+      // The server accepts a self-nomination implicitly (there is nobody to
+      // ask), so "submitted" understated what just happened; a third-party
+      // nomination stays pending until the nominee answers. Read the
+      // server's verdict rather than assuming it from the form.
+      toast.success(
+        created.accepted
+          ? `You are now a candidate for ${position}`
+          : `${created.name} has been nominated for ${position} and will be asked to accept`
+      );
       setPosition('');
       setNomineeId('');
       setStatement('');
+      // Clearing the position disables the Nominate button, which drops focus
+      // to <body>; the next Tab then lands on the layout's skip link, which
+      // pops in as a floating box over the page (W50-73). Keep focus on the
+      // form instead.
+      positionRef.current?.focus();
       await fetchData();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to submit nomination'));
@@ -79,13 +98,23 @@ const NominationsPanel: React.FC<NominationsPanelProps> = ({
     }
   };
 
-  const handleRespond = async (candidateId: string, accept: boolean) => {
+  const handleRespond = async (candidate: Candidate, accept: boolean) => {
     try {
       if (accept) {
-        await electionService.acceptNomination(electionId, candidateId);
+        await electionService.acceptNomination(electionId, candidate.id);
         toast.success('Nomination accepted');
       } else {
-        await electionService.declineNomination(electionId, candidateId);
+        // Declining deletes the candidate row for everyone, and the nominator
+        // would have to nominate again to undo it — not a one-tap decision.
+        const ok = await confirm({
+          title: 'Decline this nomination?',
+          message: `Your nomination for ${candidate.position ?? 'this position'} will be removed from the election. Whoever nominated you would have to nominate you again.`,
+          confirmLabel: 'Decline nomination',
+          cancelLabel: 'Keep it',
+          variant: 'warning',
+        });
+        if (!ok) return;
+        await electionService.declineNomination(electionId, candidate.id);
         toast.success('Nomination declined');
       }
       await fetchData();
@@ -108,9 +137,11 @@ const NominationsPanel: React.FC<NominationsPanelProps> = ({
           className="card space-y-3 p-4"
         >
           <h4 className="text-theme-text-primary text-sm font-semibold">Submit a Nomination</h4>
-          {election.nomination_deadline && (
-            <p className="text-theme-text-muted text-xs">Nominations close automatically at the configured deadline.</p>
-          )}
+          <p className="text-theme-text-muted text-xs" data-testid="nominations-close">
+            {election.nomination_deadline
+              ? `Nominations close ${formatDateTime(election.nomination_deadline, tz)}.`
+              : 'Nominations stay open until an officer closes them.'}
+          </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label htmlFor="nomination-position" className="form-label">
@@ -118,6 +149,7 @@ const NominationsPanel: React.FC<NominationsPanelProps> = ({
               </label>
               <select
                 id="nomination-position"
+                ref={positionRef}
                 required
                 value={position}
                 onChange={(e) => setPosition(e.target.value)}
@@ -204,7 +236,7 @@ const NominationsPanel: React.FC<NominationsPanelProps> = ({
                       <button
                         type="button"
                         onClick={() => {
-                          void handleRespond(c.id, true);
+                          void handleRespond(c, true);
                         }}
                         className="btn-success rounded-md px-3 py-1.5 text-xs"
                       >
@@ -213,7 +245,7 @@ const NominationsPanel: React.FC<NominationsPanelProps> = ({
                       <button
                         type="button"
                         onClick={() => {
-                          void handleRespond(c.id, false);
+                          void handleRespond(c, false);
                         }}
                         className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-md border px-3 py-1.5 text-xs"
                       >

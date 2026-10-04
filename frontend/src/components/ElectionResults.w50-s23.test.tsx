@@ -7,9 +7,10 @@
  * and `calculate_results` only overrides it for `percentage` / `count`. The
  * results panel used to gate its banner on `quorum_met !== undefined`, which
  * is always true, so a `quorum_type: 'none'` election showed a green "Quorum
- * Met" banner it never earned. The banner now reads the `election` prop's
- * `quorum_type` instead (CLAUDE.md #29 — report what the backend decided, and
- * it decided "no quorum", not "met"). This test pins that.
+ * Met" banner it never earned. The backend now sends `quorum_met: null` for
+ * an election with no quorum rule, and the panel reports what it decided
+ * (CLAUDE.md #29): a neutral "No quorum requirement" line, never "met".
+ * This test pins that.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -56,9 +57,10 @@ describe('ElectionResults quorum banner (S23)', () => {
   });
 
   it('does not announce a quorum for an election that has none', async () => {
-    mockGetResults.mockResolvedValue({ ...baseResults });
+    mockGetResults.mockResolvedValue({ ...baseResults, quorum_met: null });
     render(<ElectionResults electionId="e1" election={electionWith('none', null)} />);
     expect(await screen.findByText('Election Summary')).toBeInTheDocument();
+    expect(screen.getByText('No quorum requirement')).toBeInTheDocument();
     expect(screen.queryByText('Quorum Met')).not.toBeInTheDocument();
     expect(screen.queryByText('Quorum Not Met')).not.toBeInTheDocument();
   });

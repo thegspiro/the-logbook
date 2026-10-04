@@ -47,7 +47,7 @@ const DashboardCardHeader: React.FC<DashboardCardHeaderProps> = ({
         {onViewAll && (
           <button
             onClick={onViewAll}
-            className={`${viewAllColor} flex items-center space-x-1 py-2 pl-2 text-sm max-md:min-h-[44px]`}
+            className={`${viewAllColor} touch:min-h-[44px] flex items-center space-x-1 py-2 pl-2 text-sm`}
           >
             <span>{viewAllLabel}</span>
             <ChevronRight className="h-4 w-4" />

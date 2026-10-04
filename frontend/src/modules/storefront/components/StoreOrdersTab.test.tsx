@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import toast from 'react-hot-toast';
 import userEvent from '@testing-library/user-event';
 
 const mockGetOrders = vi.fn();
@@ -279,5 +280,14 @@ describe('StoreOrdersTab payment handling', () => {
       expect(mockGetOrders).toHaveBeenCalled();
     });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  // A 200 whose body is not a page of orders (a captive portal's HTML page)
+  // crashed the tab on `orders.length`; it is now a failed load like any other.
+  it('reports an order list that is not a list instead of crashing', async () => {
+    mockGetOrders.mockResolvedValue('<html>Sign in to Wi-Fi</html>');
+    renderTab();
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Could not load orders'));
   });
 });

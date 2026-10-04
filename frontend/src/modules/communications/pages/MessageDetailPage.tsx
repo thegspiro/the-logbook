@@ -109,7 +109,7 @@ const MessageDetailPage: React.FC = () => {
           title and is easy to miss. */}
       <Link
         to="/messages"
-        className="text-theme-text-secondary hover:text-theme-text-primary mb-4 inline-flex items-center gap-1.5 text-sm max-md:min-h-[44px]"
+        className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-[44px] mb-4 inline-flex items-center gap-1.5 text-sm"
       >
         <ArrowLeft className="h-4 w-4" aria-hidden="true" />
         All messages
@@ -155,7 +155,7 @@ const MessageDetailPage: React.FC = () => {
                   type="button"
                   onClick={() => void handleAcknowledge()}
                   disabled={isAcknowledging}
-                  className="btn-info inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60 max-md:min-h-[44px]"
+                  className="btn-info touch:min-h-[44px] inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isAcknowledging ? (
                     <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />

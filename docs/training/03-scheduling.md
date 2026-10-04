@@ -2408,6 +2408,20 @@ position, letting you fill them all at once.
 
 > **Edge case:** Members on leave, with approved time-off covering the shift date, or already assigned to the shift are automatically excluded from the member dropdown.
 
+### Probationary Members Can Sign In and Be Scheduled _(2026-10-03)_
+
+An account whose status was set to **Probationary** (an option in the member
+profile's **Change status** menu, and what a junior member derives to) was
+treated as inactive: the member got _"Account is inactive"_ at sign-in, and
+assigning them to a shift was refused as _"no longer active"_. Both are fixed —
+**Active and Probationary accounts are now both "active"** for sign-in, shift
+assignment, the shift-eligibility check, the scheduling rosters and the
+recipient list for targeted messages.
+
+A department that does **not** want probationary members signing themselves up
+for shifts can still exclude the membership type in **Scheduling settings**.
+Leave, Suspended, Inactive, Dropped and Retired accounts are unchanged.
+
 ### Required/Optional Position Toggle
 
 Open **Scheduling > Templates** and click **New Template** (or edit an

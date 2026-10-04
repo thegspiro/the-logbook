@@ -304,7 +304,7 @@ export default function RoomsSection({ facilityId, canCreate, canEdit, canDelete
               {room.displayCode && room.isActive !== false && (
                 <button
                   onClick={() => setQrRoomId((prev) => (prev === room.id ? null : room.id))}
-                  className="text-theme-text-muted inline-flex items-center justify-center rounded-lg p-1.5 transition-colors hover:text-blue-500 max-md:min-h-11 max-md:min-w-11"
+                  className="text-theme-text-muted touch:min-h-11 touch:min-w-11 inline-flex items-center justify-center rounded-lg p-1.5 transition-colors hover:text-blue-500"
                   aria-label={`Toggle QR code for ${room.name}`}
                   title="Show check-in QR code"
                 >
@@ -363,7 +363,7 @@ export default function RoomsSection({ facilityId, canCreate, canEdit, canDelete
                 onClick={() => {
                   void handleCopyKioskUrl(room);
                 }}
-                className="flex items-center gap-1.5 text-xs text-gray-600 transition-colors hover:text-blue-500 max-md:min-h-11"
+                className="touch:min-h-11 flex items-center gap-1.5 text-xs text-gray-600 transition-colors hover:text-blue-500"
               >
                 {copiedRoomId === room.id ? (
                   <Check className="h-3 w-3 text-green-500" aria-hidden="true" />
@@ -394,7 +394,7 @@ export default function RoomsSection({ facilityId, canCreate, canEdit, canDelete
           {canDelete && (
             <Link
               to="/locations/qr-codes"
-              className="text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors max-md:min-h-11"
+              className="text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover touch:min-h-11 flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors"
             >
               <QrCode className="h-3.5 w-3.5" aria-hidden="true" /> Check-In QR Codes
             </Link>

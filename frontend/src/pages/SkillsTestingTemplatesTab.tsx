@@ -241,7 +241,7 @@ const SkillsTestingTemplatesTab: React.FC = () => {
   }, [archiveTarget, deleteTemplate]);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+    <div className="py-6">
       {/* Summary Cards */}
       {!summaryLoading && summary && (
         <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -353,7 +353,7 @@ const SkillsTestingTemplatesTab: React.FC = () => {
             </button>
             <button
               onClick={() => void navigate('/training/skills-testing/templates/new')}
-              className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
+              className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover min-h-11 rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
             >
               Start from scratch
             </button>

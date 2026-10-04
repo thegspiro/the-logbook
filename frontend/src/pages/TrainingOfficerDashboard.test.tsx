@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 const getDashboardSummary = vi.fn();
 vi.mock('../services/api', () => ({
@@ -66,5 +67,28 @@ describe('TrainingOfficerDashboard', () => {
 
     expect(await screen.findByText(LOAD_ERROR)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /Training Officer Dashboard/ })).toBeInTheDocument();
+  });
+});
+
+describe('TrainingOfficerDashboard header controls', () => {
+  beforeEach(() => {
+    getDashboardSummary.mockReset();
+    getDashboardSummary.mockResolvedValue(structuredClone(summary));
+  });
+
+  // Icon-only buttons: `title` alone is a tooltip a phone never shows, and the
+  // settings toggle has to say whether the panel it controls is open.
+  it('names the icon buttons and reports the settings panel state', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingOfficerDashboard />);
+    await screen.findByText('50%');
+
+    expect(screen.getByRole('button', { name: 'Refresh data' })).toBeInTheDocument();
+    const settings = screen.getByRole('button', { name: 'Dashboard settings' });
+    expect(settings).toHaveAttribute('aria-expanded', 'false');
+
+    await user.click(settings);
+    expect(settings).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('heading', { name: 'Customize this training dashboard' })).toBeInTheDocument();
   });
 });

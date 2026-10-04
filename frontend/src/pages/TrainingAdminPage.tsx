@@ -227,6 +227,11 @@ const TabLoading = () => (
 
 // ── Tab content renderer ────────────────────────────────────────
 
+// The hub's content column already supplies the page's width and side
+// padding, so a tab's root sets only vertical spacing. A tab that brings its
+// own `px-4 sm:px-6 lg:px-8` container is indented twice, which on a 320px
+// phone costs 32px of an already narrow column.
+
 const TabContent: React.FC<{ page: PageId; tab: string; onMetricsSaved: () => void }> = ({
   page,
   tab,

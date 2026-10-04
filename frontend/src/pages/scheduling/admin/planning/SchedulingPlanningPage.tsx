@@ -101,7 +101,7 @@ const SchedulingPlanningPage: React.FC<SchedulingPlanningPageProps> = ({ section
             Set the defaults for new shifts and templates in{' '}
             <button
               type="button"
-              className="inline-flex items-center gap-1 font-medium underline"
+              className="touch:min-h-11 inline-flex items-center gap-1 font-medium underline"
               onClick={() => void navigate('/scheduling/admin/settings/general')}
             >
               Scheduling settings
