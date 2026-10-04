@@ -843,6 +843,9 @@ Officers change a member's status from the member's profile page.
    move is allowed — a retired member can only return to Active or Inactive, and
    a dropped member only to Probationary or Active — and the dialog shows an
    error for one that is not.
+   **Probationary counts as an active account** _(2026-10-03)_: a probationary
+   member can sign in and be assigned to shifts. Before this date they were
+   refused as "Account is inactive".
    When the member is dropped or retired and you pick a status that brings them
    back, the dialog also asks how their **earlier service** counts (**Continue
    prior service** or **Restart at zero**, with your department's default marked)

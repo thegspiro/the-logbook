@@ -184,6 +184,18 @@ wildcard, exactly as `view_medical` / `manage_medical` already were.
 
 ---
 
+### Checklist changes of 2026-10-03
+
+A chosen **Fail** or **Out of service** requires a note before submit; Overall
+Notes is no longer in the sticky submit wrapper. Fleet Readiness and My
+Checklists share the `isChecklistSubmitted` rule, and My Checklists no longer
+adds its own toast. The builder's apparatus-type list follows
+`DefaultApparatusType` plus custom types, readiness names the vehicles reached
+and warns when none, and editing a live checklist unpublishes it with a
+**Publish now** banner. `get_failure_log` counted over a subquery with the table
+beside it in `FROM`, cross-joining every item row across organizations; it now
+counts its own rows.
+
 ## Pages
 
 | URL                               | Page                      | Permission         |
