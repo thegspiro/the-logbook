@@ -413,6 +413,48 @@ class TestFinanceDisbursementLocking:
         ), "void_check must not mutate Budget.amount_spent directly."
 
 
+class TestFinanceWorkflowLocking:
+    """The non-ledger transitions beside FIN-31's five: submit, update and the
+    ordered/received marks. None touches a Budget, but each reads a status and
+    then writes off it, so two concurrent submits of one draft both pass the
+    DRAFT check and build two approval chains. Each now reads its entity
+    through the getter's ``for_update`` path, which locks and refreshes it.
+    ``test_finance_submit_race.py`` drives the submit case on real
+    connections."""
+
+    @pytest.mark.parametrize(
+        "getter",
+        ["get_purchase_request", "get_expense_report", "get_check_request"],
+    )
+    def test_getter_locks_and_refreshes_when_asked(self, getter):
+        source = _source_of(getattr(finance_service.FinanceService, getter))
+        assert "with_for_update()" in source
+        assert "populate_existing=True" in source, (
+            "A locked read that leaves an already-loaded instance stale checks "
+            "the status the endpoint saw, not the one the lock protects."
+        )
+
+    @pytest.mark.parametrize(
+        "method",
+        [
+            "submit_purchase_request",
+            "submit_expense_report",
+            "submit_check_request",
+            "update_purchase_request",
+            "update_expense_report",
+            "update_check_request",
+            "mark_pr_ordered",
+            "mark_pr_received",
+        ],
+    )
+    def test_transition_reads_its_entity_locked(self, method):
+        source = _source_of(getattr(finance_service.FinanceService, method))
+        assert "for_update=True" in source, (
+            f"{method} reads a status and writes off it; without the locked "
+            "read two concurrent calls both pass the status check."
+        )
+
+
 class TestTestingRunImplicitFirstRun:
     """The department's first mark opens a run implicitly. Two testers tapping
     at the same moment both saw no run and both opened one, splitting the
