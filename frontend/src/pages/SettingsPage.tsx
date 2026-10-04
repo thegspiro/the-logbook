@@ -1043,7 +1043,7 @@ export const SettingsPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => logoInputRef.current?.click()}
-                  className="text-theme-accent-blue inline-flex items-center gap-1.5 text-sm hover:opacity-80 max-md:min-h-[44px]"
+                  className="text-theme-accent-blue touch:min-h-[44px] inline-flex items-center gap-1.5 text-sm hover:opacity-80"
                 >
                   <Upload className="h-3.5 w-3.5" />
                   Upload logo
@@ -1057,7 +1057,7 @@ export const SettingsPage: React.FC = () => {
                       if (logoInputRef.current) logoInputRef.current.value = '';
                       updateProfileField('logo', null, { immediate: true });
                     }}
-                    className="text-theme-text-secondary hover:text-theme-text-primary ml-4 inline-flex items-center text-sm max-md:min-h-[44px]"
+                    className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-[44px] ml-4 inline-flex items-center text-sm"
                   >
                     Remove logo
                   </button>

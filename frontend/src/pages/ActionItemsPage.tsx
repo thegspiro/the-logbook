@@ -148,7 +148,7 @@ const ActionItemsPage: React.FC = () => {
             <option value="completed">Completed</option>
           </select>
         </div>
-        <label className="text-theme-text-secondary flex cursor-pointer items-center gap-2 text-sm max-md:min-h-[44px]">
+        <label className="text-theme-text-secondary touch:min-h-[44px] flex cursor-pointer items-center gap-2 text-sm">
           <input
             type="checkbox"
             checked={assignedToMe}

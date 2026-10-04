@@ -58,7 +58,7 @@ export const NfcTagWriteButton: React.FC<NfcTagWriteButtonProps> = ({ url, label
       type="button"
       onClick={handleClick}
       title={waiting ? 'Cancel writing' : `Write this link to an NFC tag for ${label}`}
-      className={`text-theme-text-muted flex items-center gap-1.5 text-xs transition-colors hover:text-blue-500 max-md:min-h-11 ${className}`}
+      className={`text-theme-text-muted touch:min-h-11 flex items-center gap-1.5 text-xs transition-colors hover:text-blue-500 ${className}`}
     >
       {waiting ? (
         <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />

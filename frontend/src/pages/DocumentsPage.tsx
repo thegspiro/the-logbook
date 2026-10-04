@@ -440,14 +440,14 @@ const DocumentsPage: React.FC = () => {
             <div className="flex flex-wrap items-center gap-3">
               <button
                 onClick={() => setShowCreateFolder(true)}
-                className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors"
+                className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary touch:min-h-11 flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors"
               >
                 <Folder className="h-4 w-4" aria-hidden="true" />
                 <span>New Folder</span>
               </button>
               <button
                 onClick={handleOpenUploadModal}
-                className="flex items-center space-x-2 rounded-lg bg-amber-700 px-4 py-2 text-white transition-colors hover:bg-amber-800"
+                className="touch:min-h-11 flex items-center space-x-2 rounded-lg bg-amber-700 px-4 py-2 text-white transition-colors hover:bg-amber-800"
               >
                 <Upload className="h-4 w-4" />
                 <span>Upload Document</span>
@@ -550,7 +550,7 @@ const DocumentsPage: React.FC = () => {
               {(currentFolder || showAllDocuments) && (
                 <button
                   onClick={handleClearFolder}
-                  className="flex items-center space-x-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400"
+                  className="touch:min-h-11 flex items-center space-x-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400"
                 >
                   <ArrowLeft className="h-4 w-4" aria-hidden="true" />
                   <span>All Folders</span>
@@ -559,7 +559,7 @@ const DocumentsPage: React.FC = () => {
               <div className="bg-theme-surface-secondary flex rounded-lg p-1" role="group" aria-label="View mode">
                 <button
                   onClick={() => setViewMode('grid')}
-                  className={`max-md:mobile-touch-target rounded-sm p-2.5 ${viewMode === 'grid' ? 'bg-amber-700 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+                  className={`touch:mobile-touch-target rounded-sm p-2.5 ${viewMode === 'grid' ? 'bg-amber-700 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
                   aria-label="Grid view"
                   aria-pressed={viewMode === 'grid'}
                 >
@@ -567,7 +567,7 @@ const DocumentsPage: React.FC = () => {
                 </button>
                 <button
                   onClick={() => setViewMode('list')}
-                  className={`max-md:mobile-touch-target rounded-sm p-2.5 ${viewMode === 'list' ? 'bg-amber-700 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+                  className={`touch:mobile-touch-target rounded-sm p-2.5 ${viewMode === 'list' ? 'bg-amber-700 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
                   aria-label="List view"
                   aria-pressed={viewMode === 'list'}
                 >
@@ -695,42 +695,45 @@ const DocumentsPage: React.FC = () => {
                           {doc.description && (
                             <p className="text-theme-text-muted mt-1 line-clamp-2 text-sm">{doc.description}</p>
                           )}
-                          <div className="mt-2 flex items-center space-x-3">
+                          {/* Download and delete sit on the size row, not beside the
+                              title: at their 44px touch size beside it, a 320px
+                              phone showed under a third of a document's name. */}
+                          <div className="mt-2 flex items-center gap-3">
                             <span className="text-theme-text-muted text-xs">{formatFileSize(doc.file_size)}</span>
                             {doc.file_type && (
                               <span className="text-theme-text-muted text-xs uppercase">{doc.file_type}</span>
                             )}
+                            <div className="ml-auto flex shrink-0 items-center gap-1">
+                              {doc.has_file && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void handleDownloadDocument(doc);
+                                  }}
+                                  className="text-theme-text-muted touch-target-phone p-1 transition-all hover:text-amber-700 dark:hover:text-amber-400 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100"
+                                  title="Download document"
+                                >
+                                  <Download className="h-4 w-4" />
+                                </button>
+                              )}
+                              {canManage && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDeleteConfirm(doc.id);
+                                  }}
+                                  className="text-theme-text-muted touch-target-phone p-1 transition-all hover:text-red-800 dark:hover:text-red-400 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100"
+                                  title="Delete document"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              )}
+                            </div>
                           </div>
                           <p className="text-theme-text-muted mt-1 text-xs">
                             {doc.uploader_name ? `Uploaded by ${doc.uploader_name}` : ''}{' '}
                             {formatDate(doc.created_at, tz)}
                           </p>
-                        </div>
-                        <div className="flex shrink-0 items-start space-x-1">
-                          {doc.has_file && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void handleDownloadDocument(doc);
-                              }}
-                              className="text-theme-text-muted p-1 transition-all hover:text-amber-700 dark:hover:text-amber-400 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100"
-                              title="Download document"
-                            >
-                              <Download className="h-4 w-4" />
-                            </button>
-                          )}
-                          {canManage && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDeleteConfirm(doc.id);
-                              }}
-                              className="text-theme-text-muted p-1 transition-all hover:text-red-800 dark:hover:text-red-400 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100"
-                              title="Delete document"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          )}
                         </div>
                       </div>
                     </div>

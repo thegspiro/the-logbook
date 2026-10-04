@@ -110,7 +110,7 @@ const PastEventsTab: React.FC = () => {
                 typeFilter === filter
                   ? 'border-red-500 text-red-700 dark:text-red-400'
                   : 'text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border border-transparent'
-              } shrink-0 border-b-2 px-1 py-3 text-sm font-medium whitespace-nowrap sm:py-4`}
+              } touch:min-w-11 shrink-0 border-b-2 px-1 py-3 text-sm font-medium whitespace-nowrap sm:py-4`}
             >
               {filter === 'all' ? 'All Types' : getEventTypeLabel(filter as EventType)}
             </button>
