@@ -3612,24 +3612,6 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   the model/schema's own stated intent) or `required_roles` should migrate
   to position ids — a decision affecting the member-facing `/my-training`
   endpoint and five other callers, well outside this feature's scope.
-- **`required_positions` is a fourth, unhandled applicability dimension
-  (CMP4-2, MED).** `TrainingRequirement.required_positions`
-  (`app/models/training.py:566-568`) is a JSON array of **position slugs**,
-  a third representation distinct from both `required_roles` (rank slugs,
-  see CMP4-5) and `User.positions`/`roles` (position UUIDs), populated by
-  the training-program requirements API
-  (`training_program_service.py:599-601`). `requirement_applies_to_member`
-  has no branch for it at all — not a regression from this pass, since none
-  of its four pre-existing callers (`get_compliance_matrix`,
-  `compute_org_compliance_pct`, `get_member_period_status`,
-  `get_compliance_summary`) handle it either. A requirement scoped only by
-  `required_positions` matches nobody, everywhere this helper is called.
-  `scheduling_service.py:7342-7345` is the one place a member's position
-  slugs already get compared against `req.required_positions` (for shift
-  eligibility, an unrelated purpose) and is the template a real fix should
-  follow. Fixing it means adding a branch to shared infrastructure Feature
-  17 owns and re-verifying all five now-shared call sites — a cross-feature
-  change, not a same-commit fix for the Compliance feature alone.
 - **The annual report has never been compliance-profile-aware (CMP4-3,
   MED, pre-existing).** `generate_annual_report` has never called
   `_find_matching_profile` or consulted `ComplianceProfile.required_requirement_ids`/

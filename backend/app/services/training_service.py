@@ -1637,6 +1637,7 @@ class TrainingService:
             return []
 
         user_role_ids = [str(role.id) for role in user.roles]
+        user_position_slugs = [str(role.slug) for role in user.roles if role.slug]
 
         # Get all active requirements. Ordered so a paged caller sees a
         # stable sequence across calls.
@@ -1672,7 +1673,11 @@ class TrainingService:
             req
             for req in requirements
             if requirement_applies_to_member(
-                req, user_membership_type, user_role_ids, join_date=join_date
+                req,
+                user_membership_type,
+                user_role_ids,
+                join_date=join_date,
+                position_slugs=user_position_slugs,
             )
         ]
 

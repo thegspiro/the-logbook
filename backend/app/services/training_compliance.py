@@ -832,14 +832,22 @@ def requirement_applies_to_member(
     membership_type: str,
     role_ids: Optional[List[str]] = None,
     join_date: Optional[date] = None,
+    position_slugs: Optional[List[str]] = None,
 ) -> bool:
     """Whether a requirement applies to a member.
 
     Matches ``TrainingService.get_applicable_requirements`` (the
     member-facing ``/my-training`` path) precedence exactly:
     ``applies_to_all`` wins outright; otherwise ``required_membership_types``
-    is checked; otherwise ``required_roles``. A requirement naming none of
-    the three applies to nobody.
+    is checked; otherwise the member matches if they hold any position named
+    in ``required_roles`` (by id) or in ``required_positions`` (by slug). A
+    requirement naming none of these applies to nobody.
+
+    ``required_positions`` holds position *slugs*, written by the training
+    program requirements API. Before CMP4-2 nothing here read it, so a
+    requirement scoped only that way graded nobody anywhere this helper is
+    called. Roles and positions are OR'd, as the scheduling compliance
+    report already does.
 
     Extracted after this exact precedence check was independently
     reimplemented, incompletely, at four call sites
@@ -865,7 +873,11 @@ def requirement_applies_to_member(
     if req.required_membership_types:
         return membership_type in req.required_membership_types
     if req.required_roles and role_ids:
-        return any(rid in role_ids for rid in req.required_roles)
+        if any(rid in role_ids for rid in req.required_roles):
+            return True
+    if req.required_positions and position_slugs:
+        if any(slug in position_slugs for slug in req.required_positions):
+            return True
     return False
 
 
@@ -882,6 +894,16 @@ def member_role_ids(member) -> List[str]:
     return [str(p.id) for p in positions if getattr(p, "id", None)]
 
 
+def member_position_slugs(member) -> List[str]:
+    """The slugs ``required_positions`` is matched against.
+
+    Same relationship as :func:`member_role_ids`, so the same
+    ``selectinload(User.positions)`` requirement applies.
+    """
+    positions = getattr(member, "positions", None) or []
+    return [str(p.slug) for p in positions if getattr(p, "slug", None)]
+
+
 def requirement_applies_to_user(req, member) -> bool:
     """:func:`requirement_applies_to_member` with every input read off ``member``.
 
@@ -895,6 +917,7 @@ def requirement_applies_to_user(req, member) -> bool:
         getattr(member, "membership_type", None) or "active",
         member_role_ids(member),
         join_date=member_join_date(member),
+        position_slugs=member_position_slugs(member),
     )
 
 

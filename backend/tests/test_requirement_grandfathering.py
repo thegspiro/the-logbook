@@ -77,6 +77,7 @@ def _req(**overrides):
         applies_to_all=True,
         required_membership_types=None,
         required_roles=None,
+        required_positions=None,
         new_member_cutoff_date=None,
         existing_member_deadline=None,
         applies_to_joined_before=None,

@@ -169,6 +169,56 @@ class TestRequirementAppliesToMember:
         )
         assert requirement_applies_to_member(req, "active", ["role-1"]) is False
 
+    # CMP4-2: required_positions holds position slugs, and nothing read it,
+    # so a requirement scoped only that way graded nobody.
+
+    def test_position_slug_match_applies(self):
+        req = _make_requirement(
+            applies_to_all=False, required_positions=["driver_candidate"]
+        )
+        assert (
+            requirement_applies_to_member(
+                req, "active", [], position_slugs=["firefighter", "driver_candidate"]
+            )
+            is True
+        )
+
+    def test_position_slug_mismatch_does_not_apply(self):
+        req = _make_requirement(applies_to_all=False, required_positions=["officer"])
+        assert (
+            requirement_applies_to_member(
+                req, "active", [], position_slugs=["firefighter"]
+            )
+            is False
+        )
+
+    def test_roles_and_positions_are_either_or(self):
+        # The scheduling compliance report ORs them; a role miss must not stop
+        # a position match from counting.
+        req = _make_requirement(
+            applies_to_all=False,
+            required_roles=["role-1"],
+            required_positions=["officer"],
+        )
+        assert (
+            requirement_applies_to_member(
+                req, "active", ["role-9"], position_slugs=["officer"]
+            )
+            is True
+        )
+
+    def test_user_form_reads_position_slugs_off_the_member(self):
+        from app.services.training_compliance import requirement_applies_to_user
+
+        req = _make_requirement(applies_to_all=False, required_positions=["officer"])
+        member = SimpleNamespace(
+            membership_type="active",
+            positions=[SimpleNamespace(id="pos-1", slug="officer")],
+            hire_date=None,
+            created_at=None,
+        )
+        assert requirement_applies_to_user(req, member) is True
+
 
 # =====================================================
 # 1. _get_date_window tests
