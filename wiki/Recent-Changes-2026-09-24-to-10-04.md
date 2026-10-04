@@ -50,8 +50,9 @@ nothing moved address.
   edited.**
   - Your wording is saved. Open a template and use **Previous version (before
     the redesign)** → **Load this wording** → **Save**.
-  - **Do not press Reset to "adopt" the design.** The banner still suggests
-    it, but it would only discard your wording.
+  - **Do not press Reset to "adopt" the design.** Reset only replaces your
+    wording with the default. (An earlier banner on the Templates tab
+    suggested pressing it; the banner was corrected on 2026-10-04.)
 - **Replies to any email now go to the department's contact address.** Make
   sure somebody reads it. The "Please do not reply" line is gone.
 - **Appoint a Compliance Officer.** Every department gained a **Compliance**

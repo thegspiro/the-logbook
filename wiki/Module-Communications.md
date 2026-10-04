@@ -453,11 +453,12 @@ official notices.
   SHA-256, which is why untouched templates stopped reading **Edited**. The
   reset above superseded it for appearance.
 
-> **The Templates tab banner is out of date.** It still reads "A new email
-> design is available. Templates you have never edited already use it — press
-> Reset on any you have customised to adopt it." Since `15c5bc7700aa` every
-> shipped template is on the design already; pressing Reset is no longer how a
-> template adopts it.
+> **The Templates tab banner** _(corrected 2026-10-04)_ now reads "Every email
+> uses the current design, including templates your department had edited —
+> there is nothing to adopt", points to **Previous version** for wording the
+> redesign replaced, and says Reset replaces wording without changing the
+> design. Before that it still told admins to press Reset "to adopt it", which
+> since `15c5bc7700aa` only discarded their wording.
 
 **Test sends and previews look like the real email** _(2026-09-28)_:
 

@@ -992,7 +992,9 @@ omitted:
   you have never edited already use it", which is true of a body byte-identical
   to the _current_ shipped default — not of a department arriving from the
   previous release, whose untouched bodies are the _older_ default. Reading the
-  banner aloud as the rule contradicts the script.
+  banner aloud as the rule contradicts the script. _(Superseded 2026-10-04: the
+  banner was rewritten and now matches the script; see the presenter note in
+  script 07.)_
 
 **Every email preview in this script needs re-shooting, and every shot needs a
 caption saying which shell it shows** — the pre-08-10 band, the 08-10 rounded

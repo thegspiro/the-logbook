@@ -60,9 +60,11 @@ pass, because the PRs did not write them.
    - A department's own wording is kept in `email_template_backups`. It comes
      back from the template's **Previous version (before the redesign)** panel
      ([#2757](https://github.com/thegspiro/the-logbook/pull/2757)).
-   - The Email Templates tab still shows an older banner telling admins to
-     press **Reset** to adopt the design. That advice now only discards
-     wording. It is recorded in `KNOWN_LIMITATIONS.md` as open.
+   - The Email Templates tab carried an older banner telling admins to press
+     **Reset** to adopt the design, which after the reset only discarded
+     wording. Found by this pass and corrected on 2026-10-04 in the same pull
+     request: the banner now says there is nothing to adopt and points to
+     **Previous version**.
    - Replies now go to the department's own address
      ([#2710](https://github.com/thegspiro/the-logbook/pull/2710)), and the
      seeded "do not reply" line is gone (`3f3b315165ed`).
@@ -502,7 +504,8 @@ is no longer true). The new entries:
 - New: _Found by the September 24 – October 4 Documentation Pass_, with five
   items:
   - the dead **Map User** button on External Training;
-  - the stale Reset banner on Email Templates;
+  - the stale Reset banner on Email Templates (since fixed in this pull
+    request);
   - NFC hashes depending on `ENCRYPTION_SALT`;
   - the probationary checks left for an owner decision;
   - the API-side gap in the ID-card gate.

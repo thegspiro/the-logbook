@@ -39,6 +39,11 @@ Audit: [`CHANGE_AUDIT_2026-09-24_TO_10-04.md`](../CHANGE_AUDIT_2026-09-24_TO_10-
   pre-2026-09-27 design. Every template now renders the solid-tab shell
   (#2754). The 2026-09-25 email re-shoot below captured the intermediate
   centred-masthead design (#2708), which #2754 replaced two days later.
+- **The Email Templates banner was reworded on 2026-10-04.** Any frame of the
+  **Templates** tab that shows the blue banner at the top — `08-34` certainly,
+  and any other email-template shot taken at full height — shows the old
+  "press Reset … to adopt it" text. The new text says there is nothing to
+  adopt and points to **Previous version**.
 - **"Fire Chief" now reads "Chief"** on the seeded position and rank
   (`d4e1a7c93b58`). Any frame that shows the seeded position list, or a member's
   rank, as "Fire Chief" is stale. Frames were not checked one by one for this,
@@ -218,7 +223,7 @@ and this file cannot disagree.
 | **NEW** | — | Communications → Email Templates → **Templates**, a template with a backup selected: the **Previous version (before the redesign)** panel above the editor with **Load this wording** and **Show the old wording**, and the solid-tab preview beside it. |
 | **REPLACE** | `08-58-template-send-test.png` | The preview pane shows the retired centred-masthead shell (re-shot 2026-09-25); since 2026-09-27 every template renders in the solid-tab shell — accent tab naming the category, title on a tinted card, white message card, centred footer _(#2754)_. Same state: **Send Test to Me** under the preview |
 | **REPLACE** | `08-36-template-search.png` | The preview pane shows the retired centred-masthead shell (re-shot 2026-09-25); since 2026-09-27 every template renders in the solid-tab shell — accent tab naming the category, title on a tinted card, white message card, centred footer _(#2754)_. Same state: the list filtered to "welcome" |
-| **REPLACE** | `08-34-email-templates.png` | The preview pane shows the retired centred-masthead shell (re-shot 2026-09-25); since 2026-09-27 every template renders in the solid-tab shell — accent tab naming the category, title on a tinted card, white message card, centred footer _(#2754)_. Same state: the categories with **Templates** active |
+| **REPLACE** | `08-34-email-templates.png` | The preview pane shows the retired centred-masthead shell (re-shot 2026-09-25); since 2026-09-27 every template renders in the solid-tab shell — accent tab naming the category, title on a tinted card, white message card, centred footer _(#2754)_. Same state: the categories with **Templates** active. The blue banner above the list also changed _(2026-10-04)_: it now reads "Every email uses the current design, including templates your department had edited — there is nothing to adopt" and points to **Previous version**; the frame shows the old "press Reset … to adopt it" text |
 | **REPLACE** | `08-64-email-footers-tab.png` | The tab now opens with the **Department contact details** card, and each footer has separate **Phone**, **Email** and **Website** switches showing the value each would print _(#2760)_. Re-take with the contact card and the first footer's switches in frame; never save |
 | **REPLACE** | `08-65-template-footer-selector.png` | The preview pane shows the retired centred-masthead shell (re-shot 2026-09-25); since 2026-09-27 every template renders in the solid-tab shell — accent tab naming the category, title on a tinted card, white message card, centred footer _(#2754)_. Same state: **Closes with** set to Public |
 | **REPLACE** | `08-66-template-variable-palette.png` | The preview pane shows the retired centred-masthead shell (re-shot 2026-09-25); since 2026-09-27 every template renders in the solid-tab shell — accent tab naming the category, title on a tinted card, white message card, centred footer _(#2754)_. Same state: the palette expanded |

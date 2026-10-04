@@ -1962,12 +1962,14 @@ after the redesign has no panel. See
 > the editor with **Load this wording** and **Show the old wording**, and the
 > solid-tab preview beside it.]_
 
-> **The blue banner on the Templates tab is out of date.** It still says
-> "Templates you have never edited already use it — press **Reset** on any you
-> have customised to adopt it." Since the 2026-09-27 upgrade every template
-> already uses the design, edited or not; Reset now only puts the shipped
-> wording back. Do not press Reset to "adopt" the design — use the Previous
-> version panel if you want your own wording.
+> **The blue banner on the Templates tab** _(corrected 2026-10-04)_ reads
+> "Every email uses the current design, including templates your department had
+> edited — there is nothing to adopt." It points to **Previous version** for
+> wording the redesign replaced, and says that **Reset** replaces a template's
+> wording with the default without changing the design. Until 2026-10-04 it
+> told admins to press Reset "to adopt it", which after the 2026-09-27 reset
+> only discarded their wording; if anyone followed that advice, the wording is
+> still in the template's Previous version panel.
 
 **If the department's link address only works at the station**, a warning at
 the top of Email Templates says that links and the logo in these emails will
@@ -2093,7 +2095,7 @@ Two behaviours worth knowing:
 
 ![Email template categories in the editor sidebar](./images/08-34-email-templates.png)
 
-**[SCREENSHOT — REPLACE `08-34-email-templates.png`.** The preview pane shows the retired centred-masthead shell (re-shot 2026-09-25); since 2026-09-27 every template renders in the solid-tab shell — accent tab naming the category, title on a tinted card, white message card, centred footer _(#2754)_. Same state: the categories with **Templates** active**]**
+**[SCREENSHOT — REPLACE `08-34-email-templates.png`.** The preview pane shows the retired centred-masthead shell (re-shot 2026-09-25); since 2026-09-27 every template renders in the solid-tab shell — accent tab naming the category, title on a tinted card, white message card, centred footer _(#2754)_. Same state: the categories with **Templates** active. The blue banner above the list also changed _(2026-10-04)_: it now reads "Every email uses the current design, including templates your department had edited — there is nothing to adopt" and points to **Previous version**; the frame shows the old "press Reset … to adopt it" text**]**
 
 ---
 

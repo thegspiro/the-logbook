@@ -649,11 +649,11 @@ version (before the redesign)" panel above the editor]**
 **[CALLOUT: "Your wording is saved — Previous version → Load this wording →
 Save"]**
 
-**[PRESENTER NOTE: do not film or read the banner at the top of the Templates
-tab. It still says templates you never edited "already use it" and to "press
-Reset on any you have customised to adopt it". Since the reset, every template
-already uses the design, and Reset now only throws away wording — the advice is
-misleading and has been reported as a defect. Say what is above instead.]**
+**[PRESENTER NOTE — 2026-10-04: the banner at the top of the Templates tab
+was corrected. It now says every email uses the current design, points to
+Previous version, and says Reset replaces wording without changing the design.
+It can be filmed; footage recorded before 2026-10-04 shows the old banner,
+which told admins to press Reset "to adopt it" — do not use that footage.]**
 
 **[CALLOUT: "Reset replaces your wording — read it before you press it"]**
 

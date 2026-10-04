@@ -503,8 +503,11 @@ guides can point at one place and an owner can decide it.
   adopt it." Since migration `15c5bc7700aa` (#2754) every template already uses
   the solid-tab design, edited or not, so the advice now only discards a
   department's own wording. Earlier wording is restored from the template's
-  **Previous version (before the redesign)** panel, not from Reset. The guides
-  warn about the banner. **Open — the banner should be removed or reworded.**
+  **Previous version (before the redesign)** panel, not from Reset.
+  ✅ **Resolved 2026-10-04:** the banner now says every email uses the current
+  design and there is nothing to adopt, points to **Previous version**, and
+  says Reset replaces wording without changing the design
+  (`EmailTemplatesPage.tsx`; pinned in `EmailTemplatesPage.tab.test.tsx`).
 - **NFC tag and ID-card hashes depend on `ENCRYPTION_SALT`.** Every NFC tag
   UID and member card UID is stored only as a SHA-256 peppered with the
   installation's encryption salt (`nfc_tag_service.py`). Changing
