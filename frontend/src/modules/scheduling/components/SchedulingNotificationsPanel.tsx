@@ -621,7 +621,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                       />
                       <button
                         onClick={assignCc.add}
-                        className="rounded-lg bg-blue-600 px-3 py-1 text-xs text-white hover:bg-blue-700"
+                        className="rounded-lg bg-red-800 px-3 py-1 text-xs text-white hover:bg-red-900"
                       >
                         Add
                       </button>
