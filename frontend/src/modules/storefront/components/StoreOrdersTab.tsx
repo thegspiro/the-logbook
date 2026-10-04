@@ -115,8 +115,12 @@ export const StoreOrdersTab: React.FC<StoreOrdersTabProps> = ({
         pageSize: DEFAULT_PAGE_SIZE,
       });
       if (sequence !== loadSequence.current) return;
+      // A body that is not this page (a captive portal's HTML page) is a failed
+      // load, reported like one, rather than a crash on `orders.length`. The
+      // toast shows this message, so it is the user's wording, not a type's.
+      if (!Array.isArray(response?.items)) throw new Error('Could not load orders');
       setOrders(response.items);
-      setTotal(response.total);
+      setTotal(typeof response.total === 'number' ? response.total : 0);
     } catch (err: unknown) {
       if (sequence !== loadSequence.current) return;
       toast.error(getErrorMessage(err, 'Could not load orders'));

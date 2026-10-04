@@ -260,6 +260,91 @@ export const ALL_ROUTES: RouteCheck[] = [
     permissions: ['training.manage'],
     expectText: 'Available in Training',
   },
+  // Every one of these crashed the Training hub through the ErrorBoundary the
+  // first time it was measured: each read its API response unchecked, and the
+  // catch-all `{}` in helpers.ts is exactly the malformed 200 a captive portal
+  // serves. They are listed so a regression is a red build rather than a dead
+  // tab. Most measure their empty or load-error state against that mock, which
+  // is the state that used to crash — so where that state is an error message,
+  // the message is the `expectText`: it proves the tab rendered its own body
+  // and not the ErrorBoundary, which a bare entry cannot tell apart.
+  {
+    path: '/training/admin?page=records&tab=member-status',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Behind on requirements',
+  },
+  {
+    path: '/training/admin?page=enhancements&tab=recertification',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Recertification Pathways',
+  },
+  {
+    path: '/training/admin?page=enhancements&tab=competency',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Competency Matrices',
+  },
+  {
+    path: '/training/admin?page=enhancements&tab=instructors',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Instructor Qualifications',
+  },
+  {
+    path: '/training/admin?page=enhancements&tab=effectiveness',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Training Effectiveness',
+  },
+  {
+    path: '/training/admin?page=enhancements&tab=multi-agency',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Multi-Agency Training',
+  },
+  {
+    path: '/training/admin?page=compliance&tab=annual-report',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage', 'compliance.manage'],
+    expectText: 'Failed to load annual compliance report',
+  },
+  {
+    path: '/training/admin?page=compliance&tab=iso-readiness',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage', 'compliance.manage'],
+    expectText: 'Failed to load ISO readiness data',
+  },
+  {
+    path: '/training/admin?page=compliance&tab=record-completeness',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage', 'compliance.manage'],
+    expectText: 'Failed to load record completeness data',
+  },
+  {
+    path: '/training/admin?page=compliance&tab=attestations',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage', 'compliance.manage'],
+    expectText: 'Failed to load attestation history',
+  },
+  {
+    path: '/training/admin?page=compliance&tab=forecast',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage', 'compliance.manage'],
+    expectText: 'Failed to load compliance forecast',
+  },
   // Compliance rules, reached from the Compliance Officer dashboard. Its four
   // sections are in-page state, so they are driven as states.
   {
@@ -297,6 +382,22 @@ export const ALL_ROUTES: RouteCheck[] = [
         mayRepeatArrival: true,
       },
     ],
+  },
+  // Both crashed the Events hub on a malformed response; see the Training
+  // block above.
+  {
+    path: '/events/admin?tab=create',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['events.manage'],
+    expectText: 'Event Details',
+  },
+  {
+    path: '/events/admin?tab=requests',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['events.manage'],
+    expectText: 'Failed to load event requests.',
   },
   { path: '/training/my-training', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/training/submit', maxSmallTargets: 0, maxTinyText: 0 },
@@ -387,6 +488,29 @@ export const ALL_ROUTES: RouteCheck[] = [
   { path: '/action-items', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/forms', maxSmallTargets: 0, maxTinyText: 0, permissions: ['forms.manage'] },
   { path: '/store', maxSmallTargets: 0, maxTinyText: 0, permissions: ['storefront.view'] },
+  // The store console: its overview, Orders and Payments tabs crashed on a
+  // malformed response; see the Training hub block above.
+  {
+    path: '/inventory/admin/store',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['storefront.manage', 'storefront.view'],
+    expectText: 'Order windows, catalog, orders, and payment reconciliation',
+  },
+  {
+    path: '/inventory/admin/store?tab=orders',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['storefront.manage', 'storefront.view'],
+    expectText: 'Search orders',
+  },
+  {
+    path: '/inventory/admin/store?tab=payments',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['storefront.manage', 'storefront.view'],
+    expectText: 'Inbound payments',
+  },
   { path: '/prospective-members', maxSmallTargets: 0, maxTinyText: 0, permissions: ['prospective_members.manage'] },
   // /analytics and /profile were listed here from the day this file was written
   // and match no <Route>: both fell through the catch-all to the dashboard,

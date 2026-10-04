@@ -158,7 +158,23 @@ const StoreAdminPage: React.FC = () => {
   const loadDashboard = useCallback(async () => {
     setLoading(true);
     try {
-      setDashboard(await storefrontService.getDashboard());
+      const data = await storefrontService.getDashboard();
+      // Order counts and money collected are figures an officer acts on, so a
+      // body that is not a dashboard (a captive portal's HTML page) takes the
+      // error toast rather than rendering — it used to crash the whole page
+      // reading `statusCounts.submitted` off undefined.
+      if (
+        typeof data !== 'object' ||
+        data === null ||
+        typeof data.statusCounts !== 'object' ||
+        data.statusCounts === null ||
+        !Array.isArray(data.recentActivity) ||
+        !Array.isArray(data.recentOrders)
+      ) {
+        // Shown in the toast, so worded for the user rather than the type.
+        throw new Error('Could not load the store dashboard');
+      }
+      setDashboard(data);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Could not load the store dashboard'));
     } finally {
@@ -221,7 +237,7 @@ const StoreAdminPage: React.FC = () => {
           {inventoryOn && (
             <Link
               to="/inventory/admin"
-              className="text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1 text-sm"
+              className="text-theme-text-muted hover:text-theme-text-secondary flex min-h-11 items-center gap-1 text-sm"
             >
               <ArrowLeft className="h-4 w-4" />
               Inventory

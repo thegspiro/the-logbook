@@ -1364,8 +1364,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/inventory/admin/store',
     source: 'src/modules/storefront/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'overview, orders and payments tabs, measured through the mobile presentation ratchet',
   },
   {
     path: '/store/admin',
