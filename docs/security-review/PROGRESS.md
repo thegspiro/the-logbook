@@ -16,6 +16,51 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (this PR)** — branch `claude/security-review-onboarding-pass5`,
+Feature 30 (Onboarding), pass 5. Watchdog pickup: independently confirmed via
+`list_pull_requests` (state=open) that no `claude/security-review-*` PR
+exists — PR #2896 (Feature 28, pass 5) and PR #2897 (Feature 29, pass 7) had
+both already merged (both docs-only, so per this file's own rule neither is
+a recordable event; cleared below). Rotation row 30 was the first `⬜`.
+**Not a zero-delta pass** — 6 real backend/frontend changes landed in this
+feature's own files since pass 4 (PR #2521): a default "Compliance"
+suggestion box seeded on org creation, a Cloudflare account-id validator
+consolidated into one function and checked at send time as well as save
+time, a completeness check added for the Cloudflare email platform, a
+username-without-password SMTP config now rejected at test time, `/reset`
+now clearing the caller's stale auth cookies, and a client-side
+session-init retry loop fixed (it had been hammering the rate-limited
+`/start` endpoint). Every one read in full and verified good — none is a
+new vulnerability. 0 fixes (nothing needed fixing); every previously-open
+finding (ONB-7, ONB2-30-8, ONB-30-3, the ONB-8 audit-durability residual,
+the duplicate-role-id 500) re-verified unchanged; every previously-fixed
+finding (ONB3-30-3's System Owner race lock, ONBOARD-7, ONB-1 through
+ONB-9, ONB2-30-1 through ONB2-30-8, ONB3-30-1, ONB3-30-2) re-confirmed
+intact. All 24 routes re-enumerated, no auth/guard regression. Gate:
+flake8/black/isort clean (isort 9.0.1, CI's pin), `validate_migrations.py
+--strict` passed (509 revisions, single head), 255 scoped backend tests
+passed, `npm ci` (fresh worktree) then frontend typecheck/lint clean, 442
+scoped frontend tests passed. Subscribed for CI/review events.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 29, Reports & analytics, pass 7, PR #2897, after it merged), preserved for history</summary>
+
+**None.** PR [#2897](https://github.com/thegspiro/the-logbook/pull/2897)
+(Feature 29, Reports & analytics, pass 7) merged clean (`6c422896`,
+"security(reports-analytics): pass 7"), touching only
+`docs/security-review/RPT5-29-reports-analytics.md`,
+`docs/KNOWN_LIMITATIONS.md` and `PROGRESS.md` — no application code, so per
+this file's own "a docs-only PR is not a recordable event" rule there is
+nothing to log beyond clearing this row. Rotation row 29 stays ✅. Watchdog
+re-check (this entry's author) independently confirmed via
+`list_pull_requests` (state=open) that no `claude/security-review-*` PR
+exists now, so this iteration proceeds to Feature 30 (Onboarding).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 29, Reports & analytics, pass 7, PR #2897, before it merged), preserved for history</summary>
+
 **PR (this PR)** — branch `claude/security-review-reports-analytics-pass7`,
 Feature 29 (Reports & analytics), pass 7. Watchdog pickup: confirmed via
 `list_pull_requests` (state=open) that no `claude/security-review-*` PR
@@ -38,6 +83,8 @@ regressed. Gate: flake8/black/isort clean (isort 9.0.1, CI's pin),
 719 scoped backend tests passed (1 skipped, environment-only), frontend
 typecheck/lint clean, 42 scoped frontend tests passed. Subscribed for
 CI/review events.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 28, Security, audit & IP, pass 5, PR #2896, merged, docs-only — nothing to record), preserved for history</summary>
@@ -17286,7 +17333,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
-| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
+| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
@@ -25730,3 +25777,59 @@ doc: [`RPT5-29-reports-analytics.md`](./RPT5-29-reports-analytics.md)'s
 **Pass 7** section. `docs/KNOWN_LIMITATIONS.md`'s RPT5-29-1 entry amended
 with RPT5-29-5's evidence rather than a new entry added. Rotation row 29 →
 ✅ (pending PR merge). Next: Feature 30 (Onboarding).
+
+### 2026-10-04 — Feature 30 (Onboarding, pass 5) — 0 fixes, 0 new findings, 6 real changes re-verified good
+
+Watchdog pickup. Step 0: independently confirmed via `list_pull_requests`
+(state=open) that no `claude/security-review-*` PR existed before starting
+— PR #2896 (Feature 28, pass 5) and PR #2897 (Feature 29, pass 7) had both
+already merged, both docs-only, so per this file's own rule neither is a
+recordable event; cleared above. Rotation row 30 was the first `⬜`.
+
+**Not a zero-delta pass.** Pass 4's baseline is PR #2521's merge
+(`abd4fefc` → `main` at `543445c0`, 2026-09-13). Six real changes landed in
+this feature's own files since then, all read in full: a default
+"Compliance" suggestion box seeded on org creation (org-scoped, no new
+grant); a Cloudflare account-id validator (`[a-f0-9]{32}`) consolidated
+into one function and now checked at save time **and** send time
+(`email_service.py:930`, immediately before interpolation into the API
+URL) — closing a latent drift between previously-separate regex copies; a
+completeness check added so an `enabled: true` Cloudflare config without
+its account id/API token/from-address no longer saves silently broken; a
+self-hosted SMTP config with a username but no password now rejected at
+test time (narrows, does not touch, the already-flagged ONB-30-3 SSRF
+gap); `/reset`'s response now clears the caller's stale auth cookies
+(reusing `/auth/logout`'s own helper) so "navigate to /onboarding/start to
+begin again" actually works when reset was called while authenticated as
+the deleted owner; and a frontend fix for a client-side retry loop that
+had been hammering the rate-limited `/start` endpoint at ~75 req/s after a
+reset left stale credentials in the browser. Every one verified good — a
+correctness or security-hardening fix, not a new vulnerability.
+
+All 24 routes re-enumerated against current `onboarding.py`; no
+route lost or gained a compensating control since pass 4. Every
+previously-open finding re-verified unchanged against current code:
+**ONB-7** (role editor accepts client-controlled permissions/priority/
+system-flag, product decision), **ONB2-30-8** (sliding session TTL, no
+absolute cap, three GET routes slide it without CSRF), **ONB-30-3**
+(self-hosted SMTP has no SSRF/private-network protection, product
+decision), the **ONB-8 audit-durability residual** (`reset_initiated`
+shares a transaction with `/reset`'s deletes), and the duplicate-`role.id` 500. Every previously-fixed finding re-confirmed intact by direct code
+read: **ONB3-30-3**'s System Owner race lock (`services/onboarding.py:
+1348-1350`, both halves present), **ONBOARD-7**'s singleton fix, and
+ONB-1 through ONB-9 / ONB2-30-1 through ONB2-30-8 / ONB3-30-1 / ONB3-30-2.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean over
+`app/ tests/ alembic/` (isort 9.0.1, CI's pin; flake8 7.4.1 locally vs. CI's
+7.3.0 pin, same `flake8-pytest-style` 2.2.0 plugin); `validate_migrations.py
+--strict` passed (509 revisions, single head, no migration this pass);
+scoped backend tests (`-k "onboard or org_template or template_service"`)
+255 passed, 1 skipped (environment-only — `pywebpush`); `npm ci` (this
+fresh worktree's `node_modules` was unpopulated) then frontend `npm run
+typecheck` 0 errors, `npm run lint` 0 errors/0 warnings; scoped frontend
+suite (`npx vitest run src/modules/onboarding`) 442 passed (31 files).
+Findings doc: [`ONB3-30-onboarding.md`](./ONB3-30-onboarding.md)'s **Pass 5**
+section. No `KNOWN_LIMITATIONS.md` change needed — every open item's
+entry there was re-verified accurate, none needed amending. Rotation row
+30 → ✅ (pending PR merge). Next: **Feature 31 (Scheduled tasks —
+`scheduled.py`, `services/scheduled_tasks.py`)**.
