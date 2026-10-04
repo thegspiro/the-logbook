@@ -244,6 +244,38 @@ a phone instead of squeezing beside it.
 Nothing moved on desktop beyond those two; this is the same
 scoped-under-768px approach as the touch-target work above.
 
+### Phones and Tablets: Layout Pass of 2026-10-03/04
+
+- **Settings screens use the full phone width.** Scheduling and the other
+  settings screens stacked four layers of padding at 320px, leaving a row about
+  185px wide so a label such as _Require end-of-shift equipment checks_ wrapped
+  one word per line. They now sit on the same 16px margin as Members and the
+  Dashboard; the **RECOMMENDED** badge wraps under its label. Desktop is unchanged.
+- **Training Setup and the compliance rules page** no longer scroll sideways at
+  320px; their wizard steps, tabs and **Save** buttons are 44px, and a
+  malformed response (a hotel Wi-Fi sign-in page, say) shows the load-error
+  state instead of _"Compliant: >= undefined%"_.
+- **Event roster controls are thumb-sized.** **Check In**, **Edit Times**,
+  **Remove** and the **Yes / No** confirmation were about 16px tall; they are
+  44px on a phone and unchanged on desktop.
+- **On a tablet, edit/delete/download buttons are visible.** They used to be
+  hidden until hover by screen width, so on an iPad the controls on 26 screens
+  never appeared. They now hide only on devices with a mouse.
+- **Tablet fixes:** icons and labels on small buttons sit side by side (the
+  Store's Edit/Archive/New item, and 25 other places); the Reports date inputs no
+  longer push the page sideways; Kits and Variant Groups keep their title room;
+  document, room and address names wrap rather than being cut off.
+- **Selected tabs and filters are red.** Eight screens drew the selected state
+  in blue; they now match the rest of the app (Members Admin, Admin Hours,
+  Eligibility Roster, Supply Expiring, My Checklists, Check Log, Compliance
+  Requirements and Elections).
+- **Cards look the same everywhere.** The event detail page, member profile
+  sections, minutes and member edit page now share one bordered card, where some
+  sections previously had no border.
+
+> **Screenshots:** every phone and tablet shot of the screens above predates
+> this pass — see [`SCREENSHOT_CURRENCY.md`](./SCREENSHOT_CURRENCY.md).
+
 ### Dark Mode Now Works on Public Pages _(2026-08-08)_
 
 If you had dark mode on, three pages rendered as **white-on-white and were

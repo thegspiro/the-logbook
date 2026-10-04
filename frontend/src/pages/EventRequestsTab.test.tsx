@@ -79,3 +79,21 @@ describe('EventRequestsTab pipeline tasks', () => {
     expect(screen.getByRole('option', { name: 'Sam Ortiz — Fire Chief' })).toBeInTheDocument();
   });
 });
+
+// The request queue reads as "nothing to handle" when empty, so a 200 whose
+// body is not a list (a captive portal's HTML page) must show the tab's error
+// rather than an empty queue — and must not crash on `requests.reduce`, which
+// took the whole Events hub down.
+describe('EventRequestsTab with a malformed request list', () => {
+  beforeEach(() => {
+    listRequests.mockReset();
+    listRequests.mockResolvedValue('<html>Sign in to Wi-Fi</html>');
+    getRequest.mockReset();
+  });
+
+  it('shows its load error', async () => {
+    render(<EventRequestsTab />);
+
+    expect(await screen.findByText('Failed to load event requests.')).toBeInTheDocument();
+  });
+});

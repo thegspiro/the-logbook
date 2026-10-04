@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import { CallTypeRequirementPicker } from './CallTypeRequirementPicker';
 import { useDialog } from '../../hooks/useDialog';
 import { AlertCircle, CheckCircle, X } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -69,6 +70,7 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
     required_hours: seed?.required_hours || undefined,
     required_shifts: seed?.required_shifts || undefined,
     required_calls: seed?.required_calls || undefined,
+    required_call_types: seed?.required_call_types ?? ([] as string[]),
     checklist_items: seed?.checklist_items ?? [],
     passing_score: seed?.passing_score || undefined,
     max_attempts: seed?.max_attempts || undefined,
@@ -193,6 +195,8 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
           : null,
       required_shifts: formData.requirement_type === 'shifts' ? (formData.required_shifts ?? null) : null,
       required_calls: formData.requirement_type === 'calls' ? (formData.required_calls ?? null) : null,
+      // An empty list means every call counts, so switching away clears it.
+      required_call_types: formData.requirement_type === 'calls' ? formData.required_call_types : [],
       checklist_items: formData.requirement_type === 'checklist' ? checklistItems : null,
       passing_score: formData.requirement_type === 'knowledge_test' ? (formData.passing_score ?? null) : null,
       max_attempts: formData.requirement_type === 'knowledge_test' ? (formData.max_attempts ?? null) : null,
@@ -503,6 +507,12 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                     placeholder="e.g., 24"
                     min="1"
                   />
+                  <div className="mt-3">
+                    <CallTypeRequirementPicker
+                      value={formData.required_call_types}
+                      onChange={(next) => setFormData({ ...formData, required_call_types: next })}
+                    />
+                  </div>
                 </div>
               )}
 

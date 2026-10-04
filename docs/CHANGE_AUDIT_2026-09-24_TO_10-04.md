@@ -40,6 +40,11 @@ Alongside it, a plain-language pass rewrote the wording of every module, so
 queues 122 screenshots. Training guides and scripts quote labels, and many of
 those labels are now different.
 
+A narrower [October 3 – 4 audit](./CHANGE_AUDIT_2026-10-03_TO_10-04.md) was
+written in parallel and covers the window's last day in more detail; the two
+agree, and where both added an `UPGRADING.md` entry for the same change
+(probationary sign-in) the entries were merged into one.
+
 Companion operator lesson: the **September 24 – October 4** section of
 [`training/20-september-2026-release-changes.md`](./training/20-september-2026-release-changes.md),
 which indexes where each topic now lives in the module guides. Wiki handoff:

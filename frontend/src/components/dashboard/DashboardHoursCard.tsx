@@ -96,7 +96,7 @@ const DashboardHoursCard: React.FC<DashboardHoursCardProps> = ({
                 <button
                   type="button"
                   onClick={segment.onClick}
-                  className="hover:bg-theme-surface-hover focus:ring-theme-focus-ring -mx-2 flex w-[calc(100%+1rem)] items-center gap-2 rounded-md px-2 py-1.5 text-[13px] transition-colors focus:ring-2 focus:outline-hidden max-md:min-h-[44px]"
+                  className="hover:bg-theme-surface-hover focus:ring-theme-focus-ring touch:min-h-[44px] -mx-2 flex w-[calc(100%+1rem)] items-center gap-2 rounded-md px-2 py-1.5 text-[13px] transition-colors focus:ring-2 focus:outline-hidden"
                 >
                   {row}
                 </button>

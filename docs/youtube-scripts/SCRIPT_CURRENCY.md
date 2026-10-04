@@ -202,6 +202,24 @@ problem and wrong about the fix:
 (+15 s), Ch.7 (+15 s); **08** 8F (~70 s), 8S (~35 s), 8AP (~55 s), 8AS
 (~47 s); **11** Ch.4 (+12 s); **14** Ch.4 (+10 s); **16** Ch.4 (+15 s).
 
+## Flagged by the 2026-10-03/04 changes
+
+Nothing a script says became false, but four beats are now **incomplete** and
+one needs a retake when next recorded. No script was re-timed; none of the new
+material has been written into a script yet — the rows say where it belongs.
+
+| Script         | Beat                                                                    | Was                                                                   | Now                                                                                                                                                                                                                                                                                          | Class          |
+| -------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| **05**         | Chapter 3, requirements                                                 | No account of how a new standard treats members already on the roster | New beat (about 60 seconds): **Existing Members** — apply to everyone, exempt, or a catch-up deadline; editing asks **Everyone** or **New members only**; adding to a program asks about **members already enrolled**. A catch-up member reads **Due** and does not count against compliance | **Incomplete** |
+| **05**, **16** | Compliance and matrix `[SCREEN]` cues                                   | Matrix and exports grade every member against every requirement       | Requirements that do not apply print **N/A**; role-scoped requirements are honoured on the dashboard and matrix. Any figure read aloud may differ from an older take                                                                                                                         | **Stale**      |
+| **03**, **07** | Member status / adding a member                                         | Probationary is described as a status with no mention of access       | A probationary account **can sign in and be scheduled**; to keep one out, set Inactive or Suspended, or exclude the membership type in Scheduling settings                                                                                                                                   | **Incomplete** |
+| **06**         | Equipment checks                                                        | Fail is a one-tap result                                              | A chosen **Fail** or **Out of service** needs a note; Overall Notes is no longer pinned. Re-film the phone `[SCREEN]` for the submit bar                                                                                                                                                     | **Stale**      |
+| **06**, **08** | Any phone or tablet `[SCREEN]` of settings, event roster or a tab strip | Blue selected tab; cramped settings rows                              | Selected toggles are red; settings use the full phone width; roster buttons are 44px                                                                                                                                                                                                         | **Stale**      |
+
+**Script 14 (course cohorts):** the beat on moving a cohort should say a shift
+holds the class at its local time across daylight saving and is refused whole if
+any class is finalized.
+
 ## Flagged by the 2026-09-25 guide 19 fold
 
 Guide 19, the August release lesson, was folded into the module guides

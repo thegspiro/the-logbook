@@ -1599,7 +1599,7 @@ export const recertificationService = {
         params: { active_only: activeOnly },
       }
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   async createPathway(
@@ -1627,7 +1627,7 @@ export const recertificationService = {
     const response = await api.get<import('../types/training').RenewalTask[]>('/training/recertification/tasks/me', {
       params: status ? { status } : undefined,
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   async generateRenewalTasks(): Promise<{ tasks_created: number }> {
@@ -1643,7 +1643,7 @@ export const competencyService = {
     const response = await api.get<import('../types/training').CompetencyMatrix[]>('/training/competency/matrices', {
       params: position ? { position } : undefined,
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   async createMatrix(
@@ -1691,7 +1691,7 @@ export const instructorService = {
       '/training/instructors/qualifications',
       { params }
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   async createQualification(
@@ -1755,7 +1755,7 @@ export const effectivenessService = {
       '/training/effectiveness/evaluations',
       { params }
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   async getCourseSummary(courseId: string): Promise<import('../types/training').TrainingEffectivenessSummary> {
@@ -1776,7 +1776,7 @@ export const multiAgencyService = {
     const response = await api.get<import('../types/training').MultiAgencyTraining[]>('/training/multi-agency', {
       params,
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   async createExercise(

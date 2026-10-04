@@ -202,7 +202,7 @@ function QRCard({
           onClick={() => {
             void handleCopy();
           }}
-          className="text-theme-text-muted flex items-center gap-1.5 text-xs transition-colors hover:text-blue-500 max-md:min-h-11"
+          className="text-theme-text-muted touch:min-h-11 flex items-center gap-1.5 text-xs transition-colors hover:text-blue-500"
         >
           {copied ? (
             <Check className="h-3 w-3 text-green-500" aria-hidden="true" />
@@ -213,7 +213,7 @@ function QRCard({
         </button>
         <button
           onClick={handleDownload}
-          className="text-theme-text-muted flex items-center gap-1.5 text-xs transition-colors hover:text-blue-500 max-md:min-h-11"
+          className="text-theme-text-muted touch:min-h-11 flex items-center gap-1.5 text-xs transition-colors hover:text-blue-500"
         >
           <Download className="h-3 w-3" aria-hidden="true" />
           Download PNG
@@ -227,7 +227,7 @@ function QRCard({
             }}
             disabled={isRegenerating}
             title="Generate a new code — the current QR code stops working"
-            className="text-theme-text-muted flex items-center gap-1.5 text-xs transition-colors hover:text-red-500 disabled:opacity-50 max-md:min-h-11"
+            className="text-theme-text-muted touch:min-h-11 flex items-center gap-1.5 text-xs transition-colors hover:text-red-500 disabled:opacity-50"
           >
             <RefreshCw className={`h-3 w-3 ${isRegenerating ? 'animate-spin' : ''}`} aria-hidden="true" />
             Regenerate
@@ -288,7 +288,7 @@ function BadgeCheckInSwitch({
         setSaving(true);
         void onToggle(location).finally(() => setSaving(false));
       }}
-      className="text-theme-text-muted flex items-center gap-1.5 text-xs max-md:min-h-11"
+      className="text-theme-text-muted touch:min-h-11 flex items-center gap-1.5 text-xs"
     >
       <span className={`toggle-track-sm ${on ? 'bg-green-700' : 'bg-theme-surface-border'}`}>
         <span className={`toggle-knob-sm ${on ? 'translate-x-6' : 'translate-x-1'}`} />
@@ -508,7 +508,7 @@ export default function RoomQRCodesPage() {
       <div className="no-print">
         <Link
           to="/locations"
-          className="text-theme-text-muted hover:text-theme-text-primary mb-2 inline-flex items-center gap-1.5 text-sm transition-colors max-md:min-h-11"
+          className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 mb-2 inline-flex items-center gap-1.5 text-sm transition-colors"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to Locations
         </Link>
@@ -550,7 +550,7 @@ export default function RoomQRCodesPage() {
             <button
               onClick={() => setLayout('grid')}
               aria-pressed={layout === 'grid'}
-              className={`flex items-center gap-1.5 px-3 py-2 transition-colors max-md:min-h-11 ${
+              className={`touch:min-h-11 flex items-center gap-1.5 px-3 py-2 transition-colors ${
                 layout === 'grid'
                   ? 'bg-theme-surface-hover text-theme-text-primary font-medium'
                   : 'text-theme-text-muted hover:text-theme-text-primary'
@@ -561,7 +561,7 @@ export default function RoomQRCodesPage() {
             <button
               onClick={() => setLayout('signs')}
               aria-pressed={layout === 'signs'}
-              className={`border-theme-surface-border flex items-center gap-1.5 border-l px-3 py-2 transition-colors max-md:min-h-11 ${
+              className={`border-theme-surface-border touch:min-h-11 flex items-center gap-1.5 border-l px-3 py-2 transition-colors ${
                 layout === 'signs'
                   ? 'bg-theme-surface-hover text-theme-text-primary font-medium'
                   : 'text-theme-text-muted hover:text-theme-text-primary'

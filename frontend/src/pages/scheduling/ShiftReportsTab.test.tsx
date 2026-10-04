@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
 import { ShiftReportsTab } from './ShiftReportsTab';
@@ -15,7 +15,12 @@ const mockGetUsers = vi.fn();
 const mockGetRecentShifts = vi.fn();
 const mockGetByOfficer = vi.fn();
 const mockGetOfficerAnalytics = vi.fn();
+const mockGetShiftCrewStatus = vi.fn();
+const mockGetShift = vi.fn();
+const mockBatchCreate = vi.fn();
+const mockGetOrgSettings = vi.fn();
 let canManage = true;
+let canViewAnalytics = false;
 
 vi.mock('../../services/api', () => ({
   shiftCompletionService: {
@@ -27,6 +32,8 @@ vi.mock('../../services/api', () => ({
     getReportsByOfficer: (...a: unknown[]) => mockGetByOfficer(...a) as unknown,
     getOfficerAnalytics: (...a: unknown[]) => mockGetOfficerAnalytics(...a) as unknown,
     getMyStats: () => Promise.resolve(null),
+    getShiftCrewStatus: (...a: unknown[]) => mockGetShiftCrewStatus(...a) as unknown,
+    batchCreateReports: (...a: unknown[]) => mockBatchCreate(...a) as unknown,
   },
   trainingModuleConfigService: {
     getConfig: (...a: unknown[]) => mockGetConfig(...a) as unknown,
@@ -34,12 +41,16 @@ vi.mock('../../services/api', () => ({
   userService: {
     getUsers: (...a: unknown[]) => mockGetUsers(...a) as unknown,
   },
+  organizationService: {
+    getSettings: (...a: unknown[]) => mockGetOrgSettings(...a) as unknown,
+  },
 }));
 
 vi.mock('../../modules/scheduling/services/api', () => ({
   schedulingService: {
     getRecentShiftsForReports: (...a: unknown[]) => mockGetRecentShifts(...a) as unknown,
     getShifts: (...a: unknown[]) => mockGetRecentShifts(...a) as unknown,
+    getShift: (...a: unknown[]) => mockGetShift(...a) as unknown,
   },
 }));
 
@@ -58,7 +69,7 @@ vi.mock('../../hooks/useTimezone', () => ({
 vi.mock('../../stores/authStore', () => ({
   useAuthStore: () => ({
     user: { id: 'user-1', first_name: 'Dana', last_name: 'Ruiz' },
-    checkPermission: () => canManage,
+    checkPermission: (p: string) => (p === 'training.view_analytics' ? canViewAnalytics : canManage),
   }),
 }));
 
@@ -75,6 +86,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   searchParams = new URLSearchParams();
   canManage = true;
+  canViewAnalytics = false;
   mockGetMyReports.mockResolvedValue([]);
   mockGetFiledReports.mockResolvedValue([]);
   mockGetDraftReports.mockResolvedValue([]);
@@ -87,6 +99,8 @@ beforeEach(() => {
   mockGetByOfficer.mockResolvedValue([]);
   mockGetOfficerAnalytics.mockReset();
   mockGetOfficerAnalytics.mockResolvedValue(null);
+  mockGetOrgSettings.mockReset();
+  mockGetOrgSettings.mockResolvedValue({});
 });
 
 describe('ShiftReportsTab — the view named in the URL', () => {
@@ -295,5 +309,272 @@ describe('ShiftReportsTab — acknowledging a report about me', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Acknowledge Report' }));
 
     expect(screen.getByLabelText('Comments (optional)')).toBeInTheDocument();
+  });
+});
+
+describe('ShiftReportsTab — the author is not on their own crew list', () => {
+  beforeEach(() => {
+    mockGetShift.mockReset();
+    mockGetShiftCrewStatus.mockReset();
+    mockGetShift.mockResolvedValue({
+      id: 'sh1',
+      shift_date: '2026-10-03',
+      start_time: '2026-10-03T11:00:00Z',
+      end_time: '2026-10-03T23:00:00Z',
+      apparatus_name: 'Engine 5',
+      call_count: 0,
+    });
+    mockGetShiftCrewStatus.mockResolvedValue([
+      { user_id: 'user-1', user_name: 'Dana Ruiz', has_active_enrollment: false, has_existing_report: false },
+      { user_id: 'u2', user_name: 'Sam Ortiz', has_active_enrollment: false, has_existing_report: false },
+    ]);
+  });
+
+  // A report about yourself is refused server-side; offering the checkbox
+  // would only produce a silently skipped row.
+  it('lists the rest of the crew but not the viewer', async () => {
+    searchParams = new URLSearchParams('view=create&shift=sh1');
+    renderWithRouter(<ShiftReportsTab />);
+
+    expect(await screen.findByText('Sam Ortiz')).toBeInTheDocument();
+    expect(screen.queryByText('Dana Ruiz')).not.toBeInTheDocument();
+    expect(screen.getByText('(1 of 1 selected)')).toBeInTheDocument();
+  });
+});
+
+describe('ShiftReportsTab — department totals are a leadership view', () => {
+  const totals: OfficerShiftAnalytics = {
+    total_reports: 9,
+    total_hours: 108,
+    total_calls: 30,
+    avg_rating: null,
+    status_counts: {},
+    trainees: [],
+    monthly: [],
+  };
+
+  // The defect: "Written by me" rendered the whole department's totals
+  // under "Your reporting summary", to every officer who files reports.
+  it("asks only for the viewer's own figures under Written by me", async () => {
+    renderWithRouter(<ShiftReportsTab />);
+
+    await screen.findByRole('button', { name: 'Written by me' });
+    expect(mockGetOfficerAnalytics).toHaveBeenCalledWith('mine');
+    expect(mockGetOfficerAnalytics).not.toHaveBeenCalledWith('department');
+  });
+
+  it('offers no Department view to an officer without the analytics permission', async () => {
+    renderWithRouter(<ShiftReportsTab />);
+
+    await screen.findByRole('button', { name: 'Written by me' });
+    expect(screen.queryByRole('button', { name: /Department/ })).not.toBeInTheDocument();
+  });
+
+  it('ignores ?view=department for an officer without the permission', async () => {
+    searchParams = new URLSearchParams('view=department');
+    renderWithRouter(<ShiftReportsTab />);
+
+    expect(await screen.findByText('No reports filed yet')).toBeInTheDocument();
+    expect(mockGetOfficerAnalytics).not.toHaveBeenCalledWith('department');
+  });
+
+  it('shows leadership the department totals under their own heading, with no list', async () => {
+    canViewAnalytics = true;
+    mockGetOfficerAnalytics.mockImplementation((scope: string) =>
+      Promise.resolve(scope === 'department' ? totals : null)
+    );
+    renderWithRouter(<ShiftReportsTab />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /Department/ }));
+
+    expect(await screen.findByRole('heading', { name: 'Department reporting summary' })).toBeInTheDocument();
+    expect(screen.getByText('9')).toBeInTheDocument();
+    expect(screen.getByText('Reports filed')).toBeInTheDocument();
+    expect(mockGetOfficerAnalytics).toHaveBeenCalledWith('department');
+    expect(screen.queryByRole('heading', { name: /Reports you've written/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('ShiftReportsTab — calls are counted per member', () => {
+  beforeEach(() => {
+    mockGetShift.mockReset();
+    mockGetShiftCrewStatus.mockReset();
+    mockBatchCreate.mockReset();
+    mockGetShift.mockResolvedValue({
+      id: 'sh1',
+      shift_date: '2026-10-03',
+      start_time: '2026-10-03T11:00:00Z',
+      end_time: '2026-10-03T23:00:00Z',
+      apparatus_name: 'Engine 5',
+      call_count: 4,
+    });
+    mockGetShiftCrewStatus.mockResolvedValue([
+      {
+        user_id: 'u2',
+        user_name: 'Sam Ortiz',
+        has_active_enrollment: false,
+        has_existing_report: false,
+        calls_responded: 4,
+        calls_source: 'closeout',
+      },
+      {
+        user_id: 'u3',
+        user_name: 'Lee Park',
+        has_active_enrollment: false,
+        has_existing_report: false,
+        calls_responded: 2,
+        calls_source: 'closeout',
+      },
+    ]);
+    mockBatchCreate.mockResolvedValue({ created: 2, skipped: 0, report_ids: ['r1', 'r2'] });
+  });
+
+  it("shows each member's calls from the close-out, not one shift-wide box", async () => {
+    searchParams = new URLSearchParams('view=create&shift=sh1');
+    renderWithRouter(<ShiftReportsTab />);
+
+    expect(await screen.findByLabelText('Calls for Sam Ortiz')).toHaveValue(4);
+    expect(screen.getByLabelText('Calls for Lee Park')).toHaveValue(2);
+    expect(screen.getAllByText('from close-out')).toHaveLength(2);
+    // The shift-level box was discarded server-side for every linked shift.
+    expect(screen.queryByText('Calls Responded')).not.toBeInTheDocument();
+  });
+
+  it('sends only the corrections, so unchanged members keep the derived count', async () => {
+    searchParams = new URLSearchParams('view=create&shift=sh1');
+    renderWithRouter(<ShiftReportsTab />);
+
+    const lee = await screen.findByLabelText('Calls for Lee Park');
+    await userEvent.clear(lee);
+    await userEvent.type(lee, '1');
+    await userEvent.click(screen.getByRole('button', { name: /Submit Reports \(2\)/ }));
+
+    expect(mockBatchCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ shift_id: 'sh1', member_call_counts: { u3: 1 } })
+    );
+  });
+
+  it('sends no corrections when nothing was changed', async () => {
+    searchParams = new URLSearchParams('view=create&shift=sh1');
+    renderWithRouter(<ShiftReportsTab />);
+
+    await screen.findByLabelText('Calls for Sam Ortiz');
+    await userEvent.click(screen.getByRole('button', { name: /Submit Reports \(2\)/ }));
+
+    expect(mockBatchCreate).toHaveBeenCalledTimes(1);
+    const [payload] = mockBatchCreate.mock.calls[0] as [Record<string, unknown>];
+    expect(payload).not.toHaveProperty('member_call_counts');
+  });
+});
+
+describe('ShiftReportsTab — reports filed by the officer on the rig', () => {
+  const shift = (id: string, officer: string) => ({
+    id,
+    shift_date: '2026-10-03',
+    apparatus_name: `Engine ${id}`,
+    shift_officer_id: officer,
+    attendee_count: 3,
+    call_count: 0,
+  });
+
+  beforeEach(() => {
+    mockGetRecentShifts.mockResolvedValue({ shifts: [shift('1', 'user-1'), shift('2', 'someone-else')], total: 2 });
+  });
+
+  it('offers every recent shift when the department has no such rule', async () => {
+    searchParams = new URLSearchParams('view=create');
+    renderWithRouter(<ShiftReportsTab />);
+
+    expect(await screen.findByText(/Engine 1/)).toBeInTheDocument();
+    expect(screen.getByText(/Engine 2/)).toBeInTheDocument();
+  });
+
+  it('offers only shifts the viewer was Shift Officer on when the rule is on', async () => {
+    mockGetOrgSettings.mockResolvedValue({ shift_reports: { authorship: 'shift_officer' } });
+    searchParams = new URLSearchParams('view=create');
+    renderWithRouter(<ShiftReportsTab />);
+
+    expect(await screen.findByText(/Engine 1/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText(/Engine 2/)).not.toBeInTheDocument());
+  });
+
+  it('says why the list is empty when the viewer officered none of them', async () => {
+    mockGetOrgSettings.mockResolvedValue({ shift_reports: { authorship: 'shift_officer' } });
+    mockGetRecentShifts.mockResolvedValue({ shifts: [shift('2', 'someone-else')], total: 1 });
+    searchParams = new URLSearchParams('view=create');
+    renderWithRouter(<ShiftReportsTab />);
+
+    expect(await screen.findByText(/No recent shifts where you were the Shift Officer/)).toBeInTheDocument();
+  });
+});
+
+describe('ShiftReportsTab — an acting Shift Officer without training.manage', () => {
+  beforeEach(() => {
+    canManage = false;
+    mockGetShift.mockReset();
+    mockGetShiftCrewStatus.mockReset();
+    mockGetShift.mockResolvedValue({
+      id: 'sh1',
+      shift_date: '2026-10-03',
+      start_time: '2026-10-03T11:00:00Z',
+      end_time: '2026-10-03T23:00:00Z',
+      apparatus_name: 'Engine 5',
+      shift_officer_id: 'user-1',
+      call_count: 0,
+    });
+    mockGetShiftCrewStatus.mockResolvedValue([
+      { user_id: 'u2', user_name: 'Sam Ortiz', has_active_enrollment: false, has_existing_report: false },
+    ]);
+  });
+
+  it("opens the report form from their own shift's File Shift Report button", async () => {
+    searchParams = new URLSearchParams('shift=sh1');
+    renderWithRouter(<ShiftReportsTab />);
+
+    expect(await screen.findByText('New Shift Completion Report')).toBeInTheDocument();
+    expect(await screen.findByText('Sam Ortiz')).toBeInTheDocument();
+  });
+
+  it('keeps a member who was not the Shift Officer on their own view', async () => {
+    mockGetShift.mockResolvedValue({ id: 'sh1', shift_date: '2026-10-03', shift_officer_id: 'someone-else' });
+    searchParams = new URLSearchParams('shift=sh1');
+    renderWithRouter(<ShiftReportsTab />);
+
+    expect(await screen.findByRole('heading', { name: 'Shift reports about you' })).toBeInTheDocument();
+    await waitFor(() => expect(mockGetShift).toHaveBeenCalled());
+    expect(screen.queryByText('New Shift Completion Report')).not.toBeInTheDocument();
+  });
+
+  it('offers their own drafts and lets them complete one', async () => {
+    mockGetDraftReports.mockResolvedValue([
+      {
+        id: 'd1',
+        organization_id: 'org-1',
+        shift_date: '2026-10-03',
+        trainee_id: 'u2',
+        officer_id: 'user-1',
+        trainee_name: 'Sam Ortiz',
+        hours_on_shift: 12,
+        calls_responded: 2,
+        review_status: 'draft',
+        trainee_acknowledged: false,
+        created_at: '2026-10-03T23:00:00Z',
+        updated_at: '2026-10-03T23:00:00Z',
+      },
+    ]);
+    renderWithRouter(<ShiftReportsTab />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /Drafts/ }));
+    expect(await screen.findByRole('heading', { name: 'Reports to finish' })).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('button', { name: /Sam Ortiz/ }));
+    expect(screen.getByRole('button', { name: /Complete Draft/ })).toBeInTheDocument();
+  });
+
+  it('shows no officer switch to a member with nothing to file', async () => {
+    renderWithRouter(<ShiftReportsTab />);
+
+    await screen.findByRole('heading', { name: 'Shift reports about you' });
+    await waitFor(() => expect(mockGetDraftReports).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: /Drafts/ })).not.toBeInTheDocument();
   });
 });

@@ -35,7 +35,7 @@ vi.mock('react-hot-toast', () => ({
 }));
 
 import { ShiftCloseoutWizard } from './ShiftCloseoutWizard';
-import { deriveCallTotal, hoursBetween } from './closeoutMath';
+import { addHoursLocal, deriveCallTotal, hoursBetween, parseHoursEntry } from './closeoutMath';
 
 const baseState = (over: Record<string, unknown> = {}) => ({
   shift_id: 'sh1',
@@ -81,6 +81,8 @@ const renderWizard = (outstanding = 0, requireChecks = false) =>
       tz="UTC"
       outstandingChecks={outstanding}
       requireChecks={requireChecks}
+      shiftStart="2026-08-19T12:00:00Z"
+      shiftEnd="2026-08-20T00:00:00Z"
       onCancel={vi.fn()}
       onFinalized={vi.fn()}
     />
@@ -247,6 +249,173 @@ describe('hoursBetween', () => {
 
   it('returns 0 when a time is missing', () => {
     expect(hoursBetween('2026-08-19T08:00', '')).toBe(0);
+  });
+});
+
+describe('parseHoursEntry', () => {
+  it('accepts quarter and decimal hours', () => {
+    expect(parseHoursEntry('11.75')).toBe(11.75);
+    expect(parseHoursEntry('12')).toBe(12);
+  });
+
+  it('refuses blanks, zero, rubbish and anything over the server cap', () => {
+    expect(parseHoursEntry('')).toBeNull();
+    expect(parseHoursEntry('0')).toBeNull();
+    expect(parseHoursEntry('-3')).toBeNull();
+    expect(parseHoursEntry('abc')).toBeNull();
+    expect(parseHoursEntry('48.5')).toBeNull();
+  });
+});
+
+describe('addHoursLocal', () => {
+  it('crosses midnight', () => {
+    expect(addHoursLocal('2026-08-19T20:00', 12, 'UTC')).toBe('2026-08-20T08:00');
+  });
+
+  it('adds fractional hours to the minute', () => {
+    expect(addHoursLocal('2026-08-19T07:00', 11.75, 'UTC')).toBe('2026-08-19T18:45');
+  });
+
+  it('adds real hours across a DST change, not wall-clock hours', () => {
+    // US clocks fall back at 02:00 on 2026-11-01: twelve elapsed hours from
+    // 20:00 the night before end at 07:00 on the wall, not 08:00 — and the
+    // server credits elapsed time.
+    expect(addHoursLocal('2026-10-31T20:00', 12, 'America/New_York')).toBe('2026-11-01T07:00');
+  });
+
+  it('returns blank when there is no start', () => {
+    expect(addHoursLocal('', 4, 'UTC')).toBe('');
+  });
+});
+
+describe('typing hours for a member who forgot to check in or out', () => {
+  // Assigned members with no attendance row arrive with null times; a member
+  // who checked in but never out arrives with only a start.
+  const forgetful = () =>
+    baseState({
+      members: [
+        {
+          user_id: 'u1',
+          user_name: 'Capt. Morales',
+          checked_in_at: '2026-08-19T12:00:00Z',
+          checked_out_at: '2026-08-20T00:00:00Z',
+          hours: 12,
+          call_count: null,
+          missing_checkout: false,
+        },
+        {
+          user_id: 'u2',
+          user_name: 'FF Okonjo',
+          checked_in_at: '2026-08-19T13:30:00Z',
+          checked_out_at: null,
+          hours: 0,
+          call_count: null,
+          missing_checkout: true,
+        },
+        {
+          user_id: 'u3',
+          user_name: 'FF Reyes',
+          checked_in_at: null,
+          checked_out_at: null,
+          hours: 0,
+          call_count: null,
+          missing_checkout: true,
+        },
+      ],
+    });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetState.mockReset();
+    mockSaveAttendance.mockReset();
+    mockGetState.mockResolvedValue(forgetful());
+    mockSaveAttendance.mockResolvedValue(baseState({ closeout_step: 1 }));
+  });
+
+  it('labels which time is missing and counts who has no hours', async () => {
+    renderWizard();
+    expect(await screen.findByText('no check-in recorded')).toBeInTheDocument();
+    expect(screen.getByText('no check-out recorded')).toBeInTheDocument();
+    expect(screen.getByText(/2 with no hours/)).toBeInTheDocument();
+  });
+
+  it('counts typed hours from the shift start when nobody checked in', async () => {
+    const user = userEvent.setup();
+    renderWizard();
+    await user.type(await screen.findByLabelText('Hours for FF Reyes'), '11.5');
+    // The decimal survives typing — the box holds what was typed.
+    expect(screen.getByLabelText('Hours for FF Reyes')).toHaveValue(11.5);
+    expect(screen.getByLabelText('Start time for FF Reyes')).toHaveValue('2026-08-19T12:00');
+    expect(screen.getByLabelText('End time for FF Reyes')).toHaveValue('2026-08-19T23:30');
+    expect(screen.getByText('no check-in recorded')).toBeInTheDocument();
+    expect(screen.getByText(/entered at close-out/)).toBeInTheDocument();
+  });
+
+  it('counts typed hours from the check-in a member did record', async () => {
+    const user = userEvent.setup();
+    renderWizard();
+    await user.type(await screen.findByLabelText('Hours for FF Okonjo'), '6');
+    expect(screen.getByLabelText('Start time for FF Okonjo')).toHaveValue('2026-08-19T13:30');
+    expect(screen.getByLabelText('End time for FF Okonjo')).toHaveValue('2026-08-19T19:30');
+  });
+
+  it('fills a forgotten check-out to the end of the shift in one tap', async () => {
+    const user = userEvent.setup();
+    renderWizard();
+    await user.click(await screen.findByRole('button', { name: 'Until shift end for FF Okonjo' }));
+    expect(screen.getByLabelText('End time for FF Okonjo')).toHaveValue('2026-08-20T00:00');
+    expect(screen.getByLabelText('Hours for FF Okonjo')).toHaveValue(10.5);
+  });
+
+  it('fills a member who never checked in with the whole shift', async () => {
+    const user = userEvent.setup();
+    renderWizard();
+    await user.click(await screen.findByRole('button', { name: 'Full shift for FF Reyes' }));
+    expect(screen.getByLabelText('Hours for FF Reyes')).toHaveValue(12);
+  });
+
+  it('does not offer the fill to a member whose times were recorded', async () => {
+    renderWizard();
+    await screen.findByLabelText('Hours for Capt. Morales');
+    expect(screen.queryByRole('button', { name: /for Capt\. Morales/ })).not.toBeInTheDocument();
+  });
+
+  it('refuses an entry the server would reject, and holds Next until it is fixed', async () => {
+    renderWizard();
+    const box = await screen.findByLabelText('Hours for FF Reyes');
+    // One change, not keystrokes: typing passes through a valid "6" first.
+    setValue(box, '60');
+    expect(screen.getByRole('alert')).toHaveTextContent('Enter between 0.25 and 48 hours.');
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+    // The times were not moved by an entry that cannot be recorded.
+    expect(screen.getByLabelText('End time for FF Reyes')).toHaveValue('');
+    setValue(box, '12');
+    expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled();
+  });
+
+  it('saves typed hours as times the server can derive duration from', async () => {
+    const user = userEvent.setup();
+    renderWizard();
+    await user.type(await screen.findByLabelText('Hours for FF Reyes'), '8');
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await waitFor(() => {
+      expect(mockSaveAttendance).toHaveBeenCalledWith(
+        'sh1',
+        expect.arrayContaining([
+          {
+            user_id: 'u3',
+            checked_in_at: '2026-08-19T12:00:00.000Z',
+            checked_out_at: '2026-08-19T20:00:00.000Z',
+          },
+        ])
+      );
+    });
+  });
+
+  it('flags a member still without hours on the confirm step', async () => {
+    mockGetState.mockResolvedValue({ ...forgetful(), closeout_step: 2 });
+    renderWizard();
+    expect(await screen.findAllByText('no hours recorded')).toHaveLength(2);
   });
 });
 

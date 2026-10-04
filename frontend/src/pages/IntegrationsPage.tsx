@@ -1516,7 +1516,7 @@ const IntegrationsPage: React.FC = () => {
                   onClick={toggleMcpPanel}
                   disabled={mcpPanelBusy}
                   title={mcpPanelBusy ? 'Wait for the current key request to finish' : undefined}
-                  className="flex items-center space-x-1 rounded-lg bg-orange-500/10 px-3 py-1.5 text-sm text-orange-700 transition-colors hover:bg-orange-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:text-orange-400"
+                  className="touch:min-h-11 flex items-center space-x-1 rounded-lg bg-orange-500/10 px-3 py-1.5 text-sm text-orange-700 transition-colors hover:bg-orange-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:text-orange-400"
                 >
                   <KeyRound className="h-3.5 w-3.5" />
                   <span>Service key</span>
@@ -1576,7 +1576,7 @@ const IntegrationsPage: React.FC = () => {
                         onClick={toggleMcpPanel}
                         disabled={mcpPanelBusy}
                         title={mcpPanelBusy ? 'Wait for the current key request to finish' : undefined}
-                        className="flex items-center space-x-1 rounded-lg bg-orange-500/10 px-3 py-1.5 text-sm text-orange-700 transition-colors hover:bg-orange-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:text-orange-400"
+                        className="touch:min-h-11 flex items-center space-x-1 rounded-lg bg-orange-500/10 px-3 py-1.5 text-sm text-orange-700 transition-colors hover:bg-orange-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:text-orange-400"
                       >
                         <KeyRound className="h-3.5 w-3.5" />
                         <span>Service key</span>
@@ -1587,7 +1587,7 @@ const IntegrationsPage: React.FC = () => {
                       {integration.integration_type === 'salesforce' && (
                         <button
                           onClick={() => setShowSyncPanel(!showSyncPanel)}
-                          className="flex items-center space-x-1 rounded-lg bg-blue-500/10 px-3 py-1.5 text-sm text-blue-700 transition-colors hover:bg-blue-500/20 dark:text-blue-400"
+                          className="touch:min-h-11 flex items-center space-x-1 rounded-lg bg-blue-500/10 px-3 py-1.5 text-sm text-blue-700 transition-colors hover:bg-blue-500/20 dark:text-blue-400"
                         >
                           <RefreshCw className="h-3.5 w-3.5" />
                           <span>Sync</span>
@@ -1598,7 +1598,7 @@ const IntegrationsPage: React.FC = () => {
                           onClick={() => {
                             void handleToggleBookings();
                           }}
-                          className="flex items-center space-x-1 rounded-lg bg-slate-500/10 px-3 py-1.5 text-sm text-slate-700 transition-colors hover:bg-slate-500/20 dark:text-slate-300"
+                          className="touch:min-h-11 flex items-center space-x-1 rounded-lg bg-slate-500/10 px-3 py-1.5 text-sm text-slate-700 transition-colors hover:bg-slate-500/20 dark:text-slate-300"
                         >
                           <CalendarClock className="h-3.5 w-3.5" />
                           <span>Bookings</span>
@@ -1610,7 +1610,7 @@ const IntegrationsPage: React.FC = () => {
                             void handleTestConnection(integration.id);
                           }}
                           disabled={testing}
-                          className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm transition-colors"
+                          className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-11 flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm transition-colors"
                         >
                           <Bell className="h-3.5 w-3.5" />
                           <span>Test</span>
@@ -1628,7 +1628,7 @@ const IntegrationsPage: React.FC = () => {
                             ? 'Wait for the current key request to finish'
                             : undefined
                         }
-                        className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm transition-colors"
+                        className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-11 flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm transition-colors"
                       >
                         <Settings className="h-3.5 w-3.5" />
                         <span>{activation ? 'Deactivate' : 'Disconnect'}</span>
@@ -1641,7 +1641,7 @@ const IntegrationsPage: React.FC = () => {
                         resetFormState(integration);
                         setShowConnectModal(integration.id);
                       }}
-                      className="flex items-center space-x-1 rounded-lg bg-indigo-600/20 px-4 py-1.5 text-sm text-indigo-700 transition-colors hover:bg-indigo-600/30"
+                      className="touch:min-h-11 flex items-center space-x-1 rounded-lg bg-indigo-600/20 px-4 py-1.5 text-sm text-indigo-700 transition-colors hover:bg-indigo-600/30"
                     >
                       {activation ? <Check className="h-3.5 w-3.5" /> : <Plug className="h-3.5 w-3.5" />}
                       <span>{activation ? 'Activate' : 'Connect'}</span>

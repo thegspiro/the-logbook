@@ -913,7 +913,7 @@ PATCH  /api/v1/training/programs/progress/{id}
 POST   /api/v1/training/shift-reports                                  # Create report
 GET    /api/v1/training/shift-reports/my-reports                       # Trainee's approved reports
 GET    /api/v1/training/shift-reports/my-stats                         # Trainee's aggregate stats
-GET    /api/v1/training/shift-reports/officer-analytics                # Org-wide analytics
+GET    /api/v1/training/shift-reports/officer-analytics                # Own analytics; ?scope=department needs training.view_analytics
 GET    /api/v1/training/shift-reports/by-officer                       # Reports filed by current officer
 GET    /api/v1/training/shift-reports/pending-review                   # Reports awaiting review
 GET    /api/v1/training/shift-reports/drafts                           # Auto-created drafts

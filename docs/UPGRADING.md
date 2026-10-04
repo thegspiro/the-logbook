@@ -327,6 +327,15 @@ rule applies with more force than usual.
 - **Downgrade restores from a backup table:** `15c5bc7700aa` (the email
   template reset) puts each template back from `email_template_backups`.
 
+### Scheduled reminders no longer duplicate across workers (2026-10-04)
+
+A worker whose scheduler claim had lapsed could take it back without learning
+another worker held it, so on a multi-worker deployment two or more workers ran
+every scheduled task (event and shift reminders, certification-expiry and
+inactivity alerts) and members received them more than once. Renewal is now
+conditional on still holding the claim (CRON-40). Nothing to configure. If you
+saw duplicate reminders, they should stop after the restart.
+
 ### Probationary and junior members can sign in and be scheduled (2026-10-03)
 
 A member whose status is **Probationary** — which includes every junior
@@ -343,9 +352,20 @@ shift compliance report. **A department that does not want probationary
 members signing themselves up for shifts** should add the membership type to
 **Excluded from Self-Signup** in Scheduling's **Eligibility** settings —
 account status is not the lever for that
-policy. About forty other screens (training compliance, rosters, quorum and
+policy. **If you kept a Probationary account from signing in on purpose,
+it can sign in after this upgrade:** set it to Inactive or Suspended instead. About forty other screens (training compliance, rosters, quorum and
 others) still count only fully active members; that is recorded as an open
 decision, not a defect.
+
+### Training requirements can exempt existing members (2026-10-03)
+
+Migration `d058b5e7c1f4` adds three nullable date columns for it. Every
+requirement keeps today's behaviour until someone sets a cutoff, so nothing
+changes at upgrade. Two things do, for every department: the dashboard,
+Compliance Matrix and member status now **honour role-scoped requirements**
+(My Training always did), and the compliance exports and forecast print **N/A**
+where a requirement does not apply to a member, rather than grading them
+against it. Expect some percentages to move once.
 
 ### Seeded positions gain checklist, NFC-tag and ID-card grants (2026-09-30, 2026-10-02)
 

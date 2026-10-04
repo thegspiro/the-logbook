@@ -1079,14 +1079,16 @@ const ReviewSubmissionsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div data-page-main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+      <div data-page-main className="mx-auto max-w-5xl py-8">
         {/* Header */}
         <div className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-2">
           <button
+            type="button"
             onClick={() => void navigate('/training/officer')}
-            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface shrink-0 rounded-lg p-2"
+            aria-label="Back to Training Dashboard"
+            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface btn-icon shrink-0"
           >
-            <ArrowLeft className="h-5 w-5" />
+            <ArrowLeft className="h-5 w-5" aria-hidden="true" />
           </button>
           <div className="min-w-0 flex-1">
             <h1 className="text-theme-text-primary flex items-center space-x-2 text-2xl font-bold">
@@ -1104,7 +1106,12 @@ const ReviewSubmissionsPage: React.FC = () => {
         </div>
 
         {/* Tab Navigation */}
-        <div className="bg-theme-surface hscroll mb-6 flex space-x-1 rounded-lg p-1">
+        <div
+          className="bg-theme-surface hscroll mb-6 flex space-x-1 rounded-lg p-1"
+          role="group"
+          aria-label="Submission views"
+          data-mobile-scroll-region
+        >
           <button
             onClick={() => setActiveView('pending')}
             className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${

@@ -20,7 +20,9 @@ every module's wording. Every email template was reset to one design;
 probationary members can sign in; inventory NFC tags, room door tags, outside
 shifts, "I was there" requests and a finance Approvals screen are new. It
 carries the Alembic route, the permission movements, and the screenshot
-(84 replace, 38 new) and YouTube disposition.
+(84 replace, 38 new) and YouTube disposition. A narrower
+[October 3 – 4 audit](./CHANGE_AUDIT_2026-10-03_TO_10-04.md), written in
+parallel, covers the window's last day in more detail.
 
 **[Change audit — 2026-09-15 through 2026-09-23](./CHANGE_AUDIT_2026-09-15_TO_09-23.md)**
 was the previous handoff. 40 pull requests and four migrations (head

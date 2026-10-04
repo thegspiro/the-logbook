@@ -217,6 +217,9 @@ test.describe('Events page urgency treatment', () => {
     { name: 'iPad Pro portrait', width: 1024, height: 1366 },
     { name: 'iPad Pro landscape', width: 1366, height: 1024 },
     { name: 'laptop', width: 1280, height: 800 },
+    // The narrowest phone in use: one column, and a 256px card once the page
+    // gutter and card padding are taken.
+    { name: 'small phone', width: 320, height: 568 },
   ]) {
     test(`no card content overflows its card — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });

@@ -309,6 +309,39 @@ and this file cannot disagree.
 | **REPLACE** | `18-04-my-orders-unpaid.png` | The payment line now reads "Include **ORD-…** as the reference on your payment." (was "Reference ORD-… on your payment"), and item counts read "1 item" / "3 items". |
 | **REPLACE** | `19-06-store-admin-orders.png` | The export button reads **Export CSV** (was Export), the bulk control **New status for selected orders** (was Bulk status), and rows read "1 item" / "2 items". |
 
+## Needed after the 2026-10-03/04 changes
+
+Nothing was re-shot in this pass — the demo seeder was not run. This is the
+list for whoever runs it next.
+
+**New**
+
+| Shot (suggested name) | Guide | What it must show |
+| --- | --- | --- |
+| `02-xx-requirement-existing-members` | 02 | The requirement form's **Existing Members** section with **Give a catch-up deadline** chosen and both dates filled |
+| `02-xx-requirement-change-scope` | 02 | The **who does this change reach** dialog with **New members only** selected and the date field open. Never saved |
+| `02-xx-requirement-earlier-standard` | 02 | An older requirement's edit form with the blue _"This is the earlier standard"_ banner |
+| `02-xx-program-members-already-enrolled` | 02 | The add-requirement-to-program modal with **Members already enrolled** |
+| `05-xx-checklist-unpublished-banner` | 05 | The template builder after editing a live checklist: banner and **Publish now** |
+| `05-xx-checklist-readiness-vehicles` | 05 | Readiness panel naming the vehicles reached (and one showing the warning) |
+| `05-xx-check-failed-needs-note` | 05 | The check form with a Fail chosen and the note prompt focused, phone width |
+
+**Replace** (the screen changed under the existing shot)
+
+| Shot or area | Why |
+| --- | --- |
+| `02-16-requirements` | The form gained **Existing Members** |
+| Compliance Matrix / print view shots | **Due** status and **N/A** cells; legend text |
+| Every phone shot of a **settings** screen (Scheduling, Organization, Events) | Full-width rows, new padding |
+| Training Setup and compliance-rules phone shots | Layout, 44px controls, heading levels |
+| Event detail and roster (`04-*`) | Bordered cards; 44px roster buttons; red/green fills replaced |
+| Member profile sections | Training and Admin Hours cards gained the border |
+| Any shot with a **blue** selected tab or filter: Members Admin, Admin Hours, Eligibility Roster, Supply Expiring, My Checklists, Check Log, Compliance Requirements, Elections | Selected state is red now |
+| Any iPad shot of a card page | Edit/delete/download controls are now visible on touch |
+
+**Seeder:** `my-checklists` and the check form need a Fail chosen without a
+count or reading, or the note prompt will not appear.
+
 ## Suggestion boxes re-shot after notifications, history, board and delete, 2026-09-25
 
 The suggestion-box shots in guide 07 predated four changes to those screens:

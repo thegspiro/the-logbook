@@ -42,6 +42,8 @@ _ADDED_SINCE: dict[str, set[str]] = {
     "treasurer": {"finance.approve", "finance.configure_approvals"},
     # 394600cbfae2, with its own backfill.
     "communications_officer": {"suggestions.manage"},
+    # 84819ea78a79, with its own backfill.
+    "training_officer": {"training.view_analytics"},
 }
 
 

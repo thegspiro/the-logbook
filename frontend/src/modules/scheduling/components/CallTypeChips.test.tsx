@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CallTypeChips } from './CallTypeChips';
-import { orgCallTypeChoices, textCallTypeChoices } from './callTypeChoices';
+import { labelCallTypeChoices, orgCallTypeChoices } from './callTypeChoices';
 import type { CallTypeOption } from '../types';
 
 const type = (slug: string, label: string, active = true): CallTypeOption => ({ slug, label, active });
@@ -53,9 +53,25 @@ describe('orgCallTypeChoices', () => {
   });
 });
 
-describe('textCallTypeChoices', () => {
-  it('stores exactly what it shows', () => {
-    expect(textCallTypeChoices(['Structure Fire'])).toEqual([{ value: 'Structure Fire', label: 'Structure Fire' }]);
+describe('labelCallTypeChoices', () => {
+  it("offers the department's active types, storing each label", () => {
+    expect(labelCallTypeChoices([type('fire', 'Fire'), type('mva', 'Motor Vehicle Accident')], [])).toEqual([
+      { value: 'Fire', label: 'Fire' },
+      { value: 'Motor Vehicle Accident', label: 'Motor Vehicle Accident' },
+    ]);
+  });
+
+  it('keeps a retired type that is already on the report, and hides it otherwise', () => {
+    const retired = { ...type('brush', 'Brush Fire'), active: false };
+    expect(labelCallTypeChoices([retired], [])).toEqual([]);
+    expect(labelCallTypeChoices([retired], ['Brush Fire'])).toEqual([{ value: 'Brush Fire', label: 'Brush Fire' }]);
+  });
+
+  it('keeps wording typed before the picker so it can still be removed', () => {
+    expect(labelCallTypeChoices([type('fire', 'Fire')], ['structure fire'])).toEqual([
+      { value: 'Fire', label: 'Fire' },
+      { value: 'structure fire', label: 'structure fire' },
+    ]);
   });
 });
 

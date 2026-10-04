@@ -17,6 +17,7 @@ import {
   ArrowLeft,
   Upload,
   Download,
+  Lock,
 } from 'lucide-react';
 import {
   documentsService,
@@ -41,6 +42,17 @@ const DOCUMENTS_PAGE_SIZE = 50;
 // rows at every breakpoint (1, 2 and 3 across) rather than leave a ragged tail.
 const FOLDER_PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 300;
+
+/**
+ * How a restricted folder is described to the people who file into it. The
+ * server enforces these (`_folder_admits_user`); the label only says so, so a
+ * secretary can tell a members' folder from a leadership-only one before
+ * uploading a departure clearance into it (W53-3).
+ */
+const RESTRICTED_FOLDER_LABEL: Record<string, string> = {
+  leadership: 'Leadership only',
+  owner: 'Owner and leadership only',
+};
 
 const DocumentsPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
@@ -428,14 +440,14 @@ const DocumentsPage: React.FC = () => {
             <div className="flex flex-wrap items-center gap-3">
               <button
                 onClick={() => setShowCreateFolder(true)}
-                className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors"
+                className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary touch:min-h-11 flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors"
               >
                 <Folder className="h-4 w-4" aria-hidden="true" />
                 <span>New Folder</span>
               </button>
               <button
                 onClick={handleOpenUploadModal}
-                className="flex items-center space-x-2 rounded-lg bg-amber-700 px-4 py-2 text-white transition-colors hover:bg-amber-800"
+                className="touch:min-h-11 flex items-center space-x-2 rounded-lg bg-amber-700 px-4 py-2 text-white transition-colors hover:bg-amber-800"
               >
                 <Upload className="h-4 w-4" />
                 <span>Upload Document</span>
@@ -538,7 +550,7 @@ const DocumentsPage: React.FC = () => {
               {(currentFolder || showAllDocuments) && (
                 <button
                   onClick={handleClearFolder}
-                  className="flex items-center space-x-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400"
+                  className="touch:min-h-11 flex items-center space-x-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400"
                 >
                   <ArrowLeft className="h-4 w-4" aria-hidden="true" />
                   <span>All Folders</span>
@@ -547,7 +559,7 @@ const DocumentsPage: React.FC = () => {
               <div className="bg-theme-surface-secondary flex rounded-lg p-1" role="group" aria-label="View mode">
                 <button
                   onClick={() => setViewMode('grid')}
-                  className={`max-md:mobile-touch-target rounded-sm p-2.5 ${viewMode === 'grid' ? 'bg-amber-700 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+                  className={`touch:mobile-touch-target rounded-sm p-2.5 ${viewMode === 'grid' ? 'bg-amber-700 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
                   aria-label="Grid view"
                   aria-pressed={viewMode === 'grid'}
                 >
@@ -555,7 +567,7 @@ const DocumentsPage: React.FC = () => {
                 </button>
                 <button
                   onClick={() => setViewMode('list')}
-                  className={`max-md:mobile-touch-target rounded-sm p-2.5 ${viewMode === 'list' ? 'bg-amber-700 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+                  className={`touch:mobile-touch-target rounded-sm p-2.5 ${viewMode === 'list' ? 'bg-amber-700 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
                   aria-label="List view"
                   aria-pressed={viewMode === 'list'}
                 >
@@ -622,6 +634,12 @@ const DocumentsPage: React.FC = () => {
                         <p className="text-theme-text-muted mt-2 text-xs">
                           {folder.document_count} {folder.document_count === 1 ? 'document' : 'documents'}
                         </p>
+                        {folder.visibility && RESTRICTED_FOLDER_LABEL[folder.visibility] && (
+                          <p className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-amber-800 dark:text-amber-300">
+                            <Lock className="h-3 w-3" aria-hidden="true" />
+                            {RESTRICTED_FOLDER_LABEL[folder.visibility]}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </button>
@@ -677,42 +695,45 @@ const DocumentsPage: React.FC = () => {
                           {doc.description && (
                             <p className="text-theme-text-muted mt-1 line-clamp-2 text-sm">{doc.description}</p>
                           )}
-                          <div className="mt-2 flex items-center space-x-3">
+                          {/* Download and delete sit on the size row, not beside the
+                              title: at their 44px touch size beside it, a 320px
+                              phone showed under a third of a document's name. */}
+                          <div className="mt-2 flex items-center gap-3">
                             <span className="text-theme-text-muted text-xs">{formatFileSize(doc.file_size)}</span>
                             {doc.file_type && (
                               <span className="text-theme-text-muted text-xs uppercase">{doc.file_type}</span>
                             )}
+                            <div className="ml-auto flex shrink-0 items-center gap-1">
+                              {doc.has_file && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void handleDownloadDocument(doc);
+                                  }}
+                                  className="text-theme-text-muted touch-target-phone p-1 transition-all hover:text-amber-700 dark:hover:text-amber-400 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100"
+                                  title="Download document"
+                                >
+                                  <Download className="h-4 w-4" />
+                                </button>
+                              )}
+                              {canManage && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDeleteConfirm(doc.id);
+                                  }}
+                                  className="text-theme-text-muted touch-target-phone p-1 transition-all hover:text-red-800 dark:hover:text-red-400 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100"
+                                  title="Delete document"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              )}
+                            </div>
                           </div>
                           <p className="text-theme-text-muted mt-1 text-xs">
                             {doc.uploader_name ? `Uploaded by ${doc.uploader_name}` : ''}{' '}
                             {formatDate(doc.created_at, tz)}
                           </p>
-                        </div>
-                        <div className="flex shrink-0 items-start space-x-1">
-                          {doc.has_file && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void handleDownloadDocument(doc);
-                              }}
-                              className="text-theme-text-muted p-1 transition-all hover:text-amber-700 dark:hover:text-amber-400 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100"
-                              title="Download document"
-                            >
-                              <Download className="h-4 w-4" />
-                            </button>
-                          )}
-                          {canManage && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDeleteConfirm(doc.id);
-                              }}
-                              className="text-theme-text-muted p-1 transition-all hover:text-red-800 dark:hover:text-red-400 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100"
-                              title="Delete document"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -903,13 +924,20 @@ const DocumentsPage: React.FC = () => {
 
         {/* Upload Modal */}
         {canManage && showUploadModal && (
-          <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div
+            className="fixed inset-0 z-50 overflow-y-auto"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="upload-document-title"
+          >
             <div className="flex min-h-screen items-center justify-center px-4">
               <div className="modal-overlay" aria-hidden="true" />
               <DialogPanel onClose={() => setShowUploadModal(false)} className="relative w-full max-w-lg">
                 <div className="px-6 pt-5 pb-4">
                   <div className="mb-4 flex items-center justify-between">
-                    <h3 className="text-theme-text-primary text-lg font-medium">Upload Document</h3>
+                    <h3 id="upload-document-title" className="text-theme-text-primary text-lg font-medium">
+                      Upload Document
+                    </h3>
                     <button
                       onClick={() => setShowUploadModal(false)}
                       className="text-theme-text-muted hover:text-theme-text-primary"
@@ -925,15 +953,19 @@ const DocumentsPage: React.FC = () => {
                       {/* No drop handler is wired to this box, so the copy
                           does not offer drag and drop. */}
                       <p className="text-theme-text-primary mb-3 font-medium">Choose the file to upload</p>
+                      {/* sr-only, not hidden: a display:none input takes no
+                          focus, so the keyboard could never choose a file and
+                          Upload stayed disabled (W53-1). The label shows the
+                          focus ring the input cannot. */}
                       <input
                         type="file"
-                        className="hidden"
+                        className="peer sr-only"
                         id="file-upload"
                         onChange={(e) => setUploadForm({ ...uploadForm, file: e.target.files?.[0] || null })}
                       />
                       <label
                         htmlFor="file-upload"
-                        className="inline-flex cursor-pointer items-center rounded-lg bg-amber-700 px-4 py-2 text-white transition-colors hover:bg-amber-800"
+                        className="peer-focus-visible:ring-theme-focus-ring inline-flex cursor-pointer items-center rounded-lg bg-amber-700 px-4 py-2 text-white transition-colors peer-focus-visible:ring-2 hover:bg-amber-800"
                       >
                         Choose File
                       </label>
@@ -991,6 +1023,9 @@ const DocumentsPage: React.FC = () => {
                         {folders.map((f) => (
                           <option key={f.id} value={f.id}>
                             {f.name}
+                            {f.visibility && RESTRICTED_FOLDER_LABEL[f.visibility]
+                              ? ` (${RESTRICTED_FOLDER_LABEL[f.visibility]?.toLowerCase()})`
+                              : ''}
                           </option>
                         ))}
                       </select>
@@ -1117,7 +1152,13 @@ const DocumentsPage: React.FC = () => {
 
         {/* Delete Confirmation Modal */}
         {canManage && deleteConfirm && (
-          <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div
+            className="fixed inset-0 z-50 overflow-y-auto"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="delete-document-title"
+            aria-describedby="delete-document-body"
+          >
             <div className="flex min-h-screen items-center justify-center px-4">
               <div className="modal-overlay" aria-hidden="true" />
               <DialogPanel onClose={() => setDeleteConfirm(null)} className="relative w-full max-w-sm">
@@ -1127,8 +1168,10 @@ const DocumentsPage: React.FC = () => {
                       <AlertCircle className="h-6 w-6 text-red-700 dark:text-red-400" />
                     </div>
                     <div>
-                      <h3 className="text-theme-text-primary text-lg font-medium">Delete Document</h3>
-                      <p className="text-theme-text-muted mt-1 text-sm">
+                      <h3 id="delete-document-title" className="text-theme-text-primary text-lg font-medium">
+                        Delete Document
+                      </h3>
+                      <p id="delete-document-body" className="text-theme-text-muted mt-1 text-sm">
                         This permanently deletes the document and its file. You can&apos;t undo this.
                       </p>
                     </div>

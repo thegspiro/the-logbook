@@ -5597,6 +5597,27 @@ Found driving W51 (`docs/workflow-review/W51-minutes.md`).
     UTC-combined value (which spares hand corrections), with a dry run; or
     leaving the old rows and noting it.
 
+## Action Items — Who Is Assigned, and Who Closes (2026-10-04)
+
+Found driving W52 (`docs/workflow-review/W52-action-items.md`).
+
+- **W52-6 — Nothing can be assigned to a member.**
+  - The only screen that creates action items, the minutes page, takes a typed
+    assignee name. `minutes_action_items.assignee_id` stays empty, so the
+    Action Items page's "Assigned to me" never matches anything created there.
+  - Meeting action items, which do carry a user (`assigned_to`), have no
+    screen at all.
+  - The fix is a member picker on the minutes form, setting `assignee_id`
+    alongside the name. Decide who may be assigned, and whether items already
+    assigned by name should be matched to members.
+- **W52-7 — An assignee cannot close their own item.**
+  - Every action-item update needs `minutes.manage`, so a member assigned an
+    item can neither mark it in progress nor done. The secretary closes it for
+    them.
+  - One option: let the assignee change only status and completion notes, keyed
+    on `assignee_id`, which depends on W52-6. It widens a write permission, so
+    it is the owner's decision.
+
 ## CC-7 — A Cohort Shift Can Move Classes That Already Happened (2026-10-03)
 
 `CourseCohortService.shift_remaining` bounds which classes move in one of two
@@ -5639,6 +5660,25 @@ nothing about which behaviour is wanted.
 `from_sequence` branch and say so in the endpoint's docs, or keep the current
 reach and have the UI warn when a requested shift would move a class whose date
 has passed. See [`docs/app-review/course-cohorts.md`](./app-review/course-cohorts.md) → Pass 3.
+
+## Documents — Folders Cannot Be Restricted or Managed From the Screen (2026-10-04)
+
+Found driving W53 (`docs/workflow-review/W53-documents.md`, W53-4).
+
+- **What the screen offers:** Create Folder takes a name and a description,
+  so every folder made there is visible to all members. Nothing on the screen
+  renames, moves or deletes a folder.
+- **What the API already supports:**
+  - restricting a folder: `PATCH /documents/folders/{id}` with `visibility`,
+    `allowed_roles` or `required_permissions`;
+  - moving one: `parent_id`;
+  - deleting one: `DELETE /documents/folders/{id}`.
+- **The result:** a department cannot create its own leadership-only folder,
+  or tidy a misnamed one, without the API.
+- **Decisions needed before building it:**
+  - which visibility options to offer (leadership, owner, roles);
+  - what deleting a non-empty folder does;
+  - whether system folders may be renamed or moved.
 
 ## Process
 

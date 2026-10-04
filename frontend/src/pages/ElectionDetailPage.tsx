@@ -38,7 +38,14 @@ import { Breadcrumbs, PromptDialog } from '../components/ux';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatDateTime, getTodayLocalDate, localToUTC } from '../utils/dateFormatting';
-import { getTimeRemaining, getStatusBadgeClass, getVictoryDescription } from '../utils/electionHelpers';
+import ElectionCloseStamp from '../components/election-detail/ElectionCloseStamp';
+import { groupVoidedVotes } from '../utils/electionForensics';
+import {
+  getTimeRemaining,
+  getStatusBadgeClass,
+  getVictoryDescription,
+  describePackageSendError,
+} from '../utils/electionHelpers';
 import SendBallotEmailsModal from '../components/election-detail/SendBallotEmailsModal';
 import RemindNonVotersModal from '../components/election-detail/RemindNonVotersModal';
 import NominationsPanel from '../components/election-detail/NominationsPanel';
@@ -87,6 +94,14 @@ export const ElectionDetailPage: React.FC = () => {
   const [showRollbackModal, setShowRollbackModal] = useState(false);
   const [rollbackError, setRollbackError] = useState<string | null>(null);
   const [isRollingBack, setIsRollingBack] = useState(false);
+  // A CLOSED -> OPEN rollback with no recorded votes regenerates the anonymity
+  // salt and expires every issued ballot token, so the "Ballots sent" stamp
+  // beside Resend is true and useless at once: the links in those emails are
+  // dead. Neither the rollback response nor GET /elections/{id} carries
+  // `ballots_must_be_resent` (it lives in rollback_history, exposed only via
+  // forensics), so the page derives it from the same facts the backend
+  // decides on and holds it until ballots go out again or the page reloads.
+  const [ballotsMustBeResent, setBallotsMustBeResent] = useState(false);
   const [showSendEmailModal, setShowSendEmailModal] = useState(false);
   const [isSendingEmails, setIsSendingEmails] = useState(false);
   const [sendEmailError, setSendEmailError] = useState<string | null>(null);
@@ -345,12 +360,37 @@ export const ElectionDetailPage: React.FC = () => {
   // ── Election lifecycle handlers ──────────────────────────────────
 
   const handleOpenElection = async () => {
-    if (!electionId) return;
+    if (!electionId || !election) return;
+
+    // Opening freezes the voter roll and, when the scheduled start is still
+    // ahead, moves it to now (W50-56) — say so before the click, and say
+    // that ballots are a separate send, which the manual once got wrong.
+    const startIsAhead = new Date(election.start_date).getTime() > Date.now();
+    const openMessage = startIsAhead
+      ? `Open voting now? The scheduled start (${formatDateTime(election.start_date, tz)}) moves to now, the voter roll is frozen and the ballot locks. Ballot emails are not sent by this step — use Send Ballot Emails afterwards.`
+      : 'Open voting now? The voter roll is frozen and the ballot locks. Ballot emails are not sent by this step — use Send Ballot Emails afterwards.';
+    if (
+      !(await confirm({
+        title: 'Open election',
+        message: openMessage,
+        confirmLabel: 'Open election',
+        cancelLabel: 'Keep as draft',
+        variant: 'warning',
+      }))
+    ) {
+      return;
+    }
 
     try {
       const updated = await electionService.openElection(electionId);
       setElection(updated);
-      toast.success('Election opened');
+      // The server clamps a future start to the open time and records it in
+      // the audit log only; the toast is the officer's one visible notice.
+      toast.success(
+        updated.start_date !== election.start_date
+          ? `Election opened — start moved from ${formatDateTime(election.start_date, tz)} to now`
+          : 'Election opened'
+      );
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to open election'));
     }
@@ -359,10 +399,17 @@ export const ElectionDetailPage: React.FC = () => {
   const handleCloseElection = async () => {
     if (!electionId) return;
 
+    // Closing destroys the per-election anonymity salt, so an anonymous
+    // election with votes can never be reopened (the server refuses the
+    // rollback). A non-anonymous one can, at the cost of every ballot link
+    // already sent; say which case this is instead of a blanket "cannot be undone".
+    const closeMessage = election?.anonymous_voting
+      ? 'Close this election? Voting ends immediately. Because ballots are anonymous, closing is final: once any vote has been recorded the election cannot be reopened, and a recount needs a new election.'
+      : 'Close this election? Voting ends immediately. Reopening it later takes a Roll Back, which invalidates every ballot link already sent.';
     if (
       !(await confirm({
         title: 'Close election',
-        message: 'Close this election? Voting ends immediately and this cannot be undone.',
+        message: closeMessage,
         confirmLabel: 'Close election',
         cancelLabel: 'Keep it open',
       }))
@@ -382,6 +429,20 @@ export const ElectionDetailPage: React.FC = () => {
 
   const handleOpenNominations = async () => {
     if (!electionId) return;
+    // The backend announces the phase to every active member by email the
+    // moment it opens (W50-57); nothing on the button says so.
+    if (
+      !(await confirm({
+        title: 'Open nominations',
+        message:
+          'Open nominations now? Every active member is emailed that nominations are open, and the election leaves draft until nominations close.',
+        confirmLabel: 'Open nominations and email members',
+        cancelLabel: 'Keep as draft',
+        variant: 'warning',
+      }))
+    ) {
+      return;
+    }
     try {
       const updated = await electionService.openNominations(electionId);
       setElection(updated);
@@ -513,7 +574,11 @@ export const ElectionDetailPage: React.FC = () => {
       });
       setShowCloneModal(false);
       toast.success('Draft election created');
-      void navigate(`/elections/${clone.id}`);
+      // Name the tab explicitly: the source was cloned from an open or closed
+      // election, and a bare draft URL lets the auto-select in fetchElection
+      // land on Results — a tally of nothing on an election with no ballot
+      // yet (W50-69). Ballot setup is what the officer does next.
+      void navigate(`/elections/${clone.id}?tab=ballot`);
     } catch (err: unknown) {
       setCloneError(getErrorMessage(err, 'Failed to clone election'));
     } finally {
@@ -593,6 +658,7 @@ export const ElectionDetailPage: React.FC = () => {
       });
       setElection(updated);
       setShowExtendModal(false);
+      toast.success(`Voting now closes ${formatDateTime(updated.end_date, tz)}`);
     } catch (err: unknown) {
       setExtendError(getErrorMessage(err, 'Failed to extend election'));
     }
@@ -631,11 +697,20 @@ export const ElectionDetailPage: React.FC = () => {
       setShowPackageModal(false);
       toast.success(result.message);
     } catch (err: unknown) {
-      setPackageError(getErrorMessage(err, 'Failed to send pre-meeting package'));
+      setPackageError(describePackageSendError(err, recipientEmails, 'Failed to send pre-meeting package'));
     } finally {
       setIsSendingPackage(false);
     }
   };
+
+  // Mirrors the refusal in ElectionService.rollback_election: closing NULLs
+  // the anonymity salt, so an anonymous election with votes cannot be reopened
+  // without letting every prior voter vote again undetected. Offering the
+  // button anyway meant a modal that promised "Reopen voting" and then a 400.
+  const rollbackBlockedReason: string | null =
+    election?.status === ElectionStatus.CLOSED && election.anonymous_voting && (election.total_votes ?? 0) > 0
+      ? 'This election cannot be reopened: its anonymity salt was destroyed when it closed, so members who already voted could vote again undetected. Create a new election instead.'
+      : null;
 
   const handleRollbackElection = async (reason: string) => {
     if (!electionId) return;
@@ -644,10 +719,20 @@ export const ElectionDetailPage: React.FC = () => {
       setIsRollingBack(true);
       setRollbackError(null);
 
+      // Read before the response replaces the election: the decision is
+      // about the state the rollback left, not the one it produced.
+      const wasClosedWithoutVotes = election?.status === ElectionStatus.CLOSED && (election.total_votes ?? 0) === 0;
+
       const response = await electionService.rollbackElection(electionId, reason);
 
       setElection(response.election);
       setShowRollbackModal(false);
+      // Mirrors ElectionService.rollback_election: the salt is regenerated (and
+      // the tokens expired) only on the zero-vote CLOSED -> OPEN path; with
+      // votes the salt stays as it was and the issued links are left alone.
+      if (wasClosedWithoutVotes && response.election.status === ElectionStatus.OPEN && response.election.email_sent) {
+        setBallotsMustBeResent(true);
+      }
 
       toast.success(`Election rolled back. ${response.notifications_sent} leadership members notified.`);
     } catch (err: unknown) {
@@ -680,6 +765,9 @@ export const ElectionDetailPage: React.FC = () => {
 
       setShowSendEmailModal(false);
       void fetchElection(); // Refresh to update email_sent status
+      if (response.success) {
+        setBallotsMustBeResent(false);
+      }
 
       // Persist skipped details so they stay visible in a banner
       setLastSkippedSource('ballots');
@@ -760,6 +848,9 @@ export const ElectionDetailPage: React.FC = () => {
       });
 
       setShowRemindModal(false);
+      // The server stamps reminder_sent_at on a delivered send; the stamp and
+      // the modal's cooldown both read it from the election, so refresh it.
+      void fetchElection();
 
       // Show skipped details from reminders in the persistent banner. A clean
       // send clears it, as the ballot send does, so a banner from an earlier
@@ -964,10 +1055,10 @@ export const ElectionDetailPage: React.FC = () => {
               &larr; Back to Elections
             </Link>
           </div>
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <div className="mb-2 flex items-center gap-2">
-                <h2 className="text-theme-text-primary text-2xl font-bold">{election.title}</h2>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <h2 className="text-theme-text-primary min-w-0 text-2xl font-bold break-words">{election.title}</h2>
                 {election.is_runoff && (
                   <span className="rounded-sm bg-purple-100 px-2 py-1 text-xs font-semibold text-purple-800 dark:bg-purple-500/20 dark:text-purple-400">
                     Runoff Round {election.runoff_round}
@@ -985,7 +1076,7 @@ export const ElectionDetailPage: React.FC = () => {
               {election.description && <p className="text-theme-text-secondary mt-2">{election.description}</p>}
             </div>
             <span
-              className={`inline-flex rounded-full px-3 py-1 text-sm leading-5 font-semibold ${getStatusBadgeClass(
+              className={`inline-flex shrink-0 rounded-full px-3 py-1 text-sm leading-5 font-semibold ${getStatusBadgeClass(
                 election.status
               )}`}
             >
@@ -1114,6 +1205,27 @@ export const ElectionDetailPage: React.FC = () => {
           </div>
         )}
 
+        {/* Dead ballot links after a rollback — persists until ballots are resent */}
+        {canManage && ballotsMustBeResent && election.status === ElectionStatus.OPEN && (
+          <div className="alert-warning mb-6" role="alert" data-testid="rollback-resend-banner">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex-1">
+                <h3 className="text-sm font-bold text-amber-700 dark:text-amber-300">
+                  Every ballot link already sent was invalidated by the rollback
+                </h3>
+                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                  Reopening regenerated the anonymity salt, so the links in the ballot emails sent{' '}
+                  {election.email_sent_at ? formatDateTime(election.email_sent_at, tz) : 'earlier'} no longer work.
+                  Resend ballots so members can vote.
+                </p>
+              </div>
+              <button type="button" onClick={() => setShowSendEmailModal(true)} className="btn-primary text-sm">
+                Resend Ballot Emails
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Skipped Voters Banner — persists until dismissed */}
         {canManage && lastSkippedDetails.length > 0 && (
           <div className="mb-6 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
@@ -1158,13 +1270,24 @@ export const ElectionDetailPage: React.FC = () => {
               </div>
             </div>
             <div>
-              <div className="text-theme-text-muted text-sm">End Date</div>
+              <div className="text-theme-text-muted text-sm">
+                {election.status === ElectionStatus.CLOSED ? 'Scheduled End' : 'End Date'}
+              </div>
               <div className="text-theme-text-primary mt-1 text-sm font-medium">
                 {formatDateTime(election.end_date, tz)}
               </div>
+              {election.status === ElectionStatus.CLOSED && (
+                <div className="text-theme-text-secondary mt-1 text-sm">
+                  <ElectionCloseStamp election={election} showActor />
+                </div>
+              )}
             </div>
             {election.positions && election.positions.length > 0 && (
-              <div className="col-span-2">
+              // md:col-span-2, not col-span-2: on the single-column phone grid an
+              // unconditional span forces an implicit second track, which is
+              // what collapsed "Start Date" to 0px and drew "Voting Method"
+              // over "Anonymous Voting" at 390px (W50-62).
+              <div className="md:col-span-2">
                 <div className="text-theme-text-muted text-sm">Positions</div>
                 <div className="mt-1 flex flex-wrap gap-2">
                   {election.positions.map((position) => (
@@ -1431,12 +1554,21 @@ export const ElectionDetailPage: React.FC = () => {
                   )}
 
                   {(election.status === ElectionStatus.OPEN || election.status === ElectionStatus.CLOSED) && (
-                    <button
-                      onClick={() => setShowRollbackModal(true)}
-                      className="rounded-md bg-orange-700 px-4 py-2 text-sm text-white hover:bg-orange-800"
-                    >
-                      Roll Back
-                    </button>
+                    <>
+                      <button
+                        onClick={() => setShowRollbackModal(true)}
+                        disabled={rollbackBlockedReason !== null}
+                        aria-describedby={rollbackBlockedReason !== null ? 'rollback-blocked-reason' : undefined}
+                        className="rounded-md bg-orange-700 px-4 py-2 text-sm text-white hover:bg-orange-800 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Roll Back
+                      </button>
+                      {rollbackBlockedReason !== null && (
+                        <p id="rollback-blocked-reason" className="text-theme-text-muted basis-full text-xs">
+                          {rollbackBlockedReason}
+                        </p>
+                      )}
+                    </>
                   )}
 
                   {election.status !== ElectionStatus.CLOSED &&
@@ -1521,19 +1653,9 @@ export const ElectionDetailPage: React.FC = () => {
                         vote in the app.
                       </p>
                     )}
-                    {featureFlags.reminders_enabled &&
-                      election.status === ElectionStatus.OPEN &&
-                      election.email_sent && (
-                        <button
-                          onClick={() => {
-                            void handleOpenRemindModal();
-                          }}
-                          disabled={isLoadingNonVoters}
-                          className="rounded-md bg-amber-700 px-4 py-2 text-sm text-white hover:bg-amber-800 disabled:opacity-50"
-                        >
-                          {isLoadingNonVoters ? 'Loading...' : 'Remind Non-Voters'}
-                        </button>
-                      )}
+                    {/* email_sent_at is the ballot-send stamp only: a reminder
+                      stamps reminder_sent_at and leaves it alone (W50-27), so the
+                      two are shown as two stamps rather than one that moves. */}
                     {election.status === ElectionStatus.OPEN && election.email_sent && (
                       <span className="text-theme-text-muted inline-flex items-center gap-1 text-xs">
                         <svg
@@ -1545,9 +1667,29 @@ export const ElectionDetailPage: React.FC = () => {
                           <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
                           <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
                         </svg>
-                        Sent {election.email_sent_at ? formatDateTime(election.email_sent_at, tz) : 'N/A'}
+                        Ballots sent {election.email_sent_at ? formatDateTime(election.email_sent_at, tz) : 'N/A'}
                       </span>
                     )}
+                    {featureFlags.reminders_enabled &&
+                      election.status === ElectionStatus.OPEN &&
+                      election.email_sent && (
+                        <>
+                          <button
+                            onClick={() => {
+                              void handleOpenRemindModal();
+                            }}
+                            disabled={isLoadingNonVoters}
+                            className="rounded-md bg-amber-700 px-4 py-2 text-sm text-white hover:bg-amber-800 disabled:opacity-50"
+                          >
+                            {isLoadingNonVoters ? 'Loading...' : 'Remind Non-Voters'}
+                          </button>
+                          {election.reminder_sent_at && (
+                            <span className="text-theme-text-muted inline-flex items-center gap-1 text-xs">
+                              Reminder sent {formatDateTime(election.reminder_sent_at, tz)}
+                            </span>
+                          )}
+                        </>
+                      )}
                   </div>
                 </div>
               )}
@@ -1826,8 +1968,14 @@ export const ElectionDetailPage: React.FC = () => {
                       </div>
                       <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
                         <div>
-                          <span className="text-theme-text-muted">Total Votes:</span>{' '}
-                          <span className="text-theme-text-primary font-medium">{integrityResult.total_votes}</span>
+                          <span className="text-theme-text-muted">Votes checked:</span>{' '}
+                          <span className="text-theme-text-primary font-medium">{integrityResult.total_votes}</span>{' '}
+                          {/* Every chained row is checked, but only counted
+                              votes are in the tally (W50-65) */}
+                          <span className="text-theme-text-muted">
+                            ({integrityResult.counted_votes} counted, {integrityResult.pending_paper_votes} pending
+                            paper, {integrityResult.test_votes} test)
+                          </span>
                         </div>
                         <div>
                           <span className="text-theme-text-muted">Valid:</span>{' '}
@@ -1935,6 +2083,8 @@ export const ElectionDetailPage: React.FC = () => {
                     <div className="border-theme-surface-border border-t pt-4">
                       <h3 className="text-md text-theme-text-primary mb-2 font-semibold">
                         Voided Votes ({forensicsReport.deleted_votes.count})
+                        {forensicsReport.deleted_votes.paper_batch_count > 0 &&
+                          ` — ${forensicsReport.deleted_votes.paper_batch_count} paper batch${forensicsReport.deleted_votes.paper_batch_count === 1 ? '' : 'es'} voided`}
                       </h3>
                       {forensicsReport.deleted_votes.count === 0 ? (
                         <p className="text-theme-text-muted text-sm">No votes have been voided.</p>
@@ -1970,9 +2120,13 @@ export const ElectionDetailPage: React.FC = () => {
                               </tr>
                             </thead>
                             <tbody className="divide-theme-surface-border divide-y">
-                              {forensicsReport.deleted_votes.records.map((v) => (
-                                <tr key={v.vote_id}>
-                                  <td className="px-3 py-2 font-mono text-xs">{v.vote_id.slice(0, 8)}...</td>
+                              {groupVoidedVotes(forensicsReport.deleted_votes.records).map((v) => (
+                                <tr key={v.key}>
+                                  <td className="px-3 py-2 font-mono text-xs">
+                                    {v.batch_size !== null
+                                      ? `paper batch voided (${v.batch_size} ballot${v.batch_size === 1 ? '' : 's'})`
+                                      : `${v.vote_id.slice(0, 8)}...`}
+                                  </td>
                                   <td className="px-3 py-2">{v.position || '—'}</td>
                                   <td className="px-3 py-2">{v.deletion_reason || '—'}</td>
                                   <td className="px-3 py-2">{v.deleted_at ? formatDateTime(v.deleted_at, tz) : '—'}</td>
@@ -2005,7 +2159,17 @@ export const ElectionDetailPage: React.FC = () => {
                     {/* Voting Timeline */}
                     {forensicsReport.voting_timeline && Object.keys(forensicsReport.voting_timeline).length > 0 && (
                       <div className="border-theme-surface-border border-t pt-4">
-                        <h3 className="text-md text-theme-text-primary mb-2 font-semibold">Voting Timeline</h3>
+                        <h3 className="text-md text-theme-text-primary mb-2 font-semibold">
+                          Voting Timeline
+                          {/* Buckets are keyed in the zone the backend chose,
+                              so the key is printed as sent and the zone named
+                              instead of re-converting it (W50-65) */}
+                          {forensicsReport.voting_timeline_timezone && (
+                            <span className="text-theme-text-muted ml-2 text-sm font-normal">
+                              (times in {forensicsReport.voting_timeline_timezone})
+                            </span>
+                          )}
+                        </h3>
                         <div className="space-y-1">
                           {Object.entries(forensicsReport.voting_timeline)
                             .sort(([a], [b]) => a.localeCompare(b))
@@ -2035,11 +2199,26 @@ export const ElectionDetailPage: React.FC = () => {
                     {/* Token Summary */}
                     <div className="border-theme-surface-border border-t pt-4">
                       <h3 className="text-md text-theme-text-primary mb-2 font-semibold">Ballot Tokens</h3>
-                      <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-3">
+                      {/* issued = live + superseded + used (+ expired); a
+                          resent ballot's old token is superseded, not
+                          "unused" (W50-65) */}
+                      <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-5">
                         <div className="bg-theme-surface-secondary rounded-sm p-3">
                           <div className="text-theme-text-muted">Issued</div>
                           <div className="text-theme-text-primary text-xl font-semibold">
                             {forensicsReport.voting_tokens.total_issued}
+                          </div>
+                        </div>
+                        <div className="bg-theme-surface-secondary rounded-sm p-3">
+                          <div className="text-theme-text-muted">Live</div>
+                          <div className="text-theme-text-primary text-xl font-semibold">
+                            {forensicsReport.voting_tokens.total_live}
+                          </div>
+                        </div>
+                        <div className="bg-theme-surface-secondary rounded-sm p-3">
+                          <div className="text-theme-text-muted">Superseded</div>
+                          <div className="text-theme-text-primary text-xl font-semibold">
+                            {forensicsReport.voting_tokens.total_superseded}
                           </div>
                         </div>
                         <div className="bg-theme-surface-secondary rounded-sm p-3">
@@ -2049,9 +2228,9 @@ export const ElectionDetailPage: React.FC = () => {
                           </div>
                         </div>
                         <div className="bg-theme-surface-secondary rounded-sm p-3">
-                          <div className="text-theme-text-muted">Unused</div>
+                          <div className="text-theme-text-muted">Expired</div>
                           <div className="text-theme-text-primary text-xl font-semibold">
-                            {forensicsReport.voting_tokens.total_issued - forensicsReport.voting_tokens.total_used}
+                            {forensicsReport.voting_tokens.total_expired}
                           </div>
                         </div>
                       </div>
@@ -2188,6 +2367,7 @@ export const ElectionDetailPage: React.FC = () => {
         {showMergeModal && election && (
           <MergeWriteInsModal
             candidates={mergeCandidates}
+            ballotItems={election.ballot_items}
             merging={isMerging}
             error={mergeError}
             onSubmit={(sourceIds, targetId) => {
@@ -2203,6 +2383,7 @@ export const ElectionDetailPage: React.FC = () => {
         {showPaperBallotsModal && election && (
           <RecordPaperBallotsModal
             candidates={paperCandidates}
+            ballotItems={election.ballot_items}
             recording={isRecordingPaper}
             error={paperBallotsError}
             attestationsRequired={featureFlags.paper_ballot_attestations_required}
@@ -2219,6 +2400,7 @@ export const ElectionDetailPage: React.FC = () => {
         {showRemindModal && election && (
           <RemindNonVotersModal
             nonVoterCount={nonVoterCount}
+            reminderSentAt={election.reminder_sent_at ?? null}
             sending={isSendingReminders}
             error={remindError}
             onSubmit={(message) => {

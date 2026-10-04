@@ -507,6 +507,8 @@ const CloseoutQueueSection: React.FC = () => {
                   tz={timezone}
                   outstandingChecks={pending}
                   requireChecks={requireEndOfShiftChecks}
+                  shiftStart={shift.start_time}
+                  shiftEnd={shift.end_time}
                   onCancel={() => setOpenRow(null)}
                   onFinalized={() => {
                     setOpenRow(null);
