@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { CallTypeRequirementPicker } from '../components/training/CallTypeRequirementPicker';
 import { useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import {
@@ -65,6 +66,8 @@ interface RequirementFormData {
   required_hours: string;
   required_shifts: string;
   required_calls: string;
+  // Department call-type slugs a calls requirement counts; empty counts all.
+  required_call_types: string[];
   passing_score: string;
   max_attempts: string;
   checklist_items: ChecklistItem[];
@@ -150,6 +153,7 @@ const emptyRequirement = (sortOrder: number, source: 'library' | 'new' = 'new'):
   required_hours: '',
   required_shifts: '',
   required_calls: '',
+  required_call_types: [],
   passing_score: '',
   max_attempts: '',
   checklist_items: [],
@@ -186,6 +190,9 @@ const toRequirementPayload = (reqData: RequirementFormData) =>
         required_hours: reqData.required_hours ? parseFloat(reqData.required_hours) : undefined,
         required_shifts: reqData.required_shifts ? parseInt(reqData.required_shifts) : undefined,
         required_calls: reqData.required_calls ? parseInt(reqData.required_calls) : undefined,
+        ...(reqData.requirement_type === 'calls' && reqData.required_call_types.length > 0
+          ? { required_call_types: reqData.required_call_types }
+          : {}),
         passing_score: reqData.passing_score ? parseFloat(reqData.passing_score) : undefined,
         max_attempts: reqData.max_attempts ? parseInt(reqData.max_attempts) : undefined,
         checklist_items: reqData.checklist_items.filter((i) => i.text.trim()),
@@ -898,6 +905,12 @@ const StepRequirements: React.FC<{
                           placeholder="e.g., 20"
                           min={1}
                         />
+                        <div className="mt-2">
+                          <CallTypeRequirementPicker
+                            value={req.required_call_types}
+                            onChange={(next) => onUpdateRequirement(phase.key, req.id, 'required_call_types', next)}
+                          />
+                        </div>
                       </div>
                     )}
 

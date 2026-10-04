@@ -11,6 +11,7 @@ import { electionService } from '../services/api';
 import type { Election, Candidate, VoterEligibility, VoteCreate, VotingMethod } from '../types/election';
 import { getErrorMessage } from '../utils/errorHandling';
 import { VotingMethod as VM } from '../constants/enums';
+import { VerifyReceipt } from './VerifyReceipt';
 
 interface ElectionBallotProps {
   electionId: string;
@@ -33,6 +34,11 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({ electionId, elec
 
   // Approval: multiple selections per position
   const [approvals, setApprovals] = useState<Record<string, Set<string>>>({});
+
+  // Receipt hashes returned by the casts made in this session, per position.
+  // The API hands the hash back exactly once; a voter who leaves without it
+  // has nothing to verify later (W50-53).
+  const [receipts, setReceipts] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     void fetchData();
@@ -112,6 +118,12 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({ electionId, elec
     });
   };
 
+  const recordReceipts = (position: string, hashes: (string | undefined)[]) => {
+    const kept = hashes.filter((h): h is string => typeof h === 'string' && h.length > 0);
+    if (kept.length === 0) return;
+    setReceipts((prev) => ({ ...prev, [position]: kept }));
+  };
+
   /**
    * Submits a vote for a single position. Handles three voting methods:
    * - ranked_choice: submits ordered rankings with rank numbers
@@ -135,13 +147,17 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({ electionId, elec
 
         // Submit all ranked votes atomically — a sequential per-rank loop
         // could leave a partial ballot recorded if one call failed mid-way
-        await electionService.bulkCastVotes(
+        const votes = await electionService.bulkCastVotes(
           electionId,
           ranked.map((candidateId, i) => ({
             candidate_id: candidateId,
             position: actualPosition,
             vote_rank: i + 1,
           }))
+        );
+        recordReceipts(
+          position,
+          votes.map((v) => v.receipt_hash)
         );
       } else if (votingMethod === VM.APPROVAL) {
         const approved = approvals[position];
@@ -151,12 +167,16 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({ electionId, elec
         }
 
         // Submit all approvals atomically (same partial-ballot concern)
-        await electionService.bulkCastVotes(
+        const votes = await electionService.bulkCastVotes(
           electionId,
           [...approved].map((candidateId) => ({
             candidate_id: candidateId,
             position: actualPosition,
           }))
+        );
+        recordReceipts(
+          position,
+          votes.map((v) => v.receipt_hash)
         );
       } else {
         // Simple majority or supermajority
@@ -171,7 +191,8 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({ electionId, elec
           candidate_id: candidateId,
           position: actualPosition,
         };
-        await electionService.castVote(electionId, voteData);
+        const vote = await electionService.castVote(electionId, voteData);
+        recordReceipts(position, [vote.receipt_hash]);
       }
 
       toast.success(actualPosition ? `Vote for ${actualPosition} submitted` : 'Vote submitted');
@@ -199,21 +220,57 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({ electionId, elec
     return null;
   }
 
-  if (!eligibility.is_eligible && eligibility.has_voted && eligibility.positions_remaining.length === 0) {
+  const renderReceipts = (position: string) => {
+    const hashes = receipts[position];
+    if (!hashes || hashes.length === 0) return null;
     return (
-      <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-6">
-        <div className="flex items-center">
-          <svg className="mr-2 h-6 w-6 text-green-700 dark:text-green-400" fill="currentColor" viewBox="0 0 20 20">
-            <path
-              fillRule="evenodd"
-              d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-              clipRule="evenodd"
-            />
-          </svg>
-          <span className="font-medium text-green-700 dark:text-green-300">
-            You have already voted in this election.
-          </span>
+      <div className="border-theme-surface-border mt-3 border-t pt-3 text-sm" data-testid={`receipt-${position}`}>
+        <p className="text-theme-text-secondary font-medium">Vote Receipt</p>
+        <p className="text-theme-text-muted mb-2 text-xs">
+          Save this receipt to verify your vote was counted. It cannot reveal how you voted.
+        </p>
+        {hashes.map((hash) => (
+          <code
+            key={hash}
+            className="bg-theme-surface text-theme-text-primary mb-1 block rounded px-2 py-1 font-mono text-xs break-all"
+          >
+            {hash}
+          </code>
+        ))}
+      </div>
+    );
+  };
+
+  if (!eligibility.is_eligible && eligibility.has_voted && eligibility.positions_remaining.length === 0) {
+    // Casting the last position lands here on the eligibility refresh, so the
+    // receipts just issued must survive the branch change or the voter never
+    // sees them.
+    const sessionReceipts = Object.keys(receipts);
+    return (
+      <div className="space-y-6">
+        <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-6">
+          <div className="flex items-center">
+            <svg className="mr-2 h-6 w-6 text-green-700 dark:text-green-400" fill="currentColor" viewBox="0 0 20 20">
+              <path
+                fillRule="evenodd"
+                d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                clipRule="evenodd"
+              />
+            </svg>
+            <span className="font-medium text-green-700 dark:text-green-300">
+              You have already voted in this election.
+            </span>
+          </div>
+          {sessionReceipts.map((position) => (
+            <React.Fragment key={position}>
+              {position !== '_default' && sessionReceipts.length > 1 && (
+                <p className="text-theme-text-primary mt-3 text-sm font-semibold">{position}</p>
+              )}
+              {renderReceipts(position)}
+            </React.Fragment>
+          ))}
         </div>
+        <VerifyReceipt electionId={electionId} />
       </div>
     );
   }
@@ -282,6 +339,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({ electionId, elec
                     </svg>
                     Vote submitted for {position === '_default' ? 'this election' : position}
                   </div>
+                  {renderReceipts(position)}
                 </div>
               </div>
             );
@@ -485,6 +543,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({ electionId, elec
           );
         })}
       </div>
+      <VerifyReceipt electionId={electionId} />
     </div>
   );
 };

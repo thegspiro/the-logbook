@@ -43,6 +43,26 @@ export const orgCallTypeChoices = (configured: CallTypeOption[], stored: string[
   ];
 };
 
-/** Choices for a report whose stored values are the officer's own wording. */
-export const textCallTypeChoices = (options: string[]): CallTypeChoice[] =>
-  options.map((t) => ({ value: t, label: t }));
+/**
+ * Choices for a value stored as text — a report on detailed tracking, a manual
+ * report, the call log — drawn from the same department list as everything
+ * else, storing each type's **label**.
+ *
+ * Text rather than the slug because these columns are read as text: the call
+ * log's `incident_type` goes out through the NFIRS and NEMSIS exports and comes
+ * in through the ePCR import, and a report's text list is shown as written.
+ * The server matches requirements by type, so a label and its slug credit the
+ * same requirement.
+ *
+ * As with `orgCallTypeChoices`, a stored value the list does not offer — a
+ * retired type, or wording typed before the picker existed — is kept as its
+ * own chip so it can still be seen and removed.
+ */
+export const labelCallTypeChoices = (configured: CallTypeOption[], stored: string[]): CallTypeChoice[] => {
+  const offered = configured.filter((t) => t.active || stored.includes(t.label)).map((t) => t.label);
+  const known = new Set(offered);
+  return [
+    ...offered.map((label) => ({ value: label, label })),
+    ...stored.filter((v) => !known.has(v)).map((v) => ({ value: v, label: v })),
+  ];
+};

@@ -19,6 +19,18 @@ vi.mock('../../modules/scheduling/services/api', () => ({
       Promise.resolve({
         options: [{ id: 'app-1', name: 'Engine 1', unit_number: 'E-1', apparatus_type: 'engine', source: 'basic' }],
       }),
+    // The call-type chips come from the department's one list, not a
+    // report-specific one.
+    getFeatureSettings: () =>
+      Promise.resolve({
+        call_tracking: {
+          mode: 'detailed',
+          call_types: [
+            { slug: 'structure_fire', label: 'Structure Fire', active: true },
+            { slug: 'brush', label: 'Brush Fire', active: false },
+          ],
+        },
+      }),
   },
 }));
 
@@ -52,7 +64,9 @@ describe('ManualShiftReportPage', () => {
     }
     expect(screen.getByRole('textbox', { name: 'Search members to add' })).toBeInTheDocument();
 
-    const structure = screen.getByRole('button', { name: 'Structure Fire' });
+    const structure = await screen.findByRole('button', { name: 'Structure Fire' });
+    // A retired type is not offered for a new report.
+    expect(screen.queryByRole('button', { name: 'Brush Fire' })).not.toBeInTheDocument();
     expect(structure).toHaveAttribute('aria-pressed', 'false');
     await user.click(structure);
     expect(structure).toHaveAttribute('aria-pressed', 'true');

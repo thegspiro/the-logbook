@@ -1332,7 +1332,7 @@ The scheduling module connects to the training module through **Shift Completion
 6. **Tasks Performed**: Log tasks completed during the shift (structured JSON: `{task, description, comment}`)
 7. **Pipeline Progress**: Shift hours, shift count, and call count (with call type matching) automatically update training pipeline requirements. Draft reports defer progress until completed _(2026-03-28)_
 8. **Performance Ratings**: 1-5 star ratings with strengths/improvement areas (encrypted at rest)
-9. **Officer Analytics**: Org-wide analytics dashboard with per-trainee breakdown, status counts, and monthly trends (`GET /training/shift-reports/officer-analytics`) _(2026-03-29)_
+9. **Officer Analytics**: Analytics dashboard with per-trainee breakdown, status counts, and monthly trends (`GET /training/shift-reports/officer-analytics`) _(2026-03-29)_. Since 2026-10-04 it covers only the caller's own reports (`scope=mine`, the default, shown under **Written by me**); department-wide totals are `scope=department`, shown under **Department**, and need `training.view_analytics` — granted by default to the Chief, Deputy Chief and Assistant Chief ranks and the President and Training Officer positions. Company officers hold `training.manage` to file reports, which no longer shows them the department's totals
 10. **Trainee Stats**: Personal stats dashboard with total hours, calls, average rating, and monthly breakdown (`GET /training/shift-reports/my-stats`) _(2026-03-29)_
 
 This integration allows training officers to document field observations, automatically advance trainees through their training programs based on shift activity, and track department-wide training progress through analytical dashboards.
@@ -1955,12 +1955,12 @@ Frontend shows "Finalized" badge, hides edit controls
 
 ### Officer Analytics Endpoints
 
-| Method | Path                                                | Description                                                           |
-| ------ | --------------------------------------------------- | --------------------------------------------------------------------- |
-| `GET`  | `/api/v1/training/shift-reports/officer-analytics`  | Org-wide totals, per-trainee breakdown, status counts, monthly trends |
-| `GET`  | `/api/v1/training/shift-reports/by-officer`         | Reports filed by current officer                                      |
-| `GET`  | `/api/v1/training/shift-reports/trainee/{id}`       | Reports for a specific trainee                                        |
-| `GET`  | `/api/v1/training/shift-reports/trainee/{id}/stats` | Stats for a specific trainee                                          |
+| Method | Path                                                | Description                                                                                                                                   |
+| ------ | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`  | `/api/v1/training/shift-reports/officer-analytics`  | Caller's own totals, per-trainee breakdown, status counts, monthly trends; `?scope=department` for org-wide (needs `training.view_analytics`) |
+| `GET`  | `/api/v1/training/shift-reports/by-officer`         | Reports filed by current officer                                                                                                              |
+| `GET`  | `/api/v1/training/shift-reports/trainee/{id}`       | Reports for a specific trainee                                                                                                                |
+| `GET`  | `/api/v1/training/shift-reports/trainee/{id}/stats` | Stats for a specific trainee                                                                                                                  |
 
 ### Trainee Endpoints
 

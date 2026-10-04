@@ -3797,6 +3797,19 @@ async def _reject_deleting_a_used_call_type(
             + ". Turn it off instead to stop offering it."
         )
 
+    # Requirements are read after the history check and without a lock of
+    # their own: a requirement saved concurrently with this deletion is the
+    # one race left open, and it degrades rather than corrupts — the
+    # requirement keeps the slug, which still matches every report that stored
+    # it.
+    required = await service.slugs_named_by_requirements(organization_id, removed)
+    if required:
+        raise ValueError(
+            "Cannot delete a call type a training requirement counts: "
+            + ", ".join(sorted(required))
+            + ". Turn it off instead, or remove it from the requirement first."
+        )
+
 
 async def _call_type_usage_for(db: AsyncSession, user: User) -> dict[str, int]:
     """Per-type call counts, for callers allowed to see call volume.
@@ -3840,10 +3853,10 @@ async def _call_type_locked_for(db: AsyncSession, user: User) -> list[str]:
     candidates = eligibility.effective_call_type_slugs(org)
     if not candidates:
         return []
+    service = CallTrackingService(db)
     return sorted(
-        await CallTrackingService(db).slugs_locked_by_history(
-            user.organization_id, candidates
-        )
+        await service.slugs_locked_by_history(user.organization_id, candidates)
+        | await service.slugs_named_by_requirements(user.organization_id, candidates)
     )
 
 

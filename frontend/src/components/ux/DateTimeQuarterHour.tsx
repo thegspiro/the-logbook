@@ -33,6 +33,8 @@ interface DateTimeQuarterHourProps {
    * indistinguishable to a screen reader.
    */
   timeLabel?: string | undefined;
+  /** Earliest selectable calendar date (YYYY-MM-DD), passed to the native date input. */
+  min?: string | undefined;
 }
 
 const DateTimeQuarterHour: React.FC<DateTimeQuarterHourProps> = ({
@@ -43,6 +45,7 @@ const DateTimeQuarterHour: React.FC<DateTimeQuarterHourProps> = ({
   required,
   timezone,
   timeLabel,
+  min,
 }) => {
   const { datePart, timePart } = useMemo(() => {
     if (!value) return { datePart: '', timePart: '' };
@@ -68,6 +71,7 @@ const DateTimeQuarterHour: React.FC<DateTimeQuarterHourProps> = ({
         id={id}
         required={required}
         value={datePart}
+        {...(min ? { min } : {})}
         onChange={(e) => handleDateChange(e.target.value)}
         className={className}
         style={{ flex: '1 1 40%' }}
