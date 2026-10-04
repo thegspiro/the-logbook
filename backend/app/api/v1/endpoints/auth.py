@@ -44,6 +44,7 @@ from app.core.security_middleware import (
     rate_limit_login,
     rate_limit_password_change,
     rate_limit_password_reset,
+    rate_limit_password_reset_token,
     rate_limit_register,
     rate_limit_token_refresh,
 )
@@ -1520,6 +1521,34 @@ async def forgot_password(
             "auth_provider": auth_config.provider,
         }
 
+    # Email off is a fact about the department, not the account, so saying so
+    # reveals nothing about which addresses exist. Issue no token: one nobody
+    # can receive only starts the cooldown, and the member's way back is an
+    # administrator's Reset Password (W03-6). Same test the send path and Add
+    # Member's welcome email apply.
+    from app.services.email_service import EmailService
+
+    if not EmailService(organization).can_send:
+        await log_audit_event(
+            db=db,
+            event_type="auth.password_reset_requested",
+            event_category="auth",
+            severity="INFO",
+            event_data={
+                "email": reset_request.email,
+                "token_issued": False,
+                "reason": "email_disabled",
+                "organization_id": str(organization.id),
+            },
+            ip_address=ip_address,
+            user_agent=request.headers.get("user-agent"),
+        )
+        return {
+            "message": "Password reset emails are turned off for this department. "
+            "Ask an administrator to reset your password.",
+            "email_disabled": True,
+        }
+
     # Generate reset token
     auth_service = AuthService(db)
     user, raw_token = await auth_service.create_password_reset_token(
@@ -1549,8 +1578,6 @@ async def forgot_password(
     # here, never the request `db` or detached ORM objects (`user`,
     # `organization`).
     if user and raw_token:
-        from app.services.email_service import EmailService
-
         # Use URL fragment (#) instead of query param so the token is
         # never sent to the server in Referer headers or logged in access logs.
         reset_url = f"{settings.FRONTEND_URL}/reset-password#token={raw_token}"
@@ -1624,7 +1651,7 @@ async def forgot_password(
     }
 
 
-@router.post("/reset-password", dependencies=[rate_limit_password_reset()])
+@router.post("/reset-password", dependencies=[rate_limit_password_reset_token()])
 async def reset_password(
     reset_data: PasswordReset,
     request: Request,
@@ -1671,7 +1698,7 @@ async def reset_password(
     }
 
 
-@router.post("/validate-reset-token", dependencies=[rate_limit_password_reset()])
+@router.post("/validate-reset-token", dependencies=[rate_limit_password_reset_token()])
 async def validate_reset_token(
     token_data: ValidateResetToken,
     db: AsyncSession = Depends(get_db),

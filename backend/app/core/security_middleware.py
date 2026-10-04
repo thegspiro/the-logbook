@@ -1051,6 +1051,27 @@ def rate_limit_password_reset():
     return Depends(_dependency)
 
 
+def rate_limit_password_reset_token():
+    """Rate limit for opening and submitting a reset link: 10 per 5 minutes.
+
+    A separate scope from the request budget above. Requesting, opening and
+    submitting used to share three requests, so one reload of the link or one
+    refused password locked a member out for five minutes (W03-7). The token is
+    384 random bits, so this budget guards against noise, not guessing.
+    """
+
+    async def _dependency(request: Request) -> None:
+        await check_rate_limit(
+            request,
+            max_requests=10,
+            window_seconds=300,
+            lockout_seconds=1800,
+            scope="password_reset_token",
+        )
+
+    return Depends(_dependency)
+
+
 def rate_limit_token_refresh():
     """More lenient rate limit for token refresh: 10 per 60 seconds."""
 
