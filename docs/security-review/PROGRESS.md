@@ -16,12 +16,33 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2896](https://github.com/thegspiro/the-logbook/pull/2896)** — branch
+`claude/security-review-security-audit-ip-pass5`, Feature 28 (Security,
+audit & IP), pass 5. Watchdog pickup: confirmed via `list_pull_requests`
+(state=open) that no `claude/security-review-*` PR existed before
+starting — PR #2892 (Feature 27, Integrations, pass 5) had already merged.
+0 fixed, 0 new findings — reviewed the three real code changes to this
+feature's files since pass 4's addendum (an org-scoped actor-username join
+in `audit_logs.py`, an anonymous-suggestion-box discard path in
+`error_logs.py`, and a snake_case request-body fix in the ip-security
+frontend service), all verified good. Re-confirmed all previously-open
+findings unchanged (SEC2-28-5, -6, -7, -10, the dead-detector-code note)
+and all previously-fixed ones intact. Gate: flake8/black/isort clean,
+`validate_migrations.py --strict` passed (509 revisions, no migration
+this pass), 268 scoped backend tests passed, frontend typecheck/lint
+clean. Subscribed for CI/review events.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 5, PR #2892, after it merged), preserved for history</summary>
+
 **None.** PR [#2892](https://github.com/thegspiro/the-logbook/pull/2892)
 (Feature 27, Integrations, pass 5) merged clean (`bf0a45a6`,
 "security(integrations): pass 5"). Watchdog pickup: confirmed via
 `list_pull_requests` (state=open) that no `claude/security-review-*` PR
 exists now, so this iteration proceeds to Feature 28 (Security, audit &
 IP) per the rotation table below, which already shows row 27 ✅.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 5, PR #2892, before it merged), preserved for history</summary>
