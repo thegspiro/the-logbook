@@ -5632,6 +5632,31 @@ Found driving W53 (`docs/workflow-review/W53-documents.md`, W53-4).
   - what deleting a non-empty folder does;
   - whether system folders may be renamed or moved.
 
+## Legal Documents — History, Attribution and Formatting Gaps (2026-10-04)
+
+Found driving W54 (`docs/workflow-review/W54-org-chart-and-legal.md`, W54-3 to
+W54-5). Publishing, reverting and the permission split all work; these three
+need an owner decision before anything is built.
+
+- **W54-3 — A revert leaves no trace on the screen.** After "Revert to the
+  built-in text", the published history reads "Replaced — published by …" and
+  stops. Nothing says when the built-in text came back, or who restored it;
+  only the audit log knows. So the history cannot do what the page says it is
+  for: show what members saw on a given date. Fixing it needs a revert row or
+  "replaced at / replaced by" columns, which is a migration.
+- **W54-4 — Edits to someone else's proposal are not attributed.** A
+  publisher may edit any draft. The card keeps "Sam Ortiz proposed this" with
+  no sign of the edit, and the published history names only the publisher.
+  - Option: an "edited by" column.
+  - Option: publishers comment on a proposal rather than editing it.
+- **W54-5 — Department text is plain paragraphs only.** A proposal starts
+  from the built-in text flattened to plain text, and `/privacy` renders
+  department text as paragraphs only. So headings become capitalised
+  paragraphs and lists become lines starting with "- ". This is by design: no
+  markup reaches a public page. The decision is whether to support a small,
+  safe set (headings, lists) so that adapting the built-in text does not make
+  the page look worse.
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area

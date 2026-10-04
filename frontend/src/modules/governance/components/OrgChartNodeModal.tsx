@@ -58,6 +58,14 @@ interface OrgChartNodeModalProps {
  */
 const EXTERNAL_HOLDER = '__external__';
 
+/**
+ * Deliberately loose, matching the server: it catches a typo like a missing
+ * "@", which would otherwise be published to every member as a dead mailto:
+ * link. The field is `type="email"`, but Save is a plain button rather than a
+ * form submit, so the browser's own check never runs.
+ */
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 let holderKeySeed = 0;
 const nextHolderKey = (): string => `holder-${(holderKeySeed += 1)}`;
 
@@ -235,6 +243,11 @@ export const OrgChartNodeModal: React.FC<OrgChartNodeModalProps> = ({
       setValidationError('Enter a position title.');
       return;
     }
+    const contactEmail = draft.contactEmail.trim();
+    if (contactEmail && !EMAIL_PATTERN.test(contactEmail)) {
+      setValidationError('Enter a contact email like training@department.org.');
+      return;
+    }
     setValidationError(null);
     await onSave({
       ...draft,
@@ -246,7 +259,7 @@ export const OrgChartNodeModal: React.FC<OrgChartNodeModalProps> = ({
         // would make the admin hunt for the empty row to get their save through.
         .filter((holder) => holder.userId || holder.displayName),
       responsibility: draft.responsibility.trim(),
-      contactEmail: draft.contactEmail.trim(),
+      contactEmail,
       contactPhone: draft.contactPhone.trim(),
     });
   };
