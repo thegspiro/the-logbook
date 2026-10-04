@@ -16,6 +16,45 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2917](https://github.com/thegspiro/the-logbook/pull/2917)**: branch
+`claude/security-review-cross-cutting-pass7`, Feature 00 (Cross-cutting
+baseline), pass 7, which is also rotation pass 7's first row.
+
+- **Result:** 0 fixes, 0 new findings, 0 flagged.
+- **Method:** all 13 sweep classes were re-run on head and on the pass-6
+  baseline tree (`1bf12e3de`, 1015 commits back), and every count delta was
+  read.
+- **Still open:** the outbound-URL TOCTOU, unchanged.
+- **Also in this PR:** the #2915 closure and the rotation reset to ⬜.
+- **Gate:** backend flake8/black/isort clean, `validate_migrations.py
+--strict` (511 revisions, single head), `check_route_permissions.py
+--strict` (244 routes), 141 backend guard tests, frontend typecheck and
+  lint clean, 25 frontend guard tests and 1 e2e route-integrity test.
+- **Watching:** subscribed for CI/review events.
+
+Full write-up:
+[`SEC-00-cross-cutting-baseline.md`](./SEC-00-cross-cutting-baseline.md) →
+Pass 7.
+
+<details>
+<summary>Superseded — prior Open PR note (PR #2915 merged; rotation pass 6 complete and reset — the state this PR opened from), preserved for history</summary>
+
+**None open from the prior pass.** PR
+[#2915](https://github.com/thegspiro/the-logbook/pull/2915) (Feature 34,
+Frontend shared, pass 7) merged as `532340e3` — docs-only, 0 fixes, 0 new
+findings. That completed rotation pass 6: all 35 rows (00–34) read ✅, so
+the table below is reset to ⬜ for pass 7, folded into this iteration's
+Feature 00 (Cross-cutting baseline) pass 7 PR per the 2026-09-15 precedent
+(a reset never ships as its own `PROGRESS.md`-only PR). Re-confirmed via the
+REST pulls listing (state=open) that no `claude/security-review-*` PR
+exists — only #2916, #2914, #2911 and #2910, none of this rotation. This
+iteration's PR number is recorded in a follow-up commit on the same branch.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 34, Frontend shared, pass 7, PR #2915, before it merged), preserved for history</summary>
+
 **PR [#2915](https://github.com/thegspiro/the-logbook/pull/2915)** —
 branch `claude/security-review-frontend-shared`, Feature 34 (Frontend
 shared), pass 7. 0 fixes, 0 new findings; both standing HIGH
@@ -34,6 +73,8 @@ required per CLAUDE.md), `validate_migrations.py --strict` passed (511
 revisions, single head), 19 + 311 backend tests passed. Subscribed for
 CI/review events. Full write-up:
 [`FE7-34-frontend-shared.md`](./FE7-34-frontend-shared.md).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 33, Core infrastructure, pass 5, PR #2906, merged, docs-only — nothing to record), preserved for history</summary>
@@ -17422,43 +17463,51 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 again (PRs #2128–#2382, see the Log for detail on each). Reset to ⬜ for
 pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 
+**Passes 4–5 complete (2026-09-07 → 2026-09-15):** each reset to ⬜ was
+recorded in the Log rather than here (2026-09-14, PR #2534 opening pass 5;
+2026-09-15, "Pass 5 complete; rotation reset to ⬜ for pass 6").
+
+**Pass 6 complete (2026-09-15 → 2026-10-04):** every row below went ✅
+again (PRs #2592–#2915, see the Log for detail on each). Reset to ⬜ for
+pass 7 — each row's prior PR is recorded in the Log, not repeated here.
+
 | #   | Feature                   | Prefix | Principal code                                                                                                                                  | Status |
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
-| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
-| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
-| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
-| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
-| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
-| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
-| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
-| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
-| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
-| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
-| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
-| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
-| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
-| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
-| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
-| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
-| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
-| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ✅     |
-| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ✅     |
+| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ⬜     |
+| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
+| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
+| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
+| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
+| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
+| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
+| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
+| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
+| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ⬜     |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
+| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
+| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
+| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
+| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
+| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
+| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
+| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
+| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
+| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
 re-runs the whole-codebase sweeps against whatever has landed since.
@@ -17466,6 +17515,62 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-04 — Pass 6 complete; rotation reset to ⬜ for pass 7; PR #2915 merge recorded; Feature 00 (Cross-cutting baseline, pass 7) — 0 fixed, 0 new findings — PR #2917 opened
+
+**Closure and reset.** PR [#2915](https://github.com/thegspiro/the-logbook/pull/2915)
+(Feature 34, Frontend shared, pass 7) merged as `532340e3`, docs-only. The
+**Open PR** row still named it. Every row in the Rotation table read ✅, so
+rotation pass 6 (2026-09-15 → 2026-10-04, PRs #2592–#2915) is complete.
+All 35 rows are reset to ⬜ for pass 7 and a summary line added above the
+table. Passes 4 and 5 had no summary line, so one line now covers both and
+points to their reset entries in this Log. Following the 2026-09-15
+precedent, the reset rides in the same PR as the next real review rather
+than shipping as a `PROGRESS.md`-only PR. Fetching `origin/main` turned up
+nothing unexpected, and the REST pulls listing (state=open) showed no
+`claude/security-review-*` PR, only #2916, #2914, #2911 and #2910 from other
+work.
+
+**Feature 00, pass 7.** This was a delta re-sweep against pass 6's merge
+`1bf12e3de`. The window is 1015 commits: 217 backend `app/` files changed
+(39 new), 67 new migrations and 16 new routes. The clone is shallow, so its
+history was deepened to 2026-09-14 to reach the baseline. All 13
+established sweep classes were re-run on head **and** on an exported copy of
+the baseline tree using the same method, so every count difference traces to
+a specific new site that was then read. Results:
+
+- **All 13 classes clean.** The only tracker delta (class 7) is two new
+  caches in `branding_service.py`, and both are bounded. `_asset_cache` is
+  an LRU capped at 40 entries, and its keys come from allowlisted icon
+  variants and splash geometries.
+- **Class 9 was under-reported in pass 6.** That write-up listed 2 of its
+  grep's 5 hits. The other 3 (`onboarding.py`, `inventory_service.py` and
+  `training_programs.py`) were present at baseline and are read and cleared
+  here.
+- **Class 13** is 0 unwrapped broad handlers on both trees. Every
+  `detail=str(e)` is in a narrow handler for a domain exception.
+- **One changed file in the outbound-transport family.**
+  `integration_services/base.py` moved mTLS from httpx's deprecated `cert=`
+  to a `verify=` SSL context, and certificate verification is preserved.
+- **Outbound-URL TOCTOU stays open.** It is still 7 sites with the same
+  disposition. `KNOWN_LIMITATIONS.md` is unchanged.
+
+**0 fixed, 0 new findings, 0 flagged.** Gate:
+
+- Backend: `flake8`, `black` (1862 files) and `isort` 9.0.1 all clean on
+  `app/`, `tests/` and `alembic/`.
+- `validate_migrations.py --strict`: 511 revisions, single head
+  `edf608b5a8ea`.
+- `check_route_permissions.py --strict`: 244 routes, 0 errors, 0 warnings.
+- 141 cross-cutting backend guard tests passed.
+- Frontend: `npm run typecheck` and `npm run lint` both clean.
+- Frontend structural guards: 25/25 across 6 files.
+  `mobile-route-integrity.spec.ts`: 1/1.
+
+The diff is docs-only, so the full suites were left to CI. Rotation row 00 is
+✅ and rows 01–34 are ⬜. Findings doc:
+`SEC-00-cross-cutting-baseline.md` → **Pass 7**. Next: Feature 01 (Auth &
+session lifecycle), once this PR merges.
 
 ### 2026-10-04 — Feature 34 (Frontend shared, pass 7) — 0 fixed, 0 flagged (new); both standing HIGH findings re-confirmed open
 
