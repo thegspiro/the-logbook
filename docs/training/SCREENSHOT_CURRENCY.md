@@ -1,5 +1,20 @@
 # Screenshot currency
 
+## Watchdog check-in: rebased onto main, one new commit audited, 2026-10-04
+
+This branch had drifted one commit behind `main` (merge-base `82f06f4ce` was
+about an hour stale). Rebased cleanly — the only intervening commit, PR #2898
+(`security(onboarding): pass 5`), touches only
+`docs/security-review/ONB3-30-onboarding.md` and
+`docs/security-review/PROGRESS.md`, neither of which this branch's own commits
+modify, so the rebase replayed with no conflicts.
+
+That commit touches no file under `frontend/` or `backend/`, so there is
+nothing in it for this sweep to check against the guides — a security-review
+pass over an already-shipped screen's permission logic, not a UI change.
+`audit_images.py --baseline scripts/screenshots/audit_baseline.txt` also
+reports no new findings (582 images checked). Nothing re-shot this pass.
+
 ## Watchdog check-in: rebased onto main, 13 new commits audited, 6 stale shots re-shot, 2026-10-04
 
 This branch had drifted 13 commits behind `main` (merge-base `9a3114d76`, through
