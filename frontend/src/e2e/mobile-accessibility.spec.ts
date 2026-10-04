@@ -226,7 +226,7 @@ test.describe('mobile accessibility', () => {
   // result and replace the assertion's report with a job timeout.
   test.describe.configure({ retries: 0 });
 
-  test('every feature meets WCAG AA in every theme and reflows to 320px', async ({ page }) => {
+  test('every feature meets WCAG AA in every theme and reflows to 320px @sweep', async ({ page }) => {
     // ~50 routes, each rendered in three themes with an axe run apiece. A clean
     // run is around ten minutes; the headroom is for CI, where this shares a
     // runner and a tighter cap was once reached by load alone.

@@ -60,7 +60,7 @@ test.describe('mobile dialogs', () => {
   // flake, and a re-run costs the shared `frontend-e2e` budget twice over.
   test.describe.configure({ retries: 0 });
 
-  test('every dialog is named, labelled and fits a phone', async ({ page }) => {
+  test('every dialog is named, labelled and fits a phone @sweep', async ({ page }) => {
     test.setTimeout(1_800_000);
 
     let granted: SignInState | null = null;

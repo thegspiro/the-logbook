@@ -54,7 +54,7 @@ interface Measurement {
 const fingerprintOf = (m: Measurement) => `${m.textLength}:${m.totalTargets}`;
 
 test.describe('mobile presentation', () => {
-  test('every feature is presentable at phone width', async ({ page }) => {
+  test('every feature is presentable at phone width @sweep', async ({ page }) => {
     // ~30 routes, each with a settle delay and a full render.
     test.setTimeout(400_000);
     await page.setViewportSize(PHONE);
