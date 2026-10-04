@@ -739,3 +739,30 @@ class TestMembershipTierEligibility:
             "lock would reintroduce the AB/BA ordering this test guards "
             "against — see the class docstring."
         )
+
+
+class TestRoomBookingLocking:
+    """EV-26: a room's overlap check is a read-then-write like a seat cap, over
+    a time range instead of a count. The booking lock is per organization (see
+    RoomBookingLock's docstring for why not per room), and update_event must
+    take it before its event-row lock so every path locks in one order.
+    ``test_room_booking_race.py`` drives both on real connections."""
+
+    def test_the_overlap_check_takes_the_lock_and_reads_locked(self):
+        from app.services.location_service import LocationService
+
+        source = _source_of(LocationService.check_overlapping_events)
+        assert "lock_room_bookings(" in source
+        assert "with_for_update()" in source, (
+            "Without a locking read the check answers from the request's "
+            "snapshot and misses a booking committed while it waited."
+        )
+
+    def test_update_event_locks_bookings_before_the_event_row(self):
+        source = _source_of(event_service.EventService.update_event)
+        assert source.index("lock_room_bookings(") < source.index(
+            "with_for_update()"
+        ), (
+            "update_event locks its event row; taking the booking lock after "
+            "it inverts the order every other booker uses."
+        )

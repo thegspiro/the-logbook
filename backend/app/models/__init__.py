@@ -259,7 +259,7 @@ from app.models.legal import (
     LegalDocumentType,
     LegalRevisionStatus,
 )
-from app.models.location import Location
+from app.models.location import Location, RoomBookingLock
 from app.models.mcp_service_key import McpServiceKey
 from app.models.medical_screening import (
     ScreeningRecord,
@@ -441,6 +441,7 @@ __all__ = [
     "EmailTemplateType",
     # Location models
     "Location",
+    "RoomBookingLock",
     # Public Portal models
     "PublicPortalConfig",
     "PublicPortalAPIKey",

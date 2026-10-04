@@ -841,6 +841,12 @@ class EventService:
         updated_by: Optional[UUID] = None,
     ) -> Optional[Event]:
         """Update an event"""
+        # The room booking lock comes before this event's row lock, on every
+        # update: the overlap check below takes it whenever the event has a
+        # room, and taking it there, after the event lock, would invert the
+        # order other bookers use. Two edits of events in the same room would
+        # then each hold an event and wait on the other (EV-26).
+        await LocationService(self.db).lock_room_bookings(str(organization_id))
         result = await self.db.execute(
             select(Event)
             .where(Event.id == str(event_id))

@@ -133,3 +133,34 @@ class Location(Base):
         if self.room_number:
             parts.append(f"Room {self.room_number}")
         return " - ".join(parts)
+
+
+class RoomBookingLock(Base):
+    """One row per organization, locked to serialize room booking decisions.
+
+    Booking a room is a read-then-write: look for an overlapping event, then
+    insert one. Two coordinators booking the same room both read "free"
+    unless the decision is serialized (CLAUDE.md pitfall #27, EV-26).
+
+    The lock is per organization rather than per room on purpose. The
+    overlap read has to be a locking read to see bookings committed since
+    the request's snapshot, and a locking range read over ``events`` takes
+    gap locks that two *different* rooms can share; per-room parents left
+    two bookings of different rooms deadlocking on each other's inserts, the
+    shape ``test_storefront_order_deadlock.py`` documents for the store.
+
+    A table of its own rather than the ``organizations`` row: every insert
+    into a table with an org foreign key takes a shared lock on that row, so
+    an exclusive lock there would stall every write in the department and
+    deadlock against paths, such as an RSVP, that lock an event first.
+    Nothing references this table, so locking it touches nothing else.
+    """
+
+    __tablename__ = "room_booking_locks"
+
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

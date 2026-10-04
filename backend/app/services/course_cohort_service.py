@@ -248,11 +248,14 @@ class CourseCohortService:
             # per-class warning.
             location_id = course_class.location_id
             if location_id:
+                # A preview books nothing, so it neither needs nor should hold
+                # the department's booking lock while it walks every class.
                 overlapping = await location_service.check_overlapping_events(
                     location_id=location_id,
                     organization_id=str(organization_id),
                     start_datetime=start_utc,
                     end_datetime=end_utc,
+                    for_booking=False,
                 )
                 if overlapping:
                     titles = ", ".join(f'"{e.title}"' for e in overlapping[:3])

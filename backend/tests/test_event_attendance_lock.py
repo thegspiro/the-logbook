@@ -72,6 +72,17 @@ def _event(finalized=True, **overrides):
     return SimpleNamespace(**fields)
 
 
+@pytest.fixture(autouse=True)
+def _no_room_booking_lock(monkeypatch):
+    """update_event takes the room-booking lock first (EV-26). It is a
+    statement these mocked sessions would otherwise have to answer, and it is
+    covered on a real database by test_room_booking_race.py."""
+    monkeypatch.setattr(
+        "app.services.location_service.LocationService.lock_room_bookings",
+        AsyncMock(),
+    )
+
+
 def _mock_db(*results):
     db = MagicMock()
     db.execute = AsyncMock(side_effect=list(results))

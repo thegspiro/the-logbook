@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**286 tables · 4718 columns · 931 foreign keys**
+**287 tables · 4720 columns · 932 foreign keys**
 
 ---
 
@@ -379,6 +379,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`locations`](#locations) | `Location` | 22 | Location model for managing physical spaces |
+| [`room_booking_locks`](#room_booking_locks) | `RoomBookingLock` | 2 | One row per organization, locked to serialize room booking decisions. |
 
 ### Mcp_Service_Key
 
@@ -5930,6 +5931,17 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - UNIQUE `uq_locations_facility_room_id` (`facility_room_id`)
 
+### `room_booking_locks`
+
+**RoomBookingLock** · `app/models/location.py`
+
+> One row per organization, locked to serialize room booking decisions. Booking a room is a read-then-write: look for an overlapping event, then insert one. Two coordinators booking the same room both read "free" unless the decision is serialized (CLAUDE.md pitfall #27, EV-26). The lock is per organization rather than per room on purpose. The overlap read has to be a locking read to see bookings committed since the request's snapshot, and a locking range read over ``events`` takes gap locks that two *different* rooms can share; per-room parents left two bookings of different rooms deadlocking on each other's inserts, the shape ``test_storefront_order_deadlock.py`` documents for the store. A table of its own rather than the ``organizations`` row: every insert into a table with an org foreign key takes a shared lock on that row, so an exclusive lock there would stall every write in the department and deadlock against paths, such as an RSVP, that lock an event first. Nothing references this table, so locking it touches nothing else.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `organization_id` | VARCHAR(36) | no | PK, FK |  | → `organizations.id` ON DELETE CASCADE |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+
 ## Mcp_Service_Key
 
 ### `mcp_service_keys`
@@ -10315,7 +10327,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (232 references)
+### → `organizations` (233 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10491,6 +10503,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `reorder_receipts` | `organization_id` | CASCADE | no |
 | `reorder_requests` | `organization_id` | CASCADE | no |
 | `return_requests` | `organization_id` | CASCADE | no |
+| `room_booking_locks` | `organization_id` | CASCADE | no |
 | `saved_ballot_templates` | `organization_id` | CASCADE | no |
 | `saved_reports` | `organization_id` | CASCADE | no |
 | `scheduled_emails` | `organization_id` | CASCADE | no |
