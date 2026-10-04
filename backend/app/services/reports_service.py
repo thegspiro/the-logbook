@@ -44,6 +44,7 @@ from app.services.training_compliance import (
     member_join_date,
     requirement_applies_to_user,
 )
+from app.utils.apparatus_ref import resolve_apparatus_labels
 from app.utils.hours import (
     hours_from_minutes,
     round_hours_exact,
@@ -1488,6 +1489,12 @@ class ReportsService:
                 # a call, which is normal and not an error to reconcile away.
                 "by_apparatus_runs": unit_runs,
             },
+            # The run counts are keyed by apparatus id, which resolves against
+            # either apparatus table (see utils/apparatus_ref). A unit since
+            # deleted has no label here and the screen says so.
+            "apparatus_labels": await resolve_apparatus_labels(
+                self.db, unit_runs.keys(), organization_id
+            ),
             # A slug is a storage key, not something to show an officer.
             # Retired types are in here too, so a report covering last year
             # still labels a type the department has since stopped offering.

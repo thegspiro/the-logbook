@@ -2215,3 +2215,36 @@ class TestCloseoutCallStepBelongsToCountOnlyTracking:
             str(shift.id)
         )
         assert recorded == 3
+
+
+class TestCountOnlyReportUnitRuns:
+    """The per-unit run counts reach the screen with the unit's name.
+
+    ``by_apparatus_runs`` is keyed by apparatus id, which is meaningless to an
+    officer; the report serves the labels beside it (SCHED-16).
+    """
+
+    async def test_serves_a_label_for_each_unit_with_runs(self):
+        from app.services.reports_service import ReportsService
+
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=_scalars([]))
+        call_service = MagicMock()
+        call_service.apparatus_run_counts = AsyncMock(
+            return_value={"app-1": 3, "app-2": 1}
+        )
+        call_service.type_labels = AsyncMock(return_value={})
+
+        with patch(
+            "app.services.reports_service.resolve_apparatus_labels",
+            AsyncMock(return_value={"app-1": "E1"}),
+        ) as labels:
+            report = await ReportsService(db)._generate_call_volume_from_counts(
+                "org-1", date(2026, 8, 1), date(2026, 8, 31), call_service
+            )
+
+        assert report["summary"]["by_apparatus_runs"] == {"app-1": 3, "app-2": 1}
+        assert report["apparatus_labels"] == {"app-1": "E1"}
+        ids = set(labels.await_args.args[1])
+        assert ids == {"app-1", "app-2"}
+        assert labels.await_args.args[2] == "org-1"

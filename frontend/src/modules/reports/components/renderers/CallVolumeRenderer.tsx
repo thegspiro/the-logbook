@@ -25,6 +25,10 @@ export const CallVolumeRenderer: React.FC<Props> = ({ data }) => {
   const totalLabel = unitResponses ? 'Unit Responses' : 'Total Calls';
   const perDayLabel = unitResponses ? 'Avg Responses/Day' : 'Avg Calls/Day';
   const peakLabel = unitResponses ? 'Peak Responses' : 'Peak Calls';
+  // Per-unit runs are the figure an apparatus-replacement case needs. They
+  // are listed apart from the totals because they sum past them whenever two
+  // units share a call.
+  const unitRuns = Object.entries(summary.by_apparatus_runs ?? {}).sort(([, a], [, b]) => b - a);
 
   const columns = [
     { key: 'date', header: 'Date' },
@@ -77,6 +81,20 @@ export const CallVolumeRenderer: React.FC<Props> = ({ data }) => {
         </div>
       )}
 
+      {unitRuns.length > 0 && (
+        <div className="mb-4">
+          <p className="text-theme-text-muted mb-1 text-xs">Runs by Unit:</p>
+          <div className="flex flex-wrap gap-2">
+            {unitRuns.map(([id, count]) => (
+              <span key={id} className="bg-theme-surface text-theme-text-secondary rounded-sm px-2 py-1 text-xs">
+                {data.apparatus_labels?.[id] || 'Removed unit'}:{' '}
+                <span className="text-theme-text-primary font-semibold">{count}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       <ReportTable
         rows={data.entries as unknown as Array<Record<string, unknown>>}
         columns={columns}
@@ -114,7 +132,10 @@ export function getCallVolumeExportData(data: CallVolumeReport) {
     return row;
   });
 
-  const columns = [{ key: 'date', header: 'Date' }, { key: 'total_calls', header: 'Total Calls' }, ...typeColumns];
+  // Same naming rule as the on-screen tiles: the export is what reaches a
+  // grant officer, so it must not call unit responses "calls".
+  const totalHeader = data.counts_unit_responses === true ? 'Unit Responses' : 'Total Calls';
+  const columns = [{ key: 'date', header: 'Date' }, { key: 'total_calls', header: totalHeader }, ...typeColumns];
 
   return { rows, columns };
 }

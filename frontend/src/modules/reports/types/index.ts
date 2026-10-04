@@ -430,6 +430,11 @@ export interface CallVolumeSummary {
   busiest_day: string;
   busiest_day_count: number;
   by_type_totals: Record<string, number>;
+  /**
+   * Runs per apparatus id, served only by the count-only source. These are
+   * unit responses: they legitimately sum to more than `total_calls`.
+   */
+  by_apparatus_runs?: Record<string, number>;
 }
 
 export interface CallVolumeReport {
@@ -453,6 +458,8 @@ export interface CallVolumeReport {
    * count-only source, where nothing yet links two units to one incident.
    */
   counts_unit_responses?: boolean;
+  /** Apparatus id to unit number or name, for `summary.by_apparatus_runs`. */
+  apparatus_labels?: Record<string, string>;
 }
 
 // ============================================================================
