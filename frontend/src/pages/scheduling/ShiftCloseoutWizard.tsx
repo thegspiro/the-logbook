@@ -25,8 +25,16 @@ import { schedulingService } from '../../modules/scheduling/services/api';
 import type { CloseoutState, CloseoutAttendanceEntry, MemberCallCredit } from '../../modules/scheduling/types';
 import { formatForDateTimeInput, localToUTC } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
-import { UNCATEGORISED, deriveCallTotal, hoursBetween, num } from './closeoutMath';
-import { formatHours, sumHoursToQuarter } from '../../utils/hoursFormatting';
+import {
+  MAX_ATTENDANCE_HOURS,
+  UNCATEGORISED,
+  addHoursLocal,
+  deriveCallTotal,
+  hoursBetween,
+  num,
+  parseHoursEntry,
+} from './closeoutMath';
+import { formatHours, roundHoursToQuarter, sumHoursToQuarter } from '../../utils/hoursFormatting';
 
 interface ShiftCloseoutWizardProps {
   shiftId: string;
@@ -37,6 +45,13 @@ interface ShiftCloseoutWizardProps {
   outstandingChecks: number;
   /** Whether those checks block close-out for this department. */
   requireChecks: boolean;
+  /**
+   * The shift's scheduled start and end (UTC ISO). Typed hours for a member
+   * who never checked in are counted from the start, matching what the old
+   * checklist's manual-hours field stored; the end backs the one-tap fill.
+   */
+  shiftStart: string;
+  shiftEnd?: string | null | undefined;
   onCancel: () => void;
   onFinalized: () => void;
 }
@@ -48,6 +63,15 @@ interface MemberDraft {
   inLocal: string;
   outLocal: string;
   missingCheckout: boolean;
+  /** Nothing at all was recorded — assigned, but never checked in. */
+  missingCheckIn: boolean;
+  /**
+   * What the officer is typing in the Hours box, or null when the box shows
+   * the hours derived from the two times. Held separately because the
+   * derived figure cannot represent a half-typed "11." — re-deriving on each
+   * keystroke would eat the decimal point.
+   */
+  hoursDraft: string | null;
   /**
    * Always a concrete number, seeded from the apparatus count. Held as a
    * string so the field shows exactly what state holds — rendering a
@@ -74,6 +98,8 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
   tz,
   outstandingChecks,
   requireChecks,
+  shiftStart,
+  shiftEnd,
   onCancel,
   onFinalized,
 }) => {
@@ -143,7 +169,12 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
             name: m.user_name,
             inLocal: formatForDateTimeInput(m.checked_in_at, tz),
             outLocal: formatForDateTimeInput(m.checked_out_at, tz),
-            missingCheckout: m.missing_checkout,
+            // Kept from the local copy once known: after step 1 saves, the
+            // server holds the officer's times and no longer reports the gap,
+            // and the row would stop saying why its times were typed by hand.
+            missingCheckout: held?.missingCheckout ?? m.missing_checkout,
+            missingCheckIn: held?.missingCheckIn ?? !m.checked_in_at,
+            hoursDraft: null,
             credit: String(Math.min(credit, seededTotal)),
             creditTouched: held?.creditTouched ?? false,
           };
@@ -178,6 +209,15 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
     () => sumHoursToQuarter(members.map((m) => hoursBetween(m.inLocal, m.outLocal))),
     [members]
   );
+  const shiftStartLocal = useMemo(() => formatForDateTimeInput(shiftStart, tz), [shiftStart, tz]);
+  const shiftEndLocal = useMemo(() => formatForDateTimeInput(shiftEnd, tz), [shiftEnd, tz]);
+  const noHoursCount = members.filter((m) => hoursBetween(m.inLocal, m.outLocal) === 0).length;
+  // An hours entry that cannot be recorded leaves the times untouched, so
+  // letting Next through would save the old times under a box showing the
+  // new figure.
+  const hasInvalidHours = members.some(
+    (m) => m.hoursDraft !== null && m.hoursDraft.trim() !== '' && parseHoursEntry(m.hoursDraft) === null
+  );
   const callTotal = useMemo(() => deriveCallTotal(counts), [counts]);
   const totalOrZero = callTotal ?? 0;
 
@@ -191,10 +231,51 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
   const setMemberField = (userId: string, field: 'inLocal' | 'outLocal' | 'credit', value: string) => {
     setMembers((prev) =>
       prev.map((m) =>
-        m.userId === userId ? { ...m, [field]: value, creditTouched: m.creditTouched || field === 'credit' } : m
+        m.userId === userId
+          ? {
+              ...m,
+              [field]: value,
+              creditTouched: m.creditTouched || field === 'credit',
+              // A time edit supersedes a typed figure; the box re-derives.
+              hoursDraft: field === 'credit' ? m.hoursDraft : null,
+            }
+          : m
       )
     );
   };
+
+  /**
+   * Record hours for a member rather than times.
+   *
+   * The span is stored as times either way — the server derives duration
+   * from them — so typed hours become an end time: counted from the member's
+   * check-in, or from the shift's start when they never checked in.
+   */
+  const setMemberHours = (userId: string, value: string) => {
+    setMembers((prev) =>
+      prev.map((m) => {
+        if (m.userId !== userId) return m;
+        const hours = parseHoursEntry(value);
+        const start = m.inLocal || shiftStartLocal;
+        if (hours === null || !start) return { ...m, hoursDraft: value };
+        return { ...m, hoursDraft: value, inLocal: start, outLocal: addHoursLocal(start, hours, tz) };
+      })
+    );
+  };
+
+  /** One tap for the commonest case: on until the shift ended. */
+  const fillToShiftEnd = (userId: string) => {
+    setMembers((prev) =>
+      prev.map((m) =>
+        m.userId === userId
+          ? { ...m, inLocal: m.inLocal || shiftStartLocal, outLocal: shiftEndLocal, hoursDraft: null }
+          : m
+      )
+    );
+  };
+
+  const derivedHoursText = (m: MemberDraft): string =>
+    m.inLocal && m.outLocal ? String(roundHoursToQuarter(hoursBetween(m.inLocal, m.outLocal))) : '';
 
   const saveAttendance = async () => {
     setSaving(true);
@@ -310,39 +391,110 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
       {step === 1 && (
         <div className="space-y-3">
           <h4 className="text-theme-text-primary text-sm font-semibold">When was everyone on?</h4>
-          <p className="text-theme-text-muted text-xs">Taken from check-in. Change anyone whose times were off.</p>
+          <p className="text-theme-text-muted text-xs">
+            Taken from check-in. Change anyone whose times were off, or type their hours if they forgot to check in or
+            out.
+          </p>
           <div className="divide-theme-surface-border divide-y">
-            {members.map((m) => (
-              <div key={m.userId} className="flex flex-wrap items-center gap-2 py-2">
-                <div className="min-w-0 flex-1">
-                  <p className="text-theme-text-primary truncate text-sm">{m.name}</p>
-                  {m.missingCheckout && (
-                    <p className="text-xs text-amber-600 dark:text-amber-400">no check-out recorded</p>
+            {members.map((m) => {
+              const unresolved = !m.inLocal || !m.outLocal;
+              const flag = m.missingCheckIn
+                ? 'no check-in recorded'
+                : m.missingCheckout
+                  ? 'no check-out recorded'
+                  : null;
+              const hoursInvalid =
+                m.hoursDraft !== null && m.hoursDraft.trim() !== '' && parseHoursEntry(m.hoursDraft) === null;
+              // Only offered while it would produce a real span: a member who
+              // checked in after the scheduled end has nothing to fill to.
+              const canFillToEnd =
+                flag !== null && shiftEndLocal !== '' && (m.inLocal || shiftStartLocal) < shiftEndLocal;
+              const fillLabel = m.inLocal ? 'Until shift end' : 'Full shift';
+              return (
+                <div key={m.userId} className="space-y-2 py-3">
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+                    <p className="text-theme-text-primary min-w-0 truncate text-sm font-medium">{m.name}</p>
+                    {flag && (
+                      <p className="text-xs">
+                        <span className={unresolved ? 'text-amber-700 dark:text-amber-400' : 'text-theme-text-muted'}>
+                          {flag}
+                        </span>
+                        {!unresolved && <span className="text-theme-text-muted"> · entered at close-out</span>}
+                      </p>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_6rem]">
+                    <label className="block min-w-0">
+                      <span className="text-theme-text-muted mb-0.5 block text-xs">Start</span>
+                      <input
+                        type="datetime-local"
+                        className={`${inputClass} w-full`}
+                        value={m.inLocal}
+                        aria-label={`Start time for ${m.name}`}
+                        onChange={(e) => setMemberField(m.userId, 'inLocal', e.target.value)}
+                      />
+                    </label>
+                    <label className="block min-w-0">
+                      <span className="text-theme-text-muted mb-0.5 block text-xs">End</span>
+                      <input
+                        type="datetime-local"
+                        className={`${inputClass} w-full`}
+                        value={m.outLocal}
+                        aria-label={`End time for ${m.name}`}
+                        onChange={(e) => setMemberField(m.userId, 'outLocal', e.target.value)}
+                      />
+                    </label>
+                    <label className="col-span-2 block sm:col-span-1">
+                      <span className="text-theme-text-muted mb-0.5 block text-xs">Hours</span>
+                      <input
+                        type="number"
+                        min={0.25}
+                        max={MAX_ATTENDANCE_HOURS}
+                        step={0.25}
+                        inputMode="decimal"
+                        placeholder="—"
+                        className={`${inputClass} w-full text-right tabular-nums`}
+                        value={m.hoursDraft ?? derivedHoursText(m)}
+                        aria-label={`Hours for ${m.name}`}
+                        aria-invalid={hoursInvalid || undefined}
+                        onChange={(e) => setMemberHours(m.userId, e.target.value)}
+                        // A valid entry snaps to what the times now say; an
+                        // invalid one stays put so its message stays with it.
+                        onBlur={() => {
+                          if (!hoursInvalid) {
+                            setMembers((prev) =>
+                              prev.map((x) => (x.userId === m.userId ? { ...x, hoursDraft: null } : x))
+                            );
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                  {hoursInvalid && (
+                    <p className="text-xs text-red-700 dark:text-red-300" role="alert">
+                      Enter between 0.25 and {MAX_ATTENDANCE_HOURS} hours.
+                    </p>
+                  )}
+                  {canFillToEnd && (
+                    <button
+                      type="button"
+                      onClick={() => fillToShiftEnd(m.userId)}
+                      className="text-xs font-medium text-violet-700 hover:underline dark:text-violet-300"
+                      aria-label={`${fillLabel} for ${m.name}`}
+                    >
+                      {fillLabel}
+                    </button>
                   )}
                 </div>
-                <input
-                  type="datetime-local"
-                  className={inputClass}
-                  value={m.inLocal}
-                  aria-label={`Start time for ${m.name}`}
-                  onChange={(e) => setMemberField(m.userId, 'inLocal', e.target.value)}
-                />
-                <input
-                  type="datetime-local"
-                  className={inputClass}
-                  value={m.outLocal}
-                  aria-label={`End time for ${m.name}`}
-                  onChange={(e) => setMemberField(m.userId, 'outLocal', e.target.value)}
-                />
-                <span className="text-theme-text-secondary w-12 text-right text-xs tabular-nums">
-                  {formatHours(hoursBetween(m.inLocal, m.outLocal))}
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </div>
-          <div className="border-theme-surface-border text-theme-text-secondary flex justify-between border-t pt-2 text-xs">
+          <div className="border-theme-surface-border text-theme-text-secondary flex flex-wrap justify-between gap-x-2 border-t pt-2 text-xs">
             <span>
               {members.length} member{members.length === 1 ? '' : 's'}
+              {noHoursCount > 0 && (
+                <span className="text-amber-700 dark:text-amber-400"> · {noHoursCount} with no hours</span>
+              )}
             </span>
             {/* "Combined", not "total": summed across the crew it is several
                 times the length of the shift and reads as an error without it. */}
@@ -416,9 +568,15 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
               <div key={m.userId} className="flex items-center gap-2 py-2">
                 <div className="min-w-0 flex-1">
                   <p className="text-theme-text-primary truncate text-sm">{m.name}</p>
-                  <p className="text-theme-text-muted text-xs tabular-nums">
-                    {formatHours(hoursBetween(m.inLocal, m.outLocal))}h
-                  </p>
+                  {hoursBetween(m.inLocal, m.outLocal) > 0 ? (
+                    <p className="text-theme-text-muted text-xs tabular-nums">
+                      {formatHours(hoursBetween(m.inLocal, m.outLocal))}h
+                    </p>
+                  ) : (
+                    // Finalizing credits nothing for this member; say so here,
+                    // where it can still be fixed by stepping back.
+                    <p className="text-xs text-amber-700 dark:text-amber-400">no hours recorded</p>
+                  )}
                 </div>
                 <input
                   type="number"
@@ -508,7 +666,7 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
         </button>
         <button
           type="button"
-          disabled={saving || (step === 3 && overrideBlocked)}
+          disabled={saving || (step === 1 && hasInvalidHours) || (step === 3 && overrideBlocked)}
           onClick={() => {
             if (step === 1) void saveAttendance();
             else if (step === 2) void saveCalls();

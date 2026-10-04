@@ -31,7 +31,8 @@ import { useTimezone } from '../../hooks/useTimezone';
 import { addCalendarDays, getTodayLocalDate } from '../../utils/dateFormatting';
 import { enumLabel } from '../../utils/displayValue';
 import { getErrorMessage } from '../../utils/errorHandling';
-import { DEFAULT_CALL_TYPE_OPTIONS } from '../../modules/scheduling/constants/shiftReportConstants';
+import { labelCallTypeChoices } from '../../modules/scheduling/components/callTypeChoices';
+import { useOrgCallTypes } from '../../modules/scheduling/hooks/useCallTypeLabels';
 import { StarRating } from '../../modules/scheduling/components/StarRating';
 import { Breadcrumbs } from '../../components/ux';
 import type { BatchShiftReportCreate, CrewMemberEvaluation, TrainingModuleConfig } from '../../types/training';
@@ -69,6 +70,7 @@ export const ManualShiftReportPage: React.FC = () => {
   const [endTime, setEndTime] = useState('');
   const [callsResponded, setCallsResponded] = useState(0);
   const [callTypes, setCallTypes] = useState<string[]>([]);
+  const orgCallTypes = useOrgCallTypes();
   const [narrative, setNarrative] = useState('');
 
   // Crew
@@ -262,7 +264,9 @@ export const ManualShiftReportPage: React.FC = () => {
     }
   };
 
-  const callTypeOptions = config?.shift_review_call_types ?? DEFAULT_CALL_TYPE_OPTIONS;
+  // The department's one call-type list, by label: a report not linked to a
+  // shift stores its call types as text.
+  const callTypeOptions = labelCallTypeChoices(orgCallTypes, callTypes).map((c) => c.value);
   const includeTraining = config?.shift_reports_include_training ?? true;
 
   return (

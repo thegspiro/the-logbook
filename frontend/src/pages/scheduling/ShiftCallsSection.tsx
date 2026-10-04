@@ -26,6 +26,8 @@ import { schedulingService } from '../../modules/scheduling/services/api';
 import type { ShiftCallRecord } from '../../modules/scheduling/types';
 import { formatDateTime, localToUTC } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
+import { labelCallTypeChoices } from '../../modules/scheduling/components/callTypeChoices';
+import { useOrgCallTypes } from '../../modules/scheduling/hooks/useCallTypeLabels';
 
 interface ShiftCallsSectionProps {
   shiftId: string;
@@ -101,6 +103,7 @@ export const ShiftCallsSection: React.FC<ShiftCallsSectionProps> = ({ shiftId, c
   // null = form hidden, 'new' = adding, otherwise the id of the call being edited
   const [formMode, setFormMode] = useState<string | null>(null);
   const [form, setForm] = useState<CallForm>(emptyForm);
+  const orgCallTypes = useOrgCallTypes();
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -190,14 +193,23 @@ export const ShiftCallsSection: React.FC<ShiftCallsSectionProps> = ({ shiftId, c
           <label htmlFor="call-type" className="text-theme-text-secondary mb-1 block text-xs font-medium">
             Incident Type *
           </label>
-          <input
+          {/* The department's call-type list, by label. incident_type stays
+              text because the NFIRS/NEMSIS exports and the ePCR import read
+              and write it as text; a call logged before this picker keeps its
+              own wording as an option so editing it does not change it. */}
+          <select
             id="call-type"
-            type="text"
             value={form.incident_type}
             onChange={(e) => setForm((p) => ({ ...p, incident_type: e.target.value }))}
-            placeholder="e.g. Structure fire, EMS, MVA"
             className={inputCls}
-          />
+          >
+            <option value="">Select a call type…</option>
+            {labelCallTypeChoices(orgCallTypes, form.incident_type ? [form.incident_type] : []).map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
+          </select>
         </div>
         <div>
           <label htmlFor="call-number" className="text-theme-text-secondary mb-1 block text-xs font-medium">
