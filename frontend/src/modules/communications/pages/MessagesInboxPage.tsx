@@ -76,7 +76,7 @@ const MessagesInboxPage: React.FC = () => {
           <Megaphone className="h-6 w-6" aria-hidden="true" />
           Messages
         </h1>
-        <label className="text-theme-text-secondary flex items-center gap-2 text-sm max-md:min-h-[44px]">
+        <label className="text-theme-text-secondary touch:min-h-[44px] flex items-center gap-2 text-sm">
           <input
             type="checkbox"
             checked={includeRead}
@@ -109,7 +109,7 @@ const MessagesInboxPage: React.FC = () => {
             <li key={msg.id} className={`card ${msg.is_read ? '' : 'border-l-theme-alert-info-icon border-l-4'}`}>
               <Link
                 to={`/messages/${msg.id}`}
-                className="flex w-full items-start justify-between gap-3 p-4 text-left max-md:min-h-[44px]"
+                className="touch:min-h-[44px] flex w-full items-start justify-between gap-3 p-4 text-left"
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
@@ -155,7 +155,7 @@ const MessagesInboxPage: React.FC = () => {
             type="button"
             onClick={() => void loadMore()}
             disabled={isLoadingMore}
-            className="btn-secondary inline-flex items-center gap-2 px-4 py-2 disabled:cursor-not-allowed disabled:opacity-60 max-md:min-h-[44px]"
+            className="btn-secondary touch:min-h-[44px] inline-flex items-center gap-2 px-4 py-2 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isLoadingMore && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
             {isLoadingMore ? 'Loading…' : 'Load more messages'}

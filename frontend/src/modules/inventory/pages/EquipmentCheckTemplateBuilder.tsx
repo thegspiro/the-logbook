@@ -3513,7 +3513,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <div className="flex items-center gap-1">
               <button
                 type="button"
-                className="rounded px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 max-md:min-h-[44px] max-md:min-w-[44px] dark:text-blue-400 dark:hover:bg-blue-900/20"
+                className="touch:min-h-[44px] touch:min-w-[44px] rounded px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
                 onClick={() => {
                   const job = quickAddJobs.current[item.clientKey ?? ''];
                   if (job) runQuickAdd(job);
@@ -3523,7 +3523,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               </button>
               <button
                 type="button"
-                className="rounded px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 max-md:min-h-[44px] max-md:min-w-[44px] dark:text-red-400 dark:hover:bg-red-900/20"
+                className="touch:min-h-[44px] touch:min-w-[44px] rounded px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
                 onClick={() => {
                   delete quickAddJobs.current[item.clientKey ?? ''];
                   replaceQuickAddItem(compKey, item.clientKey ?? '', null);
@@ -5470,7 +5470,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               type="button"
               onClick={() => void handleSave(true)}
               disabled={saving || !publishReady}
-              className="flex min-h-10 items-center gap-2 rounded-lg bg-red-800 px-3.5 text-sm font-semibold text-white transition-colors hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50 max-md:min-h-11 max-md:min-w-11"
+              className="touch:min-h-11 touch:min-w-11 flex min-h-10 items-center gap-2 rounded-lg bg-red-800 px-3.5 text-sm font-semibold text-white transition-colors hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <CheckCircle2 className="h-4 w-4" /> Publish
             </button>

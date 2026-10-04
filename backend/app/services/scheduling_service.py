@@ -9006,7 +9006,22 @@ class SchedulingService:
         and ratings to complete each report. Returns the number of drafts
         created.
         """
-        from app.services.shift_completion_service import ShiftCompletionService
+        from app.services.shift_completion_service import (
+            ShiftCompletionService,
+            reports_filed_by_shift_officer,
+        )
+
+        # Under officer-on-the-rig authorship every draft belongs to the
+        # shift's officer — not the finalizer, not a slot's evaluator — since
+        # only they may complete it. No officer assigned means nobody may.
+        officer_only = await reports_filed_by_shift_officer(self.db, organization_id)
+        if officer_only and not shift.shift_officer_id:
+            logger.info(
+                "No draft reports for shift {}: the department files reports by "
+                "Shift Officer and none is assigned",
+                shift.id,
+            )
+            return 0
 
         att_result = await self.db.execute(
             select(ShiftAttendance).where(ShiftAttendance.shift_id == str(shift.id))
@@ -9088,6 +9103,22 @@ class SchedulingService:
                 officer_id = finalized_by_user_id
                 if slot and slot.get("evaluator_id"):
                     officer_id = str(slot["evaluator_id"])
+                if officer_only:
+                    officer_id = str(shift.shift_officer_id)
+
+                # A trainee who closed out their own shift (and has no
+                # evaluator named on their slot) would be drafted a report
+                # about themselves, which create_report refuses. Skip it here
+                # rather than logging that refusal as a failure; another
+                # officer can still file one.
+                if str(officer_id) == str(user_id):
+                    logger.info(
+                        "No draft report for trainee {} on shift {}: they "
+                        "finalized it themselves",
+                        user_id,
+                        shift.id,
+                    )
+                    continue
 
                 att = attendee_by_user.get(user_id)
                 hours = 0.0

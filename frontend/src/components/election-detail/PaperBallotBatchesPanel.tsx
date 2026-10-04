@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle, Clock, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Clock, XCircle } from 'lucide-react';
 import type { ManualBallotBatch } from '../../types/election';
 import { formatDateTime } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
@@ -78,6 +78,13 @@ const PaperBallotBatchesPanel: React.FC<PaperBallotBatchesPanelProps> = ({
                   <span className="text-theme-text-primary text-sm font-medium">
                     {batch.total_ballots} ballot{batch.total_ballots !== 1 ? 's' : ''}
                   </span>
+                  {/* Shown on pending and confirmed cards alike: the officers
+                      attesting are confirming an implausible count (W50-66). */}
+                  {batch.over_count_override && (
+                    <span className="badge inline-flex items-center gap-1 bg-amber-500/10 text-amber-700 dark:text-amber-300">
+                      <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" /> Over-count override
+                    </span>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   {canAttest && (
@@ -116,6 +123,14 @@ const PaperBallotBatchesPanel: React.FC<PaperBallotBatchesPanelProps> = ({
                 {batch.recorded_at ? ` on ${formatDateTime(batch.recorded_at, tz)}` : ''}
                 {batch.notes ? ` — ${batch.notes}` : ''}
               </div>
+
+              {batch.status === 'voided' && (
+                <div className="mt-1 text-xs text-red-700 dark:text-red-300">
+                  Voided by {batch.voided_by_name ?? 'unknown'}
+                  {batch.voided_at ? ` (${formatDateTime(batch.voided_at, tz)})` : ''}
+                  {batch.void_reason ? ` — ${batch.void_reason}` : ''}
+                </div>
+              )}
 
               {batch.attestations.length > 0 && (
                 <div className="text-theme-text-muted mt-1 text-xs">

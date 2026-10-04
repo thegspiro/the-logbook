@@ -160,14 +160,16 @@ const ShiftReportPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div data-page-main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
+      <div data-page-main className="mx-auto max-w-4xl py-8">
         {/* Header */}
         <div className="mb-6 flex items-center space-x-4">
           <button
+            type="button"
             onClick={() => void navigate('/training/officer')}
-            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded-lg p-2"
+            aria-label="Back to Training Dashboard"
+            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface btn-icon"
           >
-            <ArrowLeft className="h-5 w-5" />
+            <ArrowLeft className="h-5 w-5" aria-hidden="true" />
           </button>
           <div className="flex-1">
             <h1 className="text-theme-text-primary flex items-center space-x-2 text-2xl font-bold">

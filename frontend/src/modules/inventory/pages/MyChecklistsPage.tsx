@@ -463,7 +463,7 @@ export const MyChecklistsPage: React.FC = () => {
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => void handleOpenTemplatePicker()}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-900 max-md:min-h-[44px] max-md:min-w-[44px]"
+            className="touch:min-h-[44px] touch:min-w-[44px] inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-900"
           >
             <Play className="h-3.5 w-3.5" aria-hidden="true" />
             Unscheduled checklist
@@ -508,7 +508,7 @@ export const MyChecklistsPage: React.FC = () => {
                   key={value}
                   onClick={() => setTimingFilter(value)}
                   aria-pressed={timingFilter === value}
-                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors sm:px-2.5 sm:py-1 ${
+                  className={`touch:min-h-11 touch:min-w-11 rounded-md px-3 py-1.5 text-xs font-medium transition-colors sm:px-2.5 sm:py-1 ${
                     timingFilter === value
                       ? 'bg-red-800 text-white'
                       : 'text-theme-text-muted hover:text-theme-text-primary'
@@ -665,7 +665,7 @@ export const MyChecklistsPage: React.FC = () => {
                       ) : (
                         <button
                           onClick={() => void handleStartCheck(checklist)}
-                          className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                          className={`touch:min-h-11 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                             isDueNow || isStarted
                               ? 'bg-red-800 text-white hover:bg-red-900'
                               : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover border'

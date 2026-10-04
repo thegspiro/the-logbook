@@ -13,19 +13,6 @@ export const DEFAULT_SKILLS = [
   'Apparatus check-off',
 ];
 
-export const DEFAULT_CALL_TYPE_OPTIONS = [
-  'Structure Fire',
-  'Vehicle Fire',
-  'Brush/Wildland',
-  'EMS/Medical',
-  'Motor Vehicle Accident',
-  'Hazmat',
-  'Rescue/Extrication',
-  'Alarm Investigation',
-  'Public Assist',
-  'Other',
-];
-
 export const SKILL_SCORE_LABELS: Record<number, string> = {
   1: 'Needs work',
   2: 'Developing',
@@ -48,20 +35,6 @@ export const REVIEW_STATUS_STYLES: Record<string, { bg: string; text: string; la
   approved: { bg: 'bg-green-500/10', text: 'text-green-700 dark:text-green-400', label: 'Approved' },
   flagged: { bg: 'bg-red-500/10', text: 'text-red-700 dark:text-red-400', label: 'Flagged' },
 };
-
-export const SAMPLE_CALL_TYPES = [
-  'Structure Fire',
-  'Vehicle Fire',
-  'Brush/Wildland',
-  'EMS/Medical',
-  'Motor Vehicle Accident',
-  'Hazmat',
-  'Rescue/Extrication',
-  'Alarm Investigation',
-  'Water Rescue',
-  'Public Assist',
-  'Other',
-];
 
 export const SAMPLE_SKILLS = [
   'SCBA donning/doffing',

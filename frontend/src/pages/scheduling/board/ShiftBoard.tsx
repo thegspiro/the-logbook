@@ -492,7 +492,7 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
                 type="button"
                 onClick={() => setFilter(option.value)}
                 aria-pressed={filter === option.value}
-                className={`min-h-[30px] shrink-0 rounded-full px-3.5 text-[13px] font-semibold transition-colors max-md:min-h-[44px] ${
+                className={`touch:min-h-[44px] min-h-[30px] shrink-0 rounded-full px-3.5 text-[13px] font-semibold transition-colors ${
                   filter === option.value
                     ? 'bg-red-800 text-white'
                     : 'text-theme-text-secondary hover:bg-theme-surface-hover'

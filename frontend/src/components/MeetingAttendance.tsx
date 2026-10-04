@@ -159,7 +159,7 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({ electionId
                     onClick={() => {
                       void handleRemove(attendee.user_id, attendee.name);
                     }}
-                    className="focus:ring-theme-focus-ring ml-1 flex min-h-[28px] min-w-[28px] items-center justify-center rounded-sm p-1 text-xs text-green-700 hover:text-red-700 focus:ring-2 focus:outline-hidden dark:text-green-500 dark:hover:text-red-400"
+                    className="btn-icon focus:ring-theme-focus-ring -my-2 -mr-2 text-xs text-green-700 hover:text-red-700 focus:ring-2 focus:outline-hidden dark:text-green-500 dark:hover:text-red-400"
                     title="Remove from attendance"
                     aria-label={`Remove ${attendee.name} from attendance`}
                   >

@@ -1148,9 +1148,16 @@ export const shiftCompletionService = {
     return response.data;
   },
 
-  async getOfficerAnalytics(): Promise<import('../types/training').OfficerShiftAnalytics> {
+  /**
+   * `mine` covers the reports the caller filed. `department` covers every
+   * officer's and is refused (403) without `training.view_analytics`.
+   */
+  async getOfficerAnalytics(
+    scope: 'mine' | 'department' = 'mine'
+  ): Promise<import('../types/training').OfficerShiftAnalytics> {
     const response = await api.get<import('../types/training').OfficerShiftAnalytics>(
-      '/training/shift-reports/officer-analytics'
+      '/training/shift-reports/officer-analytics',
+      { params: { scope } }
     );
     return response.data;
   },

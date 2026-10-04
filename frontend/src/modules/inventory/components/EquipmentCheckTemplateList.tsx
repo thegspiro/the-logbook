@@ -165,13 +165,13 @@ export const EquipmentCheckTemplateList: React.FC = () => {
         <h3 className="text-theme-text-primary flex items-center gap-2 text-base font-semibold">
           <ClipboardCheck className="h-4 w-4" /> Check Templates
         </h3>
-        {/* max-md:min-h-[44px] rather than a taller button everywhere: px-3
+        {/* touch:min-h-[44px] rather than a taller button everywhere: px-3
             py-1.5 renders 28px, under the touch minimum on a phone, while a
             pointer does not need the target a fingertip does. Same reasoning as
             form-input's own mobile-only floor. */}
         <a
           href="/inventory/admin/checklists/templates/new"
-          className="flex items-center gap-1 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-violet-700 max-md:min-h-[44px]"
+          className="touch:min-h-[44px] flex items-center gap-1 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-violet-700"
         >
           <Plus className="h-3.5 w-3.5" /> Create Template
         </a>
@@ -230,7 +230,7 @@ export const EquipmentCheckTemplateList: React.FC = () => {
           </p>
           <a
             href="/inventory/admin/checklists/templates/new"
-            className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-violet-700 max-md:min-h-[44px]"
+            className="touch:min-h-[44px] inline-flex items-center gap-1 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-violet-700"
           >
             <Plus className="h-3.5 w-3.5" /> Create First Template
           </a>

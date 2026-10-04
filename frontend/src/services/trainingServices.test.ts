@@ -15,7 +15,14 @@ vi.mock('./apiClient', () => ({
   },
 }));
 
-import { trainingService } from './trainingServices';
+import {
+  trainingService,
+  recertificationService,
+  competencyService,
+  instructorService,
+  effectivenessService,
+  multiAgencyService,
+} from './trainingServices';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -316,5 +323,27 @@ describe('trainingService', () => {
 
       await expect(trainingService.deleteRequirement('nonexistent')).rejects.toThrow('Not found');
     });
+  });
+});
+
+// The Program Management tabs map these lists straight into rows, so a body
+// that is not a list (a captive portal's HTML page answering 200) must arrive
+// as an empty one rather than take the Training hub down through the
+// ErrorBoundary — which is what each of these five tabs did.
+describe('Program Management list methods', () => {
+  beforeEach(() => {
+    mockGet.mockReset();
+    mockGet.mockResolvedValue({ data: '<html>Sign in to Wi-Fi</html>' });
+  });
+
+  it.each([
+    ['recertificationService.getPathways', () => recertificationService.getPathways()],
+    ['recertificationService.getMyRenewalTasks', () => recertificationService.getMyRenewalTasks()],
+    ['competencyService.getMatrices', () => competencyService.getMatrices()],
+    ['instructorService.getQualifications', () => instructorService.getQualifications()],
+    ['effectivenessService.getEvaluations', () => effectivenessService.getEvaluations()],
+    ['multiAgencyService.getExercises', () => multiAgencyService.getExercises()],
+  ])('%s returns an empty list for a body that is not a list', async (_name, call) => {
+    await expect(call()).resolves.toEqual([]);
   });
 });
