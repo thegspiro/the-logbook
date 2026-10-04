@@ -3166,52 +3166,6 @@ added to the list following a Codex finding on the training-extended pass
 4 PR, #2460; `documenso_service.py`'s missing call closed by security review
 INT-27 pass 4, `docs/security-review/INT-27-integrations.md`.)
 
-## Outbound Integration Requests — No Wall-Clock Deadline (INT-7 follow-up, 2026-09-06)
-
-**INT-7 (outbound integration response size was unbounded) is fixed** —
-`app/services/integration_services/base.py`'s `create_integration_client()`
-now wraps its transport with `_SizeLimitedTransport`, which aborts a
-response once `MAX_RESPONSE_SIZE` (10 MB) bytes have been read, centrally,
-with no connector call site changed. See
-`docs/security-review/INT-27-integrations.md` (INT-7) for the fix and its
-guard tests.
-
-**A narrower, related gap remains, discovered while fixing INT-7.**
-`INTEGRATION_TIMEOUT = httpx.Timeout(10.0, connect=5.0)` does not impose a
-10-second wall-clock cap on a request's total duration — httpx's `Timeout`
-has no "total" concept; the `10.0` sets a **read** timeout that applies to
-each individual socket read, restarted on every chunk received. A remote
-integration endpoint (self-hosted, compromised, or simply misbehaving) that
-sends one chunk every 9 seconds can hold the connection open indefinitely
-while never tripping the read timeout — the response-size fix above stops
-this from consuming unbounded _memory_, but the _time_ a request can run for
-is still unbounded. Same reachability as INT-7 before its fix: any of
-`events.manage`/`scheduling.manage`/`training.manage` (not just
-`integrations.manage`) can trigger an outbound chat-webhook call through
-`notify_entity_created`, and an org admin can trigger any connector
-directly.
-
-**Not fixed — a genuine per-request deadline needs an `asyncio.timeout()`-
-style wrapper around the whole request/response cycle, not a `Timeout`
-tweak** (no combination of httpx's `connect`/`read`/`write`/`pool` timeout
-knobs produces a total-duration cap). This does **not** need every
-connector call site touched: every **httpx-based** connector already gets
-its client from `create_integration_client()`, so the fix is centralized
-the same way INT-7's `_SizeLimitedTransport` was — a small
-`httpx.AsyncClient` subclass constructed there whose `send()` wraps
-`super().send()` in `asyncio.timeout(N)`, covering connect, every read, and
-the full non-streaming body drain (`Response.aread()`) in one place.
-(Confirmed locally: wrapping `send()` this way raises `TimeoutError` and
-unwinds a slow `MockTransport` request cleanly at the deadline.) **This
-centralization would still miss Google Calendar** — see the dedicated entry
-below; that connector never reaches `create_integration_client()` at all,
-so a future deadline fix built this way needs to name that exception
-explicitly rather than repeat the "every connector" overclaim this entry
-itself once corrected.
-
-(Security review INT-27 pass 3, Codex round, 2026-09-06:
-`docs/security-review/INT-27-integrations.md`.)
-
 ## Google Calendar's Connector Bypasses the Shared HTTP Hardening (INT-9, 2026-09-06)
 
 `GoogleCalendarService._build_service()`
@@ -3266,7 +3220,8 @@ per response, verified against a real streamed response the way
 `test_integration_response_size_cap.py` verifies the httpx-based transport
 — asserting the size cap actually aborts a call, not merely that
 `_build_service()` still returns an object — and (2) the equivalent for a
-wall-clock deadline once that lands for the httpx-based connectors, since
+wall-clock deadline, which the httpx-based connectors have had since
+2026-10-04 (`INTEGRATION_DEADLINE_SECONDS` in `create_integration_client()`), since
 `google_auth_httplib2`/`httplib2` have no async story to hang
 `asyncio.timeout()` off of the way the httpx subclass approach does (Google
 API calls here run synchronously inside an `async def` method with no

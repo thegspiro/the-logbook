@@ -6,8 +6,10 @@ Shared httpx.AsyncClient with security-hardened defaults:
 - Explicit TLS verification
 - No redirect following (SSRF protection)
 - Response body size cap, enforced centrally via a wrapping transport
+- Wall-clock deadline on the whole request, enforced by the client's send()
 """
 
+import asyncio
 import ssl
 import typing
 
@@ -21,8 +23,9 @@ from httpx._utils import get_environment_proxies
 # keyword value it accepts maps to one of connect/read/write/pool). A remote
 # server that trickles one chunk per 9 seconds resets the read timer on every
 # chunk and can hold the connection open indefinitely while this client
-# accumulates data, well past any "10s total" reading of this constant. See
-# docs/security-review/INT-27-integrations.md and KNOWN_LIMITATIONS.md.
+# accumulates data, well past any "10s total" reading of this constant. The
+# total is capped separately, by INTEGRATION_DEADLINE_SECONDS below. See
+# docs/security-review/INT-27-integrations.md.
 INTEGRATION_TIMEOUT = httpx.Timeout(10.0, connect=5.0)
 
 # Connection pool limits per service type
@@ -40,6 +43,63 @@ INTEGRATION_LIMITS = httpx.Limits(
 # ever fully materialized in memory — with no change needed at any
 # connector's call site. See docs/security-review/INT-27-integrations.md.
 MAX_RESPONSE_SIZE = 10 * 1024 * 1024
+
+
+# Wall-clock cap on one request, from connect to the last byte of a
+# non-streamed body. httpx's Timeout cannot express this (see above), so
+# _DeadlineAsyncClient enforces it around send(). Generous next to the 10s
+# per-read timeout: it exists to end a server that drips a byte every few
+# seconds, not to cut short a slow but honest one.
+INTEGRATION_DEADLINE_SECONDS = 60.0
+
+
+class RequestDeadlineExceeded(httpx.TimeoutException):
+    """Raised when a request outlives INTEGRATION_DEADLINE_SECONDS.
+
+    A TimeoutException, so every connector's existing timeout handling (and
+    every `except httpx.HTTPError`) treats it like the timeouts httpx raises
+    itself.
+    """
+
+
+class _DeadlineAsyncClient(httpx.AsyncClient):
+    """An AsyncClient whose every request has a total-duration deadline.
+
+    ``send()`` is the one method ``get``/``post``/``request`` all reach, and
+    for a non-streamed request it returns only after the body is read, so the
+    deadline covers connect, every read and the drain. A cancelled send closes
+    its response itself.
+    """
+
+    def __init__(self, *args: typing.Any, deadline: float, **kwargs: typing.Any):
+        super().__init__(*args, **kwargs)
+        self._deadline = deadline
+
+    async def send(
+        self,
+        request: httpx.Request,
+        *,
+        stream: bool = False,
+        auth: httpx._types.AuthTypes | httpx._client.UseClientDefault | None = (
+            httpx.USE_CLIENT_DEFAULT
+        ),
+        follow_redirects: bool | httpx._client.UseClientDefault = (
+            httpx.USE_CLIENT_DEFAULT
+        ),
+    ) -> httpx.Response:
+        try:
+            async with asyncio.timeout(self._deadline):
+                return await super().send(
+                    request,
+                    stream=stream,
+                    auth=auth,
+                    follow_redirects=follow_redirects,
+                )
+        except TimeoutError as exc:
+            raise RequestDeadlineExceeded(
+                f"Request exceeded the {self._deadline:g}s deadline",
+                request=request,
+            ) from exc
 
 
 class ResponseTooLargeError(httpx.TransportError):
@@ -243,6 +303,7 @@ def create_integration_client(
     trust_env: bool = True,
     proxy: httpx.Proxy | httpx.URL | str | None = None,
     timeout: httpx.Timeout = INTEGRATION_TIMEOUT,
+    deadline: float = INTEGRATION_DEADLINE_SECONDS,
     headers: typing.Mapping[str, str] | None = None,
     http1: bool = True,
     http2: bool = False,
@@ -404,7 +465,8 @@ def create_integration_client(
     merged_headers = httpx.Headers(headers) if headers else httpx.Headers()
     merged_headers["Accept-Encoding"] = "identity"
 
-    return httpx.AsyncClient(
+    return _DeadlineAsyncClient(
+        deadline=deadline,
         timeout=timeout,
         follow_redirects=False,
         transport=transport,
