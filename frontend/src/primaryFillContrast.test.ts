@@ -1305,7 +1305,12 @@ describe('primary fill contrast', () => {
    *   never renders. A fill takes the foreground sharing its variant prefix,
    *   falling back to the unprefixed one.
    */
-  it('pairs no text-white with a sub-AA fill at any call site', () => {
+  // An explicit budget because this reads every source file under src/: ~3s
+  // standalone, so the 5s default left it timing out whenever the runner was
+  // loaded (it did, beside a concurrent Playwright pass) with no assertion
+  // having failed. Memoising the stylesheet read (`semanticFill`) was the
+  // first half of this; the scan itself is the rest.
+  it('pairs no text-white with a sub-AA fill at any call site', { timeout: 30_000 }, () => {
     // Any hue, not only the ones already in the table: a fill whose shade is
     // unknown must fail loudly ("add its hex") rather than be skipped. Building
     // the alternation out of the palette made the sweep self-limiting — the one
