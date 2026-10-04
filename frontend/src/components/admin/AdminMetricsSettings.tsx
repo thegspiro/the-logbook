@@ -348,6 +348,7 @@ export const AdminMetricsSettings: React.FC<AdminMetricsSettingsProps> = ({
               type="button"
               role="switch"
               aria-checked={appliesToEveryone}
+              aria-label="Apply these four metrics to everyone who can see this page"
               onClick={() => setAppliesToEveryone((on) => !on)}
               className={`toggle-track-sm mt-0.5 ${appliesToEveryone ? 'bg-red-800' : 'bg-theme-surface-border'}`}
             >

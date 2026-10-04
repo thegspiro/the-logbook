@@ -554,7 +554,7 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
             <Link2 className="h-6 w-6 text-red-500" aria-hidden="true" />
           </div>
           <div>
-            <h3 className="text-theme-text-primary text-lg font-semibold">{provider.name}</h3>
+            <h2 className="text-theme-text-primary text-lg font-semibold">{provider.name}</h2>
             <p className="text-theme-text-muted text-sm">{getProviderTypeLabel()}</p>
           </div>
         </div>
@@ -1275,8 +1275,11 @@ const ExternalTrainingPage: React.FC = () => {
   };
 
   return (
+    // Rendered only as the Integrations tab of Training Administration, whose
+    // content column already supplies the side padding; `p-6` here indented
+    // the whole tab a second time on a phone.
     <div className="min-h-screen">
-      <div className="p-6">
+      <div className="py-6">
         {/* Header */}
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -1295,12 +1298,12 @@ const ExternalTrainingPage: React.FC = () => {
         </div>
 
         {/* Tabs */}
-        <div className="tab-scroll mb-6" role="tablist" aria-label="External training views">
+        <div className="tab-scroll mb-6" role="tablist" aria-label="External training views" data-mobile-scroll-region>
           <button
             onClick={() => setActiveTab('providers')}
             role="tab"
             aria-selected={activeTab === 'providers'}
-            className={`px-4 py-3 text-sm font-medium ${
+            className={`px-4 py-3 text-sm font-medium whitespace-nowrap ${
               activeTab === 'providers'
                 ? 'border-b-2 border-red-500 text-red-500'
                 : 'text-theme-text-muted hover:text-theme-text-primary'
@@ -1313,7 +1316,7 @@ const ExternalTrainingPage: React.FC = () => {
             onClick={() => setActiveTab('imports')}
             role="tab"
             aria-selected={activeTab === 'imports'}
-            className={`px-4 py-3 text-sm font-medium ${
+            className={`px-4 py-3 text-sm font-medium whitespace-nowrap ${
               activeTab === 'imports'
                 ? 'border-b-2 border-red-500 text-red-500'
                 : 'text-theme-text-muted hover:text-theme-text-primary'
@@ -1326,7 +1329,7 @@ const ExternalTrainingPage: React.FC = () => {
             onClick={() => setActiveTab('mappings')}
             role="tab"
             aria-selected={activeTab === 'mappings'}
-            className={`px-4 py-3 text-sm font-medium ${
+            className={`px-4 py-3 text-sm font-medium whitespace-nowrap ${
               activeTab === 'mappings'
                 ? 'border-b-2 border-red-500 text-red-500'
                 : 'text-theme-text-muted hover:text-theme-text-primary'
@@ -1348,7 +1351,7 @@ const ExternalTrainingPage: React.FC = () => {
             {providers.length === 0 ? (
               <div className="card col-span-2 py-12 text-center">
                 <Link2 className="text-theme-text-muted mx-auto mb-4 h-12 w-12" aria-hidden="true" />
-                <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">No Integrations Yet</h3>
+                <h2 className="text-theme-text-primary mb-2 text-lg font-semibold">No Integrations Yet</h2>
                 <p className="text-theme-text-muted mb-4">
                   Connect an external training platform to start syncing records
                 </p>
@@ -1386,7 +1389,7 @@ const ExternalTrainingPage: React.FC = () => {
         ) : activeTab === 'imports' ? (
           <div className="card p-8 text-center" role="tabpanel">
             <Download className="text-theme-text-muted mx-auto mb-4 h-12 w-12" aria-hidden="true" />
-            <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">Import Queue</h3>
+            <h2 className="text-theme-text-primary mb-2 text-lg font-semibold">Import Queue</h2>
             <p className="text-theme-text-muted">
               After syncing, pending imports will appear here for review and processing
             </p>
@@ -1394,7 +1397,7 @@ const ExternalTrainingPage: React.FC = () => {
         ) : (
           <div className="card p-8 text-center" role="tabpanel">
             <FolderTree className="text-theme-text-muted mx-auto mb-4 h-12 w-12" aria-hidden="true" />
-            <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">All Mappings</h3>
+            <h2 className="text-theme-text-primary mb-2 text-lg font-semibold">All Mappings</h2>
             <p className="text-theme-text-muted">View and manage all category and user mappings across providers</p>
           </div>
         )}

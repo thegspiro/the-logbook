@@ -435,6 +435,9 @@ class MinutesListItem(UTCResponseBase):
     location: Optional[str] = None
     called_by: Optional[str] = None
     template_id: Optional[str] = None
+    # The meeting record these minutes were written from, so the meetings list
+    # can link to them instead of offering to create a second set.
+    meeting_id: Optional[str] = None
     motions_count: int = 0
     action_items_count: int = 0
     open_action_items: int = 0

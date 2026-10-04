@@ -18,7 +18,7 @@ import type { ElectionListItem } from '../../../types/election';
 import { getStatusBadgeClass } from '../../../utils/electionHelpers';
 import { useAuthStore } from '../../../stores/authStore';
 import { useTimezone } from '../../../hooks/useTimezone';
-import { formatDate, formatDateTime } from '../../../utils/dateFormatting';
+import { formatCalendarDate, formatDate, formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import type {
   MeetingMinutes,
@@ -72,6 +72,7 @@ export const MinutesDetailPage: React.FC = () => {
   const { minutesId } = useParams<{ minutesId: string }>();
   const navigate = useNavigate();
   const { checkPermission } = useAuthStore();
+  const currentUserId = useAuthStore((state) => state.user?.id);
   const tz = useTimezone();
   // MM-3: minutes writes and restricted reads are gated on minutes.manage on
   // the backend, not meetings.manage — check the same permission the API does.
@@ -642,14 +643,23 @@ export const MinutesDetailPage: React.FC = () => {
               )}
               {minutes.status === 'submitted' && (
                 <>
-                  <button
-                    onClick={() => {
-                      void handleApprove();
-                    }}
-                    className="btn-success rounded-md"
-                  >
-                    Approve Minutes
-                  </button>
+                  {/* The server refuses an approval by the person who
+                      submitted (separation of duties), so it is not offered
+                      to them (W51-6). */}
+                  {minutes.submitted_by && minutes.submitted_by === currentUserId ? (
+                    <p className="text-theme-text-secondary self-center text-sm">
+                      Waiting for another officer to approve. You submitted these minutes, so you cannot approve them.
+                    </p>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        void handleApprove();
+                      }}
+                      className="btn-success rounded-md"
+                    >
+                      Approve Minutes
+                    </button>
+                  )}
                   <button onClick={() => setShowRejectModal(true)} className="btn-primary rounded-md">
                     Reject Minutes
                   </button>
@@ -1227,7 +1237,10 @@ export const MinutesDetailPage: React.FC = () => {
                       <p className="text-theme-text-primary text-sm">{item.description}</p>
                       <div className="text-theme-text-muted mt-2 space-x-4 text-xs">
                         {item.assignee_name && <span>Assigned to: {item.assignee_name}</span>}
-                        {item.due_date && <span>Due: {formatDate(item.due_date, tz)}</span>}
+                        {/* A due date is a calendar day, stored at UTC midnight;
+                            converting it to the department's zone showed the
+                            day before (W51-5). */}
+                        {item.due_date && <span>Due: {formatCalendarDate(item.due_date)}</span>}
                       </div>
                     </div>
                     <div className="ml-2 flex items-center gap-2">

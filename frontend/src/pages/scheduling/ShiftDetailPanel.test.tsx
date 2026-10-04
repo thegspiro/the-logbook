@@ -994,12 +994,12 @@ describe('ShiftDetailPanel apparatus NFC tag writer', () => {
     grantedPermissions.current = ['scheduling.manage'];
     await openQr();
     expect(screen.getByText(/permanent code/)).toBeInTheDocument();
-    expect(screen.queryByText('NFC tags:')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Set up an NFC tag/ })).not.toBeInTheDocument();
   });
 
   it('offers the tag writer to a holder of apparatus.manage_nfc_tags', async () => {
     grantedPermissions.current = ['scheduling.manage', 'apparatus.manage_nfc_tags'];
     await openQr();
-    expect(screen.getByText('NFC tags:')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Set up an NFC tag/ })).toBeInTheDocument();
   });
 });

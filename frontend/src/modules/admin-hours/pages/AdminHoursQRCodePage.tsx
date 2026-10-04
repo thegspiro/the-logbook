@@ -12,10 +12,15 @@ import { adminHoursCategoryService } from '../services/api';
 import type { AdminHoursQRData } from '../types';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { NfcTagWriter } from '../../../components/nfc/NfcTagWriter';
+import { NfcTapHint } from '../../../components/nfc/NfcTapHint';
+import { useAuthStore } from '../../../stores/authStore';
 import { buildAdminHoursClockInUrl } from '../../../constants/nfc';
 
 const AdminHoursQRCodePage: React.FC = () => {
   const { categoryId } = useParams<{ categoryId: string }>();
+  // Any member may open this page; writing a category's tag belongs to the
+  // officers who manage admin hours.
+  const canWriteTags = useAuthStore((s) => s.checkPermission)('admin_hours.manage');
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -130,7 +135,8 @@ const AdminHoursQRCodePage: React.FC = () => {
             </ol>
           </div>
 
-          {clockInUrl && (
+          <NfcTapHint action="clock in or out" />
+          {clockInUrl && canWriteTags && (
             <div className="print:hidden">
               <NfcTagWriter url={clockInUrl} targetLabel={qrData.categoryName} actionNoun="clock-in" />
             </div>
