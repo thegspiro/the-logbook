@@ -1241,7 +1241,9 @@ class TestEffectivenessSummary:
         mock_db.execute.return_value = mock_result
 
         service = AnnualComplianceReportService(mock_db)
-        result = await service._get_effectiveness_summary("org-1", 2025)
+        result = await service._get_effectiveness_summary(
+            "org-1", date(2025, 1, 1), date(2025, 12, 31)
+        )
 
         assert result["total_evaluations"] == 0
         assert result["avg_reaction_rating"] is None
@@ -1267,7 +1269,9 @@ class TestEffectivenessSummary:
         mock_db.execute.return_value = mock_result
 
         service = AnnualComplianceReportService(mock_db)
-        result = await service._get_effectiveness_summary("org-1", 2025)
+        result = await service._get_effectiveness_summary(
+            "org-1", date(2025, 1, 1), date(2025, 12, 31)
+        )
 
         assert result["total_evaluations"] == 3
         assert result["avg_reaction_rating"] == 4.5  # (4+5)/2
@@ -1285,7 +1289,9 @@ class TestEffectivenessSummary:
         mock_db.execute.return_value = mock_result
 
         service = AnnualComplianceReportService(mock_db)
-        result = await service._get_effectiveness_summary("org-1", 2025)
+        result = await service._get_effectiveness_summary(
+            "org-1", date(2025, 1, 1), date(2025, 12, 31)
+        )
 
         assert result["total_evaluations"] == 1
         assert result["avg_reaction_rating"] is None
@@ -1311,7 +1317,9 @@ class TestEffectivenessSummary:
         mock_db.execute.return_value = mock_result
 
         service = AnnualComplianceReportService(mock_db)
-        result = await service._get_effectiveness_summary("org-1", 2025)
+        result = await service._get_effectiveness_summary(
+            "org-1", date(2025, 1, 1), date(2025, 12, 31)
+        )
 
         assert result["avg_reaction_rating"] == 4.0  # (3+4+5)/3
         assert result["avg_knowledge_gain"] == 20.0  # (10+20+30)/3

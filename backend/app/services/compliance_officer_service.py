@@ -6,8 +6,9 @@ annual compliance report generation, and NFPA 1401 record completeness
 validation for the compliance officer dashboard.
 """
 
+import calendar
 from collections import defaultdict
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import and_, func, or_, select
@@ -811,11 +812,54 @@ class AnnualComplianceReportService:
         pathways/tasks, instructor qualifications, multi-agency exercises,
         and effectiveness evaluations.
         """
-        start_date = date(year, 1, 1)
-        end_date = date(year, 12, 31)
+        return await self._generate_period_report(
+            organization_id, date(year, 1, 1), date(year, 12, 31), year
+        )
+
+    async def generate_monthly_report(
+        self, organization_id: str, year: int, month: int
+    ) -> Dict[str, Any]:
+        """The same report for one calendar month (CS-9).
+
+        A "monthly" report used to be the annual report relabelled. Now the
+        activity figures (training hours, admin hours, exercises, record
+        completeness, effectiveness evaluations) cover the month, and each
+        member's standing is the one the compliance screen would have shown on
+        the month's last day: evaluated as of that day, counting only records
+        completed by then. For an annual requirement that is the progress made
+        so far in the year. A month still in progress is evaluated as of
+        today. ISO readiness stays a figure for the year, and the
+        recertification summary is a snapshot of now; neither has a monthly
+        meaning.
+        """
+        start_date = date(year, month, 1)
+        end_date = date(year, month, calendar.monthrange(year, month)[1])
+        report = await self._generate_period_report(
+            organization_id, start_date, end_date, year, as_of_cap=end_date
+        )
+        report["report_type"] = "monthly_compliance"
+        report["month"] = month
+        return report
+
+    async def _generate_period_report(
+        self,
+        organization_id: str,
+        start_date: date,
+        end_date: date,
+        year: int,
+        as_of_cap: Optional[date] = None,
+    ) -> Dict[str, Any]:
+        """The report body for one period.
+
+        ``as_of_cap`` (monthly reports) evaluates standing as of that day, or
+        today if sooner, and ignores records completed after it. Without it
+        (annual reports) standing is as of today, as it always was.
+        """
         # The department's date, as the compliance matrix uses, so the annual
         # report and the screen agree about the same member on the same day.
         today = await resolve_org_today(self.db, organization_id)
+        if as_of_cap is not None:
+            today = min(today, as_of_cap)
         org_include_current = await get_org_include_current_month(
             self.db, organization_id
         )
@@ -870,6 +914,14 @@ class AnnualComplianceReportService:
         else:
             year_records = []
             all_records = []
+
+        # A period that ended in the past is graded on what was known then.
+        if as_of_cap is not None:
+            all_records = [
+                r
+                for r in all_records
+                if r.completion_date is None or r.completion_date <= today
+            ]
 
         # Build per-user record lookup
         records_by_user: Dict[str, list] = defaultdict(list)
@@ -1043,9 +1095,9 @@ class AnnualComplianceReportService:
             organization_id, start_date, end_date
         )
 
-        # Effectiveness summary (scoped to the report year)
+        # Effectiveness summary (scoped to the report period)
         effectiveness_summary = await self._get_effectiveness_summary(
-            organization_id, year
+            organization_id, start_date, end_date
         )
 
         # Record completeness (NFPA 1401)
@@ -1086,6 +1138,9 @@ class AnnualComplianceReportService:
             "report_type": "annual_compliance",
             "organization_id": organization_id,
             "year": year,
+            "period_start": start_date.isoformat(),
+            "period_end": end_date.isoformat(),
+            "as_of": today.isoformat(),
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "executive_summary": {
                 "overall_compliance_pct": overall_compliance_pct,
@@ -1316,17 +1371,19 @@ class AnnualComplianceReportService:
         }
 
     async def _get_effectiveness_summary(
-        self, organization_id: str, year: int
+        self, organization_id: str, start_date: date, end_date: date
     ) -> Dict[str, Any]:
-        """Get training effectiveness evaluation summary for the given year."""
-        year_start = datetime(year, 1, 1, tzinfo=timezone.utc)
-        year_end = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+        """Training effectiveness evaluations created within the period."""
+        period_start = datetime.combine(start_date, time.min, tzinfo=timezone.utc)
+        period_end = datetime.combine(
+            end_date + timedelta(days=1), time.min, tzinfo=timezone.utc
+        )
 
         evals_result = await self.db.execute(
             select(TrainingEffectivenessEvaluation).where(
                 TrainingEffectivenessEvaluation.organization_id == organization_id,
-                TrainingEffectivenessEvaluation.created_at >= year_start,
-                TrainingEffectivenessEvaluation.created_at < year_end,
+                TrainingEffectivenessEvaluation.created_at >= period_start,
+                TrainingEffectivenessEvaluation.created_at < period_end,
             )
         )
         evals = evals_result.scalars().all()

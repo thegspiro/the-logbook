@@ -62,16 +62,25 @@ def _db(side_effect):
 @pytest.fixture
 def stub_annual(monkeypatch):
     """Stub the annual report generator; return a settable result/raiser."""
-    holder = SimpleNamespace(result=None, exc=None)
+    holder = SimpleNamespace(result=None, exc=None, calls=[])
 
     async def _gen(org_id, year):
+        holder.calls.append(("annual", year, None))
+        if holder.exc:
+            raise holder.exc
+        return holder.result
+
+    async def _gen_monthly(org_id, year, month):
+        holder.calls.append(("monthly", year, month))
         if holder.exc:
             raise holder.exc
         return holder.result
 
     monkeypatch.setattr(
         "app.services.compliance_config_service.AnnualComplianceReportService",
-        lambda db: SimpleNamespace(generate_annual_report=_gen),
+        lambda db: SimpleNamespace(
+            generate_annual_report=_gen, generate_monthly_report=_gen_monthly
+        ),
     )
     return holder
 
@@ -122,6 +131,15 @@ class TestGenerateReport:
         assert report.period_label == "March 2026"
         assert report.period_month == 3
         assert report.report_data["report_period"]["type"] == "monthly"
+        # The month's own figures, not the year's relabelled (CS-9).
+        assert stub_annual.calls == [("monthly", 2026, 3)]
+
+    async def test_a_monthly_report_without_a_month_is_refused(self, stub_annual):
+        with pytest.raises(ValueError, match="needs a month"):
+            await ComplianceReportService(_db([])).generate_report(
+                "org-1", "monthly", 2026
+            )
+        assert stub_annual.calls == []
 
     async def test_failure_marks_failed_and_reraises(self, stub_annual):
         stub_annual.exc = RuntimeError("boom")
@@ -295,8 +313,13 @@ class TestReportTypeSchema:
 
     @pytest.mark.parametrize("value", ["monthly", "annual", "yearly"])
     def test_known_values_are_accepted(self, value):
-        req = ComplianceReportGenerate(report_type=value, year=2025)
+        req = ComplianceReportGenerate(report_type=value, year=2025, month=3)
         assert req.report_type == value
+
+    def test_a_monthly_report_needs_a_month(self):
+        # It used to fall through to the annual report, relabelled (CS-9).
+        with pytest.raises(ValidationError, match="month is required"):
+            ComplianceReportGenerate(report_type="monthly", year=2025)
 
     def test_unknown_value_is_rejected_at_the_schema_layer(self):
         with pytest.raises(ValidationError):

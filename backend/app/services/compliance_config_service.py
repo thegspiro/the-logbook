@@ -242,6 +242,8 @@ class ComplianceReportService:
         # email) (CS-9).
         if report_type not in ("monthly", "annual", "yearly"):
             raise ValueError("report_type must be 'monthly', 'annual', or 'yearly'")
+        if report_type == "monthly" and not month:
+            raise ValueError("A monthly report needs a month")
 
         # Build period label
         if report_type == "monthly" and month:
@@ -267,11 +269,15 @@ class ComplianceReportService:
         try:
             # Generate the actual report data using existing service
             annual_service = AnnualComplianceReportService(self.db)
-            report_data = await annual_service.generate_annual_report(
-                organization_id, year=year
-            )
+            if report_type == "monthly" and month:
+                report_data = await annual_service.generate_monthly_report(
+                    organization_id, year=year, month=month
+                )
+            else:
+                report_data = await annual_service.generate_annual_report(
+                    organization_id, year=year
+                )
 
-            # If monthly, filter/annotate the data
             if report_type == "monthly" and month:
                 report_data["report_period"] = {
                     "type": "monthly",
