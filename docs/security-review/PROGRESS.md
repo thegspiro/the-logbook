@@ -16,6 +16,29 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2917](https://github.com/thegspiro/the-logbook/pull/2917)**: branch
+`claude/security-review-cross-cutting-pass7`, Feature 00 (Cross-cutting
+baseline), pass 7, which is also rotation pass 7's first row.
+
+- **Result:** 0 fixes, 0 new findings, 0 flagged.
+- **Method:** all 13 sweep classes were re-run on head and on the pass-6
+  baseline tree (`1bf12e3de`, 1015 commits back), and every count delta was
+  read.
+- **Still open:** the outbound-URL TOCTOU, unchanged.
+- **Also in this PR:** the #2915 closure and the rotation reset to ⬜.
+- **Gate:** backend flake8/black/isort clean, `validate_migrations.py
+--strict` (511 revisions, single head), `check_route_permissions.py
+--strict` (244 routes), 141 backend guard tests, frontend typecheck and
+  lint clean, 25 frontend guard tests and 1 e2e route-integrity test.
+- **Watching:** subscribed for CI/review events.
+
+Full write-up:
+[`SEC-00-cross-cutting-baseline.md`](./SEC-00-cross-cutting-baseline.md) →
+Pass 7.
+
+<details>
+<summary>Superseded — prior Open PR note (PR #2915 merged; rotation pass 6 complete and reset — the state this PR opened from), preserved for history</summary>
+
 **None open from the prior pass.** PR
 [#2915](https://github.com/thegspiro/the-logbook/pull/2915) (Feature 34,
 Frontend shared, pass 7) merged as `532340e3` — docs-only, 0 fixes, 0 new
@@ -26,6 +49,8 @@ Feature 00 (Cross-cutting baseline) pass 7 PR per the 2026-09-15 precedent
 REST pulls listing (state=open) that no `claude/security-review-*` PR
 exists — only #2916, #2914, #2911 and #2910, none of this rotation. This
 iteration's PR number is recorded in a follow-up commit on the same branch.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 34, Frontend shared, pass 7, PR #2915, before it merged), preserved for history</summary>
@@ -17491,7 +17516,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-10-04 — Pass 6 complete; rotation reset to ⬜ for pass 7; PR #2915 merge recorded; Feature 00 (Cross-cutting baseline, pass 7) — 0 fixed, 0 new findings
+### 2026-10-04 — Pass 6 complete; rotation reset to ⬜ for pass 7; PR #2915 merge recorded; Feature 00 (Cross-cutting baseline, pass 7) — 0 fixed, 0 new findings — PR #2917 opened
 
 **Closure and reset.** PR [#2915](https://github.com/thegspiro/the-logbook/pull/2915)
 (Feature 34, Frontend shared, pass 7) merged as `532340e3`, docs-only. The
