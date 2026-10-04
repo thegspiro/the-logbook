@@ -1102,7 +1102,7 @@ Shift completion reports are filed by shift officers after each shift. They reco
 
 - **Trainee name** and linked shift
 - **Hours on shift** — auto-populated from shift attendance records
-- **Calls responded** — auto-populated from ShiftCall records where the trainee was a responding member
+- **Calls responded** — auto-populated per member: from ShiftCall records where they were a responding member, or, for a department that records a call count at close-out, from the call credit the close-out gave them
 - **Call types** — extracted from incident types of matching ShiftCall records
 - **Performance rating** (1-5 scale, configurable label and scale type)
 - **Areas of strength** and **areas for improvement** (encrypted at rest with AES-256)
@@ -1150,14 +1150,23 @@ what the shift already knows.
 1. Go to **Shift Scheduling → Shift Reports → + New** and pick a shift from the
    list of the last fortnight — each row names the apparatus, the date, and how
    many members and calls it carried.
-2. **Hours on Shift** and **Calls Responded** arrive filled from the shift, and
-   the **crew arrives with it**, each member tagged with the position they rode
+2. **Hours on Shift** arrives filled from the shift, and the **crew arrives
+   with it**, each member tagged with the position they rode
    and — where they are enrolled in a pipeline — the pipeline they are a trainee
    on.
-3. Everything is editable before you file. The tick box beside each member
+3. Each crew member's row carries their own **Calls** figure, marked _from
+   close-out_ or _from call log_ _(2026-10-04)_. It is what will be stored
+   unless you change it; change it for anyone whose number is wrong and only
+   that member's report takes your figure. A lowered or raised count is stored
+   without call types, because nothing records which calls were dropped or
+   added. Before the shift is finalized, a member the close-out never adjusted
+   is credited the apparatus's full count, the same default finalizing uses.
+   There is no longer a single shift-wide calls box: for a linked shift it was
+   never stored, so it showed one number and saved another.
+4. Everything is editable before you file. The tick box beside each member
    controls who a report is filed for; **Evaluate** opens the rating and
    narrative fields for a trainee.
-4. The `data_sources` field records which values were carried over and which
+5. The `data_sources` field records which values were carried over and which
    the officer typed, for audit.
 
 > **You are never on your own crew list** _(2026-10-04)_. A report is an

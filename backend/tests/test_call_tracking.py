@@ -508,30 +508,65 @@ class TestMemberCreditReachesThePerson:
         # Types are drawn from the shift's tally, capped at the member's credit.
         assert len(per_member["u2"]["types"]) == 1
 
+    @staticmethod
+    def _counts_service(row, shift_total, type_counts=None):
+        """A service whose attendance lookup returns ``row`` (None = no row)."""
+        from app.services.shift_completion_service import ShiftCompletionService
+
+        db = MagicMock()
+        result = MagicMock()
+        result.first.return_value = row
+        db.execute = AsyncMock(return_value=result)
+        svc = ShiftCompletionService(db)
+        return svc, patch.multiple(
+            "app.services.shift_completion_service.CallTrackingService",
+            shift_response_count=AsyncMock(return_value=shift_total),
+            shift_type_counts=AsyncMock(return_value=type_counts or {}),
+        )
+
     async def test_trainee_fallback_uses_attendance_not_shift_total(self):
         """The training-credit path. A late arrival must not be credited with
         the whole tour."""
-        from app.services.shift_completion_service import ShiftCompletionService
-
-        db = MagicMock()
-        result = MagicMock()
-        result.scalar_one_or_none.return_value = 2
-        db.execute = AsyncMock(return_value=result)
-
-        svc = ShiftCompletionService(db)
-        count, types = await svc._get_trainee_call_data_from_counts("shift-1", "u1")
+        svc, patched = self._counts_service(
+            SimpleNamespace(id="a1", call_count=2), shift_total=5
+        )
+        with patched:
+            count, types = await svc._get_trainee_call_data_from_counts("shift-1", "u1")
         assert count == 2
+        # Credited with fewer than the apparatus ran: which ones is unknown.
+        assert types == []
 
-    async def test_trainee_fallback_with_no_credit_returns_zero(self):
-        from app.services.shift_completion_service import ShiftCompletionService
+    async def test_trainee_fallback_with_no_attendance_returns_zero(self):
+        svc, patched = self._counts_service(None, shift_total=5)
+        with patched:
+            assert await svc._get_trainee_call_data_from_counts("shift-1", "u1") == (
+                0,
+                [],
+            )
 
-        db = MagicMock()
-        result = MagicMock()
-        result.scalar_one_or_none.return_value = None
-        db.execute = AsyncMock(return_value=result)
+    async def test_an_explicit_zero_credit_stays_zero(self):
+        svc, patched = self._counts_service(
+            SimpleNamespace(id="a1", call_count=0), shift_total=5
+        )
+        with patched:
+            assert await svc._get_trainee_call_data_from_counts("shift-1", "u1") == (
+                0,
+                [],
+            )
 
-        svc = ShiftCompletionService(db)
-        assert await svc._get_trainee_call_data_from_counts("shift-1", "u1") == (0, [])
+    async def test_unset_credit_defaults_to_the_apparatus_count(self):
+        """Before finalize every member's credit is NULL. Finalize and the
+        close-out wizard default an unadjusted member to the apparatus count;
+        a report filed in that window used to credit nothing."""
+        svc, patched = self._counts_service(
+            SimpleNamespace(id="a1", call_count=None),
+            shift_total=3,
+            type_counts={"ems": 2, "fire": 1},
+        )
+        with patched:
+            count, types = await svc._get_trainee_call_data_from_counts("shift-1", "u1")
+        assert count == 3
+        assert types == ["ems", "ems", "fire"]
 
 
 class TestPartitionExisting:

@@ -17,6 +17,7 @@ const mockGetByOfficer = vi.fn();
 const mockGetOfficerAnalytics = vi.fn();
 const mockGetShiftCrewStatus = vi.fn();
 const mockGetShift = vi.fn();
+const mockBatchCreate = vi.fn();
 let canManage = true;
 let canViewAnalytics = false;
 
@@ -31,6 +32,7 @@ vi.mock('../../services/api', () => ({
     getOfficerAnalytics: (...a: unknown[]) => mockGetOfficerAnalytics(...a) as unknown,
     getMyStats: () => Promise.resolve(null),
     getShiftCrewStatus: (...a: unknown[]) => mockGetShiftCrewStatus(...a) as unknown,
+    batchCreateReports: (...a: unknown[]) => mockBatchCreate(...a) as unknown,
   },
   trainingModuleConfigService: {
     getConfig: (...a: unknown[]) => mockGetConfig(...a) as unknown,
@@ -384,5 +386,77 @@ describe('ShiftReportsTab — department totals are a leadership view', () => {
     expect(screen.getByText('Reports filed')).toBeInTheDocument();
     expect(mockGetOfficerAnalytics).toHaveBeenCalledWith('department');
     expect(screen.queryByRole('heading', { name: /Reports you've written/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('ShiftReportsTab — calls are counted per member', () => {
+  beforeEach(() => {
+    mockGetShift.mockReset();
+    mockGetShiftCrewStatus.mockReset();
+    mockBatchCreate.mockReset();
+    mockGetShift.mockResolvedValue({
+      id: 'sh1',
+      shift_date: '2026-10-03',
+      start_time: '2026-10-03T11:00:00Z',
+      end_time: '2026-10-03T23:00:00Z',
+      apparatus_name: 'Engine 5',
+      call_count: 4,
+    });
+    mockGetShiftCrewStatus.mockResolvedValue([
+      {
+        user_id: 'u2',
+        user_name: 'Sam Ortiz',
+        has_active_enrollment: false,
+        has_existing_report: false,
+        calls_responded: 4,
+        calls_source: 'closeout',
+      },
+      {
+        user_id: 'u3',
+        user_name: 'Lee Park',
+        has_active_enrollment: false,
+        has_existing_report: false,
+        calls_responded: 2,
+        calls_source: 'closeout',
+      },
+    ]);
+    mockBatchCreate.mockResolvedValue({ created: 2, skipped: 0, report_ids: ['r1', 'r2'] });
+  });
+
+  it("shows each member's calls from the close-out, not one shift-wide box", async () => {
+    searchParams = new URLSearchParams('view=create&shift=sh1');
+    renderWithRouter(<ShiftReportsTab />);
+
+    expect(await screen.findByLabelText('Calls for Sam Ortiz')).toHaveValue(4);
+    expect(screen.getByLabelText('Calls for Lee Park')).toHaveValue(2);
+    expect(screen.getAllByText('from close-out')).toHaveLength(2);
+    // The shift-level box was discarded server-side for every linked shift.
+    expect(screen.queryByText('Calls Responded')).not.toBeInTheDocument();
+  });
+
+  it('sends only the corrections, so unchanged members keep the derived count', async () => {
+    searchParams = new URLSearchParams('view=create&shift=sh1');
+    renderWithRouter(<ShiftReportsTab />);
+
+    const lee = await screen.findByLabelText('Calls for Lee Park');
+    await userEvent.clear(lee);
+    await userEvent.type(lee, '1');
+    await userEvent.click(screen.getByRole('button', { name: /Submit Reports \(2\)/ }));
+
+    expect(mockBatchCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ shift_id: 'sh1', member_call_counts: { u3: 1 } })
+    );
+  });
+
+  it('sends no corrections when nothing was changed', async () => {
+    searchParams = new URLSearchParams('view=create&shift=sh1');
+    renderWithRouter(<ShiftReportsTab />);
+
+    await screen.findByLabelText('Calls for Sam Ortiz');
+    await userEvent.click(screen.getByRole('button', { name: /Submit Reports \(2\)/ }));
+
+    expect(mockBatchCreate).toHaveBeenCalledWith(
+      expect.not.objectContaining({ member_call_counts: expect.anything() })
+    );
   });
 });

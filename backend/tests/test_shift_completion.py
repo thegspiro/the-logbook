@@ -1730,3 +1730,115 @@ class TestOfficerAnalyticsScope:
         assert months == sorted(months)
         # Ascending-then-LIMIT kept the oldest six and dropped this month.
         assert months[-1] == first.strftime("%Y-%m")
+
+
+class TestPerMemberCalls:
+    """The crew list previews each member's calls; the batch stores them, or
+    the officer's correction."""
+
+    async def _log_calls(self, db_session, d, responders_per_call):
+        from app.models.training import ShiftCall
+
+        for responders in responders_per_call:
+            db_session.add(
+                ShiftCall(
+                    shift_id=d["shift_id"],
+                    organization_id=d["org_id"],
+                    incident_type="medical",
+                    responding_members=responders,
+                )
+            )
+        await db_session.flush()
+
+    async def test_crew_status_previews_each_members_derived_calls(
+        self, db_session, setup_shift_with_crew
+    ):
+        d = setup_shift_with_crew
+        await self._log_calls(
+            db_session, d, [[d["crew_1"], d["crew_2"]], [d["crew_1"]]]
+        )
+        svc = ShiftCompletionService(db_session)
+        crew = {
+            m["user_id"]: m
+            for m in await svc.get_shift_crew_status(
+                uuid.UUID(d["org_id"]), d["shift_id"]
+            )
+        }
+        assert crew[d["crew_1"]]["calls_responded"] == 2
+        assert crew[d["crew_2"]]["calls_responded"] == 1
+        assert crew[d["crew_1"]]["calls_source"] == "call_log"
+
+    async def _batch(self, svc, d, member_call_counts):
+        return await svc.batch_create_reports(
+            organization_id=uuid.UUID(d["org_id"]),
+            officer_id=uuid.UUID(d["officer_id"]),
+            shift_id=d["shift_id"],
+            shift_date=d["shift_date"],
+            hours_on_shift=12.0,
+            calls_responded=0,
+            call_types=None,
+            officer_narrative=None,
+            crew_member_ids=[d["crew_1"], d["crew_2"]],
+            trainee_evaluations=None,
+            member_call_counts=member_call_counts,
+        )
+
+    async def _stored(self, db_session, d):
+        rows = (
+            await db_session.execute(
+                text(
+                    "SELECT trainee_id, calls_responded, call_types "
+                    "FROM shift_completion_reports WHERE shift_id = :sid"
+                ),
+                {"sid": d["shift_id"]},
+            )
+        ).all()
+        return {
+            r.trainee_id: (
+                r.calls_responded,
+                (
+                    json.loads(r.call_types)
+                    if isinstance(r.call_types, str)
+                    else r.call_types
+                ),
+            )
+            for r in rows
+        }
+
+    async def test_batch_stores_the_previewed_figures_when_untouched(
+        self, db_session, setup_shift_with_crew
+    ):
+        d = setup_shift_with_crew
+        await self._log_calls(
+            db_session, d, [[d["crew_1"], d["crew_2"]], [d["crew_1"]]]
+        )
+        svc = ShiftCompletionService(db_session)
+        await self._batch(svc, d, None)
+        stored = await self._stored(db_session, d)
+        assert stored[d["crew_1"]] == (2, ["medical", "medical"])
+        assert stored[d["crew_2"]] == (1, ["medical"])
+
+    async def test_batch_applies_a_correction_to_that_member_only(
+        self, db_session, setup_shift_with_crew
+    ):
+        d = setup_shift_with_crew
+        await self._log_calls(
+            db_session, d, [[d["crew_1"], d["crew_2"]], [d["crew_1"]]]
+        )
+        svc = ShiftCompletionService(db_session)
+        await self._batch(svc, d, {d["crew_2"]: 0})
+        stored = await self._stored(db_session, d)
+        assert stored[d["crew_1"]] == (2, ["medical", "medical"])
+        # Lowered by the officer: the count is theirs, and the derived types
+        # no longer describe it, so none are kept.
+        assert stored[d["crew_2"]] == (0, [])
+
+    async def test_a_correction_equal_to_the_derived_figure_changes_nothing(
+        self, db_session, setup_shift_with_crew
+    ):
+        d = setup_shift_with_crew
+        await self._log_calls(db_session, d, [[d["crew_1"]]])
+        svc = ShiftCompletionService(db_session)
+        await self._batch(svc, d, {d["crew_1"]: 1})
+        stored = await self._stored(db_session, d)
+        assert stored[d["crew_1"]] == (1, ["medical"])

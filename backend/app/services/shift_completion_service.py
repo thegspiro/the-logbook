@@ -230,18 +230,33 @@ class ShiftCompletionService:
         """Count-only fallback: the credit recorded against this member.
 
         Reads ``ShiftAttendance.call_count`` — the officer's per-member figure,
-        which is already capped at what the apparatus ran — never the shift
-        total directly, so a member who came on mid-tour is not credited with
-        the calls that ran before they arrived.
+        which is already capped at what the apparatus ran — so a member who
+        came on mid-tour is not credited with the calls that ran before they
+        arrived. Only an unset credit falls back to the shift total, matching
+        what finalize would write for that member.
         """
-        credited = (
+        attendance = (
             await self.db.execute(
-                select(ShiftAttendance.call_count).where(
+                select(ShiftAttendance.id, ShiftAttendance.call_count).where(
                     ShiftAttendance.shift_id == shift_id,
                     ShiftAttendance.user_id == trainee_id,
                 )
             )
-        ).scalar_one_or_none()
+        ).first()
+        if attendance is None:
+            return 0, []
+
+        call_service = CallTrackingService(self.db)
+        shift_total = await call_service.shift_response_count(shift_id)
+        # NULL is "not decided yet", not zero: per-member credit is written at
+        # finalize, so between the close-out's call-count step and finalizing
+        # every member reads NULL. Finalize and the close-out wizard both
+        # default an unadjusted member to the apparatus count, so this does
+        # too — a report filed in that window credited the trainee nothing.
+        # An explicit 0 (an officer's adjustment) stays 0.
+        credited = (
+            shift_total if attendance.call_count is None else int(attendance.call_count)
+        )
         if not credited:
             return 0, []
 
@@ -251,9 +266,6 @@ class ShiftCompletionService:
         # alphabetical prefix this used to take was an invention that
         # `create_report` then spent against type-specific requirements — one
         # credit on a shift of one EMS and one fire always became EMS.
-        call_service = CallTrackingService(self.db)
-        shift_total = await call_service.shift_response_count(shift_id)
-        credited = int(credited)
         if credited < shift_total:
             return credited, []
 
@@ -686,12 +698,21 @@ class ShiftCompletionService:
         )
         reported_ids = set(str(tid) for tid in existing_reports)
 
+        # Each member's calls as a report filed now would derive them — the
+        # same function create_report uses, so the number the form shows is the
+        # number that gets stored unless the officer changes it (CLAUDE.md
+        # pitfall #29).
+        calls_source = (
+            "call_log" if await self._shift_has_incident_rows(shift_id) else "closeout"
+        )
+
         result = []
         for assignment in assignments:
             uid = str(assignment.user_id)
             user = user_map.get(uid)
             enrollment_info = enrollment_map.get(uid, {})
             pos = assignment.position
+            calls, _types = await self._get_trainee_call_data_from_shift(shift_id, uid)
             result.append(
                 {
                     "user_id": uid,
@@ -701,6 +722,8 @@ class ShiftCompletionService:
                     "enrollment_id": enrollment_info.get("enrollment_id"),
                     "program_name": enrollment_info.get("program_name"),
                     "has_existing_report": uid in reported_ids,
+                    "calls_responded": calls,
+                    "calls_source": calls_source,
                 }
             )
 
@@ -719,11 +742,16 @@ class ShiftCompletionService:
         crew_member_ids: List[str],
         trainee_evaluations: Optional[List[Dict]],
         review_status: str = "approved",
+        member_call_counts: Optional[Dict[str, int]] = None,
     ) -> Dict:
         """Create shift reports for all crew members in one transaction.
 
         Non-trainees get hours/calls credit only.
         Trainees get full evaluation data.
+
+        ``member_call_counts`` carries the officer's per-member corrections to
+        the calls derived from the shift. A member it does not name keeps the
+        derived figure.
         """
         eval_map: Dict[str, Dict] = {}
         if trainee_evaluations:
@@ -735,6 +763,26 @@ class ShiftCompletionService:
 
         for member_id in crew_member_ids:
             evaluation = eval_map.get(member_id, {})
+            member_calls: Optional[int] = None
+            member_types: Optional[list] = None
+            if shift_id:
+                override = (member_call_counts or {}).get(member_id)
+                if override is not None:
+                    derived, _types = await self._get_trainee_call_data_from_shift(
+                        shift_id, member_id
+                    )
+                    # An override equal to the derived figure is the derived
+                    # figure: leave both unset so the report keeps its types
+                    # and its "shift_calls" provenance. A different count
+                    # cannot keep the derived types — nothing says which calls
+                    # were dropped — so it is stored with none rather than with
+                    # a list that disagrees with it.
+                    if override != derived:
+                        member_calls = override
+                        member_types = []
+            else:
+                member_calls = calls_responded
+                member_types = call_types
             try:
                 report = await self.create_report(
                     organization_id=organization_id,
@@ -742,15 +790,13 @@ class ShiftCompletionService:
                     trainee_id=member_id,
                     shift_date=shift_date,
                     hours_on_shift=hours_on_shift,
-                    # The batch form collects one call count for the *shift*,
-                    # not for each member of the crew. Handing it to a
-                    # per-trainee report would credit every rider with every
-                    # run, so a linked shift defers to the per-trainee figure
-                    # derived from the run log — which is what this path has
-                    # always stored, back when create_report overwrote the
-                    # argument unconditionally.
-                    calls_responded=(None if shift_id else calls_responded),
-                    call_types=(None if shift_id else call_types),
+                    # A linked shift never uses the shift-level count: handing
+                    # one number to every report would credit every rider with
+                    # every run. Each member gets the figure derived from the
+                    # shift's run log or close-out credit, or the officer's
+                    # per-member correction above.
+                    calls_responded=member_calls,
+                    call_types=member_types,
                     shift_id=shift_id,
                     performance_rating=evaluation.get("performance_rating"),
                     areas_of_strength=evaluation.get("areas_of_strength"),

@@ -197,6 +197,7 @@ async def batch_create_shift_reports(
                 else None
             ),
             review_status=review_status,
+            member_call_counts=data.member_call_counts,
         )
         await log_audit_event(
             db=db,

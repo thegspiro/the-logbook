@@ -148,6 +148,8 @@ export const ShiftReportsTab: React.FC = () => {
 
   // Batch create state
   const [crewMembers, setCrewMembers] = useState<ShiftCrewMember[]>([]);
+  // Per-member calls the officer typed over the derived figure, as typed.
+  const [memberCalls, setMemberCalls] = useState<Record<string, string>>({});
   const [selectedCrewIds, setSelectedCrewIds] = useState<Set<string>>(new Set());
   const [traineeEvals, setTraineeEvals] = useState<Record<string, CrewMemberEvaluation>>({});
   const [expandedTraineeId, setExpandedTraineeId] = useState<string | null>(null);
@@ -263,6 +265,7 @@ export const ShiftReportsTab: React.FC = () => {
         setSelectedCrewIds(new Set(eligible.map((m) => m.user_id)));
         setTraineeEvals({});
         setCrewRemarks({});
+        setMemberCalls({});
         setExpandedTraineeId(null);
       } catch {
         setCrewLoadError(true);
@@ -487,8 +490,6 @@ export const ShiftReportsTab: React.FC = () => {
     });
   };
 
-  const handleToggleCallType = (type: string) => toggleCallType(setForm, type);
-
   const resetNewForm = () => {
     setLinkedShiftLabel(null);
     setForm({
@@ -600,14 +601,27 @@ export const ShiftReportsTab: React.FC = () => {
       ),
     ];
 
+    // Only figures that differ from what the server would derive: an
+    // unchanged member keeps the derived count and the call types with it.
+    const callCorrections: Record<string, number> = {};
+    for (const m of crewMembers) {
+      const typed = memberCalls[m.user_id];
+      if (!selectedCrewIds.has(m.user_id) || typed === undefined || typed.trim() === '') continue;
+      const n = Number.parseInt(typed, 10);
+      if (Number.isNaN(n) || n < 0) continue;
+      if (n !== (m.calls_responded ?? 0)) callCorrections[m.user_id] = n;
+    }
+
     const payload: BatchShiftReportCreate = {
       shift_id: form.shift_id || '',
       shift_date: form.shift_date || '',
       hours_on_shift: form.hours_on_shift || 0,
-      calls_responded: form.calls_responded || 0,
-      ...(form.call_types?.length ? { call_types: form.call_types } : {}),
+      // Read only for an unlinked batch; a linked shift derives each member's
+      // calls server-side, with member_call_counts carrying corrections.
+      calls_responded: 0,
       ...(form.officer_narrative?.trim() ? { officer_narrative: form.officer_narrative.trim() } : {}),
       crew_member_ids: Array.from(selectedCrewIds),
+      ...(Object.keys(callCorrections).length > 0 ? { member_call_counts: callCorrections } : {}),
       ...(allEvaluations.length > 0 ? { trainee_evaluations: allEvaluations } : {}),
       save_as_draft: asDraft,
     };
@@ -634,6 +648,7 @@ export const ShiftReportsTab: React.FC = () => {
       setSelectedCrewIds(new Set());
       setTraineeEvals({});
       setCrewRemarks({});
+      setMemberCalls({});
       setCrewLoadError(false);
       setExpandedTraineeId(null);
       setViewMode(asDraft ? 'drafts' : 'filed-by-me');
@@ -1765,40 +1780,10 @@ export const ShiftReportsTab: React.FC = () => {
                     className="form-input text-sm focus:ring-violet-500"
                   />
                 </div>
-                <div>
-                  <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Calls Responded</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={form.calls_responded || 0}
-                    onChange={(e) => setForm((prev) => ({ ...prev, calls_responded: parseInt(e.target.value) || 0 }))}
-                    className="form-input text-sm focus:ring-violet-500"
-                  />
-                </div>
+                <p className="text-theme-text-muted self-end text-xs">
+                  Calls are counted per member below — from the shift&apos;s call log or its close-out.
+                </p>
               </div>
-
-              {/* Call Types */}
-              {(config?.form_show_call_types ?? true) && (form.calls_responded || 0) > 0 && (
-                <div>
-                  <label className="text-theme-text-secondary mb-2 block text-sm font-medium">Call Types</label>
-                  <div className="flex flex-wrap gap-2">
-                    {callTypeOptions.map((type) => (
-                      <button
-                        key={type}
-                        type="button"
-                        onClick={() => handleToggleCallType(type)}
-                        className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
-                          form.call_types?.includes(type)
-                            ? 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-400'
-                            : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-blue-500/30'
-                        }`}
-                      >
-                        {type}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               {/* Officer Narrative (shift-level) */}
               <div>
@@ -1912,6 +1897,27 @@ export const ShiftReportsTab: React.FC = () => {
                                 )}
                               </div>
                             </div>
+                            {isSelected && (
+                              <label className="flex shrink-0 items-center gap-1.5 text-xs">
+                                <span className="text-theme-text-muted">Calls</span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  inputMode="numeric"
+                                  className="form-input w-16 px-2 py-1 text-right text-sm tabular-nums"
+                                  aria-label={`Calls for ${member.user_name}`}
+                                  value={memberCalls[member.user_id] ?? String(member.calls_responded ?? 0)}
+                                  onChange={(e) =>
+                                    setMemberCalls((prev) => ({ ...prev, [member.user_id]: e.target.value }))
+                                  }
+                                />
+                                {memberCalls[member.user_id] === undefined && member.calls_source && (
+                                  <span className="text-theme-text-muted hidden sm:inline">
+                                    {member.calls_source === 'closeout' ? 'from close-out' : 'from call log'}
+                                  </span>
+                                )}
+                              </label>
+                            )}
                             {/* Remarks for non-trainees */}
                             {!isTrainee && isSelected && (
                               <input
