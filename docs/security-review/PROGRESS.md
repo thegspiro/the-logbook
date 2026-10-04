@@ -16,6 +16,28 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2915](https://github.com/thegspiro/the-logbook/pull/2915)** —
+branch `claude/security-review-frontend-shared`, Feature 34 (Frontend
+shared), pass 7. 0 fixes, 0 new findings; both standing HIGH
+findings (FE3-34-2, FE3-34-5) and FE5-34-1's flagged broader ask
+re-confirmed still open, unchanged, at their current lines. 11 files differ
+from pass 6's baseline; all read in full — a `logout()`/`endSessionLocally()`
+refactor (preserves FE3-34-2's exact failure shape), an error-detail
+extraction, a new anonymous-suggestion-box error-reporting exclusion
+(verified to match its backend `UNLOGGED_PATH` counterpart
+character-for-character), and five modules' own business-logic additions,
+all through non-caching `createApiClient()` instances. Repo-wide sweep for
+new `api.get` calls found zero new cache-exclusion gaps. Gate:
+whole-tree typecheck/lint clean, 389 scoped frontend tests passed
+(docs-only diff — no source file changed, so the full suite was not
+required per CLAUDE.md), `validate_migrations.py --strict` passed (511
+revisions, single head), 19 + 311 backend tests passed. Subscribed for
+CI/review events. Full write-up:
+[`FE7-34-frontend-shared.md`](./FE7-34-frontend-shared.md).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 33, Core infrastructure, pass 5, PR #2906, merged, docs-only — nothing to record), preserved for history</summary>
+
 **PR [#2906](https://github.com/thegspiro/the-logbook/pull/2906)** —
 branch `claude/security-review-core-infra-pass5`, Feature 33 (Core
 infrastructure), pass 5. 0 fixes, 0 new findings; both of CI3-33's flagged
@@ -30,6 +52,8 @@ backend suite passed (12,493 passed, 1 pre-existing skip), frontend
 typecheck/lint clean (fresh worktree, `npm ci` run once). Subscribed for
 CI/review events. Full write-up:
 [`CI5-33-core-infra.md`](./CI5-33-core-infra.md).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #2900's merge, Feature 32, Locations & kiosk, pass 5 — the state this pass's PR conflicted with), preserved for history</summary>
@@ -17434,7 +17458,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ✅     |
-| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
+| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ✅     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
 re-runs the whole-codebase sweeps against whatever has landed since.
@@ -17442,6 +17466,81 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-04 — Feature 34 (Frontend shared, pass 7) — 0 fixed, 0 flagged (new); both standing HIGH findings re-confirmed open
+
+Watchdog pickup of a stalled `/loop 30m /security-review` session (no
+commit/PR past its 30-minute cadence). Independently re-confirmed via
+`list_pull_requests` (state=open) that no `claude/security-review-*` PR
+existed — only #2914 (hub tab crash guards), #2911 (a documentation sweep),
+#2910 (ID card printing, draft), none of this rotation. PR #2906 (Feature
+33, Core infrastructure, pass 5) had already merged, docs-only (only
+`CI5-33-core-infra.md`, `KNOWN_LIMITATIONS.md` untouched, `PROGRESS.md`), so
+per this file's own rule nothing to log beyond clearing that row (done
+above). Rotation row 34 was the only `⬜` — the last row before the rotation
+wraps to 00 for its next full pass. This worktree was also behind
+`origin/main` by several commits at the start; branched fresh from
+`origin/main` rather than reviewing stale code.
+
+Loaded `CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`, and all five
+prior passes (`FE2`–`FE6-34-frontend-shared.md`) first. Established the
+baseline as `468f5c3ae` (the merge that landed `FE6-34-frontend-shared.md`)
+and diffed every file this feature owns against it: 11 differ, all read in
+full — a `logout()`/`endSessionLocally()` refactor (preserves FE3-34-2's
+exact failure shape; the new method is called from the password-change flow
+for a session the server already revoked, per workflow-review W04-1), an
+error-detail extraction plus a 429 `Retry-After` reader (workflow-review
+W02-2), a new anonymous-suggestion-box error-reporting exclusion (verified
+against `backend/app/core/logging.py`'s `UNLOGGED_PATH` — the two regexes
+match the same path shape character-for-character), an `ip-security`
+camelCase→snake_case request-body fix, and five modules' own business-logic
+additions (finance manual-approval routing, admin-hours self-service
+edit/withdraw, a minutes pagination helper, prospective-members'
+Multi-Signer Approval sign-off service, and scheduling's new 243-line
+"external hours" subsystem) — all through the non-caching
+`createApiClient()` factory, confirmed with 0 diff against baseline.
+
+A repo-wide sweep (not limited to feature-owned files) for every new
+`api.get`/`api.get<` call since the baseline found zero new cache-exclusion
+gaps: every genuinely sensitive new endpoint
+(`/training/sessions/by-event/`, `/attendance-petitions`) had already
+arrived with its own `UNCACHEABLE_PREFIXES`/`UNCACHEABLE_SUBSTRINGS` entry
+from the feature that introduced it, and every other new call was either
+already covered by an existing prefix (`/users`, `/organization/`,
+`/notifications/my`), explicitly cache-bypassed (`_skipCache: true`), or
+confirmed non-sensitive by reading the backend response schema directly
+(an org-wide email-policy catalog, template backups, label-print presets —
+none carrying per-member fields). Also swept for new `axios.create()`/
+`createApiClient()` call sites (still exactly 2 and 16 respectively — no
+new bespoke client), new `localStorage`/`sessionStorage` writes (UI
+preferences and test fixtures only), and hardcoded secret literals (none).
+
+**0 new findings.** Both standing HIGH findings re-verified still open at
+their current lines: FE3-34-2 (`authStore.ts:446-456`, a failed
+server-side logout still leaves httpOnly cookies live while the UI shows
+Login) and FE3-34-5 (`purgeLocalMemberData.ts`, a silently-failed
+IndexedDB purge still lets the next member on a shared device authenticate
+while the previous member's offline-queue entries remain untagged).
+FE5-34-1's flagged broader ask (excluding the whole `/inventory/items`
+catalog from caching) also re-confirmed unchanged. All three
+`KNOWN_LIMITATIONS.md` entries re-read in full and still accurate — no
+edits needed.
+
+Gate: frontend `npm run typecheck` and `npm run lint` both clean (0
+errors/warnings), each run over the whole source tree, not just this
+feature's files. 389 scoped tests passed (10 files). The diff is
+docs-only (`PROGRESS.md` + this write-up — no frontend or backend source
+file changed), which is CLAUDE.md's "documentation-only" case, so the full
+frontend suite was not required and was stopped rather than run to
+completion; CI runs it regardless. `validate_migrations.py --strict`: 511
+revisions, single head, no duplicate ids (unrelated to this feature, run
+regardless per the gate). Backend `test_api_cache_pii_exclusions.py` +
+`test_inventory_member_visibility.py`: 19 passed. Backend
+auth/logout/offline/cache-scoped tests (unit + integration): 311 passed, 2
+pre-existing skips. No backend file was modified, so no backend
+flake8/black/isort run was needed. Rotation row 34 is now `✅` — **every
+row in the 00–34 table is `✅`**. Next: the rotation wraps to Feature 00
+(Cross-cutting baseline) for its next full pass.
 
 ### 2026-10-04 — Feature 33 (Core infrastructure, pass 5) — 0 fixed, 0 flagged (new); both CI3-33 flagged items re-confirmed open
 
