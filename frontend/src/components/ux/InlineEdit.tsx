@@ -94,7 +94,7 @@ export const InlineEdit: React.FC<InlineEditProps> = ({
               onClick={() => {
                 void handleSave();
               }}
-              className="inline-flex items-center justify-center p-1 text-green-600 hover:text-green-700 max-sm:min-h-[44px] max-sm:min-w-[44px] dark:text-green-400 dark:hover:text-green-300"
+              className="touch:min-h-[44px] touch:min-w-[44px] inline-flex items-center justify-center p-1 text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
               aria-label="Save"
             >
               <Check className="h-3.5 w-3.5" />
@@ -102,7 +102,7 @@ export const InlineEdit: React.FC<InlineEditProps> = ({
             <button
               onMouseDown={(e) => e.preventDefault()}
               onClick={handleCancel}
-              className="inline-flex items-center justify-center p-1 text-red-600 hover:text-red-700 max-sm:min-h-[44px] max-sm:min-w-[44px] dark:text-red-400 dark:hover:text-red-300"
+              className="touch:min-h-[44px] touch:min-w-[44px] inline-flex items-center justify-center p-1 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
               aria-label="Cancel"
             >
               <X className="h-3.5 w-3.5" />

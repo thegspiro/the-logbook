@@ -209,7 +209,7 @@ export default function FacilitiesDashboard() {
                 </div>
                 <button
                   onClick={() => void navigate('/facilities/maintenance?status=overdue')}
-                  className="text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 text-xs transition-colors max-md:min-h-[44px]"
+                  className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-[44px] flex items-center gap-1 text-xs transition-colors"
                 >
                   View all <ArrowRight className="h-3 w-3" />
                 </button>
@@ -258,7 +258,7 @@ export default function FacilitiesDashboard() {
                 </div>
                 <button
                   onClick={() => void navigate('/facilities/inspections')}
-                  className="text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 text-xs transition-colors max-md:min-h-[44px]"
+                  className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-[44px] flex items-center gap-1 text-xs transition-colors"
                 >
                   View all <ArrowRight className="h-3 w-3" />
                 </button>

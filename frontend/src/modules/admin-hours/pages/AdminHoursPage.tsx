@@ -596,7 +596,7 @@ const AdminHoursPage: React.FC = () => {
               setPeriod(e.target.value as ReportingPeriod);
               setPage(0);
             }}
-            className="form-input min-w-40 px-3 py-1.5 text-sm max-md:min-h-[44px]"
+            className="form-input touch:min-h-[44px] min-w-40 px-3 py-1.5 text-sm"
           >
             {PERIOD_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -732,7 +732,7 @@ const AdminHoursPage: React.FC = () => {
       <div className="mb-6 flex gap-3">
         <button
           onClick={() => setShowManualForm(!showManualForm)}
-          className="btn-secondary flex items-center gap-2 transition max-md:min-h-[44px]"
+          className="btn-secondary touch:min-h-[44px] flex items-center gap-2 transition"
         >
           <Plus className="h-4 w-4" />
           Log Hours Manually
@@ -856,7 +856,7 @@ const AdminHoursPage: React.FC = () => {
             setPage(0);
           }}
           aria-label="Filter entries by status"
-          className="form-input px-3 py-1.5 text-sm max-md:min-h-[44px]"
+          className="form-input touch:min-h-[44px] px-3 py-1.5 text-sm"
         >
           <option value="">All Statuses</option>
           <option value="approved">Approved</option>
@@ -872,7 +872,7 @@ const AdminHoursPage: React.FC = () => {
             setPage(0);
           }}
           aria-label="Filter entries by category"
-          className="form-input px-3 py-1.5 text-sm max-md:min-h-[44px]"
+          className="form-input touch:min-h-[44px] px-3 py-1.5 text-sm"
         >
           <option value="">All Categories</option>
           {categories.map((cat) => (
