@@ -382,23 +382,51 @@ Shift remaining control]**
 
 ### EXTERNAL TRAINING (11:15 – 11:45)
 
-**[SCREEN: Navigate to External Training page (ExternalTrainingPage)]**
+**[SCREEN: Training Admin → Records → Submissions (Review Submissions)]**
 
-> "The External Training page tracks training taken outside the department —
-> courses at the fire academy, conferences, mutual aid training. Members submit
-> these for your approval, and they count toward their compliance requirements
+> "Training taken outside the department — courses at the fire academy,
+> conferences, mutual aid training — reaches you two ways. Members submit it
+> themselves with **Submit Training**, and it waits for you on **Review
+> Submissions**. Once approved, it counts toward their compliance requirements
 > just like internal training."
+
+**[SCREEN: Training Admin → Setup → Integrations (External Training
+Integrations): a provider card with Sync Now and Mappings, then the Import
+Queue]**
+
+> "Or, if your members train on a platform like Target Solutions or Vector
+> Solutions, connect it under **Integrations**. Completed courses sync in on
+> their own and land in the **Import Queue** for you to check, and every so
+> often it re-reads the last thirty days so a late correction on their side
+> isn't missed."
+
+**[PRODUCTION NOTE — 2026-10-04. Rewritten. The previous take described
+**External Training Integrations** (ExternalTrainingPage) as the member
+submission queue — it is the provider sync screen; member submissions are
+Submit Training / Review Submissions. Wrong before this window; found, not
+caused, by it. A Target Solutions provider saved before 2026-09-29 needs its
+API Key and API Secret re-entered. About 15 seconds longer; re-time this
+chapter and record both cues.]**
 
 ### SHIFT COMPLETION REPORTS & SKILL SCORING (11:45 – 13:15)
 
 > "After each shift, officers file shift completion reports on their trainees.
 > Let me show you the workflow."
 
-**[SCREEN: Navigate to Training Admin > Shift Reports > Create]**
+**[SCREEN: Scheduling → Shift Reports → "New report". Pick a shift card from
+the list.]**
 
-> "You select the trainee, the shift date, and the shift — hours and calls
-> auto-populate from attendance records. Then you rate their performance 1-5,
-> note strengths and areas for improvement, and write a narrative."
+> "Reports start from the shift, not the trainee. Go to Scheduling, open
+> **Shift Reports**, click **New report**, and pick the shift — hours and calls
+> auto-populate from attendance records for the whole crew. Then, for each
+> trainee, you rate their performance 1-5, note strengths and areas for
+> improvement, and write a narrative."
+
+**[PRODUCTION NOTE — 2026-10-04. Re-record this cue. The previous take filmed
+"Training Admin > Shift Reports > Create"; there is no Create there. Training
+Admin's **New Report** tab only points to Scheduling (**Go to Shift Reports**),
+or, for a department without the Scheduling module, to **Log Shift Report**.
+Wrong before this window; found, not caused, by it.]**
 
 **[SCREEN: Show the skills section with 1-5 score buttons]**
 

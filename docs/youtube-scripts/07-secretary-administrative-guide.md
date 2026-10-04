@@ -53,18 +53,29 @@ is the person who keeps the department running behind the scenes.]**
 
 ### CREATING MINUTES (1:30 – 3:00)
 
-**[SCREEN: Navigate to Minutes (MinutesPage). Click "New Minutes."]**
+**[SCREEN: Navigate to Minutes (MinutesPage). Click "Record Minutes."]**
 
 > "Meeting minutes are often the Secretary's primary responsibility. The
 > Logbook's Minutes module is designed for how fire department meetings actually
 > work."
 
-**[SCREEN: Show the minutes creation form]**
+**[SCREEN: The "Record Meeting Minutes" dialog: title, Meeting Type, called
+by, date and time]**
 
-> "Click 'New Minutes' and select the meeting type — Regular Business Meeting,
-> Special Meeting, Executive Session, etc. Enter the date and time."
+> "Click **Record Minutes**. That records the meeting itself: give it a title,
+> pick the **Meeting Type** — Business, Special, Committee, Board or Other —
+> and enter who called it, the date and the time."
 
-**[SCREEN: Fill in the header fields]**
+**[SCREEN: Back on the list, click the book icon on the meeting's card —
+"Create minutes from this meeting"]**
+
+> "Then the book icon on that meeting's card opens its minutes. If minutes
+> already exist, it opens those rather than starting a second set."
+
+**[PRODUCTION NOTE — 2026-10-04. Rewritten. There is no "New Minutes" button
+and no "Executive Session" type (pre-existing); the book icon opening existing
+minutes and the five offered types date from 2026-10-03. Re-record both
+cues.]**
 
 > "The editor gives you a structured template. Start with the **Call to Order**
 > — who called the meeting to order and at what time. **Roll Call** — who's
@@ -105,14 +116,22 @@ is the person who keeps the department running behind the scenes.]**
 
 ### PUBLISHING & ARCHIVING (4:00 – 5:00)
 
-> "When your minutes are complete, you can save them as a draft for review or
-> publish them immediately."
+> "When your minutes are complete, press **Submit for Approval**. Another
+> officer then approves or rejects them — not you. If you submitted them, the
+> page tells you it's waiting for another officer, because nobody signs off
+> their own minutes."
 
-**[SCREEN: Show the draft/publish options]**
+**[SCREEN: Submit for Approval; then, as a second officer, Approve Minutes;
+then Publish to Documents]**
 
-> "Drafts are only visible to members with manage access. Once published, all
-> members can view the minutes. Published minutes are permanent — they become
-> part of the department's official record."
+> "Once they're approved, **Publish to Documents** files them in the
+> department's Documents as a formatted copy. That's the official record."
+
+**[PRODUCTION NOTE — 2026-10-04. Rewritten. The previous take offered "save as
+a draft or publish immediately"; minutes have gone through Submit for
+Approval → a different officer's Approve Minutes → Publish to Documents since
+before this window. Pre-existing; found, not caused, by it. Needs two officer
+accounts on camera.]**
 
 > "The search feature lets you find any motion, discussion topic, or action
 > item from any meeting in the department's history."
@@ -123,10 +142,14 @@ is the person who keeps the department running behind the scenes.]**
 
 **[SCREEN: Navigate to a published minutes detail page (MinutesDetailPage)]**
 
-> "The detail view shows the complete minutes in a clean, printable format.
-> Export as PDF for distribution or for your physical records."
+> "The detail view shows the complete minutes. Once they're published, **View
+> in Documents** takes you to the formatted copy — that's the one to share or
+> print for your physical records."
 
-**[SCREEN: Show the PDF export]**
+**[SCREEN: Click View in Documents; show the published minutes document]**
+
+**[PRODUCTION NOTE — 2026-10-04. There is no PDF export on minutes (none in the
+frontend or the API); the previous cue could not be filmed. Pre-existing.]**
 
 **[TRANSITION: Event management]**
 
@@ -210,32 +233,61 @@ member who arrived late, excusing an absence.]**
 
 **[SCREEN: Show the Members Admin Hub with the roster overview]**
 
-> "The Admin Hub shows your full roster with status indicators. You can filter
-> by membership type — Active, Probationary, Retired, Honorary. Search by name
-> or position."
+**[SCREEN: Members → Membership Management. Open the "Filter by status"
+dropdown: All Statuses, Active, Inactive, On Leave, Retired, Archived]**
+
+> "The roster itself is the **Members** page, with status indicators. Filter
+> by status — Active, Inactive, On Leave, Retired, and, for officers,
+> Archived — and search by name, membership number or email."
+
+**[PRODUCTION NOTE — 2026-10-04. The previous take filtered "by membership
+type — Active, Probationary, Retired, Honorary" and searched "by position".
+The filter is by status, and search covers name, membership number and (for
+officers) email. Wrong before this window; found, not caused, by it. The Admin
+Hub's **Member Management** tab is roles, not the roster. Re-record this cue.]**
 
 ### ADDING A NEW MEMBER (10:00 – 10:30)
 
 **[SCREEN: Click "Add Member." Fill in the form quickly.]**
 
-> "Adding a new member: click 'Add Member,' fill in their information, assign
-> their initial position — usually 'Firefighter' or 'Probationary Member' —
-> and save."
+> "Adding a new member: click 'Add Member,' fill in their information — name,
+> address, phone, email and an emergency contact are all required — set their
+> **Membership Type**, which for a new joiner is usually **Probationary**, and
+> pick a Rank and Position if they hold one."
 
-**[SCREEN: Show the quick add flow]**
+**[SCREEN: Show the "Set initial password" checkbox — once with email
+working ("Leave unchecked to email the member a temporary password."), once
+with email off, where it is ticked and required]**
 
-> "If email is configured, the system sends them an invitation with login
-> credentials automatically."
+> "Then the password. If email is set up, leave **Set initial password**
+> unchecked and they're emailed a temporary password. If it isn't, the box is
+> required — set one here and hand it to them. The Logbook won't create an
+> account nobody knows the password to."
+
+**[PRODUCTION NOTE — 2026-10-04. Rewritten. "Probationary Member" was never a
+position: Probationary is a membership type (pre-existing error). The
+password requirement when email is off is new (2026-09-27). Re-record both
+cues.]**
 
 ### EDITING MEMBER RECORDS (10:30 – 11:00)
 
 **[SCREEN: Navigate to a member's admin edit page (MemberAdminEditPage)]**
 
 > "To update a member's information, click their name and go to the edit view.
-> Change their position, update their contact info, change their membership
-> type, or add notes."
+> Update their contact info, address, rank and station, or change their
+> **Membership Type** — Probationary to Active when they come off probation."
 
-**[SCREEN: Show editing a member's position from Probationary to Active]**
+**[SCREEN: Show changing Membership Type from Probationary to Active and
+saving]**
+
+> "Two things aren't on that page. Status — active, on leave, retired — is the
+> **Change status** control on the member's profile. Positions are assigned
+> under **Manage Roles** in the Members admin hub."
+
+**[PRODUCTION NOTE — 2026-10-04. The previous take changed a member's
+position and added notes on the admin edit page; it has neither, and the
+cue filmed a position change that was really a membership-type change.
+Pre-existing; found, not caused, by this window.]**
 
 ### MEMBER SCANNING (11:00 – 11:30)
 
@@ -255,10 +307,27 @@ member who arrived late, excusing an absence.]**
 > meetings, phone calls, community outreach — the Admin Hours module lets you
 > log and report these."
 
-**[SCREEN: Show logging administrative hours with category, hours, and notes]**
+**[SCREEN: Click "Log Hours Manually". Fill Category, Start Time, End Time and
+Description; click "Submit for review"]**
 
-> "This is useful for departments where officers report their non-operational
-> time for annual reports or for reimbursement tracking."
+> "Logging after the fact is **Log Hours Manually** — a category, a start and
+> an end time, and a line on what you worked on. Then **Submit for review**:
+> a hand-typed entry always goes to an officer, even in a category that
+> auto-approves clocked time. That's useful for departments where officers
+> report their non-operational time for annual reports or for reimbursement
+> tracking."
+
+**[SCREEN: A pending entry with "Edit" and "Withdraw"; a rejected one with
+"Edit & resubmit"]**
+
+> "Typed one wrong? Until it's approved it's still yours — **Edit** a pending
+> entry, **Edit & resubmit** a rejected one, or **Withdraw** either. Once it's
+> approved, only an officer can change it."
+
+**[PRODUCTION NOTE — 2026-10-04. The previous cue showed "category, hours, and
+notes"; the form takes a start and end time, not an hours figure. Re-record
+both cues. The edit/withdraw beat is new and adds about 15 seconds; re-time
+Chapter 4.]**
 
 **[SCREEN: Show a pending entry belonging to the signed-in officer, with the
 Approve button refusing]**
@@ -324,9 +393,31 @@ visibility "show when Membership Type equals EMT".]**
 > all. And if somebody fills a question in and then changes the answer that
 > shows it, the hidden answer is thrown away instead of saved."
 
+**[SCREEN: Open a form's Share dialog: the public-access switch, then the
+"Allow submissions without signing in" checkbox, unticked. Then open the form's
+public link in a private window — the "Sign in to submit this form" notice
+above the questions.]**
+
+> "Sharing a form outside the department? Turning on the public link lets
+> anyone **view** it, but submitting still needs a member sign-in until you tick
+> **Allow submissions without signing in** in the Share dialog. A visitor who
+> isn't signed in is told so before they start, with a Sign in button — not
+> after they've typed every answer."
+
+**[PRODUCTION NOTE — 2026-10-04. New beat, about 15 seconds; re-time Chapter 5.
+The up-front sign-in notice is new (2026-10-03); before it, a visitor learned
+only on Submit and lost their answers. A form that allows one submission per
+person can never be opened to visitors who are not signed in.]**
+
 > "You can review all submissions, export responses as CSV, and analyze results."
 
-**[SCREEN: Show the Review Submissions page (ReviewSubmissionsPage) briefly]**
+**[SCREEN: Show the Forms page's Submissions tab briefly]**
+
+**[PRODUCTION NOTE — 2026-10-04. This cue pointed at "Review Submissions
+(ReviewSubmissionsPage)", which is the training officer's queue of
+self-reported training, not form responses. Form responses are the
+**Submissions** tab on the Forms page. Wrong before this window; found while
+checking it.]**
 
 **[TRANSITION: Elections]**
 
@@ -358,9 +449,9 @@ tasks: the Eligibility Roster, sending a test ballot, and publishing results]**
 > "After closing the election, use the Publish Results panel to make results
 > visible to members and email the results report — then formally record the
 > outcome in the meeting minutes. One thing to know: if you close voting early,
-> say at the end of the meeting, flip 'results visible immediately' so members
-> can see the outcome right away — otherwise results stay hidden until the
-> originally scheduled end time."
+> say at the end of the meeting, press **Publish Results** so members can see
+> the outcome right away — otherwise results stay hidden until the originally
+> scheduled end time."
 
 > "And before the meeting: generate the **Pre-Meeting Package** — a printable
 > PDF with the agenda, the full ballot preview, and the eligible-voter list,
@@ -417,8 +508,8 @@ categories with counts.]**
 
 > "Every template can use officer variables now. President, Vice President, Chief,
 > Deputy and Assistant Chief, Secretary, Assistant Secretary, Treasurer, Safety
-> Officer, Training Officer, Quartermaster — name, title, email and phone for each
-> one."
+> Officer, Training Officer, Quartermaster, EMS Supply Officer and Compliance
+> Officer — name, title, email and phone for each one."
 
 **[SCREEN: Send Test Email; the rendered signature shows the current holder's
 real name.]**
@@ -462,7 +553,9 @@ default.]**
 
 **[SCREEN: Expand each in turn while narrating]**
 
-> "**Internal** — for members. The routine 'do not reply' close. That's your
+> "**Internal** — for members. 'This is an automated message from' your
+> department, and nothing telling them not to reply: replies go to the
+> department's own address, so a member who answers gets a person. That's your
 > default."
 
 > "**Public** — for people outside the department. This one **invites a reply**
@@ -474,10 +567,14 @@ default.]**
 > "**Official notice** — for things going on the record. Separations, property
 > return, election results."
 
-**[SCREEN: Edit a footer's lines; toggle the contact and address blocks.]**
+**[SCREEN: Edit a footer's lines; toggle Phone, Email, Website and Mailing
+address. Then scroll up to the "Department contact details" card.]**
 
 > "Rename them, reword them, add your own, delete ones you don't use. Each footer
-> has its own lines and switches for the contact block and the address."
+> has its own lines and its own switches — **Phone**, **Email**, **Website**,
+> **Mailing address**. What those print comes from one place, the **Department
+> contact details** card at the top, and changing it there changes it in
+> Organization settings too."
 
 **[SCREEN: Point to the "N templates use this" count beside a footer]**
 
@@ -518,71 +615,73 @@ into a template; show the preview rendering "FDID 12345"]**
 > official notice reads 'FDID 12345' and is actually right about which number
 > that is."
 
-#### Your emails look different now — but only when you say so
+#### Your emails look different now — every one of them
 
-**[REWRITTEN 2026-08-24. The previous take said an unedited template was
-"tracking the built-in design, so future improvements reach you without you
-doing anything." **That is no longer true**, and following it would have a
-secretary waiting for a change that never arrives. The August 24 shell is
-opt-in per template, and the switch is the Reset button.]**
+**[REWRITTEN 2026-10-04. Supersedes the 2026-08-24 and 2026-09-25 versions of
+this beat. Both described a design that was opt-in per template through Reset;
+since 2026-09-27 (migration `15c5bc7700aa`) **every** stored template was reset
+to the new design at upgrade, edited ones included, and the previous wording was
+kept in a backup. A secretary following the old take would wait for a choice
+that has already been made for them.]**
 
-**[SCREEN: Show the preview pane — the 5px accent rule down the header, the
-status chip, the details table.]**
+**[SCREEN: Show the preview pane — the solid tab naming the category, the title
+on its tinted card, the message card, the centred footer.]**
 
-> "The design changed again in August, and this time the change is a choice
-> rather than something that happens to you."
+> "The design changed again in September, and this time it changed everywhere
+> at once. Every email now has a solid tab at the top naming what kind of
+> notice it is, the title on a tinted card, the message on its own card, and a
+> centred footer."
 
-> "There's a 5-pixel accent rule at the top instead of a solid band, and a
-> status chip that tells the reader at a glance what kind of notice this is —
-> approved, overdue, action needed."
-
-**[SCREEN: The Templates tab, with the banner explaining the new design]**
+**[SCREEN: Open a template the department had edited; show the "Previous
+version (before the redesign)" panel above the editor]**
 
 > "Here is the part to get right, because it is the one that generates the
-> support ticket. **If you upgraded from the previous release, none of your
-> existing templates changed.** Every notice you have goes out looking exactly
-> as it did yesterday."
+> support ticket. **When your department upgraded, every template was reset to
+> the new design — including the ones you'd reworded.** Nothing you wrote was
+> thrown away."
 
-**[PRESENTER NOTE: the on-screen banner reads "Templates you have never edited
-already use it." That is true of a body byte-identical to the _current_ shipped
-default — which a department coming from the previous release does not have,
-because its untouched bodies are the _older_ default. Do not read the banner
-aloud as the rule; say what is above, then point at Reset.]**
+> "Open a template you'd changed, and above the editor there's a **Previous
+> version** panel. **Load this wording** puts your old subject and message back,
+> inside the new design. Check the preview, press **Save** — or **Discard** if
+> you'd rather keep the new text. The old colours and header don't come back;
+> only your words."
 
-**[SCREEN: Press Reset on one template; show the before and after side by side]**
+**[CALLOUT: "Your wording is saved — Previous version → Load this wording →
+Save"]**
 
-> "The new design arrives on a template when you press **Reset** on it — or
-> when you create a new one. That's per template, so you can move the dues
-> notice across, look at it for a week, and leave everything else alone."
+**[PRESENTER NOTE: do not film or read the banner at the top of the Templates
+tab. It still says templates you never edited "already use it" and to "press
+Reset on any you have customised to adopt it". Since the reset, every template
+already uses the design, and Reset now only throws away wording — the advice is
+misleading and has been reported as a defect. Say what is above instead.]**
 
-**[CALLOUT: "Reset replaces your wording too — read it before you press it"]**
+**[CALLOUT: "Reset replaces your wording — read it before you press it"]**
 
-> "And read the warning on that button. Reset does not just restyle the
-> template, it puts the shipped wording back. If somebody has spent two years
-> refining how your department words its dues notice, that goes with it. Copy
-> the text out first."
+> "And read the warning on the **Reset** button. It puts the shipped wording
+> back. If somebody has spent two years refining how your department words its
+> dues notice, that goes with it."
 
 **[SCREEN: The Templates tab list, showing which templates the department has
 changed and how often each is used]**
 
-> "The list also tells you two things it never did: which of these your
-> department has actually changed, and how heavily each one gets used. Between
-> them that's your priority order — the heavily-used ones you've never touched
-> are the ones worth moving first."
+> "The list also tells you which of these your department has changed, and how
+> heavily each one gets used. That's your priority order for bringing old
+> wording back — the heavily-used ones first."
 
 **[SCREEN: The editor and preview side by side]**
 
-> "And the editor and the preview sit side by side now, so you're not switching
-> tabs to see what you just typed."
+> "And the editor and the preview sit side by side, so you're not switching
+> tabs to see what you just typed. There's no CSS box any more — every email
+> uses the one built-in stylesheet."
 
-**[PRODUCTION NOTE: Re-shoot every email preview in this script — twice.
-Anything captured before 2026-08-10 shows the retired full-bleed red band.
-Anything captured between 2026-08-10 and 2026-08-23 shows the rounded header
-band, which is still what a department sees until it presses Reset. **Both are
-current, depending on the department**, so every email shot in this script
-needs a caption saying which state it is. An uncaptioned shot of either one
-reads as a promise about the other. The Footers tab is at
-`/communications/email-templates?tab=footers` — linkable since 2026-08-11.]**
+**[PRODUCTION NOTE — 2026-10-04: Re-shoot every email preview in this script,
+once. There is now **one** state: the solid-tab shell. Shots of the full-bleed
+red band (before 2026-08-10), the rounded header band (2026-08-10 → 08-23), the
+accent-rule and status-chip shell (2026-08-24 → 09-24) and the centred-masthead
+shell (2026-09-25 → 09-26) are all retired, whatever a template had been edited
+to — do not caption any of them as current. Film the Previous version panel on
+a demo template that has a backup row. The Footers tab is at
+`/communications/email-templates?tab=footers`.]**
 
 ### PUBLIC PORTAL (17:20 – 17:35)
 
@@ -627,7 +726,7 @@ between Messages and Photo Use Consent.]**
 > its own reviewers and its own rules about anonymity."
 
 > "First, who can set them up. That's a permission called
-> **suggestions.manage**, and out of the box it's on the Fire Chief, Deputy
+> **suggestions.manage**, and out of the box it's on the Chief, Deputy
 > Chief, Assistant Chief, President and Communications Officer. **Not the
 > Secretary.** If your chief wants you to run them, they'll need to add it to
 > your position — or set the boxes up themselves and name you as a reviewer."
@@ -664,6 +763,20 @@ tick one reviewer position, then **Save box**.]**
 
 **[CALLOUT: "Boxes are never deleted — untick Accepting submissions to close one"]**
 
+**[SCREEN: The box list, with the seeded **Compliance** box marked as accepting
+submissions; open it to show its reviewer, the Compliance Officer position.]**
+
+> "One box is already there when you arrive: **Compliance**. It's switched on
+> from day one, and its reviewer is the **Compliance Officer** position. Until
+> somebody is appointed to that position, a report filed there waits, unread.
+> So either appoint your Compliance Officer, or untick **Accepting
+> submissions** until you have one."
+
+**[PRODUCTION NOTE — 2026-10-04. New beat, about 15 seconds; re-time Chapter 7.
+The Compliance Officer position and the Compliance box were seeded on upgrade
+(2026-09-24) and the box switched on the same day. Film it in a demo department
+where nobody holds the position.]**
+
 ### WHAT A MEMBER SEES (19:00 – 19:40)
 
 **[SCREEN: Switch to the member account. Sidebar → **Suggestions**, the
@@ -699,7 +812,10 @@ an internal note, send a reply in the Follow-up thread — the author shows as
 > sees it. And if the box allows follow-up, answer in the thread."
 
 > "You'll get an email when something new arrives — but the email only carries
-> a link, never the content. Nothing sensitive sits in anybody's inbox."
+> a link, never the content. Nothing sensitive sits in anybody's inbox. That
+> email is on by default; a reviewer can turn it off in their own notification
+> settings, unless your department has made it required. The bell gets it
+> either way."
 
 **[SCREEN: Press **Forward**, choose the Training Officer position, confirm.
 The **Forwarded to** list shows it, with a **Withdraw** control.]**
@@ -710,9 +826,15 @@ The **Forwarded to** list shows it, with a **Withdraw** control.]**
 > it on. An anonymous submitter stays anonymous. And you can withdraw it later."
 
 > "One honest caveat to pass on if anyone asks. Anonymous means nobody using
-> The Logbook can find out who sent it. Somebody with access to the **server
-> itself** — its raw logs — could in principle line up times. If that matters
-> for what someone wants to raise, they should use another route."
+> The Logbook can find out who sent it — and The Logbook's own request logs
+> leave these submissions out entirely. What it can't speak for is anything
+> your IT runs **in front of** it — a firewall or another proxy keeping its own
+> logs. If that matters for what someone wants to raise, they should use
+> another route."
+
+**[PRODUCTION NOTE — 2026-10-04. The caveat used to point at the server's own
+"raw logs"; since 2026-09-29 the access logs, application request logs and
+error reports skip the submission and follow-up routes. Narration only.]**
 
 **[TRANSITION: Workflow summary]**
 
