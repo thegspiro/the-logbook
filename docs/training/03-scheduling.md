@@ -340,7 +340,7 @@ During a shift, officers (with the `scheduling.manage` permission) can log every
 2. Scroll to the **Calls / Runs** section (a count badge shows how many calls are logged).
 3. Click **+ Log Call** to open the inline form.
 4. Fill in the call details:
-   - **Incident type** _(required)_ — e.g., Structure Fire, EMS, MVA.
+   - **Incident type** _(required)_ — picked from the department's call types (Scheduling → Settings → General → Call types) _(2026-10-04)_. The type's name is what is stored, so NFIRS/NEMSIS exports and ePCR imports read it as before; a call logged earlier with typed wording keeps it when edited.
    - **Incident number** _(optional)_ — your CAD/run number.
    - **Dispatched / On-scene / Cleared times** _(optional)_ — entered in your local time and stored in UTC.
    - **Cancelled en route** and **Refusal (medical)** — checkboxes for those outcomes.
@@ -1736,6 +1736,16 @@ Anyone who never checked out is flagged, and **anyone who was assigned but never
 checked in is listed too, with empty times for you to fill in**. That is
 deliberate: they used to be invisible, which meant no hours, no credit, and
 nothing on screen to tell the officer somebody had been missed.
+
+**Each row also has an Hours box** _(2026-10-04)_. For someone who forgot to
+check in or out, type the hours they worked instead of picking two times: the
+hours are counted from their check-in, or from the shift's scheduled start if
+they never checked in, and the end time fills itself in. Rows missing a time
+also offer **Until shift end** (forgot to check out) or **Full shift** (never
+checked in) as a single tap. The footer counts anyone still with no hours, and
+the confirm step marks them **no hours recorded**, so nobody is finalized with
+zero hours by accident. An entry over 48 hours is refused and holds **Next**
+until it is corrected.
 
 ![Close-out wizard step 1 — each member's on and off times, the combined-hours figure for the crew, one member flagged for a missing check-out and one assigned member with empty times](./images/03-75-closeout-step1-attendance.png)
 

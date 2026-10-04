@@ -1768,6 +1768,14 @@ export interface ShiftCrewMember {
   enrollment_id?: string;
   program_name?: string;
   has_existing_report: boolean;
+  /**
+   * Calls a report filed now would credit this member — from the shift's run
+   * log, or from the close-out's per-member credit. The server derives it
+   * with the same function it stores from, so it is what gets saved unless
+   * the officer corrects it.
+   */
+  calls_responded?: number | undefined;
+  calls_source?: 'call_log' | 'closeout' | undefined;
 }
 
 export interface CrewMemberEvaluation {
@@ -1790,6 +1798,8 @@ export interface BatchShiftReportCreate {
   officer_narrative?: string;
   crew_member_ids: string[];
   trainee_evaluations?: CrewMemberEvaluation[];
+  /** user_id -> calls, only for members whose derived count was corrected. */
+  member_call_counts?: Record<string, number> | undefined;
   save_as_draft?: boolean;
 }
 
