@@ -112,12 +112,17 @@ An **NFC tag** is a reusable sticker you write once and mount on the wall. A
 member holds their phone near it and lands on the same check-in page the QR code
 opens.
 
-**Writing one (officers):** open the same **QR Code** page, tap **Write to an
-NFC tag**, and hold a blank tag to the back of the phone.
+**Writing one (officers):** open the same **QR Code** page — every viewer now
+sees a one-line reminder that a tag works like the QR code — and, if you can
+manage the event (or admin-hours category), open **Set up an NFC tag** below
+it, then tap **Write to an NFC tag** and hold a blank tag to the back of the
+phone. The setup panel is collapsed by default so members scanning in next to
+you do not see an officer-only control; opening it does not write anything by
+itself.
 
 **There is no screenshot of this, and the reason is the same thing the
 requirements paragraph below says.** Web NFC exists only in Chrome on Android
-over HTTPS. Where it is missing, the QR Code page does not show a disabled
+over HTTPS. Where it is missing, the opened panel does not show a disabled
 **Write to an NFC tag** control — it shows a line of text in its place saying
 which of the two conditions you are failing. Every screenshot in this library is
 taken by headless Chromium over `http://localhost`, which fails both, so the
@@ -698,8 +703,11 @@ Navigate to **Minutes** in the sidebar to access meeting minutes management.
 
 ### Creating Minutes
 
-1. Click **Create Minutes**.
-2. Select the **meeting type**: Business, Special, Committee, Board, Trustee, Executive, or Annual.
+1. Click **Record Minutes**.
+2. Select the **meeting type**: Business, Special, Committee, Board, or Other. Minutes
+   themselves support three more types — Trustee, Executive, Annual — but a meeting
+   record does not yet, so those cannot be recorded through this page; see
+   `docs/KNOWN_LIMITATIONS.md` (W51-4).
 3. Add **attendees** from the member roster.
 4. Record the **minutes content** including:
    - Call to order
