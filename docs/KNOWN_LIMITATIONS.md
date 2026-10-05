@@ -2824,67 +2824,67 @@ corrected by the training-extended pass,
 missing check closed by INT-27 pass 4,
 `docs/security-review/INT-27-integrations.md`.)
 
-## Google Calendar's Connector Bypasses the Shared HTTP Hardening (INT-9, 2026-09-06)
+## Google Calendar's Connector Bypasses the Shared HTTP Hardening (INT-9, 2026-09-06; size cap and timeouts resolved 2026-10-05)
 
-`GoogleCalendarService._build_service()`
-(`app/services/integration_services/google_calendar_service.py`) calls
-`googleapiclient.discovery.build("calendar", "v3", credentials=creds)` with
-no `http=` argument. Every other connector in this codebase is httpx-based
-and gets its response-size cap (INT-7), redirect suppression, and TLS
-verification from `create_integration_client()` — Google Calendar's
-`push_event`/`update_event`/`delete_event`/`test_connection` never call it,
-so none of that hardening applies to this one connector.
+**Resolved: the response-size cap and the timeouts.** `GoogleCalendarService`
+reaches Google through `googleapiclient` → `google_auth_httplib2` → `httplib2`,
+not `httpx`, so it never reached `create_integration_client()` and none of
+that factory's limits applied — `httplib2.Http._conn_request()` drains every
+response with a bare, unbounded `response.read()`, and a default
+`httplib2.Http()` sets no socket timeout.
 
-**What it actually uses, traced rather than assumed:** `build()` with no
-`http=` resolves through `googleapiclient._auth.authorized_http()`, which
-returns `google_auth_httplib2.AuthorizedHttp(credentials,
-http=build_http())` — `build_http()` is a plain `httplib2.Http()`.
-`httplib2.Http._conn_request()` (pinned `httplib2==0.32.0`, read directly)
-unconditionally does `content = response.read()` on the raw stdlib
-`http.client.HTTPResponse` — no size limit, no streaming, and `httplib2`
-exposes no configuration knob for either. There is no `MAX_RESPONSE_SIZE`-
-style constant this connector silently fails to enforce; it has no
-enforcement mechanism available to it at all short of a custom
-`connection_type`.
+`_build_service()` (`app/services/integration_services/google_calendar_service.py`)
+now passes `build()` an `AuthorizedHttp` over `_BoundedHttp`, an
+`httplib2.Http` subclass that supplies its own `connection_type` on every
+request — API calls, the OAuth token refresh and any redirect all come back
+through it. Its connections enforce the **same numbers** the `httpx`
+connectors use, imported rather than restated:
 
-**Why this wasn't fixed in the same pass as INT-7/INT-8:** every other fix
-in this rotation for this feature was a change to `httpx`-based code — a
-custom `httpx.AsyncBaseTransport` wrapper, or (PayPal) a one-line swap onto
-the existing shared factory. Capping `httplib2`'s response size requires a
-custom `httplib2.Http` `connection_type` whose `getresponse()` wraps the
-returned connection object to intercept `.read()` — reaching into two
-layers of wrapping (`google_auth_httplib2.AuthorizedHttp` around
-`httplib2.Http`) plus private `httplib2`/`http.client` internals, a
-materially deeper and more version-fragile change than anything else this
-rotation touched, attempted under review-loop time pressure. Forcing an
-unverified fix here risks the exact failure mode CLAUDE.md's completion
-gate exists to prevent — code that compiles and passes a shallow test while
-not actually capping anything, which for a size-cap fix is worse than no
-fix at all if it creates false confidence.
+- **`MAX_RESPONSE_SIZE` (10 MB)** on the wire: the connections'
+  `response_class` replaces only the bare `read()` httplib2 calls with a
+  chunked read that stops as soon as the total passes the cap, and refuses a
+  declared `Content-Length` over it before reading anything. A breach raises
+  the shared `ResponseTooLargeError`.
+- **`MAX_RESPONSE_SIZE` decompressed**, via httplib2's own
+  `decode_limit_hard`: httplib2 requests gzip and inflates the body after
+  reading it, so a small compressed body under the wire cap could otherwise
+  expand far past it. A breach is re-raised as `ResponseTooLargeError`.
+- **`INTEGRATION_TIMEOUT`'s budgets** as socket timeouts: 5 s for the TCP
+  connect and TLS handshake, 10 s for every later socket operation.
 
-**Impact:** same reachable population as INT-7 pre-fix (an org admin
-holding `integrations.manage` who connects Google Calendar), but the
-destination is Google's own API and OAuth token endpoint — not an
-arbitrary, admin-configured host — so unlike the general integrations case
-there is no SSRF angle; the residual risk is an oversized or slow-drip
-response from Google's own infrastructure (or a compromised/MITM'd path to
-it) driving unbounded memory growth or an unbounded-duration request, the
-same failure shape INT-7 and its wall-clock-deadline follow-up close for
-every other connector.
+After a refused or timed-out response the pooled connections are closed, so a
+half-read body is never parsed as the next response. Every call site already
+catches `Exception` and fails closed (`None`/`False`, or `test_connection`'s
+generic message). Guarded by
+`backend/tests/test_google_calendar_http_bounds.py`, against a real loopback
+server: a normal response succeeds; chunked and declared-length streams four
+times the cap are refused without the server managing to send the whole
+stream; a gzip body that inflates past the cap is refused; a response that
+stalls before its headers or mid-body times out; the same `Http` object works
+again after a refusal; and the whole `googleapiclient` stack, pointed at the
+loopback server, succeeds, fails cleanly on an oversized body, and returns
+`None` from a push against a stalled API.
 
-**Not fixed — tracked for a dedicated pass.** A real fix needs: (1) a
-custom `httplib2.Http` subclass (or `connection_type`) that caps bytes read
-per response, verified against a real streamed response the way
-`test_integration_response_size_cap.py` verifies the httpx-based transport
-— asserting the size cap actually aborts a call, not merely that
-`_build_service()` still returns an object — and (2) the equivalent for a
-wall-clock deadline, which the httpx-based connectors have had since
-2026-10-04 (`INTEGRATION_DEADLINE_SECONDS` in `create_integration_client()`), since
-`google_auth_httplib2`/`httplib2` have no async story to hang
-`asyncio.timeout()` off of the way the httpx subclass approach does (Google
-API calls here run synchronously inside an `async def` method with no
-`await` on the network call itself — a separate, pre-existing question this
-entry does not attempt to resolve).
+**Still open:**
+
+- **No wall-clock deadline** — the timeouts are per socket operation, so a
+  server that trickles a byte every few seconds is bounded in memory but not
+  in time. The `httpx` connectors have had a total deadline since 2026-10-04
+  (`INTEGRATION_DEADLINE_SECONDS` in `create_integration_client()`), but it
+  is an `asyncio.timeout()` around `send()`, and Google Calendar's calls are
+  synchronous `httplib2` calls inside `async def` methods, so it needs its
+  own mechanism.
+- **The synchronous calls block the event loop** for as long as a call runs
+  — now bounded by the timeouts above rather than unbounded.
+- **Redirects follow `httplib2`'s default** (followed for `GET`/`HEAD`, up to five). The
+  destination is Google's own API and token endpoint, so there is no SSRF
+  angle, but it is not the `httpx` factory's no-redirect policy.
+- **`httplib2` and `google-auth-httplib2` are not pinned in
+  `requirements.txt`** — they arrive as dependencies of
+  `google-api-python-client`. The fix relies on `httplib2`'s
+  `connection_type` argument, its `decode_limit_hard` option (present in
+  0.32.0) and `http.client.HTTPConnection.response_class`, so an unpinned
+  upgrade is what could break it; the tests above would catch that.
 
 (Security review INT-27, follow-up round 5, 2026-09-06:
 `docs/security-review/INT-27-integrations.md`.)
