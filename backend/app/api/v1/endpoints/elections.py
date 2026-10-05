@@ -40,7 +40,7 @@ from app.models.election import (
 )
 from app.models.event import Event, EventRSVP, RSVPStatus
 from app.models.meeting import Meeting, MeetingAttendee
-from app.models.user import User
+from app.models.user import Organization, User
 from app.schemas.election import (
     AttendeeCheckIn,
     AttendeeCheckInResponse,
@@ -112,6 +112,12 @@ from app.services.election_service import (
 from app.utils.org_scoping import assert_in_org
 
 router = APIRouter()
+
+# ELEC-12 (owner decision 2026-10-05): every Ballot Builder load returns the
+# whole list, so the bound is on creation rather than on the response — a cap
+# leaves the list contract untouched. 200 is far above any department's real
+# use and keeps the unpaginated list cheap.
+MAX_SAVED_BALLOT_TEMPLATES_PER_ORG = 200
 
 
 # Rate-limit factories for public ballot endpoints (no auth required).
@@ -443,6 +449,28 @@ async def save_ballot_template(
     result fields, preventing a template from becoming a route for copying
     sensitive or stateful election data.
     """
+    # Pitfall #27: lock the organization row so two saves arriving together
+    # cannot both read 199 and land at 201, and count with a locking read so
+    # the count is not answered from a snapshot older than the lock.
+    await db.execute(
+        select(Organization.id)
+        .where(Organization.id == str(current_user.organization_id))
+        .with_for_update()
+    )
+    existing = await db.execute(
+        select(SavedBallotTemplate.id)
+        .where(SavedBallotTemplate.organization_id == str(current_user.organization_id))
+        .with_for_update()
+    )
+    if len(existing.scalars().all()) >= MAX_SAVED_BALLOT_TEMPLATES_PER_ORG:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This organization has reached the maximum of "
+                f"{MAX_SAVED_BALLOT_TEMPLATES_PER_ORG} saved ballot templates. "
+                "Delete one you no longer use before saving another."
+            ),
+        )
     template = SavedBallotTemplate(
         id=str(uuid4()),
         organization_id=str(current_user.organization_id),
@@ -842,7 +870,6 @@ async def get_election_settings(
     **Authentication required**
     **Requires permission: elections.manage**
     """
-    from app.models.user import Organization
 
     org_result = await db.execute(
         select(Organization).where(Organization.id == str(current_user.organization_id))
@@ -908,7 +935,6 @@ async def update_election_settings(
     **Authentication required**
     **Requires permission: elections.manage**
     """
-    from app.models.user import Organization
 
     org_result = await db.execute(
         select(Organization).where(Organization.id == str(current_user.organization_id))

@@ -153,6 +153,11 @@ and apply it to next year's election:
    has at least one item, and not on a closed election)
 3. Name it — e.g. "Annual officer election" — and click **Save Template**
 
+A department can keep up to **200** saved templates _(2026-10-05)_. Saving a
+201st is refused with "This organization has reached the maximum of 200 saved
+ballot templates" — delete one you no longer use from the template picker
+first.
+
 > **What is saved — and what deliberately is not.** A template snapshots the
 > ballot **structure only**: items, positions, voting methods, victory
 > conditions, write-in settings, eligibility types. It never carries

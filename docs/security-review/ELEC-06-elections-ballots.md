@@ -10,6 +10,11 @@ The owner decided the open ELEC and W50 items on 2026-10-05; each is applied
 in its own commit on the `worktree-elections` branch and recorded here. A
 finding below that says FLAGGED or OPEN is superseded by its line here.
 
+- **ELEC-12** (`SavedBallotTemplate` list/create unbounded) — **fixed: a
+  per-org creation cap of 200** (`MAX_SAVED_BALLOT_TEMPLATES_PER_ORG` in
+  `elections.py`), enforced under a lock on the organization row with a
+  locking count (pitfall #27); the 201st save is a 409. The list response is
+  unchanged. Guard: `tests/test_saved_ballot_template_cap.py`.
 - **ELEC-16** (`list_manual_ballot_batches` unbounded) — **accepted as is.**
   Paper-tally sessions per election are naturally few; no cap and no
   pagination. Revisit if an election ever carries more than a few dozen
