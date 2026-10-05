@@ -227,6 +227,11 @@ const TabLoading = () => (
 
 // ── Tab content renderer ────────────────────────────────────────
 
+// The hub's content column already supplies the page's width and side
+// padding, so a tab's root sets only vertical spacing. A tab that brings its
+// own `px-4 sm:px-6 lg:px-8` container is indented twice, which on a 320px
+// phone costs 32px of an already narrow column.
+
 const TabContent: React.FC<{ page: PageId; tab: string; onMetricsSaved: () => void }> = ({
   page,
   tab,
@@ -517,7 +522,7 @@ export const TrainingAdminPage: React.FC = () => {
               role="tab"
               aria-selected={isActive}
               aria-current={isActive ? 'page' : undefined}
-              className={`focus:ring-theme-focus-ring flex min-h-11 items-center space-x-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden ${
+              className={`focus:ring-theme-focus-ring touch:min-h-11 flex items-center space-x-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden ${
                 isActive
                   ? 'bg-red-800 text-white'
                   : 'bg-theme-surface-secondary text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
@@ -536,7 +541,7 @@ export const TrainingAdminPage: React.FC = () => {
             onKeyDown={handleMoreTriggerKeyDown}
             aria-expanded={isMoreOpen}
             aria-haspopup="menu"
-            className={`focus:ring-theme-focus-ring flex min-h-11 items-center space-x-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-hidden ${
+            className={`focus:ring-theme-focus-ring touch:min-h-11 flex items-center space-x-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-hidden ${
               overflowPages.some(({ id }) => id === activePage)
                 ? 'bg-red-800 text-white'
                 : 'bg-theme-surface-secondary text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
@@ -600,7 +605,7 @@ export const TrainingAdminPage: React.FC = () => {
                 key={action.label}
                 type="button"
                 onClick={() => handleTabChange(action.tab)}
-                className="focus:ring-theme-focus-ring text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover min-h-11 rounded-md border px-3 py-2 text-sm font-medium focus:ring-2 focus:outline-hidden"
+                className="focus:ring-theme-focus-ring text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover touch:min-h-11 rounded-md border px-3 py-2 text-sm font-medium focus:ring-2 focus:outline-hidden"
               >
                 {action.label}
               </button>
@@ -640,7 +645,7 @@ export const TrainingAdminPage: React.FC = () => {
         role="tabpanel"
         aria-labelledby={`training-admin-section-tab-${activePage}`}
       >
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl">
           {/* Inner tab bar */}
           <div className="border-theme-surface-border border-b">
             {/* Declared an intentional scroll region so the mobile pass stops

@@ -67,6 +67,10 @@ Nothing was widened — it already reached medical stock through the broad
 `inventory.manage`; the role editor is simply honest about it now. It also
 gained the `equipment_check.*` set its description had always promised.
 
+> `equipment_check.*` was renamed `inventory.check_*` on 2026-08-31, with the
+> stored grants migrated, so both roles now hold `inventory.check_view` /
+> `.check_submit` / `.check_manage`.
+
 ## Pages
 
 | Page                      | Route                          | Opens on                                                                                        |
@@ -78,6 +82,12 @@ The page opens on the expiring tab rather than the catalog because, for a
 consumable with a shelf life, _"what am I about to lose"_ is the question that
 brings someone to the page.
 
+The headline tiles read **Expiring within 30 days** and **Low stock**
+_(2026-09-29; the second was "Below reorder point", though it counts items at or
+below it)_. A category's threshold reads "Low stock at _N_ or below", and a
+search that matches nothing says **No matching supplies** rather than claiming
+the catalog is empty.
+
 ### Receive delivery
 
 Books a whole shipment as **one dated lot per item line** — item, lot number,
@@ -86,6 +96,8 @@ add stock to a lot-tracked item.
 
 **If one line fails validation, nothing is written.** Fix the line and resubmit
 the whole delivery.
+
+Each line is labelled **Line 1**, **Line 2**… for screen readers _(2026-09-30)_.
 
 ## On-hand comes from the lots
 
@@ -98,6 +110,14 @@ For any item that has lots, on-hand is the sum of its **in-date** lots — not t
   the lot figure and a pointer to **Receive delivery**. (Until 2026-08-17 it was
   an editable box that wrote a value nothing displayed — you could change it,
   get a success toast, and watch the number stay put.)
+- **The item page's Stock Lots panel counts the same way** _(2026-09-30)_. It
+  used to total expired lots as ready units, disagreeing with this page; it now
+  counts in-date lots only and shows "· _N_ expired" beside them.
+- **A retired item's lots drop out** of the expiring list, the summary counts
+  and the supply-expiry email _(2026-09-30)_.
+- **Open:** the main dashboard's **Low stock** widget sums the item `quantity`
+  column, which a lot-stocked item leaves at 0, so it can call a well-stocked
+  medical category empty (workflow review W47-6, in KNOWN_LIMITATIONS).
 
 ## Alerts
 
@@ -107,8 +127,9 @@ structural PPE and has no medical analogue.
 
 **Each recipient group receives only the rows it is allowed to see.** Someone
 holding both grants receives **one** complete email rather than two partial
-ones. The text-message version carries only a count, so it is not split, and it
-says so.
+ones. These alerts are **email only** — an earlier version of this page
+mentioned a text-message version; SMS is reserved for the `SmsAlert` allowlist,
+which names neither _(corrected 2026-10-04)_.
 
 > Two defects here are worth knowing about if you are upgrading from before
 > 2026-08-16. First, **these alerts had never been delivered at all** — the

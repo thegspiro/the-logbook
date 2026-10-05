@@ -19,6 +19,7 @@ import { Search, User, Loader2, AlertTriangle, ScanLine } from 'lucide-react';
 import { inventoryService, type MemberInventorySummary } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
 import { MemberIdScannerModal } from './MemberIdScannerModal';
+import { displayNameOf } from '../utils/memberName';
 
 interface SelectedMember {
   userId: string;
@@ -33,7 +34,7 @@ interface MemberPickerModalProps {
 }
 
 function memberDisplayName(m: MemberInventorySummary): string {
-  return m.full_name || `${m.first_name ?? ''} ${m.last_name ?? ''}`.trim() || m.username;
+  return displayNameOf(m) || m.username;
 }
 
 export const MemberPickerModal: React.FC<MemberPickerModalProps> = ({
@@ -96,7 +97,8 @@ export const MemberPickerModal: React.FC<MemberPickerModalProps> = ({
     const sorted = [...members].sort((a, b) => memberDisplayName(a).localeCompare(memberDisplayName(b)));
     if (!q) return sorted;
     return sorted.filter((m) => {
-      const name = memberDisplayName(m).toLowerCase();
+      // The legal name too, so a member can be found by either name.
+      const name = `${memberDisplayName(m)} ${m.full_name ?? ''}`.toLowerCase();
       return (
         name.includes(q) ||
         (m.membership_number ?? '').toLowerCase().includes(q) ||

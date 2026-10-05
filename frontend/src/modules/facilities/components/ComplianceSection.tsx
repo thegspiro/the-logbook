@@ -228,7 +228,7 @@ export default function ComplianceSection({ facilityId, canCreate, canDelete }: 
                     onClick={() => {
                       void handleDelete(checklist);
                     }}
-                    className="text-theme-text-muted rounded-lg p-1.5 transition-all hover:bg-red-500/10 hover:text-red-500 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100"
+                    className="text-theme-text-muted rounded-lg p-1.5 transition-all hover:bg-red-500/10 hover:text-red-500 pointer-fine:opacity-0 pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100"
                     aria-label={`Delete ${checklist.title}`}
                   >
                     <Trash2 className="h-3.5 w-3.5" />

@@ -915,7 +915,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowAllSubmissions((open) => !open)}
-                  className="max-md:mobile-touch-target text-sm text-blue-700 dark:text-blue-400"
+                  className="touch:mobile-touch-target text-sm text-blue-700 dark:text-blue-400"
                 >
                   {showAllSubmissions ? 'Show fewer' : `View all ${submissions.length}`}
                 </button>
@@ -955,7 +955,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                             type="button"
                             onClick={() => onEdit(submission)}
                             aria-label={`Edit ${submission.course_name}`}
-                            className="text-theme-text-muted hover:text-theme-text-primary max-md:mobile-touch-target rounded-sm p-1.5"
+                            className="text-theme-text-muted hover:text-theme-text-primary touch:mobile-touch-target rounded-sm p-1.5"
                           >
                             <Pencil className="h-4 w-4" />
                           </button>
@@ -963,7 +963,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                             type="button"
                             onClick={() => onDelete(submission.id)}
                             aria-label={`Delete ${submission.course_name}`}
-                            className="text-theme-text-muted max-md:mobile-touch-target rounded-sm p-1.5 hover:text-red-700 dark:hover:text-red-400"
+                            className="text-theme-text-muted touch:mobile-touch-target rounded-sm p-1.5 hover:text-red-700 dark:hover:text-red-400"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
@@ -1157,7 +1157,7 @@ const SubmitTrainingPage: React.FC = () => {
           <button
             onClick={() => void navigate('/training')}
             aria-label="Back to training"
-            className="max-md:mobile-touch-target text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded-lg p-2"
+            className="touch:mobile-touch-target text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded-lg p-2"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>

@@ -517,3 +517,38 @@ describe('Members roster — bulk bar for members.manage', () => {
     expect(screen.getByRole('button', { name: /Export Selected/i })).toBeInTheDocument();
   });
 });
+
+describe('Members roster — preferred names', () => {
+  const terry = makeMember({
+    id: 'u4',
+    username: 'jheather',
+    email: 'jh@example.org',
+    first_name: 'John',
+    last_name: 'Heather',
+    preferred_name: 'Terry',
+    membership_number: '044',
+  });
+
+  beforeEach(() => {
+    installDefaults([]);
+    mockGetUsers.mockResolvedValue([...ROSTER, terry]);
+  });
+
+  it('lists a member by the name they go by, avatar included', async () => {
+    await renderRoster();
+
+    const row = within(table()).getByRole('row', { name: /Terry Heather/ });
+    expect(within(table()).queryByText('John Heather')).not.toBeInTheDocument();
+    expect(within(row).getByRole('img', { name: 'Terry Heather' })).toHaveTextContent('TH');
+  });
+
+  it.each([['Terry'], ['John']])('finds the member by "%s"', async (query) => {
+    const user = userEvent.setup();
+    await renderRoster();
+
+    await user.type(screen.getByLabelText(/search by name/i), query);
+
+    expect(await within(table()).findByText('Terry Heather')).toBeInTheDocument();
+    expect(within(table()).queryByText('Laura Adams')).not.toBeInTheDocument();
+  });
+});

@@ -80,6 +80,7 @@ from app.utils.apparatus_ref import (
     resolve_apparatus_ref,
 )
 from app.utils.hours import hours_from_minutes, sum_hours_to_quarter
+from app.utils.member_names import format_display_name
 from app.utils.membership import is_administrative
 from app.utils.org_timezone import resolve_org_today, resolve_scheduling_timezone
 from app.utils.positions import normalize_stored_positions, position_label
@@ -477,7 +478,7 @@ class SchedulingService:
         return (getattr(settings, "FRONTEND_URL", "") or "").rstrip("/")
 
     async def _member_display_name(self, user_id: Any) -> str:
-        """Full name for a member, or an empty string if it cannot be resolved.
+        """The name a member goes by, or an empty string if it cannot be resolved.
 
         Empty rather than a placeholder: the templates open with
         "Hello {{recipient_name}}," and an unresolved name reads better as
@@ -487,9 +488,7 @@ class SchedulingService:
         user = result.scalar_one_or_none()
         if not user:
             return ""
-        first = user.first_name or ""
-        last = user.last_name or ""
-        return (user.full_name or f"{first} {last}".strip()) or ""
+        return user.display_name or ""
 
     async def _send_notification(
         self,
@@ -708,19 +707,26 @@ class SchedulingService:
         )
 
     async def _get_user_name_map(self, user_ids: List[str]) -> Dict[str, str]:
-        """Load user display names for a set of user IDs, returning {id: full_name}."""
+        """Load user display names for a set of user IDs, returning {id: name}.
+
+        Every caller renders the name on an everyday surface (shift boards,
+        swap/trade lists, notifications), so this is the display name — the
+        preferred name when one is set. Reports that need the legal name read
+        the columns themselves.
+        """
         if not user_ids:
             return {}
         result = await self.db.execute(
-            select(User.id, User.first_name, User.last_name).where(
+            select(User.id, User.first_name, User.last_name, User.preferred_name).where(
                 User.id.in_(user_ids)
             )
         )
         name_map: Dict[str, str] = {}
         for row in result.all():
-            first = row.first_name or ""
-            last = row.last_name or ""
-            name_map[str(row.id)] = f"{first} {last}".strip() or "Unknown"
+            name_map[str(row.id)] = (
+                format_display_name(row.first_name, row.last_name, row.preferred_name)
+                or "Unknown"
+            )
         return name_map
 
     def _enrich_shift_dict(
@@ -4955,9 +4961,7 @@ class SchedulingService:
             declined_user = user_result.scalar_one_or_none()
             user_name = "Unknown"
             if declined_user:
-                first = declined_user.first_name or ""
-                last = declined_user.last_name or ""
-                user_name = f"{first} {last}".strip() or "Unknown"
+                user_name = declined_user.display_name or "Unknown"
 
             recipient_ids: set[str] = set()
 
@@ -5201,9 +5205,7 @@ class SchedulingService:
             req_user = req_result.scalar_one_or_none()
             req_name = "A member"
             if req_user:
-                first = req_user.first_name or ""
-                last = req_user.last_name or ""
-                req_name = f"{first} {last}".strip() or "A member"
+                req_name = req_user.display_name or "A member"
 
             shift_result = await self.db.execute(
                 select(Shift).where(Shift.id == str(swap_request.offering_shift_id))
@@ -5323,9 +5325,7 @@ class SchedulingService:
             user = user_result.scalar_one_or_none()
             user_name = "A member"
             if user:
-                first = user.first_name or ""
-                last = user.last_name or ""
-                user_name = f"{first} {last}".strip() or "A member"
+                user_name = user.display_name or "A member"
 
             shift_date_str = (
                 shift.shift_date.isoformat() if shift.shift_date else "unknown date"
@@ -6460,7 +6460,7 @@ class SchedulingService:
         html_body = wrap_email_body(
             org,
             subject,
-            f"<p>Hello {_html.escape(user.first_name or '')},</p>"
+            f"<p>Hello {_html.escape(user.preferred_name or user.first_name or '')},</p>"
             f"<p>{_html.escape(message)}</p>"
             f'<p style="text-align: center;">'
             f'<a href="{_html.escape(url)}" class="button" role="link">'
@@ -6790,7 +6790,13 @@ class SchedulingService:
 
         # Active members of this platoon.
         member_result = await self.db.execute(
-            select(User.id, User.first_name, User.last_name, User.email).where(
+            select(
+                User.id,
+                User.first_name,
+                User.last_name,
+                User.preferred_name,
+                User.email,
+            ).where(
                 User.organization_id == str(org_id),
                 User.platoon == shift.platoon,
                 User.is_active,
@@ -6828,7 +6834,7 @@ class SchedulingService:
                 status = "on_leave"
             else:
                 status = "available"
-            name = f"{m.first_name or ''} {m.last_name or ''}".strip()
+            name = format_display_name(m.first_name, m.last_name, m.preferred_name)
             roster.append(
                 {
                     "user_id": uid,
@@ -6908,7 +6914,13 @@ class SchedulingService:
 
         # Active org members
         user_result = await self.db.execute(
-            select(User.id, User.first_name, User.last_name, User.email).where(
+            select(
+                User.id,
+                User.first_name,
+                User.last_name,
+                User.preferred_name,
+                User.email,
+            ).where(
                 User.organization_id == str(organization_id),
                 User.is_active,
             )
@@ -6952,7 +6964,7 @@ class SchedulingService:
         summaries = []
         for u in users:
             uid = str(u.id)
-            name = f"{u.first_name or ''} {u.last_name or ''}".strip()
+            name = format_display_name(u.first_name, u.last_name, u.preferred_name)
             unavail = user_unavailable.get(uid, set())
             avail = all_dates - unavail
             summaries.append(
@@ -9006,7 +9018,22 @@ class SchedulingService:
         and ratings to complete each report. Returns the number of drafts
         created.
         """
-        from app.services.shift_completion_service import ShiftCompletionService
+        from app.services.shift_completion_service import (
+            ShiftCompletionService,
+            reports_filed_by_shift_officer,
+        )
+
+        # Under officer-on-the-rig authorship every draft belongs to the
+        # shift's officer — not the finalizer, not a slot's evaluator — since
+        # only they may complete it. No officer assigned means nobody may.
+        officer_only = await reports_filed_by_shift_officer(self.db, organization_id)
+        if officer_only and not shift.shift_officer_id:
+            logger.info(
+                "No draft reports for shift {}: the department files reports by "
+                "Shift Officer and none is assigned",
+                shift.id,
+            )
+            return 0
 
         att_result = await self.db.execute(
             select(ShiftAttendance).where(ShiftAttendance.shift_id == str(shift.id))
@@ -9088,6 +9115,22 @@ class SchedulingService:
                 officer_id = finalized_by_user_id
                 if slot and slot.get("evaluator_id"):
                     officer_id = str(slot["evaluator_id"])
+                if officer_only:
+                    officer_id = str(shift.shift_officer_id)
+
+                # A trainee who closed out their own shift (and has no
+                # evaluator named on their slot) would be drafted a report
+                # about themselves, which create_report refuses. Skip it here
+                # rather than logging that refusal as a failure; another
+                # officer can still file one.
+                if str(officer_id) == str(user_id):
+                    logger.info(
+                        "No draft report for trainee {} on shift {}: they "
+                        "finalized it themselves",
+                        user_id,
+                        shift.id,
+                    )
+                    continue
 
                 att = attendee_by_user.get(user_id)
                 hours = 0.0
@@ -9201,7 +9244,9 @@ class SchedulingService:
                         f"{settings.FRONTEND_URL}"
                         f"/scheduling?tab=shift-reports&view=drafts"
                     )
-                    e_first = _html.escape(officer.first_name or "")
+                    e_first = _html.escape(
+                        officer.preferred_name or officer.first_name or ""
+                    )
                     e_date = _html.escape(shift_date_str)
                     email_service = EmailService(organization=org)
 
@@ -9223,7 +9268,7 @@ class SchedulingService:
                         f"Review Draft Reports</a></p>",
                     )
                     text_body = (
-                        f"Hi {officer.first_name or ''},\n\n"
+                        f"Hi {officer.preferred_name or officer.first_name or ''},\n\n"
                         f"Your shift on {shift_date_str} has "
                         f"been finalized. {draft_count} draft "
                         f"report{plural} auto-created.\n\n"

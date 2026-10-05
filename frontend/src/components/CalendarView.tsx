@@ -161,7 +161,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, timezone }) 
         <div className="grid w-full grid-cols-[44px_minmax(0,1fr)_44px] items-center gap-2 md:w-auto md:grid-cols-[44px_minmax(180px,1fr)_44px]">
           <button
             onClick={goToPreviousMonth}
-            className="text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-2 transition-colors max-md:min-h-[44px] max-md:min-w-[44px]"
+            className="text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover touch:min-h-[44px] touch:min-w-[44px] rounded-lg p-2 transition-colors"
             aria-label="Previous month"
           >
             <ChevronLeft className="h-5 w-5" />
@@ -169,7 +169,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, timezone }) 
           <h2 className="text-theme-text-primary min-w-0 text-center text-lg font-semibold">{monthLabel}</h2>
           <button
             onClick={goToNextMonth}
-            className="text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-2 transition-colors max-md:min-h-[44px] max-md:min-w-[44px]"
+            className="text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover touch:min-h-[44px] touch:min-w-[44px] rounded-lg p-2 transition-colors"
             aria-label="Next month"
           >
             <ChevronRight className="h-5 w-5" />
@@ -177,7 +177,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, timezone }) 
         </div>
         <button
           onClick={goToToday}
-          className="btn-secondary text-theme-text-secondary hover:text-theme-text-primary px-3 py-1.5 text-sm font-medium max-md:min-h-[44px] max-md:min-w-[44px]"
+          className="btn-secondary text-theme-text-secondary hover:text-theme-text-primary touch:min-h-[44px] touch:min-w-[44px] px-3 py-1.5 text-sm font-medium"
         >
           Today
         </button>

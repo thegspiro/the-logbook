@@ -346,12 +346,12 @@ const VariantGroupsPage: React.FC = () => {
   );
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
+    <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
       <Breadcrumbs />
 
       <Link
         to="/inventory/admin"
-        className="text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1 text-sm"
+        className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 flex items-center gap-1 text-sm"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Admin
@@ -364,7 +364,7 @@ const VariantGroupsPage: React.FC = () => {
           <p className="text-theme-text-secondary mt-1">Group pool item variants by size, style, and color.</p>
         </div>
         <div className="flex shrink-0 items-center gap-3 whitespace-nowrap">
-          <label className="text-theme-text-secondary flex cursor-pointer items-center gap-2 text-sm">
+          <label className="text-theme-text-secondary touch:min-h-11 flex cursor-pointer items-center gap-2 text-sm">
             <input
               type="checkbox"
               checked={showInactive}
@@ -457,7 +457,7 @@ const VariantGroupsPage: React.FC = () => {
                   <button
                     onClick={() => void openDetailModal(group)}
                     aria-label={`View ${group.name}`}
-                    className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-md p-1.5 transition-colors"
+                    className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover touch-target-phone rounded-md p-1.5 transition-colors"
                   >
                     <Eye className="h-4 w-4" />
                   </button>
@@ -466,14 +466,14 @@ const VariantGroupsPage: React.FC = () => {
                       <button
                         onClick={() => openEditModal(group)}
                         aria-label={`Edit ${group.name}`}
-                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-md p-1.5 transition-colors"
+                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover touch-target-phone rounded-md p-1.5 transition-colors"
                       >
                         <Pencil className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => void toggleActive(group)}
                         aria-label={group.active ? `Deactivate ${group.name}` : `Activate ${group.name}`}
-                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-md p-1.5 transition-colors"
+                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover touch-target-phone rounded-md p-1.5 transition-colors"
                       >
                         {group.active ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>

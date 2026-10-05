@@ -173,7 +173,7 @@ async def _build_member_specs(db, org_id, ids, extra_lines):
     )
     specs = []
     for u in rows.all():
-        name = " ".join(filter(None, [u.first_name, u.last_name])) or "Member"
+        name = u.display_name or "Member"
         specs.append(
             LabelSpec(
                 name=name,
@@ -270,8 +270,8 @@ MODULE_LABELS: Dict[str, Tuple[Tuple[str, ...], SpecBuilder]] = {
     # itself requires inventory.manage, and a label document naming arbitrary
     # item ids is a read of it — accepting inventory.view (which every seeded
     # member holds) would leave this generic endpoint as a way around that.
-    # apparatus/facilities/membership stay view-level because their own pages
-    # are view-level; prospective_members.view is not a baseline grant.
+    # apparatus/facilities stay view-level because their own pages are
+    # view-level; prospective_members.view is not a baseline grant.
     "inventory": (("inventory.manage",), _build_inventory_specs),
     "apparatus": (("apparatus.view", "apparatus.manage"), _build_apparatus_specs),
     "prospective_members": (
@@ -279,10 +279,12 @@ MODULE_LABELS: Dict[str, Tuple[Tuple[str, ...], SpecBuilder]] = {
         _build_prospect_specs,
     ),
     "facilities": (("facilities.view", "facilities.manage"), _build_facility_specs),
-    # Not members.view, which every seeded position holds: a member label is a
-    # badge that scans as that member, and printing one for a colleague is
-    # the same act as opening their ID card — limited to the officers who
-    # manage member records or issue ID credentials.
+    # A member label is a badge: its barcode is what the check-in station and
+    # the badge scanner accept as "this member is here". It follows the ID-card
+    # rule (frontend/src/utils/memberIdCardAccess.ts) — members.manage or
+    # members.manage_id_cards — and never members.view, which every seeded
+    # position carries: that let any member print a colleague's badge through
+    # this endpoint while the card page itself refused them.
     "membership": (
         ("members.manage", "members.manage_id_cards"),
         _build_member_specs,

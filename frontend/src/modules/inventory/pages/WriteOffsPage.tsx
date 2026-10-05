@@ -91,12 +91,12 @@ const WriteOffsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
+      <div className="mx-auto max-w-5xl py-6 sm:py-8">
         <Breadcrumbs />
 
         <Link
           to="/inventory/admin"
-          className="text-theme-text-muted hover:text-theme-text-secondary mb-6 flex items-center gap-1 text-sm"
+          className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 mb-6 flex items-center gap-1 text-sm"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Admin
@@ -148,7 +148,7 @@ const WriteOffsPage: React.FC = () => {
         ) : writeOffs.length === 0 ? (
           <div className="card-secondary p-8 text-center">
             <FileX className="text-theme-text-muted mx-auto mb-4 h-12 w-12" />
-            <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">No Write-Offs</h3>
+            <h2 className="text-theme-text-primary mb-2 text-lg font-semibold">No Write-Offs</h2>
             <p className="text-theme-text-muted text-sm">No {statusFilter || 'write-off'} requests found.</p>
           </div>
         ) : (
@@ -158,7 +158,7 @@ const WriteOffsPage: React.FC = () => {
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
                     <div className="mb-1 flex flex-wrap items-center gap-2">
-                      <h3 className="text-theme-text-primary text-sm font-semibold">{wo.item_name}</h3>
+                      <h2 className="text-theme-text-primary text-sm font-semibold">{wo.item_name}</h2>
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-medium ${REQUEST_STATUS_BADGES[wo.status] ?? 'bg-theme-surface-secondary text-theme-text-muted'}`}
                       >

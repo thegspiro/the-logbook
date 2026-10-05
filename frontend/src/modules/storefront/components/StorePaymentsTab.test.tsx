@@ -158,4 +158,13 @@ describe('StorePaymentsTab', () => {
       expect(mockToastError).toHaveBeenCalledTimes(1);
     });
   });
+
+  // As for orders: a body that is not a list is a failed load, reported in the
+  // tab's own words, rather than a crash on `events.length`.
+  it('reports a payment list that is not a list instead of crashing', async () => {
+    mockListPaymentEvents.mockResolvedValue({});
+    render(<StorePaymentsTab onChanged={vi.fn()} />);
+
+    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Could not load payments'));
+  });
 });

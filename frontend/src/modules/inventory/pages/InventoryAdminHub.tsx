@@ -98,7 +98,7 @@ const NeedsAttention: React.FC<{
         <span className="flex-1">
           Some inventory services did not respond ({failedSources.join(', ')}). This queue may be incomplete.
         </span>
-        <button type="button" className="font-semibold underline" onClick={onRetry}>
+        <button type="button" className="touch:min-h-11 touch:min-w-11 font-semibold underline" onClick={onRetry}>
           Retry
         </button>
       </div>
@@ -611,7 +611,7 @@ export const InventoryAdminHub: React.FC = () => {
       showAttentionQueue={false}
     >
       {activeTab === 'settings' ? (
-        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl py-6">
           <AdminMetricsSettings
             moduleKey="inventory"
             moduleLabel="Inventory"
@@ -620,7 +620,7 @@ export const InventoryAdminHub: React.FC = () => {
           />
         </div>
       ) : (
-        <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
+        <div className="mx-auto max-w-5xl py-6 sm:py-8">
           {/* Only for the viewer it describes. Its empty state reads "Nothing
               needs attention. All inventory work is up to date." -- a claim
               about inventory nobody asked the server about, since the batch
@@ -646,7 +646,11 @@ export const InventoryAdminHub: React.FC = () => {
             failedSources.length > 0 && (
               <div className="alert-warning mb-8 flex items-center gap-2 text-sm" role="alert">
                 <span className="flex-1">Some figures on this page did not load ({failedSources.join(', ')}).</span>
-                <button type="button" className="font-semibold underline" onClick={() => void loadSummary()}>
+                <button
+                  type="button"
+                  className="touch:min-h-11 touch:min-w-11 font-semibold underline"
+                  onClick={() => void loadSummary()}
+                >
                   Retry
                 </button>
               </div>

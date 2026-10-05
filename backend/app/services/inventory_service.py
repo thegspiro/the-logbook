@@ -105,6 +105,7 @@ from app.utils.label_renderer import (
     render_labels,
     sanitize_barcode_value,
 )
+from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
 from app.utils.name_matching import normalize_name
 from app.utils.org_scoping import assert_in_org, is_in_org
@@ -4876,6 +4877,7 @@ class InventoryService:
                 User.username,
                 User.first_name,
                 User.last_name,
+                User.preferred_name,
                 User.membership_number,
                 func.coalesce(assign_sub.c.cnt, 0).label("permanent_count"),
                 func.coalesce(checkout_sub.c.cnt, 0).label("checkout_count"),
@@ -4902,6 +4904,7 @@ class InventoryService:
                 or_(
                     User.username.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
                     User.first_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
+                    User.preferred_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
                     User.last_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
                     User.membership_number.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
                 )
@@ -4916,13 +4919,19 @@ class InventoryService:
             co = row.checkout_count
             iss = row.issued_count
             full_name = " ".join(filter(None, [row.first_name, row.last_name])) or None
+            display_name = (
+                format_display_name(row.first_name, row.last_name, row.preferred_name)
+                or None
+            )
             result.append(
                 {
                     "user_id": row.id,
                     "username": row.username,
                     "first_name": row.first_name,
                     "last_name": row.last_name,
+                    "preferred_name": row.preferred_name,
                     "full_name": full_name,
+                    "display_name": display_name,
                     "membership_number": row.membership_number,
                     "permanent_count": perm,
                     "checkout_count": co,
@@ -5278,7 +5287,7 @@ class InventoryService:
             holding, holder = row
             return {
                 "holder_id": holding.user_id,
-                "holder_name": holder.full_name,
+                "holder_name": holder.display_name,
                 "holding_type": "assignment",
                 "record_id": holding.id,
                 "held_since": holding.assigned_date,
@@ -5298,7 +5307,7 @@ class InventoryService:
             holding, holder = row
             return {
                 "holder_id": holding.user_id,
-                "holder_name": holder.full_name,
+                "holder_name": holder.display_name,
                 "holding_type": "checkout",
                 "record_id": holding.id,
                 "held_since": holding.checked_out_at,

@@ -181,7 +181,7 @@ const ImportInventory: React.FC = () => {
               onClick={() => {
                 void handleDownloadTemplate();
               }}
-              className="flex items-center space-x-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+              className="flex items-center space-x-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
             >
               <Download className="h-4 w-4" />
               <span>Download CSV Template</span>
@@ -389,7 +389,7 @@ const ImportInventory: React.FC = () => {
               </button>
               <button
                 onClick={() => void navigate('/inventory')}
-                className="flex items-center space-x-2 rounded-lg bg-blue-600 px-6 py-3 text-white transition-colors hover:bg-blue-700"
+                className="flex items-center space-x-2 rounded-lg bg-red-800 px-6 py-3 text-white transition-colors hover:bg-red-900"
               >
                 <span>View Inventory</span>
                 <ArrowRight className="h-4 w-4" />

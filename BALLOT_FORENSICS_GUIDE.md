@@ -1,6 +1,6 @@
 # Ballot Forensics Guide
 
-**Last Updated:** 2026-07-30
+**Last Updated:** 2026-10-04
 **Audience:** Election administrators, system auditors, organization leadership
 
 ---
@@ -125,11 +125,18 @@ Check the `anomaly_detection` section:
     "2026-02-10 09:00": 2,
     "2026-02-10 10:00": 5,
     "2026-02-10 11:00": 3,
-    "2026-02-10 14:00": 15,
-    "2026-02-10 14:01": 20
-  }
+    "2026-02-10 14:00": 15
+  },
+  "voting_timeline_timezone": "America/Chicago"
 }
 ```
+
+Buckets are whole hours. **Since 2026-09-27 they are the department's local
+hours**, named in `voting_timeline_timezone`; before that they were UTC hours,
+so an evening vote landed in the next day's bucket. Compare a timeline pulled
+before that date with one pulled after it with the offset in mind. (The
+example above used to show a `14:01` bucket, which the hourly bucketing never
+produces.)
 
 Look for:
 
@@ -150,32 +157,51 @@ The `audit_log.entries` array shows a chronological history:
 }
 ```
 
+**Who the entry names** _(since 2026-09-30)_:
+
+- On an **anonymous** election, `vote_cast` rows carry no `user_id` and no
+  voter in `event_data`. Rows written before that date do name the in-app
+  voter beside the `vote_id` — they cannot be scrubbed without breaking the
+  hash chain, so treat the audit trail of an anonymous election held before
+  the fix as naming its in-app voters (`docs/KNOWN_LIMITATIONS.md`).
+- `election_closed` carries the closing officer as `user_id`, plus
+  `closed_at` and `automatic` in `event_data`; the election itself stores
+  `closed_at` / `closed_by`, which the certified PDF and the report print.
+  Elections closed before the change have neither and show the scheduled end
+  as an automatic close.
+- The **Audit Log** page now shows the officer's username for each row; it
+  read "system" for every row while the API held the real `user_id`.
+- `runoff_election_created` is written with the parent's `election_id` and
+  mirrored on the runoff, so it appears in both elections' forensics (it had no
+  `election_id` and appeared in neither).
+
 **Key event types to look for:**
 
-| Event Type                                      | Severity      | What It Means                                                        |
-| ----------------------------------------------- | ------------- | -------------------------------------------------------------------- |
-| `election_created`                              | info          | Election was created                                                 |
-| `election_opened`                               | info          | Voting started                                                       |
-| `election_closed`                               | info          | Voting ended                                                         |
-| `election_rollback`                             | warning       | Status was rolled back (check reason)                                |
-| `vote_cast`                                     | info          | Normal vote cast                                                     |
-| `vote_cast_token`                               | info          | Anonymous vote via email token                                       |
-| `vote_double_attempt`                           | warning       | Someone tried to vote twice (blocked)                                |
-| `vote_double_attempt_token`                     | warning       | Token double-vote attempt (blocked)                                  |
-| `vote_soft_deleted`                             | warning       | Admin removed a vote (check reason)                                  |
-| `vote_integrity_check`                          | info/critical | Integrity check was run                                              |
-| `ballot_emails_sent`                            | info          | Ballot notification emails distributed                               |
-| `forensics_report_generated`                    | info          | Someone pulled this report                                           |
-| `runoff_election_created`                       | info          | Automatic runoff triggered                                           |
-| `election_auto_opened` / `election_auto_closed` | info          | Lifecycle task opened/closed the election on schedule                |
-| `election_reminder_sent`                        | info          | Non-voter reminder ballots sent (manual or automatic)                |
-| `election_manual_ballots_recorded`              | info/warning  | Paper tally recorded (warning when the over-count override was used) |
-| `election_manual_ballots_attested`              | info          | An officer attested a paper batch                                    |
-| `election_manual_ballots_voided`                | warning       | A paper batch was voided (check reason)                              |
-| `election_manual_ballots_unattested_at_close`   | warning       | Election closed with a batch still pending — its votes are excluded  |
-| `election_tie_detected`                         | info          | A tie was flagged under a non-co-winners tie policy                  |
-| `election_write_ins_merged`                     | info          | Write-in variants consolidated (alias only; vote rows untouched)     |
-| `election_cloned`                               | info          | A fresh draft was cloned from this election                          |
+| Event Type                                       | Severity           | What It Means                                                               |
+| ------------------------------------------------ | ------------------ | --------------------------------------------------------------------------- |
+| `election_created`                               | info               | Election was created                                                        |
+| `election_opened`                                | info               | Voting started                                                              |
+| `election_closed`                                | info               | Voting ended — by whom, or `automatic: true`                                |
+| `election_deleted_critical` / `election_deleted` | critical / warning | An election was deleted (written after the delete commits since 2026-09-30) |
+| `election_rollback`                              | warning            | Status was rolled back (check reason)                                       |
+| `vote_cast`                                      | info               | Normal vote cast                                                            |
+| `vote_cast_token`                                | info               | Anonymous vote via email token                                              |
+| `vote_double_attempt`                            | warning            | Someone tried to vote twice (blocked)                                       |
+| `vote_double_attempt_token`                      | warning            | Token double-vote attempt (blocked)                                         |
+| `vote_soft_deleted`                              | warning            | Admin removed a vote (check reason)                                         |
+| `vote_integrity_check`                           | info/critical      | Integrity check was run                                                     |
+| `ballot_emails_sent`                             | info               | Ballot notification emails distributed                                      |
+| `forensics_report_generated`                     | info               | Someone pulled this report                                                  |
+| `runoff_election_created`                        | info               | Automatic runoff triggered                                                  |
+| `election_auto_opened` / `election_auto_closed`  | info               | Lifecycle task opened/closed the election on schedule                       |
+| `election_reminder_sent`                         | info               | Non-voter reminder ballots sent (manual or automatic)                       |
+| `election_manual_ballots_recorded`               | info/warning       | Paper tally recorded (warning when the over-count override was used)        |
+| `election_manual_ballots_attested`               | info               | An officer attested a paper batch                                           |
+| `election_manual_ballots_voided`                 | warning            | A paper batch was voided (check reason)                                     |
+| `election_manual_ballots_unattested_at_close`    | warning            | Election closed with a batch still pending — its votes are excluded         |
+| `election_tie_detected`                          | info               | A tie was flagged under a non-co-winners tie policy                         |
+| `election_write_ins_merged`                      | info               | Write-in variants consolidated (alias only; vote rows untouched)            |
+| `election_cloned`                                | info               | A fresh draft was cloned from this election                                 |
 
 ### Step 6: Check for Deleted Votes
 
@@ -190,12 +216,36 @@ The `audit_log.entries` array shows a chronological history:
         "position": "Chief",
         "deleted_at": "2026-02-10T15:30:00",
         "deleted_by": "user-456",
-        "deletion_reason": "Voter reported coerced vote, requested removal"
+        "deletion_reason": "Voter reported coerced vote, requested removal",
+        "is_manual": false,
+        "manual_batch_id": null
       }
-    ]
+    ],
+    "paper_batch_count": 0
   }
 }
 ```
+
+- **`candidate_id` is `null` on an anonymous election** _(since 2026-09-30)_.
+  Together with a pre-fix `vote_cast` audit row it joined a voter to their
+  choice.
+- **Voided paper batches** void one row per tallied ballot; `manual_batch_id`
+  groups them and `paper_batch_count` counts batches, so a batch reads as one
+  void rather than N. Batch cards on the election page show who voided a batch,
+  when and why (`voided_by` / `voided_at` / `void_reason`, backfilled for
+  batches voided before 2026-09-30).
+- **A voided voter may vote again.** Since 2026-09-30 the dedup hash is
+  cleared on void (and was cleared on rows already voided), so the member's
+  next vote is accepted and counted once; it used to fail with a server error
+  on both voting routes. Their old receipt now reads "This vote was voided by
+  an officer".
+- **Known gap — an officer's void breaks the integrity verdict.** The chain
+  check drops deleted rows before walking the chain, so a sanctioned void (a
+  single vote or a paper batch) makes **Run Check** report "Vote Integrity
+  Issue Detected" and the certified PDF print CHAIN_BROKEN, while voiding the
+  chain's last vote leaves PASS. Until the chain design records voids, read a
+  CHAIN_BROKEN alongside this list: if every gap is an officer's recorded
+  void, it is this gap, not tampering (`docs/KNOWN_LIMITATIONS.md`, W50-31).
 
 Soft-deleted votes are **never physically removed** from the database. They remain for full accountability. Check:
 
@@ -239,6 +289,9 @@ votes in older history, treat it as a red flag for exactly this reason.
   "voting_tokens": {
     "total_issued": 30,
     "total_used": 25,
+    "total_superseded": 3,
+    "total_expired": 0,
+    "total_live": 2,
     "records": [
       {
         "used": true,
@@ -256,6 +309,13 @@ Check for:
 - **Tokens never used** — Did all eligible voters receive their tokens?
 - **High access counts** — A token accessed many times but not used may indicate someone struggling with the system (or attempting unauthorized access)
 - **Token usage timing** — Were tokens used before the election opened? (should be impossible)
+
+**Issued = used + superseded + expired + live** _(since 2026-09-30)_. A
+reminder supersedes the member's earlier unused link (`superseded_at`) once the
+new email is confirmed handed to the mail server; a superseded link answers
+"This link was replaced by a newer ballot email". "Unused" alone used to lump
+these together, and the forensics and results counters disagreed. On a named
+(non-anonymous) election, token votes now list their vote ids here.
 
 **Notes on token data (since 2026-07):**
 
@@ -280,6 +340,13 @@ Check for:
 4. Compare `voting_tokens.total_issued` vs `total_used` — any unaccounted tokens?
 
 ### Scenario: "We suspect someone voted twice"
+
+> **Check the upgrade date first.** On a named election, an in-app vote and a
+> vote from the member's emailed link were not recognised as duplicates before
+> the 2026-09-30 release, and on a ballot-item election that was open across
+> the upgrade a member who voted in-app before it could vote once more after
+> it. Both counted. `docs/UPGRADING.md` told operators to close open elections
+> first; if one was left open, a double vote there is this, not tampering.
 
 1. Pull forensics report
 2. Search `audit_log.entries` for `vote_double_attempt` events
@@ -382,6 +449,10 @@ For anonymous elections:
 
 **Permission:** `elections.manage`
 
+`reason` is required (3–500 characters; an empty one is refused with 422), and
+the vote must belong to the election in the path — since 2026-09-30, when the
+route ignored the path's election and accepted an empty reason.
+
 **Response:**
 
 ```json
@@ -400,11 +471,26 @@ confirms a receipt maps to a recorded vote without revealing its content:
 
 ```json
 {
-  "valid": true,
+  "verified": true,
+  "counted": true,
+  "voided": false,
+  "message": "Your vote has been recorded and is counted",
   "voted_at": "2026-02-10T09:15:00Z",
   "position": "Chief"
 }
 ```
+
+_(Corrected 2026-10-04: the response field is `verified`; this example used to show `valid`.)_ The
+other answers:
+
+| Case                 | `verified` | `counted` | `voided` | `message`                                                                                 |
+| -------------------- | ---------- | --------- | -------- | ----------------------------------------------------------------------------------------- |
+| No such receipt      | false      | false     | false    | "No matching vote found for this receipt"                                                 |
+| Voided by an officer | false      | false     | true     | "This vote was voided by an officer" (since 2026-09-30; it read "No matching vote found") |
+| Test-ballot vote     | true       | false     | false    | "This was a test vote. It was recorded but is not counted toward the election results."   |
+
+Receipts are shown by the emailed ballot's confirmation screen; the in-app
+**Cast Vote** tab does not show one.
 
 Useful in disputes: a voter who saved their receipt can prove their vote was
 recorded (or expose that it wasn't) without anyone learning who they voted for.

@@ -60,8 +60,11 @@ export const StorePaymentsTab: React.FC<StorePaymentsTabProps> = ({ onChanged })
       const data = await storefrontService.listPaymentEvents({
         unresolvedOnly: !showResolved,
       });
+      // Verified rather than trusted: a malformed body is a failed load,
+      // reported like one, rather than a crash on `events.length`.
+      if (!Array.isArray(data?.items)) throw new Error('Could not load payments');
       setEvents(data.items);
-      setUnresolvedCount(data.unresolvedCount);
+      setUnresolvedCount(typeof data.unresolvedCount === 'number' ? data.unresolvedCount : 0);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Could not load payments'));
     } finally {
@@ -132,8 +135,13 @@ export const StorePaymentsTab: React.FC<StorePaymentsTabProps> = ({ onChanged })
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={showResolved} onChange={(e) => setShowResolved(e.target.checked)} />
+          <label className="text-theme-text-secondary mobile-touch-target flex items-center justify-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="form-checkbox"
+              checked={showResolved}
+              onChange={(e) => setShowResolved(e.target.checked)}
+            />
             Show resolved
           </label>
           <button type="button" className="btn-secondary btn-sm flex items-center gap-2" onClick={() => void load()}>

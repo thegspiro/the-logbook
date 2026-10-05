@@ -199,6 +199,73 @@ export const ALL_ROUTES: RouteCheck[] = [
   { path: '/documents', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/members/1/training', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/admin/audit-log', maxSmallTargets: 0, maxTinyText: 0, permissions: ['audit.view'] },
+  // The rest of Training Administration's tabs. Every one of these brought its
+  // own padded page container into the hub's column and was indented twice on
+  // a phone; `expectText` names something only that tab's body renders, since
+  // the hub's tab strip carries every tab's label on every visit.
+  {
+    path: '/training/admin?page=dashboard&tab=overview',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Training Officer Dashboard',
+  },
+  {
+    path: '/training/admin?page=dashboard&tab=expiring-certs',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Expiring Certifications',
+  },
+  {
+    path: '/training/admin?page=dashboard&tab=waivers',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Total',
+  },
+  {
+    path: '/training/admin?page=records&tab=submissions',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Review Submissions',
+  },
+  {
+    path: '/training/admin?page=records&tab=sessions',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Create Training Session',
+  },
+  {
+    path: '/training/admin?page=records&tab=shift-reports',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Shift Completion Reports',
+  },
+  {
+    path: '/training/admin?page=skills-testing&tab=templates',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Tests This Month',
+  },
+  {
+    path: '/training/admin?page=skills-testing&tab=tests',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'No test records found',
+  },
+  {
+    path: '/training/admin?page=enhancements&tab=reports',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Reports & Analytics',
+  },
   {
     path: '/training/admin?page=dashboard&tab=compliance',
     maxSmallTargets: 0,
@@ -260,6 +327,91 @@ export const ALL_ROUTES: RouteCheck[] = [
     permissions: ['training.manage'],
     expectText: 'Available in Training',
   },
+  // Every one of these crashed the Training hub through the ErrorBoundary the
+  // first time it was measured: each read its API response unchecked, and the
+  // catch-all `{}` in helpers.ts is exactly the malformed 200 a captive portal
+  // serves. They are listed so a regression is a red build rather than a dead
+  // tab. Most measure their empty or load-error state against that mock, which
+  // is the state that used to crash — so where that state is an error message,
+  // the message is the `expectText`: it proves the tab rendered its own body
+  // and not the ErrorBoundary, which a bare entry cannot tell apart.
+  {
+    path: '/training/admin?page=records&tab=member-status',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Behind on requirements',
+  },
+  {
+    path: '/training/admin?page=enhancements&tab=recertification',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Recertification Pathways',
+  },
+  {
+    path: '/training/admin?page=enhancements&tab=competency',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Competency Matrices',
+  },
+  {
+    path: '/training/admin?page=enhancements&tab=instructors',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Instructor Qualifications',
+  },
+  {
+    path: '/training/admin?page=enhancements&tab=effectiveness',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Training Effectiveness',
+  },
+  {
+    path: '/training/admin?page=enhancements&tab=multi-agency',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Multi-Agency Training',
+  },
+  {
+    path: '/training/admin?page=compliance&tab=annual-report',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage', 'compliance.manage'],
+    expectText: 'Failed to load annual compliance report',
+  },
+  {
+    path: '/training/admin?page=compliance&tab=iso-readiness',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage', 'compliance.manage'],
+    expectText: 'Failed to load ISO readiness data',
+  },
+  {
+    path: '/training/admin?page=compliance&tab=record-completeness',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage', 'compliance.manage'],
+    expectText: 'Failed to load record completeness data',
+  },
+  {
+    path: '/training/admin?page=compliance&tab=attestations',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage', 'compliance.manage'],
+    expectText: 'Failed to load attestation history',
+  },
+  {
+    path: '/training/admin?page=compliance&tab=forecast',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage', 'compliance.manage'],
+    expectText: 'Failed to load compliance forecast',
+  },
   // Compliance rules, reached from the Compliance Officer dashboard. Its four
   // sections are in-page state, so they are driven as states.
   {
@@ -284,6 +436,12 @@ export const ALL_ROUTES: RouteCheck[] = [
   // hub header above it is the shared AdminHubFrame one, and this is the entry
   // that first measured it at 390px with a primary action beside the title.
   {
+    path: '/events/admin?tab=past_events',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['events.manage'],
+  },
+  {
     path: '/events/admin?tab=settings',
     maxSmallTargets: 0,
     maxTinyText: 0,
@@ -297,6 +455,22 @@ export const ALL_ROUTES: RouteCheck[] = [
         mayRepeatArrival: true,
       },
     ],
+  },
+  // Both crashed the Events hub on a malformed response; see the Training
+  // block above.
+  {
+    path: '/events/admin?tab=create',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['events.manage'],
+    expectText: 'Event Details',
+  },
+  {
+    path: '/events/admin?tab=requests',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['events.manage'],
+    expectText: 'Failed to load event requests.',
   },
   { path: '/training/my-training', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/training/submit', maxSmallTargets: 0, maxTinyText: 0 },
@@ -319,6 +493,129 @@ export const ALL_ROUTES: RouteCheck[] = [
   // inventory.check_manage is a distinct grant from inventory.manage, and
   // checkPermission compares literally — without it this hub renders Access
   // Denied, which passes both budgets while measuring an error page.
+  // Inventory Administration and the pages its hub links to. Four of them
+  // (Pool, Members, Charges, Impact Planner) crashed to the error screen on a
+  // malformed response while this list did not name them; `expectText` is the
+  // page's own heading, so a redirect or a substituted screen cannot pass.
+  {
+    path: '/inventory/admin',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Inventory Administration',
+  },
+  {
+    path: '/inventory/admin/setup',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Inventory Setup',
+  },
+  {
+    path: '/inventory/admin/items',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Inventory Items',
+  },
+  {
+    path: '/inventory/admin/pool',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Pool Items',
+  },
+  {
+    path: '/inventory/admin/categories',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Categories',
+  },
+  {
+    path: '/inventory/admin/maintenance',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Maintenance & Inspections',
+  },
+  {
+    path: '/inventory/admin/members',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Member Equipment',
+  },
+  {
+    path: '/inventory/admin/charges',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Charge Management',
+  },
+  {
+    path: '/inventory/admin/returns',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Return Requests',
+  },
+  {
+    path: '/inventory/admin/requests',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Gear Requests',
+  },
+  {
+    path: '/inventory/admin/write-offs',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Write-Off Requests',
+  },
+  {
+    path: '/inventory/admin/reorder',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Reorder Requests',
+  },
+  {
+    path: '/inventory/admin/kits',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Gear Kits',
+  },
+  {
+    path: '/inventory/admin/variant-groups',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Variant Groups',
+  },
+  {
+    path: '/inventory/admin/allowances',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Issuance Allowances',
+  },
+  {
+    path: '/inventory/admin/vendors',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Vendors',
+  },
+  {
+    path: '/inventory/admin/impact-planner',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Impact Planner',
+  },
   {
     path: '/inventory/admin/checklists',
     maxSmallTargets: 0,
@@ -387,6 +684,29 @@ export const ALL_ROUTES: RouteCheck[] = [
   { path: '/action-items', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/forms', maxSmallTargets: 0, maxTinyText: 0, permissions: ['forms.manage'] },
   { path: '/store', maxSmallTargets: 0, maxTinyText: 0, permissions: ['storefront.view'] },
+  // The store console: its overview, Orders and Payments tabs crashed on a
+  // malformed response; see the Training hub block above.
+  {
+    path: '/inventory/admin/store',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['storefront.manage', 'storefront.view'],
+    expectText: 'Order windows, catalog, orders, and payment reconciliation',
+  },
+  {
+    path: '/inventory/admin/store?tab=orders',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['storefront.manage', 'storefront.view'],
+    expectText: 'Search orders',
+  },
+  {
+    path: '/inventory/admin/store?tab=payments',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['storefront.manage', 'storefront.view'],
+    expectText: 'Inbound payments',
+  },
   { path: '/prospective-members', maxSmallTargets: 0, maxTinyText: 0, permissions: ['prospective_members.manage'] },
   // /analytics and /profile were listed here from the day this file was written
   // and match no <Route>: both fell through the catch-all to the dashboard,

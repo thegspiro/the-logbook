@@ -20,6 +20,7 @@
 import { FACILITY_ENTRY_PERMISSIONS } from '../facilities/routes';
 import { MEDICAL_VIEW_PERMISSIONS } from '../medical-supplies/routes';
 import { LEGAL_DOCUMENTS_PERMISSIONS } from '../governance/routes';
+import { VIEW_OTHER_MEMBER_ID_CARD_PERMISSIONS } from '../../utils/memberIdCardAccess';
 import {
   MEMBERS_SETTINGS_ANY_PERMISSION,
   MEMBERS_SETTINGS_EVOC_GATE,
@@ -210,12 +211,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       {
         path: '/members/print-labels',
         label: 'Print member labels',
-        anyPermission: ['members.manage', 'members.manage_id_cards'],
+        anyPermission: VIEW_OTHER_MEMBER_ID_CARD_PERMISSIONS,
       },
       {
         path: '/members/print-id-cards',
         label: 'Print member ID cards',
-        anyPermission: ['members.manage', 'members.manage_id_cards'],
+        anyPermission: VIEW_OTHER_MEMBER_ID_CARD_PERMISSIONS,
       },
       { path: '/members/scan', label: 'Scan a member ID', anyPermission: ['users.view', 'members.manage'] },
       { path: '/members/check-in-station', label: 'Check-in station', permission: 'members.check_in' },

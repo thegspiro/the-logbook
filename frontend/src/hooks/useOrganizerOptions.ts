@@ -14,6 +14,7 @@ import { userService } from '../services/api';
 import { UserStatus } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import type { User } from '../types/user';
+import { displayNameOf, givenName } from '../utils/memberName';
 
 export interface OrganizerOption {
   id: string;
@@ -27,8 +28,8 @@ export function toOrganizerOptions(users: readonly User[]): OrganizerOption[] {
     .filter((u) => ELIGIBLE.includes(u.status))
     .map((u) => ({
       id: u.id,
-      name: u.full_name || `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() || u.username,
-      sortKey: `${u.last_name ?? ''} ${u.first_name ?? ''} ${u.username}`.toLowerCase(),
+      name: displayNameOf(u) || u.username,
+      sortKey: `${u.last_name ?? ''} ${givenName(u)} ${u.username}`.toLowerCase(),
     }))
     .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
     .map(({ id, name }) => ({ id, name }));

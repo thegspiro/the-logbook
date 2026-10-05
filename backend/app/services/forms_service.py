@@ -3206,6 +3206,13 @@ class FormsService:
             func.concat(User.first_name, " ", User.last_name).ilike(
                 search_term, escape=LIKE_ESCAPE_CHAR
             ),
+            # A member is looked up by the name they go by as often as by
+            # their legal one ("Terry Heather" for John Terry Heather). CONCAT
+            # with a NULL preferred_name is NULL, which simply never matches.
+            User.preferred_name.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
+            func.concat(User.preferred_name, " ", User.last_name).ilike(
+                search_term, escape=LIKE_ESCAPE_CHAR
+            ),
         ]
         if (
             contact_policy is not None
@@ -3229,6 +3236,8 @@ class FormsService:
                 "first_name": u.first_name or "",
                 "last_name": u.last_name or "",
                 "full_name": f"{u.first_name or ''} {u.last_name or ''}".strip(),
+                "preferred_name": u.preferred_name,
+                "display_name": u.display_name,
                 "membership_number": u.membership_number,
                 "rank": u.rank,
                 "station": u.station,

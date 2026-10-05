@@ -86,6 +86,15 @@ describe('InventoryMembersPage', () => {
     expect(await screen.findByRole('button', { name: /Retry/ })).toBeInTheDocument();
   });
 
+  // The empty state says "No members with inventory assignments", which is a
+  // claim the failed load cannot support.
+  it('does not claim an empty roster when loading fails', async () => {
+    mockGetMembersSummary.mockRejectedValue(new Error('The member list response was not an array'));
+    renderWithRouter(<InventoryMembersPage />);
+    expect(await screen.findByText('The member list response was not an array')).toBeInTheDocument();
+    expect(screen.queryByText('No Members Found')).not.toBeInTheDocument();
+  });
+
   it('renders a member row', async () => {
     mockGetMembersSummary.mockResolvedValue({ members: [makeMember()], total: 1 });
     renderWithRouter(<InventoryMembersPage />);

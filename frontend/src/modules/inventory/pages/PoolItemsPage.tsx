@@ -31,6 +31,7 @@ import { VariantCapsules } from '../components/VariantCapsules';
 import { getDisplayName } from '../utils/variantHelpers';
 import toast from 'react-hot-toast';
 import { Breadcrumbs } from '../../../components/ux';
+import { displayNameOf } from '../../../utils/memberName';
 
 interface SummaryCardProps {
   label: string;
@@ -377,13 +378,14 @@ const PoolItemsPage: React.FC = () => {
   const memberName = (userId: string): string => {
     const m = members.find((x) => x.user_id === userId);
     if (!m) return 'Former member';
-    return m.full_name ?? `${m.first_name ?? ''} ${m.last_name ?? ''}`.trim();
+    return displayNameOf(m);
   };
 
   const filteredMembers = members.filter((m) => {
     if (!memberSearch) return true;
     const q = memberSearch.toLowerCase();
-    const name = (m.full_name ?? `${m.first_name ?? ''} ${m.last_name ?? ''}`).toLowerCase();
+    // The legal name too, so a member can be found by either name.
+    const name = `${displayNameOf(m)} ${m.full_name ?? ''}`.toLowerCase();
     return name.includes(q) || (m.membership_number ?? '').toLowerCase().includes(q);
   });
 
@@ -491,7 +493,7 @@ const PoolItemsPage: React.FC = () => {
 
       <Link
         to="/inventory/admin"
-        className="text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1 text-sm"
+        className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 flex items-center gap-1 text-sm"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Admin
@@ -578,12 +580,12 @@ const PoolItemsPage: React.FC = () => {
             </option>
           ))}
         </select>
-        <label className="text-theme-text-secondary flex cursor-pointer items-center gap-2 text-sm whitespace-nowrap">
+        <label className="text-theme-text-secondary mobile-touch-target flex cursor-pointer items-center justify-start gap-2 text-sm whitespace-nowrap">
           <input
             type="checkbox"
             checked={lowStockOnly}
             onChange={(e) => setLowStockOnly(e.target.checked)}
-            className="rounded"
+            className="form-checkbox"
           />
           Low stock only
         </label>
@@ -676,7 +678,7 @@ const PoolItemsPage: React.FC = () => {
                       className="hover:bg-theme-surface text-theme-text-primary w-full px-3 py-2 text-left text-sm"
                       onClick={() => void handleSelectMember(m.user_id)}
                     >
-                      {m.full_name ?? `${m.first_name ?? ''} ${m.last_name ?? ''}`}
+                      {displayNameOf(m)}
                       {m.membership_number ? ` (#${m.membership_number})` : ''}
                     </button>
                   </li>
@@ -691,7 +693,7 @@ const PoolItemsPage: React.FC = () => {
                 <span>
                   {(() => {
                     const m = members.find((x) => x.user_id === issueUserId);
-                    return m ? (m.full_name ?? `${m.first_name ?? ''} ${m.last_name ?? ''}`) : issueUserId;
+                    return m ? displayNameOf(m) : issueUserId;
                   })()}
                 </span>
                 <button
@@ -922,7 +924,7 @@ const PoolItemsPage: React.FC = () => {
                     <option value="">Select member...</option>
                     {members.map((m) => (
                       <option key={m.user_id} value={m.user_id}>
-                        {m.full_name ?? `${m.first_name ?? ''} ${m.last_name ?? ''}`}
+                        {displayNameOf(m)}
                       </option>
                     ))}
                   </select>

@@ -32,6 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.operational_rank import OperationalRank
 from app.models.org_chart import OrgChartNode, OrgChartNodeHolder
 from app.models.user import Position, User, UserStatus, user_positions
+from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
 
@@ -779,18 +780,16 @@ class OrgChartService:
 def _member_name(user: User) -> str:
     """Best available display name for a member record.
 
-    Built from the columns rather than ``User.full_name``, which interpolates
+    The name the member goes by (preferred name, else first) plus last name,
+    built from the columns rather than ``User.full_name``, which interpolates
     unconditionally and yields the literal "None None" for a member with no
     recorded name.
     """
-    joined = " ".join(
-        part
-        for part in (
-            getattr(user, "first_name", "") or "",
-            getattr(user, "last_name", "") or "",
-        )
-        if part
-    ).strip()
+    joined = format_display_name(
+        getattr(user, "first_name", None),
+        getattr(user, "last_name", None),
+        getattr(user, "preferred_name", None),
+    )
     return joined or (getattr(user, "username", "") or "")
 
 

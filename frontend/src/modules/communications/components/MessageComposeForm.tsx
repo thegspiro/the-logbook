@@ -17,6 +17,7 @@ import type { User } from '../../../types/user';
 import { UserStatus } from '../../../constants/enums';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatForDateTimeInput, localToUTC } from '../../../utils/dateFormatting';
+import { displayNameOf } from '../../../utils/memberName';
 import toast from 'react-hot-toast';
 
 interface MessageComposeFormProps {
@@ -156,8 +157,9 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ message, onSave
   const filteredMembers = members.filter((m) => {
     if (!memberSearch.trim()) return true;
     const q = memberSearch.toLowerCase();
-    const name = `${m.first_name ?? ''} ${m.last_name ?? ''}`.toLowerCase();
-    return name.includes(q) || (m.membership_number ?? '').toLowerCase().includes(q);
+    const name = displayNameOf(m).toLowerCase();
+    const legalName = `${m.first_name ?? ''} ${m.last_name ?? ''}`.toLowerCase();
+    return name.includes(q) || legalName.includes(q) || (m.membership_number ?? '').toLowerCase().includes(q);
   });
 
   return (
@@ -292,7 +294,7 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ message, onSave
                   checked={targetMembers.includes(m.id)}
                   onChange={() => setTargetMembers((prev) => toggle(prev, m.id))}
                 />
-                {(m.first_name ?? '') + ' ' + (m.last_name ?? '')}
+                {displayNameOf(m)}
                 {m.membership_number ? ` (#${m.membership_number})` : ''}
               </label>
             ))}

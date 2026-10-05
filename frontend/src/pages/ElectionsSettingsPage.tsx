@@ -41,6 +41,41 @@ const inputClass = 'form-input';
 const selectClass = inputClass;
 const labelClass = 'form-label';
 
+// Mirrors `ElectionSettingsUpdate.max_proxies_per_person` (ge=1, le=10). The
+// API answers 422 outside this range, so the box never sends a value the
+// server would refuse.
+const MAX_PROXIES_MIN = 1;
+const MAX_PROXIES_MAX = 10;
+
+const parseMaxProxies = (raw: string): number | null => {
+  if (!/^\d+$/.test(raw.trim())) return null;
+  const value = Number(raw);
+  return value >= MAX_PROXIES_MIN && value <= MAX_PROXIES_MAX ? value : null;
+};
+
+interface ToggleRowProps {
+  /** The switch's accessible name, also rendered as the row's visible title. */
+  label: string;
+  description?: string;
+  checked: boolean;
+  onChange: (next: boolean) => void;
+}
+
+/**
+ * A switch with its name printed beside it. The switches here used to carry
+ * their whole description in `aria-label` only, so a sighted member saw five
+ * bare toggles with nothing to say which was which (workflow review W50-46).
+ */
+const ToggleRow: React.FC<ToggleRowProps> = ({ label, description, checked, onChange }) => (
+  <div className="flex items-center justify-between gap-4">
+    <div>
+      <p className="text-theme-text-primary text-sm font-medium">{label}</p>
+      {description && <p className="text-theme-text-muted text-xs">{description}</p>}
+    </div>
+    <Toggle checked={checked} onChange={onChange} label={label} />
+  </div>
+);
+
 export const ElectionsSettingsPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -50,6 +85,15 @@ export const ElectionsSettingsPage: React.FC = () => {
   const [selectedTestElection, setSelectedTestElection] = useState('');
   const { saveState, save, saveDebounced, retry } = useSettingsAutosave();
   const [sendingTest, setSendingTest] = useState(false);
+  /**
+   * What the member has typed into "Max Proxies Per Person" while it is not a
+   * whole number from 1 to 10, or `null` when the box shows the saved value.
+   * `parseInt(...) || 1` used to turn a cleared box back into "1" before the
+   * second digit could be typed, so "11" came out as "111", and the value was
+   * then written whatever the range said (workflow review W50-49). A draft
+   * stays in the box and nothing is sent until it is valid.
+   */
+  const [maxProxiesDraft, setMaxProxiesDraft] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -147,30 +191,56 @@ export const ElectionsSettingsPage: React.FC = () => {
               description="When enabled, a secretary can authorize one member to vote on behalf of another absent member."
             />
             <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <Toggle
-                  checked={settings.proxy_voting_enabled ?? false}
-                  onChange={(next) => updateField('proxy_voting_enabled', next)}
-                  label="Allow proxy voting"
-                />
-              </div>
+              <ToggleRow
+                checked={settings.proxy_voting_enabled ?? false}
+                onChange={(next) => updateField('proxy_voting_enabled', next)}
+                label="Allow proxy voting"
+                description="A secretary can authorize one member to vote on behalf of another absent member."
+              />
 
               {settings.proxy_voting_enabled && (
                 <div className="max-w-xs">
-                  <label className={labelClass}>Max Proxies Per Person</label>
+                  <label htmlFor="election-max-proxies" className={labelClass}>
+                    Max Proxies Per Person
+                  </label>
                   <input
+                    id="election-max-proxies"
                     type="number"
+                    inputMode="numeric"
                     className={inputClass}
-                    min={1}
-                    max={10}
-                    value={settings.max_proxies_per_person ?? 1}
-                    onChange={(e) =>
-                      updateField('max_proxies_per_person', parseInt(e.target.value, 10) || 1, { immediate: false })
+                    min={MAX_PROXIES_MIN}
+                    max={MAX_PROXIES_MAX}
+                    step={1}
+                    value={maxProxiesDraft ?? settings.max_proxies_per_person ?? 1}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      const parsed = parseMaxProxies(raw);
+                      if (parsed === null) {
+                        setMaxProxiesDraft(raw);
+                        return;
+                      }
+                      setMaxProxiesDraft(null);
+                      updateField('max_proxies_per_person', parsed, { immediate: false });
+                    }}
+                    aria-invalid={maxProxiesDraft !== null}
+                    aria-describedby={
+                      maxProxiesDraft !== null ? 'election-max-proxies-error' : 'election-max-proxies-hint'
                     }
                   />
-                  <p className="text-theme-text-muted mt-1 text-xs">
-                    Maximum number of members one person can vote on behalf of.
+                  <p id="election-max-proxies-hint" className="text-theme-text-muted mt-1 text-xs">
+                    Maximum number of members one person can vote on behalf of, from {MAX_PROXIES_MIN} to{' '}
+                    {MAX_PROXIES_MAX}.
                   </p>
+                  {maxProxiesDraft !== null && (
+                    <p
+                      id="election-max-proxies-error"
+                      role="alert"
+                      className="mt-1 text-sm text-red-700 dark:text-red-400"
+                    >
+                      Enter a whole number from {MAX_PROXIES_MIN} to {MAX_PROXIES_MAX}. It is still saved as{' '}
+                      {settings.max_proxies_per_person ?? 1}.
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -185,23 +255,21 @@ export const ElectionsSettingsPage: React.FC = () => {
               description="Optional election workflows for your department. All features are on by default. Automatic closing at the end date is always on — it finalizes results and runs the anonymity purge."
             />
             <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <Toggle
-                  checked={settings.nominations_enabled ?? true}
-                  onChange={(next) => updateField('nominations_enabled', next)}
-                  label="Nomination phase — members nominate candidates (with accept/decline) before the ballot opens"
-                />
-              </div>
+              <ToggleRow
+                checked={settings.nominations_enabled ?? true}
+                onChange={(next) => updateField('nominations_enabled', next)}
+                label="Nomination phase"
+                description="Members nominate candidates (with accept/decline) before the ballot opens."
+              />
 
-              <div className="flex items-center gap-3">
-                <Toggle
-                  checked={settings.paper_ballots_enabled ?? true}
-                  onChange={(next) => updateField('paper_ballots_enabled', next)}
-                  label="Paper-ballot entry — officers record in-room paper tallies into the results"
-                />
-              </div>
+              <ToggleRow
+                checked={settings.paper_ballots_enabled ?? true}
+                onChange={(next) => updateField('paper_ballots_enabled', next)}
+                label="Paper-ballot entry"
+                description="Officers record in-room paper tallies into the results."
+              />
 
-              <div className="flex flex-wrap items-center gap-3 pl-7">
+              <div className="flex flex-wrap items-center gap-3 pl-4">
                 <label htmlFor="paper_ballot_attestations_required" className="text-theme-text-secondary text-sm">
                   Officers who must confirm each paper batch before it counts (besides the recorder):
                 </label>
@@ -218,23 +286,19 @@ export const ElectionsSettingsPage: React.FC = () => {
                 </select>
               </div>
 
-              <div className="flex items-center gap-3">
-                <Toggle
-                  checked={settings.reminders_enabled ?? true}
-                  onChange={(next) => updateField('reminders_enabled', next)}
-                  label="Non-voter reminders — manual and automatic reminder emails with fresh ballot links"
-                />
-              </div>
+              <ToggleRow
+                checked={settings.reminders_enabled ?? true}
+                onChange={(next) => updateField('reminders_enabled', next)}
+                label="Non-voter reminders"
+                description="Manual and automatic reminder emails with fresh ballot links."
+              />
 
-              <div className="flex items-center gap-3">
-                <Toggle
-                  checked={settings.auto_open_enabled ?? true}
-                  onChange={(next) => updateField('auto_open_enabled', next)}
-                  label={
-                    'Scheduled opening — elections flagged "open automatically" open themselves at their start time'
-                  }
-                />
-              </div>
+              <ToggleRow
+                checked={settings.auto_open_enabled ?? true}
+                onChange={(next) => updateField('auto_open_enabled', next)}
+                label="Scheduled opening"
+                description='Elections flagged "open automatically" open themselves at their start time.'
+              />
             </div>
           </div>
         );
@@ -273,37 +337,74 @@ export const ElectionsSettingsPage: React.FC = () => {
           </div>
         );
 
-      case 'security':
+      case 'security': {
+        const posture = settings.security;
+        // The rows used to be static markup, so "HMAC-SHA256" printed as a
+        // guarantee on installations where the API reported
+        // `vote_signing_key_configured: false` (workflow review W50-50). A
+        // missing object means the server reported nothing, not "on".
+        const reported = (flag: boolean | undefined): 'on' | 'off' | 'unknown' =>
+          posture == null || flag === undefined ? 'unknown' : flag ? 'on' : 'off';
+        const signing = reported(posture?.vote_signing_key_configured);
+        const salt = reported(posture?.anonymity_salt_auto_destroy);
+        const chain = reported(posture?.vote_chain_hashing);
+        const statusClass = {
+          on: 'font-medium text-green-700 dark:text-green-400',
+          off: 'font-medium text-amber-800 dark:text-amber-400',
+          unknown: 'text-theme-text-muted font-medium',
+        } as const;
+        const onOff = (state: 'on' | 'off' | 'unknown') =>
+          state === 'on' ? 'Enabled' : state === 'off' ? 'Off' : 'Not reported';
         return (
           <div>
             <SettingsPanelHead
               title="Security & Integrity"
-              description="Guarantees the platform enforces on every ballot. These are not configurable."
+              description="Integrity measures the platform applies to every ballot, as reported by the server. These are not configurable here."
             />
             <div className="space-y-3 text-sm">
-              <div className="border-theme-surface-border flex items-center justify-between border-b py-2">
-                <span className="text-theme-text-secondary">Vote Signatures</span>
-                <span className="font-medium text-green-600 dark:text-green-400">HMAC-SHA256</span>
+              <div className="border-theme-surface-border border-b py-2">
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-theme-text-secondary">Vote Signatures</span>
+                  <span className={statusClass[signing]} data-testid="security-vote-signatures">
+                    {signing === 'on'
+                      ? 'HMAC-SHA256, dedicated signing key'
+                      : signing === 'off'
+                        ? 'HMAC-SHA256, signing key not configured'
+                        : 'Not reported'}
+                  </span>
+                </div>
+                {signing === 'off' && (
+                  <p role="status" className="mt-1 text-xs text-amber-800 dark:text-amber-400">
+                    VOTE_SIGNING_KEY is not set on this server, so vote signatures fall back to SECRET_KEY. Rotating
+                    SECRET_KEY will invalidate every existing vote signature. Ask your administrator to set
+                    VOTE_SIGNING_KEY.
+                  </p>
+                )}
               </div>
-              <div className="border-theme-surface-border flex items-center justify-between border-b py-2">
+              <div className="border-theme-surface-border flex items-center justify-between gap-4 border-b py-2">
                 <span className="text-theme-text-secondary">Anonymity Salt Rotation</span>
-                <span className="font-medium text-green-600 dark:text-green-400">Auto-destroyed on close</span>
+                <span className={statusClass[salt]} data-testid="security-salt-rotation">
+                  {salt === 'on' ? 'Auto-destroyed on close' : onOff(salt)}
+                </span>
               </div>
-              <div className="border-theme-surface-border flex items-center justify-between border-b py-2">
+              <div className="border-theme-surface-border flex items-center justify-between gap-4 border-b py-2">
                 <span className="text-theme-text-secondary">Vote Chain Hashing</span>
-                <span className="font-medium text-green-600 dark:text-green-400">Enabled</span>
+                <span className={statusClass[chain]} data-testid="security-chain-hashing">
+                  {onOff(chain)}
+                </span>
               </div>
-              <div className="border-theme-surface-border flex items-center justify-between border-b py-2">
+              <div className="border-theme-surface-border flex items-center justify-between gap-4 border-b py-2">
                 <span className="text-theme-text-secondary">Double-Vote Prevention</span>
-                <span className="font-medium text-green-600 dark:text-green-400">DB-level unique constraint</span>
+                <span className={statusClass.on}>DB-level unique constraint</span>
               </div>
-              <div className="flex items-center justify-between py-2">
+              <div className="flex items-center justify-between gap-4 py-2">
                 <span className="text-theme-text-secondary">Voter Receipt Hashes</span>
-                <span className="font-medium text-green-600 dark:text-green-400">Enabled</span>
+                <span className={statusClass.on}>Enabled</span>
               </div>
             </div>
           </div>
         );
+      }
     }
   };
 

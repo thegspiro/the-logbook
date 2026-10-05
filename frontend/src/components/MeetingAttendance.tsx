@@ -15,6 +15,7 @@ import { formatTime } from '../utils/dateFormatting';
 import { UserStatus, ElectionStatus } from '../constants/enums';
 import { useTimezone } from '../hooks/useTimezone';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { formatMemberName } from '../utils/memberName';
 
 interface MeetingAttendanceProps {
   electionId: string;
@@ -61,6 +62,7 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({ electionId
     return members.filter(
       (m) =>
         (m.first_name?.toLowerCase().includes(q) ?? false) ||
+        (m.preferred_name?.toLowerCase().includes(q) ?? false) ||
         (m.last_name?.toLowerCase().includes(q) ?? false) ||
         (m.full_name?.toLowerCase().includes(q) ?? false) ||
         (m.membership_number?.toLowerCase().includes(q) ?? false)
@@ -159,7 +161,7 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({ electionId
                     onClick={() => {
                       void handleRemove(attendee.user_id, attendee.name);
                     }}
-                    className="focus:ring-theme-focus-ring ml-1 flex min-h-[28px] min-w-[28px] items-center justify-center rounded-sm p-1 text-xs text-green-700 hover:text-red-700 focus:ring-2 focus:outline-hidden dark:text-green-500 dark:hover:text-red-400"
+                    className="btn-icon focus:ring-theme-focus-ring -my-2 -mr-2 text-xs text-green-700 hover:text-red-700 focus:ring-2 focus:outline-hidden dark:text-green-500 dark:hover:text-red-400"
                     title="Remove from attendance"
                     aria-label={`Remove ${attendee.name} from attendance`}
                   >
@@ -216,9 +218,7 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({ electionId
                 >
                   <div className="flex items-center gap-3">
                     <div>
-                      <span className="text-theme-text-primary text-sm font-medium">
-                        {member.first_name} {member.last_name}
-                      </span>
+                      <span className="text-theme-text-primary text-sm font-medium">{formatMemberName(member)}</span>
                       {member.membership_number && (
                         <span className="text-theme-text-muted ml-2 text-xs">#{member.membership_number}</span>
                       )}
@@ -239,7 +239,7 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({ electionId
                       void handleCheckIn(member.id);
                     }}
                     disabled={checking === member.id}
-                    aria-label={`Check in ${member.first_name ?? ''} ${member.last_name ?? ''}`.trim()}
+                    aria-label={`Check in ${formatMemberName(member)}`}
                     className="btn-info rounded-sm px-3 py-1 text-xs"
                   >
                     {checking === member.id ? 'Checking in...' : 'Check In'}

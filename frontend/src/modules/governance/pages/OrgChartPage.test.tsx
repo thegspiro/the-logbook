@@ -307,6 +307,23 @@ describe('OrgChartPage', () => {
     });
   });
 
+  // W54-1: Save is a plain button, so the field's type="email" never checked
+  // anything, and "not-an-email" went out to every member as a mailto: link.
+  it('refuses a malformed contact email and keeps the editor open', async () => {
+    mockGetChart.mockResolvedValue(chart({ canManage: true }));
+    renderWithRouter(<OrgChartPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /Edit Training Officer/i }));
+    const email = screen.getByLabelText('Contact email (optional)');
+    await userEvent.clear(email);
+    await userEvent.type(email, 'not-an-email');
+    await userEvent.click(screen.getByRole('button', { name: /Save position/i }));
+
+    expect(await screen.findByText('Enter a contact email like training@department.org.')).toBeInTheDocument();
+    expect(mockUpdateNode).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
   it('empties a seat with an empty holder list rather than by omitting the key', async () => {
     mockGetChart.mockResolvedValue(chart({ canManage: true, members: [{ id: 'user-2', name: 'Sam Okafor' }] }));
     mockUpdateNode.mockResolvedValue(chart({ canManage: true }));

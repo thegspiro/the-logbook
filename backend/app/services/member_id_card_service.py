@@ -187,7 +187,9 @@ class MemberIdCardService:
                 title = ranks.get(user.rank) or user.rank.replace("_", " ").title()
             else:
                 title = None
-            name = " ".join(filter(None, [user.first_name, user.last_name]))
+            # The name the member goes by, as the digital card shows it, so the
+            # printed card and the phone agree.
+            name = user.display_name
             cards.append(
                 IdCardSpec(
                     name=name or user.username or "Member",

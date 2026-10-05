@@ -242,10 +242,10 @@ class TestModuleRegistry:
     #: printing can assign a barcode to an area that lacks one.
     MANAGE_ONLY_MODULES = {"inventory", "storage_areas"}
 
-    #: Member labels are badges that scan as the member, so printing one for
-    #: a colleague is limited like opening their ID card: members.manage or
-    #: the ID-credential grant, never the members.view every position holds.
-    BADGE_MODULES = {"membership": {"members.manage", "members.manage_id_cards"}}
+    #: Member labels are badges, so they follow the ID-card rule rather than
+    #: the directory's: members.manage or members.manage_id_cards, never the
+    #: baseline members.view.
+    BADGE_MODULES = {"membership": {"manage", "manage_id_cards"}}
 
     def test_every_module_accepts_its_manage_grant(self):
         """A manage-only user must be able to print.
@@ -263,7 +263,7 @@ class TestModuleRegistry:
         for module, (permissions, _) in ls.MODULE_LABELS.items():
             actions = {p.split(".")[-1] for p in permissions}
             if module in self.BADGE_MODULES:
-                assert set(permissions) == self.BADGE_MODULES[module], module
+                assert actions == self.BADGE_MODULES[module], module
             elif module in self.MANAGE_ONLY_MODULES:
                 assert actions == {"manage"}, (
                     f"{module} is manage-only by policy; registering a view "
@@ -325,18 +325,24 @@ class TestAuthorizeModule:
         _authorize_module(self._user("inventory.manage"), "inventory")
 
     def test_members_view_alone_cannot_print_member_badges(self):
-        """A member badge scans as that member; the directory grant every
-        position holds must not print one for a colleague."""
+        """A member label is a badge, and members.view is a baseline grant.
+
+        The ID card page refuses another member's card without members.manage
+        or members.manage_id_cards; posting the same member ids here with
+        `module: "membership"` must be refused the same way, or every member
+        can print a colleague's badge.
+        """
         from fastapi import HTTPException
 
         from app.api.v1.endpoints.labels import _authorize_module
 
         with pytest.raises(HTTPException) as exc:
-            _authorize_module(self._user("members.view", "users.view"), "membership")
+            _authorize_module(self._user("members.view"), "membership")
         assert exc.value.status_code == 403
 
-        _authorize_module(self._user("members.manage"), "membership")
+        # Whoever issues ID credentials, and whoever manages members, still prints.
         _authorize_module(self._user("members.manage_id_cards"), "membership")
+        _authorize_module(self._user("members.manage"), "membership")
 
     def test_unknown_module_is_not_found(self):
         from fastapi import HTTPException

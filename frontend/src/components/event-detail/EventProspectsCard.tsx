@@ -78,7 +78,7 @@ export const EventProspectsCard: React.FC<EventProspectsCardProps> = ({ eventId,
     <div className="card p-6">
       <div className="mb-4 flex items-center justify-between gap-3">
         <h2 className="text-theme-text-primary flex items-center gap-2 text-lg font-medium">
-          <UserPlus className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+          <UserPlus className="h-5 w-5" aria-hidden="true" />
           <span>Prospective Members</span>
         </h2>
         {total > 0 && (

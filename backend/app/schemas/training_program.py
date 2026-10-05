@@ -832,6 +832,7 @@ class MemberEligibilityResponse(BaseModel):
     user_id: UUID
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    preferred_name: Optional[str] = None
     membership_number: Optional[str] = None
     eligible: bool
     # eligible | enrolled | prerequisite | concurrent

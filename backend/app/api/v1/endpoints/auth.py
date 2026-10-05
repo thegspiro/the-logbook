@@ -210,7 +210,9 @@ async def _build_current_user_dict(user: User, db: AsyncSession) -> dict:
         email=user.email,
         first_name=user.first_name,
         last_name=user.last_name,
+        preferred_name=user.preferred_name,
         full_name=user.full_name,
+        display_name=user.display_name,
         organization_id=user.organization_id,
         timezone=org_timezone,
         roles=position_names,
@@ -1559,10 +1561,8 @@ async def forgot_password(
         org_name = organization.name
         expiry_minutes = RESET_TOKEN_EXPIRY_MINUTES
         recipient_email = user.email
-        recipient_first_name = user.first_name or user.username
-        recipient_full_name = (
-            f"{user.first_name or ''} {user.last_name or ''}".strip() or user.username
-        )
+        recipient_first_name = user.preferred_name or user.first_name or user.username
+        recipient_full_name = user.display_name or user.username
         it_team = org_settings.get("it_team", {})
         it_emails = [m["email"] for m in it_team.get("members", []) if m.get("email")]
 

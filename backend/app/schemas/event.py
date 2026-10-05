@@ -1487,6 +1487,9 @@ class EligibleMemberResponse(BaseModel):
     id: str
     first_name: str
     last_name: str
+    # The name the member goes by; the check-in list shows it in place of
+    # first_name. None when they go by their first name.
+    preferred_name: Optional[str] = None
     # Optional, not str: contact_visibility.email_for() returns None when the
     # org's contact_info_visibility ceiling is off or the member hid their
     # own email — a required str here made those cases a 500 for the whole

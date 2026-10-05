@@ -20,6 +20,17 @@ Throughout this document, examples use the following fictitious members of
 All examples assume **today is October 15, 2025** and the department has
 **4 active requirements** unless stated otherwise.
 
+> **"Today" is the department's date** _(2026-09-26)_. Wherever this document
+> says `today`, the engine uses the calendar date in the organization's
+> timezone (`resolve_org_today` / `org_today` in
+> `app/utils/org_timezone.py`), not the server's `date.today()`. The server runs
+> in UTC, so until this change a US department was graded against tomorrow's
+> date every evening — a certificate on its last valid day read as expired, and
+> "this month" rolled over early. The whole engine moved at once (matrix,
+> dashboard percentage, member status, compliance summary, requirement
+> progress, competency matrix, annual report, forecast, CSV/PDF exports, My
+> Training, MCP tools), so no two views disagree about the same member.
+
 ---
 
 ## Table of Contents
@@ -477,9 +488,9 @@ It is configured at two levels (see `COMPLIANCE_CONFIG.md` for the data model):
 The resolved as-of date replaces `today` wherever the date window, waiver
 proration (active vs. waived months), and overdue checks are computed. One
 deliberate exception: the certificate **"expiring soon" lookahead always uses
-the real `date.today()`** (e.g. `today + 90 days` in the compliance matrix), so
-excluding the current month never hides a certificate that is genuinely about to
-expire.
+the actual current date** — the department's today, not the resolved as-of date
+(e.g. `today + 90 days` in the compliance matrix) — so excluding the current
+month never hides a certificate that is genuinely about to expire.
 
 > This is _distinct_ from the rolling-window concept above. Rolling windows
 > change how far **back** the period reaches; `include_current_month` only moves
@@ -841,12 +852,13 @@ The compliance matrix provides a grid view: members (rows) × requirements
 
 ### Cell Statuses
 
-| Status        | Meaning                                            |
-| ------------- | -------------------------------------------------- |
-| `completed`   | Requirement fully met within the evaluation period |
-| `in_progress` | Some progress but not yet fully met                |
-| `not_started` | No relevant records found                          |
-| `expired`     | Had a certification but it has expired             |
+| Status        | Meaning                                                                                                                                                                                                    |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `completed`   | Requirement fully met within the evaluation period                                                                                                                                                         |
+| `in_progress` | Some progress but not yet fully met                                                                                                                                                                        |
+| `not_started` | No relevant records found                                                                                                                                                                                  |
+| `expired`     | Had a certification but it has expired                                                                                                                                                                     |
+| `catch_up`    | Existing member, requirement not yet met, still inside its `existing_member_deadline` (see [Grandfathering](#grandfathering-existing-members-2026-10-03)). Left out of both sides of the member's standing |
 
 ### Evaluation by Requirement Type
 
@@ -971,6 +983,12 @@ Note that `expired` and `in_progress` cells do **not** count toward
   stands).
 - `active_months` is clamped to a minimum of 1 to prevent negative or zero
   values.
+- A department with **no active requirements** still gets 100 from
+  `compute_org_compliance_pct` — arithmetically true — but no screen shows it
+  _(2026-09-29)_. Callers check `count_active_requirements()` first: the
+  Training Officer Dashboard's compliance widget reads **Not set up**, the
+  administration hub's metric "no requirements set up yet", and the admin
+  summary withholds the figure. An empty set is not a passing set.
 
 #### Example: Zero-Hour Requirement
 
@@ -1076,6 +1094,62 @@ of her active requirements.
 This means different members can have different `requirements_total` values.
 If the department has 4 universal requirements plus 1 driver-only
 requirement, Danielle's total is 5 while Maria's total is 4.
+
+### Grandfathering Existing Members (2026-10-03)
+
+A requirement can separate members who were already on the roster from new
+ones by **join date** — `member_join_date()`: the member's `hire_date`, or the
+UTC date their account was created when no hire date is recorded. Three nullable
+columns on `training_requirements` drive it (all `NULL` on rows created before
+migration `d058b5e7c1f4`, which keeps the old behaviour):
+
+| Column                     | Effect                                                                                                                                                          |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `new_member_cutoff_date`   | Members who joined **before** it are existing members for this requirement                                                                                      |
+| `existing_member_deadline` | With a cutoff: `NULL` → existing members are **exempt** (step 4 below). A date → they are held to it, but an unmet requirement reads `catch_up` until it passes |
+| `applies_to_joined_before` | Set on the original when an edit is saved for new members only: members who joined **on or after** it are graded by the newer copy instead                      |
+
+Applicability gains two checks after the role check above:
+
+4. **Join date** (`requirement_applies_by_join_date`): the requirement does not
+   apply if the member joined on or after `applies_to_joined_before`, or joined
+   before `new_member_cutoff_date` when there is no deadline. An unknown join
+   date is held to the requirement rather than silently dropped.
+5. **Catch-up** (`catch_up_deadline`): for an existing member while today is on
+   or before `existing_member_deadline`, an **unmet** requirement is reported as
+   `catch_up` with the deadline as its due date. `tally_standing()` skips
+   `catch_up` in both the met and the total counts, so it neither helps nor
+   hurts the member's standing. A met requirement counts as met as usual. From
+   the day after the deadline it is graded normally.
+
+Every screen that decides who a requirement grades goes through
+`requirement_applies_to_member` / `requirement_applies_to_user` with the join
+date — dashboard, matrix and print view, profile card, My Training, progress
+and MCP, compliance-officer report, member status, scheduling hours report,
+competency matrix, forecast, and the CSV/PDF exports, which print N/A where a
+requirement does not apply. `tests/test_requirement_grandfathering.py` sweeps
+`app/` for a call that omits it. Passing role ids through the same helper also
+fixed the dashboard, matrix and member-status views, which had ignored
+role-scoped requirements that My Training already enforced.
+
+#### Example: Riverside Raises Its Annual Hours
+
+On **January 1, 2026** Riverside creates "Annual Live-Fire Hours" (12 h) with a
+cutoff of Jan 1, 2026 and a catch-up deadline of **June 30, 2026**. Evaluated on
+March 15, 2026:
+
+| Member       | Join date          | Hours | Status        | Counts toward standing? |
+| ------------ | ------------------ | ----- | ------------- | ----------------------- |
+| Maria Torres | 2018 (hire date)   | 4     | `catch_up`    | No — until June 30      |
+| Tom Raines   | 2015 (hire date)   | 12    | `completed`   | Yes, as met             |
+| Jake Nguyen  | Feb 2, 2026 (hire) | 4     | `in_progress` | Yes, as not met         |
+
+On July 1 Maria's cell becomes `in_progress` and counts against her. Had the
+requirement no deadline, Maria and Tom would not be graded on it at all.
+
+> **Caveat:** an imported roster with no hire dates reads every imported member
+> as joining on the import day. If that day is on or after the cutoff, veterans
+> are graded as new members. See KNOWN_LIMITATIONS.md.
 
 ### Certification Matching Rules
 

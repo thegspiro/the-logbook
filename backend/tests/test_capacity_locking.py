@@ -413,6 +413,26 @@ class TestFinanceDisbursementLocking:
         ), "void_check must not mutate Budget.amount_spent directly."
 
 
+class TestFinanceDuesPaymentLocking:
+    """record_dues_payment reads MemberDues, appends a DuesPayment, and
+    recomputes amount_paid/status from dues.payments (_apply_payment_totals)
+    -- a read-then-write of an aggregate, the same shape FIN-31 fixed for
+    Budget. Two concurrent payments against the same dues row would otherwise
+    both load the ledger before either commits, both append their own row,
+    and the second to flush would overwrite amount_paid with a total that
+    excludes the first payment: the ledger row itself survives, but the
+    cached total silently drops it, understating what the member has paid."""
+
+    def test_record_dues_payment_locks_the_dues_row(self):
+        source = _source_of(finance_service.FinanceService.record_dues_payment)
+        assert "with_for_update()" in source, (
+            "Two concurrent dues payments on the same record both read the "
+            "ledger off a plain SELECT and the second to flush overwrites "
+            "amount_paid with a total that excludes the first -- unless "
+            "this read locks the row."
+        )
+
+
 class TestTestingRunImplicitFirstRun:
     """The department's first mark opens a run implicitly. Two testers tapping
     at the same moment both saw no run and both opened one, splitting the

@@ -178,7 +178,12 @@ export function AdminHubFrame<K extends string>({
 
   return (
     <div>
-      <div className="mx-auto flex max-w-7xl flex-col gap-5 px-4 pt-6 sm:px-6 sm:pt-8 lg:px-8">
+      {/* No side padding: AppLayout's page gutter already supplies it at
+          every width (1rem / 1.5rem / 2rem), and px-4 sm:px-6 lg:px-8 here
+          doubled it — every hub sat 32px in on a phone and 64px on a desktop
+          where ordinary pages sit at 16px and 32px. The hubs' own bodies and
+          the Events tabs carried the same duplicate and lost it with this. */}
+      <div className="mx-auto flex max-w-7xl flex-col gap-5 pt-6 sm:pt-8">
         {/* 0 — Trail. Above the eyebrow, because it says where the page sits
             rather than what kind of page it is. Rendered by the frame so all
             six hubs carry one without each remembering to; `mb-0` because the

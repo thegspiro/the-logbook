@@ -47,6 +47,7 @@ from app.models.nfc_tag import NfcCredentialType
 from app.models.user import User
 from app.services.inventory_service import InventoryService
 from app.services.nfc_tag_service import hash_tag_uid, uid_preview
+from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
@@ -1361,13 +1362,15 @@ class InventoryNfcService:
         if not ids:
             return {}
         result = await self.db.execute(
-            select(User.id, User.first_name, User.last_name).where(
+            select(User.id, User.first_name, User.last_name, User.preferred_name).where(
                 User.id.in_(ids),
                 User.organization_id == str(organization_id),
             )
         )
         return {
-            row.id: f"{row.first_name or ''} {row.last_name or ''}".strip()
+            row.id: format_display_name(
+                row.first_name, row.last_name, row.preferred_name
+            )
             for row in result
         }
 

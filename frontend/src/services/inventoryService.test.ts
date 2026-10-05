@@ -927,3 +927,65 @@ describe('inventoryService', () => {
     });
   });
 });
+
+// A captive portal or proxy error page answers 200 with a body that is not the
+// declared shape. These three reads were handed straight to pages that
+// iterate them, and each one took an Inventory admin page down to the error
+// screen.
+describe('inventoryService — malformed list responses', () => {
+  beforeEach(() => {
+    mockGet.mockReset();
+  });
+
+  it.each([
+    ['an HTML page', '<html>Sign in to Wi-Fi</html>'],
+    ['an object without the list', {}],
+  ])('getMembersSummary rejects %s rather than reporting an empty roster', async (_label, body) => {
+    mockGet.mockResolvedValue({ data: body });
+    await expect(inventoryService.getMembersSummary()).rejects.toThrow('member list');
+  });
+
+  it('getMembersSummary passes a well-formed roster through', async () => {
+    const data = { members: [{ user_id: 'u1' }], total: 1 };
+    mockGet.mockResolvedValue({ data });
+    await expect(inventoryService.getMembersSummary()).resolves.toEqual(data);
+  });
+
+  it.each([
+    ['an HTML page', '<html>Sign in to Wi-Fi</html>'],
+    ['an object without the list', { total_pending: 0 }],
+  ])('getCharges rejects %s rather than reporting an empty ledger', async (_label, body) => {
+    mockGet.mockResolvedValue({ data: body });
+    await expect(inventoryService.getCharges()).rejects.toThrow('charges');
+  });
+
+  it('getCharges passes a well-formed ledger through', async () => {
+    const data = { items: [], total_pending: '0', total_charged: '0', total_waived: 0 };
+    mockGet.mockResolvedValue({ data });
+    await expect(inventoryService.getCharges()).resolves.toEqual(data);
+  });
+
+  it.each([
+    ['an HTML page', '<html>Sign in to Wi-Fi</html>'],
+    ['an empty object', {}],
+  ])('getImpactPlannerOptions degrades %s to empty choices', async (_label, body) => {
+    mockGet.mockResolvedValue({ data: body });
+    await expect(inventoryService.getImpactPlannerOptions()).resolves.toEqual({
+      statuses: [],
+      membership_types: [],
+      ranks: [],
+      stations: [],
+      positions: [],
+      categories: [],
+      size_fields: [],
+    });
+  });
+
+  it('getImpactPlannerOptions keeps well-formed choices', async () => {
+    mockGet.mockResolvedValue({ data: { statuses: [{ value: 'active', label: 'Active' }], stations: ['1'] } });
+    const result = await inventoryService.getImpactPlannerOptions();
+    expect(result.statuses).toEqual([{ value: 'active', label: 'Active' }]);
+    expect(result.stations).toEqual(['1']);
+    expect(result.ranks).toEqual([]);
+  });
+});
