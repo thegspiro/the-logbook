@@ -24,7 +24,7 @@ been through a review pass.
 | A4  | Email templates & delivery     | `endpoints/email_templates.py` (671 L), `services/email_template_service.py` (2739 L), `email_service.py` (1633 L)                                                                                                                                                        | MAIL   | ✅     |
 | A5  | Course cohorts & syllabus      | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx`                                                                                    | CC     | ✅     |
 | A6  | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L)                             | LIFE   | ✅     |
-| A7  | Dashboard & action items       | `endpoints/dashboard.py` (456 L), `services/attendance_dashboard_service.py` (329 L); `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items`                                                                                                                | DASH   | ⬜     |
+| A7  | Dashboard & action items       | `endpoints/dashboard.py` (1452 L, 7 routes), `services/attendance_dashboard_service.py` (329 L), `dashboard_widget_service.py`; `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items`, `components/dashboard/`                                             | DASH   | ✅     |
 | A8  | Locations & kiosk              | `endpoints/locations.py` (434 L, 8 routes), `services/location_service.py` (394 L), `api/public/display.py` (550 L, 4 routes); `pages/LocationKioskPage.tsx`, `RoomCheckInPage.tsx`, `RoomQRCodesPage.tsx`                                                                | LOC    | ✅     |
 | A9  | Platform ops & data lifecycle  | `services/admin_continuity_service.py` (216 L), `audit_ship_service.py` (165 L), `data_export_service.py` (192 L), `separation_of_duties.py` (70 L, 20 call sites in 8 modules)                                                                                           | OPS    | ✅     |
 
@@ -2720,3 +2720,82 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   · 162 backend medical tests passed, 1 skipped. No frontend source changed, so
   per CLAUDE.md's own "Match the Verification to the Change" the frontend suites
   were not run. See medical-screening.md → Pass 5. Next: B2 apparatus.
+- **A7 dashboard & action items ✅ (pass 3).** `dashboard.py` has grown from the
+  456 lines and 4 routes pass 2 reviewed to **1452 lines and 7 routes**;
+  `/asset-widgets`, `/operations` and `/widgets` all arrived after it and are
+  where this pass concentrated. **7 fixes, 4 flagged.** The authorization lens
+  came back clean, including the lead worth chasing: `minutes_visibility_filter`
+  is applied at one of the four places this file reads `ActionItem`, which looks
+  like DASH-1 returning and is not — the filter returns `None` for
+  `minutes.manage` holders and the new `/operations` read is gated on exactly
+  that, so applying it there is a no-op by construction. Same for the meeting
+  half of `/action-items`: `MeetingStatus` has a `DRAFT` state, but
+  `MeetingsService.get_open_action_items` restricts neither draft nor status, so
+  the dashboard mirrors its owning module exactly, which is what DASH-3 asked
+  for. (That meetings restricts nothing where minutes restricts drafts and
+  executive session is a real asymmetry — recorded in the findings file as a
+  **B6** question, not a dashboard bug, so it is not rediscovered as one.)
+  What this pass found instead is a dimension nothing was checking: **the
+  dashboard's links.** **DASH-30** — five server-supplied navigation targets
+  pointed at paths no route declares (`/inventory/lots`, `/inventory/requests`,
+  `/apparatus/maintenance`, `/notifications/manage`, `/training/reports` — the
+  first three are API paths), and `App.tsx`'s catch-all turned every click into
+  a silent redirect back to the dashboard, indistinguishable from a dead button.
+  `routeIntegrity.test.ts` has checked precisely this since the Add Member
+  button broke, but it scans `frontend/src/**/*.tsx?` and these five are Python
+  string literals served as response data, so no frontend sweep could have seen
+  them — which is why two passes over this endpoint did not. **The fix is for
+  the class:** that test now also walks a named list of backend modules that
+  build navigation targets as data (`dashboard.py`, `admin_hub_service.py`, 40
+  targets), matching `href="/…"` with a literal leading slash so the
+  HTML-email anchors elsewhere in `app/services/` are excluded; a missing file
+  throws rather than quietly halving the scan, and a per-source floor guards a
+  regex that stops matching. It found two of the five on its first run that I
+  had not spotted by reading. `admin_hub_service.py`'s 19 hrefs were all
+  already valid. **DASH-31** — `facilities-maintenance` and
+  `facilities-urgent-work-orders` rendered the same overdue count, so a
+  department with three overdue work orders read "Urgent work orders: 3" beside
+  "Maintenance due: 3"; the duplicate's title said "due" where its query said
+  overdue, its empty state said "overdue" where its title said due, and its
+  `href` was `?status=due`, a value `MaintenanceListPage` does not accept.
+  Removed; a genuine upcoming figure needs a second query **and** a page filter,
+  flagged as DASH-39 rather than guessed. **DASH-32** — the apparatus block
+  carries a careful `_may_open_apparatus` guard against handing out a tile whose
+  only action is Access Denied, and **the lesson landed on one of three
+  blocks**: inventory and facilities grant on `settings.manage` with no
+  destination check, so a delegated settings role holding neither module grant
+  got **nine** dead tiles. Same guard on both; the existing apparatus test is
+  now parametrized across all three, and its comment claiming `settings.manage`
+  "legitimately opens the inventory and facilities blocks" is corrected, because
+  the fix makes it false. **DASH-33** — `wiki/API-Reference.md` described
+  `/asset-widgets` as gated on `*.view` with "no module check here"; both are
+  wrong and wrong in the lax direction, since the code requires each module's
+  _manage_ grant or `settings.manage` **and** the module enabled, and the
+  endpoint's own comments explain at length why view is deliberately not enough.
+  **DASH-34** (LOW) — the `/operations` 30-day event window was
+  `local_midnight + timedelta(days=30)` on an already-UTC instant, so it ended
+  at 23:00 or 01:00 local across a DST transition; same class as CC-5. Its test
+  freezes the clock on purpose, because with the real one the assertion holds
+  most of the year under the arithmetic it is meant to reject. **DASH-35** (LOW)
+  — `/community-engagement`'s attendee tallies counted cancelled events while
+  the event count beside them did not, and the comment above them claimed the
+  figures described one population. **DASH-36** (LOW) — the wiki published the
+  legacy alias `equipment_check.manage` for a section whose real grant has been
+  `inventory.check_manage` since the module segment changed, and
+  `OPERATIONS_SECTION_PERMISSIONS["critical_exceptions"]` is the one entry of
+  six `_has_any` is never called with (the section is assembled per item, which
+  is strictly finer), now documented as contract rather than control.
+  **Flagged:** DASH-37 (MED) — every tile announces "Open filtered results" and
+  **13 of 16** parameterised targets land on a page that ignores the parameter;
+  the three that work are the two whose hrefs carry an explanatory comment plus
+  the training hub, so the rest were written as if the pages already filtered.
+  Eight components would need query-param support, which is its own iteration.
+  DASH-38, DASH-39, DASH-40 (`/action-items` is unpaginated and carries free
+  text, so the payload grows with content). **DASH-2 re-verified still open** —
+  `/dashboard/stats` still returns three fabricated constants and
+  `dashboardService.getStats` still has zero callers. Every fix is
+  mutation-verified: the fix reverted, the new test confirmed to fail naming the
+  right file and line, and the revert undone with the mechanism that applied it.
+  Gate: tsc 0 · flake8 0 · black 1351 unchanged · eslint 0 (full run) ·
+  `routeIntegrity` 7 passed (was 5) · backend dashboard suite 97 passed, 1
+  skipped. See dashboard.md → Pass 3. Next: A8 locations & kiosk.

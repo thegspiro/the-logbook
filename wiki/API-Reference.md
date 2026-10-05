@@ -333,10 +333,11 @@ same way** — do not generalize from one to the others:
 | -------------------------- | --------------------------- | ------------------------------------------------------------------------ |
 | `/dashboard/widgets`       | **`null`** in the response  | Only `fundraising` (`grants`). Finance and community are permission-only |
 | `/dashboard/operations`    | **omitted** from `sections` | Yes — every section checks module **and** permission                     |
-| `/dashboard/asset-widgets` | **omitted** from `widgets`  | No — permission-only                                                     |
+| `/dashboard/asset-widgets` | **omitted** from `widgets`  | Yes — every block checks module **and** permission                       |
 
-Only `/dashboard/operations` combines module and permission checks throughout,
-and only the two list-based responses omit what the caller cannot see.
+`/dashboard/operations` and `/dashboard/asset-widgets` both combine module and
+permission checks throughout, and only the two list-based responses omit what
+the caller cannot see.
 `/dashboard/widgets` explicitly serializes `finance`, `fundraising` and
 `community` as `null`, so **an integrator can tell the difference between "no
 access" and "no data" on that endpoint** — the other two are opaque.
@@ -365,11 +366,17 @@ have data are never `null`. Treat `null` as unauthorized.
 | Section                  | Requires (any of)                                                                                          |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------- |
 | `operational_readiness`  | `scheduling.manage`                                                                                        |
-| `critical_exceptions`    | `meetings.manage`, `minutes.manage`, `scheduling.manage`, `equipment_check.manage`, `notifications.manage` |
+| `critical_exceptions`    | `meetings.manage`, `minutes.manage`, `scheduling.manage`, `inventory.check_manage`, `notifications.manage` |
 | `membership_health`      | `members.manage`                                                                                           |
 | `upcoming_command_dates` | `events.manage`                                                                                            |
 | `period_trends`          | `training.manage`                                                                                          |
 | `pending_approvals`      | `admin_hours.manage`                                                                                       |
+
+`critical_exceptions` is finer-grained than the row above suggests: it is
+assembled item by item, each item behind the single permission owning its data
+source, and the section is omitted entirely when no item survived. Holding
+`notifications.manage` alone therefore returns the section with the notification
+item only — not the shift, action-item or equipment-check items.
 
 Dates are resolved in the organization's configured timezone, falling back to
 UTC if it is unset or unrecognized.
@@ -377,11 +384,27 @@ UTC if it is unset or unrecognized.
 ### `/dashboard/asset-widgets`
 
 Returns **counts and fixed links only** for Inventory, Apparatus and
-Facilities, gated on `inventory.view`, `apparatus.view` and `facilities.view`
-respectively — **permission-only; there is no module check here.** Each is
-authorized independently, so managing inventory does not reveal apparatus or
-facilities. Protected facility fields (codes, accounts, budgets, leases) are
-deliberately not reachable through this endpoint.
+Facilities. Each block is authorized independently, so managing inventory does
+not reveal apparatus or facilities. Protected facility fields (codes, accounts,
+budgets, leases) are deliberately not reachable through this endpoint.
+
+**A `*.view` grant is not enough, and the module must be switched on.** These
+are management-reporting tallies — deficiency counts, overdue checks,
+compliance deadlines — so each block requires its module's _manage_ permission
+or `settings.manage`, **and** the module enabled for the organization:
+
+| Block        | Requires                                                                                                        |
+| ------------ | --------------------------------------------------------------------------------------------------------------- |
+| `inventory`  | module on, **and** `inventory.manage`                                                                           |
+| `apparatus`  | module on, **and** (`apparatus.manage` or `settings.manage`), **and** `apparatus.view` or `apparatus.manage`    |
+| `facilities` | module on, **and** (`facilities.manage` or `settings.manage`), **and** `facilities.view` or `facilities.manage` |
+
+The second condition on each row is a destination check, not a second data
+gate: every widget links into that module's pages, and those routes have their
+own entry permissions, so a caller who cannot open the destination is not shown
+a tile whose only action is Access Denied. For `inventory` the destination gate
+(`inventory.manage`) is the stricter of the two and subsumes the
+`settings.manage` arm.
 
 ---
 
