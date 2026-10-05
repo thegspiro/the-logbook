@@ -28,6 +28,7 @@ from app.models.user import Organization, User
 from app.services.separation_of_duties import assert_different_person
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.hours import hours_from_minutes
+from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
 from app.utils.org_timezone import (
     local_day_start_utc,
@@ -431,6 +432,7 @@ class AdminHoursService:
                 AdminHoursCategory.max_hours_per_session,
                 User.first_name,
                 User.last_name,
+                User.preferred_name,
             )
             .join(
                 AdminHoursCategory,
@@ -446,7 +448,15 @@ class AdminHoursService:
         rows = result.all()
 
         sessions = []
-        for entry, cat_name, cat_color, max_hours, first_name, last_name in rows:
+        for (
+            entry,
+            cat_name,
+            cat_color,
+            max_hours,
+            first_name,
+            last_name,
+            preferred_name,
+        ) in rows:
             elapsed = now - _ensure_utc(entry.clock_in_at)
             elapsed_minutes = int(elapsed.total_seconds() / 60)
 
@@ -461,7 +471,9 @@ class AdminHoursService:
                     "category_name": cat_name,
                     "category_color": cat_color,
                     "user_id": entry.user_id,
-                    "user_name": f"{first_name} {last_name}",
+                    "user_name": format_display_name(
+                        first_name, last_name, preferred_name
+                    ),
                     "clock_in_at": entry.clock_in_at,
                     "elapsed_minutes": elapsed_minutes,
                     "max_session_minutes": max_minutes,
@@ -630,6 +642,7 @@ class AdminHoursService:
                 AdminHoursCategory.color,
                 Approver.first_name,
                 Approver.last_name,
+                Approver.preferred_name,
                 Event.title,
             )
             .join(
@@ -667,13 +680,15 @@ class AdminHoursService:
         entries = []
         for row in rows:
             entry, cat_name, cat_color = row[0], row[1], row[2]
-            approver_first, approver_last = row[3], row[4]
-            event_title = row[5]
+            approver_first, approver_last, approver_preferred = row[3], row[4], row[5]
+            event_title = row[6]
             d = self._entry_to_dict(
                 entry, cat_name, cat_color, source_event_name=event_title
             )
             if approver_first and approver_last:
-                d["approver_name"] = f"{approver_first} {approver_last}"
+                d["approver_name"] = format_display_name(
+                    approver_first, approver_last, approver_preferred
+                )
             entries.append(d)
         return entries, total
 
@@ -703,8 +718,10 @@ class AdminHoursService:
                 AdminHoursCategory.color,
                 EntryUser.first_name,
                 EntryUser.last_name,
+                EntryUser.preferred_name,
                 Approver.first_name,
                 Approver.last_name,
+                Approver.preferred_name,
                 Event.title,
             )
             .join(
@@ -750,15 +767,19 @@ class AdminHoursService:
             cat_color = row[2]
             first_name = row[3]
             last_name = row[4]
-            approver_first = row[5]
-            approver_last = row[6]
-            event_title = row[7]
+            preferred_name = row[5]
+            approver_first = row[6]
+            approver_last = row[7]
+            approver_preferred = row[8]
+            event_title = row[9]
             d = self._entry_to_dict(
                 entry, cat_name, cat_color, source_event_name=event_title
             )
-            d["user_name"] = f"{first_name} {last_name}"
+            d["user_name"] = format_display_name(first_name, last_name, preferred_name)
             if approver_first and approver_last:
-                d["approver_name"] = f"{approver_first} {approver_last}"
+                d["approver_name"] = format_display_name(
+                    approver_first, approver_last, approver_preferred
+                )
             entries.append(d)
         return entries, total
 

@@ -6,6 +6,7 @@ import { CSVMemberRow } from '../types/member';
 import { userService, roleService } from '../services/api';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { buildCsv, downloadCsv } from '../utils/csv';
+import { displayNameOf } from '../utils/memberName';
 
 /**
  * One rejected row: why it was rejected, and the cells it was rejected from.
@@ -479,10 +480,12 @@ interface ExistingMembers {
 
 const describeMember = (member: {
   full_name?: string | undefined;
+  display_name?: string | undefined;
   first_name?: string | undefined;
   last_name?: string | undefined;
+  preferred_name?: string | null | undefined;
   username: string;
-}): string => member.full_name || [member.first_name, member.last_name].filter(Boolean).join(' ') || member.username;
+}): string => displayNameOf(member) || member.username;
 
 /**
  * Indexes the roster so a row that collides with an existing member is caught
@@ -501,8 +504,10 @@ const indexExistingMembers = (
     username: string;
     membership_number?: string | undefined;
     full_name?: string | undefined;
+    display_name?: string | undefined;
     first_name?: string | undefined;
     last_name?: string | undefined;
+    preferred_name?: string | null | undefined;
   }>
 ): ExistingMembers => {
   const index: ExistingMembers = {

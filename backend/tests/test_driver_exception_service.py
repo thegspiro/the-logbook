@@ -360,7 +360,11 @@ class TestListApprovers:
             else []
         )
         return SimpleNamespace(
-            id=f"u-{name}", full_name=name, rank=rank, positions=positions
+            id=f"u-{name}",
+            full_name=name,
+            display_name=name,
+            rank=rank,
+            positions=positions,
         )
 
     async def test_chief_ranks_are_approvers_by_default(self):

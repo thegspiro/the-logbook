@@ -198,6 +198,22 @@ describe('MemberIdCardPage', () => {
       });
     });
 
+    it('shows the name the member goes by, and its initial', async () => {
+      vi.mocked(userService.getUserWithRoles).mockResolvedValue({
+        ...mockMember,
+        preferred_name: 'Terry',
+        display_name: 'Terry Doe',
+      } as never);
+
+      renderWithRouter(<MemberIdCardPage />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { name: 'Terry Doe' })).toBeInTheDocument();
+      });
+      expect(screen.queryByText('John Doe')).not.toBeInTheDocument();
+      expect(screen.getByText('T')).toBeInTheDocument();
+    });
+
     it('should display membership number', async () => {
       renderWithRouter(<MemberIdCardPage />);
 

@@ -128,6 +128,34 @@ Click **Edit** in the heading of the relevant section to make changes. Officers 
 
 > **Hint:** Members can edit their own contact information and notification preferences. Officers with the `members.manage` permission can edit any member's profile using the full Admin Edit page.
 
+### Preferred Names _(2026-10-04)_
+
+A member can be known by a name other than their legal first name. John Terry
+Heather, who goes by his middle name, sets **Preferred Name** to "Terry", and
+everyone sees "Terry Heather" on the shift board instead of a "John Heather"
+they would not recognise.
+
+**Where to set it.** Members set their own under **Settings > Account**.
+Officers can set or clear it for anyone on the **Admin Edit** page or when
+**adding a member**. Clearing the box goes back to the first name. Each change
+is written to the audit log with the old and new value.
+
+**Where it shows.** The preferred name replaces the first name wherever the
+app is just referring to someone: shifts and scheduling, events and check-in,
+the member directory and profiles, dashboards and greetings, notifications and
+emails, inventory assignments, messages, pickers and search, the member ID
+card, the attendance list in meeting minutes, the photo-use consent roster,
+and medical screening records. Searching for either name finds the member.
+Minutes record the name when they are drafted, so changing a preferred name
+later does not rewrite minutes already on file.
+
+**Where the legal name stays.** Anything that may go to a government body or
+has to match an ID keeps the legal first name: reports and every CSV/PDF
+export, training records, certificates and compliance reports, skills testing
+records, elections and ballots, legal documents, signed forms, property
+custody and return records, and the audit log. The member's profile shows the
+legal name under the preferred one so officers can always see both.
+
 ---
 
 ## Adding Members
@@ -137,7 +165,7 @@ Click **Edit** in the heading of the relevant section to make changes. Officers 
 Navigate to **Administration > Members > Member Management**, then click the **Add Member** tab.
 
 1. Fill in the required fields: first and last name, membership number, home address (street, city, state, ZIP), primary phone, email, and a primary emergency contact (name, relationship, phone). The **username** is created automatically from the part of the email before `@`.
-2. Optionally set middle name, date of birth, secondary phone, join date, membership type, rank, position, station, platoon and a secondary emergency contact.
+2. Optionally set middle name, [preferred name](#preferred-names-2026-10-04), date of birth, secondary phone, join date, membership type, rank, position, station, platoon and a secondary emergency contact.
 3. Leave **Set initial password** unchecked to have a temporary password generated and emailed to the member, or check it to choose a password yourself (at least 12 characters) — no email is sent in that case.
 4. Click **Save Member**.
 

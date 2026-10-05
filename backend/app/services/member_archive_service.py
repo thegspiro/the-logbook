@@ -199,8 +199,8 @@ async def check_and_auto_archive(
 
         if admin_emails:
             # Names are user-entered; escape them before HTML interpolation.
-            safe_name = html.escape(member.full_name or "")
-            subject = f"Member Archived: {member.full_name} — {org_name}"
+            safe_name = html.escape(member.display_name or "")
+            subject = f"Member Archived: {member.display_name} — {org_name}"
             html_body = wrap_email_body(
                 org,
                 "Member Archived",
@@ -212,7 +212,7 @@ async def check_and_auto_archive(
                 chip="Member archived",
             )
             text_body = (
-                f"Member Archived: {member.full_name}\n\n"
+                f"Member Archived: {member.display_name}\n\n"
                 f"All department property has been returned. "
                 f"Previous status: {previous_status.replace('_', ' ').title()}.\n\n"
                 f"The member's profile remains accessible for legal requests "
@@ -229,7 +229,7 @@ async def check_and_auto_archive(
 
     archive_info = {
         "user_id": user_id,
-        "member_name": member.full_name,
+        "member_name": member.display_name,
         "previous_status": previous_status,
         "new_status": UserStatus.ARCHIVED.value,
         "archived_at": now.isoformat(),
@@ -350,7 +350,7 @@ async def reactivate_member(
 
     return {
         "user_id": user_id,
-        "member_name": member.full_name,
+        "member_name": member.display_name,
         "previous_status": previous_status,
         "new_status": UserStatus.ACTIVE.value,
         "reactivated_at": now.isoformat(),

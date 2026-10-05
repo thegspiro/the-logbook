@@ -65,6 +65,7 @@ import { useRejoinServiceOptions } from '../hooks/useRejoinServiceOptions';
 import { ServiceHistorySection } from '../components/member-profile/ServiceHistorySection';
 import { isCertificationExpired, isCertificationExpiringSoon } from '../utils/certificationExpiry';
 import { blankToNull } from '../utils/formValues';
+import { displayNameOf, givenName } from '../utils/memberName';
 
 // Types for inventory data
 interface InventoryItem {
@@ -716,6 +717,17 @@ export const MemberProfilePage: React.FC = () => {
   const memberTypeLabel = user ? membershipTypeLabel(user.membership_type) : '';
   // "Administrative · Administrative" would be the class stated twice.
   const headerSubtitle = [rankLabel, memberTypeLabel === rankLabel ? '' : memberTypeLabel].filter(Boolean).join(' · ');
+  // A member who goes by another name is headed by it, so the name on their
+  // ID and certificates is stated beneath it — an officer matching this page
+  // to a card or a state record needs both.
+  const preferredName = user?.preferred_name?.trim() || '';
+  const legalNameLine =
+    user && preferredName && preferredName !== (user.first_name?.trim() || '')
+      ? [user.first_name, user.middle_name, user.last_name]
+          .map((part) => part?.trim() || '')
+          .filter(Boolean)
+          .join(' ')
+      : '';
 
   if (loading) {
     return (
@@ -773,13 +785,13 @@ export const MemberProfilePage: React.FC = () => {
                   {user.photo_url ? (
                     <img
                       src={user.photo_url}
-                      alt={user.full_name || user.username}
+                      alt={displayNameOf(user) || user.username}
                       className="h-20 w-20 rounded-full object-cover"
                     />
                   ) : (
                     <div className="flex h-20 w-20 items-center justify-center rounded-full bg-indigo-100">
                       <span className="text-2xl font-bold text-indigo-600">
-                        {(user.first_name?.[0] || user.username?.[0] || '?').toUpperCase()}
+                        {(givenName(user)[0] || user.username?.[0] || '?').toUpperCase()}
                       </span>
                     </div>
                   )}
@@ -822,8 +834,9 @@ export const MemberProfilePage: React.FC = () => {
                 </div>
                 <div>
                   <h1 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">
-                    {user.full_name || user.username}
+                    {displayNameOf(user) || user.username}
                   </h1>
+                  {legalNameLine && <p className="text-theme-text-muted mt-1 text-sm">Legal name: {legalNameLine}</p>}
                   {headerSubtitle && (
                     <p className="text-theme-text-secondary mt-1 text-[15px] font-medium">{headerSubtitle}</p>
                   )}
@@ -923,10 +936,7 @@ export const MemberProfilePage: React.FC = () => {
                 relabel or revoke a card, not even their own, and the panel
                 hides itself when the organization has cards turned off. */}
               {showIdCards && userId && (
-                <MemberIdCardsPanel
-                  userId={userId}
-                  memberName={user ? `${user.first_name} ${user.last_name}`.trim() : undefined}
-                />
+                <MemberIdCardsPanel userId={userId} memberName={user ? displayNameOf(user) : undefined} />
               )}
 
               {/* Assigned Inventory - the member's own kit, or a quartermaster's
@@ -1486,7 +1496,7 @@ export const MemberProfilePage: React.FC = () => {
             onClose={() => setReactivateModalOpen(false)}
             member={{
               id: userId,
-              name: user.full_name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username,
+              name: displayNameOf(user) || user.username,
             }}
             onReactivated={() => fetchUserData(userId)}
           />
@@ -1498,7 +1508,7 @@ export const MemberProfilePage: React.FC = () => {
             onClose={() => setAnonymizeModalOpen(false)}
             member={{
               id: userId,
-              name: user.full_name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username,
+              name: displayNameOf(user) || user.username,
             }}
             onAnonymized={() => navigate('/members')}
           />

@@ -240,7 +240,7 @@ class InventoryNotificationService:
                 )
 
                 context = {
-                    "first_name": user.first_name or "Member",
+                    "first_name": user.preferred_name or user.first_name or "Member",
                     "organization_name": org.name if org else "Your Department",
                     "change_date": format_in_org_timezone(
                         datetime.now(timezone.utc), org, "%B %d, %Y"

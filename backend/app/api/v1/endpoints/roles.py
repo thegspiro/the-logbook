@@ -44,6 +44,7 @@ from app.schemas.role import (
 )
 from app.services.role_service import role_service
 from app.services.security_monitoring import report_privilege_escalation_attempt
+from app.utils.member_names import format_legal_name
 
 router = APIRouter()
 
@@ -528,8 +529,9 @@ async def get_role_users(
                 email=user.email,
                 first_name=user.first_name,
                 last_name=user.last_name,
-                full_name=f"{user.first_name or ''} {user.last_name or ''}".strip()
-                or None,
+                preferred_name=user.preferred_name,
+                full_name=format_legal_name(user.first_name, user.last_name) or None,
+                display_name=user.display_name or None,
                 is_active=user.is_active,
             )
             for user in users

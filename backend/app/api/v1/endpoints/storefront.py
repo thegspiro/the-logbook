@@ -147,7 +147,7 @@ def _order_payload(
                 "to_status": event.to_status,
                 "message": event.message,
                 "is_member_visible": event.is_member_visible,
-                "author_name": author.full_name if author else None,
+                "author_name": author.display_name if author else None,
                 "created_at": event.created_at,
             }
         )
