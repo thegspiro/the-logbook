@@ -157,21 +157,32 @@ Track equipment stored on each apparatus (tools, medical supplies, SCBA, etc.):
 
 ## NFPA Compliance
 
-Track compliance with NFPA standards for each apparatus:
+Whether a department tracks NFPA apparatus compliance is a department-wide
+switch. Until an administrator sets it, it follows the organization type: **on**
+for fire departments and combined fire/EMS departments, **off** for EMS-only
+agencies.
 
-- NFPA 1901 (Automotive Fire Apparatus)
-- NFPA 1911 (Inspection, Maintenance, Testing)
-- NFPA 1912 (Refurbishing)
+**Turning it on or off** (requires `settings.manage`): on the **Apparatus**
+page, use the **NFPA Compliance** switch above the fleet list. The card says
+whether the organization-type default or an administrator's choice is in force.
+Turning it off hides the NFPA tab and the per-vehicle checkbox and the server
+refuses NFPA requests; nothing is deleted, so turning it back on restores every
+record.
 
-The compliance section shows which standards apply and whether the apparatus is compliant, with dates of last assessment.
+With the switch on, tick **Enable NFPA compliance tracking** on an apparatus's
+edit form, and its detail page gains an **NFPA** tab with two lists:
 
-> **Corrected 2026-08-12.** There is no NFPA Compliance **tab**, and no
-> per-standard status, assessment date or due date anywhere.
-> `ApparatusOverviewTab` renders a single card reading "Tracking Enabled" when
-> the flag is set; the flag's only other consumer is a checkbox on the edit
-> form. The standards above are the ones a department is expected to track, not
-> ones the application tracks for you. Recorded in
-> [Apparatus & Facilities — Four Guide Sections With No Screen](../KNOWN_LIMITATIONS.md#apparatus--facilities--four-guide-sections-with-no-screen-2026-08-08).
+- **Required NFPA Tests** — every maintenance type marked NFPA-required that
+  applies to this apparatus type, with the last test, the next due date and a
+  status: _Current_, _Due soon_ (within 30 days), _Overdue_, _Scheduled_ or _No
+  record yet_. The next due date is the one recorded on the last test, else a
+  booked test's due date, else the type's calendar interval from the last test.
+  Tests are recorded on the **Maintenance** tab; the NFPA tab reads them.
+- **Compliance Items** — a list a department keeps by hand, one row per
+  standard and section (for example NFPA 1911, NFPA 1962 hose, NFPA 1932 ground
+  ladders), with status, last checked and next due dates. An item whose next due
+  date has passed reads _Overdue_ whatever its stored status. Members with
+  `apparatus.edit` or `apparatus.manage` can add, edit and remove items.
 
 ---
 
@@ -444,11 +455,7 @@ Track utility accounts and monitor usage:
 2. Add utility accounts (electric, gas, water, internet, etc.).
 3. Record monthly readings to track consumption trends.
 
-> **Corrected 2026-08-12.** There is no Utilities section. Nine
-> `facilitiesService` methods sit over `/facilities/utility-accounts` and
-> `/utility-readings` with **no UI consumer** — `FacilityDetailPage` renders
-> seven sections and this is not one of them. The steps above describe the
-> intended design. Recorded in [Apparatus & Facilities — Four Guide Sections With No Screen](../KNOWN_LIMITATIONS.md#apparatus--facilities--four-guide-sections-with-no-screen-2026-08-08).
+Each utility account lists its twelve most recent readings, newest first, with an **Add reading** button for members who can edit the facility.
 
 ---
 
@@ -462,9 +469,7 @@ Track building improvement and capital projects:
 - Status (Planning, In Progress, Completed)
 - Contractor information
 
-> **Corrected 2026-08-12.** There is no capital-projects screen. Five
-> `facilitiesService` methods exist over `/facilities/capital-projects` with no
-> UI consumer, no route and no page. Recorded in [Apparatus & Facilities — Four Guide Sections With No Screen](../KNOWN_LIMITATIONS.md#apparatus--facilities--four-guide-sections-with-no-screen-2026-08-08).
+Projects are kept in the facility's **Capital Projects** section.
 
 ---
 

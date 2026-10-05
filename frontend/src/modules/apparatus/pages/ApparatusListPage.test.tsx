@@ -45,6 +45,15 @@ vi.mock('../store/apparatusStore', () => ({
   useApparatusStore: () => store,
 }));
 
+vi.mock('../hooks/useApparatusNfpaSettings', () => ({
+  useApparatusNfpaSettings: () => ({
+    enabled: true,
+    settings: { enabled: true, defaultForOrganizationType: true, explicitChoice: null },
+    loading: false,
+    refresh: () => Promise.resolve(),
+  }),
+}));
+
 import ApparatusListPage from './ApparatusListPage';
 
 describe('ApparatusListPage permissions', () => {
@@ -114,5 +123,26 @@ describe('ApparatusListPage row actions', () => {
     expect(screen.getByRole('button', { name: 'Edit U-9' })).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'View E-2' }).length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: 'View Details' })).not.toBeInTheDocument();
+  });
+});
+
+describe('ApparatusListPage NFPA department switch', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    grantedPermissions = new Set();
+    mockCheckPermission.mockImplementation((permission: string) => grantedPermissions.has(permission));
+    localStorage.setItem('has_session', 'true');
+  });
+
+  it('is not offered to an apparatus manager who cannot change settings', () => {
+    grantedPermissions = new Set(['apparatus.manage']);
+    renderWithRouter(<ApparatusListPage />);
+    expect(screen.queryByRole('switch', { name: 'NFPA Compliance' })).not.toBeInTheDocument();
+  });
+
+  it('is offered to a settings administrator', () => {
+    grantedPermissions = new Set(['settings.manage']);
+    renderWithRouter(<ApparatusListPage />);
+    expect(screen.getByRole('switch', { name: 'NFPA Compliance' })).toBeChecked();
   });
 });

@@ -15,6 +15,7 @@ import { getPositionOptions } from '@/modules/scheduling/components/shiftTemplat
 import { ensureShiftSettingsLoaded } from '@/modules/scheduling/services/shiftSettingsApi';
 import { useApparatusStore } from '../store/apparatusStore';
 import { apparatusService, evocLevelService } from '../services/api';
+import { useApparatusNfpaSettings } from '../hooks/useApparatusNfpaSettings';
 import type { ApparatusCreate, ApparatusUpdate, EvocLevel, FuelType } from '../types';
 
 /** Columns the server stores as NOT NULL; an emptied one is refused by
@@ -40,6 +41,7 @@ const CREW_POSITION_CODES = [
 
 export const ApparatusFormPage: React.FC = () => {
   const navigate = useNavigate();
+  const { enabled: nfpaEnabled } = useApparatusNfpaSettings();
   const { id } = useParams<{ id: string }>();
   const isEditing = Boolean(id);
   // Ranks only append eligibility labels to options that are already known, so
@@ -1094,23 +1096,27 @@ export const ApparatusFormPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Settings */}
-          <div className="card p-6">
-            <h2 className="text-theme-text-primary mb-6 font-bold">Settings</h2>
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="nfpaTrackingEnabled"
-                name="nfpaTrackingEnabled"
-                checked={formData.nfpaTrackingEnabled}
-                onChange={handleChange}
-                className="form-checkbox"
-              />
-              <label htmlFor="nfpaTrackingEnabled" className="text-theme-text-secondary ml-2">
-                Enable NFPA compliance tracking
-              </label>
+          {/* Settings — only for a department that tracks NFPA compliance. The
+              stored flag is kept either way, so turning the department switch
+              back on restores each vehicle's choice. */}
+          {nfpaEnabled && (
+            <div className="card p-6">
+              <h2 className="text-theme-text-primary mb-6 font-bold">Settings</h2>
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="nfpaTrackingEnabled"
+                  name="nfpaTrackingEnabled"
+                  checked={formData.nfpaTrackingEnabled}
+                  onChange={handleChange}
+                  className="form-checkbox"
+                />
+                <label htmlFor="nfpaTrackingEnabled" className="text-theme-text-secondary ml-2">
+                  Enable NFPA compliance tracking
+                </label>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Notes */}
           <div className="card p-6">

@@ -1015,29 +1015,6 @@ there is no screen.
 | **Leave of absence is created from Waiver Management** | Open (LOW — discoverability) | It works, but it is not where a membership coordinator would look for it.                                                                                                                                                                      |
 | **No UI for overdue property returns (members)**       | Open (LOW)                   | Three endpoints, no consumer. The Inventory members page shows an "Overdue Returns" figure, which is a different feature and may be the reason this was assumed to exist.                                                                      |
 
-## Apparatus & Facilities — Four Guide Sections With No Screen (2026-08-08)
-
-Found while capturing screenshots for `docs/training/06-apparatus-facilities.md`:
-four placeholders in that guide picture screens the frontend does not render.
-Same shape as the Member Lifecycle row above — the API is built, the screen is
-not — so they are recorded rather than papered over with an approximate image.
-Their placeholders are deliberately left open.
-
-| Guide section                     | What the guide pictures                                                                                                | What exists                                                                                                                                                                                                           | State                |
-| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| Apparatus **NFPA Compliance tab** | Applicable standards with per-standard compliance status (green check / red X), last assessment date and next due date | `ApparatusOverviewTab.tsx:242` renders a single card reading "Tracking Enabled" when the flag is set. There is no standards list, no status, no dates. The flag's only other consumer is a checkbox on the edit form. | ⚠️ Flag only, no tab |
-
-Verified 2026-08-08 by counting non-test consumers of each service method under
-`frontend/src`, and by reading the render bodies rather than trusting the type
-definitions — `deficiencySince` and the utility/capital-project types are all
-declared, which is exactly what makes this class of gap easy to miss.
-
-The guide text has **not** been rewritten here. Two of these are one component
-away from being true, and deciding between "build the screen" and "cut the
-section" is a product call, not a documentation fix. The deficiency banner was
-decided on 2026-10-04: no banner, and the guide now describes the badge as it
-is.
-
 ## Medical Screening — The Add Record Form Attaches to Nobody (2026-08-08)
 
 **Re-verified still open by security review (MS-13,

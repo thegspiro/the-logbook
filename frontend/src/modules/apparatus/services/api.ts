@@ -45,6 +45,11 @@ import type {
   DriverException,
   DriverExceptionApprover,
   DriverExceptionCreate,
+  ApparatusNfpaCompliance,
+  ApparatusNfpaComplianceCreate,
+  ApparatusNfpaComplianceUpdate,
+  ApparatusNfpaSettings,
+  ApparatusNfpaSummary,
 } from '../types';
 import { asArray } from '../../../utils/asArray';
 
@@ -550,4 +555,36 @@ export default {
   photos: apparatusPhotoService,
   documents: apparatusDocumentService,
   evocLevels: evocLevelService,
+};
+
+// =============================================================================
+// NFPA Compliance
+// =============================================================================
+
+export const apparatusNfpaService = {
+  /** Whether this department tracks NFPA compliance (defaults by organization type). */
+  async getSettings(): Promise<ApparatusNfpaSettings> {
+    const response = await api.get<ApparatusNfpaSettings>('/apparatus/nfpa-settings');
+    return response.data;
+  },
+
+  /** Required tests and compliance items, graded by the server. */
+  async getSummary(apparatusId: string): Promise<ApparatusNfpaSummary> {
+    const response = await api.get<ApparatusNfpaSummary>(`/apparatus/${apparatusId}/nfpa-summary`);
+    return response.data;
+  },
+
+  async createItem(data: ApparatusNfpaComplianceCreate): Promise<ApparatusNfpaCompliance> {
+    const response = await api.post<ApparatusNfpaCompliance>('/apparatus/nfpa-compliance', data);
+    return response.data;
+  },
+
+  async updateItem(itemId: string, data: ApparatusNfpaComplianceUpdate): Promise<ApparatusNfpaCompliance> {
+    const response = await api.patch<ApparatusNfpaCompliance>(`/apparatus/nfpa-compliance/${itemId}`, data);
+    return response.data;
+  },
+
+  async deleteItem(itemId: string): Promise<void> {
+    await api.delete(`/apparatus/nfpa-compliance/${itemId}`);
+  },
 };
