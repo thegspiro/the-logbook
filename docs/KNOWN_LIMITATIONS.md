@@ -260,32 +260,6 @@ Fixed the same way as this entry's own singleton race — lock the parent
 the existence check itself a locking read. See
 `docs/security-review/ONB3-30-onboarding.md` → Pass 4.
 
-## ONBOARD-3 — A Deleted Seed Rank Is Still Accepted on a Write (2026-09-09)
-
-Setup now lets a department curate its rank ladder, and removing a rank does
-remove the row: it disappears from the rank pickers, from the ladder editor and
-from shift eligibility, which is the whole of what a department sees.
-
-`OperationalRankService.resolve_rank_code` is broader than that. It resolves a
-code two ways — a stored `operational_ranks` row **or** one of the built-in
-`DEFAULT_RANK_CODES` — and it checks the built-ins first, unconditionally. So a
-department that deletes `firefighter` during setup will still have
-`rank="firefighter"` accepted by any path that goes through that resolver: the
-member API, a CSV import, the prospect-conversion flow.
-
-**It is deliberate and is not being changed here.** The fallback exists because
-`seed_defaults` only ever fires into an empty table, so an organization
-onboarded before a code joined `DEFAULT_RANKS` has no row for it while the
-eligibility fallback still honours it — rejecting those is the exact shape of
-the EMT bug in #1833, which the fallback was added to close. Narrowing it to
-"only when the organization has no stored rows at all" is probably right and is
-a change to a guard that several write paths depend on, so it wants its own
-piece of work rather than riding along with the setup editor.
-
-**What it means in practice:** removing a rank during setup is a statement
-about what the department uses, not a constraint the API enforces. Nothing in
-the UI offers a deleted seed rank, so reaching this needs a direct write.
-
 ## ONBOARD-5 — Navigation Layout Was a Per-Browser Preference (resolved 2026-09-11)
 
 The setup wizard's last step asks whether the department wants top or left

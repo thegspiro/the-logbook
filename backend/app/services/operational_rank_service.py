@@ -79,12 +79,11 @@ DEFAULT_RANKS = [
 
 #: Every code the seed knows, whatever agency type it is written for.
 #:
-#: A rank is accepted on write if it is a stored row for the organization *or*
-#: one of these. The second half matters: the seed only fires into an empty
-#: table, so a department onboarded before a code joined DEFAULT_RANKS has no
-#: row for it while the eligibility fallback still honours it. Validating
-#: against stored rows alone would refuse a rank the rest of the system treats
-#: as valid — the shape of the EMT bug in #1833.
+#: A write accepts one of these only while the organization has no rank rows at
+#: all (see ``resolve_rank_code``); once it has a ladder, the ladder decides, so
+#: a seeded rung the department deleted is refused. The rank-validation audit and
+#: the shift-eligibility fallback still honour every code here, so a member who
+#: already holds one keeps working — the shape of the EMT bug in #1833.
 #:
 #: Note it spans every agency type on purpose, unlike ``default_ranks_for``
 #: below: what a department may *hold* is broader than what it is seeded.
@@ -397,13 +396,22 @@ class OperationalRankService:
     ) -> Optional[str]:
         """The canonical code for ``rank_code``, or ``None`` if it is not a rank.
 
-        Resolves two ways, and the second matters: a stored
-        ``operational_ranks`` row, **or** one of the built-in seed codes. The
-        seed only ever fires into an empty table, so a department onboarded
-        before a code joined ``DEFAULT_RANKS`` has no row for it while the
-        eligibility fallback still honours it. Rejecting those would refuse a
-        rank the rest of the system treats as valid — the exact shape of the
-        EMT bug in #1833.
+        A stored ``operational_ranks`` row for the organization is the answer.
+        The built-in seed codes are honoured **only while the organization has
+        no rank rows at all** — a department that has never been seeded, which
+        is the state the #1833 EMT fix was written for: with nothing stored,
+        refusing the built-ins would refuse every rank the eligibility fallback
+        treats as valid.
+
+        Once a department has a ladder, the ladder is the vocabulary. Setup lets
+        it delete seeded rungs, and the rank pickers list stored rows only, so
+        honouring a deleted ``firefighter`` here let a direct write — the member
+        API, a CSV import, prospect conversion — assign a rank the department
+        removed, and ``get_rank_default_permissions`` then granted its static
+        defaults (ONBOARD-3). A department onboarded before a code joined
+        ``DEFAULT_RANKS`` adds that rung in the rank editor to assign it;
+        members already holding it keep it, and keep their seats through the
+        eligibility fallback, which this does not touch.
 
         **It returns the canonical spelling rather than a yes/no, and callers
         must persist what it returns.** Every downstream consumer of
@@ -429,16 +437,22 @@ class OperationalRankService:
         if not code:
             return None
         folded = code.lower()
-        for seeded in DEFAULT_RANK_CODES:
-            if seeded == folded:
-                return seeded
+        # One read of the whole ladder rather than a lookup plus an emptiness
+        # check: the table holds a dozen rows per organization, and answering
+        # both questions from one snapshot means a concurrent first seed cannot
+        # fall between them.
         result = await self.db.execute(
             select(OperationalRank.rank_code).where(
                 OperationalRank.organization_id == organization_id,
-                func.lower(OperationalRank.rank_code) == folded,
             )
         )
-        return result.scalar_one_or_none()
+        stored = [row[0] for row in result.all() if row[0]]
+        for stored_code in stored:
+            if stored_code.strip().lower() == folded:
+                return stored_code
+        if not stored and folded in DEFAULT_RANK_CODES:
+            return folded
+        return None
 
     async def resolve_configured_rank_code(
         self, organization_id: str, rank_code: str
@@ -451,20 +465,17 @@ class OperationalRankService:
 
         That gap is real during setup: the IT team is named at step 10 and its
         accounts are created at completion, with the rank ladder edited at step
-        11 in between. ``resolve_rank_code`` answers from ``DEFAULT_RANK_CODES``
-        before it consults the organization's rows, deliberately — a department
-        onboarded before a code joined ``DEFAULT_RANKS`` has no row for it while
-        the eligibility fallback still honours it, and rejecting those is the
-        EMT bug in #1833. But that same permissiveness lets a code the
-        administrator has just *deleted* be written anyway, and
-        ``get_rank_default_permissions`` then grants its static defaults: an
+        11 in between. ``resolve_rank_code`` still honours the built-in codes
+        for an organization with no rank rows at all, and a department that
+        deletes every rung on the ladder step is exactly that organization — so
+        a code the administrator has just removed would be written anyway, and
+        ``get_rank_default_permissions`` would grant its static defaults: an
         account holding Captain-level access under a rank the ladder no longer
         lists.
 
         Onboarding seeds the ladder on arrival at the rank step, so every rank a
         department can legitimately choose there has a row. Requiring one costs
-        that path nothing and closes this gap without touching the fallback the
-        rest of the system relies on.
+        that path nothing and closes the empty-ladder case too.
         """
         code = (rank_code or "").strip()
         if not code:
@@ -493,7 +504,12 @@ class OperationalRankService:
         """Return active members whose rank is unknown or noncanonical.
 
         A rank may be supplied by either the organization's stored rows or the
-        built-in defaults, matching :meth:`resolve_rank_code`. Recognizable
+        built-in defaults. That is broader than :meth:`resolve_rank_code`, which
+        honours the built-ins only for an organization with no rows, on
+        purpose: this reports members whose rank is *broken*, and a member of a
+        department onboarded before a code joined ``DEFAULT_RANKS`` who holds
+        that code still gets its seats from the eligibility fallback and its
+        grants from the permission registry. Recognizable
         legacy spellings with different case or surrounding whitespace remain
         issues because downstream permission and eligibility lookups require
         the canonical value stored in ``User.rank``.
