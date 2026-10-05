@@ -4445,8 +4445,6 @@ ones skipped.
 - **A rolling recurring series cannot carry training details** — the nightly
   job that extends it copies events, not sessions. Its occurrences are still
   credited, as their titles.
-- **Pending-approval records are hidden by My Training's default date range**
-  (it filters on completion date, which a pending record does not have yet).
 
 ## Events — Attendance-Lock Refusals (2026-09-30)
 

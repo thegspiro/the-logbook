@@ -614,8 +614,11 @@ const MyTrainingPage: React.FC = () => {
   const v = data?.visibility;
 
   const allRecords = data?.training_records ?? [];
+  // A record still awaiting approval has no completion date, so a date range
+  // cannot place it; hiding it behind the default 12-month window made a
+  // member's own pending submission vanish from their history.
   const recordInRange = (completionDate?: string | null): boolean => {
-    if (!completionDate) return !rangeStart && !rangeEnd;
+    if (!completionDate) return true;
     if (rangeStart && completionDate < rangeStart) return false;
     if (rangeEnd && completionDate > rangeEnd) return false;
     return true;

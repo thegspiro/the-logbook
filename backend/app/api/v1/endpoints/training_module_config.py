@@ -187,7 +187,13 @@ async def get_my_training_summary(
                 TrainingRecord.organization_id == str(org_id),
                 TrainingRecord.user_id == str(user_id),
             )
-            .order_by(TrainingRecord.completion_date.desc())
+            # Undated (pending) records first: MySQL sorts NULL last under
+            # DESC, so a member with 100 completed records lost their pending
+            # ones to the limit.
+            .order_by(
+                TrainingRecord.completion_date.is_(None).desc(),
+                TrainingRecord.completion_date.desc(),
+            )
             .limit(100)
         )
         records = records_result.scalars().all()
