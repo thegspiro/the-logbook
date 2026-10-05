@@ -3083,6 +3083,28 @@ January 1 to today, not the last 365 days.
 > **Screenshot needed:**
 > _[Member at `/admin-hours`: the inline edit form open on a rejected entry, showing "Returned with: <reason>", the Category, Start Time, End Time and Description fields, and the Resubmit and Cancel buttons.]_
 
+### Admin Hours review rules _(2026-10-05)_
+
+**Where:** `/admin-hours/manage` → **Review Rules** tab · **Who:** anyone with
+`admin_hours.manage` can read them; changing them needs `settings.manage`.
+
+Two department-wide rules decide how approvals hold up:
+
+- **Let an approver approve their own entries.** Off by default: an officer's
+  own entry must be approved by somebody else, and bulk approval skips it.
+  A department with a single officer who reviews admin hours can turn it on.
+  A self-approved entry still records its approver, so it can be seen as one.
+- **Send a corrected event entry back for review when it grows by more than
+  _N_ percent** (default **25**). When a reopened event's check-out is
+  corrected, attendance hours already approved are updated in place. If the
+  correction grows an entry past the threshold, and its category would not
+  have approved the new length automatically, the entry returns to **Pending
+  Review** instead of keeping an approval that covered fewer hours. `0` sends
+  back any growth at all.
+
+Only a settings administrator can change them because the first one relaxes a
+control on the very people who review admin hours.
+
 ## Scheduling Staffing Tiles on the Dashboard _(2026-08-23)_
 
 Seven tiles — Today's Staffing, Future Coverage Gaps, Open Slots, Pending
