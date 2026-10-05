@@ -87,12 +87,13 @@ export const EventsAdminHub: React.FC = () => {
       onTabChange={handleTabChange}
       refreshToken={frameToken}
     >
-      {/* Tab Content - each child handles its own layout */}
+      {/* Tab content. The frame supplies the side gutter, so each tab sets
+          only its own width and vertical spacing. */}
       <Suspense fallback={<TabLoading />}>
         {activeTab === 'create' && <EventCreatePage />}
         {activeTab === 'past_events' && <PastEventsTab />}
         {activeTab === 'requests' && <EventRequestsTab />}
-        {activeTab === 'analytics' && <AnalyticsDashboardPage />}
+        {activeTab === 'analytics' && <AnalyticsDashboardPage embedded />}
         {activeTab === 'community' && <CommunityEngagementTab />}
         {activeTab === 'settings' && <EventsSettingsTab onMetricsSaved={() => setFrameToken((token) => token + 1)} />}
       </Suspense>

@@ -1,6 +1,236 @@
 # Security Review — Public Surface & Webhooks
 
-**Prefix:** `PUB` · **Iteration:** 03 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6) · **PR:** #1806 (pass 1)
+**Prefix:** `PUB` · **Iteration:** 03 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7) · **PR:** #1806 (pass 1)
+
+---
+
+## Pass 7 (2026-10-05) — two new unauthenticated surfaces (branding assets, kiosk NFC badge-tap write, self-service withdrawal), 0 new findings
+
+**Backend:** 13 files under `app/api/public/` (up from 12 — a new
+`branding.py`) plus `app/core/public_portal_security.py`. Route-decorator
+count: 28 (up from 20 — `branding.py`'s 3 logical endpoints each register a
+`HEAD` alongside their `GET`, `display.py` gained one route, `portal.py`
+gained one). Collaborators read for the new routes:
+`app/services/branding_service.py`, `app/utils/app_icons.py`,
+`app/services/nfc_tag_service.py` (`kiosk_check_in`, `_only_event_checked_into`,
+`resolve_tag`, `check_in`, `hash_tag_uid`), `app/utils/nfc_integration.py`,
+`app/schemas/nfc_tag.py`, `app/services/membership_pipeline_service.py`
+(`withdraw_prospect_by_token`, `_status_token_usable`, `_can_self_withdraw`).
+**Frontend:** none modified — Feature 03 declares no frontend files.
+**Migrations:** none written this pass.
+
+### Scope
+
+Pass 6's closing merge (`aa9928dcf`, PR #2597) to current `HEAD`:
+`git diff aa9928dcf HEAD -- backend/app/api/public/ backend/app/core/public_portal_security.py`
+touches 5 of the (now) 13 files. The other 8 — `finance_approvals.py`,
+`forms.py`, `integrations_webhook.py`, `legal.py`, `paypal_webhook.py`,
+`salesforce_webhook.py`, `security_txt.py`, `responses.py`'s existing
+constants — are byte-identical (confirmed by the same diff command returning
+no hunks for each), so pass 4–6's findings and "Verified good" items for
+those files stand unchanged and are not re-derived here.
+
+The five changed files, read in full against all seven checklist dimensions
+rather than trusted from the diff:
+
+- **`branding.py` (new file, 216 L, 6 route decorators / 3 logical
+  endpoints — app icon, iOS launch image, email masthead logo).**
+  Unauthenticated by necessity (a browser/mail client fetches these with no
+  session), rate-limited before any work (120/min/IP for icons+splash,
+  600/min/IP for the email logo — sized for a mail provider's proxy-IP
+  fan-out, per its own docstring), and reads from exactly one organization
+  by design (`branding_service.get_primary_branding` — the oldest active
+  org, the same rule the login page's branding endpoint already uses; this
+  is a single-department-per-deployment assumption stated in the module
+  docstring, not a new multi-tenant gap). `decode_logo` rejects anything
+  that isn't a `data:` URI (so a logo stored as an external URL cannot turn
+  an anonymous asset request into SSRF), caps the encoded size before
+  allocating, and caps decoded pixel count before `Image.verify()` —
+  closing the decompression-bomb angle a PNG/JPEG decoder can otherwise be
+  pushed through. Render geometries are allowlisted
+  (`ICON_VARIANTS`, `SPLASH_GEOMETRIES`) so a request cannot force an
+  arbitrary-size render. Both in-memory caches (`_logo_cache`,
+  `_asset_cache`) are bounded (a fixed 3-key dict; a 40-entry LRU with
+  `popitem(last=False)` eviction) — already swept and confirmed by SEC-00
+  pass 7 (class 7); re-confirmed here rather than re-derived since the file
+  is this feature's own declared scope. `ETag`/`If-None-Match` and
+  `X-Content-Type-Options: nosniff` are set on every response.
+- **`display.py` — new `POST /{display_code}/badge-tap` (kiosk NFC card
+  tap, 1 route).** The one unauthenticated **write that acts for a member**
+  in this feature. Two independent switches are checked on every tap, not
+  cached from the page load (`location.nfc_badge_check_in_enabled` and
+  `nfc_id_cards_enabled(db, organization_id)`, the latter failing _closed_
+  on a missing/unseeded integration row per its own docstring — Pitfall
+  #19's reader-before-UI rule, named in its own comment). Organization and
+  event resolution are display-code-first, matching the existing guest
+  check-in pattern: `kiosk_check_in` derives `organization_id` from
+  `location.organization_id`, never from the request, and the event is
+  "whichever one is open in this room now" rather than a client-supplied
+  id — removing the id-based IDOR surface a `target_event_id` parameter
+  would otherwise have. The card credential itself: `tag_uid` is never
+  stored or compared in the clear — `hash_tag_uid` peppers it with
+  `get_encryption_salt()` before a SHA-256 lookup scoped to
+  `(organization_id, uid_hash)`, so a stolen tag table from one deployment
+  cannot be matched against another's, and the lookup cannot be used to
+  enumerate cards cross-org. A card that fails to resolve, a revoked/lost
+  card, and a member in `_BLOCKED_MEMBER_STATUSES` (inactive, suspended,
+  dropped, archived) all refuse — checked directly in `resolve_tag`/
+  `check_in`. The response (`KioskBadgeTapResponse`, built by
+  `_kiosk_result`) deliberately strips everything the authenticated
+  station's response carries except a first-name-and-initial display name —
+  no member id, full name, or membership number reaches the kiosk screen,
+  by construction (the dict `_kiosk_result` returns has no such keys).
+  Two rate limits apply before the DB lookup: per-IP
+  (`pub_badge_tap:{ip}`, 60/min + 5 min lockout — sized for a kiosk tablet
+  carrying a whole room's arrivals) and, inside the handler right after
+  display-code validation and before any query, per-room
+  (`pub_badge_tap_room:{code}`, same ceiling) — the second closes what the
+  first alone cannot: a caller spread across addresses walking card UIDs
+  against one leaked display code. An audit event
+  (`nfc_kiosk_badge_tap`) is logged only on an actual state change
+  (checked in/out), not on a refusal, matching the authenticated station's
+  own "stamp `last_used_at` only on a real tap" rule.
+- **`portal.py` — new `POST /application-status/{token}/withdraw` (1
+  route), plus `GET /events/public` gaining a whitelistable `id` field and
+  `response_model_exclude_unset=True` (already recorded as part of PUB-7's
+  2026-09-24 decision; re-confirmed unchanged at current line numbers, not
+  re-litigated).** The withdrawal route shares its token contract exactly
+  with the existing status read (same `Path(..., min_length=10,
+max_length=64, pattern=...)`, same `validate_ip_rate_limit`, same
+  no-store/no-index response headers) and both routes share one
+  `_status_token_usable` gate (TTL + `public_status_enabled_for`) so they
+  cannot disagree about which tokens are live — the same anti-drift
+  reasoning PUB-9's `response_model_exclude_unset` fix relied on for the
+  read side. The write itself: `withdraw_prospect_by_token` takes
+  `.with_for_update()` on the prospect row (closing the same
+  read-then-write race Pitfall #27 names), re-checks status against a
+  narrow allowlist (`ACTIVE`, `ON_HOLD` only — anything else, including an
+  already-withdrawn or already-approved application, answers 409 rather
+  than silently no-op'ing), and the `reason` free-text field is
+  `html.escape`d before being interpolated into the coordinator-notification
+  email body (`_notify_coordinators_of_withdrawal`, confirmed at the actual
+  call site) — satisfying checklist §4's "user text in email HTML is
+  escaped" item for the one new attacker-influenceable string this route
+  introduces. No amount, financial data, or other prospect PII is
+  returned — the response is `{status, message}` only.
+- **`calendar.py`** — one unrelated line, `date.today()` → `org_today(org)`
+  (a correctness fix: the calendar feed's "today" now follows the
+  organization's configured timezone rather than the server's wall clock,
+  consistent with CLAUDE.md's UTC-storage/local-display rule). No security
+  effect; the feed still exposes only the token's own user's shifts.
+- **`public_portal_security.py`** — the `_log_refusal` addition this file's
+  own pass-6 section already documented in full (PUB-8's "429 half is now
+  recorded", dated 2026-09-24/PR #2665, landed between pass 6 and this
+  pass). Re-read at current line numbers rather than trusted from the
+  prior write-up: unchanged in substance — commits (not flushes) a
+  best-effort access-log row before the 429 raise, using `organization_id`/
+  `config_id` already resolved by that point, with a failed write rolled
+  back rather than replacing the 429.
+
+Also checked and ruled out of scope: `app/core/security_middleware.py`'s
+`IPLoggingMiddleware` gained an `is_unlogged_path` carve-out for
+`/api/v1/suggestions/(boxes/.../submissions|follow-up/...)`. Read directly —
+both route families require `get_current_user` (session-authenticated;
+"anonymous" there means anonymous _to other members of the department_, not
+to the server), live under `app/api/v1/endpoints/`, and are not part of this
+feature's declared `api/public/*` scope. Not a public/webhook surface and not
+reviewed further here.
+
+### Route inventory — delta from pass 4's full inventory
+
+Pass 4's inventory (20 routes, reproduced in that section below) is still
+accurate for every route it lists. New routes this pass:
+
+| Method   | Path                                                 | Compensating control                                                                                             | Org resolved from                     |
+| -------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| GET/HEAD | `/api/public/v1/branding/icon/{variant}.png`         | 120/min per IP; variant allowlist (`ICON_VARIANTS`)                                                              | the deployment's one org (fixed rule) |
+| GET/HEAD | `/api/public/v1/branding/splash/{geometry}.png`      | 120/min per IP; geometry allowlist (`SPLASH_GEOMETRIES`)                                                         | same                                  |
+| GET/HEAD | `/api/public/v1/branding/email-logo`                 | 600/min per IP; `v` digest must match current logo (else 404)                                                    | same                                  |
+| POST     | `/api/public/v1/display/{display_code}/badge-tap`    | 40-bit display code + per-IP 60/min+5min-lockout + per-room 60/min+5min-lockout + two org-level feature switches | the display code's location row       |
+| POST     | `/api/public/v1/application-status/{token}/withdraw` | 256-bit token, 100/min per IP, `with_for_update()`, status allowlist (409 otherwise)                             | the token's prospect row              |
+
+### Verified good ✅ (pass 7 additions)
+
+- **The kiosk badge-tap write cannot be used to enumerate members or
+  cross-org card data.** Mechanism: `hash_tag_uid` peppers every UID with
+  the installation's encryption salt before lookup, and every lookup is
+  scoped to `(organization_id, uid_hash)` — derived from the display code,
+  never the request — so a correct card UID for org A cannot resolve
+  against org B, and an incorrect one is indistinguishable from a correct
+  one belonging to someone else (`resolve_tag` returns the same
+  `UNKNOWN_CARD` either way).
+- **The kiosk response schema structurally cannot carry a member id, full
+  name or membership number.** Mechanism: `_kiosk_result` builds the
+  returned dict explicitly, field by field, from a allow-list of keys —
+  there is no code path that copies the fuller internal result (which does
+  carry `user_id`/`member_name`/`membership_number` for the audit log) into
+  the response.
+- **The branding routes cannot be used for SSRF or a decompression bomb.**
+  Mechanism: `decode_logo` only reads `data:` URIs (an external-URL logo
+  value is treated as undecodable, never fetched) and rejects on encoded
+  size before allocating and on pixel count before `Image.verify()` is even
+  called — both checks run before any decompression work.
+- **The self-withdrawal write and the existing status read cannot disagree
+  about which tokens are live.** Mechanism: both call the same
+  `_status_token_usable` (TTL + `public_status_enabled_for`), so a token the
+  read answers 404 for cannot be used to withdraw, and vice versa.
+- **All five routes/route-families this pass added are rate-limited before
+  any database work**, matching checklist §6 — confirmed by reading each
+  dependency/call ordering directly (see per-file notes above).
+
+### Findings
+
+**None new.** Two genuinely new unauthenticated surfaces this pass (branded
+app-icon/splash/email-logo assets, and the kiosk NFC badge-tap write) plus one
+new unauthenticated write on an existing token (self-service application
+withdrawal) were read in full against all seven checklist dimensions, not
+spot-checked against their own docstrings. Every one resolves its
+organization from a credential the request cannot forge (the display code,
+the status token, or the deployment's fixed single-org rule), is rate-limited
+ahead of its database/CPU work, and — for the two writes — locks or
+re-validates state before mutating it. The one open item this feature
+carries forward, PUB-8's 401-logging half, is unchanged (re-confirmed against
+`docs/KNOWN_LIMITATIONS.md`, still correctly flagged, still blocked on the
+same nullable-column migration decision). No new `KNOWN_LIMITATIONS.md`
+entry — nothing new in this pass needs one.
+
+### Schema & migration notes
+
+No migration written this pass; no model changed. `KioskBadgeTapRequest`/
+`Response` and the two withdrawal-route Pydantic models are request/response
+schemas only, not tables.
+
+### Guard tests
+
+No new guard tests added — both new routes already carry dedicated test
+coverage from the feature work that introduced them
+(`tests/test_kiosk_badge_tap.py`, including `TestResponseSchema::
+test_the_public_response_has_no_identifying_fields`;
+`tests/test_application_self_withdraw.py`), re-run as part of the scoped and
+full suites below. The standing guard suites this feature depends on
+(org-scoping ratchet, capacity locking, endpoint-auth coverage, CSV sweep,
+LIKE escaping, PII-cache exclusions, `create_all`-table tolerance, baseline
+member grants, `SET NULL` nullability) all re-run clean.
+
+### Completion gate
+
+| Check                                                                                                                                                                                                                  | Result                                              |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1)                                                                                                                                                                                  | ✅ 0 violations                                     |
+| `black --check app/ tests/ alembic/` (26.5.1)                                                                                                                                                                          | ✅ 1874 files unchanged                             |
+| `isort --check-only app/ tests/ alembic/` (9.0.1)                                                                                                                                                                      | ✅ clean                                            |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                      | ✅ single head `34d3d56d1479`, 512 revisions        |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                                                                                  | ✅ 244 routes, 0 errors, 0 warnings                 |
+| `python3 scripts/check_docs_links.py`                                                                                                                                                                                  | ✅ 431 files, 0 broken links                        |
+| scoped pytest (`-k "public or portal or webhook or salesforce or paypal or finance_approval or legal or display or calendar or security_txt or forms or kiosk or badge_tap or application_self_withdraw or branding"`) | ✅ 871 passed, 1 skipped (`py_vapid`, pre-existing) |
+| standing guard suites (org-scoping ratchet, capacity locking, endpoint-auth coverage, CSV sweep, LIKE escaping, PII-cache exclusions, `create_all`-table tolerance, baseline member grants, `SET NULL` nullability)    | ✅ 184 passed                                       |
+| **full backend unit suite** (`-m "not integration and not slow and not docker"`)                                                                                                                                       | ✅ 12 600 passed, 1 skipped, 0 failed               |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                     | ✅ 0 errors (aliased 7.0.2 compiler)                |
+| `cd frontend && npm run lint`                                                                                                                                                                                          | ✅ 0 errors, 0 warnings                             |
+
+No source file changed this pass — every check above is a re-verification of
+newly-landed feature work, not a fix, so there is nothing for a
+behavior-neutrality diff against unmodified `HEAD` to compare.
 
 ---
 
