@@ -444,6 +444,11 @@ export interface Pipeline {
   conversion_config: PipelineConversionConfig;
   public_status_enabled: boolean;
   public_show_future_stages: boolean;
+  /**
+   * Completing the stage flagged as final (not by skipping it) converts the
+   * applicant into a member, with no Transfer click.
+   */
+  auto_transfer_on_approval: boolean;
   report_stage_groups?: ReportStageGroup[] | undefined;
   stages: PipelineStage[];
   applicant_count?: number | undefined;
@@ -457,6 +462,7 @@ export interface PipelineCreate {
   is_active?: boolean | undefined;
   is_template?: boolean | undefined;
   inactivity_config?: InactivityConfig | undefined;
+  auto_transfer_on_approval?: boolean | undefined;
 }
 
 export interface PipelineUpdate {
@@ -469,6 +475,7 @@ export interface PipelineUpdate {
   conversion_config?: PipelineConversionConfig | undefined;
   public_status_enabled?: boolean | undefined;
   public_show_future_stages?: boolean | undefined;
+  auto_transfer_on_approval?: boolean | undefined;
 }
 
 export interface PipelineListItem {

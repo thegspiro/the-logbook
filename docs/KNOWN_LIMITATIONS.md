@@ -4425,33 +4425,6 @@ The one gap that remains is `ElectionPackage.target_role_name`, which
 see the comment there for why resolving it live would put a current value beside
 two frozen snapshot ones in the same panel.
 
-## Prospects — `auto_transfer_on_approval` Cannot Be Set or Seen From the UI (2026-09-24)
-
-`MembershipPipeline.auto_transfer_on_approval` decides whether completing a
-stage flagged `is_final_step` converts the prospect into a full member
-(`membership_pipeline_service.py`, `will_auto_transfer`). The backend accepts it
-on pipeline create and update and returns it on read.
-
-The frontend names it in exactly two places, both of which are wire-shape
-declarations — `BackendPipelineResponse` and `BackendPipelineListResponse`. The
-`Pipeline` type does not carry it, no mapper reads it, no screen renders it and
-no payload sends it. So a department cannot turn the switch on, cannot turn it
-off, and cannot see which way it is set.
-
-This is CLAUDE.md pitfall #19 in its mirror image: not a setting stored with no
-reader, but a reader with no setting. The column defaults to `False`, so a
-pipeline created through the app has auto-transfer off and unreachable; the
-behaviour the September release lesson describes — "on a pipeline with
-auto-transfer and the vote as its final stage, that click made them a member" —
-is reachable only for a pipeline whose flag was set through the API directly or
-cloned from one that already had it (`create_pipeline_from_template` copies
-`source.auto_transfer_on_approval`).
-
-**What would fix it.** Carry the field on `Pipeline`, `PipelineCreate` and
-`PipelineUpdate`, map it, and put it in the pipeline settings screen beside the
-stage list — with wording that says what it does, because a switch that converts
-people to members on a stage completion deserves more than a checkbox label.
-
 ## Prospects — The Screen Re-Derives "Last Stage" Instead of Reading `is_final_step` (2026-09-24)
 
 `ProspectiveMembersPage` computes `isLastStage` as "the stage with the highest
