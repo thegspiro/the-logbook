@@ -340,7 +340,9 @@ class TrainingService:
         if freq == RequirementFrequency.ONE_TIME.value:
             return None, None
         elif freq == RequirementFrequency.BIANNUAL.value:
-            return None, None
+            from app.services.training_compliance import biannual_window
+
+            return biannual_window(requirement, today)
         elif freq == RequirementFrequency.QUARTERLY.value:
             quarter_month = ((today.month - 1) // 3) * 3 + 1
             start_date = date(current_year, quarter_month, 1)

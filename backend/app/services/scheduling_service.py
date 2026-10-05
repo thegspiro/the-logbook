@@ -70,6 +70,7 @@ from app.services.shift_eligibility_service import (
     DEFAULT_SIGNUP_CLOSES_MINUTES_BEFORE,
 )
 from app.services.training_compliance import (
+    biannual_window,
     catch_up_deadline,
     member_join_date,
     requirement_applies_by_join_date,
@@ -7931,20 +7932,10 @@ class SchedulingService:
             period_end = date(q_end_year, q_end_month, 1) - timedelta(days=1)
 
         elif freq == RequirementFrequency.BIANNUAL:
-            # Two 6-month periods per year starting at start_month
-            relative_month = (reference_date.month - start_month) % 12
-            half_offset = (relative_month // 6) * 6
-            h_start_month = ((start_month - 1 + half_offset) % 12) + 1
-            h_start_year = reference_date.year
-            if h_start_month > reference_date.month:
-                h_start_year -= 1
-            period_start = date(h_start_year, h_start_month, 1)
-            h_end_month = h_start_month + 6
-            h_end_year = h_start_year
-            if h_end_month > 12:
-                h_end_month -= 12
-                h_end_year += 1
-            period_end = date(h_end_year, h_end_month, 1) - timedelta(days=1)
+            # "Every 2 Years", the same window the training side grades
+            # (pitfall 29). This used to be two six-month periods a year,
+            # so the report graded a two-year requirement over half a year.
+            period_start, period_end = biannual_window(requirement, reference_date)
 
         elif freq == RequirementFrequency.ANNUAL:
             # Check for custom period end (supports cross-year windows)

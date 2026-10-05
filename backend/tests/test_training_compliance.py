@@ -283,10 +283,18 @@ class TestGetDateWindow:
         assert end is None
 
     def test_biannual(self):
+        # "Every 2 Years": this calendar year and the one before (owner
+        # decision BIANNUAL-window). It used to have no window at all.
         req = _make_requirement(frequency=SimpleNamespace(value="biannual"))
         start, end = TrainingService._get_date_window(req, date(2026, 6, 15))
-        assert start is None
-        assert end is None
+        assert start == date(2025, 1, 1)
+        assert end == date(2026, 12, 31)
+
+    def test_biannual_named_year(self):
+        req = _make_requirement(frequency=SimpleNamespace(value="biannual"), year=2024)
+        start, end = TrainingService._get_date_window(req, date(2026, 6, 15))
+        assert start == date(2023, 1, 1)
+        assert end == date(2024, 12, 31)
 
     def test_rolling_period(self):
         req = _make_requirement(

@@ -777,13 +777,13 @@ department-defined rules.
 
 ### Frequency and Due Dates
 
-| Frequency     | Description            |
-| ------------- | ---------------------- |
-| **Annual**    | Resets each year       |
-| **Biannual**  | Resets every two years |
-| **Quarterly** | Resets every quarter   |
-| **Monthly**   | Resets each month      |
-| **One-Time**  | Must be completed once |
+| Frequency     | Description                                                                                     |
+| ------------- | ----------------------------------------------------------------------------------------------- |
+| **Annual**    | Resets each year                                                                                |
+| **Biannual**  | Every two years: graded over the requirement's year and the year before (or this year and last) |
+| **Quarterly** | Resets every quarter                                                                            |
+| **Monthly**   | Resets each month                                                                               |
+| **One-Time**  | Must be completed once                                                                          |
 
 | Due Date Type            | Description                              |
 | ------------------------ | ---------------------------------------- |
@@ -2044,7 +2044,7 @@ The training module has several boundary behaviors that affect how submissions a
 | `COURSES` requirement with empty `required_courses` list | Auto-completes immediately (100% progress). Appears green in the compliance matrix.                                                                                                                                                                |
 | `CERTIFICATION` requirement matching                     | Matches records via three fallback strategies: (1) `training_type` match, (2) case-insensitive requirement name substring in course name, (3) `registry_code` substring in certification number. If none match, the member shows as non-compliant. |
 | Biannual requirement with expired certification          | Even if the member has accumulated sufficient hours, an expired certification resets progress to 0 and blocks further activity.                                                                                                                    |
-| `BIANNUAL` or `ONE_TIME` frequency requirements          | No date window applied — ALL historical training records count toward the requirement, not just recent ones.                                                                                                                                       |
+| `ONE_TIME` frequency requirements                        | No date window applied — ALL historical training records count toward the requirement. (`BIANNUAL` was the same until 2026-10-05; it now counts the requirement's year and the year before.)                                                       |
 
 ### Waiver Behavior
 

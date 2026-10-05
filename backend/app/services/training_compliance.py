@@ -84,6 +84,20 @@ def _get_custom_annual_window(req, today: date):
         return date(yr, start_month, start_day), date(yr, end_month, end_day)
 
 
+def biannual_window(req, today: date) -> tuple[date, date]:
+    """The window a BIANNUAL ("Every 2 Years") requirement is graded over.
+
+    The requirement's year and the calendar year before it, or the current
+    and previous years when it names none. This is the one definition: the
+    compliance evaluators, the training service, the competency matrix and
+    the scheduling compliance report all call it. BIANNUAL used to have no
+    window here, so hours, shifts and calls counted from a member's whole
+    history (owner decision BIANNUAL-window, 2026-10-05).
+    """
+    base_year = getattr(req, "year", None) or today.year
+    return date(base_year - 1, 1, 1), date(base_year, 12, 31)
+
+
 def get_requirement_date_window(req, today: date):
     """Return (start_date, end_date) for evaluating a requirement's compliance window.
 
@@ -118,7 +132,7 @@ def get_requirement_date_window(req, today: date):
     if freq == RequirementFrequency.ONE_TIME.value:
         return None, None
     elif freq == RequirementFrequency.BIANNUAL.value:
-        return None, None
+        return biannual_window(req, today)
     elif freq == RequirementFrequency.QUARTERLY.value:
         quarter_month = ((today.month - 1) // 3) * 3 + 1
         start_date = date(current_year, quarter_month, 1)
