@@ -412,12 +412,12 @@ export interface SkillTestUpdate {
    *  test that already had time on the clock. The server increments its own
    *  counter; the client never sets it. */
   resumed?: boolean | undefined;
-  status?: SkillTestStatus;
+  /** Only 'in_progress', to start a draft. The outcome (completed, result,
+   *  score) is recorded by completing the test, never by a save. */
+  status?: 'in_progress';
   section_results?: SectionResult[];
-  overall_score?: number;
   elapsed_seconds?: number;
   notes?: string;
-  result?: TestResult;
   requirement_id?: string | null;
   /** The version last seen. A stale value is refused with 409 rather than
    *  silently overwriting whoever wrote in between. */

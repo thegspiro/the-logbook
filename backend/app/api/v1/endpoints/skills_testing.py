@@ -1561,6 +1561,31 @@ async def update_test(
     # it once per pickup.
     resumed = update_data.pop("resumed", None)
 
+    # A test's outcome is computed by completing it, never set by saving it
+    # (owner decision SKT4-7). complete_test scores the section results and
+    # refuses a scorecard with a blank or waived critical step; a bare PUT of
+    # status="completed" with a hand-picked result would skip all of that,
+    # and the officer validating it would credit a fabricated result. The one
+    # status a save may still set is "in_progress", which the examiner screen
+    # sends to start a draft.
+    refused = sorted(
+        {"result", "overall_score"} & set(update_data)
+        | (
+            {"status"}
+            if "status" in update_data
+            and update_data["status"] != SkillTestStatus.IN_PROGRESS.value
+            else set()
+        )
+    )
+    if refused:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"{', '.join(refused)} cannot be saved directly. Finish the test "
+                "to record its outcome."
+            ),
+        )
+
     # Completed tests only allow notes updates (section_results for criterion notes, top-level notes)
     if test.status == "completed":
         allowed_fields = {"section_results", "notes"}

@@ -1163,7 +1163,9 @@ the disguise is consistent across every field the frontend reads to decide
 finality, not just the ones a human reviewer thinks to check by hand. One new
 guard test.
 
-### SKT4-7 — MED — `PUT /tests/{id}` lets a member-examiner set `status`/`result`/`overall_score` directly, bypassing `complete_test` — OPEN / FLAGGED
+### SKT4-7 — MED — `PUT /tests/{id}` lets a member-examiner set `status`/`result`/`overall_score` directly, bypassing `complete_test` — ✅ FIXED (2026-10-05)
+
+**Resolved (owner decision):** `update_test` refuses `result`, `overall_score` and any `status` other than `in_progress` with a 400 ("… cannot be saved directly. Finish the test to record its outcome."); the outcome is recorded only by `complete_test`. `status: "in_progress"` stays, because the examiner screen sends it to start a draft. The frontend `SkillTestUpdate` type no longer carries the refused fields. Tests: `TestOutcomeIsNotSavedDirectly`. As found:
 
 `_authorize_test_write` permits any member holding `examiner_id` on an
 unvalidated test to call `update_test`, and `SkillTestUpdate.status`,
