@@ -808,17 +808,29 @@ page is no longer officer-only, so the Summary tab is reachable by any member.
 The figures below are department-wide aggregates and carry no individual's
 name.)_
 
-Navigate to **Training Admin > Skills Testing > Summary** for a department-wide overview:
+The overview is the row of four cards at the top of **Training Admin > Skills
+Testing > Templates**:
 
-| Metric                  | Description                                                                                                                                     |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Total Templates**     | Number of skill sheet templates (archived excluded)                                                                                             |
-| **Published Templates** | Templates available for testing                                                                                                                 |
-| **Total Tests**         | All-time official test sessions. Practice attempts and **voided** results are excluded                                                          |
-| **Tests This Month**    | Official test sessions created in the current month, on the same exclusions                                                                     |
-| **Pass Rate**           | Percentage of **validated** completed tests that resulted in a pass                                                                             |
-| **Average Score**       | Mean percentage score across **validated** completed tests                                                                                      |
-| **Needs Validation**    | Official results awaiting an officer's sign-off. It **replaces the Pass Rate card** while the queue is non-empty, and appears for officers only |
+| Card                 | Description                                                                                                                                     |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Templates**        | Number of skill sheet templates (archived excluded)                                                                                             |
+| **Tests This Month** | Official test sessions created in the current month. Practice attempts and **voided** results are excluded                                      |
+| **Pass Rate**        | Percentage of **validated** completed tests that resulted in a pass                                                                             |
+| **Avg Score**        | Mean percentage score across **validated** completed tests                                                                                      |
+| **Needs Validation** | Official results awaiting an officer's sign-off. It **replaces the Pass Rate card** while the queue is non-empty, and appears for officers only |
+
+The summary endpoint also reports published templates and all-time test totals,
+which no card shows. _(Corrected 2026-10-04: this table used to list seven
+metrics, including **Total Templates**, **Published Templates** and **Total
+Tests**, and send you to a **Summary** tab. There is no Summary tab, and the
+cards are the four above.)_
+
+> **"—" means there is nothing to measure yet** _(2026-09-29)_. **Pass Rate**
+> and **Avg Score** show "—" when the department has no figure — no validated
+> test yet, or (for the score) nothing tested carried points. They used to show
+> **0%**, so a department whose only test passed read "Pass Rate 100%" beside
+> "Avg Score 0%", and a department that had run no tests read as failing every
+> one.
 
 > **Pass rate and average score count only validated results** _(2026-08-08)_.
 > A member-run result nobody has signed off is a submission, not yet the
@@ -1443,7 +1455,7 @@ Competency Matrix reflects new scores
 | A practice test says it cannot be finished, over and over        | Fixed 2026-08-08. If the completion reached the server but its response never got back to your phone, every retry used to fail permanently on a test that had in fact gone through. The review screen now shows the existing results instead, and reports the server's actual message.                                                                            |
 | Template shows "archived" — can I still view old tests?          | Yes. Historical test results always reference the template version they were administered under. Archived templates just can't be used for new tests.                                                                                                                                                                                                             |
 | Score calculation seems wrong                                    | The score is calculated as: (total points earned / total possible points) × 100. Each criterion has a configurable point value. Check that all sections, criteria, and point values are correct.                                                                                                                                                                  |
-| Summary dashboard shows 0% pass rate                             | The pass rate only includes completed tests. If all tests are still in progress or cancelled, the rate will show 0%.                                                                                                                                                                                                                                              |
+| Summary dashboard shows "—" for the pass rate or average score   | The pass rate only includes validated completed tests, and the average only tests that carry points. With none, the card shows "—" rather than 0% _(since 2026-09-29)_.                                                                                                                                                                                         |
 | Non-critical criteria showing as "FAIL"                          | Fixed: Non-critical criteria that are unchecked now display "Not Completed" instead of "FAIL". Pull latest changes.                                                                                                                                                                                                                                               |
 | Completed test times show UTC instead of local time              | Fixed: All timestamps now display in the user's local timezone. Pull latest changes and hard-refresh.                                                                                                                                                                                                                                                             |
 | Practice test results appearing in compliance                    | Practice tests are excluded from compliance calculations. If incorrectly categorized, delete the practice record — the candidate, the examiner or an officer can.                                                                                                                                                                                                 |

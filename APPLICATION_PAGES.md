@@ -1369,7 +1369,7 @@ are opened from the corresponding module's list view.
 
 | URL                                     | Prints                  | Permission                                                     |
 | --------------------------------------- | ----------------------- | -------------------------------------------------------------- |
-| `/members/print-labels`                 | Member labels           | `members.view`                                                 |
+| `/members/print-labels`                 | Member labels           | `members.manage` **OR** `members.manage_id_cards`              |
 | `/members/:userId/id-card`              | Member ID card          | Authenticated                                                  |
 | `/members/scan`                         | Member badge scanner    | `users.view` **OR** `members.manage`                           |
 | `/prospective-members/print-labels`     | Applicant badges        | `prospective_members.view` **OR** `prospective_members.manage` |

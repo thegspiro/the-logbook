@@ -158,7 +158,7 @@ sections of the form]**
 > general resolution, budget approval — pre-configured with sensible
 > eligibility and vote types. Or build a custom item."
 
-**[SCREEN: Create 'Fire Chief' item from the officer template; position
+**[SCREEN: Create 'Chief' item from the officer template; position
 dropdown showing org ranks with type-ahead]**
 
 > "For officer items, the position dropdown loads your organization's actual
@@ -250,7 +250,7 @@ changelog, which carried the reverted claim for five days.]**
 
 ## CHAPTER 5: Candidates & Nominations (11:00 – 13:00)
 
-**[SCREEN: Candidates tab. Add candidates to the Fire Chief position.]**
+**[SCREEN: Candidates tab. Add candidates to the Chief position.]**
 
 > "Add candidates to each position. Pick the member from the roster — their
 > name fills in — set the position, and optionally a statement and photo that
@@ -515,12 +515,18 @@ climbing. Then the Non-Voters list.]**
 
 > "One thing to know about early closes: the results _API_ stays gated until
 > the originally scheduled end time passes — a safeguard against premature
-> disclosure. If you want the room to see results now, flip **results
-> visible immediately** on the closed election. It's one toggle on the
-> Publish Results panel, and it's the single most common 'where are my
-> results?' question. Short 12c covers just this."
+> disclosure. If you want the room to see results now, press **Publish
+> Results** on the closed election. It's one button on the **Results &
+> Publishing** panel, and it's the single most common 'where are my results?'
+> question. Short 12c covers just this."
 
-**[CALLOUT: "Closed early? Flip 'results visible immediately' to publish now"]**
+**[CALLOUT: "Closed early? Press Publish Results to show them now"]**
+
+**[PRODUCTION NOTE — 2026-10-04. The control is the **Publish Results** button
+(it becomes **Hide Results** once pressed) on a panel titled **Results &
+Publishing**; there is no "results visible immediately" toggle on screen —
+that was the API field's name. Pre-existing. Narration only; the panel shot
+stands if it shows the button.]**
 
 ### READING THE RESULTS (27:30 – 29:00)
 
@@ -539,12 +545,15 @@ turnout bar, quorum banner]**
 
 ### PUBLISH & REPORT (29:00 – 30:00)
 
-**[SCREEN: Publish Results panel — visibility toggle, Send Report button]**
+**[SCREEN: Results & Publishing panel — Publish Results, then Send Report
+under Email Results Report]**
 
-> "The Publish Results panel is your one-stop close-out: toggle member
-> visibility, and Send Report emails a formatted results report. Then record
-> the outcome in your meeting minutes — if the election is linked to the
-> meeting, it's displayed right on the minutes page."
+> "The **Results & Publishing** panel is your one-stop close-out: **Publish
+> Results** shows them to the membership, and under **Email Results Report**,
+> **Send Report** emails a formatted results report to the election's
+> secretary. Both appear once the election is closed. Then record the outcome
+> in your meeting minutes — if the election is linked to the meeting, it's
+> displayed right on the minutes page."
 
 ---
 
@@ -898,10 +907,19 @@ same demo org as Script 12 for visual continuity.
 > "Still unsure? Preview their exact ballot — it uses the same eligibility
 > code the real ballot uses, so what you see is what they get."
 
-**[SCREEN: Grant Override with a reason; row turns blue]**
+**[SCREEN: Overrides tab → "+ Add Override" → pick the member → type a Reason
+(at least ten characters) → "Add Override"; back on the roster the row shows
+"Voter Overrides"]**
 
-> "If they _should_ be able to vote, grant an override with a reason — it's
-> logged — then re-send their ballot so their new token picks up the change."
+> "If they _should_ be able to vote, open the **Overrides** tab, press **Add
+> Override**, pick the member and give a reason — ten characters at least, and
+> it's logged — then re-send their ballot so their new token picks up the
+> change."
+
+**[PRODUCTION NOTE — 2026-10-04. There is no "Grant Override" button on the
+roster row; overrides have always been added on the Overrides tab
+(pre-existing). Since 2026-09-30 the member is chosen from a picker rather than
+typed as a user ID. Re-record this cue.]**
 
 **[CALLOUT: "Roster → reason → override → re-send"]**
 
@@ -946,16 +964,16 @@ same demo org as Script 12 for visual continuity.
 > "Results stay gated until the election's _scheduled_ end time passes, so
 > nobody can peek by closing early. But when the room is waiting:"
 
-**[SCREEN: Publish Results panel — toggle 'results visible immediately']**
+**[SCREEN: Results & Publishing panel — press "Publish Results"]**
 
-> "Open the Publish Results panel and flip 'results visible immediately.'
+> "Open the **Results & Publishing** panel and press **Publish Results**.
 > Done — results are live for the membership, and you can email the report
 > right from the same panel."
 
 > "Runoffs, by the way, don't wait for the gate — if one's needed, it was
 > already created the moment you closed."
 
-**[CALLOUT: "Early close + one toggle = instant results"]**
+**[CALLOUT: "Early close + one button = instant results"]**
 
 ---
 
@@ -1146,8 +1164,9 @@ timeline chart]**
 **[SCREEN: Quick visual for each — one mark; ranked list; multiple checks;
 2/3 bar]**
 
-> "**Simple majority**: one member, one mark. Two-candidate races, routine
-> officer elections."
+> "**One choice per voter**: one member, one mark. Two-candidate races, routine
+> officer elections. That's what the election page calls it afterwards, with
+> who wins on its own **Winner** row."
 
 > "**Ranked choice**: rank your preferences; last place is eliminated round
 > by round until someone has a true majority. Three-plus candidates, no

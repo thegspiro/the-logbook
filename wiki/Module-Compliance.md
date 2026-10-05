@@ -7,7 +7,7 @@ The Compliance module provides organization-wide compliance tracking, reporting,
 ## Key Features
 
 - **Compliance Dashboard** — Overview of department-wide compliance status
-- **Compliance Matrix** — Grid view of all members vs. all active requirements
+- **Compliance Matrix** — Triage rail of members grouped by standing (since 2026-09-05; see below), with a printable matrix
 - **Competency Matrix** — Department readiness heat-map
 - **Compliance Summary** — Per-member green/yellow/red indicator on profiles
 - **Certification Tracking** — Monitor certification statuses and expiration dates
@@ -20,6 +20,8 @@ The Compliance module provides organization-wide compliance tracking, reporting,
 - **ISO Readiness Scoring** — _(2026-03-05)_ ISO 9001/14001/45001 readiness scoring based on attestation completion rates
 - **Attestation Workflows** — _(2026-03-05)_ Configurable annual compliance sign-off workflows assigned to members with tracking and reminders
 - **NFPA 1401 Record Quality** — _(2026-03-05)_ Training record quality analysis per NFPA 1401 standards (requires ≥10 records for meaningful scores)
+- **Requirement Grandfathering** — _(2026-10-03)_ A requirement can exempt members who joined before a cutoff, or give them a catch-up deadline during which an unmet requirement (`catch_up`) counts neither for nor against their standing
+- **Department-Date Grading** — _(2026-09-26)_ Every compliance view judges "today" as the department's date rather than the UTC server date
 - **Configurable Evaluation Period** — _(2026-05-29)_ Org-wide and per-requirement control over whether the in-progress (current) month counts toward compliance, so members aren't flagged non-compliant mid-month when drills happen late in the period
 
 ---
@@ -53,6 +55,42 @@ A calendar month is waived if the leave covers **15 or more days** of that month
 | Calls         | Yes      | Proportional reduction |
 | Courses       | No       | Binary completion      |
 | Certification | No       | Valid or not           |
+
+### Who a Requirement Grades — Grandfathering _(2026-10-03)_
+
+Before a requirement is evaluated for a member, its three nullable dates are
+checked against the member's **join date** (`hire_date`, else the account's
+creation date; `training_compliance.member_join_date`):
+
+| Requirement carries                                   | Member joined…                        | Result                                                                                 |
+| ----------------------------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------- |
+| `new_member_cutoff_date`, no deadline                 | before the cutoff                     | Not graded at all                                                                      |
+| `new_member_cutoff_date` + `existing_member_deadline` | before the cutoff, today ≤ deadline   | Unmet → `catch_up`, due on the deadline; left out of both counts by `tally_standing()` |
+| same                                                  | before the cutoff, after the deadline | Graded normally                                                                        |
+| `applies_to_joined_before`                            | on or after that date                 | Not graded by this (older) requirement — its newer copy grades them                    |
+
+All `NULL` (every row before migration `d058b5e7c1f4`) keeps the old behaviour.
+Every screen that decides who a requirement grades — dashboard, matrix and
+print, profile card, My Training, member status, competency matrix, forecast,
+annual report, CSV/PDF exports (which print N/A) — goes through
+`requirement_applies_to_member` with the join date, and
+`tests/test_requirement_grandfathering.py` fails on a call that omits it. The
+same change made the dashboard, matrix and member-status views honour
+role-scoped requirements, which only My Training had enforced; a department
+with role-scoped requirements may see those figures move.
+
+> **A missing hire date reads as the account's creation date.** An imported
+> roster without hire dates joins "on the import day", so a cutoff on or after
+> that day treats veterans as new members. Record hire dates before relying on
+> a cutoff (KNOWN_LIMITATIONS, accepted 2026-10-03).
+
+### No Requirements Is "Not Set Up", Not 100% _(2026-09-29)_
+
+`compute_org_compliance_pct` still returns 100 for an organization with no
+active requirement; callers check `count_active_requirements()` first and show
+**Not set up** / "no requirements set up yet" instead. The annual report likewise
+reads **Not applicable** for a requirement that applies to no active member,
+instead of a red "0/0 — 0%" (W29-4, closing CMP4-4).
 
 ---
 
@@ -88,13 +126,17 @@ chance to train that month. The evaluation period is now configurable:
   last day of the previous month. This "as-of" date drives the requirement
   window, waiver proration, and overdue checks
 - **Exception:** the certification **"expiring soon"** lookahead always uses the
-  real `today()`, never the resolved as-of date — upcoming expirations are not
-  shifted by the evaluation period
+  actual current date (the department's, since 2026-09-26), never the resolved
+  as-of date — upcoming expirations are not shifted by the evaluation period
 
 ### UI
 
 - **"Evaluation Period" checkbox** on the Compliance Requirements > Thresholds
-  tab sets the org default
+  tab (`/training/compliance-config`) sets the org default. _(2026-09-29)_ A
+  refused save now shows the server's reason (e.g. "at_risk_threshold must be
+  less than or equal to compliant_threshold") instead of "Failed to save
+  configuration"; _(2026-10-03)_ the page fits a 320px phone and treats a
+  malformed config response as a load error
 - A **per-requirement select** (inherit / include / exclude) overrides the
   default for individual requirements
 

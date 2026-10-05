@@ -29,6 +29,13 @@ you instead build each shift's roster ad hoc, you don't need platoons.
 Once enabled, platoon badges, the per-shift hold-over roster, and platoon-aware
 generation appear in the module.
 
+> **While platoons are off**, the settings list does not offer a Platoons
+> section, and a link straight to `/scheduling/admin/settings/platoons` shows
+> **General** — marked current — under a breadcrumb that still reads
+> "Platoons", with nothing saying why. That is the deliberate fallback
+> (workflow review W36-4, left open as a copy choice): turn the toggle on in
+> General and the section appears.
+
 ## Step 2 — Assign each member to a platoon
 
 Platoon membership is a standing, person-level attribute (`users.platoon`) — a
@@ -42,7 +49,8 @@ You have three ways to assign it:
    **Scheduling Administration → Settings → Platoons**): see every
    platoon and its members at a glance, select any number of members, and
    **bulk-assign** them to a platoon (or clear it) in one step. Best for initial
-   setup and shuffling crews.
+   setup and shuffling crews. The target platoon is chosen in the **Platoon to
+   assign** select beside the "N selected" count.
 2. **Scheduling Administration → Settings → Platoons** (`/scheduling/admin/settings/platoons`):
    an inline list with a per-member dropdown — handy for quick one-off edits.
 3. **Member admin UI:** set an individual member's platoon from their record.
@@ -69,11 +77,30 @@ The generated shifts reflect each platoon's **actual makeup**: a member on
 approved leave during the window is omitted from the shifts they'd otherwise
 staff. The responsible platoon is recorded on each shift (`shifts.platoon`).
 
+**Read the result, not just the count** _(2026-09-29)_. Generation will leave a
+**driver seat empty** rather than seat a platoon member who lacks the
+apparatus's EVOC level. Both generate screens now say so — a red notice that
+stays eight seconds: "One driver seat was left unfilled: …" (or "N driver seats
+were …"), naming each. Until this date both screens showed only "Generated N
+shifts", so the empty seat was discovered on the night. Fill it from the
+shift's hold-over roster, or record a driver exception.
+
+Re-running a range you already generated is safe: dates already on the
+schedule are skipped. The result then reads "No new shifts. Dates already on
+the schedule are skipped, as are dates outside the pattern's own start and
+end." (it used to say "Generated 0 shifts").
+
 ## Step 4 — Day-to-day: filling gaps and holding over
 
 On any shift's detail view you'll see a **hold-over roster** — members who are
 available to cover a gap or be held over: same organization, **not on leave**,
 and **not already assigned** to that shift.
+
+**Probationary members count** _(2026-10-03)_. The platoon roster, like shift
+eligibility, used to take only members whose status was exactly `active`, so a
+probationary firefighter on A platoon never appeared on A's roster and was
+refused on assignment as "no longer active". Probationary now counts as active
+throughout scheduling.
 
 - Click **Assign** next to a member to add them to the shift in one step.
 - Approving a member's leave automatically **cancels** their conflicting

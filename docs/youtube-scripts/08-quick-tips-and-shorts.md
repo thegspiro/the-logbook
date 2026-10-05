@@ -89,38 +89,41 @@ reads Waitlisted, with your place in line.)]**
 
 > "Need to swap a shift? Here's how — no phone calls required."
 
-**[SCREEN: Click on your assigned shift]**
+**[SCREEN: The schedule board. On your next-shift card, click "Offer trade"]**
 
-> "Click on the shift you need to swap."
+> "Option one: hand your seat to somebody. On the schedule, click **Offer
+> trade** on your shift."
 
-**[SCREEN: Click "Request Swap"]**
+**[SCREEN: The "Give up this shift" dialog with "Offer it to someone specific"
+selected. The target-side Accept / Decline control DOES now exist for a one-way
+offer — stage it. — REWRITTEN 2026-08-24; the previous version said no such
+control existed, which was true until August 23. REWRITTEN AGAIN 2026-10-04:
+there is no "Request Swap" button and no "post as open for anyone" option;
+re-record this cue and the two after it.]**
 
-> "Click 'Request Swap.'"
+> "Name them, and the list you pick from has already dropped anyone who
+> couldn't take it anyway — people already on the shift, people on approved
+> leave, people not cleared for the position, and anyone working a tour that
+> runs into this one. Least-loaded first."
 
-**[SCREEN: Show the swap options — hand your seat to a named member, trade two
-shifts, or post as open. The target-side Accept / Decline control DOES now
-exist for a one-way offer — stage it. — REWRITTEN 2026-08-24; the previous
-version said no such control existed, which was true until August 23]**
-
-> "Option one: hand your seat to somebody. Name them, and the list you pick
-> from has already dropped anyone who couldn't take it anyway — people already
-> on the shift, people on approved leave, people not cleared for the position,
-> and anyone working a tour that runs into this one. Least-loaded first."
-
-**[SCREEN: Show the candidate list]**
+**[SCREEN: Show the candidate list; click "Send offer to <name>"]**
 
 > "They get an Accept or Decline. If they accept, that's it — no officer, no
 > waiting. Accepting is just you dropping the seat and them picking it up, and
 > neither of those needed permission in the first place."
 
-> "Option two: a real trade — your Tuesday for their Thursday. That moves two
-> rosters, so it still goes to an officer, and it has to be an officer who
-> isn't in the swap. Not you, not the person you named. A swap is signed off by
+**[SCREEN: My Shifts → Upcoming → "Swap" → "Request Shift Swap" → "Specific
+Shift"]**
+
+> "Option two: a real trade — your Tuesday for their Thursday. That one starts
+> from **Swap** on My Shifts. It moves two rosters, so it goes to an officer,
+> and it has to be an officer who isn't in the swap. A swap is signed off by
 > somebody with no stake in it."
 
-> "Option three: post it open for anyone eligible to pick up."
+> "And **Open Swap** in that same dialog doesn't post your shift anywhere — no
+> member sees it. An officer finds cover; it stays yours until then."
 
-**[SCREEN: Select an option and submit.]**
+**[SCREEN: Click "Submit Request".]**
 
 > "One thing to know: while your offer is sitting with somebody, you can't
 > release the seat or offer it to anyone else. Withdraw first — otherwise
@@ -236,18 +239,31 @@ printable QR code.]**
 
 > "Click Add Member."
 
-**[SCREEN: Fill in the form — first name, last name, email]**
+**[SCREEN: Fill in the form — name, address, phone, email, one emergency
+contact]**
 
-> "Enter their name and email. That's the minimum."
+> "Name, address, phone, email and one emergency contact are required — the
+> membership number too, unless your department numbers members
+> automatically."
 
-**[SCREEN: Select a position from the dropdown]**
+**[SCREEN: Set Membership Type to Probationary; pick a Position from the
+dropdown]**
 
-> "Assign their position — Firefighter, Probationary, whatever applies."
+> "Set their **Membership Type** — Probationary for a new joiner — and give
+> them a Position if they hold one."
 
-**[SCREEN: Click Save. Show the success message.]**
+**[SCREEN: Point to "Set initial password". Click Save. Show the success
+message.]**
 
-> "Save. If email is configured, they automatically receive an invitation with
-> their login credentials."
+> "Save. If email is configured, leave **Set initial password** unchecked and
+> they're emailed a temporary password. If it isn't, that box is required —
+> set a password and hand it to them."
+
+**[PRODUCTION NOTE — 2026-10-04. Rewritten. "Name and email. That's the
+minimum" was never true of the form, and Probationary is a membership type,
+not a position — both pre-existing. The required password when email is off
+is new (2026-09-27). Re-record all three cues; the short now runs closer to
+70 seconds.]**
 
 **[SCREEN: Show the invitation email preview if available]**
 
@@ -267,17 +283,20 @@ printable QR code.]**
 
 ---
 
-**[SCREEN: User Settings page]**
+**[SCREEN: My Account page]**
 
 > "Protect your account with two-factor authentication. Takes sixty seconds."
 
-**[SCREEN: Navigate to User Settings → Security]**
+**[SCREEN: Navigate to My Account → Security]**
 
-> "Go to User Settings. Click Security."
+> "Go to My Account. Click Security."
 
-**[SCREEN: Click "Enable 2FA" or "Set Up Two-Factor Authentication"]**
+**[SCREEN: Click "Enable two-factor authentication"]**
 
-> "Click Enable Two-Factor Authentication."
+> "Click Enable two-factor authentication."
+
+**[PRODUCTION NOTE — 2026-10-04. The page is titled **My Account** (since
+2026-09-29), not "User Settings". Re-record the first two cues.]**
 
 **[SCREEN: Show the QR code that appears]**
 
@@ -600,19 +619,30 @@ large phone, one-handed, awkwardly]**
 > "Every screen in The Logbook used to live behind that menu. Top-left corner.
 > The single hardest place to reach with one thumb."
 
-**[SCREEN: The bottom tab bar on a phone]**
+**[SCREEN: The bottom tab bar on a phone: Home, a tab, Add, a tab, More]**
 
-> "There's a bar at the bottom now. Four destinations plus **More**."
+> "There's a bar at the bottom now. **Home**, two tabs you choose, **Add** in
+> the middle, and **More**."
 
 **[SCREEN: Tap More; the full navigation drawer opens]**
 
 > "More opens everything else."
 
-**[CALLOUT: "Your four tabs depend on which modules your department uses"]**
+**[SCREEN: My Account → Appearance → "Phone navigation bar"; change "Left of
+Add" and "Right of Add"]**
 
-> "The four aren't the same everywhere — they're picked from what your department
-> actually has switched on. Phones only. On a tablet or a desktop the side menu is
-> already there."
+**[CALLOUT: "Pick your two tabs in My Account → Appearance"]**
+
+> "The two either side of Add are yours: **My Account**, **Appearance**,
+> **Phone navigation bar**. It's saved to your account, so it follows you to
+> every phone. Phones only. On a tablet or a desktop the side menu is already
+> there."
+
+**[PRODUCTION NOTE — 2026-10-04. Rewritten. The bar was "four destinations
+picked from your modules"; since 2026-10-02 it is Home, two member-chosen
+tabs, Add and More. A **Settings** tab, if chosen, opens My Account, not the
+department's settings. Re-record the bar and add the Appearance cue; the short
+runs nearer 35 seconds.]**
 
 ---
 
@@ -902,15 +932,23 @@ same footer text]**
 **[SCREEN: The three seeded footers listed, Internal marked as default]**
 
 > "Three come set up, and they're different on purpose. **Internal** for
-> members — the 'do not reply' close. **Public** for everyone else, which
-> invites a reply and carries your mailing address. **Official notice** for
-> things going on the record."
+> members — the plain 'automated message from' close. **Public** for everyone
+> else, which invites a reply and carries your mailing address. **Official
+> notice** for things going on the record."
 
-**[CALLOUT: "Don't tell a member of the public not to reply"]**
+**[CALLOUT: "Replies reach the department — nobody's told not to reply"]**
 
 > "That middle one matters. Somebody emails asking if you'll bring an engine to
-> their school's fair — they should not get a notice back saying do not reply.
-> Event requesters and applicants get the public footer automatically."
+> their school's fair — they should hear that their reply reaches the office.
+> Event requesters and applicants get the public footer automatically. And
+> none of the three says 'do not reply' any more: replies go to your
+> department's own address."
+
+**[PRODUCTION NOTE — 2026-10-04. The Internal footer's "Please do not reply to
+this email." line was removed from the default and from saved footers
+(2026-09-25, migration `3f3b315165ed`), and every email now carries the
+department's address as Reply-To. Re-record the footer list cue if it shows
+that line.]**
 
 **[SCREEN: Point to the "3 templates use this" count beside a footer]**
 
@@ -1157,7 +1195,8 @@ first two seconds — let the tap land.]**
 on an apparatus card, holding a blank tag to the phone, moving to the next
 card.]**
 
-> "Officers write them from the same page that already prints your QR codes.
+> "Officers write them from the same page that already prints your QR codes —
+> anyone holding the apparatus tag permission, `apparatus.manage_nfc_tags`.
 > One card per apparatus — so you can do a whole fleet from a box of blank tags
 > in one sitting."
 
@@ -1182,11 +1221,19 @@ be captured in the screenshot harness or faked in a mockup, and anyone who has
 used NFC will spot a staged shot immediately. Shoot over HTTPS; the buttons do
 not render on a plain-`http://` LAN deployment.
 
-**Do not** shoot this on a room kiosk card. Room display codes are deliberately
-not taggable — that code is a check-in credential for an unauthenticated
-screen, and a sticker in a public hallway hands it to whoever walks past. The
-button only appears on apparatus cards, and showing a viewer hunting for it on a
-room card teaches the wrong thing.
+**Rooms take tags too, since 2026-10-02 — but not the kiosk's code.** A room
+card's **Write NFC tag** (for holders of `locations.manage_nfc_tags`) writes
+`/locations/<room>/check-in`, which needs the member signed in and opens
+whatever event is checking in in that room. The room's kiosk display code is
+still never written to a tag: it is a check-in credential for an
+unauthenticated screen, and a sticker in a public hallway would hand it to
+whoever walks past. Keep this short on apparatus; if a room beat is wanted, it
+belongs in script 06's check-in chapter, which now carries one.
+
+**[PRODUCTION NOTE — 2026-10-04. "The button only appears on apparatus cards"
+stopped being true on 2026-10-02, and writing tags now needs its own permission
+rather than being offered to anyone who could open the page. Re-record the 0:10 cue as a holder of
+`apparatus.manage_nfc_tags`.]**
 
 ---
 
@@ -1385,7 +1432,12 @@ on the shift roster; paper comes out of the watch-desk printer.]**
 > "One thing for whoever sets it up: **the server** talks to the printer, not
 > your browser. So the address has to be reachable from the machine running The
 > Logbook — you can ping that printer from your desk all day and still have it
-> fail from the app."
+> fail from the app. And the server has to be allowed to: the operator lists
+> the printers' addresses in `LABEL_PRINTER_ALLOWED_NETWORKS`. Empty means
+> off."
+
+**[PRODUCTION NOTE — 2026-10-04. Last sentence added; the allowlist (since
+2026-08-24) was never mentioned. Narration only, about 5 seconds.]**
 
 **Production:** show **RFC 5737 documentation addresses** (`192.0.2.x`) on
 screen. Never a real department's printer address — that is an internal network
@@ -1537,6 +1589,17 @@ the row and puts the cursor in the empty field.]**
 > list. Click one, and it takes you to the row, opens the location, and puts
 > your cursor in the field that's empty."
 
+**[0:45 — SCREEN: Edit a published template; the "Publish now" banner appears.
+Then the "Used on…" line naming its apparatus.]**
+
+> "One warning. Editing a live checklist takes it off every shift it was on —
+> crews can't see it until you press **Publish now** on the banner, and leaving
+> the page asks first. The **Used on** line tells you which trucks are
+> waiting."
+
+**[PRODUCTION NOTE — 2026-10-04. New beat (2026-10-04), about 10 seconds; the
+short runs nearer 55 seconds.]**
+
 **Production:** **the "before" state no longer exists in any build.** Either
 source it from an archived capture or drop the opening beat and start on the
 canvas — do not reconstruct the old screen.
@@ -1621,7 +1684,15 @@ chosen. Tick one row; press **Select all 214 matching**.]**
 labels print correctly?" prompt appears.]**
 
 > "After it prints, it asks whether it worked. Say yes and those items come off
-> the 'needs a label' list."
+> the 'needs a label' list. Got a registered label printer? **Print to** it
+> straight from the same page. Half a sheet of Avery left? **Start at label**
+> picks up where the last run stopped."
+
+**[PRODUCTION NOTE — 2026-10-04. Two lines added (2026-09-24 → 09-27), about 7
+seconds; the short runs nearer 47 seconds. The network-print button reads
+"Print to <printer name>" and needs a printer allowed by
+`LABEL_PRINTER_ALLOWED_NETWORKS`; "Start at label" shows for sheet stock, not
+thermal.]**
 
 **[0:28 — SCREEN: An item's page — **Label Printed** with a date. Edit its
 barcode; it flips back to **Needs a label**.]**

@@ -28,7 +28,7 @@ import {
   PlayCircle,
 } from 'lucide-react';
 import { Tooltip } from '../components/ux';
-import { externalTrainingService, trainingService } from '../services/api';
+import { externalTrainingService, trainingService, userService } from '../services/api';
 import type {
   ExternalTrainingProvider,
   ExternalTrainingProviderCreate,
@@ -37,6 +37,7 @@ import type {
   ExternalUserMapping,
   TrainingCategory,
 } from '../types/training';
+import type { User } from '../types/user';
 
 type TabView = 'providers' | 'imports' | 'mappings';
 
@@ -942,20 +943,26 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
   // The internal categories an external one can be pointed at. Without them the
   // Map Category button had nothing to offer and did nothing at all.
   const [internalCategories, setInternalCategories] = useState<TrainingCategory[]>([]);
+  // The members an external user can be pointed at. Without them the Map User
+  // button had nobody to offer and did nothing at all — the same gap the
+  // category picker above once had.
+  const [members, setMembers] = useState<User[]>([]);
   const [savingMappingId, setSavingMappingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadMappings = useCallback(async () => {
     setLoading(true);
     try {
-      const [categories, users, internal] = await Promise.all([
+      const [categories, users, internal, roster] = await Promise.all([
         externalTrainingService.getCategoryMappings(providerId),
         externalTrainingService.getUserMappings(providerId),
         trainingService.getCategories(),
+        userService.getUsers(),
       ]);
       setCategoryMappings(categories);
       setUserMappings(users);
       setInternalCategories(internal);
+      setMembers(roster);
     } catch (_err) {
       // Error silently handled - mappings modal will show empty state
     } finally {
@@ -989,6 +996,33 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
     } finally {
       setSavingMappingId(null);
     }
+  };
+
+  const mapUser = async (mapping: ExternalUserMapping, internalUserId: string) => {
+    setSavingMappingId(mapping.id);
+    const externalLabel = mapping.external_name || mapping.external_username || mapping.external_user_id;
+    try {
+      // null, not undefined: the endpoint reads an omitted key as "leave the
+      // mapping alone", so "Not mapped" has to send an explicit null to clear it.
+      const updated = await externalTrainingService.updateUserMapping(providerId, mapping.id, {
+        internal_user_id: internalUserId || null,
+      });
+      setUserMappings((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+      toast.success(
+        internalUserId
+          ? `${externalLabel}'s training now imports for ${updated.internal_user_name ?? 'the chosen member'}`
+          : `${externalLabel} is unmapped again`
+      );
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to save the member mapping'));
+    } finally {
+      setSavingMappingId(null);
+    }
+  };
+
+  const memberLabel = (member: User) => {
+    const name = member.full_name || `${member.first_name ?? ''} ${member.last_name ?? ''}`.trim() || member.username;
+    return member.membership_number ? `${name} (#${member.membership_number})` : name;
   };
 
   if (!isOpen) return null;
@@ -1117,7 +1151,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
                         : 'border-yellow-500/30 bg-yellow-500/10'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <p className="text-theme-text-primary font-medium">
                           {mapping.external_name || mapping.external_username || 'Unknown User'}
@@ -1127,18 +1161,38 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
                           External ID: {mapping.external_user_id}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {mapping.is_mapped ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        {mapping.is_mapped && (
                           <span className="flex items-center gap-1 text-sm text-green-700 dark:text-green-400">
                             <CheckCircle className="h-4 w-4" aria-hidden="true" />
                             Mapped
                             {mapping.auto_mapped && <span className="text-xs">(auto)</span>}
                           </span>
-                        ) : (
-                          <button className="rounded-sm bg-red-800 px-3 py-1 text-sm text-white hover:bg-red-900">
-                            Map User
-                          </button>
                         )}
+                        <select
+                          value={mapping.internal_user_id ?? ''}
+                          disabled={savingMappingId === mapping.id}
+                          onChange={(e) => {
+                            void mapUser(mapping, e.target.value);
+                          }}
+                          aria-label={`Member for ${mapping.external_name || mapping.external_username || mapping.external_user_id}`}
+                          className="form-input-sm w-full sm:w-56"
+                        >
+                          <option value="">Not mapped</option>
+                          {/* A member the roster no longer lists (deleted since)
+                              would otherwise leave the select showing "Not
+                              mapped" while the mapping still credits them. */}
+                          {mapping.internal_user_id && !members.some((m) => m.id === mapping.internal_user_id) && (
+                            <option value={mapping.internal_user_id}>
+                              {mapping.internal_user_name ?? 'A former member'}
+                            </option>
+                          )}
+                          {members.map((member) => (
+                            <option key={member.id} value={member.id}>
+                              {memberLabel(member)}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     </div>
                   </div>

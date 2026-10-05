@@ -58,7 +58,11 @@ current recommendation, which auditors do check.
    ENCRYPTION_KEY=<new value>
    ```
    Do **not** change `ENCRYPTION_SALT` — it is installation-scoped, not
-   key-scoped, and changing it invalidates every key in the ring.
+   key-scoped, and changing it invalidates every key in the ring. It also
+   orphans every registered NFC tag and ID card: their UIDs are stored only
+   as a hash peppered with the salt (`nfc_tag_service.hash_tag_uid`), a hash
+   cannot be converted to a new salt, and every tag and card would have to be
+   registered again. Key rotation never needs the salt to change.
 4. Restart the stack. Verify sign-in with an MFA-enabled account (proves the
    ring reads old ciphertext).
 5. Drain: re-encrypt everything under the new key.

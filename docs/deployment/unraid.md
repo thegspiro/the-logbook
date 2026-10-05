@@ -113,10 +113,17 @@ REDIS_PASSWORD=<strong password>
 # the HTTPS origin named here.
 ALLOWED_ORIGINS=https://logbook.example.com
 # Every link in outgoing email is built from this — use the same HTTPS origin.
-# The setup script writes it from the HTTPS URL you give it.
+# The setup script writes it from the HTTPS URL you give it; the Community
+# Apps template calls it "Public Site Address". Left blank or localhost, the
+# first public ALLOWED_ORIGINS entry is used instead (2026-09-25).
 FRONTEND_URL=https://logbook.example.com
-TZ=America/New_York  # Your timezone
+TZ=America/New_York  # The container's clock, not the department's
 ```
+
+`TZ` is the container's clock only. The times the application prints in
+emails, PDFs and exports, and the date it calls "today", come from the
+department's timezone in **Settings → Organization → Profile → Timezone**
+(since 2026-09-25) — set that in the app, not here.
 
 Create directories and start:
 
