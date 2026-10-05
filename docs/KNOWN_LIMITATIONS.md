@@ -2924,28 +2924,78 @@ own organization's integration.
 (Security review INT-27 pass 4, 2026-09-13:
 `docs/security-review/INT-27-integrations.md`.)
 
-## Training — Dashboard Summary Is an Unbounded Per-Request Scan (2026-08-29)
+## Training — Compliance Grading Still Reads Full History for Certifications and One-Time Requirements (2026-10-05)
 
-`get_training_dashboard_summary` (`app/api/v1/endpoints/training.py`) loads
-every active `User`, every active `TrainingRequirement`, and every
-`TrainingRecord` belonging to those users for the org, with no date bound or
-row limit, then evaluates each member's applicable requirements in Python.
-Until this pass, the endpoint's 30s-fresh/90s-stale frontend cache absorbed
-repeated dashboard mounts within that window. TR2-1/TR2-3 (this pass)
-correctly excluded it from that cache — the response carries per-member
-names, so caching it risked serving stale PII past a permission or record
-change — but removing the cache means every dashboard mount or manual
-refresh now re-runs this unbounded scan directly against the database.
+Department-wide compliance grading used to load every `TrainingRecord` each
+member ever had, then grade in Python (TR2-4: the dashboard summary; TR4-2:
+the compliance matrix). On the owner's decision (2026-10-05), it now loads
+only the records the grader can read. `load_graded_records`
+(`app/services/training_compliance.py`) does this, bounded by
+`graded_records_clause`. Every department-wide grader uses it:
+`get_training_dashboard_summary`, `get_compliance_matrix`,
+`compute_org_compliance_tally` (the dashboard and Administration hub
+percentage), `get_member_period_status`, the annual/monthly compliance
+report and the profile-card `get_compliance_summary`.
 
-Not fixed: closing this needs the query itself bounded (e.g. limiting
-`TrainingRecord` rows to what each requirement's own lookback/
-recertification window actually needs, via the same logic
-`training_compliance.py`'s `get_requirement_date_window` already applies) or
-reworked into a set-based/aggregate evaluation instead of loading every row
-into Python. Either is a service-level query redesign entangled with
-`evaluate_member_requirement`'s per-requirement date-window correctness, not
-a safe drive-by alongside a cache-exclusion security fix. This one is more pressing since a cache-based mitigation was correctly removed
-out from under it. (Security review TR-17 pass 2,
+The results are identical, not approximately equal.
+`tests/test_graded_records_bounded_load.py` grades an eight-year department
+twice, once bounded and once unbounded. Every figure from every caller must
+match, and so must every member × requirement cell on seven evaluation dates.
+
+**Bounded to a date range** (COMPLETED records whose completion date falls in
+the requirement's window, narrowed by `recency_days`):
+
+- hours, courses, shifts, calls and the fallback types (skills evaluation,
+  checklist, knowledge test), for every frequency with a window: annual
+  (including custom and cross-year periods, and a pinned past `year`),
+  quarterly, monthly and biannual
+- rolling requirements (`today − rolling_period_months` to `today`)
+- certification-period due dates. The compliance grader never reads the due
+  date, only the frequency window.
+- biannual hours. Its expired-certificate override reads only the records
+  inside the biannual window.
+- one-time requirements with `recency_days` ("on or after the cutoff")
+- certifications with `recency_days` ("on or after the cutoff")
+
+Windows are resolved per requirement on the same as-of date the grader uses,
+so `include_current_month` moves the bound with them. Grandfathering,
+catch-up deadlines and waivers read the member and waiver tables, not
+records, so they widen nothing. SCHEDULED, CANCELLED and FAILED records are
+never read, so they are never loaded.
+
+**Still unbounded:**
+
+- **Certification requirements without `recency_days`** load the member's
+  whole COMPLETED history. A certification ignores its frequency window by
+  design, and part of `certification_record_matches` is a case-insensitive
+  substring test: the requirement name in the course name, the registry code
+  in the certification number. SQL `LIKE` folds case by the column
+  collation, not by Python's `str.lower`. The two disagree on characters
+  such as `İ` and the Greek final sigma. Pushing the match into the query
+  could drop a record the grader would have credited. That is a
+  wrong-result risk, and the owner's bar was identical results. Bounding
+  this case needs a design change, either a collation-independent match key
+  stored on the record or dropping the name and registry-code heuristics in
+  favour of linked courses. That is an owner decision.
+- **One-time hours, courses, shifts, calls and fallback requirements without
+  `recency_days`** have no window, so the grader reads every COMPLETED
+  record, including ones with no completion date. They load all of them.
+- **Fallback types** (skills evaluation, checklist, knowledge test) also
+  read IN_PROGRESS records of any date when nothing completed matches, so
+  every IN_PROGRESS record is loaded while one of these is active.
+
+Most departments define at least one certification requirement, so most
+departments still load each member's full COMPLETED history. The saving is
+then the unread statuses, plus every department whose requirements are all
+windowed. The callers' own extra reads are OR'd in exactly: the dashboard's
+expiring, recent and year-to-date lists, the roster's selected period, and
+the report's certificate count, which reads every completed certificate.
+
+TR3-2 (above) is the same class: `TrainingService._preload_window` serves a
+different evaluator. That evaluator also reads rolling and
+certification-period due-date anchors, so it cannot bound the cases this
+loader bounds. Both now take their per-requirement window from
+`completion_window`. (Security review TR-17, TR2-4 and TR4-2,
 `docs/security-review/TR-17-training-core.md`.)
 
 ## Training — The MCP Requirement-Progress Tool Is Paginated, Not Bounded (2026-09-04)
@@ -2974,31 +3024,12 @@ and that is acceptable for this caller. Not redesigned: bounding a
 certification check's window without breaking its correctness is a
 service-level redesign of what "ignoring the window" means
 for this class of check (`training_compliance.py`'s date-window logic), not
-a safe drive-by change. Same abuse-resistance class as "Dashboard Summary Is
-an Unbounded Per-Request Scan" above (TR2-4) — a per-member, not org-wide,
-scan, so the ceiling is one member's training history rather than the whole
+a safe drive-by change. Same class as the certification residual in
+"Compliance Grading Still Reads Full History for Certifications and One-Time
+Requirements" above (TR2-4/TR4-2) — a per-member, not org-wide, scan, so the
+ceiling is one member's training history rather than the whole
 department's. (Security review TR-17 pass 3,
 `docs/security-review/TR-17-training-core.md`, TR3-2.)
-
-## Training — The Compliance Matrix Has Its Own Unbounded Record Scan (2026-09-10)
-
-`get_compliance_matrix` (`app/api/v1/endpoints/training.py`) loads every
-active `User`, every active `TrainingRequirement`, and every `TrainingRecord`
-belonging to those users for the org, with no date bound or row limit — the
-same shape as `get_training_dashboard_summary`, but a separately callable
-endpoint. TR2-4 (above) documents only the dashboard-summary endpoint;
-bounding that one would leave this matrix scan untouched, since the two
-share no code path. First reported by a Codex review of TR-17 pass 4
-(`docs/security-review/TR-17-training-core.md`, PR #2455), whose own initial
-draft had incorrectly described this endpoint as bounded by department size
-rather than by the department's complete training-record history.
-
-Not fixed here: same reasoning as TR2-4 — closing it needs the query itself
-bounded to what each requirement's date window actually needs, or a move to
-set-based/aggregate evaluation, entangled with `evaluate_member_requirement_
-detail`'s per-requirement window correctness rather than a safe drive-by
-change alongside a documentation-only pass. (Security review TR-17 pass 4,
-TR4-2.)
 
 ## Compliance — The Annual Report's New Applicability Filter Has Four More Gaps, Plus a Display Nit (2026-09-11)
 

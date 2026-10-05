@@ -23,7 +23,10 @@ def _scalars(items):
 
 
 class _DB:
-    """Returns queued execute() results in order (members, requirements, records)."""
+    """Returns queued execute() results in order (members, requirements).
+
+    The records arrive through ``load_graded_records``, patched in ``_call``.
+    """
 
     def __init__(self, results):
         self._results = list(results)
@@ -71,8 +74,9 @@ async def _call(monkeypatch, members, requirements, records, evaluate):
     )
     monkeypatch.setattr(mod, "_load_compliance_config", AsyncMock(return_value=None))
     monkeypatch.setattr(mod, "_evaluate_member_requirement", evaluate)
+    monkeypatch.setattr(mod, "load_graded_records", AsyncMock(return_value=records))
 
-    db = _DB([_scalars(members), _scalars(requirements), _scalars(records)])
+    db = _DB([_scalars(members), _scalars(requirements)])
     user = SimpleNamespace(organization_id="org-1")
     return await mod.get_member_period_status(
         start_date=date(2026, 7, 1),
@@ -161,7 +165,8 @@ class TestMemberPeriodStatus:
             mod, "get_org_include_current_month", AsyncMock(return_value=True)
         )
         monkeypatch.setattr(mod, "_evaluate_member_requirement", evaluate)
-        db = _DB([_scalars([m]), _scalars([_req("r1")]), _scalars([])])
+        monkeypatch.setattr(mod, "load_graded_records", AsyncMock(return_value=[]))
+        db = _DB([_scalars([m]), _scalars([_req("r1")])])
         result = await mod.get_member_period_status(
             start_date=date(2026, 7, 1),
             end_date=date(2026, 7, 31),

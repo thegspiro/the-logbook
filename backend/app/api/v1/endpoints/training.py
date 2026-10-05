@@ -23,7 +23,7 @@ from fastapi import (
 )
 from loguru import logger
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -93,6 +93,7 @@ from app.services.training_compliance import (
     evaluate_member_requirement_detail,
     get_org_include_current_month,
     get_requirement_date_window,
+    load_graded_records,
     member_join_date,
     requirement_applies_to_user,
     tally_standing,
@@ -161,26 +162,6 @@ async def get_training_dashboard_summary(
         .scalars()
         .all()
     )
-    records = list(
-        (
-            await db.execute(
-                select(TrainingRecord).where(
-                    TrainingRecord.organization_id == org_id,
-                    (
-                        TrainingRecord.user_id.in_([m.id for m in members])
-                        if members
-                        else False
-                    ),
-                )
-            )
-        )
-        .scalars()
-        .all()
-    )
-    by_user: dict[str, list[TrainingRecord]] = {}
-    for record in records:
-        by_user.setdefault(str(record.user_id), []).append(record)
-    waivers = await fetch_org_waivers(db, str(org_id))
     # The same resolution the compliance matrix and compute_org_compliance_pct
     # use: a member's requirement set comes through their compliance profile
     # and their standing through classify_standing with the profile's
@@ -189,6 +170,29 @@ async def get_training_dashboard_summary(
     grading = ComplianceGrading.from_config(
         await _load_compliance_config(db, str(org_id))
     )
+    # Only the records the grader can read, plus the three lists this
+    # response builds from the same rows below — not every record the
+    # department ever logged (TR2-4).
+    completed = TrainingRecord.status == TrainingStatus.COMPLETED
+    records = await load_graded_records(
+        db,
+        str(org_id),
+        [m.id for m in members],
+        requirements,
+        today,
+        grading.include_current_month,
+        also=(
+            and_(completed, TrainingRecord.expiration_date.between(today, cutoff)),
+            and_(
+                completed, TrainingRecord.completion_date.between(recent_start, today)
+            ),
+            and_(completed, TrainingRecord.completion_date.between(year_start, today)),
+        ),
+    )
+    by_user: dict[str, list[TrainingRecord]] = {}
+    for record in records:
+        by_user.setdefault(str(record.user_id), []).append(record)
+    waivers = await fetch_org_waivers(db, str(org_id))
 
     compliant = 0
     not_applicable = 0
@@ -1780,14 +1784,10 @@ async def get_compliance_summary(
         req for req in all_requirements if requirement_applies_to_user(req, target_user)
     ]
 
-    # Pre-fetch all completed records for the user (no date filter —
-    # _evaluate_member_requirement handles windowing internally)
-    records_result = await db.execute(
-        select(TrainingRecord)
-        .where(TrainingRecord.organization_id == org_id)
-        .where(TrainingRecord.user_id == str(user_id))
+    # The member's records the grader can read for these requirements.
+    member_records = await load_graded_records(
+        db, str(org_id), [str(user_id)], requirements, today, org_include_current
     )
-    member_records = list(records_result.scalars().all())
 
     # Fetch waivers
     waivers = await fetch_user_waivers(db, str(org_id), str(user_id))
@@ -3049,23 +3049,6 @@ async def get_compliance_matrix(
             "generated_at": datetime.now(timezone.utc).isoformat(),
         }
 
-    # Get all training records for these members
-    records_result = await db.execute(
-        select(TrainingRecord).where(
-            TrainingRecord.organization_id == org_id,
-            TrainingRecord.user_id.in_([m.id for m in members]),
-        )
-    )
-    all_records = records_result.scalars().all()
-
-    # Build lookup: user_id -> [records]
-    records_by_user = {}
-    for r in all_records:
-        records_by_user.setdefault(r.user_id, []).append(r)
-
-    # Batch-fetch all active waivers / leaves for the org
-    waivers_by_user = await fetch_org_waivers(db, str(org_id))
-
     today = await resolve_org_today(db, org_id)
 
     # One config load for the whole matrix. get_org_include_current_month()
@@ -3075,6 +3058,23 @@ async def get_compliance_matrix(
     grading = ComplianceGrading.from_config(
         await _load_compliance_config(db, str(org_id))
     )
+
+    # Only the records the grader can read for these requirements, not every
+    # record the department ever logged (TR4-2). Needs `today` and the
+    # config above: the windows it bounds by are resolved from both.
+    records_by_user: dict[str, list[TrainingRecord]] = {}
+    for r in await load_graded_records(
+        db,
+        str(org_id),
+        [m.id for m in members],
+        requirements,
+        today,
+        grading.include_current_month,
+    ):
+        records_by_user.setdefault(r.user_id, []).append(r)
+
+    # Batch-fetch all active waivers / leaves for the org
+    waivers_by_user = await fetch_org_waivers(db, str(org_id))
 
     matrix = []
     # The evaluation cut-off can differ per requirement (each may override
@@ -3252,19 +3252,29 @@ async def get_member_period_status(
             "generated_at": datetime.now(timezone.utc).isoformat(),
         }
 
-    records_result = await db.execute(
-        select(TrainingRecord).where(
-            TrainingRecord.organization_id == org_id,
-            TrainingRecord.user_id.in_([m.id for m in members]),
-        )
-    )
+    today = await resolve_org_today(db, org_id)
+    org_include_current = await get_org_include_current_month(db, str(org_id))
+
+    # The records the standing grades from, plus the selected period's
+    # completions the activity columns count — not every record on file.
     records_by_user: dict = {}
-    for r in records_result.scalars().all():
+    for r in await load_graded_records(
+        db,
+        str(org_id),
+        [m.id for m in members],
+        requirements,
+        today,
+        org_include_current,
+        also=(
+            and_(
+                TrainingRecord.status == TrainingStatus.COMPLETED,
+                TrainingRecord.completion_date.between(start_date, end_date),
+            ),
+        ),
+    ):
         records_by_user.setdefault(r.user_id, []).append(r)
 
     waivers_by_user = await fetch_org_waivers(db, str(org_id))
-    today = await resolve_org_today(db, org_id)
-    org_include_current = await get_org_include_current_month(db, str(org_id))
 
     # Compliance thresholds, read as the matrix reads them. `or` here turned a
     # configured 0% threshold into the 100% default.

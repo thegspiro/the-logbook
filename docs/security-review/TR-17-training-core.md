@@ -1107,7 +1107,7 @@ to reach the endpoint at all, but the same PII-in-cache class as TR2-1.
 test: `apiCache.test.ts` → `'returns false for the training-session approval
 roster'`.
 
-#### TR2-4 — LOW (abuse resistance) — `get_training_dashboard_summary` is an unbounded per-request scan, now uncached — 🚩 FLAGGED
+#### TR2-4 — LOW (abuse resistance) — `get_training_dashboard_summary` is an unbounded per-request scan, now uncached — ✅ FIXED (2026-10-05), certification residual open
 
 Also raised by Codex, against the TR2-1 fix itself. `get_training_dashboard_summary`
 (`training.py`) loads every active `User` in the org, every active
@@ -1120,8 +1120,9 @@ caching it is the HIPAA-shaped problem TR2-1/TR2-3 close), which means every
 mount or manual refresh now re-runs this unbounded scan against the live
 database.
 
-See `docs/KNOWN_LIMITATIONS.md` → "Training — Dashboard Summary Is an
-Unbounded Per-Request Scan". Not fixed here: the query needs a
+See `docs/KNOWN_LIMITATIONS.md` → "Training — Compliance Grading Still
+Reads Full History for Certifications and One-Time Requirements" (the
+residual, after the fix below). Not fixed in pass 2: the query needs a
 date-window-aware bound (e.g. limiting `TrainingRecord` rows to what each
 requirement's own lookback/recertification window actually needs, matching
 `training_compliance.py`'s `get_requirement_date_window` logic) or a move to
@@ -1132,6 +1133,10 @@ drive-by change alongside a cache-exclusion security fix. Mirrors the same
 abuse-resistance class as TR2-2 (unbounded per-request read that grows with
 department history), and the fix removing this endpoint's cache-based
 mitigation makes it more pressing than TR2-2, not less.
+
+**Fixed (2026-10-05), on the owner's decision ("bound the records loaded via
+each requirement's date window — same results"):** fixed together with TR4-2.
+See the fix note there.
 
 ### Verified good ✅ (pass 2, not previously stated this way)
 
@@ -1414,7 +1419,7 @@ role_ids=None)` into `training_compliance.py` — the exact precedence
 > `AttributeError` until fixed, confirming the helper's stricter contract
 > rather than a false positive.
 
-### TR4-2 — LOW (abuse resistance) — `get_compliance_matrix` has its own unbounded record scan, distinct from TR2-4 — 🚩 FLAGGED
+### TR4-2 — LOW (abuse resistance) — `get_compliance_matrix` has its own unbounded record scan, distinct from TR2-4 — ✅ FIXED (2026-10-05), certification residual open
 
 **Reported by Codex on PR #2455; confirmed.** `get_compliance_matrix`
 loads every active member, requirement, and `TrainingRecord` for the org
@@ -1433,6 +1438,43 @@ entry (not folded into TR2-4's, since fixing TR2-4 would not fix this).
 **Impact:** LOW — same-org, `training.manage`-gated, and bounded by
 department size on the member/requirement axes even though the record axis
 is not; same abuse-resistance class as TR2-2/TR2-4/TR3-2.
+
+**Fixed (2026-10-05), with TR2-4, on the owner's decision:** both endpoints
+now load records through `load_graded_records`
+(`training_compliance.py`). So do the other department-wide graders found
+loading every record into the shared grader: `compute_org_compliance_tally`,
+`get_member_period_status`, the annual/monthly compliance report and the
+profile card's `get_compliance_summary`. The load is bounded by
+`graded_records_clause`, which follows `_grade_member_requirement` branch by
+branch. Each requirement takes its window from `completion_window`, which is
+the frequency window narrowed by `recency_days` and resolved on the grader's
+own per-requirement as-of date. `TrainingService._preload_window` now uses
+the same helper. A caller's own extra reads (the dashboard's
+expiring/recent/year lists, the roster's period, the report's certificate
+count) are OR'd in. Records are ordered by id, so ties resolve the same way
+in any subset.
+
+Results are identical, not approximately equal.
+`tests/test_graded_records_bounded_load.py` grades an eight-year fixture
+bounded and unbounded. It covers every requirement type, frequency and
+due-date type, plus profiles, waivers, grandfathering, NULL-date,
+future-dated and non-completed records. It asserts that every caller's
+output matches and that every member × requirement cell matches on seven
+evaluation dates under both `include_current_month` settings. It also
+asserts that the windowed load excludes out-of-window and unread-status
+rows. Mutating a bound by one day, dropping the as-of shift, bounding
+certifications by their window or dropping the IN_PROGRESS read each fails
+it.
+
+**Residual (still unbounded):** certification requirements without
+`recency_days`, which load the member's whole COMPLETED history. The
+name/registry-code substring match is case-folded by Python and cannot be
+reproduced exactly by a collation-dependent SQL `LIKE`, so bounding it is
+an owner decision, not a drive-by. Also unbounded: one-time requirements
+without `recency_days`, which have no window, and the fallback types'
+IN_PROGRESS read. Recorded in `docs/KNOWN_LIMITATIONS.md` → "Training —
+Compliance Grading Still Reads Full History for Certifications and One-Time
+Requirements".
 
 ### TR4-3 — LOW/MED (Pitfall #29) — Three endpoints, three different definitions of "compliant" — ✅ FIXED (2026-10-05)
 
@@ -1836,3 +1878,12 @@ No files changed by this pass other than this findings doc and
     than becoming the default. The hardcoded type set is replaced by the
     `TrainingType` enum.
   - Tests: `tests/test_training_import_enum_rows.py`.
+
+- **TR2-4 / TR4-2 (unbounded compliance record scans).** Owner decision:
+  bound the records loaded via each requirement's date window, with
+  identical results. `load_graded_records` / `graded_records_clause`
+  (`training_compliance.py`) now feed every department-wide grader.
+  Certifications without `recency_days`, one-time requirements without it,
+  and the fallback types' IN_PROGRESS read stay unbounded because exact
+  equivalence needs them. See the fix note under TR4-2. Tests:
+  `tests/test_graded_records_bounded_load.py`.

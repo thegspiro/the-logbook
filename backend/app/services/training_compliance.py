@@ -8,9 +8,9 @@ Used by both the dashboard admin-summary and the training compliance-matrix endp
 import calendar
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, and_, false, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -156,6 +156,22 @@ def get_requirement_date_window(req, today: date):
         return date(yr, 1, 1), date(yr, 12, 31)
 
 
+def requirement_as_of(req, today: date, org_include_current_month: bool) -> date:
+    """The date ``req`` is graded as of: ``today``, or the end of last month.
+
+    The requirement's own ``include_current_month`` overrides the org default.
+    The grader and :func:`graded_records_clause` both resolve it here, so the
+    records loaded are the records the grader's windows were computed from.
+    """
+    return resolve_as_of_date(
+        today,
+        effective_include_current_month(
+            getattr(req, "include_current_month", None),
+            org_include_current_month,
+        ),
+    )
+
+
 def recency_cutoff(req, today: date) -> Optional[date]:
     """Earliest completion date still fresh enough to count, or None.
 
@@ -194,6 +210,29 @@ def apply_recency(req, records, today: date):
     if recency_cutoff(req, today) is None:
         return records
     return [r for r in records if is_recent_enough(req, r, today)]
+
+
+def completion_window(req, as_of: date) -> Tuple[Optional[date], Optional[date]]:
+    """The completion dates a windowed requirement can count, as of ``as_of``.
+
+    The frequency window (:func:`get_requirement_date_window`) narrowed by the
+    freshness cutoff (:func:`recency_cutoff`). ``(start, None)`` means
+    "``start`` or later", which only a freshness cutoff on an otherwise
+    unbounded (one-time) requirement produces; ``(None, None)`` means any
+    completion date, including none at all.
+
+    This is the window, not the certification rule: a CERTIFICATION
+    requirement ignores its frequency window, so callers handle that type
+    before asking. Shared by :func:`graded_records_clause` and
+    ``TrainingService._preload_window``.
+    """
+    start, end = get_requirement_date_window(req, as_of)
+    if not (start and end):
+        start, end = None, None
+    cutoff = recency_cutoff(req, as_of)
+    if cutoff is not None:
+        start = cutoff if start is None else max(start, cutoff)
+    return start, end
 
 
 def hours_record_counts(req, record) -> bool:
@@ -384,13 +423,7 @@ def _grade_member_requirement(
     # Resolve the effective evaluation date for this requirement (per-requirement
     # override inherits the org default). Everything below — window, proration,
     # and expiry/overdue checks — keys off this date.
-    today = resolve_as_of_date(
-        today,
-        effective_include_current_month(
-            getattr(req, "include_current_month", None),
-            org_include_current_month,
-        ),
-    )
+    today = requirement_as_of(req, today, org_include_current_month)
     start_date, end_date = get_requirement_date_window(req, today)
     _waivers = waivers or []
 
@@ -419,7 +452,9 @@ def _grade_member_requirement(
             as_of=today.isoformat(),
         )
 
-    # Filter completed records within the date window
+    # Filter completed records within the date window. Which records each
+    # branch below reads is mirrored by graded_records_clause, which bounds
+    # the load feeding this function — change one, change the other.
     completed = [r for r in member_records if r.status == TrainingStatus.COMPLETED]
     # A freshness window narrows the pool for every requirement type before the
     # frequency window is applied, so a stale completion can't satisfy anything
@@ -728,6 +763,164 @@ def evaluate_member_requirement(
         join_date=join_date,
     )
     return ev.status, ev.completion_date, ev.expiry_date
+
+
+# The requirement types _grade_member_requirement grades in a typed branch.
+# Every other type falls through to its last branch, the only place a record
+# that is not COMPLETED is read.
+_TYPED_BRANCH_TYPES = frozenset(
+    {
+        RequirementType.HOURS.value,
+        RequirementType.COURSES.value,
+        RequirementType.CERTIFICATION.value,
+        RequirementType.SHIFTS.value,
+        RequirementType.CALLS.value,
+    }
+)
+
+
+def graded_records_clause(
+    requirements: Iterable[TrainingRequirement],
+    today: date,
+    org_include_current_month: bool,
+) -> ColumnElement[bool]:
+    """Every ``TrainingRecord`` the grader can read for any of ``requirements``.
+
+    A filter for the record load that feeds :func:`evaluate_member_requirement`
+    across a whole department (TR2-4, TR4-2), which used to read every record
+    each member ever had. It is exact, not an approximation: grading the
+    records it selects gives the same result as grading all of them, because
+    it selects a superset of what :func:`_grade_member_requirement` reads,
+    branch by branch, for each requirement:
+
+    - **Windowed types** (hours, courses, shifts, calls, and the fallback
+      types) read COMPLETED records with a completion date inside
+      :func:`completion_window`. Every frequency now has a bounded window
+      except ONE_TIME, and so does every rolling requirement, so this is a
+      date range — including biannual hours, whose expired-certificate
+      override reads only the windowed records. A certification-period due
+      date changes nothing here: the grader never reads one.
+    - **ONE_TIME without a freshness cutoff** has no window. The grader reads
+      every COMPLETED record, including one with no completion date, so all
+      of them are selected — that requirement still costs the member's full
+      completed history.
+    - **CERTIFICATION** ignores the frequency window and reads every COMPLETED
+      record :func:`certification_record_matches` accepts. With a freshness
+      cutoff that is "completed on or after the cutoff". Without one it is
+      the member's full completed history: the match is partly a
+      case-insensitive substring test (requirement name in course name,
+      registry code in certification number), and SQL's ``LIKE`` folds case
+      by the column collation, not by Python's ``str.lower``, so pushing it
+      into the query could drop a record the grader would have counted.
+    - **Fallback types** (skills evaluation, checklist, knowledge test) also
+      read IN_PROGRESS records of any date when nothing completed matches,
+      so every IN_PROGRESS record is selected while one is active.
+
+    SCHEDULED, CANCELLED and FAILED records are never read and never loaded.
+    Grandfathering, catch-up deadlines and waivers read the member and the
+    waiver tables, not records, so they widen nothing.
+
+    ``today`` and ``org_include_current_month`` must be the values the
+    caller grades with: windows are resolved per requirement through
+    :func:`requirement_as_of`, as the grader resolves them.
+    """
+    spans: List[Tuple[date, Optional[date]]] = []
+    all_completed = False
+    in_progress = False
+    for req in requirements:
+        as_of = requirement_as_of(req, today, org_include_current_month)
+        req_type = getattr(req.requirement_type, "value", req.requirement_type)
+        if req_type not in _TYPED_BRANCH_TYPES:
+            in_progress = True
+        if req_type == RequirementType.CERTIFICATION.value:
+            start, end = recency_cutoff(req, as_of), None
+        else:
+            start, end = completion_window(req, as_of)
+        if start is None:
+            all_completed = True
+        elif end is None or start <= end:
+            # start > end: the freshness cutoff falls after the window closes,
+            # so the grader's windowed pool is empty and nothing is needed.
+            spans.append((start, end))
+
+    clauses: List[ColumnElement[bool]] = []
+    completed = TrainingRecord.status == TrainingStatus.COMPLETED
+    if all_completed:
+        clauses.append(completed)
+    elif spans:
+        clauses.append(
+            and_(
+                completed,
+                or_(
+                    *(
+                        (
+                            TrainingRecord.completion_date >= start
+                            if end is None
+                            else TrainingRecord.completion_date.between(start, end)
+                        )
+                        for start, end in _merge_spans(spans)
+                    )
+                ),
+            )
+        )
+    if in_progress:
+        clauses.append(TrainingRecord.status == TrainingStatus.IN_PROGRESS)
+    return or_(*clauses) if clauses else false()
+
+
+def _merge_spans(
+    spans: List[Tuple[date, Optional[date]]],
+) -> List[Tuple[date, Optional[date]]]:
+    """Coalesce overlapping or adjacent date ranges (``None`` end = open)."""
+    merged: List[Tuple[date, Optional[date]]] = []
+    for start, end in sorted(spans, key=lambda s: s[0]):
+        if merged:
+            last_start, last_end = merged[-1]
+            if last_end is None or start <= last_end + timedelta(days=1):
+                merged[-1] = (
+                    last_start,
+                    None if last_end is None or end is None else max(last_end, end),
+                )
+                continue
+        merged.append((start, end))
+    return merged
+
+
+async def load_graded_records(
+    db: AsyncSession,
+    org_id: str,
+    member_ids: Sequence[str],
+    requirements: Iterable[TrainingRequirement],
+    today: date,
+    org_include_current_month: bool,
+    *,
+    also: Sequence[ColumnElement[bool]] = (),
+) -> List[TrainingRecord]:
+    """The records needed to grade ``member_ids`` against ``requirements``.
+
+    Bounded by :func:`graded_records_clause`. ``also`` widens the load for
+    whatever else the caller reads from the same rows (the dashboard's
+    expiring and recent lists, a report's certificate count); each is OR'd in,
+    so it can only add records.
+
+    Ordered by id so the grader's ties (``max`` over equal completion dates)
+    and any caller's ``[:5]`` resolve the same way whatever subset is loaded.
+    """
+    if not member_ids:
+        return []
+    result = await db.execute(
+        select(TrainingRecord)
+        .where(
+            TrainingRecord.organization_id == org_id,
+            TrainingRecord.user_id.in_([str(m) for m in member_ids]),
+            or_(
+                graded_records_clause(requirements, today, org_include_current_month),
+                *also,
+            ),
+        )
+        .order_by(TrainingRecord.id)
+    )
+    return list(result.scalars().all())
 
 
 def _find_matching_profile(
@@ -1288,27 +1481,26 @@ async def compute_org_compliance_tally(
 
     grading = ComplianceGrading.from_config(await _load_compliance_config(db, org_id))
 
-    # Get all training records for these members
-    records_result = await db.execute(
-        select(TrainingRecord).where(
-            TrainingRecord.organization_id == org_id,
-            TrainingRecord.user_id.in_([m.id for m in members]),
-        )
-    )
-    all_records = records_result.scalars().all()
+    # The department's date, as every other compliance view uses: the dashboard
+    # percentage and the matrix it links to must grade against the same day.
+    # Resolved before the record load, which is bounded by the windows it sets.
+    if today is None:
+        today = await resolve_org_today(db, org_id)
 
-    # Build lookup: user_id -> [records]
     records_by_user: Dict[str, list] = {}
-    for r in all_records:
+    for r in await load_graded_records(
+        db,
+        org_id,
+        [m.id for m in members],
+        requirements,
+        today,
+        grading.include_current_month,
+    ):
         records_by_user.setdefault(r.user_id, []).append(r)
 
     # Fetch waivers
     waivers_by_user = await fetch_org_waivers(db, str(org_id))
 
-    # The department's date, as every other compliance view uses: the dashboard
-    # percentage and the matrix it links to must grade against the same day.
-    if today is None:
-        today = await resolve_org_today(db, org_id)
     compliant_count = 0
     not_applicable_count = 0
 

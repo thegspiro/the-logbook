@@ -43,6 +43,7 @@ from app.services.training_compliance import (
     compute_org_compliance_pct,
     evaluate_member_requirement,
     get_org_include_current_month,
+    load_graded_records,
     member_join_date,
     requirement_applies_to_user,
     tally_standing,
@@ -928,14 +929,23 @@ class AnnualComplianceReportService:
             )
             year_records = records_result.scalars().all()
 
-            # All records (for compliance evaluation -- not date-filtered)
-            all_records_result = await self.db.execute(
-                select(TrainingRecord).where(
-                    TrainingRecord.organization_id == organization_id,
-                    TrainingRecord.user_id.in_(member_ids),
-                )
+            # The records the standing grades from, bounded by each
+            # requirement's window, plus every completed certificate: the
+            # active/expired certificate counts below read all of them.
+            all_records = await load_graded_records(
+                self.db,
+                organization_id,
+                member_ids,
+                requirements,
+                today,
+                org_include_current,
+                also=(
+                    and_(
+                        TrainingRecord.status == TrainingStatus.COMPLETED,
+                        TrainingRecord.certification_number.isnot(None),
+                    ),
+                ),
             )
-            all_records = all_records_result.scalars().all()
         else:
             year_records = []
             all_records = []

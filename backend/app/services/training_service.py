@@ -1436,9 +1436,16 @@ class TrainingService:
         completion to find one older than the window (the overdue case a
         window-bounded search would otherwise miss) — or when a
         requirement's own window is open-ended.
+
+        The per-requirement window is
+        ``training_compliance.completion_window``, which the department-wide
+        compliance load (``graded_records_clause``) also uses. The exemptions
+        above are this evaluator's own: ``check_requirement_progress`` reads
+        due-date anchors the compliance grader does not, so that load can
+        bound cases this one cannot.
         """
         from app.models.training import RequirementType
-        from app.services.training_compliance import recency_cutoff
+        from app.services.training_compliance import completion_window
 
         starts = []
         ends = []
@@ -1455,13 +1462,12 @@ class TrainingService:
                 or cls._due_date_type_str(req) == "certification_period"
             ):
                 return None
-            start, end = cls._get_date_window(req, today)
-            # Mirrors check_requirement_progress: a freshness cutoff narrows
-            # the start and closes an open-ended window at today.
-            cutoff = recency_cutoff(req, today)
-            if cutoff is not None:
-                start = cutoff if start is None else max(start, cutoff)
-                end = end or today
+            start, end = completion_window(req, today)
+            # Mirrors check_requirement_progress: a freshness cutoff on an
+            # open-ended window (the only way to get a start with no end)
+            # closes it at today.
+            if start is not None and end is None:
+                end = today
             if start is None or end is None:
                 return None
             starts.append(start)
