@@ -4551,10 +4551,6 @@ Found while fixing that, and left as they are:
   id came back, or the approval row is missing). The route keeps its 400 for
   that rather than a 404, so a caller is not told nothing happened. No screen
   calls the route.
-- **The event request screen hides the reason.** `EventRequestsTab` shows the
-  server's text on a failed schedule only when it mentions a double-booked
-  room, and a failed postpone as "Failed to postpone request", so a coordinator
-  never reads that the event's attendance is closed.
 
 ## Equipment Checks — Basic Apparatus, and Checks Filed Ahead of Their Shift (2026-09-30)
 
