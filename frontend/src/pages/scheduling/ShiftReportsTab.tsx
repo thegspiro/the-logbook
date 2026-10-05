@@ -241,6 +241,33 @@ export const ShiftReportsTab: React.FC = () => {
       });
   }, []);
 
+  // Whether any report is sitting flagged while review is switched off. The
+  // review endpoint does not consult `report_review_required`, so a report
+  // flagged before an administrator turned review off stays flagged — and
+  // with the Flagged view gated on the setting alone it was in no list an
+  // officer could act from. Asked only when review is off: with it on the
+  // view is always offered, and a department that never flags sees nothing
+  // new because the answer is empty.
+  const [hasFlaggedWithReviewOff, setHasFlaggedWithReviewOff] = useState(false);
+  useEffect(() => {
+    if (!canManage || !config || config.report_review_required) return;
+    let cancelled = false;
+    shiftCompletionService
+      .getFlaggedReports()
+      .then((flagged) => {
+        if (!cancelled) setHasFlaggedWithReviewOff(flagged.length > 0);
+      })
+      .catch(() => {
+        /* the view stays hidden, exactly as before this probe existed */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canManage, config]);
+  // Kept while the view is open so clearing the last flag does not pull the
+  // tab out from under the officer who just did it.
+  const showFlaggedView = Boolean(config?.report_review_required) || hasFlaggedWithReviewOff || viewMode === 'flagged';
+
   // Rating display helpers using config
   const ratingLabel = config?.rating_label || 'Performance Rating';
   const ratingScaleType = config?.rating_scale_type || 'stars';
@@ -1667,7 +1694,7 @@ export const ShiftReportsTab: React.FC = () => {
                 <ClipboardCheck className="h-3.5 w-3.5" /> Review Queue
               </button>
             )}
-            {config?.report_review_required && (
+            {showFlaggedView && (
               <button
                 onClick={() => setViewMode('flagged')}
                 className={`inline-flex shrink-0 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${

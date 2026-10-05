@@ -1319,19 +1319,6 @@ equipment row out, and the compliance report marks an apparatus "No checklist
 applies" (`has_checklist`) rather than showing zero checks that read like
 missed ones.
 
-## Shift Reports — Flagged Reports Are Unreachable With Review Off (2026-08-10)
-
-The Review Queue and Flagged buttons render only while the organization has
-`report_review_required` on. The review endpoint does not consult that flag, so
-a report can be flagged and then become invisible the moment an administrator
-switches review off — it is not in the queue, not in Flagged, and Filed by Me
-shows it with a badge but no way to act on it.
-
-No data is lost and turning review back on restores the views, so this is
-recorded rather than fixed: the alternative is showing a Flagged view to
-departments that never flag anything. Worth revisiting as "show the Flagged
-view whenever a flagged report exists".
-
 ## Screenshot Harness — Camera Viewfinders Cannot Be Photographed (2026-08-12)
 
 Three placeholders asked for a live camera viewfinder with a code being read:

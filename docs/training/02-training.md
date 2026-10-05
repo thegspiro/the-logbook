@@ -1316,10 +1316,11 @@ The shift report system supports a multi-stage review workflow:
 
 **For Reviewers:**
 
-- Navigate to the **Review Queue** view. It and **Flagged** appear in the view
-  strip only while **Require review before a report reaches the trainee** is on
-  in Shift Report settings; with review switched off, a report can still be
-  flagged through the API but no view in the tab lists it
+- Navigate to the **Review Queue** view. It appears in the view strip only
+  while **Require review before a report reaches the trainee** is on in Shift
+  Report settings. **Flagged** appears whenever review is on, and also with
+  review switched off while any report is still flagged — a flag set before
+  review was turned off stays reachable until someone re-reviews it
 - Review reports and approve or flag them — the review modal displays the full report content (hours, calls, rating, strengths, improvements, narrative, skills with scores, tasks) for complete context
 - **Batch review** _(2026-04-07)_ — Select multiple reports using checkboxes, toggle select-all, then click "Approve Selected" or "Flag Selected" to review up to 100 reports at once
 - Navigate to the **Flagged** view _(2026-04-07)_ — Reports previously flagged appear here for follow-up. Flagged reports can be re-reviewed and approved
