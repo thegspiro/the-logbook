@@ -928,6 +928,7 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Saw:** `&lt;script&gt;…` stored and shown literally; the long one → 500, log `DataError (1406, "Data too long for column 'name'")`.
 **Where:** `election_service.py` ~8245 (HTML-escaped into `String(200)`); `CandidateManagement.tsx`; `ElectionResults.tsx`.
 **Fix:** S15 stores the name as typed (`test_w50_s15.py`; S16 is the test-ballot exemption, see W50-18). **Confirmed live** (`notes/CONFIRM-backend.md`, CONFIRM-12/16): a 62-character write-in of quotes and angle brackets → 201, stored and returned exactly once and unescaped in `/candidates`, `/results` and the certified PDF. The render check that a stored `<b>` shows as text once is frontend round 2.
+**Stored rows (2026-10-05, owner decision):** migration `b3e8d5a1c947` unescapes every stored write-in name that `html.unescape` changes and logs the candidate ids. Test: `test_unescape_write_in_names_migration.py`.
 
 ### W50-43 — MED — Every ballot page load sends the lookup twice, halving the shared 10/min budget — ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
 
