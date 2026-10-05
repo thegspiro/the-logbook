@@ -503,6 +503,13 @@ export type RequestStatus = (typeof RequestStatus)[keyof typeof RequestStatus];
  */
 export const DRIVER_NOT_QUALIFIED_CODE = 'LB-SCHED-001';
 
+/**
+ * Support code for a two-way shift exchange whose members are not both
+ * qualified for the seat they would take. The approve flow keys its
+ * "approve anyway" offer off this, not the message text.
+ */
+export const EXCHANGE_NOT_QUALIFIED_CODE = 'LB-SCHED-002';
+
 // The qualification a course certifies its holder in. Values must match
 // QUALIFICATIONS in backend/app/services/qualification_service.py — a course
 // that names a code the backend does not know grants nothing, so a test parses

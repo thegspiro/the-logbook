@@ -255,6 +255,15 @@ A pending swap is cancelled, and both members told, when the seat it names goes
 away — withdrawal, removal, decline, reassignment, shift cancellation, approved
 time off, leave, or another approved swap of the same seat.
 
+A **two-way exchange** (a requested shift and a target member) requires each
+member to be qualified for the seat they take — the same eligibility rule as
+signup. It is refused when submitted, `GET
+/scheduling/shifts/{id}/exchange-candidates` lists only qualifying pairs, and
+approval re-checks it: a pair that lapsed while pending is refused with
+`LB-SCHED-002`, which a duty officer may override (`override_qualification` on
+the review, noted on the request and audited). One-way offers and moves are not
+gated by this rule.
+
 `swap_offer_expiry` is a daily sweep closing offers still pending the day
 before the shift, notifying both members and the duty officer. A pending offer
 holds the seat with the member who made it, so left alone it survived the shift

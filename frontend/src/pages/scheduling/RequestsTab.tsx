@@ -15,12 +15,15 @@ import type { SwapRequest, TimeOffRequest } from '../../types/scheduling';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDate, formatTime, formatDateCustom } from '../../utils/dateFormatting';
-import { getErrorMessage } from '../../utils/errorHandling';
-import { REQUEST_STATUS_COLORS, RequestStatus } from '../../constants/enums';
+import { getErrorMessage, toAppError } from '../../utils/errorHandling';
+import { EXCHANGE_NOT_QUALIFIED_CODE, REQUEST_STATUS_COLORS, RequestStatus } from '../../constants/enums';
+import { useConfirm } from '../../contexts/ConfirmContext';
+import type { SwapRequestReview } from '../../modules/scheduling/types';
 
 const REQUESTS_PAGE_SIZE = 20;
 
 export const RequestsTab: React.FC = () => {
+  const { confirm } = useConfirm();
   const { checkPermission, user: currentUser } = useAuthStore();
   const tz = useTimezone();
   const canManage = checkPermission('scheduling.manage');
@@ -161,16 +164,42 @@ export const RequestsTab: React.FC = () => {
     if (reviewing) reviewModalRef.current?.querySelector<HTMLElement>('textarea')?.focus();
   }, [reviewing]);
 
+  /**
+   * Review a swap, offering the qualification override when the server
+   * refuses an exchange with LB-SCHED-002. Resolves false when the officer
+   * declines the override, leaving the request pending.
+   */
+  const reviewSwap = async (id: string, review: SwapRequestReview): Promise<boolean> => {
+    try {
+      await schedulingService.reviewSwapRequest(id, review);
+      return true;
+    } catch (err) {
+      const appError = toAppError(err);
+      if (review.status !== 'approved' || appError.code !== EXCHANGE_NOT_QUALIFIED_CODE) throw err;
+      const overridden = await confirm({
+        title: 'Approve without qualification?',
+        message: `${appError.message}. Approving anyway puts them in that seat. The override is recorded on the request and in the audit log.`,
+        confirmLabel: 'Approve anyway',
+        cancelLabel: 'Keep it pending',
+        variant: 'warning',
+      });
+      if (!overridden) return false;
+      await schedulingService.reviewSwapRequest(id, { ...review, override_qualification: true });
+      return true;
+    }
+  };
+
   const handleReview = async (action: 'approved' | 'denied') => {
     if (!reviewing) return;
     setSubmittingReview(true);
     setReviewAction(action);
     try {
       if (reviewing.type === 'swap') {
-        await schedulingService.reviewSwapRequest(reviewing.id, {
+        const reviewed = await reviewSwap(reviewing.id, {
           status: action,
           reviewer_notes: reviewNotes,
         });
+        if (!reviewed) return;
       } else {
         await schedulingService.reviewTimeOff(reviewing.id, {
           status: action,
@@ -201,7 +230,7 @@ export const RequestsTab: React.FC = () => {
     setQuickReviewing(id);
     try {
       if (type === 'swap') {
-        await schedulingService.reviewSwapRequest(id, { status: action });
+        if (!(await reviewSwap(id, { status: action }))) return;
       } else {
         await schedulingService.reviewTimeOff(id, { status: action });
       }
@@ -353,6 +382,7 @@ export const RequestsTab: React.FC = () => {
                               {req.requesting_shift_start_time
                                 ? ` ${formatTime(req.requesting_shift_start_time, tz)}`
                                 : ''}
+                              {req.target_user_id ? ` with ${req.target_user_name || 'a member'}` : ''}
                             </>
                           ) : req.requesting_shift_id ? (
                             <> {' \u2192 '} Requested shift (details unavailable)</>
