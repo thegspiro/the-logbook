@@ -304,11 +304,13 @@ const SkillsTestingTemplatesTab: React.FC = () => {
             className="form-input placeholder:text-theme-text-muted pr-4 pl-10"
           />
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="form-input px-3"
+            className="form-input flex-1 px-3"
+            // Inline: index.css resets min-width on phone-width selects in unlayered CSS.
+            style={{ minWidth: '9.5rem' }}
             aria-label="Filter by status"
           >
             <option value="">All Statuses</option>
@@ -318,7 +320,7 @@ const SkillsTestingTemplatesTab: React.FC = () => {
           </select>
           <button
             onClick={() => setLibraryOpen(true)}
-            className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors"
+            className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors"
           >
             <BookOpen className="h-4 w-4" />
             <span className="hidden sm:inline">Add from library</span>
@@ -326,7 +328,7 @@ const SkillsTestingTemplatesTab: React.FC = () => {
           </button>
           <button
             onClick={() => void navigate('/training/skills-testing/templates/new')}
-            className="btn-primary flex items-center gap-2 font-medium"
+            className="btn-primary flex shrink-0 items-center gap-2 font-medium whitespace-nowrap"
           >
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">New Template</span>
