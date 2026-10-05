@@ -538,6 +538,24 @@ MemberLeaveOfAbsence ──auto-link──> TrainingWaiver (unless exempt_from_t
 > list skips the Phases step of the wizard rather than showing a step to leave
 > empty.
 
+### Existing-Member Exemption and Catch-Up _(2026-10-03)_
+
+A requirement can separate members who joined before a cutoff from those who
+joined after. Join date is hire date, else account creation. Migration
+`d058b5e7c1f4` adds three nullable date columns; `NULL` keeps prior behaviour.
+
+| Field                      | Meaning                                                                                                                                                  |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `new_member_cutoff_date`   | Members who joined before it are "existing"                                                                                                              |
+| `existing_member_deadline` | With a cutoff: existing members have until this date; an unmet requirement is `catch_up` and counts neither way. Without it: existing members are exempt |
+| `applies_to_joined_before` | Set on the preserved original when a change is saved **for new members only**; a copy carries the change                                                 |
+
+Adding a requirement to a program can **waive** it for members already enrolled.
+Every screen that decides which requirements grade a member goes through the
+shared helper with the join date and role ids; a sweep test fails on a call that
+omits the join date. Splits and grandfathering changes are audited. Exports and
+the forecast print N/A where a requirement does not apply.
+
 ### Enrollment Expiry and Reopen _(2026-08-09)_
 
 `EnrollmentStatus.EXPIRED` was **read but never written** until 2026-08-09.

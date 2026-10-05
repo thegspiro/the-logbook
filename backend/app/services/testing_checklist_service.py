@@ -24,6 +24,7 @@ from app.models.testing_checklist import (
 )
 from app.models.user import Organization, Position, User, user_positions
 from app.schemas.testing_checklist import TestingCheckUpsert
+from app.utils.member_names import format_display_name
 from app.utils.org_timezone import resolve_org_today
 
 # A run covers the pages the router declares — a few hundred. The cap is well
@@ -217,14 +218,20 @@ class TestingChecklistService:
         if not wanted:
             return {}
         result = await self.db.execute(
-            select(User.id, User.first_name, User.last_name, User.username).where(
+            select(
+                User.id,
+                User.first_name,
+                User.last_name,
+                User.preferred_name,
+                User.username,
+            ).where(
                 User.id.in_(wanted),
                 User.organization_id == organization_id,
             )
         )
         return {
-            str(user_id): f"{first or ''} {last or ''}".strip() or username
-            for user_id, first, last, username in result.all()
+            str(user_id): format_display_name(first, last, preferred) or username
+            for user_id, first, last, preferred, username in result.all()
         }
 
     async def resolve_tester_names(

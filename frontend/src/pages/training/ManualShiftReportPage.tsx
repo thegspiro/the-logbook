@@ -31,7 +31,9 @@ import { useTimezone } from '../../hooks/useTimezone';
 import { addCalendarDays, getTodayLocalDate } from '../../utils/dateFormatting';
 import { enumLabel } from '../../utils/displayValue';
 import { getErrorMessage } from '../../utils/errorHandling';
-import { DEFAULT_CALL_TYPE_OPTIONS } from '../../modules/scheduling/constants/shiftReportConstants';
+import { displayNameOf } from '../../utils/memberName';
+import { labelCallTypeChoices } from '../../modules/scheduling/components/callTypeChoices';
+import { useOrgCallTypes } from '../../modules/scheduling/hooks/useCallTypeLabels';
 import { StarRating } from '../../modules/scheduling/components/StarRating';
 import { Breadcrumbs } from '../../components/ux';
 import type { BatchShiftReportCreate, CrewMemberEvaluation, TrainingModuleConfig } from '../../types/training';
@@ -69,6 +71,7 @@ export const ManualShiftReportPage: React.FC = () => {
   const [endTime, setEndTime] = useState('');
   const [callsResponded, setCallsResponded] = useState(0);
   const [callTypes, setCallTypes] = useState<string[]>([]);
+  const orgCallTypes = useOrgCallTypes();
   const [narrative, setNarrative] = useState('');
 
   // Crew
@@ -149,9 +152,10 @@ export const ManualShiftReportPage: React.FC = () => {
     const q = memberSearch.toLowerCase();
     return members
       .filter((m) => {
-        const name = `${m.first_name || ''} ${m.last_name || ''}`.toLowerCase();
+        const name = displayNameOf(m).toLowerCase();
+        const legalName = `${m.first_name || ''} ${m.last_name || ''}`.toLowerCase();
         return (
-          (name.includes(q) || (m.username || '').toLowerCase().includes(q)) &&
+          (name.includes(q) || legalName.includes(q) || (m.username || '').toLowerCase().includes(q)) &&
           !crew.some((c) => c.user_id === m.id) &&
           m.id !== user?.id
         );
@@ -160,6 +164,8 @@ export const ManualShiftReportPage: React.FC = () => {
   }, [memberSearch, members, crew, user?.id]);
 
   const addMember = (m: User) => {
+    // The crew list is the training record of who rode, so it carries the
+    // legal name even though the picker that chose the member shows theirs.
     const name = `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.username;
     setCrew((prev) => [...prev, { user_id: m.id, user_name: name }]);
     setSelectedIds((prev) => new Set([...prev, m.id]));
@@ -262,7 +268,9 @@ export const ManualShiftReportPage: React.FC = () => {
     }
   };
 
-  const callTypeOptions = config?.shift_review_call_types ?? DEFAULT_CALL_TYPE_OPTIONS;
+  // The department's one call-type list, by label: a report not linked to a
+  // shift stores its call types as text.
+  const callTypeOptions = labelCallTypeChoices(orgCallTypes, callTypes).map((c) => c.value);
   const includeTraining = config?.shift_reports_include_training ?? true;
 
   return (
@@ -477,9 +485,7 @@ export const ManualShiftReportPage: React.FC = () => {
                   className="hover:bg-theme-surface-hover flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors"
                 >
                   <UserIcon className="text-theme-text-muted h-3.5 w-3.5 shrink-0" />
-                  <span>
-                    {m.first_name} {m.last_name}
-                  </span>
+                  <span>{displayNameOf(m)}</span>
                   <span className="text-theme-text-muted text-xs">@{m.username}</span>
                 </button>
               ))}

@@ -291,6 +291,36 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Probationary members can now sign in and be scheduled (2026-10-03)
+
+An account whose status is **Probationary** used to count as inactive: the
+member was refused at sign-in with _"Account is inactive"_ and could not be
+assigned to a shift. Both now work, because **Active and Probationary are both
+treated as active** everywhere the application asks. **If you have Probationary
+accounts you deliberately kept from signing in, they can sign in after this
+upgrade.** Set such members to Inactive or Suspended, or exclude the membership
+type in Scheduling settings if the concern is shift self-signup. No migration
+runs; the change is in code.
+
+### Training requirements can exempt existing members (2026-10-03)
+
+Migration `d058b5e7c1f4` adds three nullable date columns for it. Every
+requirement keeps today's behaviour until someone sets a cutoff, so nothing
+changes at upgrade. Two things do, for every department: the dashboard,
+Compliance Matrix and member status now **honour role-scoped requirements**
+(My Training always did), and the compliance exports and forecast print **N/A**
+where a requirement does not apply to a member, rather than grading them
+against it. Expect some percentages to move once.
+
+### Scheduled reminders no longer duplicate across workers (2026-10-04)
+
+A worker whose scheduler claim had lapsed could take it back without learning
+another worker held it, so on a multi-worker deployment two or more workers ran
+every scheduled task (event and shift reminders, certification-expiry and
+inactivity alerts) and members received them more than once. Renewal is now
+conditional on still holding the claim (CRON-40). Nothing to configure. If you
+saw duplicate reminders, they should stop after the restart.
+
 ### Close any election that is OPEN before you upgrade (2026-09-30)
 
 Do not upgrade over an election whose status is **Open**. Close it first, or

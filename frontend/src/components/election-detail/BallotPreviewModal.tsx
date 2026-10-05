@@ -1,8 +1,8 @@
-import React, { useCallback } from 'react';
+import React from 'react';
 import type { Election, Candidate, BallotItem } from '../../types/election';
 import { VoteType, BallotItemType } from '../../constants/enums';
 import { formatDate } from '../../utils/dateFormatting';
-import { useOverlaySurface } from '../../hooks/useOverlaySurface';
+import { useDialog } from '../../hooks/useDialog';
 
 interface BallotPreviewModalProps {
   election: Election;
@@ -12,17 +12,10 @@ interface BallotPreviewModalProps {
 }
 
 const BallotPreviewModal: React.FC<BallotPreviewModalProps> = ({ election, candidates, onClose, timezone }) => {
-  // Mounted only while open.
-  useOverlaySurface();
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    },
-    [onClose]
-  );
+  // Mounted only while open. The preview has nothing focusable above its
+  // Close button, so without the trap focus stayed on the opener behind the
+  // overlay and a React-level Escape handler never saw the key (W50-61).
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
 
   const getPreviewCandidatesForItem = (item: BallotItem): Candidate[] => {
     if (item.position) {
@@ -37,9 +30,11 @@ const BallotPreviewModal: React.FC<BallotPreviewModalProps> = ({ election, candi
       role="dialog"
       aria-modal="true"
       aria-labelledby="ballot-preview-title"
-      onKeyDown={handleKeyDown}
     >
-      <div className="bg-theme-surface-secondary max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-lg shadow-xl">
+      <div
+        ref={dialogRef}
+        className="bg-theme-surface-secondary max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-lg shadow-xl"
+      >
         <div className="sticky top-0 z-10 bg-amber-500 px-4 py-2 text-center text-sm font-bold text-amber-900">
           BALLOT PREVIEW — This is how voters will see the ballot
         </div>

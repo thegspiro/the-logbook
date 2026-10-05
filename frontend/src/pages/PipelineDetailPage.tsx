@@ -41,6 +41,7 @@ import { EditProgramModal, PhaseFormModal, RequirementFormModal, MilestoneFormMo
 import { enumLabel } from '../utils/displayValue';
 import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
 import { formatDate } from '../utils/dateFormatting';
+import { formatLegalName, formatMemberName } from '../utils/memberName';
 import { STATUS_META, groupRecordsByPhase, isPhaseGroupComplete } from '../utils/pipelineProgress';
 import { checklistClaimedIds, checklistDoneIds } from '../utils/checklistItems';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -78,8 +79,9 @@ const ELIGIBILITY_META: Record<EligibilityStatus, { label: string; className: st
   concurrent: { label: 'In another program', className: 'text-yellow-700 dark:text-yellow-400' },
 };
 
+// The enrollment picker names members the way the department knows them.
 function eligibilityName(m: MemberEligibility): string {
-  return `${m.first_name ?? ''} ${m.last_name ?? ''}`.trim() || 'Unknown member';
+  return formatMemberName(m) || 'Unknown member';
 }
 
 // ==================== Types ====================
@@ -387,7 +389,11 @@ const EnrollModal: React.FC<{
     return members.filter((m) => {
       if (eligibleOnly && !m.eligible) return false;
       if (!q) return true;
-      return eligibilityName(m).toLowerCase().includes(q) || (m.membership_number ?? '').toLowerCase().includes(q);
+      return (
+        eligibilityName(m).toLowerCase().includes(q) ||
+        formatLegalName(m).toLowerCase().includes(q) ||
+        (m.membership_number ?? '').toLowerCase().includes(q)
+      );
     });
   }, [members, search, eligibleOnly]);
 

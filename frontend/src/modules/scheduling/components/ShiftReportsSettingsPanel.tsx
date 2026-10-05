@@ -31,6 +31,7 @@ import {
   Star,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { Link } from 'react-router';
 import { organizationService } from '../../../services/api';
 import { trainingModuleConfigService } from '../../../services/trainingServices';
 import { schedulingService } from '../services/api';
@@ -39,7 +40,6 @@ import EditableTagList from './EditableTagList';
 import TagChip from './TagChip';
 import { tagChipKeys } from './tagChipKeys';
 import {
-  SAMPLE_CALL_TYPES,
   SAMPLE_SKILLS,
   SAMPLE_TASKS,
   SAMPLE_APPARATUS_SKILLS,
@@ -71,9 +71,9 @@ const SECTIONS: {
   },
   {
     key: 'post-shift',
-    label: 'Post-Shift Validation',
+    label: 'Filing & Validation',
     icon: FileText,
-    description: 'Officer review after shift ends',
+    description: 'Who files reports, and officer review after a shift',
   },
   {
     key: 'training-defaults',
@@ -110,6 +110,7 @@ const SECTIONS: {
 // ─── Defaults ──────────────────────────────────────────────────────────────
 
 const DEFAULT_SETTINGS: ShiftReportSettings = {
+  authorship: 'any_officer',
   post_shift_validation: {
     enabled: true,
     require_officer_report: false,
@@ -151,12 +152,10 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
   const [skillEvalNames, setSkillEvalNames] = useState<Set<string>>(new Set());
 
   // Editable lists for training defaults
-  const [callTypes, setCallTypes] = useState<string[]>([]);
   const [skills, setSkills] = useState<string[]>([]);
   const [tasks, setTasks] = useState<string[]>([]);
 
   // New-item inputs
-  const [newCallType, setNewCallType] = useState('');
   const [newSkill, setNewSkill] = useState('');
   const [newTask, setNewTask] = useState('');
 
@@ -178,6 +177,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
         const saved = obj.shift_reports as Partial<ShiftReportSettings> | undefined;
         if (saved) {
           setSettings({
+            authorship: saved.authorship === 'shift_officer' ? 'shift_officer' : 'any_officer',
             post_shift_validation: { ...DEFAULT_SETTINGS.post_shift_validation, ...saved.post_shift_validation },
           });
         }
@@ -195,7 +195,6 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
       try {
         const config = await trainingModuleConfigService.getConfig();
         setTrainingConfig(config);
-        setCallTypes(config.shift_review_call_types?.length ? config.shift_review_call_types : SAMPLE_CALL_TYPES);
         setSkills(config.shift_review_default_skills?.length ? config.shift_review_default_skills : SAMPLE_SKILLS);
         setTasks(config.shift_review_default_tasks?.length ? config.shift_review_default_tasks : SAMPLE_TASKS);
         setAppTypeSkills(
@@ -277,7 +276,6 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
     await runSaveTraining(
       async () => {
         const result = await trainingModuleConfigService.updateConfig({
-          shift_review_call_types: callTypes,
           shift_review_default_skills: skills,
           shift_review_default_tasks: tasks,
         });
@@ -286,7 +284,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
       'Training feedback defaults saved',
       'Failed to save training defaults'
     );
-  }, [callTypes, skills, tasks, runSaveTraining]);
+  }, [skills, tasks, runSaveTraining]);
 
   const saveAppTypeMapping = useCallback(
     async (updatedSkills: Record<string, string[]>, updatedTasks: Record<string, string[]>) => {
@@ -358,8 +356,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
 
   const trainingDirty =
     trainingConfig &&
-    (JSON.stringify(callTypes) !== JSON.stringify(trainingConfig.shift_review_call_types ?? []) ||
-      JSON.stringify(skills) !== JSON.stringify(trainingConfig.shift_review_default_skills ?? []) ||
+    (JSON.stringify(skills) !== JSON.stringify(trainingConfig.shift_review_default_skills ?? []) ||
       JSON.stringify(tasks) !== JSON.stringify(trainingConfig.shift_review_default_tasks ?? []));
 
   // ── Render ──
@@ -456,11 +453,38 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
         return (
           <div>
             <p className="text-theme-text-muted mb-4 text-sm">
-              After a shift ends, the shift officer can be notified to validate attendance, review hours, and confirm
-              call counts before the shift is finalized.
+              Who files a shift&apos;s completion reports, and whether the shift officer is prompted to validate
+              attendance, hours and call counts before the shift is finalized.
             </p>
 
             <div className="space-y-4">
+              <label className="mobile-touch-row cursor-pointer gap-3">
+                <input
+                  type="checkbox"
+                  checked={settings.authorship === 'shift_officer'}
+                  onChange={(e) => {
+                    const updated: ShiftReportSettings = {
+                      ...settings,
+                      authorship: e.target.checked ? 'shift_officer' : 'any_officer',
+                    };
+                    setSettings(updated);
+                    void saveSettings(updated);
+                  }}
+                  disabled={saving}
+                  className={checkboxClass}
+                />
+                <div>
+                  <span className="text-theme-text-primary text-sm font-medium">
+                    Reports are filed by the officer on the rig
+                  </span>
+                  <p className="text-theme-text-muted text-xs">
+                    Only the shift&apos;s assigned Shift Officer can file its completion reports, and the drafts created
+                    when a shift is finalized are assigned to them. A shift with no Shift Officer can&apos;t have
+                    reports until one is set. Reports not linked to a shift are unaffected.
+                  </p>
+                </div>
+              </label>
+
               <label className="mobile-touch-row cursor-pointer gap-3">
                 <input
                   type="checkbox"
@@ -529,8 +553,8 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
         return (
           <div>
             <p className="text-theme-text-muted mb-4 text-sm">
-              Define the default call types, skills, and tasks that appear on the officer&apos;s shift completion report
-              form. Officers can add to these lists when filing a report.
+              Define the default skills and tasks that appear on the officer&apos;s shift completion report form.
+              Officers can add to these lists when filing a report.
             </p>
 
             {loadingTraining ? (
@@ -544,18 +568,24 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
               </p>
             ) : (
               <div className="space-y-5">
-                {/* Call Types */}
-                <TagListEditor
-                  label="Call / Incident Types"
-                  description="Incident types officers can select when recording calls responded."
-                  items={callTypes}
-                  onRemove={(i) => removeItem(callTypes, setCallTypes, i)}
-                  onMove={(i, d) => moveItem(callTypes, setCallTypes, i, d)}
-                  inputValue={newCallType}
-                  onInputChange={setNewCallType}
-                  onAdd={() => addItem(callTypes, setCallTypes, newCallType, setNewCallType)}
-                  placeholder="e.g. Structure Fire"
-                />
+                {/* Call types are the department's one list, edited with the
+                    rest of call tracking. A second, free-text list here was
+                    what let reports and training requirements disagree about
+                    what a call type was called. */}
+                <div className="border-theme-surface-border rounded-lg border p-3">
+                  <p className="text-theme-text-primary text-sm font-medium">Call types</p>
+                  <p className="text-theme-text-muted mt-0.5 text-xs">
+                    Reports, the call log and training requirements all use the department&apos;s call-type list. Add,
+                    rename or turn off types in{' '}
+                    <Link
+                      to="/scheduling/admin/settings/general"
+                      className="font-medium text-violet-700 hover:underline dark:text-violet-300"
+                    >
+                      General → Call types
+                    </Link>
+                    .
+                  </p>
+                </div>
 
                 {/* Skills */}
                 <TagListEditor

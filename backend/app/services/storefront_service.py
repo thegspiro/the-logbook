@@ -3123,7 +3123,7 @@ class StorefrontService:
                 "from_status": event.from_status,
                 "to_status": event.to_status,
                 "message": event.message,
-                "author_name": event.author.full_name if event.author else None,
+                "author_name": event.author.display_name if event.author else None,
                 "created_at": event.created_at,
             }
             for event, order_number, customer_name in activity_rows.all()

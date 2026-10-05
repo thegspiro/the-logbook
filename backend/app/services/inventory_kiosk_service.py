@@ -68,8 +68,7 @@ class _Tap:
 
 
 def _member_name(user: User) -> str:
-    name = f"{user.first_name or ''} {user.last_name or ''}".strip()
-    return name or user.username
+    return user.display_name or user.username
 
 
 class InventoryKioskService:

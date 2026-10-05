@@ -77,6 +77,7 @@ export interface MemberFormData {
   firstName: string;
   lastName: string;
   middleName: string;
+  preferredName: string;
   membershipNumber: string;
   dateOfBirth: string;
 

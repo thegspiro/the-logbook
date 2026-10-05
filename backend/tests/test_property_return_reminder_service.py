@@ -42,6 +42,7 @@ def _member(days_ago=95, status=UserStatus.DROPPED_VOLUNTARY):
     return SimpleNamespace(
         id="u1",
         full_name="Jane Smith",
+        display_name="Jane Smith",
         email="jane@x.org",
         status=status,
         status_changed_at=datetime.now(timezone.utc) - timedelta(days=days_ago),

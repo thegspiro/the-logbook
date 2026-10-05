@@ -42,6 +42,7 @@ import { useRegisterPullToRefresh } from '../../../hooks/useRegisterPullToRefres
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { formatLegalName, formatMemberName, givenName } from '../../../utils/memberName';
 
 type StatusFilter = ConsentStatus | 'all';
 
@@ -111,8 +112,7 @@ const SORT_CHOICES: { value: string; label: string }[] = [
 ];
 
 function memberName(member: ConsentRosterMember): string {
-  const name = [member.first_name, member.last_name].filter(Boolean).join(' ').trim();
-  return name || 'Unnamed member';
+  return formatMemberName(member) || 'Unnamed member';
 }
 
 /**
@@ -228,7 +228,8 @@ const PhotoUseConsentPage: React.FC = () => {
         if (stationFilter === NO_STATION ? station !== '' : station !== stationFilter) return false;
       }
       if (!term) return true;
-      return [memberName(member), member.membership_number, member.station]
+      // The legal name too, so a member can be found by either name.
+      return [memberName(member), formatLegalName(member), member.membership_number, member.station]
         .filter(Boolean)
         .some((field) => String(field).toLowerCase().includes(term));
     });
@@ -252,7 +253,7 @@ const PhotoUseConsentPage: React.FC = () => {
           // Surname first: it is how a roster is read, and it is the order the
           // server already returns, so the first click confirms the arrow
           // rather than reshuffling the page under the reader.
-          return [member.last_name, member.first_name].filter(Boolean).join(' ').trim().toLowerCase() || null;
+          return [member.last_name, givenName(member)].filter(Boolean).join(' ').trim().toLowerCase() || null;
         case 'rank':
           // A code the department has since retired still sorts — just after
           // every rank it still defines, and ahead of members who have none.
@@ -642,6 +643,7 @@ const PhotoUseConsentPage: React.FC = () => {
                       <div className="flex items-center gap-3">
                         <Avatar
                           firstName={member.first_name}
+                          preferredName={member.preferred_name}
                           lastName={member.last_name}
                           photoUrl={member.photo_url}
                           size="sm"

@@ -11,7 +11,7 @@ from typing import Dict, List, Optional
 from uuid import UUID
 
 from loguru import logger
-from sqlalchemy import func, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -51,7 +51,51 @@ from app.services.shift_eligibility_service import (
     ShiftEligibilityService,
 )
 from app.services.training_program_service import TrainingProgramService
+from app.utils.call_type_matching import matching_call_types
+from app.utils.member_names import format_display_name
 from app.utils.org_timezone import resolve_org_today
+
+#: ``settings["shift_reports"]["authorship"]`` value under which a shift's
+#: reports are filed only by that shift's assigned Shift Officer. Anything
+#: else — including the key being absent, which is every installation that
+#: predates the setting — keeps the original rule: any ``training.manage``
+#: holder may file (CLAUDE.md pitfall #19, absence means current behaviour).
+SHIFT_OFFICER_AUTHORSHIP = "shift_officer"
+
+SHIFT_OFFICER_ONLY_MESSAGE = (
+    "Your department has each shift's reports filed by that shift's officer"
+)
+NO_SHIFT_OFFICER_MESSAGE = (
+    "Your department has each shift's reports filed by that shift's officer, "
+    "and this shift has none assigned. Set its Shift Officer first."
+)
+
+
+async def reports_filed_by_shift_officer(db: AsyncSession, organization_id) -> bool:
+    """Whether this department restricts filing to each shift's officer."""
+    from app.models.user import Organization
+
+    settings = (
+        await db.execute(
+            select(Organization.settings).where(Organization.id == str(organization_id))
+        )
+    ).scalar_one_or_none()
+    # Read defensively: settings is free-form JSON, and a malformed block must
+    # degrade to the original rule rather than refuse every report.
+    block = (
+        (settings or {}).get("shift_reports") if isinstance(settings, dict) else None
+    )
+    return (
+        isinstance(block, dict) and block.get("authorship") == SHIFT_OFFICER_AUTHORSHIP
+    )
+
+
+def require_shift_officer(shift, author_id) -> None:
+    """Raise unless ``author_id`` is ``shift``'s assigned Shift Officer."""
+    if not shift.shift_officer_id:
+        raise ValueError(NO_SHIFT_OFFICER_MESSAGE)
+    if str(shift.shift_officer_id) != str(author_id):
+        raise ValueError(SHIFT_OFFICER_ONLY_MESSAGE)
 
 
 class ShiftCompletionService:
@@ -206,6 +250,14 @@ class ShiftCompletionService:
         in_force = eligibility.effective_call_type_slugs(org) if org else set()
         return all(isinstance(v, str) and v in in_force for v in values)
 
+    async def _org_call_types(self, organization_id) -> list:
+        """The department's call types, retired ones included."""
+        eligibility = ShiftEligibilityService(self.db)
+        org = await eligibility._get_org(str(organization_id))
+        if org is None:
+            return []
+        return eligibility.get_call_tracking_settings(org).get("call_types", [])
+
     async def _shift_has_incident_rows(self, shift_id: str) -> bool:
         """Whether this shift logged per-incident calls.
 
@@ -230,18 +282,33 @@ class ShiftCompletionService:
         """Count-only fallback: the credit recorded against this member.
 
         Reads ``ShiftAttendance.call_count`` — the officer's per-member figure,
-        which is already capped at what the apparatus ran — never the shift
-        total directly, so a member who came on mid-tour is not credited with
-        the calls that ran before they arrived.
+        which is already capped at what the apparatus ran — so a member who
+        came on mid-tour is not credited with the calls that ran before they
+        arrived. Only an unset credit falls back to the shift total, matching
+        what finalize would write for that member.
         """
-        credited = (
+        attendance = (
             await self.db.execute(
-                select(ShiftAttendance.call_count).where(
+                select(ShiftAttendance.id, ShiftAttendance.call_count).where(
                     ShiftAttendance.shift_id == shift_id,
                     ShiftAttendance.user_id == trainee_id,
                 )
             )
-        ).scalar_one_or_none()
+        ).first()
+        if attendance is None:
+            return 0, []
+
+        call_service = CallTrackingService(self.db)
+        shift_total = await call_service.shift_response_count(shift_id)
+        # NULL is "not decided yet", not zero: per-member credit is written at
+        # finalize, so between the close-out's call-count step and finalizing
+        # every member reads NULL. Finalize and the close-out wizard both
+        # default an unadjusted member to the apparatus count, so this does
+        # too — a report filed in that window credited the trainee nothing.
+        # An explicit 0 (an officer's adjustment) stays 0.
+        credited = (
+            shift_total if attendance.call_count is None else int(attendance.call_count)
+        )
         if not credited:
             return 0, []
 
@@ -251,9 +318,6 @@ class ShiftCompletionService:
         # alphabetical prefix this used to take was an invention that
         # `create_report` then spent against type-specific requirements — one
         # credit on a shift of one EMS and one fire always became EMS.
-        call_service = CallTrackingService(self.db)
-        shift_total = await call_service.shift_response_count(shift_id)
-        credited = int(credited)
         if credited < shift_total:
             return credited, []
 
@@ -305,6 +369,14 @@ class ShiftCompletionService:
     ) -> ShiftCompletionReport:
         """Create a shift completion report and update pipeline progress."""
 
+        # A report is an officer's account of somebody else's shift. One about
+        # yourself would count your own hours, calls and ratings toward your
+        # own training requirements with nobody else's eyes on it. Enforced
+        # here because every path — single, batch and the drafts finalize
+        # creates — comes through this method.
+        if str(trainee_id) == str(officer_id):
+            raise ValueError("You can't write a shift report about yourself")
+
         # Validate shift linkage when provided
         data_sources: dict = {}
         if shift_id:
@@ -321,6 +393,9 @@ class ShiftCompletionService:
 
             if shift.shift_date != shift_date:
                 raise ValueError("Report date does not match the " "linked shift date")
+
+            if await reports_filed_by_shift_officer(self.db, organization_id):
+                require_shift_officer(shift, officer_id)
 
             # A friendly fast path only — see the flush below, which is the
             # actual concurrency authority (Pitfall #27, matching
@@ -678,21 +753,32 @@ class ShiftCompletionService:
         )
         reported_ids = set(str(tid) for tid in existing_reports)
 
+        # Each member's calls as a report filed now would derive them — the
+        # same function create_report uses, so the number the form shows is the
+        # number that gets stored unless the officer changes it (CLAUDE.md
+        # pitfall #29).
+        calls_source = (
+            "call_log" if await self._shift_has_incident_rows(shift_id) else "closeout"
+        )
+
         result = []
         for assignment in assignments:
             uid = str(assignment.user_id)
             user = user_map.get(uid)
             enrollment_info = enrollment_map.get(uid, {})
             pos = assignment.position
+            calls, _types = await self._get_trainee_call_data_from_shift(shift_id, uid)
             result.append(
                 {
                     "user_id": uid,
-                    "user_name": (user.full_name if user else "Unknown"),
+                    "user_name": (user.display_name if user else "Unknown"),
                     "position": pos.value if hasattr(pos, "value") else pos,
                     "has_active_enrollment": uid in enrollment_map,
                     "enrollment_id": enrollment_info.get("enrollment_id"),
                     "program_name": enrollment_info.get("program_name"),
                     "has_existing_report": uid in reported_ids,
+                    "calls_responded": calls,
+                    "calls_source": calls_source,
                 }
             )
 
@@ -711,22 +797,63 @@ class ShiftCompletionService:
         crew_member_ids: List[str],
         trainee_evaluations: Optional[List[Dict]],
         review_status: str = "approved",
+        member_call_counts: Optional[Dict[str, int]] = None,
     ) -> Dict:
         """Create shift reports for all crew members in one transaction.
 
         Non-trainees get hours/calls credit only.
         Trainees get full evaluation data.
+
+        ``member_call_counts`` carries the officer's per-member corrections to
+        the calls derived from the shift. A member it does not name keeps the
+        derived figure.
         """
         eval_map: Dict[str, Dict] = {}
         if trainee_evaluations:
             for ev in trainee_evaluations:
                 eval_map[ev["user_id"]] = ev
 
+        # Checked once, up front: create_report enforces the same rule, but a
+        # batch catches its ValueError per member and would report every row
+        # as "skipped" with no reason given.
+        if shift_id and await reports_filed_by_shift_officer(self.db, organization_id):
+            shift = (
+                await self.db.execute(
+                    select(Shift).where(
+                        Shift.id == shift_id,
+                        Shift.organization_id == str(organization_id),
+                    )
+                )
+            ).scalar_one_or_none()
+            if not shift:
+                raise ValueError("Shift not found in this organization")
+            require_shift_officer(shift, officer_id)
+
         created_ids: List[str] = []
         skipped = 0
 
         for member_id in crew_member_ids:
             evaluation = eval_map.get(member_id, {})
+            member_calls: Optional[int] = None
+            member_types: Optional[list] = None
+            if shift_id:
+                override = (member_call_counts or {}).get(member_id)
+                if override is not None:
+                    derived, _types = await self._get_trainee_call_data_from_shift(
+                        shift_id, member_id
+                    )
+                    # An override equal to the derived figure is the derived
+                    # figure: leave both unset so the report keeps its types
+                    # and its "shift_calls" provenance. A different count
+                    # cannot keep the derived types — nothing says which calls
+                    # were dropped — so it is stored with none rather than with
+                    # a list that disagrees with it.
+                    if override != derived:
+                        member_calls = override
+                        member_types = []
+            else:
+                member_calls = calls_responded
+                member_types = call_types
             try:
                 report = await self.create_report(
                     organization_id=organization_id,
@@ -734,15 +861,13 @@ class ShiftCompletionService:
                     trainee_id=member_id,
                     shift_date=shift_date,
                     hours_on_shift=hours_on_shift,
-                    # The batch form collects one call count for the *shift*,
-                    # not for each member of the crew. Handing it to a
-                    # per-trainee report would credit every rider with every
-                    # run, so a linked shift defers to the per-trainee figure
-                    # derived from the run log — which is what this path has
-                    # always stored, back when create_report overwrote the
-                    # argument unconditionally.
-                    calls_responded=(None if shift_id else calls_responded),
-                    call_types=(None if shift_id else call_types),
+                    # A linked shift never uses the shift-level count: handing
+                    # one number to every report would credit every rider with
+                    # every run. Each member gets the figure derived from the
+                    # shift's run log or close-out credit, or the officer's
+                    # per-member correction above.
+                    calls_responded=member_calls,
+                    call_types=member_types,
                     shift_id=shift_id,
                     performance_rating=evaluation.get("performance_rating"),
                     areas_of_strength=evaluation.get("areas_of_strength"),
@@ -1111,6 +1236,9 @@ class ShiftCompletionService:
         requirements_progressed = []
         # Resolved on first use: only a call-type breakdown records a date.
         history_date: Optional[date] = None
+        # Likewise loaded on first use: only a type-specific requirement needs
+        # the department's call-type list.
+        org_call_types: Optional[list] = None
 
         # Find active enrollments for this trainee
         enrollment_query = select(ProgramEnrollment).where(
@@ -1166,13 +1294,14 @@ class ShiftCompletionService:
                     # Check if requirement specifies required call types
                     required_call_types = requirement.required_call_types or []
                     if required_call_types and call_types:
-                        # Count only calls matching the required types
-                        required_lower = [rct.lower() for rct in required_call_types]
-                        matching_calls = [
-                            ct
-                            for ct in call_types
-                            if isinstance(ct, str) and ct.lower() in required_lower
-                        ]
+                        # Count only calls matching the required types — by
+                        # type, not by spelling: a requirement stores slugs,
+                        # a report may hold slugs, labels or legacy text.
+                        if org_call_types is None:
+                            org_call_types = await self._org_call_types(organization_id)
+                        matching_calls = matching_call_types(
+                            call_types, required_call_types, org_call_types
+                        )
                         value_to_add = float(len(matching_calls))
                         if matching_calls:
                             call_type_detail = {
@@ -1828,15 +1957,21 @@ class ShiftCompletionService:
     async def get_officer_analytics(
         self,
         organization_id: UUID,
+        officer_id: Optional[str] = None,
     ) -> dict:
-        """Get org-wide shift report analytics for training officers.
+        """Shift report analytics: aggregate totals, per-trainee summary,
+        report status counts, and monthly trend data.
 
-        Returns aggregate totals, per-trainee summary, report status
-        counts, and monthly trend data.
+        With ``officer_id`` every figure covers only the reports that officer
+        filed — the "Written by me" summary. Without it the figures are
+        department-wide, which the endpoint serves only to holders of
+        ``training.view_analytics``.
         """
         org_filter = [
             ShiftCompletionReport.organization_id == str(organization_id),
         ]
+        if officer_id is not None:
+            org_filter.append(ShiftCompletionReport.officer_id == str(officer_id))
 
         # Aggregate totals (exclude drafts from counts)
         active_filter = org_filter + [
@@ -1871,6 +2006,7 @@ class ShiftCompletionService:
                 ShiftCompletionReport.trainee_id,
                 User.first_name,
                 User.last_name,
+                User.preferred_name,
                 func.count(ShiftCompletionReport.id).label("reports"),
                 func.sum(ShiftCompletionReport.hours_on_shift).label("hours"),
                 func.sum(ShiftCompletionReport.calls_responded).label("calls"),
@@ -1885,13 +2021,14 @@ class ShiftCompletionService:
                 ShiftCompletionReport.trainee_id,
                 User.first_name,
                 User.last_name,
+                User.preferred_name,
             )
             .order_by(func.sum(ShiftCompletionReport.hours_on_shift).desc())
         )
         trainees = [
             {
                 "trainee_id": r.trainee_id,
-                "name": (f"{r.first_name or ''}" f" {r.last_name or ''}").strip()
+                "name": format_display_name(r.first_name, r.last_name, r.preferred_name)
                 or "Unknown",
                 "reports": r.reports or 0,
                 "hours": float(r.hours or 0),
@@ -1912,7 +2049,9 @@ class ShiftCompletionService:
             )
             .where(*active_filter)
             .group_by("month")
-            .order_by("month")
+            # Newest first so LIMIT keeps the latest six; ascending kept the
+            # department's *first* six months for ever once it had seven.
+            .order_by(desc("month"))
             .limit(6)
         )
         monthly = [
@@ -1921,7 +2060,7 @@ class ShiftCompletionService:
                 "reports": r.reports or 0,
                 "hours": float(r.hours or 0),
             }
-            for r in monthly_result.all()
+            for r in reversed(monthly_result.all())
         ]
 
         return {

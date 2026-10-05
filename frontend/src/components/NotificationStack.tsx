@@ -102,7 +102,7 @@ const NotificationStack: React.FC<NotificationStackProps> = ({
             <button
               onClick={() => void handleMarkStackRead()}
               disabled={markingRead}
-              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover border-theme-surface-border inline-flex shrink-0 items-center gap-1.5 border-l px-3 text-xs transition-colors disabled:opacity-50 max-md:min-h-[44px]"
+              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover border-theme-surface-border touch:min-h-[44px] inline-flex shrink-0 items-center gap-1.5 border-l px-3 text-xs transition-colors disabled:opacity-50"
               aria-label={`Mark all ${title} as read`}
             >
               {markingRead ? (

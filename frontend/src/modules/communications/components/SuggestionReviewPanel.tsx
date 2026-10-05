@@ -514,7 +514,7 @@ const SuggestionReviewPanel: React.FC<SuggestionReviewPanelProps> = ({ boxes, se
                     type="button"
                     onClick={() => onSelect(item.id)}
                     aria-current={item.id === selectedId ? 'true' : undefined}
-                    className={`card flex w-full items-center justify-between gap-3 p-4 text-left max-md:min-h-[44px] ${
+                    className={`card touch:min-h-[44px] flex w-full items-center justify-between gap-3 p-4 text-left ${
                       item.id === selectedId ? 'border-l-theme-alert-info-icon border-l-4' : ''
                     }`}
                   >

@@ -14,6 +14,7 @@ import { formsService } from '../../services/api';
 import type { MemberLookupResult } from '../../services/api';
 import { FieldType } from '../../constants/enums';
 import { useRanks } from '../../hooks/useRanks';
+import { displayNameOf } from '../../utils/memberName';
 import TimeQuarterHour from '../ux/TimeQuarterHour';
 import DateTimeQuarterHour from '../ux/DateTimeQuarterHour';
 
@@ -253,7 +254,7 @@ const FieldRenderer = ({
 
   const selectMember = (member: MemberLookupResult) => {
     onChange(field.id, member.id);
-    setMemberQuery(member.full_name);
+    setMemberQuery(displayNameOf(member));
     setMemberResults([]);
   };
 
@@ -515,7 +516,7 @@ const FieldRenderer = ({
                   >
                     <User className="h-4 w-4 shrink-0" />
                     <div>
-                      <p className="text-sm font-medium">{member.full_name}</p>
+                      <p className="text-sm font-medium">{displayNameOf(member)}</p>
                       {member.rank && <p className="text-theme-text-muted text-xs">{formatRank(member.rank)}</p>}
                     </div>
                   </button>

@@ -670,7 +670,7 @@ async def list_submissions(
         resp = FormSubmissionResponse.model_validate(submission)
         if not resp.submitter_name and submission.submitter:
             resp.submitter_name = (
-                submission.submitter.full_name or submission.submitter.username
+                submission.submitter.display_name or submission.submitter.username
             )
         enriched.append(resp)
 

@@ -270,3 +270,62 @@ describe('MemberAdminEditPage — emergency contacts', () => {
     expect(screen.getByRole('textbox', { name: /^relationship$/i })).toHaveValue('Spouse');
   });
 });
+
+describe('MemberAdminEditPage — preferred name', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetLocations.mockReset();
+    mockGetLocations.mockResolvedValue([]);
+    mockUpdateUserProfile.mockReset();
+    mockUpdateUserProfile.mockResolvedValue({});
+    mockChangeMembershipType.mockReset();
+    mockChangeMembershipType.mockResolvedValue({});
+    mockGetUserWithRoles.mockReset();
+    mockGetUserWithRoles.mockResolvedValue(member({ preferred_name: 'Dee' }));
+  });
+
+  const payload = () => mockUpdateUserProfile.mock.calls[0]?.[1] as Record<string, unknown>;
+
+  it('heads the page with the name the member goes by', async () => {
+    await renderPage();
+    expect(screen.getByRole('heading', { level: 1, name: /Dee Reyes/ })).toBeInTheDocument();
+  });
+
+  it('leaves the preferred name out of a save that did not change it', async () => {
+    const user = userEvent.setup();
+    await renderPage();
+
+    const lastName = screen.getByRole('textbox', { name: /last name/i });
+    await user.clear(lastName);
+    await user.type(lastName, 'Reyes-Ortiz');
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    await waitFor(() => expect(mockUpdateUserProfile).toHaveBeenCalled());
+    expect(payload()).toHaveProperty('last_name', 'Reyes-Ortiz');
+    expect(payload()).not.toHaveProperty('preferred_name');
+  });
+
+  it('sends a changed preferred name', async () => {
+    const user = userEvent.setup();
+    await renderPage();
+
+    const input = screen.getByRole('textbox', { name: /preferred name/i });
+    await user.clear(input);
+    await user.type(input, 'Danny');
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    await waitFor(() => expect(mockUpdateUserProfile).toHaveBeenCalled());
+    expect(payload()).toHaveProperty('preferred_name', 'Danny');
+  });
+
+  it('sends null when the preferred name is cleared', async () => {
+    const user = userEvent.setup();
+    await renderPage();
+
+    await user.clear(screen.getByRole('textbox', { name: /preferred name/i }));
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    await waitFor(() => expect(mockUpdateUserProfile).toHaveBeenCalled());
+    expect(JSON.parse(JSON.stringify(payload()))).toHaveProperty('preferred_name', null);
+  });
+});

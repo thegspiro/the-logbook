@@ -263,4 +263,36 @@ describe('ComplianceOfficerDashboard', () => {
 
     expect(mockGetComplianceForecast).toHaveBeenCalledWith();
   });
+  // Every section reports a figure an officer acts on, so a 200 whose body is
+  // not its declared shape (a captive portal's HTML page) must reach the
+  // section's own error message — not crash the hub through the ErrorBoundary,
+  // and not render as zeros or an empty list.
+  describe('a response that is not its declared shape', () => {
+    const PORTAL_PAGE = '<html>Sign in to Wi-Fi</html>';
+
+    it.each([
+      ['annual-report', 'Failed to load annual compliance report', () => mockGetAnnualReport.mockResolvedValue({})],
+      ['iso-readiness', 'Failed to load ISO readiness data', () => mockGetISOReadiness.mockResolvedValue({})],
+      [
+        'record-completeness',
+        'Failed to load record completeness data',
+        () => mockGetRecordCompleteness.mockResolvedValue(PORTAL_PAGE),
+      ],
+      ['attestations', 'Failed to load attestation history', () => mockGetAttestations.mockResolvedValue({})],
+      ['forecast', 'Failed to load compliance forecast', () => mockGetComplianceForecast.mockResolvedValue({})],
+    ])('shows the %s error message', async (tab, message, malform) => {
+      malform();
+      renderWithRouter(<ComplianceOfficerDashboard activeTab={tab} />);
+
+      expect(await screen.findByText(message)).toBeInTheDocument();
+    });
+
+    it('rejects an annual report missing one of the sections it renders', async () => {
+      const { recertification_summary: _omitted, ...partial } = mockAnnualReport;
+      mockGetAnnualReport.mockResolvedValue(partial);
+      renderWithRouter(<ComplianceOfficerDashboard activeTab="annual-report" />);
+
+      expect(await screen.findByText('Failed to load annual compliance report')).toBeInTheDocument();
+    });
+  });
 });

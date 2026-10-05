@@ -397,7 +397,10 @@ class MemberLookupResult(BaseModel):
     id: str
     first_name: str
     last_name: str
+    # Legal first + last. display_name is the name the member goes by.
     full_name: str
+    preferred_name: Optional[str] = None
+    display_name: Optional[str] = None
     membership_number: Optional[str] = None
     rank: Optional[str] = None
     station: Optional[str] = None

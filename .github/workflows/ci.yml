@@ -920,20 +920,58 @@ jobs:
           if-no-files-found: warn
 
   frontend-e2e:
-    name: Frontend E2E (Playwright)
+    name: Frontend E2E (${{ matrix.leg.name }})
     runs-on: ubuntu-latest
-    # Deliberately ~1.6x measured, not the 4-6x the note at the top of this
-    # file sets as the rule: 4x of a ~28.5 min suite is nearly two hours of
-    # held runner, which defeats the point of catching a hang early. 30 was
-    # worse in the other direction — about 1.05x, under two minutes of
-    # headroom — and a slow runner spent it, cancelling #2890 mid-suite twice
-    # with every test passing. Sharding with `--shard` is the durable fix,
-    # since this margin erodes with every route added; 45 buys room until then.
-    timeout-minutes: 45
+    # Derived, not chosen: the cap must exceed the largest per-test budget in any
+    # leg plus that leg's setup, or it cancels the job before the test can time
+    # out and report — replacing an assertion failure with a bare job timeout,
+    # the exact loss the note at the top of this file warns about and the thing
+    # that cancelled #2890 twice.
+    #
+    # The largest budget is mobile-accessibility's 1_920_000 (32 min). Setup
+    # measured 0.4-0.6 min across all five legs on 2026-10-04 (the Playwright
+    # cache hits); 35 leaves room for the cold-cache install the lockfile hash
+    # invalidates. Re-derive this if a @sweep budget changes — the spec files
+    # are the source, this is the consequence.
+    #
+    # The legs themselves run far below it. Over the two runs of 2026-10-04:
+    # 2.3-2.8 min for each `rest` shard, and 5.6-6.0 / 7.6-7.7 / 16.1-19.4 for
+    # presentation / dialogs / accessibility. The cap is a hang guard, not a
+    # target — but note accessibility's 20% spread across consecutive runs of
+    # identical code, which is what the headroom is for.
+    timeout-minutes: 35
     # No `needs:` — see the note on backend-test-integration.
     defaults:
       run:
         working-directory: frontend
+    strategy:
+      # One red leg must not cancel the others: a sweep and a shard fail for
+      # unrelated reasons, and cancelling the survivors hides the second cause
+      # behind the first.
+      fail-fast: false
+      matrix:
+        # Split by weight, not by count. `--shard` alone balances on the number
+        # of tests, which is the wrong axis here: three tests carry most of the
+        # suite (`@sweep` — each walks every route, and mobile-accessibility
+        # renders ~50 routes in three themes with an axe run apiece). Measured
+        # on 2026-10-04, a plain `--shard=i/4` put all three on shard 2 and left
+        # the other three runners idle, so the wall clock barely moved.
+        #
+        # Splitting the tag out instead gives each sweep its own runner and
+        # leaves the other 120 tests to share two. Adding a fourth `@sweep` test
+        # needs no change here — `--shard=i/3` redistributes on its own, and
+        # e2eSweepTagIntegrity.test.ts fails if a long test forgets the tag.
+        leg:
+          - name: sweep 1/3
+            select: --grep @sweep --shard=1/3
+          - name: sweep 2/3
+            select: --grep @sweep --shard=2/3
+          - name: sweep 3/3
+            select: --grep @sweep --shard=3/3
+          - name: rest 1/2
+            select: --grep-invert '@screenshots|@sweep' --shard=1/2
+          - name: rest 2/2
+            select: --grep-invert '@screenshots|@sweep' --shard=2/2
     steps:
       - uses: actions/checkout@v7
 
@@ -984,20 +1022,62 @@ jobs:
       # In CI it just writes PNGs into the runner's workspace for nothing to
       # read, so skipping it saves the run without losing any coverage.
       - name: Run E2E tests
-        run: npx playwright test --project=chromium --grep-invert @screenshots
+        run: npx playwright test --project=chromium ${{ matrix.leg.select }}
 
-      # Unlike the suite above, this builds and serves dist: service-worker
-      # registration is deliberately disabled on Vite's development server.
-      - name: Run production PWA smoke test
-        run: npm run test:pwa
-
+      # Named per leg: five legs uploading `playwright-report` would collide,
+      # and upload-artifact refuses a duplicate name rather than merging.
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-report
+          name: playwright-report-${{ strategy.job-index }}
           path: frontend/playwright-report/
           retention-days: 7
+
+  # Its own job rather than a step on one of the legs above. It builds and
+  # serves dist — service-worker registration is deliberately disabled on
+  # Vite's development server — so it shares nothing with them but the install,
+  # and hanging it off an arbitrary leg would run it five times or make that
+  # one leg the odd one out.
+  frontend-pwa:
+    name: Frontend PWA Smoke Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Same cache key and the same headless-shell-only install as
+      # frontend-e2e — see the notes on those steps for why neither
+      # `--with-deps` nor the full Chromium build is wanted. The key being
+      # identical means this job warms the cache the legs read, or reads
+      # theirs, rather than fetching a second copy.
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Playwright Chromium headless shell
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install chromium-headless-shell
+
+      # playwright.pwa.config.ts runs `npm run build` itself via webServer,
+      # with a 180s budget for the build and preview server.
+      - name: Run production PWA smoke test
+        run: npm run test:pwa
 
   # ──────────────────────────────────────────────
   # Documentation
@@ -1103,6 +1183,7 @@ jobs:
       - frontend-checks
       - frontend-test
       - frontend-e2e
+      - frontend-pwa
       - docs-links
     runs-on: ubuntu-latest
     timeout-minutes: 5

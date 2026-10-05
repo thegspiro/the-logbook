@@ -622,7 +622,7 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
             </div>
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center space-x-2 rounded-lg border px-4 py-2 text-sm max-md:min-h-[44px] ${
+              className={`touch:min-h-[44px] flex items-center space-x-2 rounded-lg border px-4 py-2 text-sm ${
                 showFilters || filterType || filterCategory
                   ? 'border-red-500 bg-red-600/20 text-red-700 dark:text-red-400'
                   : 'bg-theme-surface-secondary border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary'
@@ -715,7 +715,7 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
           </div>
         ) : (
           <>
-            <div className="card-grid gap-4">
+            <div className="card-grid gap-4 [--card-grid-min:22rem]">
               {paginatedCourses.map((course) => (
                 <div key={course.id} className="card-secondary hover:bg-theme-surface-hover p-5">
                   <div className="mb-3 flex items-start justify-between">
@@ -729,7 +729,7 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
                       <div className="flex items-center space-x-1">
                         <button
                           onClick={() => setSyllabusCourse(course)}
-                          className="text-theme-text-muted hover:text-theme-text-primary rounded-sm p-1.5"
+                          className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone rounded-sm p-1.5"
                           aria-label={`Manage classes for ${course.name}`}
                           title="Manage classes"
                         >
@@ -740,7 +740,7 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
                             setEditCourse(course);
                             setShowModal(true);
                           }}
-                          className="text-theme-text-muted hover:text-theme-text-primary rounded-sm p-1.5"
+                          className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone rounded-sm p-1.5"
                           aria-label={`Edit ${course.name}`}
                         >
                           <Edit2 className="h-4 w-4" />
@@ -749,7 +749,7 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
                           onClick={() => {
                             void handleDelete(course.id, course.name);
                           }}
-                          className="text-theme-text-muted rounded-sm p-1.5 hover:text-red-700 dark:hover:text-red-400"
+                          className="text-theme-text-muted touch-target-phone rounded-sm p-1.5 hover:text-red-700 dark:hover:text-red-400"
                           aria-label={`Deactivate ${course.name}`}
                         >
                           <Trash2 className="h-4 w-4" />

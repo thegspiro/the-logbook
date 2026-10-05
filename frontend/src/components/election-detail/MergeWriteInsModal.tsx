@@ -1,9 +1,13 @@
 import React, { useCallback, useState } from 'react';
 import { useDialog } from '../../hooks/useDialog';
-import type { Candidate } from '../../types/election';
+import type { BallotItem, Candidate } from '../../types/election';
+import { ballotItemTitlesById, candidateContestLabel } from '../../utils/electionHelpers';
 
 interface MergeWriteInsModalProps {
   candidates: Candidate[];
+  // Names the contest of a write-in cast on a ballot item by the item's
+  // title rather than its raw id (W50-30).
+  ballotItems?: BallotItem[] | undefined;
   merging: boolean;
   error: string | null;
   onSubmit: (sourceIds: string[], targetId: string) => void;
@@ -16,7 +20,14 @@ interface MergeWriteInsModalProps {
  * sources; votes are never mutated — results simply count merged variants
  * under the target. The merge is audited.
  */
-const MergeWriteInsModal: React.FC<MergeWriteInsModalProps> = ({ candidates, merging, error, onSubmit, onClose }) => {
+const MergeWriteInsModal: React.FC<MergeWriteInsModalProps> = ({
+  candidates,
+  ballotItems,
+  merging,
+  error,
+  onSubmit,
+  onClose,
+}) => {
   const dialogRef = useDialog<HTMLDivElement>({ onClose });
 
   const [selectedSources, setSelectedSources] = useState<Set<string>>(new Set());
@@ -31,8 +42,20 @@ const MergeWriteInsModal: React.FC<MergeWriteInsModalProps> = ({ candidates, mer
     [onClose]
   );
 
+  const itemTitles = ballotItemTitlesById(ballotItems);
   const writeIns = candidates.filter((c) => c.is_write_in && !c.merged_into_candidate_id);
-  const targets = candidates.filter((c) => !c.merged_into_candidate_id && !selectedSources.has(c.id));
+  // A merge moves votes between candidates of one contest. Once a source is
+  // picked, only its contest's write-ins can join it and only its contest's
+  // candidates can receive them — otherwise a Chief write-in could be counted
+  // for a budget motion's Approve (W50-30).
+  const firstSource = writeIns.find((c) => selectedSources.has(c.id));
+  const contest = firstSource ? (firstSource.position ?? '') : null;
+  const inContest = (c: Candidate) => contest === null || (c.position ?? '') === contest;
+  const targets = candidates.filter((c) => !c.merged_into_candidate_id && !selectedSources.has(c.id) && inContest(c));
+  const label = (c: Candidate) => {
+    const contestLabel = candidateContestLabel(c, itemTitles);
+    return contestLabel ? `${c.name} (${contestLabel})` : c.name;
+  };
 
   const toggleSource = (id: string) => {
     setSelectedSources((prev) => {
@@ -86,12 +109,18 @@ const MergeWriteInsModal: React.FC<MergeWriteInsModalProps> = ({ candidates, mer
                   <input
                     type="checkbox"
                     checked={selectedSources.has(c.id)}
+                    disabled={!inContest(c)}
                     onChange={() => toggleSource(c.id)}
                     className="form-checkbox"
                   />
-                  <span className="text-theme-text-primary text-sm">
+                  <span className={`text-sm ${inContest(c) ? 'text-theme-text-primary' : 'text-theme-text-muted'}`}>
                     {c.name}
-                    {c.position && <span className="text-theme-text-muted ml-1 text-xs">({c.position})</span>}
+                    {c.position && (
+                      <>
+                        {' '}
+                        <span className="text-theme-text-muted text-xs">({candidateContestLabel(c, itemTitles)})</span>
+                      </>
+                    )}
                   </span>
                 </label>
               ))}
@@ -110,8 +139,7 @@ const MergeWriteInsModal: React.FC<MergeWriteInsModalProps> = ({ candidates, mer
             <option value="">Select a candidate…</option>
             {targets.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.name}
-                {c.position ? ` (${c.position})` : ''}
+                {label(c)}
               </option>
             ))}
           </select>

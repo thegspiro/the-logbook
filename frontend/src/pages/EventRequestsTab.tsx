@@ -55,6 +55,10 @@ import { useRanks } from '../hooks/useRanks';
 import { formatShortDateTime, localToUTC } from '../utils/dateFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
 import { positionLabel } from '../modules/scheduling/utils/positionLabels';
+import { asArray, expectArray } from '../utils/asArray';
+import { displayNameOf } from '../utils/memberName';
+
+const isRecord = (value: unknown): value is Record<string, string> => typeof value === 'object' && value !== null;
 
 const STATUS_CONFIG: Record<EventRequestStatus, { label: string; color: string; icon: React.ElementType }> = {
   submitted: {
@@ -114,6 +118,8 @@ interface OrgMember {
   id: string;
   first_name: string;
   last_name: string;
+  preferred_name?: string | null | undefined;
+  display_name?: string | undefined;
   rank?: string;
 }
 
@@ -179,7 +185,9 @@ const EventRequestsTab: React.FC = () => {
       const params: Record<string, string> = {};
       if (statusFilter) params.status = statusFilter;
       const data = await eventRequestService.listRequests(params);
-      setRequests(data);
+      // Verified, not substituted: an empty queue reads as "no requests to
+      // handle", so a body that is not a list takes the error path instead.
+      setRequests(expectArray(data, 'event requests'));
     } catch {
       setError('Failed to load event requests.');
     } finally {
@@ -203,15 +211,16 @@ const EventRequestsTab: React.FC = () => {
           eventRequestService.listEmailTemplates(),
           eventRequestService.getOutreachRoles(),
         ]);
-        setOutreachLabels(labels);
-        setOutreachRoles(roles);
+        setOutreachLabels(isRecord(labels) ? labels : {});
+        const roleList = asArray(roles);
+        setOutreachRoles(roleList);
         // Seed the sheet with one of the first role the department configured,
         // so a coordinator opening signups for a simple event can just press
         // the button.
-        setRoleNeeds(roles[0] ? [{ role: roles[0].value, count: 1 }] : []);
-        setPipelineTasks(settings.request_pipeline?.tasks || []);
+        setRoleNeeds(roleList[0] ? [{ role: roleList[0].value, count: 1 }] : []);
+        setPipelineTasks(asArray(settings?.request_pipeline?.tasks ?? []));
         setMembers(memberList);
-        setLocations(locationList);
+        setLocations(asArray(locationList));
         setEmailTemplates(templates);
       } catch {
         // Silently fail — we'll fall back to defaults
@@ -535,7 +544,7 @@ const EventRequestsTab: React.FC = () => {
           <p className="text-red-700 dark:text-red-300">{error}</p>
           <button
             onClick={() => void fetchRequests()}
-            className="mt-2 text-sm text-red-700 underline dark:text-red-400"
+            className="mt-2 min-h-11 text-sm text-red-700 underline dark:text-red-400"
           >
             Try again
           </button>
@@ -770,7 +779,7 @@ const EventRequestsTab: React.FC = () => {
                                 </option>
                                 {members.map((m) => (
                                   <option key={m.id} value={m.id}>
-                                    {m.first_name} {m.last_name}
+                                    {displayNameOf(m)}
                                     {m.rank ? ` — ${formatRank(m.rank)}` : ''}
                                   </option>
                                 ))}

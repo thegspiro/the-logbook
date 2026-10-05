@@ -196,7 +196,9 @@ class TestAffectedUserResolution:
 
     async def test_ids_resolve_to_a_name_and_username(self):
         db = AsyncMock()
-        db.execute.return_value = self._rows(("user-1", "Dana", "Reyes", "dreyes"))
+        db.execute.return_value = self._rows(
+            ("user-1", "Dana", "Reyes", None, "dreyes")
+        )
         errors = [Mock(user_id="user-1"), Mock(user_id="user-1")]
 
         resolved = await _affected_users(db, "org-1", errors)
@@ -204,6 +206,16 @@ class TestAffectedUserResolution:
         assert resolved["user-1"] == {"name": "Dana Reyes", "username": "dreyes"}
         # One batched query for the page, not one per row.
         db.execute.assert_awaited_once()
+
+    async def test_a_preferred_name_is_the_name_shown(self):
+        db = AsyncMock()
+        db.execute.return_value = self._rows(
+            ("user-1", "Dana", "Reyes", "Dee", "dreyes")
+        )
+
+        resolved = await _affected_users(db, "org-1", [Mock(user_id="user-1")])
+
+        assert resolved["user-1"]["name"] == "Dee Reyes"
 
     async def test_the_lookup_is_org_scoped(self):
         """Pitfall #14a: the id comes from stored data, so the org filter is
@@ -228,7 +240,7 @@ class TestAffectedUserResolution:
 
     async def test_a_nameless_account_falls_back_to_its_username(self):
         db = AsyncMock()
-        db.execute.return_value = self._rows(("user-1", None, None, "dreyes"))
+        db.execute.return_value = self._rows(("user-1", None, None, None, "dreyes"))
 
         resolved = await _affected_users(db, "org-1", [Mock(user_id="user-1")])
 

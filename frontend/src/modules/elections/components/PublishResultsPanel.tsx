@@ -160,7 +160,7 @@ export const PublishResultsPanel: React.FC<PublishResultsPanelProps> = ({ electi
             <button
               onClick={() => void handleSendReport()}
               disabled={sendingReport}
-              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+              className="rounded-md bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:opacity-50"
             >
               {sendingReport ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

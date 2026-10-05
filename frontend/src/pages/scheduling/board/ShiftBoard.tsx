@@ -30,6 +30,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatCalendarDate } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { displayNameOf } from '../../../utils/memberName';
 import DayDetailPanel from './DayDetailPanel';
 import GiveUpShiftModal from './GiveUpShiftModal';
 import MonthGrid from './MonthGrid';
@@ -336,7 +337,7 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
               {
                 assignment_id: `pending-${shift.id}`,
                 user_id: String(currentUserId),
-                user_name: user?.full_name ?? 'You',
+                user_name: (user ? displayNameOf(user) : '') || 'You',
                 position: seat,
                 status: 'assigned',
               },
@@ -492,7 +493,7 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
                 type="button"
                 onClick={() => setFilter(option.value)}
                 aria-pressed={filter === option.value}
-                className={`min-h-[30px] shrink-0 rounded-full px-3.5 text-[13px] font-semibold transition-colors max-md:min-h-[44px] ${
+                className={`touch:min-h-[44px] min-h-[30px] shrink-0 rounded-full px-3.5 text-[13px] font-semibold transition-colors ${
                   filter === option.value
                     ? 'bg-red-800 text-white'
                     : 'text-theme-text-secondary hover:bg-theme-surface-hover'

@@ -436,7 +436,7 @@ class MembershipTierService:
             advanced.append(
                 {
                     "user_id": str(member.id),
-                    "name": member.full_name,
+                    "name": member.display_name,
                     "previous_tier": previous_type,
                     "new_tier": target_tier["id"],
                     "years_of_service": yos,

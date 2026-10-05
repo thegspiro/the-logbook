@@ -207,6 +207,7 @@ class TestAdvanceAllStaysOnTheLadder:
         return SimpleNamespace(
             id=f"u-{membership_type}",
             full_name=f"Pat {membership_type.title()}",
+            display_name=f"Pat {membership_type.title()}",
             membership_type=membership_type,
             member_class=None,
             membership_type_changed_at=None,

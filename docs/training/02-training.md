@@ -300,6 +300,8 @@ If each meeting covers a different subject, you want a cohort.
 | You add a member half-way through                       | They're added to the classes still to come, not the ones that already ran.                                                                                                                                                                            |
 | You remove a member                                     | Their records and any class they already attended are kept. Upcoming classes come off their calendar.                                                                                                                                                 |
 | **Shift remaining** doesn't move everything             | It only moves classes that haven't started, and never moves cancelled ones.                                                                                                                                                                           |
+| You shift a cohort across a daylight-saving change      | _(2026-10-04)_ The shift is counted in the department's local time, so a 19:00 class that moves from 29 October to 5 November is still at 19:00. Before this fix it landed at 18:00 and the linked event, RSVP and check-in window followed it.       |
+| A class in the shift is already finalized               | _(2026-10-04)_ The whole shift is refused up front with a message. Before, classes ahead of the locked one had already moved and committed, leaving a half-moved schedule behind a 409.                                                               |
 | A class shouldn't count toward a certificate            | Turn off **Counts toward certification requirements** on that class. Members still get the hours.                                                                                                                                                     |
 | The course has no classes yet                           | Generation is refused with a clear message. Build the syllabus first.                                                                                                                                                                                 |
 | A course is capped at 200 classes                       | Past that it's a data-entry mistake rather than a course.                                                                                                                                                                                             |
@@ -800,6 +802,62 @@ When a requirement uses **Rolling** due date type with a rolling period (e.g., 1
 
 See [Membership > Leave of Absence](./01-membership.md#leave-of-absence) for details on managing leaves.
 
+### Existing Members: Exempt, Catch-Up, or "New Members Only" _(2026-10-03)_
+
+A department that raises its training standard used to turn its whole roster
+non-compliant overnight: a requirement applied to every member it matched,
+however long ago they joined. A requirement can now treat existing members
+differently from new ones. A member's **join date** is their **hire date**, or
+the date their account was created when no hire date is recorded.
+
+**On the requirement form** (Training Admin > Requirements > New or Edit), the
+**Existing Members** section offers three choices:
+
+| Choice                       | What it does                                                                                                                                                      |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Apply to everyone**        | The default and the old behaviour. Nothing changes for a requirement you leave alone                                                                              |
+| **Exempt existing members**  | Only members who joined on or after **Existing members joined before** (the cutoff date) are held to it                                                           |
+| **Give a catch-up deadline** | Existing members have until **Existing members must meet it by**. Until then an unmet requirement reads **Due** and counts neither for nor against their standing |
+
+**When you edit a requirement that already exists**, a dialog asks **who the
+change reaches**:
+
+- **Everyone** — the requirement changes for every member it applies to, starting now.
+- **New members only** — members who joined before the date you choose stay on the
+  current standard. The Logbook keeps the original (it now carries the banner
+  _"This is the earlier standard…"_) and creates a **copy** with your changes for
+  everyone who joins on or after that date. Both stay on the list and can be
+  edited separately. The option is unavailable, with the reason shown, when the
+  requirement's existing-member setting was changed in the same edit — save that
+  first.
+
+**When you add a requirement to a training program** the form asks about
+**Members already enrolled**: _hold them to it too_ (added to their progress
+now), or _only members who enroll from now on_ (recorded as **waived** for
+everyone already enrolled).
+
+Every screen that decides which requirements grade a member now uses the same
+rule with the member's join date — the dashboard, Compliance Matrix and its
+print view, the member profile's training card, My Training, the compliance
+officer report, the scheduling shift and hours report, the competency matrix,
+the forecast, and the CSV and PDF exports. Two consequences worth knowing:
+
+- A **Due** member shows as **blue** on the scheduling report's requirement
+  bars, and the print view's legend reads _"Due — existing member, before their
+  catch-up deadline"_.
+- The compliance exports and forecast used to grade every member against every
+  requirement; where a requirement does not apply to someone they now print
+  **N/A**. The dashboard, matrix and member status also now honour
+  **role-scoped** requirements, which My Training already did.
+
+Grandfathering changes and splits are written to the audit log. Nothing changes
+on upgrade: a requirement with no cutoff behaves exactly as before.
+
+> **Screenshots:** `02-16-requirements` should be re-shot once to show the
+> **Existing Members** section; two new shots are needed — the **who does this
+> change reach** dialog and the program's **Members already enrolled** choice.
+> See [`SCREENSHOT_CURRENCY.md`](./SCREENSHOT_CURRENCY.md).
+
 ---
 
 ## Officer Dashboard
@@ -1102,7 +1160,7 @@ Shift completion reports are filed by shift officers after each shift. They reco
 
 - **Trainee name** and linked shift
 - **Hours on shift** — auto-populated from shift attendance records
-- **Calls responded** — auto-populated from ShiftCall records where the trainee was a responding member
+- **Calls responded** — auto-populated per member: from ShiftCall records where they were a responding member, or, for a department that records a call count at close-out, from the call credit the close-out gave them
 - **Call types** — extracted from incident types of matching ShiftCall records
 - **Performance rating** (1-5 scale, configurable label and scale type)
 - **Areas of strength** and **areas for improvement** (encrypted at rest with AES-256)
@@ -1110,7 +1168,7 @@ Shift completion reports are filed by shift officers after each shift. They reco
 - **Skills observed** — structured list of `{skill_name, demonstrated, score (1-5), notes, comment}` entries. Each skill can be scored on a 1-5 scale: 1=Needs work, 2=Developing, 3=Competent, 4=Proficient, 5=Excellent. Scores flow through to `SkillCheckoff` records and the competency score history
 - **Tasks performed** — structured list of `{task, description, comment}` entries
 
-These reports **automatically update training program progress** for enrolled members. When a report is filed (or a draft is completed), the system credits hours, shift count, and call count toward matching requirements. Call type requirements support **case-insensitive matching** against the report's call_types array — only calls matching the required types count toward progress.
+These reports **automatically update training program progress** for enrolled members. When a report is filed (or a draft is completed), the system credits hours, shift count, and call count toward matching requirements. Call type requirements count only calls of the types they name, matched **by type rather than by spelling** _(2026-10-04)_: a requirement stores the department's call-type slugs (picked in the requirement editor's **Call types that count**), and a report's calls match whether they were stored as that slug, as the type's label, or as the same words typed before the picker existed. Until then matching was an exact case-insensitive string comparison, so a requirement naming `mva` never counted a report listing "Motor Vehicle Accident".
 
 Which requirements a report advanced is recorded on the report
 (`requirements_progressed`) but is not shown anywhere in the interface — not on
@@ -1118,6 +1176,33 @@ the card, not in the expanded body, and not in the review modal. Check the
 member's enrolment progress to see the credit land.
 
 ![Filed shift reports listing trainee, date, hours, calls and rating](./images/02-31-shift-reports-filed.png)
+
+### One call-type list _(2026-10-04)_
+
+A department has **one** list of call types, edited in **Scheduling → Settings
+→ General → Call types**: add a specialized type, rename one, turn off one that
+doesn't apply (it stops being offered but history keeps it), or delete one that
+has never been used. Everything else reads that list:
+
+| Where                                             | Stores                      |
+| ------------------------------------------------- | --------------------------- |
+| Close-out call count (count-only departments)     | the type's slug             |
+| Call log **Incident type** (detailed departments) | the type's name             |
+| Shift report **Call Types** chips, manual reports | name, or slug on count-only |
+| A calls requirement's **Call types that count**   | the type's slug             |
+
+Requirements match by type, so it doesn't matter which column a report used.
+That is what makes call-specific advancement work: pick, say, **Motor Vehicle
+Accident** on a pipeline requirement for 5 calls, and every MVA a trainee is
+credited with on a shift report counts toward it.
+
+A type a training requirement counts can't be deleted — turn it off instead,
+or take it off the requirement first.
+
+The separate free-text **Call / Incident Types** list that used to live under
+Shift Reports settings is gone. Migration `edf608b5a8ea` copied each
+department's entries into its call-type list (skipping any that already named a
+type), so nothing an officer could pick before has disappeared.
 
 ### Shift Finalization Workflow _(2026-03-28)_
 
@@ -1150,15 +1235,56 @@ what the shift already knows.
 1. Go to **Shift Scheduling → Shift Reports → + New** and pick a shift from the
    list of the last fortnight — each row names the apparatus, the date, and how
    many members and calls it carried.
-2. **Hours on Shift** and **Calls Responded** arrive filled from the shift, and
-   the **crew arrives with it**, each member tagged with the position they rode
+2. **Hours on Shift** arrives filled from the shift, and the **crew arrives
+   with it**, each member tagged with the position they rode
    and — where they are enrolled in a pipeline — the pipeline they are a trainee
    on.
-3. Everything is editable before you file. The tick box beside each member
+3. Each crew member's row carries their own **Calls** figure, marked _from
+   close-out_ or _from call log_ _(2026-10-04)_. It is what will be stored
+   unless you change it; change it for anyone whose number is wrong and only
+   that member's report takes your figure. A lowered or raised count is stored
+   without call types, because nothing records which calls were dropped or
+   added. Before the shift is finalized, a member the close-out never adjusted
+   is credited the apparatus's full count, the same default finalizing uses.
+   There is no longer a single shift-wide calls box: for a linked shift it was
+   never stored, so it showed one number and saved another.
+4. Everything is editable before you file. The tick box beside each member
    controls who a report is filed for; **Evaluate** opens the rating and
    narrative fields for a trainee.
-4. The `data_sources` field records which values were carried over and which
+5. The `data_sources` field records which values were carried over and which
    the officer typed, for audit.
+
+> **Reports filed by the officer on the rig** _(2026-10-04)_. **Scheduling →
+> Settings → Shift Reports → Filing & Validation → Reports are filed by the
+> officer on the rig** restricts a shift's reports to its assigned **Shift
+> Officer**: the form lists only shifts you were officer on, the server refuses
+> anyone else (including a whole batch, with the reason, rather than skipping
+> each member), and the drafts created when a shift is finalized are assigned
+> to the Shift Officer instead of whoever finalized it. A shift with no Shift
+> Officer can't have reports until one is set. Off by default; reports not
+> linked to a shift are unaffected. Stored as
+> `settings.shift_reports.authorship = "shift_officer"`.
+
+> **Only the Shift Officer sees File Shift Report** _(2026-10-04)_. The
+> button on a finished shift's detail panel is shown to that shift's assigned
+> Shift Officer and nobody else — scheduling managers included, who still file
+> from **Shift Reports → New report**. The Shift Officer can file their own
+> shift's reports and complete the drafts assigned to them **without** the
+> `training.manage` permission, so an acting officer in the seat is not stuck:
+> the button opens the form, and a **Drafts** switch appears beside "Shift
+> reports about you" when they have drafts to finish. That grant reaches only
+> their own shift — no other shift, and none of the review, analytics or
+> listing screens.
+
+> **You are never on your own crew list** _(2026-10-04)_. A report is an
+> officer's account of someone else's shift, and one about yourself would
+> credit your own hours, calls and ratings toward your own requirements with
+> nobody else's eyes on it. The form leaves you off the crew, the server
+> refuses a report whose trainee is its author (a batch skips that member and
+> files the rest), and finalizing a shift does not draft one for a trainee who
+> closed out that shift themselves and has no evaluator named on their
+> training slot. Reports about yourself filed before this change are left as
+> they are.
 
 ![A shift completion report — the hours and calls carried over from the shift, its crew listed, and the buttons that file the batch](./images/02-102-shift-report-crew-form.png)
 
@@ -1344,7 +1470,7 @@ shift to draw a crew from.
 - **Auto-populate edge case:** If the trainee is not found in the shift's attendance records, the preview returns zeroed data. If there are no ShiftCall records, calls_responded defaults to 0 and call_types is empty.
 - **Trainee with assignment but no attendance:** If a trainee has a shift assignment but no attendance record (e.g., they were assigned but didn't check in), the auto-populate returns zeros and the officer can manually enter hours.
 - **Report shift_date validation:** When a report is linked to a specific shift, the report's `shift_date` must match the linked shift's actual date. A mismatch returns a validation error.
-- **Call type matching:** Requirements with `required_call_types` use case-insensitive matching. "Medical" in a requirement matches "medical" in a call type. The system tracks matched types in `progress_notes` for audit.
+- **Call type matching:** Requirements with `required_call_types` match calls by type: the department's slug, its label and legacy free text that folds to either (case, spaces, underscores and hyphens ignored) all count as the same type. "Medical" in a requirement still matches "medical" on a report. The system tracks matched types in `progress_notes` for audit. See **One call-type list** below.
 - **Ad hoc reports:** Reports filed without a `shift_id` are saved as ad hoc reports — no auto-population is available, and they appear in reports as "ad hoc".
 - **Failure isolation during finalization:** If draft auto-creation fails for one trainee, the error is logged and processing continues for remaining attendees.
 - **All form sections toggled off:** When all optional sections are disabled, only core fields (trainee, shift date, hours, calls) remain on the form. The form is still submittable.

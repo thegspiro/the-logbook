@@ -12,6 +12,7 @@ import type { User } from '../../../types/user';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { apparatusOperatorService, evocLevelService } from '../services/api';
 import type { ApparatusOperator, ApparatusOperatorCreate, ApparatusOperatorUpdate, EvocLevel } from '../types';
+import { displayNameOf } from '../../../utils/memberName';
 
 interface OperatorModalProps {
   isOpen: boolean;
@@ -178,7 +179,7 @@ export const OperatorModal: React.FC<OperatorModalProps> = ({
               <option value="">Select a member...</option>
               {members.map((member) => (
                 <option key={member.id} value={member.id}>
-                  {member.first_name} {member.last_name}
+                  {displayNameOf(member)}
                 </option>
               ))}
             </select>

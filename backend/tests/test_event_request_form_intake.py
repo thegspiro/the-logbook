@@ -62,7 +62,8 @@ def _service(org, *, coordinator_found=True):
     db.add = MagicMock()
     # 1) the organization, 2) the default coordinator's org membership check
     db.scalar.side_effect = [org, COORDINATOR_ID if coordinator_found else None]
-    db.execute.return_value = SimpleNamespace(first=lambda: ("Sam", "Ortiz"))
+    # (first_name, last_name, preferred_name) for the coordinator's name
+    db.execute.return_value = SimpleNamespace(first=lambda: ("Sam", "Ortiz", None))
     return FormsService(db), db
 
 
