@@ -16,9 +16,28 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR TBD** — Feature 02 (Permissions & roles), pass 7. Branch
-`claude/security-review-permissions-roles`, opened by this iteration; number
-recorded in a follow-up commit on the same branch once opened.
+**PR [#2933](https://github.com/thegspiro/the-logbook/pull/2933)**: branch
+`claude/security-review-permissions-roles`, Feature 02 (Permissions &
+roles), pass 7.
+
+- **Result:** 0 fixes, 0 new findings, 0 flagged. Docs-only diff.
+- **Method:** six of eleven scoped files had changed since pass 6's baseline
+  (`ea2b1ef87`, PR #2596) — 113 commits touched migrations alone. All 28
+  routes individually re-enumerated; unchanged.
+- **Still open:** PERM-5, re-confirmed unchanged and reproduced directly
+  against the current seed. A fix for it already exists on a different,
+  unmerged branch (PR #2918) — not duplicated here.
+- **Also in this PR:** the #2924 closure (docs-only, nothing else to
+  record).
+- **Gate:** backend flake8/black/isort clean, `validate_migrations.py
+--strict` (512 revisions, single head), `check_route_permissions.py
+--strict` (244 routes), `check_docs_links.py` clean, 1448 scoped + 212
+  standing-guard backend tests, full backend unit suite (12574 passed, 1
+  pre-existing skip), frontend typecheck and lint clean.
+- **Watching:** subscribed for CI/review events.
+
+Full write-up:
+[`PERM-02-permissions-roles.md`](./PERM-02-permissions-roles.md) → Pass 7.
 
 <details>
 <summary>Superseded — prior Open PR note (PR #2924 merged, docs-only; rotation picked up Feature 02 — the state this PR opened from), preserved for history</summary>
