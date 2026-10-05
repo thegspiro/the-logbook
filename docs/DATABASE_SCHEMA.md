@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**288 tables · 4734 columns · 940 foreign keys**
+**288 tables · 4736 columns · 940 foreign keys**
 
 ---
 
@@ -228,14 +228,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`facility_capital_projects`](#facility_capital_projects) | `FacilityCapitalProject` | 23 | Capital improvement and renovation projects for a facility |
 | [`facility_compliance_checklists`](#facility_compliance_checklists) | `FacilityComplianceChecklist` | 14 | Regulatory/compliance checklists for a facility |
 | [`facility_compliance_items`](#facility_compliance_items) | `FacilityComplianceItem` | 13 | Individual items within a compliance checklist |
-| [`facility_documents`](#facility_documents) | `FacilityDocument` | 12 | Documents associated with a facility (blueprints, permits, leases, etc.) |
+| [`facility_documents`](#facility_documents) | `FacilityDocument` | 13 | Documents associated with a facility (blueprints, permits, leases, etc.) |
 | [`facility_emergency_contacts`](#facility_emergency_contacts) | `FacilityEmergencyContact` | 15 | Emergency/vendor contacts for a facility (alarm company, plumber, etc.) |
 | [`facility_inspections`](#facility_inspections) | `FacilityInspection` | 24 | Inspection records for facilities — fire inspections, building code, |
 | [`facility_insurance_policies`](#facility_insurance_policies) | `FacilityInsurancePolicy` | 20 | Insurance policies covering a facility |
 | [`facility_maintenance`](#facility_maintenance) | `FacilityMaintenance` | 28 | Maintenance records for facilities. |
 | [`facility_maintenance_types`](#facility_maintenance_types) | `FacilityMaintenanceType` | 11 | Types of maintenance work that can be performed on facilities. |
 | [`facility_occupants`](#facility_occupants) | `FacilityOccupant` | 14 | Units, crews, or teams assigned to a facility |
-| [`facility_photos`](#facility_photos) | `FacilityPhoto` | 10 | Photos associated with a facility |
+| [`facility_photos`](#facility_photos) | `FacilityPhoto` | 11 | Photos associated with a facility |
 | [`facility_rooms`](#facility_rooms) | `FacilityRoom` | 19 | Individual rooms and spaces within a facility |
 | [`facility_shutoff_locations`](#facility_shutoff_locations) | `FacilityShutoffLocation` | 11 | Utility shutoff locations within a facility (water main, gas main, etc.) |
 | [`facility_statuses`](#facility_statuses) | `FacilityStatus` | 10 | Facility statuses (e.g. Operational, Under Renovation). |
@@ -2054,8 +2054,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `idx_doc_folders_org` (`organization_id`)
+- `idx_doc_folders_org_slug` (`organization_id`, `slug`)
 - `idx_doc_folders_owner` (`owner_user_id`)
 - `idx_doc_folders_parent` (`parent_id`)
+- `idx_doc_folders_parent_slug` (`parent_id`, `slug`)
 
 ### `documents`
 
@@ -3139,6 +3141,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `facility_id` | VARCHAR(36) | no | FK, IDX |  | → `facilities.id` ON DELETE CASCADE |
 | `file_path` | VARCHAR(500) | no |  |  |  |
+| `document_id` | VARCHAR(36) | yes |  |  |  |
 | `file_name` | VARCHAR(200) | no |  |  |  |
 | `mime_type` | VARCHAR(100) | yes |  |  |  |
 | `document_type` | VARCHAR(100) | yes | IDX |  |  |
@@ -3152,6 +3155,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_facility_documents_expiration` (`expiration_date`)
 - `idx_facility_documents_facility` (`facility_id`)
+- `idx_facility_documents_org_document` (`organization_id`, `document_id`)
 - `idx_facility_documents_type` (`document_type`)
 - `ix_facility_documents_organization_id` (`organization_id`)
 
@@ -3377,6 +3381,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `facility_id` | VARCHAR(36) | no | FK, IDX |  | → `facilities.id` ON DELETE CASCADE |
 | `file_path` | VARCHAR(500) | no |  |  |  |
+| `document_id` | VARCHAR(36) | yes |  |  |  |
 | `file_name` | VARCHAR(200) | no |  |  |  |
 | `mime_type` | VARCHAR(100) | yes |  |  |  |
 | `caption` | VARCHAR(500) | yes |  |  |  |
@@ -3387,6 +3392,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `idx_facility_photos_facility` (`facility_id`)
+- `idx_facility_photos_org_document` (`organization_id`, `document_id`)
 - `ix_facility_photos_organization_id` (`organization_id`)
 
 ### `facility_rooms`

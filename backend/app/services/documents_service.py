@@ -962,12 +962,12 @@ class DocumentsService:
         organization_id: UUID,
     ) -> List[str]:
         """Row ids of ``model`` (``FacilityDocument`` or ``FacilityPhoto``)
-        whose ``file_path`` resolves to one of ``target_document_ids``.
+        that reference one of ``target_document_ids``.
 
-        Matches by *parsed* UUID, not the stored string (FAC-27): a
-        ``"document:<uuid>"`` reference validates as long as ``UUID(...)``
-        accepts the suffix, which is looser than the single canonical
-        lowercase, unbraced form an exact-string match would require.
+        Matches on ``document_id``, the canonical id the model derives from
+        ``file_path`` on every write, so every spelling of the reference that
+        ``UUID(...)`` accepts (uppercase, braced, ...) is found, not only the
+        lowercase hyphenated one an exact string match would require (FAC-27).
 
         FAC-29 (Codex): ``with_for_update()`` -- a plain SELECT answers from
         the snapshot taken at this transaction's *first* read (InnoDB
@@ -978,25 +978,34 @@ class DocumentsService:
         of when the snapshot was taken -- the same fix this codebase already
         applies to every capacity check (CLAUDE.md Pitfall #27) -- so a
         reference filed a moment ago is never missed here.
+
+        FAC-41: the predicate is satisfied by the ``(organization_id,
+        document_id)`` index, so the read locks the matching index entries and
+        the gaps beside them. A concurrent insert of a reference to one of
+        these documents lands in a locked gap and waits (FAC-29 still holds);
+        a reference to any other document does not. The earlier
+        ``file_path LIKE 'document:%'`` scan had no usable index and locked
+        every shared-document reference in the organization. It must stay a
+        single locking query: an unlocked lookup followed by a lock on the
+        ids it found would read from the stale snapshot and reopen FAC-29.
         """
+        canonical_ids = set()
+        for document_id in target_document_ids:
+            try:
+                canonical_ids.add(str(UUID(str(document_id))))
+            except ValueError:
+                continue
+        if not canonical_ids:
+            return []
         rows = await self.db.execute(
-            select(model.id, model.file_path)
+            select(model.id)
             .where(
                 model.organization_id == str(organization_id),
-                model.file_path.like("document:%", escape=LIKE_ESCAPE_CHAR),
+                model.document_id.in_(sorted(canonical_ids)),
             )
             .with_for_update()
         )
-        matched_ids: List[str] = []
-        for row_id, file_path in rows.all():
-            suffix = file_path[len("document:") :]
-            try:
-                parsed_id = str(UUID(suffix))
-            except (ValueError, AttributeError, TypeError):
-                continue
-            if parsed_id in target_document_ids:
-                matched_ids.append(row_id)
-        return matched_ids
+        return list(rows.scalars().all())
 
     # ============================================
     # Document Management
@@ -1756,6 +1765,11 @@ class DocumentsService:
         from both its fast (no creation needed) and slow (creation-guarded)
         paths without duplicating the query, and so a test can
         patch-and-track it.
+
+        FAC-44: ``idx_doc_folders_org_slug`` satisfies ``organization_id`` +
+        ``slug``, and its entries are ordered by primary key within that pair,
+        so ``ORDER BY id LIMIT 1`` reads (and locks) the root's own entry
+        rather than walking the organization's folders in id order.
         """
         result = await self.db.execute(
             select(DocumentFolder)
@@ -1780,6 +1794,9 @@ class DocumentsService:
         ``.with_for_update()`` takes a gap lock when nothing matches, and
         the slow path is the only place that gap lock is safe to take (see
         FAC-45's docstring on ``ensure_facility_folder``).
+
+        FAC-44: ``idx_doc_folders_parent_slug`` satisfies both predicates, so
+        a sibling facility's folder is no longer locked on the way past.
         """
         result = await self.db.execute(
             select(DocumentFolder)
