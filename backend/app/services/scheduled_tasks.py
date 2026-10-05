@@ -4688,17 +4688,45 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
 
     window_days = 30
 
+    # Three columns, not six: a phone gives the email about 300px of card, and
+    # six columns of headers alone overran it, pushing the stock count — the
+    # number the officer acts on — off the right edge. Where an item is and
+    # how long it has left ride as a second line under the item and the date.
     def _cell(content: str, extra: str = "") -> str:
         return (
-            f"<td style='padding:6px 12px;border-bottom:1px solid #eee;{extra}'>"
-            f"{content}</td>"
+            "<td style='padding:8px;border-bottom:1px solid #eee;"
+            f"vertical-align:top;{extra}'>{content}</td>"
+        )
+
+    def _th(label: str, align: str = "left") -> str:
+        return f'<th style="padding:8px;text-align:{align};">{label}</th>'
+
+    def _stacked(primary: str, secondary: str) -> str:
+        """*primary* over a smaller grey *secondary*; both already escaped."""
+        if not secondary:
+            return primary
+        return (
+            f"{primary}<br><span style='color:#6b7280;font-size:12px;'>"
+            f"{secondary}</span>"
         )
 
     def _days_label(days: Optional[int], color: str) -> str:
         if days is None:
-            return "&mdash;"
-        text = "expired" if days < 0 else f"{days}d"
+            return ""
+        text = "expired" if days < 0 else f"{days}d left"
         return f"<strong style='color:{color};'>{text}</strong>"
+
+    def _expires_cell(
+        expiration: Optional[date], days: Optional[int], color: str
+    ) -> str:
+        # The fallback is markup, so it is never passed through escape():
+        # doing so is what mailed a literal "&mdash;" for an undated row.
+        when = _html.escape(str(expiration)) if expiration else "&mdash;"
+        return _cell(_stacked(when, _days_label(days, color)), "white-space:nowrap;")
+
+    # Long unbroken names (a part number, a lot code) must wrap inside the
+    # cell rather than widen the table past the card.
+    _wrap = "word-break:break-word;overflow-wrap:anywhere;"
 
     async def process(db_session: AsyncSession, org: Organization) -> int:
         # One department-local date for every count in the email; the job runs
@@ -4740,20 +4768,29 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
                 return ""
             body = ""
             for item in rows:
-                days = item.get("days_until_expiration")
+                location = " &middot; ".join(
+                    _html.escape(str(part))
+                    for part in (
+                        item.get("apparatus_name"),
+                        item.get("compartment_name"),
+                    )
+                    if part
+                )
                 body += (
                     "<tr>"
-                    + _cell(_html.escape(str(item.get("item_name") or "Unknown")))
-                    + _cell(_html.escape(str(item.get("apparatus_name") or "&mdash;")))
                     + _cell(
-                        _html.escape(str(item.get("compartment_name") or "&mdash;"))
+                        _stacked(
+                            _html.escape(str(item.get("item_name") or "Unknown")),
+                            location,
+                        ),
+                        _wrap,
                     )
-                    + _cell(_html.escape(str(item.get("expiration_date") or "&mdash;")))
-                    + _cell(_days_label(days, color), "text-align:center;")
-                    + _cell(
-                        str(item.get("ready_stock", 0)),
-                        "text-align:center;",
+                    + _expires_cell(
+                        item.get("expiration_date"),
+                        item.get("days_until_expiration"),
+                        color,
                     )
+                    + _cell(str(item.get("ready_stock", 0)), "text-align:center;")
                     + "</tr>"
                 )
             return f"""
@@ -4761,12 +4798,7 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
                 <p style="color:#6b7280;font-size:13px;margin:4px 0;">{note}</p>
                 <table style="width:100%;border-collapse:collapse;margin:8px 0;">
                     <thead><tr style="background:#f3f4f6;">
-                        <th style="padding:8px 12px;text-align:left;">Item</th>
-                        <th style="padding:8px 12px;text-align:left;">Apparatus</th>
-                        <th style="padding:8px 12px;text-align:left;">Compartment</th>
-                        <th style="padding:8px 12px;text-align:left;">Expires</th>
-                        <th style="padding:8px 12px;text-align:center;">In</th>
-                        <th style="padding:8px 12px;text-align:center;">Ready stock</th>
+                        {_th("Item")}{_th("Expires")}{_th("Ready stock", "center")}
                     </tr></thead>
                     <tbody>{body}</tbody>
                 </table>
@@ -4781,12 +4813,16 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
                     (lot.expiration_date - today).days if lot.expiration_date else None
                 )
                 color = "#dc2626" if days is not None and days < 0 else "#ca8a04"
+                lot_label = (
+                    f"Lot {_html.escape(str(lot.lot_number))}" if lot.lot_number else ""
+                )
                 body += (
                     "<tr>"
-                    + _cell(_html.escape(item_name or "Unknown"))
-                    + _cell(_html.escape(lot.lot_number or "&mdash;"))
-                    + _cell(_html.escape(str(lot.expiration_date or "&mdash;")))
-                    + _cell(_days_label(days, color), "text-align:center;")
+                    + _cell(
+                        _stacked(_html.escape(item_name or "Unknown"), lot_label),
+                        _wrap,
+                    )
+                    + _expires_cell(lot.expiration_date, days, color)
                     + _cell(str(lot.quantity), "text-align:center;")
                     + "</tr>"
                 )
@@ -4800,11 +4836,7 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
                 </p>
                 <table style="width:100%;border-collapse:collapse;margin:8px 0;">
                     <thead><tr style="background:#f3f4f6;">
-                        <th style="padding:8px 12px;text-align:left;">Item</th>
-                        <th style="padding:8px 12px;text-align:left;">Lot</th>
-                        <th style="padding:8px 12px;text-align:left;">Expires</th>
-                        <th style="padding:8px 12px;text-align:center;">In</th>
-                        <th style="padding:8px 12px;text-align:center;">Qty</th>
+                        {_th("Item")}{_th("Expires")}{_th("Qty", "center")}
                     </tr></thead>
                     <tbody>{body}</tbody>
                 </table>

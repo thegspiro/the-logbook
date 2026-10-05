@@ -351,3 +351,57 @@ class TestDomainIsolationInAlerts:
         body = captured["all"][0]["html_body"]
         assert "Epi 1:1000" in body
         assert "Turnout Hood" in body
+
+
+class TestSupplyExpirationLayout:
+    """The email is read on a phone, where six columns overran the card."""
+
+    async def test_an_undated_row_shows_a_dash_not_an_escaped_entity(self, sent):
+        captured, overview, lots = sent
+        undated = _deployed("Tourniquets", ready_stock=0)
+        undated.update(
+            apparatus_name=None, expiration_date=None, days_until_expiration=None
+        )
+        overview.return_value = {"items": [undated]}
+        lots.return_value = [_lot(expiration=None)]
+        lots.return_value[0][0].lot_number = None
+
+        await run_supply_expiration_alerts(_db())
+
+        html = captured["html_body"]
+        # Escaping the fallback is what mailed a literal "&mdash;".
+        assert "&amp;mdash;" not in html
+        assert "&mdash;" in html
+        # A missing apparatus is dropped from the location, not dashed.
+        assert "Tourniquets<br>" in html
+        assert "Compartment 1</span>" in html
+        assert "Lot None" not in html
+
+    async def test_each_table_has_three_columns(self, sent):
+        captured, overview, lots = sent
+        overview.return_value = {"items": [_deployed("4x4 Gauze", ready_stock=0)]}
+        lots.return_value = [_lot()]
+
+        await run_supply_expiration_alerts(_db())
+
+        html = captured["html_body"]
+        assert html.count("<th style=") == 6
+        for gone in (">Apparatus<", ">Compartment<", ">Lot<", ">In<"):
+            assert gone not in html
+        assert "Engine 1 &middot; Compartment 1" in html
+        assert "10d left" in html
+        assert "Lot LOT-" in html
+
+    async def test_names_are_escaped(self, sent):
+        captured, overview, lots = sent
+        hostile = _deployed("<b>Epi</b>", ready_stock=0)
+        hostile["apparatus_name"] = "E&1"
+        overview.return_value = {"items": [hostile]}
+        lots.return_value = []
+
+        await run_supply_expiration_alerts(_db())
+
+        html = captured["html_body"]
+        assert "<b>Epi</b>" not in html
+        assert "&lt;b&gt;Epi&lt;/b&gt;" in html
+        assert "E&amp;1 &middot;" in html
