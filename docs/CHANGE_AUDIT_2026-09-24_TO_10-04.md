@@ -513,7 +513,8 @@ is no longer true). The new entries:
     pull request, with the two endpoint defects it hid);
   - the stale Reset banner on Email Templates (since fixed in this pull
     request);
-  - NFC hashes depending on `ENCRYPTION_SALT`;
+  - NFC hashes depending on `ENCRYPTION_SALT` (kept by owner decision; the
+    key-rotation, backup and deployment docs now name it);
   - the probationary checks left for an owner decision;
   - the API-side gap in the ID-card gate (since fixed in this pull request).
 - Updated: W46-13 is marked resolved by #2882, and the Finance "Add Approval

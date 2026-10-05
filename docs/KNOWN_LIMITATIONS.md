@@ -520,6 +520,10 @@ guides can point at one place and an owner can decide it.
   `ENCRYPTION_SALT` therefore orphans every registered tag and card: taps stop
   matching and each must be registered again. `docs/KEY_ROTATION.md` already
   says not to change the salt; this is one more reason. **Accepted.**
+  ✅ **Covered 2026-10-05:** the owner chose to keep the salt as the pepper
+  rather than add a separate secret, which would force every tag and card to
+  be registered again. `KEY_ROTATION.md`, `BACKUP.md` and `DEPLOYMENT.md` now
+  name NFC tags and ID cards among what a changed or mismatched salt breaks.
 - **Probationary counts as active only where `User.is_active` is read**
   (#2886). Sign-in, scheduling, messaging recipients and the other
   `is_active` callers now admit probationary and junior members. About forty

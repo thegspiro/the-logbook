@@ -464,7 +464,7 @@ openssl rand -hex 16
 openssl rand -base64 32
 ```
 
-**Important:** The `ENCRYPTION_SALT` must be unique for each installation and is used for secure key derivation. Never share this value between installations.
+**Important:** The `ENCRYPTION_SALT` must be unique for each installation and is used for secure key derivation. Never share this value between installations. Never change it once the installation is in use: it invalidates every encryption key, and every registered NFC tag and ID card stops matching, because their UIDs are stored only as hashes peppered with it (see [KEY_ROTATION.md](./KEY_ROTATION.md)).
 
 ---
 

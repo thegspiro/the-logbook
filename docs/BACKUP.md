@@ -66,6 +66,9 @@ safe, vault) of at minimum:
 - `ENCRYPTION_KEY` + `ENCRYPTION_SALT` — **without these, every encrypted
   field in the database backup (MFA secrets, medical evaluation narratives,
   integration credentials) is permanently unrecoverable.** There is no reset.
+  Restoring with a different `ENCRYPTION_SALT` also leaves every registered
+  NFC tag and ID card unmatched — their UIDs are stored only as salted
+  hashes — so each would have to be registered again.
 - `DB_PASSWORD`, `MYSQL_ROOT_PASSWORD`, `REDIS_PASSWORD`
 
 Treat the key copy with the same care as the backups themselves — either one
