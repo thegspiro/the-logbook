@@ -16,12 +16,53 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2941](https://github.com/thegspiro/the-logbook/pull/2941)**: branch
+`claude/security-review-finance-approvals`, Feature 05 (Finance &
+approvals), pass 7.
+
+- **Result:** 1 fix (FIN-33, MED), 0 flagged.
+- **Method:** a real delta since pass 6's closing merge (`7754eccd7`, PR
+  #2599) — 41 files, 3,771 insertions, mainly a new manual-approval path for
+  requests with no matching approval chain. Reviewed in full against the
+  model: org-scoped, race-safe, separation-of-duties guarded, and
+  structurally unreachable by any routed request. `public/finance_
+approvals.py` is byte-identical to pass 6's reviewed state — re-read in
+  full anyway per the checklist's own rule.
+- **FIN-33 (MED, fixed):** `record_dues_payment` read-then-recomputed the
+  dues ledger aggregate (`amount_paid`/`status`) with no row lock —
+  CLAUDE.md Pitfall #27, the same shape FIN-31 fixed for `Budget`. Two
+  concurrent payments against the same dues record could race, silently
+  dropping one from the cached total. Fixed with `.with_for_update()`,
+  guarded by a new source-inspection test confirmed red pre-fix.
+- **Still open:** `list_dues_payments` unbounded (FIN-30, LOW),
+  `get_pending_approvals`'s lack of per-assignee filtering, the eight
+  non-ledger status-transition locks, and `record_dues_payment`'s missing
+  separation-of-duties guard — all four re-confirmed unchanged, all already
+  mirrored in `KNOWN_LIMITATIONS.md`.
+- **Gate:** backend flake8/black/isort clean, `validate_migrations.py
+--strict` (512 revisions, single head), `check_route_permissions.py
+--strict` (244 routes, 0 errors), `generate_schema_docs.py` zero diff,
+  scoped pytest (510 passed), cross-cutting guard tests (120 passed, incl.
+  the new one), full backend unit suite (12,609 passed, 1 pre-existing
+  skip, 0 failed), frontend typecheck/lint clean, finance vitest suite (188
+  passed), route-registry guard tests confirm the new `/finance/approvals`
+  route in all three Pitfall #30a registries.
+- **Watching:** subscribed for CI/review events.
+
+Full write-up:
+[`FIN-05-finance-approvals.md`](./FIN-05-finance-approvals.md) → Pass 7.
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #2940's merge, Feature 04, Storefront & payments, pass 7 — the state this pass's PR opened from), preserved for history</summary>
+
 **None.** PR [#2940](https://github.com/thegspiro/the-logbook/pull/2940)
 (Feature 04, Storefront & payments, pass 7) merged, docs-only (0 fixes, 0 new
 findings — a findings-file and tracker write-up only) — nothing to record per
 the skill's own rule ("a docs-only PR is not a recordable event"). Rotation
 row 04 stays ✅. This iteration picked up Feature 05 (Finance & approvals,
 pass 7), the state this PR opened from.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #2940, Feature 04, Storefront & payments, pass 7, before it merged), preserved for history</summary>
