@@ -15,9 +15,9 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from uuid import UUID
 
 from loguru import logger
-from sqlalchemy import case
+from sqlalchemy import and_, case
 from sqlalchemy import delete as sa_delete
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
@@ -127,6 +127,75 @@ def _get_user_role_slugs(user: User) -> Set[str]:
 def _is_leadership(user_permissions: Set[str]) -> bool:
     """Check if the user has any leadership-level permission."""
     return bool(user_permissions & LEADERSHIP_PERMISSIONS)
+
+
+def _json_has_value(column):
+    """SQL: does this JSON column hold something Python would read as truthy?
+
+    A superset, never a subset: it rules out only SQL NULL, JSON ``null`` (what
+    an explicit ``None`` is stored as) and an empty array — all falsy — so a
+    folder it passes over can never carry a restriction.
+    """
+    return and_(
+        column.is_not(None),
+        func.json_type(column) != "NULL",
+        not_(and_(func.json_type(column) == "ARRAY", func.json_length(column) == 0)),
+    )
+
+
+def restricted_folders_query(organization_id: str):
+    """The org's folders that carry any restriction of their own.
+
+    Only these can turn a caller away; an organization-visible folder with no
+    roles, permissions or owner admits everyone who can see its parent. Both
+    access-scope computations judge just these rows in Python, then let
+    ``reachable_folder_ids`` walk the tree in SQL (DOC-9, DOC-30).
+    """
+    return select(DocumentFolder).where(
+        DocumentFolder.organization_id == str(organization_id),
+        or_(
+            DocumentFolder.visibility != FolderVisibility.ORGANIZATION,
+            DocumentFolder.owner_user_id.is_not(None),
+            _json_has_value(DocumentFolder.allowed_roles),
+            _json_has_value(DocumentFolder.required_permissions),
+        ),
+    )
+
+
+async def reachable_folder_ids(
+    db: AsyncSession, organization_id: str, blocked: Set[str]
+) -> Set[str]:
+    """Folders reachable from an org root without passing a blocked folder.
+
+    A folder is accessible exactly when it and every ancestor admit the
+    caller, so walking down from the roots and stopping at each folder that
+    turns the caller away yields the accessible set. The fail-closed cases
+    fall out of the walk: a folder whose parent is missing, in another
+    organization, or caught in a cycle is never reached from a root.
+    Recursive CTEs need MySQL 8.0 / MariaDB 10.2, both below the supported
+    floor.
+    """
+    org = str(organization_id)
+    blocked_ids = sorted(blocked)
+    roots = select(DocumentFolder.id).where(
+        DocumentFolder.organization_id == org,
+        DocumentFolder.parent_id.is_(None),
+    )
+    if blocked_ids:
+        roots = roots.where(DocumentFolder.id.not_in(blocked_ids))
+    tree = roots.cte("reachable_folders", recursive=True)
+    children = (
+        select(DocumentFolder.id)
+        .join(tree, DocumentFolder.parent_id == tree.c.id)
+        .where(DocumentFolder.organization_id == org)
+    )
+    if blocked_ids:
+        children = children.where(DocumentFolder.id.not_in(blocked_ids))
+    # UNION (distinct), not UNION ALL: it is what ends the recursion on a
+    # cycle that hangs below a reachable folder.
+    tree = tree.union(children)
+    result = await db.execute(select(tree.c.id))
+    return {str(row) for row in result.scalars().all()}
 
 
 class DocumentsService:
@@ -419,20 +488,18 @@ class DocumentsService:
         document query. This keeps unfiltered listings consistent with direct
         folder and document authorization.
         """
-        result = await self.db.execute(
-            select(DocumentFolder).where(
-                DocumentFolder.organization_id == str(organization_id)
-            )
-        )
-        folders = result.scalars().all()
-        folders_by_id = {str(folder.id): folder for folder in folders}
-        accessible = set()
-        for folder in folders:
-            if await self.can_access_folder(
-                folder, organization_id, user, folders_by_id
-            ):
-                accessible.add(folder.id)
-        return accessible
+        # Every folder in the organization used to be loaded and walked to
+        # its root here, on every listing (DOC-9). Only folders carrying a
+        # restriction can turn the caller away, so only those are judged in
+        # Python, by the same per-folder rule can_access_folder applies; the
+        # tree walk, with its fail-closed ancestry, runs in SQL.
+        result = await self.db.execute(restricted_folders_query(organization_id))
+        blocked = {
+            str(folder.id)
+            for folder in result.scalars().all()
+            if not self._folder_admits_user(folder, user)
+        }
+        return await reachable_folder_ids(self.db, str(organization_id), blocked)
 
     @staticmethod
     def _document_access_predicate(accessible_folder_ids: Optional[Set[str]]):
