@@ -4026,7 +4026,11 @@ class ElectionService:
         if accept:
             # The tier may have changed since the nomination was made.
             nominee = (
-                await self.db.execute(select(User).where(User.id == str(user_id)))
+                await self.db.execute(
+                    select(User)
+                    .where(User.id == str(user_id))
+                    .where(User.organization_id == str(organization_id))
+                )
             ).scalar_one_or_none()
             if nominee is not None and not await self.member_can_hold_office(
                 nominee, organization_id
