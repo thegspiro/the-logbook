@@ -58,7 +58,11 @@ def _active_locations(organization_id: str):
 
 
 def register(server: Any) -> None:
-    @logbook_tool(server, title="Department profile")
+    @logbook_tool(
+        server,
+        title="Department profile",
+        permissions=("organization.view", "settings.manage"),
+    )
     async def get_department_profile(db: AsyncSession, principal: McpPrincipal) -> dict:
         """The department's name, type, timezone, identifiers, how many active
         stations and locations it has (``list_locations`` names them), and
@@ -88,7 +92,11 @@ def register(server: Any) -> None:
             "active_location_count": location_count,
         }
 
-    @logbook_tool(server, title="List locations")
+    @logbook_tool(
+        server,
+        title="List locations",
+        permissions=("locations.view", "locations.manage"),
+    )
     async def list_locations(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -132,7 +140,11 @@ def register(server: Any) -> None:
             )
         return page(items, total, limit, offset)
 
-    @logbook_tool(server, title="Read location description")
+    @logbook_tool(
+        server,
+        title="Read location description",
+        permissions=("locations.view", "locations.manage"),
+    )
     async def get_location_description(
         db: AsyncSession,
         principal: McpPrincipal,

@@ -22,6 +22,7 @@ from app.mcp.principal import peek_principal
 from app.mcp.registry import (
     META_GATE,
     META_MODULE,
+    META_PERMISSIONS,
     audit_rejected_dispatch,
     gate_allows,
 )
@@ -78,8 +79,16 @@ class LogbookMcpServer(MCPServer):
                 principal,
                 (tool.meta or {}).get(META_GATE),
                 (tool.meta or {}).get(META_MODULE),
+                _permissions(tool),
             )
         ]
+
+
+def _permissions(tool: MCPTool) -> Optional[tuple[str, ...]]:
+    raw = (tool.meta or {}).get(META_PERMISSIONS)
+    if not isinstance(raw, list):
+        return None
+    return tuple(str(p) for p in raw)
 
 
 def build_server() -> LogbookMcpServer:

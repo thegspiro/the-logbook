@@ -260,6 +260,7 @@ from app.models.legal import (
     LegalRevisionStatus,
 )
 from app.models.location import Location
+from app.models.mcp_oauth import McpOAuthAuthorization, McpOAuthClient, McpOAuthGrant
 from app.models.mcp_service_key import McpServiceKey
 from app.models.medical_screening import (
     ScreeningRecord,
@@ -489,6 +490,9 @@ __all__ = [
     "Integration",
     "IntegrationSyncLog",
     "McpServiceKey",
+    "McpOAuthClient",
+    "McpOAuthGrant",
+    "McpOAuthAuthorization",
     # Analytics models
     "AnalyticsEvent",
     # Error log models

@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**289 tables · 4759 columns · 943 foreign keys**
+**292 tables · 4801 columns · 954 foreign keys**
 
 ---
 
@@ -380,6 +380,16 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`locations`](#locations) | `Location` | 22 | Location model for managing physical spaces |
+
+### Mcp_Oauth
+
+<sub>`app/models/mcp_oauth.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`mcp_oauth_authorizations`](#mcp_oauth_authorizations) | `McpOAuthAuthorization` | 16 |  |
+| [`mcp_oauth_clients`](#mcp_oauth_clients) | `McpOAuthClient` | 10 |  |
+| [`mcp_oauth_grants`](#mcp_oauth_grants) | `McpOAuthGrant` | 16 |  |
 
 ### Mcp_Service_Key
 
@@ -5978,6 +5988,88 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - UNIQUE `uq_locations_facility_room_id` (`facility_room_id`)
 
+## Mcp_Oauth
+
+### `mcp_oauth_authorizations`
+
+**McpOAuthAuthorization** · `app/models/mcp_oauth.py`
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `client_pk` | VARCHAR(36) | no | FK, IDX |  | → `mcp_oauth_clients.id` ON DELETE CASCADE |
+| `redirect_uri` | TEXT | no |  |  |  |
+| `scope` | VARCHAR(255) | no |  |  |  |
+| `state` | TEXT | yes |  |  |  |
+| `code_challenge` | VARCHAR(128) | no |  |  |  |
+| `resource` | VARCHAR(500) | no |  |  |  |
+| `status` | VARCHAR(16) | no |  | `'pending'` |  |
+| `user_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE CASCADE |
+| `code_hash` | VARCHAR(64) | yes | UQ, UQ-IDX |  |  |
+| `expires_at` | DATETIME | no |  |  |  |
+| `decided_at` | DATETIME | yes |  |  |  |
+| `consumed_at` | DATETIME | yes |  |  |  |
+| `grant_id` | VARCHAR(36) | yes | FK |  | → `mcp_oauth_grants.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_mcp_oauth_authorizations_client_pk` (`client_pk`)
+- UNIQUE `ix_mcp_oauth_authorizations_code_hash` (`code_hash`)
+- `ix_mcp_oauth_authorizations_organization_id` (`organization_id`)
+
+### `mcp_oauth_clients`
+
+**McpOAuthClient** · `app/models/mcp_oauth.py`
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `client_id` | VARCHAR(64) | no | UQ, UQ-IDX |  |  |
+| `client_secret_hash` | VARCHAR(64) | yes |  |  |  |
+| `name` | VARCHAR(100) | no |  |  |  |
+| `redirect_uris` | JSON | no |  |  |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `revoked_at` | DATETIME | yes |  |  |  |
+| `revoked_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+
+**Indexes**
+
+- UNIQUE `ix_mcp_oauth_clients_client_id` (`client_id`)
+- `ix_mcp_oauth_clients_organization_id` (`organization_id`)
+
+### `mcp_oauth_grants`
+
+**McpOAuthGrant** · `app/models/mcp_oauth.py`
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `client_pk` | VARCHAR(36) | no | FK, IDX |  | → `mcp_oauth_clients.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
+| `scope` | VARCHAR(255) | no |  |  |  |
+| `resource` | VARCHAR(500) | no |  |  |  |
+| `access_token_hash` | VARCHAR(64) | yes |  |  |  |
+| `access_expires_at` | DATETIME | yes |  |  |  |
+| `refresh_token_hash` | VARCHAR(64) | yes |  |  |  |
+| `refresh_expires_at` | DATETIME | yes |  |  |  |
+| `expires_at` | DATETIME | no |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `last_used_at` | DATETIME | yes |  |  |  |
+| `revoked_at` | DATETIME | yes |  |  |  |
+| `revoked_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `revoked_reason` | VARCHAR(32) | yes |  |  |  |
+
+**Indexes**
+
+- `ix_mcp_oauth_grants_client_pk` (`client_pk`)
+- `ix_mcp_oauth_grants_organization_id` (`organization_id`)
+- `ix_mcp_oauth_grants_user_id` (`user_id`)
+
 ## Mcp_Service_Key
 
 ### `mcp_service_keys`
@@ -10064,7 +10156,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (346 references)
+### → `users` (351 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10259,6 +10351,11 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `manual_ballot_attestations` | `attested_by` | SET NULL | yes |
 | `manual_ballot_batches` | `recorded_by` | SET NULL | yes |
 | `manual_ballot_batches` | `voided_by` | SET NULL | yes |
+| `mcp_oauth_authorizations` | `user_id` | CASCADE | yes |
+| `mcp_oauth_clients` | `created_by` | SET NULL | yes |
+| `mcp_oauth_clients` | `revoked_by` | SET NULL | yes |
+| `mcp_oauth_grants` | `revoked_by` | SET NULL | yes |
+| `mcp_oauth_grants` | `user_id` | CASCADE | no |
 | `mcp_service_keys` | `created_by` | SET NULL | yes |
 | `mcp_service_keys` | `revoked_by` | SET NULL | yes |
 | `meeting_action_items` | `assigned_to` | RESTRICT | yes |
@@ -10415,7 +10512,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (235 references)
+### → `organizations` (238 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10550,6 +10647,9 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `maintenance_records` | `organization_id` | CASCADE | no |
 | `manual_ballot_attestations` | `organization_id` | CASCADE | no |
 | `manual_ballot_batches` | `organization_id` | CASCADE | no |
+| `mcp_oauth_authorizations` | `organization_id` | CASCADE | no |
+| `mcp_oauth_clients` | `organization_id` | CASCADE | no |
+| `mcp_oauth_grants` | `organization_id` | CASCADE | no |
 | `mcp_service_keys` | `organization_id` | CASCADE | no |
 | `meeting_action_items` | `organization_id` | CASCADE | no |
 | `meeting_attendees` | `organization_id` | CASCADE | no |
@@ -11246,6 +11346,13 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `check_item_deployed_lots` | `inventory_lot_id` | SET NULL | yes |
 | `reorder_receipts` | `inventory_lot_id` | RESTRICT | no |
 
+### → `mcp_oauth_clients` (2 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `mcp_oauth_authorizations` | `client_pk` | CASCADE | no |
+| `mcp_oauth_grants` | `client_pk` | CASCADE | no |
+
 ### → `meeting_minutes` (2 references)
 
 | From table | Column | On delete | Nullable |
@@ -11477,6 +11584,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `manual_ballot_attestations` | `batch_id` | CASCADE | no |
+
+### → `mcp_oauth_grants` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `mcp_oauth_authorizations` | `grant_id` | SET NULL | yes |
 
 ### → `member_dues` (1 references)
 

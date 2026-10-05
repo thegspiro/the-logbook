@@ -83,7 +83,12 @@ async def _election(
 
 
 def register(server: Any) -> None:
-    @logbook_tool(server, title="List elections", module="elections")
+    @logbook_tool(
+        server,
+        title="List elections",
+        module="elections",
+        permissions=("elections.view", "elections.manage"),
+    )
     async def list_elections(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -142,7 +147,12 @@ def register(server: Any) -> None:
             )
         return page(items, total, limit, offset)
 
-    @logbook_tool(server, title="Read election description", module="elections")
+    @logbook_tool(
+        server,
+        title="Read election description",
+        module="elections",
+        permissions=("elections.view", "elections.manage"),
+    )
     async def get_election_description(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -158,7 +168,12 @@ def register(server: Any) -> None:
         body.update(_chunk(election.description or "", content_offset))
         return body
 
-    @logbook_tool(server, title="Election results", module="elections")
+    @logbook_tool(
+        server,
+        title="Election results",
+        module="elections",
+        permissions=("elections.view", "elections.manage"),
+    )
     async def get_election_results(
         db: AsyncSession, principal: McpPrincipal, election_id: str
     ) -> dict:

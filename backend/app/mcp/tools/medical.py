@@ -50,6 +50,7 @@ def register(server: Any) -> None:
         title="Member medical compliance",
         gate="medical_screening",
         module="medical_screening",
+        permissions=("medical_screening.view", "medical_screening.manage"),
     )
     async def get_member_medical_compliance(
         db: AsyncSession, principal: McpPrincipal, member_id: str
@@ -94,6 +95,7 @@ def register(server: Any) -> None:
         title="Expiring screenings",
         gate="medical_screening",
         module="medical_screening",
+        permissions=("medical_screening.view", "medical_screening.manage"),
     )
     async def list_expiring_screenings(
         db: AsyncSession,

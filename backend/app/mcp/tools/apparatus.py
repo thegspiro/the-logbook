@@ -143,7 +143,12 @@ def _maintenance(r: Any) -> dict:
 
 
 def register(server: Any) -> None:
-    @logbook_tool(server, title="List apparatus", module="apparatus")
+    @logbook_tool(
+        server,
+        title="List apparatus",
+        module="apparatus",
+        permissions=("apparatus.view", "apparatus.manage"),
+    )
     async def list_apparatus(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -173,7 +178,12 @@ def register(server: Any) -> None:
         )
         return page([_apparatus(a, locations) for a in rows], total, limit, offset)
 
-    @logbook_tool(server, title="Read apparatus text", module="apparatus")
+    @logbook_tool(
+        server,
+        title="Read apparatus text",
+        module="apparatus",
+        permissions=("apparatus.view", "apparatus.manage"),
+    )
     async def get_apparatus_text(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -209,7 +219,12 @@ def register(server: Any) -> None:
             body["next_content_offset"] = content_offset + len(piece)
         return body
 
-    @logbook_tool(server, title="Fleet summary", module="apparatus")
+    @logbook_tool(
+        server,
+        title="Fleet summary",
+        module="apparatus",
+        permissions=("apparatus.view", "apparatus.manage"),
+    )
     async def get_fleet_summary(db: AsyncSession, principal: McpPrincipal) -> dict:
         """Counts by status, deficiencies, and upcoming maintenance and
         expirations across the fleet. ``by_type`` is a list of type name and
@@ -226,7 +241,12 @@ def register(server: Any) -> None:
         ]
         return summary
 
-    @logbook_tool(server, title="Apparatus maintenance", module="apparatus")
+    @logbook_tool(
+        server,
+        title="Apparatus maintenance",
+        module="apparatus",
+        permissions=("apparatus.view", "apparatus.manage"),
+    )
     async def list_apparatus_maintenance(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -253,7 +273,12 @@ def register(server: Any) -> None:
         items = [_maintenance(r) for r in records]
         return page(items, None, limit, offset)
 
-    @logbook_tool(server, title="Read maintenance text", module="apparatus")
+    @logbook_tool(
+        server,
+        title="Read maintenance text",
+        module="apparatus",
+        permissions=("apparatus.view", "apparatus.manage"),
+    )
     async def get_maintenance_record_text(
         db: AsyncSession,
         principal: McpPrincipal,

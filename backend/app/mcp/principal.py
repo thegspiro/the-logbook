@@ -14,9 +14,14 @@ both of the SDK's dispatch paths.
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Iterator, Literal, Optional
+from typing import Iterable, Iterator, Literal, Optional
+
+from app.core.permissions import permission_matches_any
 
 AccessMode = Literal["read_only", "read_write"]
+# How the caller authenticated: the department's service key, or a member's
+# OAuth access token.
+AuthMethod = Literal["service_key", "oauth"]
 
 
 @dataclass(frozen=True)
@@ -43,10 +48,49 @@ class McpPrincipal:
     # module off must switch it off for Claude too. ``None`` means the set
     # was not resolved (tests); ``require_module`` treats that the same way.
     enabled_modules: Optional[frozenset[str]] = None
+    auth_method: AuthMethod = "service_key"
+    # OAuth only: the consenting member's permissions, re-read from their
+    # positions and rank on every request, so a connection can never do more
+    # than the member can do in the app right now. ``None`` on a service
+    # key, which has no member behind it and is gated by the department's
+    # switches alone.
+    member_permissions: Optional[frozenset[str]] = None
+    # OAuth only: the registered client the member connected.
+    oauth_client_id: Optional[str] = None
 
     @property
     def can_write(self) -> bool:
         return self.access_mode == "read_write"
+
+    @property
+    def is_oauth(self) -> bool:
+        return self.auth_method == "oauth"
+
+    @property
+    def rate_limit_bucket(self) -> str:
+        """Whose request budget a call spends.
+
+        Per member for OAuth rather than per grant, so connecting the same
+        account several times does not multiply the budget.
+        """
+        if self.is_oauth and self.issued_by_user_id:
+            return f"user:{self.issued_by_user_id}"
+        return self.key_id
+
+    def member_allows(self, permissions: Optional[Iterable[str]]) -> bool:
+        """Whether the member behind an OAuth token holds one of
+        ``permissions`` (OR, wildcards honoured, as ``require_permission``).
+
+        Always true for a service key. For an OAuth principal it fails
+        closed: a tool that declares no permission, or a principal whose
+        permissions were never resolved, is refused.
+        """
+        if not self.is_oauth:
+            return True
+        wanted = tuple(permissions or ())
+        if not wanted or self.member_permissions is None:
+            return False
+        return permission_matches_any(wanted, set(self.member_permissions))
 
     def module_enabled(self, module: Optional[str]) -> bool:
         if module is None or self.enabled_modules is None:

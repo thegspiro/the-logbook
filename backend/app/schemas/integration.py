@@ -251,6 +251,12 @@ class ClaudeMcpConfig(BaseModel):
     # for, so without this the shift tools show only shifts open to all
     # members.
     expose_full_schedule: bool = False
+    # Whether members may connect an MCP client with their own account
+    # through the OAuth authorization server, in addition to the service
+    # key. Off by default, and inert unless the deployment also sets
+    # MCP_OAUTH_ENABLED. A member's connection never sees more than the
+    # switches above allow *and* that member's own permissions allow.
+    oauth_enabled: bool = False
 
 
 # Map integration_type → config schema for strict validation
