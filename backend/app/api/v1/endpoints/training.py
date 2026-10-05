@@ -85,7 +85,7 @@ from app.services.qualification_service import QualificationService
 from app.services.training_compliance import (
     CATCH_UP_STATUS,
     STANDING_NOT_APPLICABLE,
-    _find_matching_profile,
+    ComplianceGrading,
     _load_compliance_config,
     classify_standing,
     evaluate_member_requirement,
@@ -178,7 +178,14 @@ async def get_training_dashboard_summary(
     for record in records:
         by_user.setdefault(str(record.user_id), []).append(record)
     waivers = await fetch_org_waivers(db, str(org_id))
-    include_current = await get_org_include_current_month(db, str(org_id))
+    # The same resolution the compliance matrix and compute_org_compliance_pct
+    # use: a member's requirement set comes through their compliance profile
+    # and their standing through classify_standing with the profile's
+    # thresholds. This card links into the matrix, and used to grade every
+    # applicable requirement at a fixed 100% instead (TR4-3).
+    grading = ComplianceGrading.from_config(
+        await _load_compliance_config(db, str(org_id))
+    )
 
     compliant = 0
     not_applicable = 0
@@ -186,35 +193,40 @@ async def get_training_dashboard_summary(
     risk_counts: dict[str, int] = {str(req.id): 0 for req in requirements}
     applicable_counts: dict[str, int] = {str(req.id): 0 for req in requirements}
     for member in members:
-        applicable = [r for r in requirements if requirement_applies_to_user(r, member)]
+        member_grading = grading.for_member(member, requirements)
         join_date = member_join_date(member)
         unmet: list[str] = []
-        graded = 0
-        for req in applicable:
+        statuses: list[str] = []
+        for req in member_grading.requirements:
             req_status, _, _ = _evaluate_member_requirement(
                 req,
                 by_user.get(str(member.id), []),
                 today,
                 waivers=waivers.get(str(member.id), []),
-                org_include_current_month=include_current,
+                org_include_current_month=grading.include_current_month,
                 join_date=join_date,
             )
+            statuses.append(req_status)
             # Inside an existing member's catch-up period the requirement is
             # neither unmet nor part of the at-risk denominator.
             if req_status == CATCH_UP_STATUS:
                 continue
-            graded += 1
             applicable_counts[str(req.id)] += 1
             if req_status != TrainingStatus.COMPLETED.value:
                 unmet.append(str(req.id))
                 risk_counts[str(req.id)] += 1
-        if graded == 0:
+        standing, _ = grading.classify(member_grading, *tally_standing(statuses))
+        if standing == STANDING_NOT_APPLICABLE:
             # Nothing grades this member: outside the percentage entirely,
             # not a compliant member (TR4-4).
             not_applicable += 1
-        elif not unmet:
+        elif standing == "compliant":
             compliant += 1
-        else:
+        # The intervention list stays "any open item", not "not compliant":
+        # it backs the matrix's status=noncompliant deep link, which filters
+        # on open items so a member under a sub-100% threshold who still has
+        # one is not hidden from the coordinator sent to find them.
+        if unmet:
             intervention.append(
                 {
                     "member_id": str(member.id),
@@ -3038,18 +3050,9 @@ async def get_compliance_matrix(
     # would issue this same query — with the same selectinload of profiles —
     # so calling both cost every configured org a duplicate config+profile
     # round trip on each visit.
-    config = await _load_compliance_config(db, str(org_id))
-    org_include_current = True if config is None else bool(config.include_current_month)
-    compliant_threshold = config.compliant_threshold if config else 100.0
-    at_risk_threshold = config.at_risk_threshold if config else 75.0
-    threshold_type = (config.threshold_type if config else None) or "percentage"
-    # Higher priority first, matching compute_org_compliance_pct.
-    profiles = (
-        sorted(config.profiles, key=lambda p: p.priority, reverse=True)
-        if config and config.profiles
-        else []
+    grading = ComplianceGrading.from_config(
+        await _load_compliance_config(db, str(org_id))
     )
-    reqs_by_id = {str(r.id): r for r in requirements}
 
     matrix = []
     # The evaluation cut-off can differ per requirement (each may override
@@ -3064,43 +3067,18 @@ async def get_compliance_matrix(
         req_statuses = []
 
         # A compliance profile narrows which requirements grade this member and
-        # can override the thresholds. compute_org_compliance_pct — which feeds
-        # the dashboard percentage this screen links from — already honours
-        # both, so skipping them here made the matrix label a member
-        # differently from the dashboard for any org using profiles.
-        member_requirements = requirements
-        member_compliant_threshold = compliant_threshold
-        member_at_risk_threshold = at_risk_threshold
-        if profiles:
-            profile = _find_matching_profile(member, profiles)
-            if profile:
-                # `is not None`, not truthy: an explicitly empty list means
-                # "nothing is required of this group" and must not fall back
-                # to grading against every org-wide requirement (CMP2-3).
-                if profile.required_requirement_ids is not None:
-                    member_requirements = [
-                        reqs_by_id[rid]
-                        for rid in profile.required_requirement_ids
-                        if rid in reqs_by_id
-                    ]
-                if profile.compliant_threshold_override is not None:
-                    member_compliant_threshold = profile.compliant_threshold_override
-                if profile.at_risk_threshold_override is not None:
-                    member_at_risk_threshold = profile.at_risk_threshold_override
+        # can override the thresholds; requirements that do not apply are
+        # dropped. The same resolution feeds the dashboard percentage and the
+        # "Department Compliance" card this screen links from.
+        member_grading = grading.for_member(member, list(requirements))
 
-        for req in member_requirements:
-            # Skip requirements not applicable to this member. See
-            # requirement_applies_to_member's docstring for why this is a
-            # shared helper rather than another ad-hoc reimplementation.
-            if not requirement_applies_to_user(req, member):
-                continue
-
+        for req in member_grading.requirements:
             ev = evaluate_member_requirement_detail(
                 req,
                 member_records,
                 today,
                 waivers=member_waivers,
-                org_include_current_month=org_include_current,
+                org_include_current_month=grading.include_current_month,
                 join_date=join_date,
             )
 
@@ -3134,12 +3112,8 @@ async def get_compliance_matrix(
         completed_count, applicable_total = tally_standing(
             item.status for item in req_statuses
         )
-        standing, pct = classify_standing(
-            completed_count,
-            applicable_total,
-            member_compliant_threshold,
-            member_at_risk_threshold,
-            threshold_type,
+        standing, pct = grading.classify(
+            member_grading, completed_count, applicable_total
         )
         member_name = (
             f"{member.last_name}, {member.first_name}"
@@ -3173,7 +3147,7 @@ async def get_compliance_matrix(
             for r in requirements
         ],
         "as_of": as_of or today.isoformat(),
-        "threshold_type": threshold_type,
+        "threshold_type": grading.threshold_type,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 

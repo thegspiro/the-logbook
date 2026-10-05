@@ -1434,7 +1434,7 @@ entry (not folded into TR2-4's, since fixing TR2-4 would not fix this).
 department size on the member/requirement axes even though the record axis
 is not; same abuse-resistance class as TR2-2/TR2-4/TR3-2.
 
-### TR4-3 — LOW/MED (Pitfall #29) — Three endpoints, three different definitions of "compliant" — 🚩 FLAGGED
+### TR4-3 — LOW/MED (Pitfall #29) — Three endpoints, three different definitions of "compliant" — ✅ FIXED (2026-10-05)
 
 **Reported by Codex on PR #2455; confirmed.** `get_compliance_matrix` and
 `compute_org_compliance_pct` (after TR4-1's fix) now agree on both which
@@ -1457,6 +1457,23 @@ with one obviously-correct fix. Mirrored into `docs/KNOWN_LIMITATIONS.md`.
 **Impact:** LOW/MED — same-org, `training.manage`-gated; a correctness/
 trust gap (a chief-facing summary card that can read differently from the
 detail screen it links to) rather than a security boundary.
+
+**Fixed (2026-10-05), on the owner's decision:** the card now uses the same
+definition as the matrix. `ComplianceGrading` (`training_compliance.py`) is
+the one resolution of a member's requirement set — profile match,
+`required_requirement_ids`, threshold overrides, then
+`requirement_applies_to_user` — and its `classify` applies
+`classify_standing` with the member's thresholds. `get_compliance_matrix`,
+`compute_org_compliance_tally` and `get_training_dashboard_summary` all go
+through it, so the card's compliant count and percentage equal
+`compute_org_compliance_pct`'s, and members TR4-4 calls not applicable are
+excluded. The card's intervention list keeps its "any open item" rule (it
+backs the matrix's `status=noncompliant` deep link, which filters on open
+items), and `requirements_at_risk` now counts only members whose profile
+selects the requirement, matching the matrix's by-requirement axis. Card
+numbers change for orgs using compliance profiles or non-100% thresholds.
+Guard test: `tests/test_compliance_matrix_endpoint.py::
+TestDashboardCardAgreesWithMatrix`.
 
 ### TR4-4 — LOW (Pitfall #29 corollary) — A member with zero applicable requirements counts as "compliant," inflating the org percentage — ✅ FIXED (2026-10-05)
 

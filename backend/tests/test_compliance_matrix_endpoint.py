@@ -748,3 +748,94 @@ class TestPerCellCutoff:
 
         cell = payload["members"][0]["requirements"][0]
         assert cell["as_of"] == date.today().isoformat()
+
+
+class TestDashboardCardAgreesWithMatrix:
+    """TR4-3: the dashboard's "Department Compliance" card links into the
+    matrix, so it must grade members the way the matrix and
+    compute_org_compliance_pct do — through the member's compliance profile
+    and its threshold overrides — not by requiring 100% of every applicable
+    requirement."""
+
+    async def test_card_matrix_and_org_percentage_agree(self, db_session: AsyncSession):
+        from app.api.v1.endpoints.training import get_training_dashboard_summary
+        from app.models.user import User
+        from app.services.training_compliance import compute_org_compliance_pct
+
+        org_id = await _insert_org(db_session)
+        regular = await _insert_member(db_session, org_id, last_name="Aoki")
+        support = await _insert_member(
+            db_session, org_id, last_name="Byrne", membership_type="support"
+        )
+        await _insert_member(
+            db_session, org_id, last_name="Cole", membership_type="life"
+        )
+        company = await _insert_hours_req(db_session, org_id, name="Company Hours")
+        officer = await _insert_hours_req(
+            db_session, org_id, name="Officer Hours", required_hours=100.0
+        )
+        hazmat = await _insert_hours_req(
+            db_session, org_id, name="Hazmat Hours", required_hours=200.0
+        )
+        for user_id in (regular, support):
+            await _insert_record(
+                db_session, org_id, user_id, hours=30.0, completion_date=date.today()
+            )
+
+        config_id = await _insert_compliance_config(db_session, org_id)
+        # Narrows the list to two of the three requirements AND lowers the
+        # bar to half: one of two met is compliant for this group.
+        await _insert_profile(
+            db_session,
+            config_id,
+            name="Support",
+            membership_types=["support"],
+            required_requirement_ids=[company, officer],
+            compliant_override=50.0,
+            at_risk_override=25.0,
+        )
+        # Nothing required of life members: not applicable (TR4-4).
+        await _insert_profile(
+            db_session,
+            config_id,
+            name="Life",
+            membership_types=["life"],
+            required_requirement_ids=[],
+        )
+
+        caller = User(id=_uid(), organization_id=org_id)
+        matrix = await get_compliance_matrix(db=db_session, current_user=caller)
+        card = await get_training_dashboard_summary(
+            expiration_days=90, db=db_session, current_user=caller
+        )
+        org_pct = await compute_org_compliance_pct(db_session, org_id)
+
+        standings = {
+            m["member_name"].split(",")[0]: m["standing"] for m in matrix["members"]
+        }
+        assert standings == {
+            "Aoki": "non_compliant",  # 1 of 3 at the org's 100%
+            "Byrne": "compliant",  # 1 of 2 at the profile's 50%
+            "Cole": "not_applicable",
+        }
+
+        stats = card["stats"]
+        # The old card graded Byrne against all three requirements at 100%
+        # and counted Cole as compliant: 1 of 3 members, 33%.
+        assert stats["compliant_members"] == 1
+        assert stats["graded_members"] == 2
+        assert stats["not_applicable_members"] == 1
+        assert stats["compliance_percentage"] == 50
+        assert org_pct == 50.0
+        assert stats["compliance_percentage"] == round(org_pct)
+
+        # Byrne is compliant but still has an open item, so the deep link to
+        # the matrix's "behind" filter still names them.
+        flagged = {m["member_id"] for m in card["members_needing_intervention"]}
+        assert flagged == {regular, support}
+
+        # Hazmat grades only Aoki — the support profile does not select it —
+        # which is the denominator the matrix's by-requirement axis uses too.
+        at_risk = {r["requirement_id"]: r for r in card["requirements_at_risk"]}
+        assert at_risk[hazmat]["applicable_members"] == 1
+        assert at_risk[officer]["applicable_members"] == 2

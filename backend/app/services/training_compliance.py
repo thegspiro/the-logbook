@@ -1057,6 +1057,110 @@ async def _load_compliance_config(
     return result.scalars().first()
 
 
+@dataclass(frozen=True)
+class MemberGrading:
+    """What grades one member: their requirements and pass bars."""
+
+    requirements: List[TrainingRequirement]
+    compliant_threshold: float
+    at_risk_threshold: float
+
+
+@dataclass(frozen=True)
+class ComplianceGrading:
+    """An organization's compliance configuration, resolved once per request.
+
+    The one definition of which requirements grade a member and against
+    which thresholds. ``compute_org_compliance_tally`` (the dashboard and hub
+    percentage), ``get_compliance_matrix`` and the dashboard's "Department
+    Compliance" card all resolve members through :meth:`for_member` and
+    classify through :func:`classify_standing`. The card used to grade every
+    applicable requirement at a fixed 100% instead, and read differently
+    from the matrix it links to for any org using profiles (TR4-3).
+    """
+
+    compliant_threshold: float = 100.0
+    at_risk_threshold: float = 75.0
+    threshold_type: str = "percentage"
+    include_current_month: bool = True
+    # Highest priority first: _find_matching_profile takes the first match.
+    profiles: Tuple[ComplianceProfile, ...] = ()
+
+    @classmethod
+    def from_config(cls, config: Optional[ComplianceConfig]) -> "ComplianceGrading":
+        """Defaults when the org has configured nothing (legacy behaviour)."""
+        if config is None:
+            return cls()
+        return cls(
+            compliant_threshold=config.compliant_threshold,
+            at_risk_threshold=config.at_risk_threshold,
+            threshold_type=config.threshold_type or "percentage",
+            include_current_month=bool(config.include_current_month),
+            profiles=tuple(
+                sorted(config.profiles or [], key=lambda p: p.priority, reverse=True)
+            ),
+        )
+
+    def for_member(
+        self, member: User, requirements: List[TrainingRequirement]
+    ) -> MemberGrading:
+        """The requirements that grade ``member``, and their thresholds.
+
+        A matching profile narrows the requirement list and may override the
+        thresholds; then every requirement that does not apply to the member
+        (``requirement_applies_to_user``) is dropped. ``member.positions``
+        must be loaded when any profile exists.
+        """
+        member_reqs = list(requirements)
+        compliant_threshold = self.compliant_threshold
+        at_risk_threshold = self.at_risk_threshold
+        profile = (
+            _find_matching_profile(member, list(self.profiles))
+            if self.profiles
+            else None
+        )
+        if profile:
+            # `is not None`, not truthy: a profile that explicitly selects zero
+            # required requirements (`[]`, "nothing is required for this
+            # group") must not fall through to grading against every org-wide
+            # requirement — `[]` and "never set" (`None`) differ. See CMP2-3.
+            if profile.required_requirement_ids is not None:
+                by_id = {str(r.id): r for r in requirements}
+                member_reqs = [
+                    by_id[rid]
+                    for rid in profile.required_requirement_ids
+                    if rid in by_id
+                ]
+            # Threshold overrides apply whenever the profile matched,
+            # independent of whether it also narrows the list (CMP2-3).
+            if profile.compliant_threshold_override is not None:
+                compliant_threshold = profile.compliant_threshold_override
+            if profile.at_risk_threshold_override is not None:
+                at_risk_threshold = profile.at_risk_threshold_override
+        # A requirement that does not apply to the member is not in their
+        # denominator. See requirement_applies_to_member's docstring for why
+        # this is one shared check rather than a reimplementation per screen.
+        return MemberGrading(
+            requirements=[
+                req for req in member_reqs if requirement_applies_to_user(req, member)
+            ],
+            compliant_threshold=compliant_threshold,
+            at_risk_threshold=at_risk_threshold,
+        )
+
+    def classify(
+        self, grading: MemberGrading, met: int, total: int
+    ) -> Tuple[str, Optional[float]]:
+        """:func:`classify_standing` with this member's thresholds."""
+        return classify_standing(
+            met,
+            total,
+            grading.compliant_threshold,
+            grading.at_risk_threshold,
+            self.threshold_type,
+        )
+
+
 async def get_org_include_current_month(db: AsyncSession, org_id: str) -> bool:
     """Return the org-wide "count the in-progress month" compliance default.
 
@@ -1182,28 +1286,7 @@ async def compute_org_compliance_tally(
     if not requirements:
         return OrgComplianceTally(0, 0, len(members), 0)
 
-    # Build requirements lookup by ID
-    reqs_by_id: Dict[str, TrainingRequirement] = {str(r.id): r for r in requirements}
-
-    # Load compliance config (if configured)
-    config = await _load_compliance_config(db, org_id)
-    profiles: List[ComplianceProfile] = []
-    if config and config.profiles:
-        # Sort by priority descending (higher priority first)
-        profiles = sorted(
-            config.profiles,
-            key=lambda p: p.priority,
-            reverse=True,
-        )
-
-    # Default thresholds
-    compliant_threshold = 100.0
-    at_risk_threshold = 75.0
-    threshold_type = "percentage"
-    if config:
-        compliant_threshold = config.compliant_threshold
-        at_risk_threshold = config.at_risk_threshold
-        threshold_type = config.threshold_type or "percentage"
+    grading = ComplianceGrading.from_config(await _load_compliance_config(db, org_id))
 
     # Get all training records for these members
     records_result = await db.execute(
@@ -1222,9 +1305,6 @@ async def compute_org_compliance_tally(
     # Fetch waivers
     waivers_by_user = await fetch_org_waivers(db, str(org_id))
 
-    # Org-wide evaluation-period default; per-requirement overrides are applied
-    # inside the evaluator. Config is already loaded above.
-    org_include_current = True if config is None else bool(config.include_current_month)
     # The department's date, as every other compliance view uses: the dashboard
     # percentage and the matrix it links to must grade against the same day.
     if today is None:
@@ -1236,60 +1316,16 @@ async def compute_org_compliance_tally(
         member_records = records_by_user.get(member.id, [])
         member_waivers = waivers_by_user.get(str(member.id), [])
 
-        # Determine which requirements apply to this member
-        member_reqs = list(requirements)  # default: all requirements
-        member_compliant_threshold = compliant_threshold
-        member_at_risk_threshold = at_risk_threshold
-
-        if profiles:
-            profile = _find_matching_profile(member, profiles)
-            if profile:
-                # `is not None`, not truthy: a profile that explicitly selects
-                # zero required requirements (`[]`, meaning "nothing is
-                # required for this group") must not fall through to grading
-                # against every org-wide requirement, which `if
-                # profile.required_requirement_ids:` did — `[]` and "never
-                # set" (`None`) were indistinguishable. See CMP2-3.
-                if profile.required_requirement_ids is not None:
-                    # Use only the requirements specified in the profile
-                    member_reqs = [
-                        reqs_by_id[rid]
-                        for rid in profile.required_requirement_ids
-                        if rid in reqs_by_id
-                    ]
-                # Threshold overrides apply whenever this profile matched,
-                # independent of whether it also overrides the requirement
-                # list — these were previously nested inside the same `if`
-                # above and so silently skipped for a profile with an empty
-                # required list (CMP2-3).
-                if profile.compliant_threshold_override is not None:
-                    member_compliant_threshold = profile.compliant_threshold_override
-                if profile.at_risk_threshold_override is not None:
-                    member_at_risk_threshold = profile.at_risk_threshold_override
-
-        # A requirement that doesn't apply to this member is not in their
-        # denominator. get_compliance_matrix (training.py) already applies
-        # this same exclusion per-member; without it here, a member holding
-        # a requirement that was never meant to apply to them was graded
-        # against it anyway — evaluate_member_requirement almost always
-        # reports "not_started" for such a requirement, so this dashboard
-        # percentage could disagree with the matrix for the exact
-        # member/requirement pair it's supposed to describe the same way.
-        # See requirement_applies_to_member's own docstring for why this is
-        # a shared helper rather than a fourth ad-hoc reimplementation.
-        member_reqs = [
-            req for req in member_reqs if requirement_applies_to_user(req, member)
-        ]
-
+        member_grading = grading.for_member(member, list(requirements))
         status, _ = _evaluate_member_compliance(
-            member_reqs,
+            member_grading.requirements,
             member_records,
             today,
             member_waivers,
-            member_compliant_threshold,
-            member_at_risk_threshold,
-            threshold_type,
-            org_include_current_month=org_include_current,
+            member_grading.compliant_threshold,
+            member_grading.at_risk_threshold,
+            grading.threshold_type,
+            org_include_current_month=grading.include_current_month,
             join_date=member_join_date(member),
         )
         if status == STANDING_NOT_APPLICABLE:

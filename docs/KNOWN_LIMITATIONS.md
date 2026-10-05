@@ -3109,71 +3109,6 @@ detail`'s per-requirement window correctness rather than a safe drive-by
 change alongside a documentation-only pass. (Security review TR-17 pass 4,
 TR4-2.)
 
-## Training — The Compliance Matrix, Dashboard Percentage, and Dashboard Summary Use Three Different Definitions of "Compliant" (2026-09-10)
-
-Three endpoints each compute a member's training-compliance standing, and as
-of this writing they can disagree about the same member:
-
-- `get_compliance_matrix` and `compute_org_compliance_pct`
-  (`training_compliance.py`) share `classify_standing` and both honor a
-  compliance profile's `required_requirement_ids`/threshold overrides — but
-  see the fix below, this pair still needed a second, independent
-  correction to actually agree.
-- `get_training_dashboard_summary` — which backs the "Department Compliance"
-  card that links directly into the matrix — ignores compliance profiles and
-  configured thresholds entirely: it always grades a member against every
-  membership-applicable requirement, and always requires 100% of them met
-  (`if not unmet: compliant += 1`, no percentage/at-risk tier at all). An org
-  that configures a compliance profile with a narrowed requirement list, a
-  non-100% compliant threshold, or an `at_risk` tier sees the summary card
-  disagree with both the matrix and the dashboard percentage it feeds.
-
-Also found and fixed in the same pass: `compute_org_compliance_pct` graded a
-member against every profile-selected requirement without excluding one
-scoped to a `required_membership_types` list the member doesn't belong to —
-`get_compliance_matrix` already excludes these — so a membership-scoped
-requirement could fail a member on the dashboard percentage while the
-matrix correctly never showed it to them at all. Fixed by applying the same
-`required_membership_types` filter to `compute_org_compliance_pct`'s
-per-member requirement list, mirroring the matrix's own `continue`.
-
-**Correction (a second Codex review of the same fix):** the first version
-of that fix ignored `applies_to_all`, which takes precedence over
-`required_membership_types` in the canonical, member-facing applicability
-check (`TrainingService.get_applicable_requirements`). Since the two
-fields are independent and unvalidated, a requirement created as "applies
-to all" and later scoped down without clearing `applies_to_all` is a
-reachable state — and `get_compliance_matrix`'s own pre-existing filter had
-the identical gap, so the first fix was matching a filter that was itself
-wrong. Fixed both call sites to check `applies_to_all` first. Guard tests:
-`tests/test_compute_org_compliance_pct_profile_overrides.py::
-TestMembershipTypeExclusion` and
-`tests/test_compliance_matrix_endpoint.py::TestApplicableRequirementDenominator::test_applies_to_all_overrides_a_stale_membership_type_list`.
-
-**Correction (a third Codex review found a third, untouched call site):**
-`get_compliance_summary` (the profile-card endpoint) checked
-`required_membership_types` before `applies_to_all` — round 2 only fixed
-the matrix and the dashboard percentage. Investigating surfaced a second,
-independent bug in the same block, not reported by Codex: the function
-never re-checked a membership-type match as its own inclusion path, so a
-requirement scoped **only** by membership type (the ordinary shape) was
-silently excluded for every member, not just a mismatched one. Grepping
-for the same pattern found two more reimplementations missing
-`applies_to_all` entirely, in `get_training_dashboard_summary` and
-`get_member_period_status`. Fixed by extracting one shared helper,
-`requirement_applies_to_member()` (`training_compliance.py`), matching
-`get_applicable_requirements`'s exact precedence, and switching all five
-call sites to use it instead of hand-rolling the check. Guard tests: a new
-`TestRequirementAppliesToMember` (7 cases) in `test_training_compliance.py`
-testing the helper directly.
-
-**Not fixed:** making `get_training_dashboard_summary` profile/threshold-aware
-is a larger, product-level question — which of the three currently-different
-definitions the "Department Compliance" card should actually use — not a
-safe drive-by alongside the membership-type fix above. First reported by a
-Codex review of TR-17 pass 4 (`docs/security-review/TR-17-training-core.md`,
-PR #2455). (Security review TR-17 pass 4, TR4-3.)
-
 ## Compliance — The Annual Report's New Applicability Filter Has Four More Gaps, Plus a Display Nit (2026-09-11)
 
 Feature 20 (Compliance) pass 4 (`docs/security-review/CMP-20-compliance.md`,
@@ -3213,16 +3148,18 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   MED, pre-existing).** `generate_annual_report` has never called
   `_find_matching_profile` or consulted `ComplianceProfile.required_requirement_ids`/
   threshold overrides — confirmed absent before and after CMP4-1.
-  `compute_org_compliance_pct` (`training_compliance.py:831`, profile
-  resolution at `:935-959`) does. An org using a compliance profile (e.g. a
+  `compute_org_compliance_pct`, the compliance matrix and the dashboard's
+  "Department Compliance" card do, through the shared
+  `ComplianceGrading.for_member` (`training_compliance.py`). An org using a
+  compliance profile (e.g. a
   "recruit" profile requiring only CPR) gets a different percentage from the
   annual report than from the compliance dashboard/matrix for the same
   members — the cross-surface disagreement CLAUDE.md's "A screen reports
   what the backend decided" pitfall names. This gap predates CMP4-1 entirely
   (the report had no applicability awareness of any kind before this pass);
   CMP4-1 does not claim to close it. Fixing it means deriving each member's
-  requirement set through `_find_matching_profile` before applying
-  `requirement_applies_to_member`, a second filtering pass that changes
+  requirement set through `ComplianceGrading.for_member` (which applies
+  `requirement_applies_to_user` itself) — a change that moves the report's
   numbers for every org currently using profiles — a dedicated fix, not a
   drive-by.
 - **A requirement with zero currently-applicable members renders as a
