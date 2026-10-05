@@ -675,6 +675,8 @@ export interface BulkActionResult {
 
 export interface AdvanceStageRequest {
   notes?: string | undefined;
+  /** Ticks for a checklist stage, graded on the advance that completes it. */
+  completed_items?: string[] | undefined;
   artifacts?:
     | {
         type: StageArtifact['type'];

@@ -723,10 +723,12 @@ rather than Advance — the same button, naming what it does there.
 
 ![An applicant's drawer on the last stage of the pipeline — their details, the stage they are on, and Convert where Advance sits elsewhere](./images/01-35-applicant-drawer-final-stage.png)
 
-> **Checklist Progress reads "No checklist data recorded yet" for everyone.**
-> Nothing in the application records which checklist items are done — see
-> `docs/KNOWN_LIMITATIONS.md`. Track a checklist stage's items in the stage
-> notes until that is built, and leave the stage's item list unconfigured.
+**On a checklist stage** _(2026-10-05)_ the drawer lists the stage's items as
+checkboxes. Tick each one as it is done, then **Advance**: the ticks go with the
+advance, and when the stage requires every item, Advance is refused until all
+are ticked. Dragging the card to the next column sends no ticks, so a checklist
+stage with items is advanced from the drawer. **Skip Stage** still moves an
+applicant past it without ticks.
 
 ### Printing Applicant Badges
 

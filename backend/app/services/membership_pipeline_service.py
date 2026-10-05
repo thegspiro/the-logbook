@@ -3289,8 +3289,12 @@ class MembershipPipelineService:
         notes: Optional[str] = None,
         *,
         unobserved: bool = False,
+        completed_items: Optional[List[str]] = None,
     ) -> Optional[ProspectiveMember]:
         """Complete the current step and advance a prospect.
+
+        ``completed_items`` carries the ticks of a checklist stage, which is
+        graded on the same call that completes it.
 
         Advancement used to move ``current_step_id`` directly.  That bypassed
         every stage gate enforced by :meth:`complete_step` (interviews,
@@ -3333,6 +3337,11 @@ class MembershipPipelineService:
             step_id=str(sorted_steps[current_idx].id),
             completed_by=advanced_by,
             notes=notes,
+            action_result=(
+                {"completed_items": list(completed_items)}
+                if completed_items is not None
+                else None
+            ),
             automated=unobserved,
             additional_activity=_ActivityEvent(
                 action="prospect_advanced",

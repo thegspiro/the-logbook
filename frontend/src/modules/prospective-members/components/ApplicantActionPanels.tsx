@@ -29,6 +29,8 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 
 interface ApplicantActionPanelsProps {
   applicant: Applicant;
+  /** Items ticked in the drawer's checklist, sent when Advance completes the stage. */
+  checklistTicks?: string[] | undefined;
   isLastStage: boolean;
   isFirstStage: boolean;
   onClose: () => void;
@@ -100,6 +102,7 @@ const getStageRequirementHint = (applicant: Applicant): string | null => {
 
 export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
   applicant,
+  checklistTicks,
   isLastStage,
   isFirstStage,
   onClose,
@@ -162,7 +165,11 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
     }
 
     try {
-      await advanceApplicant(applicant.id, actionNotes || undefined);
+      await advanceApplicant(
+        applicant.id,
+        actionNotes || undefined,
+        applicant.current_stage_type === StageType.CHECKLIST ? (checklistTicks ?? []) : undefined
+      );
       toast.success('Applicant advanced to next stage');
       setActionNotes('');
       setShowNotesInput(false);

@@ -852,7 +852,12 @@ export const applicantService = {
   async advanceStage(applicantId: string, data?: AdvanceStageRequest): Promise<Applicant> {
     const response = await api.post<BackendProspectResponse>(
       `/prospective-members/prospects/${applicantId}/advance`,
-      data ? { notes: data.notes } : {}
+      data
+        ? {
+            notes: data.notes,
+            ...(data.completed_items ? { completed_items: data.completed_items } : {}),
+          }
+        : {}
     );
     return mapProspectToApplicant(response.data);
   },
