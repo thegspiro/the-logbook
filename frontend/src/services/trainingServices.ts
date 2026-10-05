@@ -15,7 +15,8 @@ import type {
   SkillTemplateUpdate,
   SkillTest,
   SkillTestCreate,
-  SkillTestListItem,
+  SkillTestListPage,
+  SkillTestListParams,
   SkillTestUpdate,
   SkillTestViewer,
   SkillTestCandidate,
@@ -1499,16 +1500,15 @@ export const skillsTestingService = {
   },
 
   // Tests
-  async getTests(params?: {
-    status?: string;
-    candidate_id?: string;
-    template_id?: string;
-    include_practice?: boolean;
-    /** Officer review queue: official results nobody has signed off yet. */
-    pending_validation?: boolean;
-  }): Promise<SkillTestListItem[]> {
-    const response = await api.get<SkillTestListItem[]>('/training/skills-testing/tests', { params });
-    return asArray(response.data);
+  /** One page of tests, newest first. The server pages (50 rows by default,
+   *  200 at most), so pass `limit`/`offset` and read `total` to go further. */
+  async getTests(params?: SkillTestListParams): Promise<SkillTestListPage> {
+    const response = await api.get<SkillTestListPage | null>('/training/skills-testing/tests', { params });
+    // Same defence as asArray: a captive portal's 200 must read as an empty
+    // page, not take the screen down.
+    const items = asArray(response.data?.items ?? []);
+    const total = typeof response.data?.total === 'number' ? response.data.total : items.length;
+    return { items, total };
   },
 
   async getTest(testId: string): Promise<SkillTest> {

@@ -741,11 +741,28 @@ Navigate to **Training Admin > Skills Testing > Tests** and click on any complet
 
 ### Test History
 
-The tests list page supports filtering by:
+The **Test Records** tab supports filtering by:
 
-- **Status** — not_started, in_progress, completed, cancelled
-- **Candidate** — filter by specific member
-- **Template** — filter by specific skill sheet
+- **Status** — in progress, completed, cancelled, voided, or **Needs
+  Validation** (the review queue)
+- **Search** — a template, candidate or examiner name
+- **Date range** — when the test was completed, or when it was opened if it is
+  still unfinished. The tab opens on the **last twelve months**; clear the range
+  to see every test on file. The **Needs Validation** card on the Templates tab
+  links to the queue with no date range, so every result awaiting sign-off is
+  listed however old it is.
+
+_(2026-10-05)_ Records come a page at a time — 25 by default, with a **Per
+page** choice and page buttons under the list — rather than the department's
+whole history on every visit. Search runs across every page, not just the one
+on screen. **My Results** on the member's Skills Testing page and the skills
+list on **My Training** page the same way.
+
+**Export** downloads the records the tab is showing — the same status, search
+and date range — as a CSV with one row per evaluated step. It needs a date
+range of **at most a year**; with no range, or a longer one, the button is
+greyed out and the line under the date picker says why. For a longer audit
+period, export it a year at a time.
 
 ### What the member sees _(2026-08-08)_
 

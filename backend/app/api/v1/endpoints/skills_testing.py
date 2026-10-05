@@ -7,12 +7,13 @@ and tracking pass/fail results for fire department skills assessments.
 """
 
 import html
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import load_only
 
 from app.api.dependencies import (
     get_current_user,
@@ -51,6 +52,7 @@ from app.schemas.skills_testing import (
     SkillTestCandidateResponse,
     SkillTestCreate,
     SkillTestingSummaryResponse,
+    SkillTestListPage,
     SkillTestListResponse,
     SkillTestResponse,
     SkillTestReturnRequest,
@@ -95,6 +97,21 @@ router = APIRouter()
 # bounds what any single search can return.
 CANDIDATE_SEARCH_MIN_CHARS = 2
 CANDIDATE_SEARCH_MAX_RESULTS = 15
+
+# SKT3-2: every list here used to return the organization's whole history.
+# GET /tests pages like the other limit/offset lists in the API (50 by default,
+# 200 at most). GET /templates keeps its bare-list shape — every screen that
+# reads it searches the full library client-side, and a department's sheet
+# library is tens of rows, not thousands — so its cap is a backstop rather than
+# a page size, and is set where no real library reaches it.
+TEST_LIST_DEFAULT_LIMIT = 50
+TEST_LIST_MAX_LIMIT = 200
+TEMPLATE_LIST_MAX_LIMIT = 500
+
+# The CSV export is built in memory, so it must be asked for a bounded window.
+# A year matches the finance export's synchronous ceiling and covers an annual
+# audit packet; a longer review is a few exports rather than one unbounded one.
+EXPORT_MAX_SPAN_DAYS = 366
 
 # Statuses whose scorecard is final, and so has a score breakdown to explain.
 # A voided test keeps its arithmetic: the record survives the withdrawal, and a
@@ -336,6 +353,8 @@ async def list_templates(
         None,
         description="Filter by visibility (all_members/officers_only/assigned_only)",
     ),
+    limit: int = Query(TEMPLATE_LIST_MAX_LIMIT, ge=1, le=TEMPLATE_LIST_MAX_LIMIT),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -347,11 +366,27 @@ async def list_templates(
     based on the user's role: officers see all templates, regular members
     only see templates with visibility='all_members'.
 
+    ``limit``/``offset`` bound the response; the default is the cap, so a
+    caller that sends neither still gets the whole library of any real
+    department.
+
     **Authentication required**
     """
     query = select(SkillTemplate).where(
         SkillTemplate.organization_id == current_user.organization_id
     )
+
+    # In SQL rather than after the fetch, so limit/offset count only templates
+    # the reader may see. A blank visibility predates the column and has always
+    # read as all_members.
+    if not _user_has_officer_role(current_user):
+        query = query.where(
+            or_(
+                SkillTemplate.visibility == "all_members",
+                SkillTemplate.visibility.is_(None),
+                SkillTemplate.visibility == "",
+            )
+        )
 
     if status_filter:
         query = query.where(SkillTemplate.status == status_filter)
@@ -362,17 +397,12 @@ async def list_templates(
     if visibility:
         query = query.where(SkillTemplate.visibility == visibility)
 
-    query = query.order_by(SkillTemplate.name)
+    # id breaks ties between same-named templates so a page boundary is stable.
+    query = query.order_by(SkillTemplate.name, SkillTemplate.id)
+    query = query.limit(limit).offset(offset)
 
     result = await db.execute(query)
     templates = result.scalars().all()
-
-    # Apply visibility filtering for non-officer users
-    is_officer = _user_has_officer_role(current_user)
-    if not is_officer:
-        templates = [
-            t for t in templates if (t.visibility or "all_members") == "all_members"
-        ]
 
     # Build list responses with computed counts
     items = []
@@ -1008,7 +1038,141 @@ async def search_candidates(
     ]
 
 
-@router.get("/tests", response_model=list[SkillTestListResponse])
+def _test_activity_date():
+    """The date a test is filed under: its completion, or its opening if unfinished.
+
+    One expression for the list and the export, so the window an officer picks
+    on screen is the window the file covers. Completion rather than creation
+    for a finished test — a draft opened in December for an evaluation run in
+    January belongs in January's packet — and creation for one still open, or
+    an in-progress evaluation would vanish from every dated view until it was
+    finished. It is also the date the member-facing lists display.
+    """
+    return func.coalesce(SkillTest.completed_at, SkillTest.created_at)
+
+
+def _apply_test_filters(
+    query,
+    *,
+    organization_id: str,
+    status_filter: str | None,
+    candidate_id: UUID | None,
+    template_id: UUID | None,
+    include_practice: bool,
+    pending_validation: bool,
+    search: str | None,
+    date_from: date | None,
+    date_to: date | None,
+):
+    """The filters ``GET /tests`` and its CSV export share.
+
+    Shared rather than repeated because the export's contract is "the rows the
+    records tab is showing": when the two drifted, the Export button under
+    "Needs Validation" quietly widened to every official test on file, which is
+    the one place a wrong export is least likely to be noticed and most likely
+    to be handed to somebody.
+    """
+    if not include_practice:
+        query = query.where(SkillTest.is_practice.is_(False))
+
+    # The review queue is not expressible as a status — it is a status *and*
+    # the absence of a validation.
+    if pending_validation:
+        query = query.where(
+            SkillTest.is_practice.is_(False),
+            SkillTest.status == SkillTestStatus.COMPLETED.value,
+            SkillTest.validated_at.is_(None),
+        )
+
+    if status_filter:
+        query = query.where(SkillTest.status == status_filter)
+
+    if candidate_id:
+        query = query.where(SkillTest.candidate_id == str(candidate_id))
+
+    if template_id:
+        query = query.where(SkillTest.template_id == str(template_id))
+
+    fragment = (search or "").strip()
+    if fragment:
+        # Server-side now that the list is paged: a filter applied in the
+        # browser would only ever search the page on screen.
+        pattern = like_pattern(fragment)
+        full_name = func.concat(
+            func.coalesce(User.first_name, ""),
+            " ",
+            func.coalesce(User.last_name, ""),
+        )
+        preferred_full_name = func.concat(
+            func.coalesce(User.preferred_name, ""),
+            " ",
+            func.coalesce(User.last_name, ""),
+        )
+        matching_users = select(User.id).where(
+            User.organization_id == organization_id,
+            or_(
+                full_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
+                preferred_full_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
+                User.username.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
+            ),
+        )
+        matching_templates = select(SkillTemplate.id).where(
+            SkillTemplate.organization_id == organization_id,
+            SkillTemplate.name.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
+        )
+        query = query.where(
+            or_(
+                SkillTest.template_id.in_(matching_templates),
+                SkillTest.candidate_id.in_(matching_users),
+                SkillTest.examiner_id.in_(matching_users),
+            )
+        )
+
+    if date_from and date_to and date_from > date_to:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="date_from must be on or before date_to",
+        )
+    if date_from:
+        query = query.where(
+            _test_activity_date() >= datetime.combine(date_from, time.min)
+        )
+    if date_to:
+        query = query.where(
+            _test_activity_date() <= datetime.combine(date_to, time.max)
+        )
+
+    return query
+
+
+# What a list row and its disclosure check read — and nothing else. A full row
+# carries the template snapshot and every section result as JSON, none of which
+# a list item shows; for a non-officer every candidate row is fetched to run the
+# disclosure pass, so the difference is paid per row of their history.
+_TEST_LIST_COLUMNS = (
+    SkillTest.id,
+    SkillTest.organization_id,
+    SkillTest.template_id,
+    SkillTest.candidate_id,
+    SkillTest.examiner_id,
+    SkillTest.status,
+    SkillTest.result,
+    SkillTest.is_practice,
+    SkillTest.overall_score,
+    SkillTest.started_at,
+    SkillTest.completed_at,
+    SkillTest.created_at,
+    SkillTest.voided_at,
+    SkillTest.validated_at,
+    SkillTest.released_at,
+    SkillTest.returned_at,
+    SkillTest.result_disclosure,
+    SkillTest.result_release,
+    SkillTest.result_viewer_positions,
+)
+
+
+@router.get("/tests", response_model=SkillTestListPage)
 async def list_tests(
     status_filter: str | None = Query(
         None, alias="status", description="Filter by status"
@@ -1022,23 +1186,46 @@ async def list_tests(
         False,
         description="Only official results still awaiting an officer's sign-off",
     ),
+    search: str | None = Query(
+        None,
+        max_length=100,
+        description="Match the template, candidate or examiner name",
+    ),
+    date_from: date | None = Query(
+        None,
+        description=(
+            "Only tests completed (or, if unfinished, opened) on or after this "
+            "date (UTC)"
+        ),
+    ),
+    date_to: date | None = Query(
+        None,
+        description=(
+            "Only tests completed (or, if unfinished, opened) on or before this "
+            "date (UTC)"
+        ),
+    ),
+    limit: int = Query(TEST_LIST_DEFAULT_LIMIT, ge=1, le=TEST_LIST_MAX_LIMIT),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    List skill tests for the organization.
+    List skill tests for the organization, one page at a time.
 
-    Supports filtering by status, candidate, and template.
-    Practice tests are excluded by default; pass include_practice=true to see them.
-    Pass pending_validation=true for the officer review queue — member-run
-    official results nobody has signed off yet.
-    Returns summary items with denormalized names.
+    Supports filtering by status, candidate, template, a name search and a date
+    window. Practice tests are excluded by default; pass include_practice=true
+    to see them. Pass pending_validation=true for the officer review queue —
+    member-run official results nobody has signed off yet.
+
+    Returns ``{items, total}``: newest first, ``limit`` rows (default 50, at
+    most 200) from ``offset``, and the count of every row the reader may see
+    under these filters.
 
     **Authentication required**
     """
-    query = select(SkillTest).where(
-        SkillTest.organization_id == current_user.organization_id
-    )
+    org_id = current_user.organization_id
+    query = select(SkillTest).where(SkillTest.organization_id == org_id)
 
     # Skills-test rows carry PHI-adjacent data (pass/fail, scores, examiner
     # notes). A non-officer sees only tests they are party to or have been
@@ -1067,7 +1254,7 @@ async def list_tests(
                     select(
                         SkillTemplate.id, SkillTemplate.result_viewer_positions
                     ).where(
-                        SkillTemplate.organization_id == current_user.organization_id,
+                        SkillTemplate.organization_id == org_id,
                         SkillTemplate.result_viewer_positions.isnot(None),
                     )
                 )
@@ -1084,7 +1271,7 @@ async def list_tests(
             granting_tests = (
                 await db.execute(
                     select(SkillTest.id, SkillTest.result_viewer_positions).where(
-                        SkillTest.organization_id == current_user.organization_id,
+                        SkillTest.organization_id == org_id,
                         SkillTest.result_viewer_positions.isnot(None),
                     )
                 )
@@ -1099,102 +1286,114 @@ async def list_tests(
 
         query = query.where(or_(*grant_clauses))
 
-    if not include_practice:
-        query = query.where(SkillTest.is_practice.is_(False))
+    query = _apply_test_filters(
+        query,
+        organization_id=org_id,
+        status_filter=status_filter,
+        candidate_id=candidate_id,
+        template_id=template_id,
+        include_practice=include_practice,
+        pending_validation=pending_validation,
+        search=search,
+        date_from=date_from,
+        date_to=date_to,
+    )
 
-    if pending_validation:
-        query = query.where(
-            SkillTest.is_practice.is_(False),
-            SkillTest.status == SkillTestStatus.COMPLETED.value,
-            SkillTest.validated_at.is_(None),
+    # id breaks ties between tests opened in the same second, so a row cannot
+    # appear on two pages or on neither.
+    ordered = query.options(load_only(*_TEST_LIST_COLUMNS)).order_by(
+        SkillTest.created_at.desc(), SkillTest.id.desc()
+    )
+
+    async def _templates_for(ids: set[str]) -> dict[str, SkillTemplate]:
+        if not ids:
+            return {}
+        rows = await db.execute(
+            select(SkillTemplate)
+            .options(
+                load_only(
+                    SkillTemplate.id,
+                    SkillTemplate.name,
+                    SkillTemplate.result_disclosure,
+                    SkillTemplate.result_release,
+                    SkillTemplate.result_viewer_positions,
+                )
+            )
+            .where(
+                SkillTemplate.organization_id == org_id,
+                SkillTemplate.id.in_(list(ids)),
+            )
         )
+        return {tmpl.id: tmpl for tmpl in rows.scalars().all()}
 
-    if status_filter:
-        query = query.where(SkillTest.status == status_filter)
-
-    if candidate_id:
-        query = query.where(SkillTest.candidate_id == str(candidate_id))
-
-    if template_id:
-        query = query.where(SkillTest.template_id == str(template_id))
-
-    query = query.order_by(SkillTest.created_at.desc())
-
-    result = await db.execute(query)
-    tests = result.scalars().all()
-
-    # Collect unique user/template IDs for batch lookup
-    user_ids = set()
-    template_ids = set()
-    for t in tests:
-        user_ids.add(t.candidate_id)
-        user_ids.add(t.examiner_id)
-        template_ids.add(t.template_id)
-
-    # Batch fetch users
-    users_map = {}
-    if user_ids:
-        users_result = await db.execute(select(User).where(User.id.in_(list(user_ids))))
-        users_map = {u.id: u for u in users_result.scalars().all()}
-
-    # Batch fetch templates
-    templates_map = {}
-    if template_ids:
-        templates_result = await db.execute(
-            select(SkillTemplate).where(SkillTemplate.id.in_(list(template_ids)))
-        )
-        templates_map = {tmpl.id: tmpl for tmpl in templates_result.scalars().all()}
-
-    # Second pass — drop rows the disclosure policy withholds. Fetched once
-    # outside the loop; every row shares the reader's organization and
-    # positions, and the named-viewer set is looked up per test only when it
-    # could change the outcome.
-    viewer_context: dict[str, object] = {}
-    if not is_officer:
+    # (test, view) for each row on the requested page.
+    page: list[tuple[SkillTest, str]]
+    if is_officer:
+        # An officer sees every row the filters match, so SQL can page and
+        # count directly.
+        total = (
+            await db.execute(select(func.count()).select_from(query.subquery()))
+        ).scalar_one()
+        tests = (await db.execute(ordered.limit(limit).offset(offset))).scalars().all()
+        templates_map = await _templates_for({t.template_id for t in tests})
+        page = [(t, ResultDisclosure.FULL.value) for t in tests]
+    else:
+        # The disclosure pass cannot run in SQL (see above), so a SQL LIMIT
+        # would page over rows the reader may not see: short pages, and a total
+        # that counts withheld results. Instead the narrowed rows — only the
+        # reader's own tests and the ones granted to them, in list columns
+        # only — are resolved here, then counted and sliced.
+        candidates = (await db.execute(ordered)).scalars().all()
+        templates_map = await _templates_for({t.template_id for t in candidates})
         uid = str(current_user.id)
-        viewer_context = {
-            "uid": uid,
-            "org_config": await _org_training_config(db, current_user.organization_id),
-            "positions": await _user_position_slugs(db, current_user),
-            "named": {
-                str(tid)
-                for tid in (
-                    await db.execute(
-                        select(SkillTestViewer.test_id).where(
-                            SkillTestViewer.user_id == uid
-                        )
+        org_config = await _org_training_config(db, org_id)
+        positions = await _user_position_slugs(db, current_user)
+        named = {
+            str(tid)
+            for tid in (
+                await db.execute(
+                    select(SkillTestViewer.test_id).where(
+                        SkillTestViewer.user_id == uid
                     )
                 )
-                .scalars()
-                .all()
-            },
+            )
+            .scalars()
+            .all()
         }
+        visible: list[tuple[SkillTest, str]] = []
+        for t in candidates:
+            # resolve_result_view asks "is this reader named on this test", so
+            # pass their own id only when the grant covers this row.
+            view = resolve_result_view(
+                t,
+                templates_map.get(t.template_id),
+                org_config,
+                is_officer=False,
+                user_id=uid,
+                named_viewer_ids={uid} if str(t.id) in named else set(),
+                user_position_slugs=positions,
+            )
+            if view != ResultDisclosure.NONE.value:
+                visible.append((t, view))
+        total = len(visible)
+        page = visible[offset : offset + limit]
+
+    # Names for this page only.
+    user_ids = {i for t, _ in page for i in (t.candidate_id, t.examiner_id)}
+    users_map = {}
+    if user_ids:
+        users_result = await db.execute(
+            select(User).where(
+                User.organization_id == org_id, User.id.in_(list(user_ids))
+            )
+        )
+        users_map = {u.id: u for u in users_result.scalars().all()}
 
     items = []
-    for t in tests:
+    for t, view in page:
         candidate = users_map.get(t.candidate_id)
         examiner = users_map.get(t.examiner_id)
         tmpl = templates_map.get(t.template_id)
-        view = ResultDisclosure.FULL.value
-
-        if not is_officer:
-            reader_id = str(viewer_context["uid"])
-            # resolve_result_view asks "is this reader named on this test", so
-            # pass their own id only when the grant covers this row.
-            named_for_row = (
-                {reader_id} if str(t.id) in viewer_context["named"] else set()
-            )
-            view = resolve_result_view(
-                t,
-                tmpl,
-                viewer_context["org_config"],
-                is_officer=False,
-                user_id=reader_id,
-                named_viewer_ids=named_for_row,
-                user_position_slugs=viewer_context["positions"],
-            )
-            if view == ResultDisclosure.NONE.value:
-                continue
 
         candidate_name = _format_user_name(candidate) if candidate else None
         examiner_name = _format_user_name(examiner) if examiner else None
@@ -1229,7 +1428,7 @@ async def list_tests(
             )
         )
 
-    return items
+    return SkillTestListPage(items=items, total=total)
 
 
 @router.post(
@@ -3335,11 +3534,25 @@ async def export_tests_csv(
     candidate_id: UUID | None = Query(None),
     template_id: UUID | None = Query(None),
     include_practice: bool = Query(False),
+    search: str | None = Query(
+        None,
+        max_length=100,
+        description="Match the template, candidate or examiner name",
+    ),
     date_from: date | None = Query(
-        None, description="Only tests completed on or after this date (UTC)"
+        None,
+        description=(
+            "Required. Only tests completed (or, if unfinished, opened) on or "
+            "after this date (UTC)"
+        ),
     ),
     date_to: date | None = Query(
-        None, description="Only tests completed on or before this date (UTC)"
+        None,
+        description=(
+            "Required. Only tests completed (or, if unfinished, opened) on or "
+            f"before this date (UTC); at most {EXPORT_MAX_SPAN_DAYS} days after "
+            "date_from"
+        ),
     ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("training.manage")),
@@ -3363,6 +3576,10 @@ async def export_tests_csv(
     default would pad an audit file with runs the department does not consider
     records.
 
+    A date window is required and may span at most ``EXPORT_MAX_SPAN_DAYS``
+    (SKT3-2): the file is assembled in memory, so an unfiltered request scaled
+    with the department's entire testing history.
+
     **Authentication required**
     **Requires permission: training.manage**
     """
@@ -3379,39 +3596,34 @@ async def export_tests_csv(
             detail="detail must be 'summary' or 'criteria'",
         )
 
-    query = select(SkillTest).where(
-        SkillTest.organization_id == current_user.organization_id
+    if date_from is None or date_to is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Choose a date range (date_from and date_to) to export",
+        )
+    if date_to - date_from > timedelta(days=EXPORT_MAX_SPAN_DAYS):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"An export can cover at most {EXPORT_MAX_SPAN_DAYS} days; "
+                "narrow the date range"
+            ),
+        )
+
+    query = _apply_test_filters(
+        select(SkillTest).where(
+            SkillTest.organization_id == current_user.organization_id
+        ),
+        organization_id=current_user.organization_id,
+        status_filter=status_filter,
+        candidate_id=candidate_id,
+        template_id=template_id,
+        include_practice=include_practice,
+        pending_validation=pending_validation,
+        search=search,
+        date_from=date_from,
+        date_to=date_to,
     )
-    if not include_practice:
-        query = query.where(SkillTest.is_practice.is_(False))
-    # Mirrors GET /tests exactly. The review queue is not expressible as a
-    # status — it is a status *and* the absence of a validation — so without
-    # this the Export button under "Needs Validation" quietly widened to every
-    # official test on file, which is the one place a wrong export is least
-    # likely to be noticed and most likely to be handed to somebody.
-    if pending_validation:
-        query = query.where(
-            SkillTest.is_practice.is_(False),
-            SkillTest.status == SkillTestStatus.COMPLETED.value,
-            SkillTest.validated_at.is_(None),
-        )
-    if status_filter:
-        query = query.where(SkillTest.status == status_filter)
-    if candidate_id:
-        query = query.where(SkillTest.candidate_id == str(candidate_id))
-    if template_id:
-        query = query.where(SkillTest.template_id == str(template_id))
-    # Filtered on completion rather than creation: a test is a record from the
-    # moment it is completed, and a draft opened in December for an evaluation
-    # run in January belongs in January's packet.
-    if date_from:
-        query = query.where(
-            SkillTest.completed_at >= datetime.combine(date_from, time.min)
-        )
-    if date_to:
-        query = query.where(
-            SkillTest.completed_at <= datetime.combine(date_to, time.max)
-        )
     query = query.order_by(SkillTest.completed_at.desc(), SkillTest.created_at.desc())
 
     tests = (await db.execute(query)).scalars().all()

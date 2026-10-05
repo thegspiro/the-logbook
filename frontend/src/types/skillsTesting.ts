@@ -476,6 +476,30 @@ export interface SkillTestListItem {
   pending_validation?: boolean | undefined;
 }
 
+/** One page of `GET /training/skills-testing/tests`. `total` counts every row
+ *  the filters match and the reader may see, not just the rows in `items`. */
+export interface SkillTestListPage {
+  items: SkillTestListItem[];
+  total: number;
+}
+
+/** Query for the tests list. Dates are `YYYY-MM-DD` and match a test's
+ *  completion date, or its opening date while it is unfinished. */
+export interface SkillTestListParams {
+  status?: string;
+  candidate_id?: string;
+  template_id?: string;
+  include_practice?: boolean;
+  /** Officer review queue: official results nobody has signed off yet. */
+  pending_validation?: boolean;
+  /** Template, candidate or examiner name. */
+  search?: string;
+  date_from?: string;
+  date_to?: string;
+  limit?: number;
+  offset?: number;
+}
+
 /** A selectable candidate for the start-test picker. Id and display name only —
  *  the endpoint behind it is open to every member, so it carries no contact
  *  information. */

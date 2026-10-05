@@ -677,6 +677,18 @@ class SkillTestListResponse(UTCResponseBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class SkillTestListPage(BaseModel):
+    """One page of ``GET /tests``.
+
+    ``total`` counts every row the filters match *and* the reader may see, not
+    just the rows on this page, so a client can size its pager without fetching
+    the rest.
+    """
+
+    items: List[SkillTestListResponse] = []
+    total: int = 0
+
+
 # ============================================
 # Summary / Stats
 # ============================================

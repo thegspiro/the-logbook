@@ -642,7 +642,7 @@ code, not on an existing test), and
 nor examiner still reaches the grant path — guards the fix against
 over-matching).
 
-### SKT3-2 — LOW/MED — `GET /tests` has no pagination or result cap — OPEN / FLAGGED
+### SKT3-2 — LOW/MED — `GET /tests` has no pagination or result cap — ✅ FIXED 2026-10-05 (owner decision; see pass 4's entry)
 
 **What:** `list_tests` (`GET /tests`, gated only by `get_current_user` — open
 to every member, not `training.manage`) builds its `SkillTest` query with
@@ -1238,7 +1238,7 @@ from the pre-redaction row, so the redacted payload combined "completed"
 with "not pending" — read by the frontend as a final, failed result rather
 than the undisclosed one intended (see SKT4-6's "Round 7 follow-up").
 
-### SKT3-2 — LOW/MED — `GET /tests`, `GET /tests/export/csv`, and `GET /templates` have no pagination or result cap — still OPEN / FLAGGED
+### SKT3-2 — LOW/MED — `GET /tests`, `GET /tests/export/csv`, and `GET /templates` have no pagination or result cap — ✅ FIXED 2026-10-05 (owner decision)
 
 Re-verified, not re-derived: read `list_tests` (`skills_testing.py:978-1198`)
 directly end to end this pass. No `.limit()`/`.offset()` anywhere in the
@@ -1284,6 +1284,50 @@ anyway. Included in this finding's scope and its `docs/KNOWN_LIMITATIONS.md`
 entry, which now names all three routes. Closing it needs the same kind of
 remedy as the others — paging, or selecting bounded summary columns instead
 of the full row — not a same-commit fix.
+
+**Resolved 2026-10-05, on the owner's decision: limit/offset with frontend
+pagination, and a required date window on the export.**
+
+- `GET /tests` now returns `{items, total}` instead of a bare list, takes
+  `limit` (default 50, at most 200) and `offset`, and orders by
+  `created_at DESC, id DESC` so a page boundary is stable. For an officer the
+  page and the count are SQL `LIMIT`/`OFFSET` and `COUNT(*)`. For a non-officer
+  the disclosure pass still cannot run in SQL, so the narrowed candidate rows
+  (their own tests and the ones granted to them) are resolved first and then
+  counted and sliced — `total` is what the reader may see, never a count that
+  includes withheld results. Both paths load list columns only
+  (`load_only`), not the template snapshot or section-result JSON, and the
+  name lookups are for the page's rows only. New `search` (template,
+  candidate or examiner name, through `like_pattern`) and `date_from`/
+  `date_to` parameters move the records tab's filtering to the server, since a
+  browser-side filter would only search the page on screen. Non-officer
+  disclosure behaviour is unchanged: same grant clauses, same
+  `resolve_result_view` per row, same pending redaction.
+- `GET /tests/export/csv` refuses (400) without both `date_from` and
+  `date_to`, or with a window over `EXPORT_MAX_SPAN_DAYS` (366, the finance
+  export's synchronous ceiling). The list and the export share one filter
+  helper (`_apply_test_filters`), so the file is the rows the tab shows. The
+  date both filter on is `COALESCE(completed_at, created_at)` — completion for
+  a finished test, as the export already used, and opening for an unfinished
+  one, which a completion-only filter would have hidden from every dated view.
+- `GET /templates` keeps its bare-list shape — every screen reading it
+  searches the whole library client-side — but takes `limit` (default and
+  cap 500) and `offset`, orders by `name, id`, and applies the member
+  visibility rule in SQL before the limit rather than in Python after the
+  fetch, so a member's page is never padded with templates they cannot see.
+- Frontend: `SkillsTestingTestRecordsTab.tsx` pages through the server
+  (`Pagination`, `DEFAULT_PAGE_SIZE`/`PAGE_SIZE_OPTIONS`), searches server-side,
+  and gains a `DateRangePicker` defaulting to the last twelve months; Export
+  carries that range and the tab's filters, and is a disabled button that says
+  why when there is no range or it is over a year. The Needs Validation deep
+  link opens undated so the queue still matches the tile's count. The member's
+  My Results tab and `MySkillTestsList` on My Training page too.
+
+Guard tests: `backend/tests/test_skill_test_list_paging.py` (paging, total,
+cap, org scoping, member total, server search, date window, export refusal and
+span cap, template paging and visibility-before-limit);
+`SkillsTestingTestRecordsTab.test.tsx`, `SkillsTestingPage.test.tsx`,
+`MySkillTestsList.test.tsx` and `skillsTestingStore.test.ts` on the client.
 
 ## Guard tests added
 
@@ -1701,6 +1745,7 @@ write-up or `KNOWN_LIMITATIONS.md`:
 - **SKT3-2** — `list_tests` (`:1000-1228`), `export_tests_csv` (`:3285-3420`),
   and `list_templates` (`:330-412`) still carry no `.limit()`/`.offset()`.
   Still open, still a product decision (paging contract + frontend change).
+  _(Fixed 2026-10-05 on the owner's decision — see pass 4's SKT3-2 entry.)_
 - **SKT4-1** — `SkillTemplateCreate.sections`, `SkillTemplateSectionSchema.criteria`,
   and `SkillCriterionSchema.checklist_items` still have no `max_length`
   (confirmed by grepping every `max_length=` in `app/schemas/skills_testing.py`
