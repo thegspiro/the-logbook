@@ -32,6 +32,7 @@ import useLoadData from '../hooks/useLoadData';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
+import { QUALIFICATION_STANDING, qualificationStanding } from '../utils/instructorQualifications';
 import { getTrainingPeriodWindow, TRAINING_PERIOD_LABELS, TrainingExportPeriod } from '../utils/trainingPeriods';
 import {
   recertificationService,
@@ -929,6 +930,7 @@ const InstructorsSection: React.FC = () => {
     reload: loadData,
   } = useLoadData(loadQualData, [] as InstructorQualification[]);
   const [showAddModal, setShowAddModal] = useState(false);
+  const today = getTodayLocalDate(tz);
 
   if (loading) {
     return (
@@ -973,6 +975,9 @@ const InstructorsSection: React.FC = () => {
                   Type
                 </th>
                 <th scope="col" className="pr-4 pb-2">
+                  Qualifies for
+                </th>
+                <th scope="col" className="pr-4 pb-2">
                   Level
                 </th>
                 <th scope="col" className="pr-4 pb-2">
@@ -993,18 +998,15 @@ const InstructorsSection: React.FC = () => {
                   {/* The stored values are snake_case (`lead_instructor`), so
                       `capitalize` alone leaves the underscore on screen. */}
                   <td className="py-2 pr-4 capitalize">{qual.qualification_type.replace(/_/g, ' ')}</td>
+                  <td className="py-2 pr-4">{qual.course_name || qual.skill_name || '-'}</td>
                   <td className="py-2 pr-4">{qual.certification_level || '-'}</td>
                   <td className="py-2 pr-4">{qual.certification_number || '-'}</td>
                   <td className="py-2 pr-4">{qual.expiration_date ? formatDate(qual.expiration_date, tz) : '-'}</td>
                   <td className="py-2">
                     <span
-                      className={`rounded-sm px-2 py-0.5 text-xs ${
-                        qual.verified
-                          ? 'bg-green-500/10 text-green-700 dark:text-green-400'
-                          : 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400'
-                      }`}
+                      className={`rounded-sm px-2 py-0.5 text-xs ${QUALIFICATION_STANDING[qualificationStanding(qual, today)].className}`}
                     >
-                      {qual.verified ? 'Verified' : 'Pending'}
+                      {QUALIFICATION_STANDING[qualificationStanding(qual, today)].label}
                     </span>
                   </td>
                 </tr>

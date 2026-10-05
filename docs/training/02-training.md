@@ -1830,7 +1830,7 @@ Each instructor qualification record tracks:
 
 ![Instructor qualification roster with type, agency and expiry](./images/02-69-instructor-qualifications.png)
 
-The roster's **Status** column reports whether an officer has _verified_ the qualification, not whether it has expired — a lapsed qualification still reads "Pending" until someone verifies it. Read the **Expires** column for currency. The course a qualification is tied to is stored but not shown in this table; open the record to see it.
+The roster's **Qualifies for** column names the course or skill a qualification covers. **Status** reads **Expired** once the expiry date has passed (in the department's own date), whether or not it was verified; otherwise **Inactive** for a deactivated qualification, **Verified** once an officer has confirmed it, and **Pending** until then.
 
 ### Assigning Instructors to Sessions
 

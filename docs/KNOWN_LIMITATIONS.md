@@ -1241,12 +1241,12 @@ There is no such button: `EffectivenessSection` renders the four Kirkpatrick
 summary cards and a recent-evaluations table, and nothing else. Evaluations
 reach the system only through `POST /training/effectiveness/evaluations`.
 
-Same shape, smaller gap, on Instructors: the qualification a record is tied to
-_is_ stored (`course_id`), and the response now carries `course_name`, but the
-roster table has no column for it. Its **Status** column reports `verified`,
-not expiry, so a lapsed qualification reads "Pending" rather than "Expired".
+The Instructors roster's gaps (no course column; a lapsed qualification
+reading "Pending") were fixed on 2026-10-05: it shows what each qualification
+covers and reads Expired once the expiry date passes.
 
-Both are documented in place rather than left to surprise someone.
+The Effectiveness gap is documented in place rather than left to surprise
+someone.
 
 ## Admin — No Scheduled Tasks Page (2026-08-09)
 
