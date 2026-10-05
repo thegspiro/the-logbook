@@ -1227,12 +1227,28 @@ class BallotTemplatesResponse(BaseModel):
     templates: List[BallotTemplate]
 
 
+class SavedBallotTemplateItemInput(BallotItemInput):
+    """A ballot item inside a saved template, which rejects unknown keys.
+
+    WHY only here: the template body already forbids extras at its top level,
+    and an item carrying ``candidates`` was answered 201 and stored without
+    them, so the caller believed the candidates were saved. Election
+    create/update keep the shared, extra-tolerant :class:`BallotItemInput`
+    (owner decision 2026-10-05) — tightening that would reject requests other
+    clients send today.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class SavedBallotTemplateCreate(BaseModel):
     """Persisted ballot definition that can be reused by the organization."""
 
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = Field(default=None, max_length=2_000)
-    ballot_items: List[BallotItemInput] = Field(..., min_length=1, max_length=250)
+    ballot_items: List[SavedBallotTemplateItemInput] = Field(
+        ..., min_length=1, max_length=250
+    )
     voting_method: str = Field(default="simple_majority", max_length=50)
     allow_write_ins: bool = False
     model_config = ConfigDict(extra="forbid")
@@ -1252,7 +1268,9 @@ class SavedBallotTemplateCreate(BaseModel):
 
     @field_validator("ballot_items")
     @classmethod
-    def unique_item_ids(cls, values: List[BallotItemInput]) -> List[BallotItemInput]:
+    def unique_item_ids(
+        cls, values: List[SavedBallotTemplateItemInput]
+    ) -> List[SavedBallotTemplateItemInput]:
         ids = [item.id for item in values]
         if len(set(ids)) != len(ids):
             raise ValueError("Ballot item IDs must be unique")

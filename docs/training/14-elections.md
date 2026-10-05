@@ -162,8 +162,10 @@ first.
 > ballot **structure only**: items, positions, voting methods, victory
 > conditions, write-in settings, eligibility types. It never carries
 > candidates, voters, votes, tokens, or attendance — the builder says exactly
-> this under the name field, and the stored shape has nowhere to put them, so
-> they cannot survive the round trip even if something tries to send them.
+> this under the name field, and the stored shape has nowhere to put them.
+> Since 2026-10-05 a save request that tries to send one anyway — a
+> `candidates` list inside an item, say — is refused outright rather than
+> accepted with the extra quietly dropped.
 > Applying last year's template gives you last year's _questions_, with nobody
 > pre-nominated.
 

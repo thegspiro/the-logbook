@@ -2022,27 +2022,6 @@ member's half of `CohortDetailPage` — a permissions decision plus a feature,
 not a correctness fix. This loop does not widen route guards, so it needs an
 owner.
 
-## Elections — Saved Ballot Templates Accept Fields They Then Discard (2026-08-12)
-
-`POST /elections/templates/saved-ballots` answers **201** to a ballot item
-carrying a `candidates` array, and stores the item without it. The safety
-guarantee holds — no candidate, voter, vote or token data can reach a template,
-because `BallotItem` has no field to hold one — but the caller is told the write
-succeeded in full.
-
-The asymmetry is that `SavedBallotTemplateCreate` sets
-`ConfigDict(extra="forbid")`, so a stray key at the _template_ level is
-rejected with a 422, while a stray key one level down inside `ballot_items` is
-silently dropped. Two adjacent parts of the same request body answer the same
-mistake differently.
-
-The obvious fix — `extra="forbid"` on `BallotItem` — is not this loop's to make:
-`BallotItem` is shared with election creation and update, so tightening it
-rejects requests that are accepted today, from clients this repository does not
-contain. That is a compatibility decision with an owner, not a correctness fix.
-Nothing is at risk in the meantime; the failure mode is a misleading 201, not a
-leak.
-
 ## Elections — Vote Receipt Verification Takes Its Credential as a GET Query Parameter (2026-09-02)
 
 `GET /elections/{id}/verify-receipt?receipt=...` (`verify_vote_receipt`)
