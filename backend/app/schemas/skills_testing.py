@@ -62,6 +62,18 @@ def _validate_result_release_value(v: Optional[str]) -> Optional[str]:
     return v
 
 
+# Item caps on skill sheets and their results (owner decisions SKT4-1 and
+# SKT4-2). The request-body byte ceiling alone admits roughly a million small
+# items, each materialized, stored and later iterated for scoring and export.
+# Generous: the largest sheet in the shipped library has 4 sections, 6
+# criteria in a section and 5 checklist items. Result lists use the same caps
+# as the template lists they mirror, so a valid sheet always fits its results.
+MAX_TEMPLATE_SECTIONS = 100
+MAX_SECTION_CRITERIA = 200
+MAX_CHECKLIST_ITEMS = 100
+MAX_RESULT_VIEWER_POSITIONS = 100
+
+
 class SkillCriterionSchema(BaseModel):
     """Schema for a single evaluation criterion within a template section"""
 
@@ -73,7 +85,7 @@ class SkillCriterionSchema(BaseModel):
     passing_score: Optional[float] = Field(None, ge=0)
     max_score: Optional[float] = Field(None, ge=0)
     time_limit_seconds: Optional[int] = Field(None, ge=0)
-    checklist_items: Optional[List[str]] = None
+    checklist_items: Optional[List[str]] = Field(None, max_length=MAX_CHECKLIST_ITEMS)
     statement_text: Optional[str] = None
     # How a pass/fail-judged step touches the overall percentage:
     #   "none"   — recorded only; the mark appears on the scorecard and moves
@@ -169,7 +181,9 @@ class SkillTemplateSectionSchema(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
     sort_order: int = 0
-    criteria: List[SkillCriterionSchema] = Field(default_factory=list)
+    criteria: List[SkillCriterionSchema] = Field(
+        default_factory=list, max_length=MAX_SECTION_CRITERIA
+    )
 
 
 # ============================================
@@ -183,7 +197,9 @@ class SkillTemplateCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
     category: Optional[str] = Field(None, max_length=100)
-    sections: List[SkillTemplateSectionSchema] = Field(..., min_length=1)
+    sections: List[SkillTemplateSectionSchema] = Field(
+        ..., min_length=1, max_length=MAX_TEMPLATE_SECTIONS
+    )
     time_limit_seconds: Optional[int] = Field(None, ge=0)
     passing_percentage: Optional[float] = Field(None, ge=0, le=100)
     require_all_critical: bool = True
@@ -200,7 +216,9 @@ class SkillTemplateCreate(BaseModel):
     result_disclosure: Optional[str] = Field(None, max_length=50)
     result_release: Optional[str] = Field(None, max_length=50)
     # Corporate position slugs whose holders may view results of these tests.
-    result_viewer_positions: Optional[List[str]] = None
+    result_viewer_positions: Optional[List[str]] = Field(
+        None, max_length=MAX_RESULT_VIEWER_POSITIONS
+    )
 
     @field_validator("result_disclosure")
     @classmethod
@@ -242,7 +260,9 @@ class SkillTemplateUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     category: Optional[str] = Field(None, max_length=100)
-    sections: Optional[List[SkillTemplateSectionSchema]] = None
+    sections: Optional[List[SkillTemplateSectionSchema]] = Field(
+        None, max_length=MAX_TEMPLATE_SECTIONS
+    )
     time_limit_seconds: Optional[int] = Field(None, ge=0)
     passing_percentage: Optional[float] = Field(None, ge=0, le=100)
     require_all_critical: Optional[bool] = None
@@ -255,7 +275,9 @@ class SkillTemplateUpdate(BaseModel):
     result_disclosure: Optional[str] = Field(None, max_length=50)
     result_release: Optional[str] = Field(None, max_length=50)
     # Corporate position slugs whose holders may view results of these tests.
-    result_viewer_positions: Optional[List[str]] = None
+    result_viewer_positions: Optional[List[str]] = Field(
+        None, max_length=MAX_RESULT_VIEWER_POSITIONS
+    )
 
     @field_validator("result_disclosure")
     @classmethod
@@ -329,7 +351,9 @@ class CriterionResultSchema(BaseModel):
     passed: Optional[bool] = None
     score: Optional[float] = Field(None, ge=0)
     time_seconds: Optional[int] = None
-    checklist_completed: Optional[List[bool]] = None
+    checklist_completed: Optional[List[bool]] = Field(
+        None, max_length=MAX_CHECKLIST_ITEMS
+    )
     notes: Optional[str] = None
     # The examiner could not observe this step, and said so. Distinct from a
     # blank (which now blocks completion) and from a failure: the candidate is
@@ -356,7 +380,9 @@ class SectionResultSchema(BaseModel):
 
     section_id: Optional[str] = None
     section_name: Optional[str] = None
-    criteria_results: List[CriterionResultSchema] = Field(default_factory=list)
+    criteria_results: List[CriterionResultSchema] = Field(
+        default_factory=list, max_length=MAX_SECTION_CRITERIA
+    )
     section_score: Optional[float] = None
     section_passed: Optional[bool] = None
     notes: Optional[str] = None
@@ -380,7 +406,9 @@ class SkillTestCreate(BaseModel):
     # Per-test disclosure overrides; omit to inherit the template's.
     result_disclosure: Optional[str] = Field(None, max_length=50)
     result_release: Optional[str] = Field(None, max_length=50)
-    result_viewer_positions: Optional[List[str]] = None
+    result_viewer_positions: Optional[List[str]] = Field(
+        None, max_length=MAX_RESULT_VIEWER_POSITIONS
+    )
 
     @field_validator("result_disclosure")
     @classmethod
@@ -397,7 +425,9 @@ class SkillTestUpdate(BaseModel):
     """Schema for updating a skill test (saving progress or results)"""
 
     status: Optional[str] = None
-    section_results: Optional[List[SectionResultSchema]] = None
+    section_results: Optional[List[SectionResultSchema]] = Field(
+        None, max_length=MAX_TEMPLATE_SECTIONS
+    )
     overall_score: Optional[float] = Field(None, ge=0, le=100)
     elapsed_seconds: Optional[int] = Field(None, ge=0)
     notes: Optional[str] = None
@@ -405,7 +435,9 @@ class SkillTestUpdate(BaseModel):
     requirement_id: Optional[UUID] = None
     result_disclosure: Optional[str] = Field(None, max_length=50)
     result_release: Optional[str] = Field(None, max_length=50)
-    result_viewer_positions: Optional[List[str]] = None
+    result_viewer_positions: Optional[List[str]] = Field(
+        None, max_length=MAX_RESULT_VIEWER_POSITIONS
+    )
 
     @field_validator("result_disclosure")
     @classmethod

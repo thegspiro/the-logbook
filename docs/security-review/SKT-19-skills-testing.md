@@ -902,7 +902,9 @@ sweep skipped feature-owned files by design, and so that a future pass does
 not repeat round 1's mistake of dropping a site for not matching a field-name
 pattern instead of evaluating it.
 
-### SKT4-1 — LOW/MED — `sections`/`criteria` has no per-template item cap — OPEN / FLAGGED
+### SKT4-1 — LOW/MED — `sections`/`criteria` has no per-template item cap — ✅ FIXED (2026-10-05)
+
+**Resolved (owner decision, generous caps):** `MAX_TEMPLATE_SECTIONS = 100`, `MAX_SECTION_CRITERIA = 200` and `MAX_CHECKLIST_ITEMS = 100` in `app/schemas/skills_testing.py`, on create and update. The largest shipped library sheet is 4 / 6 / 5. Test: `test_skill_sheet_item_caps.py`. As found:
 
 `SkillTemplateCreate.sections: List[SkillTemplateSectionSchema] =
 Field(..., min_length=1)` and `SkillTemplateSectionSchema.criteria` (default
@@ -941,7 +943,9 @@ Included in this finding's scope (not filed separately, since it is the same
 root cause and the same content-decision remedy) and in the
 `docs/KNOWN_LIMITATIONS.md` entry.
 
-### SKT4-2 — MED — `PUT /tests/{id}`'s result arrays have no per-field item cap, member-reachable — OPEN / FLAGGED
+### SKT4-2 — MED — `PUT /tests/{id}`'s result arrays have no per-field item cap, member-reachable — ✅ FIXED (2026-10-05)
+
+**Resolved (owner decision, caps matched to the template's):** `section_results`, `criteria_results` and `checklist_completed` use the same three caps as the template lists they mirror, so a valid sheet always fits its results; `result_viewer_positions` is capped at `MAX_RESULT_VIEWER_POSITIONS = 100` on test and template create/update. Test: `test_skill_sheet_item_caps.py`. As found:
 
 The same amplification shape as SKT4-1, one level deeper and reachable by a
 broader population. `SkillTestUpdate.section_results:
