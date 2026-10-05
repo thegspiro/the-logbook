@@ -611,7 +611,7 @@ export const InventoryAdminHub: React.FC = () => {
       showAttentionQueue={false}
     >
       {activeTab === 'settings' ? (
-        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl py-6">
           <AdminMetricsSettings
             moduleKey="inventory"
             moduleLabel="Inventory"
@@ -620,7 +620,7 @@ export const InventoryAdminHub: React.FC = () => {
           />
         </div>
       ) : (
-        <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
+        <div className="mx-auto max-w-5xl py-6 sm:py-8">
           {/* Only for the viewer it describes. Its empty state reads "Nothing
               needs attention. All inventory work is up to date." -- a claim
               about inventory nobody asked the server about, since the batch
