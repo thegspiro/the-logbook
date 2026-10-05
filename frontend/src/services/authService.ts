@@ -188,6 +188,11 @@ export const authService = {
     return `${baseUrl}/auth/oauth/microsoft`;
   },
 
+  getAuthentikOAuthUrl(): string {
+    const baseUrl = api.defaults.baseURL || '';
+    return `${baseUrl}/auth/oauth/authentik`;
+  },
+
   /**
    * Get session settings (timeout configuration)
    */

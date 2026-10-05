@@ -37,6 +37,9 @@ ALLOWLISTED_PUBLIC = {
     ("auth.py", "oauth_google_callback"),
     ("auth.py", "oauth_microsoft_initiate"),
     ("auth.py", "oauth_microsoft_callback"),
+    # Authentik sign-in: the same pre-session OAuth pair as Google/Microsoft.
+    ("auth.py", "oauth_authentik_initiate"),
+    ("auth.py", "oauth_authentik_callback"),
     ("auth.py", "register"),
     ("auth.py", "login"),
     # Second factor of login: caller is pre-auth by definition; gated by the

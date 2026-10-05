@@ -1260,6 +1260,25 @@ class Settings(BaseSettings):
     # "yourdept.org,county.gov"). Empty = allow any Google account (still
     # subject to an existing local user matching the email).
     GOOGLE_ALLOWED_DOMAINS: str = ""
+    # Authentik (self-hosted OpenID Connect). The issuer is the provider's
+    # OpenID configuration base, ending in the application slug, e.g.
+    # https://auth.example.org/application/o/the-logbook/ — discovery is read
+    # from <issuer>.well-known/openid-configuration. The provider must sign ID
+    # tokens with a signing key (RS256/ES256); client-secret (HS256) signing is
+    # refused. Accounts are linked by email only when the token says the email
+    # is verified (email_verified), as for Google.
+    AUTHENTIK_ENABLED: bool = False
+    AUTHENTIK_ISSUER_URL: str | None = None
+    AUTHENTIK_CLIENT_ID: str | None = None
+    AUTHENTIK_CLIENT_SECRET: str | None = None
+    # Absolute URL Authentik redirects back to. Must exactly match a redirect
+    # URI on the Authentik provider, e.g.
+    # https://app.example.org/api/v1/auth/oauth/authentik/callback
+    AUTHENTIK_REDIRECT_URI: str | None = None
+    # Comma-separated allowed email domains (empty = any verified email that
+    # matches an existing local user).
+    AUTHENTIK_ALLOWED_DOMAINS: str = ""
+
     # Relative SPA paths the OAuth callback redirects to. Success lands on a
     # lightweight page that establishes the session; failure returns to login.
     OAUTH_SUCCESS_REDIRECT: str = "/auth/callback"
@@ -1283,6 +1302,16 @@ class Settings(BaseSettings):
         return {
             d.strip().lower()
             for d in self.GOOGLE_ALLOWED_DOMAINS.split(",")
+            if d.strip()
+        }
+
+    def get_authentik_allowed_domains(self) -> set[str]:
+        """Allowed Authentik email domains as a lowercased set (empty = any)."""
+        if not self.AUTHENTIK_ALLOWED_DOMAINS:
+            return set()
+        return {
+            d.strip().lower()
+            for d in self.AUTHENTIK_ALLOWED_DOMAINS.split(",")
             if d.strip()
         }
 

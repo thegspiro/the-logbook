@@ -141,9 +141,17 @@ last hour" counts the organization's `login_failed` rows.
 ## OAuth
 
 Connect external identity providers for single sign-on. _(2026-05-29)_ "Sign in
-with Google" and "Sign in with Microsoft" (Azure AD, single-tenant) are
-implemented via the OpenID Connect authorization-code flow in
-`services/oauth_service.py`.
+with Google" and "Sign in with Microsoft" (Azure AD, single-tenant), and
+_(2026-10-05)_ "Authentik SSO", are implemented via the OpenID Connect
+authorization-code flow in `services/oauth_service.py`.
+
+**The credentials come from the server's environment, not the Settings
+screen.** Settings → Authentication chooses which provider the login page
+offers; the client ID, secret and server URL fields there are kept for the
+department's records and read by nothing. A provider shows a button only when
+the department chose it **and** the server is configured for it. Until then,
+members keep signing in with passwords and can reset them: forgot-password
+refers people to a provider only when that provider is actually live.
 
 ### How It Works
 
@@ -162,6 +170,16 @@ implemented via the OpenID Connect authorization-code flow in
      `audience=AZURE_AD_CLIENT_ID`, issuer `{authority}/v2.0`, and the token's
      `tid` claim required to equal `AZURE_AD_TENANT_ID` (single-tenant lock —
      only accounts in the configured directory can sign in)
+   - **Authentik** — endpoints come from the issuer's discovery document
+     (`<AUTHENTIK_ISSUER_URL>.well-known/openid-configuration`, cached for an
+     hour), which must name the configured issuer and keep every endpoint on
+     the issuer's origin. The token is verified against the provider's JWKS
+     with `audience=AUTHENTIK_CLIENT_ID` and the configured issuer, using an
+     asymmetric algorithm only: give the Authentik provider a **signing key**,
+     because a client-secret (HS256) token is refused. The email links an
+     account only when `email_verified` is `true` — make sure the provider's
+     email scope mapping sets it, or every sign-in fails with
+     `unverified_email`
 4. **Link-existing-only policy:** OAuth never auto-creates an account. The
    verified IdP email must match an existing, **active** local user in the
    organization. On first use the provider/subject is bound to that user
@@ -188,10 +206,12 @@ implemented via the OpenID Connect authorization-code flow in
 
 - **Google Workspace** — "Sign in with Google" (OpenID Connect)
 - **Microsoft 365 / Azure AD** — "Sign in with Microsoft" (single-tenant)
+- **Authentik** — "Authentik SSO" (self-hosted OpenID Connect)
 
 ### Domain Restriction
 
-Set `GOOGLE_ALLOWED_DOMAINS` / `AZURE_AD_ALLOWED_DOMAINS` (comma-separated) to
+Set `GOOGLE_ALLOWED_DOMAINS` / `AZURE_AD_ALLOWED_DOMAINS` /
+`AUTHENTIK_ALLOWED_DOMAINS` (comma-separated) to
 restrict which email domains may sign in. Empty (default) means no domain
 restriction. Enforced server-side after token verification; when exactly one
 Google domain is configured, the consent screen is hinted via the `hd`
@@ -217,6 +237,14 @@ AZURE_AD_CLIENT_ID=your-client-id
 AZURE_AD_CLIENT_SECRET=your-client-secret
 AZURE_AD_REDIRECT_URI=https://your-domain.com/api/v1/auth/oauth/microsoft/callback
 AZURE_AD_ALLOWED_DOMAINS=yourdept.org
+
+# Authentik (OpenID Connect provider with a signing key)
+AUTHENTIK_ENABLED=true
+AUTHENTIK_ISSUER_URL=https://auth.your-domain.com/application/o/the-logbook/
+AUTHENTIK_CLIENT_ID=your-client-id
+AUTHENTIK_CLIENT_SECRET=your-client-secret
+AUTHENTIK_REDIRECT_URI=https://your-domain.com/api/v1/auth/oauth/authentik/callback
+AUTHENTIK_ALLOWED_DOMAINS=yourdept.org
 ```
 
 ### Callback Error Codes _(2026-05-29)_
@@ -224,21 +252,23 @@ AZURE_AD_ALLOWED_DOMAINS=yourdept.org
 The callback redirects to `OAUTH_FAILURE_REDIRECT?error=<code>` for these
 recoverable failures:
 
-| Code                    | Meaning                                                                |
-| ----------------------- | ---------------------------------------------------------------------- |
-| `access_denied`         | The provider returned an error (e.g. user cancelled consent)           |
-| `invalid_state`         | Missing/mismatched `state` vs. the `oauth_state` cookie (CSRF guard)   |
-| `token_exchange_failed` | Authorization-code exchange with the provider failed                   |
-| `missing_id_token`      | Provider response contained no ID token                                |
-| `invalid_id_token`      | ID token failed cryptographic verification (signature/audience/expiry) |
-| `invalid_issuer`        | ID token issuer is not the expected provider                           |
-| `invalid_tenant`        | Microsoft `tid` claim does not match `AZURE_AD_TENANT_ID`              |
-| `unverified_email`      | IdP did not mark the email as verified                                 |
-| `no_email`              | No email present in the verified claims                                |
-| `domain_not_allowed`    | Email domain not in the configured allowlist                           |
-| `no_account`            | No matching active local user for the verified email                   |
-| `inactive`              | Matched local user is not active                                       |
-| `account_conflict`      | Email already bound to a different IdP subject/provider                |
+| Code                     | Meaning                                                                |
+| ------------------------ | ---------------------------------------------------------------------- |
+| `access_denied`          | The provider returned an error (e.g. user cancelled consent)           |
+| `invalid_state`          | Missing/mismatched `state` vs. the `oauth_state` cookie (CSRF guard)   |
+| `token_exchange_failed`  | Authorization-code exchange with the provider failed                   |
+| `missing_id_token`       | Provider response contained no ID token                                |
+| `invalid_id_token`       | ID token failed cryptographic verification (signature/audience/expiry) |
+| `invalid_issuer`         | ID token issuer is not the expected provider                           |
+| `invalid_tenant`         | Microsoft `tid` claim does not match `AZURE_AD_TENANT_ID`              |
+| `unverified_email`       | IdP did not mark the email as verified (Google, Authentik)             |
+| `provider_unavailable`   | Authentik discovery could not be fetched                               |
+| `provider_misconfigured` | Authentik discovery names another issuer or an off-origin endpoint     |
+| `no_email`               | No email present in the verified claims                                |
+| `domain_not_allowed`     | Email domain not in the configured allowlist                           |
+| `no_account`             | No matching active local user for the verified email                   |
+| `inactive`               | Matched local user is not active                                       |
+| `account_conflict`       | Email already bound to a different IdP subject/provider                |
 
 ---
 

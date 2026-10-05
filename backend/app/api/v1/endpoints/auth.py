@@ -308,6 +308,36 @@ async def get_captcha_config():
     }
 
 
+_NO_OAUTH = {
+    "googleEnabled": False,
+    "microsoftEnabled": False,
+    "authentikEnabled": False,
+}
+
+
+def sso_provider_is_live(provider: str) -> bool:
+    """Whether the server can actually sign people in through *provider*.
+
+    A department choosing a provider in Settings is not enough: the client
+    credentials live in the server's environment. Both the sign-in buttons and
+    the forgot-password refusal key off this, so a provider chosen but never
+    configured neither shows a dead button nor takes password reset away.
+    """
+    from app.services.oauth_service import (
+        AuthentikOAuthService,
+        GoogleOAuthService,
+        MicrosoftOAuthService,
+    )
+
+    services = {
+        "google": GoogleOAuthService,
+        "microsoft": MicrosoftOAuthService,
+        "authentik": AuthentikOAuthService,
+    }
+    service = services.get(provider)
+    return bool(service and service.is_configured())
+
+
 @router.get("/oauth-config")
 async def get_oauth_config(
     db: AsyncSession = Depends(get_db),
@@ -328,25 +358,24 @@ async def get_oauth_config(
         row = result.first()
 
         if not row or not row.settings:
-            return {"googleEnabled": False, "microsoftEnabled": False}
+            return dict(_NO_OAUTH)
 
         auth_settings = (
             row.settings.get("auth", {}) if isinstance(row.settings, dict) else {}
         )
         provider = auth_settings.get("provider", "local")
 
-        from app.services.oauth_service import GoogleOAuthService, MicrosoftOAuthService
-
         return {
             # Only advertise a provider when the org selected it AND the server
             # is fully configured for it, so the button never 404s on click.
-            "googleEnabled": provider == "google"
-            and GoogleOAuthService.is_configured(),
+            "googleEnabled": provider == "google" and sso_provider_is_live("google"),
             "microsoftEnabled": provider == "microsoft"
-            and MicrosoftOAuthService.is_configured(),
+            and sso_provider_is_live("microsoft"),
+            "authentikEnabled": provider == "authentik"
+            and sso_provider_is_live("authentik"),
         }
     except Exception:
-        return {"googleEnabled": False, "microsoftEnabled": False}
+        return dict(_NO_OAUTH)
 
 
 # OAuth state cookie: a short-lived, httpOnly token compared against the `state`
@@ -576,6 +605,73 @@ async def oauth_microsoft_callback(
         return _oauth_fail_redirect(reason or "login_failed")
 
     return await _finish_oauth_login(db, user, request, "microsoft")
+
+
+@router.get("/oauth/authentik")
+async def oauth_authentik_initiate(db: AsyncSession = Depends(get_db)):
+    """
+    Begin the Authentik (OpenID Connect) OAuth flow.
+
+    Sets a CSRF state cookie and redirects to the Authentik consent screen.
+    Returns 404 when Authentik login is not configured.
+    """
+    from app.services.oauth_service import AuthentikOAuthError, AuthentikOAuthService
+
+    if not AuthentikOAuthService.is_configured():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    try:
+        discovery = await AuthentikOAuthService.discovery()
+    except AuthentikOAuthError as exc:
+        return _oauth_fail_redirect(str(exc))
+    return _start_oauth(
+        lambda state: AuthentikOAuthService.build_authorization_url(discovery, state)
+    )
+
+
+@router.get("/oauth/authentik/callback")
+async def oauth_authentik_callback(
+    request: Request,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    oauth_state_cookie: str | None = Cookie(None, alias=_OAUTH_STATE_COOKIE),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Handle Authentik's redirect back: verify state, exchange the code, map the
+    Authentik identity to an existing local user, and establish the session.
+    """
+    from app.services.oauth_service import AuthentikOAuthError, AuthentikOAuthService
+
+    if not AuthentikOAuthService.is_configured():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    if error:
+        logger.info(f"Authentik OAuth returned error: {error}")
+        return _oauth_fail_redirect("access_denied")
+
+    if (
+        not code
+        or not state
+        or not oauth_state_cookie
+        or not secrets.compare_digest(state, oauth_state_cookie)
+    ):
+        return _oauth_fail_redirect("invalid_state")
+
+    service = AuthentikOAuthService(db)
+    try:
+        claims = await service.exchange_code_for_idinfo(code)
+        user, reason = await service.resolve_user(claims)
+    except AuthentikOAuthError as exc:
+        return _oauth_fail_redirect(str(exc))
+    except Exception as exc:  # noqa: BLE001 - never surface internals to the UA
+        logger.error(f"Unexpected error during Authentik OAuth callback: {exc}")
+        return _oauth_fail_redirect("server_error")
+
+    if not user:
+        return _oauth_fail_redirect(reason or "login_failed")
+
+    return await _finish_oauth_login(db, user, request, "authentik")
 
 
 @router.post(
@@ -1716,11 +1812,14 @@ async def forgot_password(
     org_settings = organization.settings or {}
     auth_config = AuthSettings(**org_settings.get("auth", {}))
 
-    if not auth_config.is_local_auth():
+    # A provider the department chose but the server cannot sign anyone in
+    # through leaves members with only their passwords, so they keep reset
+    # (W01-11): refusing it there locked every member out of recovery.
+    if not auth_config.is_local_auth() and sso_provider_is_live(auth_config.provider):
         provider_names = {
             "google": "Google",
             "microsoft": "Microsoft",
-            "authentik": "your SSO provider",
+            "authentik": "Authentik",
         }
         provider_label = provider_names.get(auth_config.provider, auth_config.provider)
         return {
