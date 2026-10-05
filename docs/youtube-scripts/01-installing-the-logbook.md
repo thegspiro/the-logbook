@@ -290,8 +290,20 @@ python3 -c "import secrets; print(secrets.token_hex(16))"
 > network, that might be something like `http://192.168.1.50:3000`. For a
 > domain, it would be `https://logbook.yourdepartment.org`."
 
+> "**FRONTEND_URL** — the address your members open the site at. Every link in
+> every email, password resets and ballots included, is built from it. Leave it
+> at localhost and The Logbook uses the first address in ALLOWED_ORIGINS that
+> isn't localhost instead. If neither names a real address, a production
+> server refuses to start."
+
+**[CALLOUT: "FRONTEND_URL = where emailed links point"]**
+
 > "**Timezone** — set `TZ` to your IANA timezone. For example,
-> `America/New_York`, `America/Chicago`, or `America/Los_Angeles`."
+> `America/New_York`, `America/Chicago`, or `America/Los_Angeles`. That only
+> sets the containers' clock, though. The department's own dates — when a
+> certificate expires, what 'today' is, and every time printed in an email or
+> an export — come from the timezone you pick in the setup wizard, which you
+> can change later under Settings, General, Profile. Get that one right."
 
 > "**Modules** — you don't turn these on or off here in the environment file.
 > Once you're up and running, you'll enable or disable modules for your
@@ -500,6 +512,11 @@ chapter. New screen recording of the command.]**
 > resource limits to play nicely with other containers on your NAS. Check the
 > Unraid quick-start guide in the repository for the full walkthrough."
 
+> "One field in the template matters more than it looks: **Public Site
+> Address**. That's the address every emailed link uses. Leave it blank and the
+> first Allowed Origins address is used. If you use the setup script instead,
+> it asks for your public HTTPS address and writes it to both settings for you."
+
 **[CALLOUT: "See: unraid/QUICK-START.md in the repository"]**
 
 **[TRANSITION: Cut to verification section]**
@@ -563,8 +580,10 @@ curl http://localhost:3001/health
 **[CALLOUT: Issue #1]**
 
 > "**Number one: Port conflicts.** If you already have something running on port
-> 3000, 3001, 3306, or 6379, Docker will fail to bind. Check with
-> `docker compose logs` and change the ports in your `.env` file if needed."
+> 3000 or 3001, Docker will fail to bind. The database and Redis ports aren't
+> published to the host by default, so they won't collide. Check with
+> `docker compose logs` and change `FRONTEND_PORT` or `BACKEND_PORT` in your
+> `.env` file if needed."
 
 **[CALLOUT: Issue #2]**
 

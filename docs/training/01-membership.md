@@ -61,6 +61,9 @@ The directory lists every member on the roster, whatever their status, with thei
 
 ![Member directory listing members with their status and contact columns](./images/01-01-member-directory.png)
 
+> **Screenshot needed:**
+> _[As an administrator (members.manage) at /members on a desktop width: the Members table with the status filter set to Archived, showing at least one archived member's row with the green Reactivate icon beside Edit and Delete in Actions. Needs an archived member in the demo seed. Do not open the Reactivate dialog.]_
+
 **[SCREENSHOT — REPLACE `01-01-member-directory.png`.** The table gained a
 **Rank** column between the name and **Member #** (2026-09-30). Re-shoot as an
 officer so **Member #** is present, with at least one member whose rank is set.**]**
@@ -278,6 +281,9 @@ There is **one** Membership Number field:
 
 ---
 
+> **Screenshot needed:**
+> _[As an administrator (users.create + members.manage) on an install with email not configured, at /members/admin?tab=add: the Account Password block with Set initial password ticked and disabled and the "Required: email isn't set up for this department…" hint visible. Leave the password fields empty; do not capture any typed password.]_
+
 ## Importing Members from CSV
 
 **Required Permission:** `users.create`
@@ -494,6 +500,9 @@ saving.
 
 ---
 
+> **Screenshot needed:**
+> _[As an administrator (members.manage) at /members/admin, Member Management tab: a demo member's Reset Password dialog with a weak password typed (for example Abcdefgh1234!) so the Password rules list shows "No runs like 123 or abc" unmet. Never submit, and never capture a real password.]_
+
 ## Member Audit History
 
 **Required Permission:** `members.manage`
@@ -630,6 +639,9 @@ are never rewritten.
 > keeps them.
 
 ---
+
+> **Screenshot needed:**
+> _[As an administrator (members.manage) at /members/:userId for a Dropped or Archived demo member: the Anonymize Member dialog showing the warning sentence, the red Removed panel, the Kept panel with the "Former Member" note, the empty "Type <name> to confirm" field and the disabled Anonymize button. Clip to the dialog. Never type the name or confirm — the action is irreversible and would remove the demo member. Needs a dropped or archived member in the seed.]_
 
 ## Prospective Members Pipeline
 
@@ -862,6 +874,9 @@ reveal the tracker once someone has passed their interview.
 > on/off setting, but is not emailed the link, and the stage waits for you to
 > complete it.
 
+> **Screenshot needed:**
+> _[As a Membership Coordinator (prospective_members.manage) at /prospective-members/settings: a pipeline selected and Add Stage open with the Enable Status Page tile chosen, showing the "Enables the public status page" panel with its override sentence, "Enable public status page at this stage" ticked, and "Message in the link email (optional)" filled with a sample welcome line.]_
+
 ### Pipeline Configuration
 
 Open **Prospective Members** and click **Pipeline Settings** in the page header
@@ -1084,6 +1099,9 @@ happen automatically — the dialog has no per-change options for them.
 > choice.
 
 ![The Change Member Status dialog with a drop status selected and its property-return note](./images/01-29-status-change-modal.png)
+
+> **Screenshot needed:**
+> _[As an administrator (members.manage) at /members/:userId for a Dropped (Voluntary) demo member: the Change Member Status dialog with Active selected, showing the Earlier service radios (department default marked), Return date and Last day of previous service. Never press Update Status. Needs a dropped member in the seed.]_
 
 > **The last administrator cannot be removed** _(2026-08-01)_. If the member
 > you are changing is the only remaining active person who can manage members,
@@ -1394,6 +1412,9 @@ date may be in the future.
 > **Members reinstated before 2026-09-24 have no recorded gap.** Their service is
 > still counted from their hire date, including the time away. Correct it by
 > editing their Service History.
+
+> **Screenshot needed:**
+> _[As an administrator (members.manage) at /members/:userId for a demo member who rejoined under Restart at zero: the Service History card in its read view, showing the Credited service and Prior service (not counted) tiles and two stints — an earlier one tagged "Dropped (voluntary)" and "Not counted", and a current one ending "present". Needs a seeded rejoin with stints. Clip to the card.]_
 
 ---
 
@@ -2142,6 +2163,41 @@ what lets an admin-hours audit tell a card tap at a station from a member's
 own scan. **Historical rows are
 not rewritten** — a `qr_scan` recorded before this really was written by the QR
 path.
+
+## Printing Plastic ID Cards _(2026-10-04)_
+
+Members → select members → **Print ID Cards**, with `members.manage` or
+`members.manage_id_cards`. The page produces a PDF with one card side per page
+at exactly CR80 size (3.375 × 2.125 in, the standard ID card). Any ID card
+printer accepts that through its ordinary driver — Zebra ZC/ZXP, HID Fargo,
+Evolis, Magicard, Entrust Datacard — with no plug-in to install.
+
+| Option      | Choices                     | When to pick it                                                    |
+| ----------- | --------------------------- | ------------------------------------------------------------------ |
+| Orientation | Landscape, Portrait         | Portrait suits vertical clip and lanyard holders                   |
+| Sides       | Front only, Front and back  | Front and back puts the code and a return address on the back      |
+| Code        | Barcode (Code 128), QR code | Barcode for USB/handheld scanners, QR for phone and tablet cameras |
+
+The page opens on the **department layout**. Changing an option affects only
+that print; **Save as department layout** makes it the starting point for
+whoever prints next. The back's "If found, please return to" text uses the
+department's mailing address (or its physical address) and phone number from
+Organization settings.
+
+To print: open the PDF, choose the card printer, pick the CR80 / ID-1 card size
+if the driver asks, and print at **100% / Actual size** — "Fit to page" shrinks
+the barcode. For two-sided cards turn on duplex in the printer's options, or
+print and flip by hand; pages alternate front, back, front, back. Print one
+**Test card** first to check alignment. Cards print in black only, so they come
+out the same on a monochrome ribbon as on a colour one.
+
+**Who may print badges changed.** The sticker-label badges at
+`/members/print-labels`, and colleague ID cards, now need `members.manage` or
+`members.manage_id_cards`. Before this, any member holding the directory
+permission (`members.view`, which every position has) could print a badge that
+scans as a colleague.
+
+---
 
 ## A Member Profile No Longer Shows Everyone's Gear _(2026-08-24)_
 

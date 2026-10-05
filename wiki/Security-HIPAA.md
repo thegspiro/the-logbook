@@ -10,12 +10,12 @@ The Logbook includes security features designed with HIPAA (Health Insurance Por
 
 ### Access Control (§ 164.312(a))
 
-| HIPAA Requirement          | Feature                                                                                    |
-| -------------------------- | ------------------------------------------------------------------------------------------ |
-| Unique user identification | Every user has a unique ID and username                                                    |
-| Emergency access procedure | System owner bypass for emergency situations                                               |
-| Automatic logoff           | 30-minute inactivity timeout (configurable)                                                |
-| Encryption and decryption  | AES-256-GCM authenticated encryption for PHI at rest (legacy Fernet values still readable) |
+| HIPAA Requirement          | Feature                                                                                                   |
+| -------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Unique user identification | Every user has a unique ID and username                                                                   |
+| Emergency access procedure | System owner bypass for emergency situations                                                              |
+| Automatic logoff           | 15-minute inactivity timeout (`HIPAA_SESSION_TIMEOUT_MINUTES`), enforced in the browser and on the server |
+| Encryption and decryption  | AES-256-GCM authenticated encryption for PHI at rest (legacy Fernet values still readable)                |
 
 ### Audit Controls (§ 164.312(b))
 
@@ -39,12 +39,12 @@ The Logbook includes security features designed with HIPAA (Health Insurance Por
 
 ### Person or Entity Authentication (§ 164.312(d))
 
-| HIPAA Requirement           | Feature                                     |
-| --------------------------- | ------------------------------------------- |
-| Strong passwords            | Argon2id hashing, 12+ character minimum     |
-| Multi-factor authentication | TOTP-based 2FA (optional or admin-enforced) |
-| Account lockout             | 5 failed attempts = 30-minute lockout       |
-| Session management          | JWT tokens with configurable expiration     |
+| HIPAA Requirement           | Feature                                                                                                                                       |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Strong passwords            | Argon2id hashing, 12+ character minimum                                                                                                       |
+| Multi-factor authentication | TOTP-based 2FA (optional or admin-enforced)                                                                                                   |
+| Account lockout             | 5 failed attempts (`MAX_LOGIN_ATTEMPTS`) = 15-minute lockout by default (`ACCOUNT_LOCKOUT_DURATION_MINUTES`); wrong MFA codes count toward it |
+| Session management          | JWT tokens with configurable expiration                                                                                                       |
 
 ### Transmission Security (§ 164.312(e))
 

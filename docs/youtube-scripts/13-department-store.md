@@ -499,8 +499,8 @@ those orders.]**
 > "**Mark paid** is the one you'll use ninety percent of the time. It reads the
 > balance off the order, so there's no amount to fat-finger."
 
-> "**Record payment** takes a specific amount, for partials. **Waive** clears a
-> balance without money — a replacement for a defective item, a comp. It's
+> "**Record payment** takes a specific amount, for partials. **Waive payment**
+> clears a balance without money — a replacement for a defective item, a comp. It's
 > recorded as a waiver, not a payment, so your totals still tell the truth."
 
 ### BULK (15:15 – 16:00)

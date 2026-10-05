@@ -650,6 +650,9 @@ Split it into three fields rather than pasting it whole:
 | API Key      | the value after `key=`                       |
 | API Secret   | the value after `secret=`                    |
 
+> **Screenshot needed:**
+> _[Training Officer or admin (training.manage) at /training/admin?page=setup&tab=integrations → Add Provider → Target Solutions, details step: API Base URL with its helper text, API Key and API Secret \* holding only obviously fake values (demo-key / demo-secret) or empty, Enable Auto-Sync switched on (it starts off) with Pull new completions: Every hour and Daily 30-day review at 02:00 with its timezone helper. Never save, and never type a real key or secret.]_
+
 The key and secret are stored encrypted and are never returned by the API or
 shown again. A base URL that still contains a key, secret or token is
 rejected, because the base URL is stored in plain text. The credentials are

@@ -311,6 +311,12 @@ Compliance report **does** add them into each member's shift and hour totals.
 
 ---
 
+> **Screenshot needed:**
+> _[Member at /scheduling?tab=my-shifts&view=hours, with at least one outside department and unit seeded. The 'Log a shift with another department' dialog opened from 'Log outside shift' and filled in: a Start, an End set with '+12 hours', the 'Counts as 12 hours' line, a Department and Apparatus chosen, and Position 'Driver'. Use placeholder department names, never a real neighbouring department.]_
+
+> **Screenshot needed:**
+> _[Member at /scheduling?tab=my-shifts&view=hours. The 'Shifts with other departments' section under the Hours table, with two counted entries showing date, time range, hours and apparatus, and one 'Not counted' entry with its Reason line; a card above should read '+N hrs with other departments'.]_
+
 ## Shift Assignments
 
 **Required Permission:** `scheduling.manage`
@@ -799,6 +805,9 @@ What you are told afterwards _(2026-09-29)_:
 
 ![The shift patterns page — each pattern with its type badge, rotation settings and Generate Shifts action](./images/03-13-shift-patterns.png)
 
+> **Screenshot needed:**
+> _[Scheduling administrator at /scheduling/admin/planning/patterns. A pattern's Generate panel after generating a date range that is already fully on the schedule, with the 'No new shifts. Dates already on the schedule are skipped…' toast visible. Generate the same range once first so the second run creates nothing.]_
+
 ### Understanding Platoon Rotations
 
 Platoon patterns are the most complex pattern type. They work by cycling through a fixed on/off rotation:
@@ -961,6 +970,9 @@ reports saw a discrepancy with nothing to explain it.
 logged on other departments' apparatus; below the table sit **Outside
 apparatus staffed** and **Shifts with other departments** — see
 [Shifts with other departments](#shifts-with-other-departments-2026-09-27--09-29).
+
+> **Screenshot needed:**
+> _[Scheduling administrator (scheduling.manage) at /scheduling/admin/reports, Member Hours generated for a range containing outside shifts. Show the Outside Hours column, the 'Outside apparatus staffed' table with its Total row, and the 'Shifts with other departments' list with a Reject button and one 'Not counted' row. Use placeholder department names such as 'Township Fire Company', never a real neighbouring department.]_
 
 ### Compliance Report
 
@@ -3318,6 +3330,9 @@ API, the response shape changed — it is now an object with an `items` list
 rather than a plain list.
 
 ![The bottom of the Requests tab's first page of time-off requests, with the Load more time-off requests control beneath the twentieth row](./images/03-79-requests-load-more.png)
+
+> **Screenshot needed:**
+> _[Member at /scheduling?tab=requests on the default Pending filter, after their only swap request was approved. It shows 'No swap requests', 'Your swap requests will appear here…' and the line 'Showing pending requests only. Choose All Statuses to see the rest.']_
 
 ## August 19–23, 2026 update — equipment checks survive a dead spot
 

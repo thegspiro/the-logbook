@@ -965,6 +965,15 @@ No current connector call site passes any of the three — this is the same
 `trust_env`/`proxy` parameters already documented in this function's
 docstring.
 
+**Mechanism changed (2026-09-25, [#2681](https://github.com/thegspiro/the-logbook/pull/2681)).**
+httpx 0.28 deprecates `cert=` on a transport, so `cert` no longer reaches any
+transport, or `httpx.AsyncClient`, as that keyword. `_tls_verify()` in
+`integration_services/base.py` builds an `ssl.SSLContext` with
+`httpx.create_ssl_context()` and loads the client certificate into it with
+`load_cert_chain()`. Every transport this module constructs receives that
+context as `verify=`. The guarantee above is unchanged: a requested client
+certificate still reaches every transport, the proxy mounts included.
+
 **Guard tests** (`test_integration_response_size_cap.py`):
 `test_create_integration_client_http2_kwarg_reaches_the_transport`,
 `test_create_integration_client_http1_false_reaches_the_transport`,

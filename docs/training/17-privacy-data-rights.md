@@ -411,6 +411,9 @@ prove the member was compliant at the time.
 
 ---
 
+> **Screenshot needed:**
+> _[As an administrator (members.manage) at /members/:userId for a Dropped (Voluntary) demo member: the Membership card showing Rank, Member type, Member since, then Status reading "Dropped Voluntary" with the red "Anonymize member" link beneath it. Clip to the card. Do not open the dialog.]_
+
 ## Audit Records and Retention (Admin)
 
 Audit records follow their own rule: **seven years**, exceeding the HIPAA

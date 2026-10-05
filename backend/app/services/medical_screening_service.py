@@ -363,7 +363,16 @@ class MedicalScreeningService:
                 if latest.expiration_date:
                     is_compliant = latest.expiration_date >= today
                     days_until_exp = (latest.expiration_date - today).days
-                    if 0 < days_until_exp <= 30:
+                    # `0 <=`, not `0 <`: a screening expiring **today** is the
+                    # one most in need of flagging, and `get_expiring_soon`
+                    # below already returns it (`expiration_date >= today`).
+                    # Excluding it here meant the summary count and the list it
+                    # links to disagreed about the same member on that single
+                    # day — the count said nothing was due, the list named it.
+                    # Keep the two windows in step: this is the other half of
+                    # the same "expiring soon" definition, and the WAIVED
+                    # divergence between them is recorded as MS2-7.
+                    if 0 <= days_until_exp <= 30:
                         expiring_soon_count += 1
                 else:
                     # No expiration = compliant indefinitely

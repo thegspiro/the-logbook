@@ -24,7 +24,7 @@ been through a review pass.
 | A4  | Email templates & delivery     | `endpoints/email_templates.py` (671 L), `services/email_template_service.py` (2739 L), `email_service.py` (1633 L)                                                                                                                                                        | MAIL   | ✅     |
 | A5  | Course cohorts & syllabus      | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx`                                                                                    | CC     | ✅     |
 | A6  | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L)                             | LIFE   | ✅     |
-| A7  | Dashboard & action items       | `endpoints/dashboard.py` (456 L), `services/attendance_dashboard_service.py` (329 L); `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items`                                                                                                                | DASH   | ⬜     |
+| A7  | Dashboard & action items       | `endpoints/dashboard.py` (1452 L, 7 routes), `services/attendance_dashboard_service.py` (329 L), `dashboard_widget_service.py`; `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items`, `components/dashboard/`                                             | DASH   | ✅     |
 | A8  | Locations & kiosk              | `endpoints/locations.py` (434 L, 8 routes), `services/location_service.py` (394 L), `api/public/display.py` (550 L, 4 routes); `pages/LocationKioskPage.tsx`, `RoomCheckInPage.tsx`, `RoomQRCodesPage.tsx`                                                                | LOC    | ✅     |
 | A9  | Platform ops & data lifecycle  | `services/admin_continuity_service.py` (216 L), `audit_ship_service.py` (165 L), `data_export_service.py` (192 L), `separation_of_duties.py` (70 L, 20 call sites in 8 modules)                                                                                           | OPS    | ✅     |
 
@@ -39,7 +39,7 @@ from its open list.
 
 | #   | Feature                    | Prefix | Status |
 | --- | -------------------------- | ------ | ------ |
-| B1  | medical-screening          | MS2    | ⬜     |
+| B1  | medical-screening          | MS2    | ✅     |
 | B2  | apparatus                  | AP2    | ⬜     |
 | B3  | inventory                  | INV2   | ⬜     |
 | B4  | facilities                 | FAC2   | ⬜     |
@@ -2647,3 +2647,155 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   marked `unit` per class, confirmed by collection rather than a local run.
   Every fix mutation-verified. See locations-kiosk.md → Pass 3.
   Next: A9 platform ops & data lifecycle.
+- **B1 medical-screening ✅ (pass 5).** Ten prior passes cover this surface —
+  four here and **six** in `docs/security-review/MS-09-medical-screening.md`,
+  the latest 2026-09-16 — so this pass reviewed the delta since the newest of
+  them and spent the rest on the dimensions the security track does not carry.
+  **2 fixes, 1 flagged.** **The delta is two commits, both clean, and both
+  verified rather than skimmed:** `78f52e4a` swapped
+  `cascade="all, delete-orphan"` for `passive_deletes=True` so deleting a
+  requirement unlinks records instead of destroying members' medical history —
+  its claim that the FK "has been SET NULL and nullable since the table was
+  created" is exactly CLAUDE.md Pitfall #2's pairing and checks out, and the
+  design is consistent with compliance matching records by `screening_type`
+  rather than `requirement_id`, so unlinking costs nobody their compliance; and
+  `25cf5c01` replaced `date.today()` with `resolve_org_today`, **checked for
+  completeness** rather than trusted, since a sweep that fixes what it searched
+  for and misses the rest is the failure CLAUDE.md records for the contrast
+  palette — grep for `date.today()|datetime.now()|utcnow()` across the service
+  and endpoint returns nothing. **MS2-6** — `get_compliance_status` counted
+  expiring-soon as `0 < days <= 30` while `get_expiring_soon` selects
+  `expiration_date >= today`, so the two differed by exactly one day: **today**,
+  the day a member's physical actually lapses. The compliance summary said
+  nothing was due while the expiring list it links to named them — Pitfall #29's
+  failure mode, and quiet, since both numbers look plausible alone. Fixed to
+  `0 <=` with a comment naming the other site; the lower bound stays because an
+  already-lapsed screening is reported by `non_compliant_count` and must not
+  read as though there is still time. Two tests, one per bound, both
+  mutation-verified — the existing coverage used `days=15`, so neither edge had
+  one. **MS2-8** — reached by the ordinary route of checking this module's
+  frontend types against its schema for drift (there is none): **CLAUDE.md
+  asserted in two places that response schemas use `alias_generator=to_camel`,
+  unconditionally, and 37 of the 54 schema modules declaring a `Response` class
+  carry no alias generator at all** (17 do). The split is real on the wire,
+  since FastAPI dumps response models `by_alias=True` — `schemas/apparatus.py`
+  uses it and its frontend type is `organizationId`/`unitNumber`, while
+  `schemas/medical_screening.py` does not and its type is
+  `organization_id`/`screening_type`. Both conventions are internally consistent
+  and every module's types match their own module, which is why nothing is
+  broken today and why nothing would catch a new mistake either: a hand-written
+  interface in the wrong casing type-checks, passes lint, satisfies
+  `tsc --noEmit`, and reads every field as `undefined` at runtime — and somebody
+  following the documented rule gets it wrong two times in three, against a
+  checklist in the same file that says "Schema fields match". Corrected with the
+  measurement and an actionable rule in place of a wrong one (check the module
+  with a named grep; a new schema in an existing module follows that module's
+  choice, because switching one is a breaking change for its frontend). No
+  machine check, deliberately: the rule stays in CLAUDE.md in full so none is
+  required, and a test asserting 17/37 would fail on every new schema module —
+  noise, where the corrected guidance is self-verifying. **Flagged:** MS2-7
+  (LOW) — the _same_ two surfaces also disagree about a **waived** screening,
+  which compliance counts toward expiring-soon and the list (filtered to
+  PASSED/COMPLETED) never shows; left open because either reading is defensible
+  — a lapsing waiver is work coming, or a waiver is an exemption rather than a
+  screening — and they are opposite one-line changes on a PHI-adjacent surface.
+  **Re-verified, all still open:** the exactly-one-of `user_id`/`prospect_id`
+  validator and MS-13 (the Add Record form has no subject control) are **two
+  halves of one defect** — the validator would reject every create the UI makes,
+  which is why neither half can land alone; MS-6's unbounded lists; and the
+  compliance-by-id 404, now stated more precisely — an unknown id reads as
+  **non-compliant against every active requirement**, and in an org with no
+  active requirements comes back `is_fully_compliant: true` for a member who
+  does not exist. MS-9's `grace_period_days` is still read by nothing, and the
+  gap is concrete: documented "days past due before flagging non-compliant",
+  default 30, while `is_compliant` applies no grace at all. **Clean, each
+  checked:** no org-level N+1 (all four compliance callers resolve one subject);
+  the module avoids Pitfall #11 without re-fetching, because all four
+  record-returning routes — including create and update — call
+  `attach_record_names`, which is also why the two unused by-id service methods
+  are mild dead code rather than a skipped re-fetch; Pitfall #7 satisfied via
+  the shared `createApiClient()`; `_resolve_names` org-scoped on all three
+  lookups; `/compliance/me` declared before `/compliance/{user_id}`. Gate:
+  flake8 0 · black 1350 unchanged · isort clean · docs links 428 files 0 broken
+  · 162 backend medical tests passed, 1 skipped. No frontend source changed, so
+  per CLAUDE.md's own "Match the Verification to the Change" the frontend suites
+  were not run. See medical-screening.md → Pass 5. Next: B2 apparatus.
+- **A7 dashboard & action items ✅ (pass 3).** `dashboard.py` has grown from the
+  456 lines and 4 routes pass 2 reviewed to **1452 lines and 7 routes**;
+  `/asset-widgets`, `/operations` and `/widgets` all arrived after it and are
+  where this pass concentrated. **7 fixes, 4 flagged.** The authorization lens
+  came back clean, including the lead worth chasing: `minutes_visibility_filter`
+  is applied at one of the four places this file reads `ActionItem`, which looks
+  like DASH-1 returning and is not — the filter returns `None` for
+  `minutes.manage` holders and the new `/operations` read is gated on exactly
+  that, so applying it there is a no-op by construction. Same for the meeting
+  half of `/action-items`: `MeetingStatus` has a `DRAFT` state, but
+  `MeetingsService.get_open_action_items` restricts neither draft nor status, so
+  the dashboard mirrors its owning module exactly, which is what DASH-3 asked
+  for. (That meetings restricts nothing where minutes restricts drafts and
+  executive session is a real asymmetry — recorded in the findings file as a
+  **B6** question, not a dashboard bug, so it is not rediscovered as one.)
+  What this pass found instead is a dimension nothing was checking: **the
+  dashboard's links.** **DASH-30** — five server-supplied navigation targets
+  pointed at paths no route declares (`/inventory/lots`, `/inventory/requests`,
+  `/apparatus/maintenance`, `/notifications/manage`, `/training/reports` — the
+  first three are API paths), and `App.tsx`'s catch-all turned every click into
+  a silent redirect back to the dashboard, indistinguishable from a dead button.
+  `routeIntegrity.test.ts` has checked precisely this since the Add Member
+  button broke, but it scans `frontend/src/**/*.tsx?` and these five are Python
+  string literals served as response data, so no frontend sweep could have seen
+  them — which is why two passes over this endpoint did not. **The fix is for
+  the class:** that test now also walks a named list of backend modules that
+  build navigation targets as data (`dashboard.py`, `admin_hub_service.py`, 40
+  targets), matching `href="/…"` with a literal leading slash so the
+  HTML-email anchors elsewhere in `app/services/` are excluded; a missing file
+  throws rather than quietly halving the scan, and a per-source floor guards a
+  regex that stops matching. It found two of the five on its first run that I
+  had not spotted by reading. `admin_hub_service.py`'s 19 hrefs were all
+  already valid. **DASH-31** — `facilities-maintenance` and
+  `facilities-urgent-work-orders` rendered the same overdue count, so a
+  department with three overdue work orders read "Urgent work orders: 3" beside
+  "Maintenance due: 3"; the duplicate's title said "due" where its query said
+  overdue, its empty state said "overdue" where its title said due, and its
+  `href` was `?status=due`, a value `MaintenanceListPage` does not accept.
+  Removed; a genuine upcoming figure needs a second query **and** a page filter,
+  flagged as DASH-39 rather than guessed. **DASH-32** — the apparatus block
+  carries a careful `_may_open_apparatus` guard against handing out a tile whose
+  only action is Access Denied, and **the lesson landed on one of three
+  blocks**: inventory and facilities grant on `settings.manage` with no
+  destination check, so a delegated settings role holding neither module grant
+  got **nine** dead tiles. Same guard on both; the existing apparatus test is
+  now parametrized across all three, and its comment claiming `settings.manage`
+  "legitimately opens the inventory and facilities blocks" is corrected, because
+  the fix makes it false. **DASH-33** — `wiki/API-Reference.md` described
+  `/asset-widgets` as gated on `*.view` with "no module check here"; both are
+  wrong and wrong in the lax direction, since the code requires each module's
+  _manage_ grant or `settings.manage` **and** the module enabled, and the
+  endpoint's own comments explain at length why view is deliberately not enough.
+  **DASH-34** (LOW) — the `/operations` 30-day event window was
+  `local_midnight + timedelta(days=30)` on an already-UTC instant, so it ended
+  at 23:00 or 01:00 local across a DST transition; same class as CC-5. Its test
+  freezes the clock on purpose, because with the real one the assertion holds
+  most of the year under the arithmetic it is meant to reject. **DASH-35** (LOW)
+  — `/community-engagement`'s attendee tallies counted cancelled events while
+  the event count beside them did not, and the comment above them claimed the
+  figures described one population. **DASH-36** (LOW) — the wiki published the
+  legacy alias `equipment_check.manage` for a section whose real grant has been
+  `inventory.check_manage` since the module segment changed, and
+  `OPERATIONS_SECTION_PERMISSIONS["critical_exceptions"]` is the one entry of
+  six `_has_any` is never called with (the section is assembled per item, which
+  is strictly finer), now documented as contract rather than control.
+  **Flagged:** DASH-37 (MED) — every tile announces "Open filtered results" and
+  **13 of 16** parameterised targets land on a page that ignores the parameter;
+  the three that work are the two whose hrefs carry an explanatory comment plus
+  the training hub, so the rest were written as if the pages already filtered.
+  Eight components would need query-param support, which is its own iteration.
+  DASH-38, DASH-39, DASH-40 (`/action-items` is unpaginated and carries free
+  text, so the payload grows with content). **DASH-2 re-verified still open** —
+  `/dashboard/stats` still returns three fabricated constants and
+  `dashboardService.getStats` still has zero callers. Every fix is
+  mutation-verified: the fix reverted, the new test confirmed to fail naming the
+  right file and line, and the revert undone with the mechanism that applied it.
+  Gate: tsc 0 · flake8 0 · black 1351 unchanged · eslint 0 (full run) ·
+  `routeIntegrity` 7 passed (was 5) · backend dashboard suite 97 passed, 1
+  skipped. See dashboard.md → Pass 3. Next: A8 locations & kiosk.

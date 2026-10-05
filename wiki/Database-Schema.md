@@ -61,10 +61,15 @@ The Logbook uses MySQL 8.0+ (MariaDB 10.11+ for ARM) with SQLAlchemy ORM and Ale
 
 ### Membership
 
-| Table                      | Description                                                                      |
-| -------------------------- | -------------------------------------------------------------------------------- |
-| `member_leaves_of_absence` | Leave records with `exempt_from_training_waiver` and `linked_training_waiver_id` |
-| `membership_tiers`         | Tier definitions with benefits and advancement rules                             |
+| Table                      | Description                                                                                                                                                                                                                                                                                                              |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `member_leaves_of_absence` | Leave records with `exempt_from_training_waiver` and `linked_training_waiver_id`                                                                                                                                                                                                                                         |
+| `member_service_periods`   | One row per continuous stint of membership: `start_date` (NULL = the hire date), `end_date`, `separation_status`, `counts_toward_service`, `notes`. Credited length of service is the sum of the counted stints; a member with no rows is one unbroken stint from the hire date _(2026-09-24, migration `500a63596f66`)_ |
+
+Membership tiers are **not a table**: they live in
+`organizations.settings["membership_tiers"]`, together with
+`rejoin_service_credit` (`continue` or `restart`), the department's default
+when a former member rejoins.
 
 ### Events
 
@@ -248,6 +253,62 @@ The `organizations.settings` JSON column stores email platform configuration und
 
 ---
 
+## Recent Schema Changes (2026-09-24 → 09-30)
+
+**As of 2026-09-30 the single head is `601fdb28ab8c`.** Run `alembic heads` to
+confirm, and expect exactly one line. The window's revisions forked and were
+rejoined seven times by no-op merge revisions (some forks merged twice in
+parallel, and the duplicates merged again); between 2026-09-24 and 09-27 `main`
+briefly carried two or three heads, and `alembic upgrade head` refuses to run
+then. Pulling a later `main` fixes that without a downgrade.
+`docs/DATABASE_SCHEMA.md` is regenerated from the models and is the complete
+column reference; this section names what changed.
+
+**Every foreign key now declares `ondelete`** _(2026-09-25)_. The 88 that
+relied on the database default say `ondelete="RESTRICT"`, which is what MySQL
+already enforced. No migration ships and no stored constraint changes.
+
+### New Tables
+
+| Table                                                             | Migration      | Description                                                                                                                                                                                                                                                                                     |
+| ----------------------------------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `inventory_nfc_tags`                                              | `ced0061dedc8` | NFC tags linked to items; later to storage areas (`b713c2e8ee26`) and equipment-check compartments (`45b36bae9098`, `check_compartment_id`), with a one-target check. The tag id is stored as a peppered SHA-256 hash plus its last four characters. Off until `inventory.nfc_tracking_enabled` |
+| `inventory_nfc_scans`                                             | `b713c2e8ee26` | Tap log                                                                                                                                                                                                                                                                                         |
+| `inventory_nfc_audits`, `inventory_nfc_audit_items`               | `7ad83f52735c` | Shelf audits and what each found; `client_submission_id` (unique per organization, `31e8ad77527b`) makes an offline replay idempotent                                                                                                                                                           |
+| `inventory_nfc_audit_digests`                                     | `b1eb0458782a` | One row per "audits overdue" digest sent; `storage_areas.audit_frequency` (weekly / monthly / quarterly / yearly, NULL = unscheduled) arrives in the same revision                                                                                                                              |
+| `inventory_label_prints`                                          | `81537606ee07` | Label print history, seeded with one row per item whose latest print is recorded on the item                                                                                                                                                                                                    |
+| `member_service_periods`                                          | `500a63596f66` | Membership stints (see [Membership](#membership)). No backfill                                                                                                                                                                                                                                  |
+| `suggestion_box_watchers`                                         | `1ae1ffbc445e` | Positions and members told of a box's submissions without being able to read them                                                                                                                                                                                                               |
+| `suggestion_status_events`                                        | `0010291816fd` | Status history and public responses; one event backfilled per suggestion already past `new`                                                                                                                                                                                                     |
+| `suggestion_votes`                                                | `e79309de6735` | Idea-board votes                                                                                                                                                                                                                                                                                |
+| `external_agencies`, `external_apparatus`, `external_shift_hours` | `f03c9f236904` | Shifts members work on another department's apparatus: the agencies and units scheduling officers maintain, and one row per shift worked (agency and apparatus names snapshotted at the write); `start_at` / `end_at` added by `31027aabca12` (nullable, no backfill)                           |
+| `email_template_backups`                                          | `15c5bc7700aa` | The pre-redesign copy of every stored email template the solid-tab reset overwrote                                                                                                                                                                                                              |
+
+### New Columns
+
+| Table                  | Column(s)                                                                                                       | Migration      | Description                                                                                                       |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `inventory_categories` | `allow_self_checkout` (NOT NULL, default false), `self_checkout_loan_days` (nullable)                           | `2000f4561f52` | Kiosk opt-in and loan period; every existing category starts opted out                                            |
+| `prospective_members`  | `target_role_id`, `deactivated_at`, `deactivated_reason`, `reactivated_at`, `withdrawn_at`, `withdrawal_reason` | `77d4aa7798dd` | Target role and lifecycle stamps; the stamps are backfilled from `prospect_activity_log`                          |
+| `membership_pipelines` | `public_show_future_stages` (default true)                                                                      | `1b52ea3a079e` | Default keeps the previous behaviour                                                                              |
+| `membership_pipelines` | `conversion_config` (NULL = previous defaults)                                                                  | `601fdb28ab8c` | The class and status an applicant becomes on conversion, per applicant track                                      |
+| `suggestion_boxes`     | `public_board_enabled` (default false)                                                                          | `e79309de6735` | Idea board; `suggestions` gains `published_at`, `published_by`, `published_title`, `published_summary`            |
+| `training_records`     | `source_event_id`, unique with `user_id`                                                                        | `2b15c5a8ba82` | The Training event whose finalized attendance wrote the record, so re-finalizing updates it in place; no backfill |
+| `user_consents`        | `granted` server default false                                                                                  | `b4014469fd76` | No stored row changes                                                                                             |
+
+### Data Migrations
+
+| Migration                                                      | Effect                                                                                                                                                                                                                      |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `43e9df281412`                                                 | Seeds the `assistant_membership_coordinator` system position where the slug is missing                                                                                                                                      |
+| `3c918c06466d`, `7d2b4e8a1c35`                                 | Seed the `compliance_officer` position and a Compliance suggestion box, then switch on boxes still exactly as seeded                                                                                                        |
+| `d4e1a7c93b58`                                                 | Renames the seeded "Fire Chief" position and rank to "Chief" where the name is still exactly the seeded one; the `fire_chief` code is unchanged                                                                             |
+| `941e1251ad74`, `1ae1ffbc445e`, `fb7da5b05833`, `8c47e8945f69` | Enum values: `application_withdrawn`, `suggestion_submitted`, `equipment_request_update` (template and trigger types), and `withdrawn` on admin-hours entries                                                               |
+| `3f3b315165ed`                                                 | Removes the exact line "Please do not reply to this email." from stored email footers                                                                                                                                       |
+| `f0d76814a9ab`, `b795d1b3401b`, `15c5bc7700aa`, `ba5c348d7045` | Move stored email templates onto the current design. **`b795d1b3401b` does not reverse** (earlier values were not recorded); `15c5bc7700aa` resets even edited templates and keeps the old copy in `email_template_backups` |
+
+---
+
 ## Recent Schema Changes (2026-08-23 → 08-24)
 
 **Head after this window: `e7a41b6d09c2`.** Twelve revisions. The window
@@ -408,7 +469,8 @@ line.
 > on startup rather than at review. Run `alembic heads` after merging main rather
 > than assuming a documented head is current.
 
-**Current head: `20260810_0008`.**
+The head after this window was `20260810_0008`; it has long since moved on. See
+the newest section above, and run `alembic heads`.
 
 ---
 

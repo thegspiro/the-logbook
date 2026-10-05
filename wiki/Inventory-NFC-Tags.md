@@ -245,6 +245,9 @@ Give a storage area an audit schedule and the app tracks when it is due.
 2. Under **Shelf audit schedule**, pick **Weekly**, **Monthly**, **Quarterly**
    or **Yearly**. It saves immediately. **Not scheduled** takes it off.
 
+> **Screenshot needed:**
+> _[Quartermaster (`inventory.manage`), inventory NFC tags on, `/inventory/storage-areas`, the Edit Storage Area dialog of an active shelf: the **NFC Tags** card and the **Shelf audit schedule** select set to **Monthly**, with its status line ("Last audited …; next due …" or "Overdue since …"). Demo data only; no real tag serials in view.]_
+
 Due dates count from the area's **latest saved audit**, in calendar periods: a
 monthly shelf audited on 31 January is next due on 28 February. An area that
 has never been audited is due now.
@@ -278,6 +281,9 @@ their card.
 4. On the tablet, an officer with `inventory.kiosk` opens **Inventory →
    Administration → Self-Service Kiosk** (`/inventory/kiosk`) and presses
    **Start kiosk**.
+
+> **Screenshot needed:**
+> _[Quartermaster, `/inventory/admin/categories`, editing a loaner category with **Allow self-checkout at the kiosk** switched on and **Kiosk loan period (days)** set to 14; behind the dialog, the category card's **Kiosk · 14d** chip if visible. Demo category names only.]_
 
 **Using it** (members)
 

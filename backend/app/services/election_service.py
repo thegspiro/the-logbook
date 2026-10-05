@@ -64,7 +64,13 @@ from app.services.email_template_service import (
     DEFAULT_ELECTION_ROLLBACK_TEXT,
     EmailTemplateService,
 )
-from app.services.email_theme import TABLE_STYLE, TD_STYLE, TH_STYLE
+from app.services.email_theme import (
+    TABLE_STYLE,
+    TD_STYLE,
+    TH_STYLE,
+    WRAP_STYLE,
+    with_subline,
+)
 from app.utils.org_timezone import (
     ZONED_DATE_TIME_FORMAT,
     format_in_org_timezone,
@@ -8040,15 +8046,15 @@ class ElectionService:
                 "No results available.",
             )
 
-        # HTML table
+        # HTML table. Three columns so it fits a phone: the position is a
+        # heading row over its candidates instead of a column repeated on
+        # every row, and the percentage rides under the vote count.
         rows = []
         rows.append(
             f'<table style="{TABLE_STYLE}">'
             "<tr>"
-            f'<th style="{TH_STYLE}text-align:left;">Position</th>'
             f'<th style="{TH_STYLE}text-align:left;">Candidate</th>'
             f'<th style="{TH_STYLE}text-align:center;">Votes</th>'
-            f'<th style="{TH_STYLE}text-align:center;">%</th>'
             f'<th style="{TH_STYLE}text-align:center;">Result</th>'
             "</tr>"
         )
@@ -8059,6 +8065,10 @@ class ElectionService:
             contest = getattr(pos_result, "label", None) or pos_result.position
             position = html.escape(contest)
             text_parts.append(f"Position: {contest}")
+            rows.append(
+                f'<tr><td colspan="3" style="{TD_STYLE}{WRAP_STYLE}'
+                f'background-color:#f8fafc;font-weight:600;">{position}</td></tr>'
+            )
             for candidate in pos_result.candidates:
                 name = html.escape(candidate.candidate_name)
                 pct = f"{candidate.percentage:.1f}%"
@@ -8075,10 +8085,9 @@ class ElectionService:
                     result_label = "\u2014"
                     winner_text = ""
                 rows.append(
-                    f'<tr><td style="{TD_STYLE}">{position}</td>'
-                    f'<td style="{TD_STYLE}">{name}</td>'
-                    f'<td style="{TD_STYLE}text-align:center;">{candidate.vote_count}</td>'
-                    f'<td style="{TD_STYLE}text-align:center;">{pct}</td>'
+                    f'<tr><td style="{TD_STYLE}{WRAP_STYLE}">{name}</td>'
+                    f'<td style="{TD_STYLE}text-align:center;white-space:nowrap;">'
+                    f"{with_subline(str(candidate.vote_count), pct)}</td>"
                     f'<td style="{TD_STYLE}text-align:center;">{result_label}</td></tr>'
                 )
                 text_parts.append(
@@ -8089,7 +8098,7 @@ class ElectionService:
                     getattr(results, "tie_policy", None), runoff_created
                 )
                 rows.append(
-                    f'<tr><td style="{TD_STYLE}" colspan="5">'
+                    f'<tr><td style="{TD_STYLE}" colspan="3">'
                     f"<strong>{html.escape(outcome)}</strong></td></tr>"
                 )
                 text_parts.append(f"  {outcome}")

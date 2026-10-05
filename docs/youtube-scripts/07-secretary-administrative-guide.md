@@ -166,18 +166,33 @@ frontend or the API); the previous cue could not be filmed. Pre-existing.]**
 > core to the role."
 
 > "Creating an event follows the same flow we covered in the Chief's guide —
-> name, type, date, time, location, RSVP settings, and optional QR check-in."
+> name, type, date, time, location, RSVP settings, and the check-in window.
+> Every event gets its own check-in QR code; there's nothing to switch on."
 
 **[SCREEN: Quickly create an event — "April Business Meeting"]**
 
-> "One thing Secretaries specifically manage: **event request approvals.** If
-> your department allows members to request events — say a member wants to
-> schedule a fundraiser car wash — those requests come to you for approval."
+> "One thing Secretaries often manage: **event requests.** These come from your
+> public outreach form — a school asking for an engine at its fair, a group
+> wanting a fire-safety talk. The person asking is a member of the public with
+> no account here."
 
-**[SCREEN: Navigate to Event Requests (EventRequestsTab)]**
+**[REWRITTEN 2026-09-30 — requests come from the public request form, not from
+members, and there is no approve/deny: a coordinator works the request's
+pipeline tasks, then schedules, postpones or declines it. The requester's
+status link is not in any email, so it has to be sent by hand.]**
 
-> "The Event Requests tab shows pending requests. Review the details, approve
-> or deny, and the requester is notified."
+**[SCREEN: Navigate to Event Requests (EventRequestsTab). Expand a request:
+the pipeline task list, **Assign**, then **Schedule Event**, **Postpone** and
+**Decline**. Point to **Copy Link**.]**
+
+> "Open a request and you'll see its tasks — the checklist your department set
+> up for these. Work through them, then **Schedule Event**, **Postpone** or
+> **Decline**. Scheduling puts it on the calendar."
+
+> "Whether the requester hears about each change depends on which request
+> emails your department switched on under Events settings. And one thing to
+> know: their status link isn't in any of those emails. If you want them to
+> follow along, press **Copy Link** and send it to them yourself."
 
 ### EVENTS ADMIN HUB (7:00 – 7:30)
 
@@ -293,8 +308,10 @@ Pre-existing; found, not caused, by this window.]**
 
 **[SCREEN: Navigate to Member Scan page (MemberScanPage)]**
 
-> "The Member Scan page lets you scan a member's ID card or QR code to pull up
-> their profile instantly. Useful at events, during check-in, or at the
+> "The Member Scan page lets you scan a member's ID card, QR code or printed
+> badge to pull up their profile instantly. A badge printed for someone without
+> a membership number carries a twelve-character code instead — that scans too,
+> so there's no need to reprint. Useful at events, during check-in, or at the
 > firehouse."
 
 **[SCREEN: Show scanning a QR code and the profile appearing]**
@@ -365,13 +382,31 @@ Approve button refusing]**
 
 ### WAIVER MANAGEMENT (13:00 – 13:30)
 
-**[SCREEN: Navigate to Waiver Management (WaiverManagementPage)]**
+**[REWRITTEN 2026-09-30 — Waiver Management holds leaves of absence and
+training waivers. It has no waiver templates and no signature tracking; the
+previous take described liability releases and photo consents, which live
+nowhere here.]**
 
-> "Waivers — liability releases, medical consent forms, photo releases — are
-> managed through the Waiver Management section. You can create waiver templates
-> and track which members have signed."
+**[SCREEN: Members → Admin → Waivers (WaiverManagementPage) → **Create
+Waiver**. Show the waiver type, the dates, and the **Applies To** fieldset with
+**Training Requirements** and **Meeting Attendance & Shift Requirements**, and
+the line under them saying what will be created.]**
 
-**[SCREEN: Show waiver tracking with signed/unsigned status per member]**
+> "Waivers here excuse a member from requirements for a period — a leave of
+> absence, medical, military. Pick the member, the type and the dates, then
+> what it applies to."
+
+> "**Meeting Attendance & Shift Requirements** is one box, because a leave
+> excuses both. **Training Requirements** is the other: tick it too and their
+> training is adjusted for the time away; leave it off and their training stays
+> on schedule. The line under the boxes tells you exactly what will be
+> created."
+
+**[SCREEN: The **Active Waivers** tab, a **Deactivate** button; then **All
+Waivers**.]**
+
+> "**Active Waivers** shows what's in force, and **Deactivate** ends one early.
+> **All Waivers** keeps the history."
 
 ### FORMS MODULE (13:30 – 14:00)
 
@@ -381,6 +416,15 @@ Approve button refusing]**
 > checklists, equipment inspection reports, member surveys, event feedback.
 > Build the form with the drag-and-drop builder, publish it, and members can
 > fill it out."
+
+**[SCREEN: A form card → **Share** → the **Share Form** dialog: **Public
+Access** on, then tick **Allow submissions without signing in**; the footnote
+changes to "Anyone can submit this form without signing in."]**
+
+> "Sharing it outside the department? Press **Share** and turn on **Public
+> Access**. If people without an account need to send it — applicants, the
+> public — also tick **Allow submissions without signing in**. Leave that off
+> and only members can submit, even from the public link."
 
 **[SCREEN: Show the form builder briefly — adding fields, setting types]**
 
@@ -487,17 +531,18 @@ tasks: the Eligibility Roster, sending a test ballot, and publishing results]**
 
 ### EMAIL TEMPLATES — FINDING THINGS, SIGNING THEM, AND CLOSING THEM (15:20 – 17:20)
 
-**[SCREEN: Communications → Email Templates. The sidebar shows seven collapsible
-categories with counts.]**
+**[SCREEN: Communications → Email Templates. The sidebar shows the collapsible
+categories with counts — seven, plus Other only when a template fits none.]**
 
 > "Email Templates is where the wording of every automated notice lives — welcome
 > emails, event reminders, dues notices, store confirmations. There are well over
 > three dozen of them, and they used to be one long flat scroll."
 
-> "They're grouped now — Members & Accounts, Events & Scheduling, Training,
-> Elections, Inventory, Department Store, Other. Search still works across all of
-> them, and searching expands every group so a match can't hide behind a collapsed
-> header."
+> "They're grouped now — Members & Accounts, Events & Scheduling, Training &
+> Certifications, Elections & Voting, Inventory & Property, Suggestion Boxes and
+> Department Store, with Other for anything that fits none. Search still works
+> across all of them, and searching expands every group so a match can't hide
+> behind a collapsed header."
 
 **[SCREEN: Open a template; in the signature block, type {{president_name}} and
 {{president_title}}.]**
@@ -700,11 +745,16 @@ a demo template that has a backup row. The Footers tab is at
 
 ## CHAPTER 7: Suggestion Boxes (17:35 – 20:35) — ADDED 2026-09-24
 
-> **Producer note:** everything in this chapter shipped on 2026-09-23. The
-> demo seeder creates three boxes — **Training ideas** (Submitter chooses),
-> **Station concerns** (Always anonymous) and **Apparatus wish list** (Always
-> named, one-way) — reviewed by the Secretary position, which the demo
-> secretary **Owen Kittredge** (`okittredge`) holds. It also files four
+> **Producer note:** suggestion boxes shipped on 2026-09-23; the Compliance box,
+> the idea board, Also notify and deleting a box followed that week. The demo
+> department has four boxes. The seeder's three — **Training ideas** (Submitter
+> chooses), **Station concerns** (Always anonymous) and **Apparatus wish list**
+> (Always named, one-way) — are reviewed by the Secretary position, which the
+> demo secretary **Owen Kittredge** (`okittredge`) holds; **Training ideas** also
+> has the idea board on, with two published ideas and votes. The fourth is the
+> default **Compliance** box every department gets, reviewed by the Compliance
+> Officer position, which the demo gives to **Lila Nakamura** (`lnakamura`) —
+> Owen does not review it and cannot open it. It also files four
 > submissions from **Nadia Belhaj** (`nbelhaj`), including an anonymous one
 > already under review, with a reply thread and a forward to the Training
 > Officer. Record the reviewer beats as Owen and the member beats as Nadia. The

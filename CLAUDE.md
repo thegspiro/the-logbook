@@ -552,7 +552,7 @@ backend/app/
       BUSINESS_MEETING = "business_meeting"
       TRAINING = "training"
   ```
-- **Schemas** (`schemas/`): Separate classes: `{Resource}Base` (shared fields), `{Resource}Create`, `{Resource}Update`, `{Resource}Response`. Use `@model_validator(mode="after")` for cross-field validation. Response schemas use `ConfigDict(from_attributes=True, alias_generator=to_camel, populate_by_name=True)` for camelCase serialization. `Field()` for validation
+- **Schemas** (`schemas/`): Separate classes: `{Resource}Base` (shared fields), `{Resource}Create`, `{Resource}Update`, `{Resource}Response`. Use `@model_validator(mode="after")` for cross-field validation. `Field()` for validation. **Response casing is per-module and split roughly one to two — check the module you are in before writing a frontend type against it** (see below)
 - **Permissions:** Dot-notation strings (`"apparatus.view"`, `"settings.manage"`). Wildcards supported: `"*"` (global), `"module.*"` (module-level). OR logic via `require_permission()`, AND logic via `require_all_permissions()`
 - **API URL convention:** All routes under `/api/v1/`. Resources as plural nouns (`/events`, `/users`). Sub-resources nested (`/training/programs`). Actions as verbs on resource (`/{id}/archive`)
 
@@ -741,7 +741,12 @@ Mismatches between Pydantic schemas and frontend TypeScript types cause 422 erro
 
 - **Required vs optional fields:** If a frontend form field is optional, the corresponding Pydantic schema field must be `Optional[T] = None`. Do not mark fields as required in the schema if the frontend can omit them.
 - **Enum casing:** Backend `(str, Enum)` values must be **lowercase** (`routine`, not `ROUTINE`). If the frontend sends uppercase, add `.lower()` conversion or a `@field_validator`.
-- **Response shape:** Backend response schemas use `alias_generator=to_camel` for camelCase serialization. If a frontend component destructures a specific field name, verify it matches the camelCase alias, not the snake_case Python attribute.
+- **Response shape — casing is per-module, not repo-wide** _(measured 2026-10-05, app-review B1)_: of the **54** schema modules declaring a `Response` class, **17 carry `alias_generator=to_camel`** (so FastAPI serializes camelCase, since it dumps response models `by_alias=True`) and **37 carry no alias generator at all** (so the wire is snake_case, exactly as the Python attributes are named). An earlier version of this document asserted the camelCase form unconditionally; it describes under a third of the codebase.
+
+  The two conventions are each internally consistent and the frontend types match their own module, which is why nothing is broken and why nothing catches a new mistake either. `schemas/apparatus.py` uses `to_camel` and `modules/apparatus/types` is `organizationId` / `unitNumber`; `schemas/medical_screening.py` does not and `modules/medical-screening/types` is `organization_id` / `screening_type`. Trusting one blanket rule gets it wrong two times in three, and the failure is silent: a hand-written interface in the wrong casing type-checks, passes lint, and reads every field as `undefined` at runtime.
+
+  **So check the module before writing or destructuring a response type:** `grep alias_generator=to_camel backend/app/schemas/<module>.py`. A new schema in an existing module follows that module's existing choice — switching one is a breaking API change for its frontend. A brand-new module may pick either, and its frontend types must match the choice.
+
 - **422 error display:** FastAPI returns 422 errors as `{"detail": [{"loc": [...], "msg": "..."}]}` — an array, not a string. The `toAppError()` utility handles this, but any custom error handling must also check for array-format details.
 
 **Rule:** When adding or modifying an API endpoint, verify the Pydantic schema field requirements match what the frontend actually sends. When adding new fields to a response schema, verify the frontend type interface includes the camelCase version.

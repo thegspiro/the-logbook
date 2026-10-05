@@ -4296,6 +4296,7 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
     Daily at 07:00.
     """
     from app.services.email_service import EmailService
+    from app.services.email_theme import WRAP_STYLE, with_subline
     from app.services.inventory_service import InventoryService
 
     def _row_domain(item) -> str:
@@ -4315,15 +4316,18 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
             # will not match the item's own quantity column, and an unexplained
             # mismatch reads as a bug rather than as the count that matters.
             source = "in-date lots" if from_lots else "on hand"
+            # The category rides under the item name rather than taking a
+            # fourth column, which ran the table past a phone-width card.
             items_html += (
-                f"<tr><td style='padding:6px 12px;border-bottom:1px solid #eee;'>"
-                f"{_html.escape(item.name)}</td>"
-                f"<td style='padding:6px 12px;border-bottom:1px solid #eee;'>"
-                f"{_html.escape(cat_name)}</td>"
-                f"<td style='padding:6px 12px;border-bottom:1px solid #eee;text-align:center;'>"
+                f"<tr><td style='padding:8px;border-bottom:1px solid #eee;"
+                f"vertical-align:top;{WRAP_STYLE}'>"
+                f"{with_subline(_html.escape(item.name), _html.escape(cat_name))}</td>"
+                f"<td style='padding:8px;border-bottom:1px solid #eee;"
+                f"vertical-align:top;text-align:center;'>"
                 f"<strong style='color:#dc2626;'>{on_hand}</strong>"
                 f"<br><span style='color:#6b7280;font-size:11px;'>{source}</span></td>"
-                f"<td style='padding:6px 12px;border-bottom:1px solid #eee;text-align:center;'>"
+                f"<td style='padding:8px;border-bottom:1px solid #eee;"
+                f"vertical-align:top;text-align:center;'>"
                 f"{item.reorder_point}</td></tr>"
             )
 
@@ -4331,10 +4335,9 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
             '<table style="width:100%;border-collapse:collapse;margin:16px 0;">'
             "<thead>"
             '<tr style="background:#f3f4f6;">'
-            '<th style="padding:8px 12px;text-align:left;">Item</th>'
-            '<th style="padding:8px 12px;text-align:left;">Category</th>'
-            '<th style="padding:8px 12px;text-align:center;">Current Qty</th>'
-            '<th style="padding:8px 12px;text-align:center;">Reorder Point</th>'
+            '<th style="padding:8px;text-align:left;">Item</th>'
+            '<th style="padding:8px;text-align:center;">Current Qty</th>'
+            '<th style="padding:8px;text-align:center;">Reorder Point</th>'
             "</tr></thead>"
             f"<tbody>{items_html}</tbody></table>"
         )
@@ -4623,6 +4626,7 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
     Tiers: 180 days, 90 days, 30 days, past due.
     """
     from app.services.email_service import EmailService
+    from app.services.email_theme import WRAP_STYLE, with_subline
     from app.services.inventory_service import InventoryService
 
     async def process(db_session: AsyncSession, org: Organization) -> int:
@@ -4645,24 +4649,31 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
                 return ""
             rows = ""
             for it in items:
+                # The serial or asset tag rides under the item name; as its
+                # own column it pushed the table past a phone-width card.
+                ident = it.get("serial_number") or it.get("asset_tag")
                 rows += (
-                    f"<tr><td style='padding:6px 12px;border-bottom:1px solid #eee;'>"
-                    f"{_html.escape(it['item_name'])}</td>"
-                    f"<td style='padding:6px 12px;border-bottom:1px solid #eee;'>"
-                    f"{_html.escape(it.get('serial_number') or it.get('asset_tag') or 'N/A')}</td>"
-                    f"<td style='padding:6px 12px;border-bottom:1px solid #eee;'>"
-                    f"{it['retirement_date']}</td>"
-                    f"<td style='padding:6px 12px;border-bottom:1px solid #eee;text-align:center;'>"
+                    f"<tr><td style='padding:8px;border-bottom:1px solid #eee;"
+                    f"vertical-align:top;{WRAP_STYLE}'>"
+                    + with_subline(
+                        _html.escape(it["item_name"]),
+                        _html.escape(str(ident)) if ident else "",
+                    )
+                    + "</td>"
+                    f"<td style='padding:8px;border-bottom:1px solid #eee;"
+                    f"vertical-align:top;white-space:nowrap;'>"
+                    f"{_html.escape(str(it['retirement_date']))}</td>"
+                    f"<td style='padding:8px;border-bottom:1px solid #eee;"
+                    f"vertical-align:top;text-align:center;'>"
                     f"<strong style='color:{color};'>{it['days_until_retirement']}d</strong></td></tr>"
                 )
             return f"""
                 <h3 style="color:{color};margin-top:16px;">{title} ({len(items)})</h3>
                 <table style="width:100%;border-collapse:collapse;margin:8px 0;">
                     <thead><tr style="background:#f3f4f6;">
-                        <th style="padding:8px 12px;text-align:left;">Item</th>
-                        <th style="padding:8px 12px;text-align:left;">ID</th>
-                        <th style="padding:8px 12px;text-align:left;">Retirement Date</th>
-                        <th style="padding:8px 12px;text-align:center;">Days</th>
+                        <th style="padding:8px;text-align:left;">Item</th>
+                        <th style="padding:8px;text-align:left;">Retires</th>
+                        <th style="padding:8px;text-align:center;">Days</th>
                     </tr></thead>
                     <tbody>{rows}</tbody>
                 </table>

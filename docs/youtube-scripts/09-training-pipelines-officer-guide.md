@@ -40,8 +40,8 @@ with a phase timeline, an enrolled-members list, and progress bars.]**
 ### WHY IT BEATS A SPREADSHEET (1:30 – 2:30)
 
 > "Here's what makes it worth the setup. Once a member is enrolled, their
-> progress updates _on its own_ — from the shifts they work, the sessions you
-> approve, the skills they pass, the courses they import. You're not
+> progress updates _on its own_ — from the shifts they work, the training events
+> they attend, the skills they pass, the courses they import. You're not
 > transcribing anything. Your job shifts from data entry to actually watching who
 > needs help. And the system tells you who that is."
 
@@ -376,9 +376,9 @@ enrollment with the Reopen action.]**
 > pending self-report reviews and shift reports — those are the feeds that move
 > everyone's progress. Act on any falling-behind alerts."
 
-> "**As sessions happen:** Approve linked training sessions and skills tests
-> promptly — every day you sit on an approval is a day the recruit's bar doesn't
-> move."
+> "**As sessions happen:** Finalize each training event's attendance once it
+> ends, approve the ones that need your confirmation, and validate skills tests
+> promptly — every day you sit on one is a day the recruit's bar doesn't move."
 
 > "**At each gate:** When a member reaches a manual-advance phase, review and
 > advance them. That's your quality checkpoint."

@@ -988,3 +988,17 @@ export const FiscalYearLabel = {
   START: 'start',
 } as const;
 export type FiscalYearLabel = (typeof FiscalYearLabel)[keyof typeof FiscalYearLabel];
+
+/** Which way a printed CR80 ID card is laid out. */
+export const IdCardOrientation = {
+  LANDSCAPE: 'landscape',
+  PORTRAIT: 'portrait',
+} as const;
+export type IdCardOrientation = (typeof IdCardOrientation)[keyof typeof IdCardOrientation];
+
+/** Whether a printed ID card has a back (the code and a return address). */
+export const IdCardSides = {
+  FRONT: 'front',
+  BOTH: 'both',
+} as const;
+export type IdCardSides = (typeof IdCardSides)[keyof typeof IdCardSides];

@@ -213,6 +213,11 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         label: 'Print member labels',
         anyPermission: VIEW_OTHER_MEMBER_ID_CARD_PERMISSIONS,
       },
+      {
+        path: '/members/print-id-cards',
+        label: 'Print member ID cards',
+        anyPermission: VIEW_OTHER_MEMBER_ID_CARD_PERMISSIONS,
+      },
       { path: '/members/scan', label: 'Scan a member ID', anyPermission: ['users.view', 'members.manage'] },
       { path: '/members/check-in-station', label: 'Check-in station', permission: 'members.check_in' },
       { path: '/members/admin', label: 'Members administration hub', permission: 'members.manage' },

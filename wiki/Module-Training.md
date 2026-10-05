@@ -1173,6 +1173,9 @@ Renders the department-wide compliance matrix (all members × all requirements) 
 - Letter landscape. Column headings repeat on each printed page because the grid uses a real `<thead>`, but nothing constrains the width: past roughly twenty requirements the columns run off the right edge of the sheet
 - Designed for annual reviews, regulatory audits, and compliance filing
 
+> **Screenshot needed:**
+> _[Training officer (training.manage) at /training/print/compliance, landscape: the four summary counts (Compliant, At Risk, Non-Compliant, Requirements); the grid with member names down the left, a colour-coded Completion percentage beside each, and one column per requirement with full wrapped headings; cells showing ✓, ◐, ✗, Exp and — ; the legend line under the grid; and the Training Officer / Chief signature block. Use a demo department with few enough requirements that the grid fits the sheet.]_
+
 > **[SCREENSHOT NEEDED]:** _Screenshot of the Compliance Print Page in landscape showing the four summary counts (Compliant, At Risk, Non-Compliant, Requirements); the grid with member names down the left, a colour-coded Completion percentage beside each, and one column per requirement — headings wrapped to the full name, cells carrying `✓`, `◐`, `✗`, `Exp` or `—`; the legend under the table; and the Training Officer / Chief signature block at the foot. Shoot a department with few enough requirements that the grid fits the sheet; past roughly twenty the columns run off the right edge._
 
 ### Print Buttons on Source Pages

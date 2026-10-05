@@ -11,6 +11,7 @@
  *   /members/:userId - Member profile
  *   /members/:userId/training - Member training history
  *   /members/:userId/id-card - Digital member ID card with QR code
+ *   /members/print-id-cards - Print CR80 ID cards for selected members
  *
  * Admin hub:
  *   /members/admin - Tabbed admin hub (manage, add, import)
@@ -99,6 +100,7 @@ const MemberScanPage = lazyWithRetry(() => import('../../pages/MemberScanPage'))
 const CheckInStationPage = lazyWithRetry(() => import('./pages/CheckInStationPage'));
 const WaiverManagementPage = lazyWithRetry(() => import('../../pages/WaiverManagementPage'));
 const MemberLabelPrintPage = lazyWithRetry(() => import('../../pages/MemberLabelPrintPage'));
+const MemberIdCardPrintPage = lazyWithRetry(() => import('../../pages/MemberIdCardPrintPage'));
 
 export const getMembershipRoutes = () => {
   return (
@@ -122,6 +124,16 @@ export const getMembershipRoutes = () => {
                 reads the list from this file. */}
             <ProtectedRoute requiredAnyPermission={['members.manage', 'members.manage_id_cards']}>
               <MemberLabelPrintPage />
+            </ProtectedRoute>
+          </Suspense>
+        }
+      />
+      <Route
+        path="/members/print-id-cards"
+        element={
+          <Suspense fallback={null}>
+            <ProtectedRoute requiredAnyPermission={['members.manage', 'members.manage_id_cards']}>
+              <MemberIdCardPrintPage />
             </ProtectedRoute>
           </Suspense>
         }

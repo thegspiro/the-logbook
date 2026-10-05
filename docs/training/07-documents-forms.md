@@ -286,6 +286,12 @@ Select a template to start with a pre-configured form that you can customize.
 
 ---
 
+> **Screenshot needed:**
+> _[Forms manager (`forms.manage`) at `/forms`, **Starter Templates** tab: the
+> template grid showing the **Public** badge and the orange "Sends responses to
+> Membership" / "Sends responses to Events" hints on the two public templates.
+> Do not press **Use Template**, which creates a form.]_
+
 ## Publishing and Sharing Forms
 
 ### Internal Forms
@@ -467,6 +473,12 @@ The **Create Rule** dropdown offers only the triggers a sender actually reads:
 Rules can be enabled/disabled individually with toggle switches. The summary cards at the top show total rules, active rules, and total sent notifications.
 
 ![Create notification rule modal with its trigger and channel fields](./images/07-10-create-rule-modal.png)
+
+> **Screenshot needed:**
+> _[Administrator with `notifications.manage` at `/notifications?tab=rules`:
+> press **Add Rule**, name it "Gear request notices" and choose the trigger
+> **Equipment Request Update**, so its note is visible at the bottom of the dialog. Do
+> not press **Create Rule**.]_
 
 **[SCREENSHOT — REPLACE `07-10-create-rule-modal.png`.** The trigger dropdown now also offers **Equipment Request Update** _(#2767)_, and the note under it reads "To stop it for the whole department, switch off **every** rule for this trigger — any one left on keeps it running. Members set their own email and text preferences separately." _(#2791)_. Re-take Create Notification Rule with **Event Reminder** chosen and that note in frame; never save**]**
 
@@ -726,6 +738,14 @@ requires cannot be made optional. Each change is written to the audit log.
 > **Emails you can turn off** list with **Event reminders** switched off, and
 > **Always emailed to you** below it.]_
 
+> **Screenshot needed:**
+> _[Administrator with `settings.manage` at `/communications/member-emails`:
+> the full page with **Always sent**, **Members can turn off** and **Text
+> messages** all visible. Before capturing, switch on **Require for every
+> member** for one optional email (e.g. **Quartermaster duties**) so its card
+> shows **Required by your department** beside cards reading **On unless turned
+> off**; switch it back off afterwards.]_
+
 ### Edge Cases
 
 | Scenario                                    | Behavior                                                                                                                   |
@@ -804,6 +824,14 @@ created closed, because an open box needs a reviewer.
 
 To close a box, untick **Accepting submissions**. Its existing submissions stay
 readable by its reviewers.
+
+> **Screenshot needed:**
+> _[Holder of `suggestions.manage` (e.g. the demo chief) at
+> `/communications/suggestion-boxes` after a fresh demo seed: the **Suggestion
+> boxes** list showing the default **Compliance** box (submitter chooses,
+> follow-up allowed, its submission count, "Reviewers: Compliance Officer"),
+> **Training ideas** with its reviewers and any "Also notified:" line, and the
+> **Edit** and **Delete** buttons on each row. Nothing saved or deleted.]_
 
 To remove a box you no longer need, press **Delete** on it:
 
@@ -987,6 +1015,12 @@ a key — so all of them usually fit.
 | More than five screenshots, or a file that is not an image    | Refused with a message naming the limit                                                                  |
 
 ---
+
+> **Screenshot needed:**
+> _[Ordinary member at `/suggestions`, **Submit** tab, with the **Compliance**
+> box chosen: its description ("Report a compliance concern … Reviewed by the
+> Compliance Officer."), the anonymity hint and the follow-up hint visible.
+> Nothing typed or submitted.]_
 
 ## External Integrations
 

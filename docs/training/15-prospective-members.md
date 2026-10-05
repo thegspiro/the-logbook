@@ -89,6 +89,9 @@ Navigate to **Prospective Members > Settings** to configure the pipeline.
 
 ---
 
+> **Screenshot needed:**
+> _[Membership Coordinator (prospective_members.manage) at /prospective-members/settings with a pipeline selected, clipped to the "When an Applicant Becomes a Member" card: Operational applicants → Operational / Probationary, Administrative applicants → Administrative / Regular, and the Save Conversion Settings button. Demo pipeline only.]_
+
 ## Stage Types
 
 Each pipeline stage has a type that determines its behavior:
@@ -377,6 +380,9 @@ are worked or skipped.
 
 ---
 
+> **Screenshot needed:**
+> _[Membership Coordinator (prospective_members.manage) at /prospective-members, Withdrawn tab, with at least two rows showing the Withdrawn Date and Reason columns filled — one of them withdrawn by the applicant from the status page. Crop to the tab strip and table; fictitious demo applicants only.]_
+
 ## The Kanban Board
 
 The default view shows applicants as **cards on a kanban board** with one column per pipeline stage.
@@ -478,6 +484,9 @@ Three drawer details changed in this window:
   is recorded as skipped, not completed.
 
 ![Applicant detail drawer on its overview tab, with the stage indicator and tab row](./images/15-14-applicant-drawer-overview.png)
+
+> **Screenshot needed:**
+> _[Membership Coordinator (prospective_members.manage) at /prospective-members, drawer of a demo applicant on a Multi-Signer Approval stage, clipped to the Approval Status section listing President — Approved and Chief — Pending. The demo seeder has no such stage today; seed one.]_
 
 ---
 
@@ -657,6 +666,12 @@ signers and who has signed. It used to report no data after a signature.
 > _[Sign-offs page as an officer holding the Chief position → one applicant card on a "Chief and President approval" stage, with the pills reading "Chief: waiting" and "President: signed", and the **Sign as Chief** button.]_
 
 ---
+
+> **Screenshot needed:**
+> _[A member holding the Fire Chief position but no prospective_members permission, at /prospective-members/sign-offs. Seed a pipeline with a Required Multi-Signer Approval stage requiring chief and president and one demo applicant on it with the President's signature recorded. Capture the heading and subtitle, the applicant card with stage · pipeline, pills "President: signed" and "Chief: waiting", and the "Sign as Chief" button.]_
+
+> **Screenshot needed:**
+> _[Same member and state with the "Sign as Chief" dialog open: the message naming the applicant and stage, the optional Note field, and the Sign / Not now buttons. Cancel with Not now so the seed survives.]_
 
 ## Converting to a Full Member
 
@@ -977,6 +992,9 @@ advance to, and **the audit entry is only written after a real advance**.
 
 ---
 
+> **Screenshot needed:**
+> _[Membership Coordinator (prospective_members.manage) at /prospective-members, Inactive Applications tab with two demo rows selected and the Purge Applications dialog open ("This permanently deletes 2 inactive application(s)…", Cancel / Permanently Delete). Needs seeded inactive applicants; cancel rather than confirm so the seed survives.]_
+
 ## Pipeline Statistics & Reports
 
 The pipeline dashboard shows summary statistics:
@@ -1104,6 +1122,9 @@ Each badge carries a short id for the applicant, not their status-page token.
 See [Inventory > Cross-Module Barcode Label Printing](./05-inventory.md#cross-module-barcode-label-printing-2026-06-10) for label format options.
 
 ---
+
+> **Screenshot needed:**
+> _[Membership coordinator holding prospective_members.manage only, at /prospective-members/print-labels?ids=<two or three demo applicant ids>, reached from Print Badges: the label preview showing two or three demo applicants' labels with name and short-id barcode. Demo data only; no real applicant names or emails.]_
 
 ## Realistic Example: New Firefighter Application
 

@@ -323,11 +323,18 @@ validation", score and result columns blank.]**
 
 ### VALIDATING ONE (10:00 – 11:00)
 
-**[SCREEN: Officer account. Tests tab, filtered to results awaiting validation.
-A count badge on the summary dashboard.]**
+**[SCREEN: Officer account. The Skills Testing summary tiles — "Needs
+Validation" sitting where "Pass Rate" usually is. Tap it; the Tests tab opens
+filtered to Needs Validation.]**
 
-> "Officer side. There's a filter for results waiting on you, and a count on the
-> dashboard so you're not hunting for it."
+> "Officer side. While results are waiting on you, a **Needs Validation** tile
+> takes the Pass Rate's place on the summary, and tapping it opens the Tests tab
+> already filtered to them — so you're not hunting."
+
+> "And while we're on those tiles: a department with no validated test yet sees
+> a dash under **Avg Score**, and under **Pass Rate** once nothing is waiting on
+> you, not zero percent.
+> There's no figure yet, and zero would say everybody failed."
 
 **[SCREEN: Open a pending result. The full scorecard — every criterion, the
 notes, the elapsed time.]**

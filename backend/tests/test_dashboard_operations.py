@@ -1,5 +1,7 @@
+from datetime import date, datetime, time, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -112,3 +114,60 @@ async def test_every_data_query_is_scoped_to_current_organization():
     assert len(response.sections) == 2
     for call in db.execute.await_args_list[1:]:
         assert "org-a" in call.args[0].compile().params.values()
+
+
+class _FrozenDatetime(datetime):
+    """``datetime`` with a fixed ``now()``; everything else is the real class.
+
+    Subclassed rather than mocked because the endpoint also calls
+    ``datetime.combine``, which has to keep working.
+    """
+
+    @classmethod
+    def now(cls, tz=None):
+        fixed = datetime(2026, 10, 4, 16, 0, tzinfo=timezone.utc)
+        return fixed if tz is not None else fixed.replace(tzinfo=None)
+
+
+@pytest.mark.asyncio
+async def test_thirty_day_event_window_ends_at_a_local_midnight_across_dst():
+    """The window is 30 department days, not 30x24h.
+
+    ``local_midnight`` is already a UTC instant, so adding ``timedelta(days=30)``
+    to it lands on 23:00 or 01:00 local whenever a DST transition falls inside
+    the window, moving an event in that hour into or out of the next reporting
+    period.
+
+    The clock is frozen on purpose. With the real one this assertion would hold
+    for most of the year under the arithmetic it is meant to reject, so the
+    fixed date puts the US DST end (2026-11-01) inside the 30 days and makes the
+    check mean the same thing in June as in October.
+    """
+    org_tz = ZoneInfo("America/New_York")
+
+    with patch("app.api.v1.endpoints.dashboard.datetime", _FrozenDatetime):
+        _, db = await _call(
+            _user("events.manage"),
+            ["events"],
+            [
+                _result(scalar=SimpleNamespace(timezone="America/New_York")),
+                _result(row=(0, None)),
+            ],
+        )
+
+    params = db.execute.await_args_list[1].args[0].compile().params
+    bounds = sorted(v for v in params.values() if isinstance(v, datetime))
+    assert len(bounds) == 2, f"expected a start and an end bound, got {bounds}"
+    start, end = bounds
+
+    # EDT on 4 October, EST on 3 November: both are local midnight, and the
+    # two instants are 30 days and one hour apart because the department
+    # gained an hour in between.
+    assert start.astimezone(org_tz).date() == date(2026, 10, 4)
+    assert end.astimezone(org_tz).date() == date(2026, 11, 3)
+    assert start.astimezone(org_tz).time() == time.min
+    assert end.astimezone(org_tz).time() == time.min, (
+        "the window ends at "
+        f"{end.astimezone(org_tz).time()} local, not midnight — the boundary "
+        "was computed by UTC arithmetic rather than a local-day shift"
+    )

@@ -62,11 +62,15 @@ the wrong people".
 
 ## Exports
 
-- **Mark CSV** — every mark, for a spreadsheet.
-- **Permission matrix** — page by tester, for handing to whoever signs off.
-- **Printable report** (`/testing/report/print`) — coverage, failures with
-  notes, gate mismatches, and coverage by area. Save as PDF.
-- **Markdown** — the original export, unchanged.
+The export buttons on Testing Home:
+
+- **Print report** — opens the printable report (`/testing/report/print`):
+  coverage (**Checked**), failures with notes, gate mismatches, and coverage by
+  area. Pages with no mark count as not tested, not as passing. Save as PDF.
+- **Download CSV** — every mark, for a spreadsheet.
+- **Permission matrix** — page by tester, for handing to whoever signs off
+  (shown to `settings.manage` holders once more than one tester has marked).
+- **Copy Markdown** / **Download Markdown** — the original export, unchanged.
 
 ## Keyboard marking
 

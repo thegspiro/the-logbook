@@ -32,6 +32,19 @@ default, and a department can **require** it for every member.
    set.
 4. Only after the second factor verifies are full session cookies issued.
 
+**Wrong codes count toward the account lockout** _(2026-09-28)_. For an MFA
+account the password step does not reset `failed_login_attempts`: a correct
+password is not full authentication, and resetting there let anyone holding
+the password guess four codes, sign in again and guess four more. Each wrong
+TOTP or recovery code at `/auth/mfa/login` adds to the same counter the
+password step uses; at `MAX_LOGIN_ATTEMPTS` (default 5) the account locks for
+`ACCOUNT_LOCKOUT_DURATION_MINUTES` (default 15). Only a successful second
+factor clears the count. With `ACCOUNT_LOCKOUT_REVEAL` off (the default) the
+member sees only the generic wrong-credentials message, so a help-desk report
+reads "my password stopped working". An administrator's password reset clears
+the lock, as does `backend/scripts/reset_login_lockout.py <username> --unlock`.
+Password-only accounts are unchanged: a correct password clears the count.
+
 ### OAuth Logins Are Challenged Too _(2026-08-12)_
 
 "Sign in with Google" / "Sign in with Microsoft" no longer bypasses the second
