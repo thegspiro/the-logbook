@@ -5,6 +5,8 @@ Shared httpx.AsyncClient with security-hardened defaults:
 - Connection pooling with per-service limits
 - Explicit TLS verification
 - No redirect following (SSRF protection)
+- Direct connections pinned to the address validated at resolution time
+  (SCH-10), so DNS rebinding cannot land a request on an internal host
 - Response body size cap, enforced centrally via a wrapping transport
 - Wall-clock deadline on the whole request, enforced by the client's send()
 """
@@ -15,6 +17,8 @@ import typing
 
 import httpx
 from httpx._utils import get_environment_proxies
+
+from app.utils.ssrf_transport import SSRFSafeAsyncTransport
 
 # INT-7 (security-review, 2026-09-06 pass 3): httpx.Timeout(10.0, connect=5.0)
 # sets a 5s *connect* timeout and a 10s *read* timeout that applies to each
@@ -308,6 +312,7 @@ def create_integration_client(
     http1: bool = True,
     http2: bool = False,
     cert: ClientCert | None = None,
+    allow_private_destinations: bool = False,
     **kwargs: object,
 ) -> httpx.AsyncClient:
     """Create a security-hardened httpx client for external API calls.
@@ -424,15 +429,37 @@ def create_integration_client(
     the transport's own `cert=` argument; it is not passed to
     `httpx.AsyncClient`, which would only route it into a transport of its
     own that this function never lets it build.
+
+    SCH-10: the direct-connection transport is wrapped in
+    `SSRFSafeAsyncTransport`, which resolves the request's host once, refuses
+    a non-public answer, and connects to that validated address while keeping
+    the original hostname for the `Host` header and TLS SNI/certificate
+    verification. A caller's own `assert_outbound_url_safe()` still runs, but
+    it is no longer the only check: the connection cannot re-resolve onto an
+    internal address after it. `allow_private_destinations=True` is for an
+    operator-configured destination on a trusted private network (audit
+    shipping's `AUDIT_SHIP_ALLOW_PRIVATE_DESTINATION`) and lifts only the
+    public-address requirement — the connection is still pinned.
+
+    Proxy mounts are not pinned. Through a proxy the proxy resolves the
+    destination, so there is no local connection to pin, and httpcore 1.0's
+    CONNECT tunnel takes its TLS server name from the URL rather than the
+    `sni_hostname` extension, so rewriting the URL to an address would break
+    certificate verification. A deployment that routes integrations through
+    an egress proxy relies on that proxy's own destination policy for
+    rebinding; see docs/KNOWN_LIMITATIONS.md.
     """
     verify = _tls_verify(cert, trust_env)
     transport = _SizeLimitedTransport(
-        httpx.AsyncHTTPTransport(
-            verify=verify,
-            trust_env=trust_env,
-            http1=http1,
-            http2=http2,
-            limits=INTEGRATION_LIMITS,
+        SSRFSafeAsyncTransport(
+            transport=httpx.AsyncHTTPTransport(
+                verify=verify,
+                trust_env=trust_env,
+                http1=http1,
+                http2=http2,
+                limits=INTEGRATION_LIMITS,
+            ),
+            allow_private=allow_private_destinations,
         ),
         MAX_RESPONSE_SIZE,
     )

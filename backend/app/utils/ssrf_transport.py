@@ -1,5 +1,14 @@
-"""HTTP transport that pins outbound connections to SSRF-approved addresses."""
+"""HTTP transport that pins outbound connections to SSRF-approved addresses.
 
+Calling ``assert_outbound_url_safe()`` before a request narrows a DNS-rebinding
+window but cannot close it: the request then performs its own, independent
+resolution when it connects, and a hostname can answer the check with a public
+address and the connection with an internal one. This transport resolves once,
+validates that answer, and connects to the validated address itself, so there
+is no second resolution for an attacker to win (SCH-10).
+"""
+
+import asyncio
 import ipaddress
 import socket
 from urllib.parse import urlsplit
@@ -7,34 +16,104 @@ from urllib.parse import urlsplit
 import httpx
 
 from app.core.config import settings
+from app.utils.url_validator import BLOCKED_HOSTNAMES
 
 
-def resolve_public_addresses(hostname: str, port: int) -> tuple[str, ...]:
-    """Resolve a host once and fail closed unless every answer is global."""
+def _literal_ip(value: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
+    try:
+        return ipaddress.ip_address(value)
+    except ValueError:
+        return None
+
+
+# The metadata endpoints in BLOCKED_HOSTNAMES that are addresses rather than
+# names. A hostname check never sees them when a name *resolves* to one, so the
+# resolved answer is checked against them too — including for an
+# operator-trusted private destination, which opts into a private network, not
+# into the cloud instance's credential endpoint.
+_BLOCKED_ADDRESSES = frozenset(
+    ip for ip in (_literal_ip(host) for host in BLOCKED_HOSTNAMES) if ip is not None
+)
+
+
+class UnsafeDestinationError(ValueError):
+    """The destination resolved to an address outbound requests may not reach.
+
+    A ``ValueError`` so every caller that already fails closed on
+    ``assert_outbound_url_safe()``'s ``ValueError`` keeps doing so; a distinct
+    type so a caller can tell a refused destination from an unrelated
+    ``ValueError`` raised elsewhere in the same request path.
+    """
+
+
+def _resolve(hostname: str, port: int) -> tuple[str, ...]:
     try:
         answers = socket.getaddrinfo(
             hostname, port, socket.AF_UNSPEC, socket.SOCK_STREAM
         )
     except socket.gaierror as exc:
-        raise ValueError(f"Could not resolve hostname '{hostname}'") from exc
+        raise UnsafeDestinationError(
+            f"Could not resolve hostname '{hostname}'"
+        ) from exc
 
     addresses = tuple(dict.fromkeys(answer[4][0] for answer in answers))
     if not addresses:
-        raise ValueError(f"Could not resolve hostname '{hostname}'")
+        raise UnsafeDestinationError(f"Could not resolve hostname '{hostname}'")
+    return addresses
+
+
+def resolve_public_addresses(hostname: str, port: int) -> tuple[str, ...]:
+    """Resolve a host once and fail closed unless every answer is global."""
+    addresses = _resolve(hostname, port)
     for address in addresses:
-        if not ipaddress.ip_address(address).is_global:
-            raise ValueError(
+        ip = ipaddress.ip_address(address)
+        # `is_global` alone admits multicast (239.0.0.0/8 is "global");
+        # url_validator._is_private_ip rejects it, and this check must not be
+        # the looser of the two now that it is the one the connection uses.
+        if not ip.is_global or ip.is_multicast:
+            raise UnsafeDestinationError(
                 f"URL resolves to a non-global IP address ({address}); "
                 "outbound destinations must be public"
             )
     return addresses
 
 
-class SSRFSafeAsyncTransport(httpx.AsyncBaseTransport):
-    """Resolve, approve, and connect to the same IP without following redirects."""
+def resolve_trusted_private_addresses(hostname: str, port: int) -> tuple[str, ...]:
+    """Resolve once for an operator-trusted destination; refuse metadata only."""
+    addresses = _resolve(hostname, port)
+    for address in addresses:
+        if ipaddress.ip_address(address) in _BLOCKED_ADDRESSES:
+            raise UnsafeDestinationError(
+                f"URL resolves to a blocked metadata address ({address})"
+            )
+    return addresses
 
-    def __init__(self, *, transport: httpx.AsyncBaseTransport | None = None) -> None:
+
+class SSRFSafeAsyncTransport(httpx.AsyncBaseTransport):
+    """Resolve, approve, and connect to the same IP without following redirects.
+
+    ``allow_private=True`` is for an operator-controlled destination that
+    legitimately lives on a trusted private network (the audit-ship collector
+    behind ``AUDIT_SHIP_ALLOW_PRIVATE_DESTINATION``), mirroring
+    ``assert_outbound_url_safe(allow_private=True)``. It lifts only the
+    public-address requirement: the connection is still pinned to the address
+    resolved here, and metadata addresses are still refused.
+
+    Only meaningful for a *direct* connection. Through an HTTP proxy the proxy
+    performs the resolution, and httpcore 1.0's tunnel takes its TLS server
+    name from the tunnelled URL's host rather than the ``sni_hostname``
+    extension, so rewriting that URL to an address would break certificate
+    verification rather than pin anything — see ``create_integration_client()``.
+    """
+
+    def __init__(
+        self,
+        *,
+        transport: httpx.AsyncBaseTransport | None = None,
+        allow_private: bool = False,
+    ) -> None:
         self._transport = transport or httpx.AsyncHTTPTransport(retries=0)
+        self._allow_private = allow_private
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
         url = request.url
@@ -45,7 +124,14 @@ class SSRFSafeAsyncTransport(httpx.AsyncBaseTransport):
             raise ValueError("Outbound URL must contain a hostname without credentials")
 
         port = url.port or (443 if url.scheme == "https" else 80)
-        approved_ip = resolve_public_addresses(url.host, port)[0]
+        resolver = (
+            resolve_trusted_private_addresses
+            if self._allow_private
+            else resolve_public_addresses
+        )
+        # getaddrinfo blocks, and every integration request now passes through
+        # here, so it runs in a worker thread rather than stalling the loop.
+        approved_ip = (await asyncio.to_thread(resolver, url.host, port))[0]
         headers = request.headers.copy()
         host_header = url.host
         if url.port and url.port != (443 if url.scheme == "https" else 80):
