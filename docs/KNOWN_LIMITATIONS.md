@@ -2839,9 +2839,9 @@ or warns against it today. (Security review ELEC-38,
 
 ## Users: Roster/Archive/Leave Lists Are Unbounded, Not Just Un-Paginated (2026-08-25)
 
-`list_users_with_roles` (`users.py:601`) and `get_archived_members`
-(`member_status.py:723`) return every matching row in the org with no
-pagination; `leave_widget_summary` (`member_leaves.py:50`) materializes every
+`list_users_with_roles` (`users.py:824`) and `get_archived_members`
+(`member_status.py:771`) return every matching row in the org with no
+pagination; `leave_widget_summary` (`member_leaves.py:53`) materializes every
 `active` leave to compute its counts, and `MemberLeaveService.list_leaves`
 (`member_leave_service.py`) runs an unbounded query before its two callers in
 `member_leaves.py` apply an in-memory slice. All four are `members.manage`-gated
@@ -2867,7 +2867,7 @@ a frontend-affecting decision, not a drop-in. (Security review USR-5,
 docstring — is enough to receive the same `UserListResponse` shape
 `members.manage` gets: `username`, `hire_date`, `membership_number`, `rank`,
 and `station` for every member in the org
-(`app/services/user_service.py:24-91`, `app/schemas/user.py:271-298`). A
+(`app/services/user_service.py:24-93`, `app/schemas/user.py:462-493`). A
 2026-09-01/02 frontend change (`frontend/src/pages/Members.tsx`) now presents
 a visibly reduced "Member Directory" for callers without `members.manage` —
 no username, no Hire Date column, no export/bulk actions — framed as "a
