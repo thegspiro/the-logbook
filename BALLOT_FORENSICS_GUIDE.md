@@ -117,6 +117,20 @@ Check the `anomaly_detection` section:
 - **`ip_metadata_purged`** — `true` once an anonymous election has closed: per-vote IP/user-agent metadata is erased at close (alongside the anonymity salt), so run IP-based analysis **while voting is open** — after close it is gone by design.
 - **Context matters:** A shared computer at the station will naturally have multiple votes from one IP. But 20+ votes from a home IP is unusual.
 
+> **IP cutover — 2026-08-05.** Before the 2026-08-05 release, every vote and
+> audit row behind the production nginx recorded the **proxy's** internal
+> address, not the voter's (app review AXC-1). On an installation that ran an
+> earlier release behind a reverse proxy, any vote or audit row written before
+> it upgraded past 2026-08-05 carries that one proxy address: `unique_ip_count`
+> reads 1 and `suspicious_ips` flags it for every such election. That is the
+> recording defect, not ballot stuffing. Those rows are **not rewritten** —
+> audit rows are hash-chained, and correcting them would break
+> `verify_integrity` — so a reviewer must date the evidence: an IP stored
+> before the installation's upgrade to the 2026-08-05 release is not a client
+> address and cannot support an IP-based finding. Per-vote IPs of a closed
+> anonymous election are purged at close anyway; the pre-cutover values
+> survive mainly in audit rows and in named (non-anonymous) elections.
+
 ### Step 4: Examine the Voting Timeline
 
 ```json
