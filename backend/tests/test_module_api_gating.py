@@ -280,6 +280,7 @@ DELIBERATELY_UNGATED = {
     "/api/v1/": "the API root itself",
     "/api/v1/auth": "sign-in, refresh and MFA — reachable before any module is",
     "/api/v1/users": "essential module",
+    "/api/v1/member-id-cards": "member ID cards, part of members, an essential module",
     "/api/v1/roles": "essential module",
     "/api/v1/organization": "essential module; also where the switch itself lives",
     "/api/v1/documents": "essential module",
