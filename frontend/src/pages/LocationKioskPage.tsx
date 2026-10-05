@@ -73,7 +73,20 @@ const LocationKioskPage: React.FC = () => {
         const response = await fetch(`/api/public/v1/display/${code}`);
         if (!response.ok) {
           if (response.status === 404) {
-            setError('Display not found. Check the URL.');
+            // Clearing `data` is the point, not tidiness. A 404 on a *refresh*
+            // means this code has stopped resolving — an officer rotated it
+            // (the documented way to revoke a leaked one), or the room or the
+            // department was deactivated. Left in place, the stale payload
+            // keeps rendering behind a green "connected" icon on every later
+            // poll, because the permanent-error branch below is guarded on
+            // `!data`: the revocation would never reach the one screen it
+            // exists to take down. A transient backend failure is a different
+            // thing and lands in the `catch` below, which deliberately keeps
+            // showing the last payload with a disconnected badge.
+            setData(null);
+            setError(
+              'This display link is no longer active. Ask an officer for this ' + "room's current display link."
+            );
           } else {
             throw new Error(`HTTP ${response.status}`);
           }

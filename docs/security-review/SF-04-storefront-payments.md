@@ -1,6 +1,203 @@
 # Security Review — Storefront & Payments
 
-**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6) · **PR:** #1807 (pass 1)
+**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7) · **PR:** #1807 (pass 1)
+
+---
+
+## Pass 7 (2026-10-05) — real changes, all reviewed, 0 new findings
+
+**Scope, same `git diff`-between-tree-states method passes 3–6 used.** Diffed
+pass 6's own closing merge (`a16635e60`, PR #2598) against current `HEAD`
+across the full domain established since pass 3: `storefront.py`,
+`storefront_service.py`, `storefront_notification_service.py`,
+`email_templates_storefront.py`, `storefront_preview_service.py`,
+`storefront_payments.py`, `paypal_webhook.py`, `models/storefront.py`,
+`schemas/storefront.py`, `utils/size_order.py`, `utils/embroidery.py`, the
+entire `frontend/src/modules/storefront/` tree, every migration whose
+filename or content matches storefront/embroidery/personalization/thread/
+grant, and the shared collaborators prior passes established:
+`admin_hub_service.py`/`admin_hub.py`, `core/permissions.py`,
+`api/dependencies.py`, `core/security_middleware.py`, `models/notification.py`,
+`core/database.py`, `core/utils.py`.
+
+**Not zero-delta this time — 3 backend files and 22 frontend files changed,
+read in full rather than diff-trusted.** 75 non-merge commits landed between
+pass 6's merge and this pass; unlike pass 6's own "nothing moved" result, six
+real feature changes reached this domain:
+
+1. **`storefront.py` (1 line) / `storefront_service.py` (1 line, same
+   change twice):** `author.full_name` → `author.display_name` in the two
+   order-activity-timeline serializers (`_order_payload` and
+   `get_order_events`'s equivalent). Part of the app-wide "preferred display
+   name" feature (`f92fbd927`); cosmetic field rename, no behavior or
+   authorization change — `display_name` is a plain attribute read off an
+   already-org-scoped, already-permission-checked `User`/`author`
+   relationship, same as `full_name` was.
+2. **`storefront_service.py` (+9, `export_orders_csv`):** the CSV export's
+   submitted-time column now renders in the organization's configured
+   timezone (`resolve_scheduling_timezone` + `to_local`) instead of a hardcoded
+   `"%Y-%m-%d %H:%M UTC"` literal — a correctness fix matching CLAUDE.md's
+   UTC-storage/local-display convention, not a security change. Still
+   `SafeCsvWriter`; still unbounded pagination (SF export finding, unchanged,
+   see below); no new client input reaches this path.
+3. **`storefront_notification_service.py` (+73/-2): a new
+   `_drop_opted_out` filter wired into every non-capture send.** Part of the
+   app-wide "required vs. optional member email" feature
+   (`72dfb4f1e`/`b5fe2ca00`, already reviewed under
+   [`MSG-25-messaging-notifications.md`](./MSG-25-messaging-notifications.md)
+   and `CRON5-31-scheduled-tasks.md`). Reviewed here for what _this_ feature's
+   call site does with it, not re-auditing the shared module: the lookup
+   query (`select(User.email, User.notification_preferences).where(
+User.organization_id == str(organization.id), User.email.in_(addresses))`)
+   is org-scoped on the already-resolved `organization`, never a
+   client-supplied id; `department_required_kinds(organization)` is checked
+   _before_ any opt-out is honored, so a department that marked
+   `storefront_new_order_admin` mandatory cannot have it silently dropped; and
+   a lookup failure (`except Exception`) logs and falls back to sending
+   unfiltered — documented in-line as the deliberate direction ("sending to a
+   member who opted out is the lesser failure than every member missing an
+   ordering window"), matching this codebase's existing fail-open/fail-closed
+   reasoning for notification delivery rather than a new unreviewed tradeoff.
+   The order-receipt template (a required notice) is absent from
+   `_EMAIL_KIND_BY_TEMPLATE` by design — it is never looked up, so it is
+   never filtered.
+4. **`storefront_notification_service.py` (2 lines): window-close/open email
+   timestamps now render via `format_in_org_timezone` instead of a hardcoded
+   `"UTC"` literal** — same class of fix as item 2, no security content.
+5. **22 frontend files, all copy/UX polish and defensive hardening, none
+   touching price, permission, or org-scoping logic:** wording passes
+   ("Failed to load X" → "Could not load X", clearer action labels), mobile
+   touch-target class additions (`touch:min-h-11`, `mobile-touch-target`),
+   `card-grid` adoption in `StoreCatalogTab`, and — the one defensive pattern
+   worth naming — four call sites (`StoreOrdersTab`, `StorePaymentsTab`,
+   `StoreAdminPage`'s dashboard loader) now validate the response shape
+   (`Array.isArray(response?.items)`, numeric-type checks on counts) before
+   rendering, throwing a user-facing error instead of crashing on
+   `undefined.length` when a captive portal or proxy returns a non-JSON body.
+   This hardens the client against a malformed response; it does not change
+   what the server trusts from the client, so it does not touch the
+   price-integrity or org-scoping findings below.
+6. **New seeded positions carrying baseline `storefront.view`/
+   `storefront.order` grants** (`assistant_membership_coordinator`,
+   `compliance_officer`, plus `core/permissions.py`'s `DEFAULT_POSITIONS`
+   additions for the same): confirmed, by reading each migration/position
+   definition in full, to be the same "every new baseline position gets the
+   member-level storefront grants every other baseline position already has"
+   pattern pass 3/4 already classified as a false positive from a content
+   grep — none adds or widens access to `storefront.manage`, and the
+   `STOREFRONT_VIEW`/`STOREFRONT_ORDER`/`STOREFRONT_MANAGE` `Permission(...)`
+   definitions themselves are untouched (only adjacent-context diff noise from
+   an unrelated `INVENTORY_KIOSK` insertion).
+
+**Shared-collaborator diffs, each checked for storefront relevance and found
+to have none:** `api/dependencies.py`'s `get_request_enabled_modules` change
+retypes its parameter from `Request` to `HTTPConnection` so a WebSocket
+handshake on a gated router doesn't 500 before accepting — storefront has no
+WebSocket route, and the function's behavior for an HTTP request
+(`isinstance(connection, Request)` → proceeds exactly as before) is
+unchanged. `core/database.py`'s `_stamp_utc` change (reads already-loaded
+column state via `inspect(target).dict` instead of `getattr`, to avoid a
+second SELECT firing from inside a partial-refresh event handler) is a
+load-time correctness fix with no authorization or tenancy content — storefront
+models use the same `DateTime(timezone=True)` pattern as everything else and
+are neither more nor less affected than any other model. `core/security_middleware.py`'s
+changes are (a) a new `is_unlogged_path` carve-out for anonymous
+suggestion-box routes, which do not include any storefront path, and (b) one
+new entry (`/api/v1/inventory/not-seen/export`) added to the sensitive-export
+tracking list that already includes `/api/v1/store/orders/export`, unchanged.
+`admin_hub_service.py`'s diff is confined to `_training_compliance` and
+`_scheduling_needs_closeout` (an empty-denominator "100%"/"all clear" framing
+fix, the exact Pitfall-#29-adjacent pattern SEC-00 already tracks) and an
+`AdminHubService._timezone_for_org`-equivalent refactor onto a shared
+`scheduling_timezone()` helper — grep-confirmed zero hits on `_store_` or
+`storefront` anywhere in the diff, so none of the six storefront `MetricSpec`
+resolvers (`_store_open_orders`, `_store_awaiting_payment`,
+`_store_outstanding_balance`, `_store_pending_verification`,
+`_store_ready_for_pickup`, `_store_active_products`) or `_storefront_attention`
+changed. `models/notification.py`'s diff adds two new trigger enum values and
+a `created_by` FK's `ondelete` for an unrelated suggestion-box/equipment-request
+feature — no `NotificationChannel`/`NotificationLog` schema change storefront
+writes through. `paypal_webhook.py`, `storefront_payments.py`,
+`models/storefront.py`, `schemas/storefront.py`, `utils/size_order.py`, and
+`utils/embroidery.py` are all byte-identical to pass 6 (`git diff` returns
+nothing for each, confirmed directly, not inferred from the aggregate stat).
+
+**Re-verified the three still-open findings directly against current code,
+not merely by their unchanged citation in the diff:**
+
+- **SF-9 (app-review, MED, still OPEN)** — `record_payment`
+  (`storefront_service.py:1919`) is still a plain `get_order` read (`:1931`,
+  no `for_update`) followed by `order.amount_paid = _money(Decimal(
+order.amount_paid or 0) + applied)` (`:1952`) and a commit. Line numbers
+  shifted by a handful from the `tz`/`format_in_org_timezone` insertions
+  above them in the file, but the method body is unchanged. The
+  `assert_different_person` guard (`:1944`) remains present and unrelated to
+  this finding (it blocks self-settlement, not the concurrent-write race). No
+  fix attempted here, for the reason passes 5/6 both gave: the change moves
+  transaction boundaries shared by `bulk_mark_paid`'s per-order commit loop
+  and the unauthenticated PayPal webhook's auto-apply path, with two
+  non-equivalent remediation options that need an owner call in a payments
+  path. Still mirrored in `KNOWN_LIMITATIONS.md`.
+- **SF-11 (app-review, LOW, still OPEN)** — `StoreOrderCreate.items`
+  (`schemas/storefront.py:675`) is still `Field(..., min_length=1)` with no
+  `max_length`. Confirmed by direct read; still mirrored in
+  `KNOWN_LIMITATIONS.md`.
+- **Order export unbounded (carried forward since pass 1, LOW/MED, still
+  OPEN)** — `export_orders_csv`'s page-accumulation loop
+  (`storefront_service.py:3151` onward) is unchanged in shape; still
+  `SafeCsvWriter`-based, still paginates to exhaustion with no row cap. Still
+  deliberately grouped with `AH-21`'s and `reportExportService`'s siblings in
+  `KNOWN_LIMITATIONS.md` rather than fixed piecemeal.
+
+**All five self-settlement separation-of-duties guards re-confirmed present
+and unmodified** (`record_payment` `:1944`, `mark_order_paid` `:2017`,
+`waive_order_payment` `:2059`, `refund_order` `:2245`,
+`update_order_status`'s `settles_payment` branch `:1869` — all shifted by the
+same small, explained offset, all still positioned before any ledger
+mutation).
+
+**Route inventory, price integrity, idempotency, and abuse-resistance
+unchanged and re-confirmed by direct read of the one real backend diff
+(`storefront.py`'s 1-line field rename touches nothing else):** still 48
+routes, same permission table as pass 4/5/6 (not reproduced a fourth time
+verbatim); `_price_lines` still derives every line from the catalog, and
+`StoreOrderItemInput` still carries no client-supplied price field;
+`record_external_payment`'s dedupe-on-`(organization_id, provider,
+external_id)` and `apply_payment_event`'s `APPLIED`-status short-circuit are
+untouched; PayPal webhook signature verification, replay guard, and audit
+logging are untouched (file byte-identical to pass 6).
+
+**No new findings.**
+
+## Guard tests added
+
+None by this pass — nothing changed in a way that needed a new guard. The
+existing suite (`test_storefront_order_deadlock.py`, the lock-order and
+locking-read source guards, the SF-6/SF-7 self-settlement tests,
+`test_refund_amount_must_be_positive`/`_may_be_omitted`) was re-run, not
+re-written.
+
+## Completion gate
+
+| Check                                                                                                                         | Result                                                  |
+| ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                 | ✅ 0 violations                                         |
+| `black --check app/ tests/ alembic/`                                                                                          | ✅ 1874 files unchanged                                 |
+| `isort --check-only app/ tests/ alembic/` (9.0.1)                                                                             | ✅ clean                                                |
+| `python3 scripts/validate_migrations.py --strict`                                                                             | ✅ 512 revisions, single head (`34d3d56d1479`)          |
+| `python3 scripts/check_route_permissions.py --strict` (frontend route↔page registry)                                          | ✅ 244 routes, 0 errors, 0 warnings                     |
+| backend tests (scoped: `-k "storefront or payment"`)                                                                          | ✅ 787 passed, 1 skipped (environment-only: `py_vapid`) |
+| cross-cutting guard tests (deadlock, org-scoping ratchet, capacity locking, LIKE escaping, CSV sweep, endpoint-auth coverage) | ✅ 72 passed                                            |
+| backend tests (full suite, `pytest tests/ -m "not integration and not slow and not docker"`)                                  | ✅ 12,600 passed, 1 skipped, 0 failed                   |
+| `npm run typecheck`                                                                                                           | ✅ 0 errors                                             |
+| `npm run lint` (`eslint --max-warnings 10`)                                                                                   | ✅ 0 errors, 0 warnings                                 |
+| `vitest run src/modules/storefront/ src/components/admin/`                                                                    | ✅ 213 passed (18 files)                                |
+
+Every real change this pass was read directly against current code and
+traced to one of six named feature changes above, each reviewed for
+storefront-specific effect rather than trusted on the diff summary alone; the
+gate above is a direct re-run against the current tree, including the full
+backend unit suite given this feature's money-handling sensitivity.
 
 ---
 

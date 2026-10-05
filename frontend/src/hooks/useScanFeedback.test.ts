@@ -40,4 +40,16 @@ describe('useScanFeedback', () => {
     Object.defineProperty(navigator, 'vibrate', { configurable: true, value: undefined });
     expect(() => act(() => result.current.signalScanSuccess())).not.toThrow();
   });
+
+  // ScanCodeField signals after awaiting a lookup, and a recognised code can
+  // unmount it first. The timer used to start anyway, outlive the component,
+  // and fire setState into a torn-down tree.
+  it('starts no timer when signalled after unmount', () => {
+    const { result, unmount } = renderHook(() => useScanFeedback());
+    const signal = result.current.signalScanSuccess;
+    unmount();
+
+    signal();
+    expect(vi.getTimerCount()).toBe(0);
+  });
 });

@@ -530,7 +530,7 @@ const EventRequestsTab: React.FC = () => {
 
   if (loading && requests.length === 0) {
     return (
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl py-8">
         <div className="flex h-64 items-center justify-center" role="status" aria-live="polite">
           <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
         </div>
@@ -540,7 +540,7 @@ const EventRequestsTab: React.FC = () => {
 
   if (error) {
     return (
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl py-8">
         <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
           <p className="text-red-700 dark:text-red-300">{error}</p>
           <button
@@ -555,7 +555,7 @@ const EventRequestsTab: React.FC = () => {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-6xl py-8">
       <div className="space-y-6">
         {/* Header */}
         <div>

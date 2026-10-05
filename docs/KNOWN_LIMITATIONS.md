@@ -30,11 +30,19 @@ entry stays only while code, tests or `CLAUDE.md` still cite it by name.
 >
 > Staleness cuts both ways, though, and the sweep itself proved it. FIN-4 was
 > initially marked resolved here on the strength of `assert_different_person`
-> appearing in `finance_service` — but that guard sits on the **approval** step,
-> not on disbursement, so `mark_pr_paid` / `issue_check` / `waive_dues` remain
-> gated by `finance.manage` alone. The row is back to ⚠️ Narrowed. Read the
-> call site, not the import: "the guard exists in this file" is not the same
-> claim as "this path is guarded."
+> appearing in `finance_service` — but that guard sat on the **approval** step,
+> not on disbursement, so `mark_pr_paid` / `issue_check` / `waive_dues` were
+> gated by `finance.manage` alone. Read the call site, not the import: "the
+> guard exists in this file" is not the same claim as "this path is guarded."
+>
+> **The example has since closed, and this note was itself stale for it**
+> (corrected app-review A9 pass 3, 2026-10-04): all three of those methods now
+> call the guard, verified by extracting every `assert_different_person` call
+> site and its arguments from the AST rather than by grepping the file. The
+> lesson stands and the illustration is kept deliberately — but a present-tense
+> "remain gated by `finance.manage` alone" sitting in this page's own preamble
+> was precisely the dangerous direction of staleness the paragraph above
+> describes. See the FIN-4 row for what is actually left.
 >
 > Rows are annotated with the date they were last _verified against the code_,
 > not just the date they were written. When you fix something listed here,
@@ -889,7 +897,7 @@ Per-module docs under `docs/module-audit/` carry the full lower-severity list.
 | **Compliance/Skills: self-certification & self-attestation (no separation of duties)**                                                                                       | ⚠️ Half resolved (verified app-review A9)                                                                                 | **✅ Skills self-certification closed, at both ends:** an examiner can no longer be the candidate on a scored skills test, and **since 2026-08-08 an officer can no longer validate a test they are the candidate in** — `skills_testing.py` calls the shared `assert_different_person` guard (`app/services/separation_of_duties.py`) on both paths, with an `is_practice` carve-out for un-credited self-drilling. The second check is what keeps opening the examiner role to every member from re-opening this: without it an officer could have a peer "examine" them and then sign off their own pass, which is the same fraud one hop removed. **Still open:** `create_attestation` records a client-supplied `compliance_percentage` with nothing recomputed server-side and no second approver, so a compliance officer can attest a number they chose. Closing it needs a computed value or dual-control — a workflow change. (CS-8)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | **Compliance: reporting correctness & email abuse-surface polish**                                                                                                           | Partially resolved (LOW/MED)                                                                                              | **Fixed:** the report email HTML now `html.escape`s the org name, `report_type`, and period label (was raw interpolation of user-controlled values — mail-client HTML/script injection); `report_type` is constrained to `monthly`/`annual` (was free-form, persisted + interpolated). **Still flagged:** report emailing accepts client-supplied recipients (external auditors are a legitimate case — **owner decision 2026-08-09: allow any recipient, but audit-log each send to a non-member address**; `_email_report` now calls `audit_external_recipients`, which writes an `external_recipient_send` audit event listing every out-of-org address); attestation history over-fetches globally (blocked on the deferred `audit_logs.organization_id` column — availability, not a leak); `records_with_certification` mislabel left as-is (ambiguous intent). (CS-9)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | **Compliance: "notify non-compliant members" / reminder-days settings are stored but never sent**                                                                            | 🚩 Open — needs a reader built (security-review pass 2, CMP2-1)                                                           | `ComplianceConfig.notify_non_compliant_members` and `.notify_days_before_deadline` are set from `ComplianceRequirementsConfigPage.tsx`'s Notifications panel, persisted, and returned on every `GET /compliance/config` — but no scheduled task or notification sender anywhere in the backend reads either column (confirmed: `grep -rn notify_days_before_deadline backend/app` outside `schemas/`/`models/` returns nothing). A compliance officer who enables the toggle and sets "30, 14, 7" believes members are reminded before their deadline and notified on becoming non-compliant; neither happens. This is the same shape as the `notification_rules` gap CLAUDE.md Pitfall #19 documents. **Partial fix applied:** the panel now carries an explicit "Not yet active" notice so the UI stops implying the feature works (`ComplianceRequirementsConfigPage.tsx`, `docs/security-review/CMP-20-compliance.md` CMP2-1). **Still needed:** a scheduled task (alongside the existing `compliance_auto_reports` task) that evaluates each org's compliance status against `notify_days_before_deadline` and emails members per Pitfall #18 (email-first; SMS only via the `SmsAlert` allowlist if ever added) — a product/architecture decision on cadence and message content, not a drive-by fix.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| **Finance: no separation of duties on terminal money movement**                                                                                                              | ⚠️ Narrowed (verified app-review A9)                                                                                      | **✅ The severe case is closed:** the request **approval step** now calls the shared `assert_different_person` guard (`finance_service.py:649`), so one person can no longer both raise a purchase/check request and approve it — a second person must approve before anything is payable. **Still open:** the _disbursement_ actions (`mark_pr_paid`, `mark_expense_paid`, `issue_check`, `void_check`, `record_dues_payment`, `waive_dues`, `unwaive_dues`) are all gated only by `finance.manage`, so the requester can still be the person who executes an already-approved payment. Full three-way separation needs a distinct `finance.disburse`/treasury permission on roles (seed + roles + frontend). (FIN-4)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **Finance: no separation of duties on terminal money movement**                                                                                                              | ⚠️ Narrowed (verified app-review A9)                                                                                      | **✅ The severe case is closed:** the request **approval step** now calls the shared `assert_different_person` guard (`finance_service.py:649`), so one person can no longer both raise a purchase/check request and approve it — a second person must approve before anything is payable. **The disbursement half has since closed too** (verified app-review A9 pass 3, 2026-10-04, by extracting every `assert_different_person` call site and its arguments from the AST): `mark_pr_paid`, `mark_expense_paid`, `issue_check` and `waive_dues` each now compare the actor against the request's `requested_by` / the expense's `submitted_by` / the dues member and refuse on a match. Two of the seven methods this row used to name — `void_check` and `unwaive_dues` — take **no actor parameter at all** and are reversals rather than disbursements (voiding your own check or re-imposing your own waived dues moves money _away_ from you), so they are correctly unguarded, not gaps. **One is genuinely still open:** `record_dues_payment` accepts a `recorded_by` and settles money, and has no guard — while its exact analogue on the storefront side (`record_payment`) does, and `waive_dues` on the _same_ `MemberDues` record does. See the OPS-8 entry below. **Also still open, and the broader point:** none of these carries a _distinct permission_, so this is self-dealing prevention, not three-way separation — the requester can still execute an already-approved payment raised by somebody else. Full separation needs a `finance.disburse`/treasury permission on roles (seed + roles + frontend). (FIN-4)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | **Finance: dues administration has no UI — every write is API-only**                                                                                                         | Open (MED, missing feature)                                                                                               | `DuesManagementPage` is read-only: schedule filter, status tabs, summary cards and the member dues list. The store exposes only `fetchDuesSchedules` / `fetchMemberDues` / `fetchDuesSummary`, and `duesService` has no `unwaive` or payment-history call at all. So creating a schedule, generating member dues, recording a payment, waiving, reversing a waiver and reading the payment ledger are all reachable only through the API, despite every one of them being an endpoint. `docs/training/11-finance.md` documents the click-paths as the intended UI and now carries a callout saying so; the YouTube shorts for the dues fixes (8m/8n) are written but on hold because there is nothing to film. Closing this is a frontend build-out, not a fix.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | **Finance: correctness/DoS polish (export, pagination, request numbers, float aggregates)**                                                                                  | ⚠️ Mostly resolved (re-verified, security-review FIN-05 pass 4, 2026-09-08; corrected same-day, Codex review on PR #2398) | This row had gone stale — the items marked "still flagged" below were already fixed on `main` (in the finance-approvals security-review's own earlier passes, never threaded back into this row). Re-verified directly against current code: `_generate_request_number` is MAX-of-suffix-based with a per-org unique constraint and a SAVEPOINT retry allocator (fixed 2026-07-31); every list method the original finding named (`list_purchase_requests`, `list_expense_reports`, `list_check_requests`, etc.) pushes `.offset()`/`.limit()` into the SQL query, none fetches-all-then-slices; `generate_export` caps at `max_records=10_000` and streams in 500-row batches via `SafeCsvWriter`; `_mutate_budget` takes a locking read and raises `BudgetLimitExceededError` whenever a spend/encumbrance would exceed `amount_budgeted`, fail-closed with no override. Money storage and arithmetic are `Decimal`/`Numeric(12,2)` throughout; the only remaining `float()` casts are two percentage/rate display roundings, not currency math (one needless `Decimal`→`float`→`Decimal` round-trip on `entity_amount` in `get_pending_approvals` was found and removed this pass). **Still open:** `list_dues_payments` (`GET /dues/{dues_id}/payments`) is also a list method and does not paginate — it eager-loads one member's entire payment ledger unbounded (this row's own first correction overclaimed "every list method" before Codex review caught the exception); left flagged rather than fixed since pagination would change the endpoint's response shape. `get_pending_approvals` also still returns every org approver's actionable steps rather than filtering to steps assigned specifically to the caller — there is no per-step assignee field to filter on today, and adding one is a schema/behavior decision, not this row's fix. (FIN-7/FIN-30; see `docs/module-audit/finance.md`'s FIN-7 entry for the full re-verification.)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | **Recurring: create/update paths trust client-supplied FK ids without an org check (XC-1)**                                                                                  | Open (LOW, systemic)                                                                                                      | The dominant cross-cutting pattern — create/update methods store `user_id`/`category_id`/`assignee_id`/etc. without verifying the referenced row is in-org. Individually low impact (org-stamped writes → dangling/mis-attributed FKs, not disclosure), but pervasive. Best closed by a shared `assert_in_org(db, Model, id, org_id)` helper rolled out per module. Full instances in [`docs/module-audit/CROSS-CUTTING.md`](./module-audit/CROSS-CUTTING.md) (XC-1/2/3).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
@@ -4645,6 +4653,153 @@ need an owner decision before anything is built.
   the page look worse.
 
 ## Process
+
+## OPS-7 — Audit Shipping Can Deliver A Batch Twice (2026-10-04)
+
+`audit_ship_service._get_or_create_state` reads the shipping watermark with
+`SELECT ... FOR UPDATE`, added by the security review (SEC2-28-9) because this
+task runs both on a schedule and via the manual
+`/scheduled/run-task?task=audit_log_ship` trigger, so two runs can overlap. The
+lock does what it was added for: the second run blocks until the first commits
+and so starts from an advanced watermark rather than the same one.
+
+It does not, however, serialize a _run_. `ship_new_audit_logs` commits after
+**each** acknowledged batch — deliberately, so a failure mid-run never
+re-ships rows the collector already confirmed — and committing is also what
+releases the row lock. So two concurrent runs are serialized for their first
+batch only; past that both proceed from the watermark as it stood after batch
+one and can deliver the same later batches twice. `expire_on_commit=False` on
+the session (set in `core/database.py`) means neither run's in-memory `state`
+ever notices the other's commits, so they diverge for the rest of the run,
+up to `_MAX_BATCHES_PER_RUN` (20) batches each.
+
+**What it costs, and what it does not.** No audit row is lost or skipped — the
+watermark only ever moves forward, and every row past it is re-queried — so
+this is an at-least-once delivery property, not a gap in the off-host copy the
+control exists to provide. The collector is handed `X-Logbook-First-Id` and
+`X-Logbook-Last-Id` on every request precisely so it can deduplicate. A SIEM
+that does not dedupe would double-count entries for the overlapping batches.
+
+**Why it is here rather than fixed.** The two goals genuinely conflict:
+durable per-batch progress requires committing, and holding an exclusive claim
+for a whole run requires not committing. Resolving it means a run-scoped claim
+rather than a row lock — the shape `core/background_claim.py` already provides
+for the scheduler loops (CRON-40) — which is a design change to a task that
+ships every organization's audit trail, not a drive-by. The in-code comment now
+states the real boundary of the lock rather than the one the fix was described
+as providing.
+
+## OPS-8 — Recording A Payment Against Your Own Dues Has No Separation Guard (2026-10-04)
+
+`FinanceService.record_dues_payment` accepts a `recorded_by` and appends to the
+dues ledger, re-deriving the member's paid total — a money settlement. It does
+**not** call `assert_different_person`, so a `finance.manage` holder can record
+a payment against their own dues with no second person involved.
+
+Three things make this a real asymmetry rather than a judgement call about
+scope:
+
+- **Its exact analogue is guarded.** `StorefrontService.record_payment` carries
+  the check, with a comment explaining that it belongs on the shared engine
+  rather than the wrapper because the engine is also reachable directly
+  (`POST /orders/{id}/payments`) — the SF-6 finding. Dues payment recording is
+  the same shape and has no such guard.
+- **Its sibling on the same record is guarded.** `waive_dues` compares
+  `waived_by` against `dues.user_id` and refuses. So waiving your own dues is
+  blocked while recording a payment on them is not.
+- **The exemption mechanism already exists.** `assert_different_person` no-ops
+  when either id is missing, and `recorded_by` is `Optional`, so an
+  out-of-band/reconciliation path would pass through untouched exactly as the
+  storefront's `actor_id=None` path does.
+
+`tests/test_money_separation_of_duties.py` reflects the gap: it asserts a
+member cannot waive their own dues and has no case for recording a payment on
+them.
+
+**Why it is here rather than fixed.** It changes a money workflow, and the
+operational cost is the one OPS-1 already recorded for admin hours: a treasurer
+paying their own dues in cash at a meeting would no longer be able to record
+it, and in a single-officer department nobody else can. The owner's 2026-08-09
+decision chose option (a) — block self-dealing — for an enumerated set of paths
+that did not include this one, so extending it is a decision rather than a
+correction. The fix itself is one line mirroring the storefront call:
+
+```python
+assert_different_person(
+    recorded_by, dues.user_id, action="record a payment on", record="dues"
+)
+```
+
+## LOC-37 — A Room Tag Tapped With An Expired Session Loses The Room (2026-10-04)
+
+`/locations/:locationId/check-in` is where a room's NFC sticker lands a member's
+phone. It is the **only route in the app entered cold from a physical object**
+rather than from inside a live session, which makes it both the likeliest to be
+hit with no valid session and the worst at handling it.
+
+The route carries no `ProtectedRoute`
+(`frontend/src/modules/facilities/routes.tsx`). So a member whose session has
+expired renders the page, which calls `GET /locations/{id}/display`, receives a
+401, and is hard-redirected by `handleExpiredSession`
+(`frontend/src/services/apiClient.ts:207`) via
+`window.location.href = '/login'`. That is a full page load carrying **no
+`state.from`**, so `postLoginRedirect` falls through to its default and the
+member arrives at the dashboard. To check in they must walk back to the door and
+tap the sticker again.
+
+The machinery to do this correctly already exists and is used everywhere else:
+`ProtectedRoute` redirects with `<Navigate to="/login" state={{ from: location }} replace />`,
+and `postLoginRedirect` reads that, validates it against open-redirect, and
+returns `pathname + search + hash`. This route simply never reaches it.
+
+**Why it is here rather than fixed.** The obvious fix is to wrap the route in a
+bare `<ProtectedRoute>`, which gates on authentication alone and so preserves
+the route's documented intent exactly — no module gate, no permission gate,
+because a room tag must work in Locations mode as well as Facilities mode and
+any member may check in. But `/events/:id/check-in`, which this page forwards to,
+is ungated in precisely the same way. So this is a convention shared by both
+check-in landing pages rather than a one-route slip, and the fix belongs to both
+at once. It is also a change to the session/redirect flow, which this
+repository's standing instructions put behind an explicit confirmation.
+
+**Bounded.** Nothing is exposed and nothing errors — the endpoint's own auth
+dependency is what actually protects the data, and it holds. The cost is a
+member standing at a door, sent to a dashboard, with no indication that tapping
+again after signing in is what they need to do.
+
+## LOC-40 / LOC-41 — Two Locations Decisions Left Open (2026-10-04)
+
+- **LOC-40 — the display capability exists twice, and both copies are now
+  live.** Pass 2 of the application review said to delete the dead
+  authenticated `GET /locations/{id}/display` or give it a caller; it got a
+  caller (`RoomCheckInPage`). `LocationDisplayInfo` has six fields and its two
+  producers fill different subsets: `public/display.py` computes `is_valid` via
+  `_validate_check_in_window` and populates `timezone`,
+  `badge_check_in_enabled` and `allow_guest_check_in`, while `locations.py`
+  hardcodes `is_valid`/`can_check_in` to `True` and leaves the rest at their
+  defaults. Nothing is broken — every omission defaults to the safe value and
+  the one caller reads none of them — but the ~20 lines of `QRCheckInData`
+  construction are near-identical between the two, which is exactly how LOC-1
+  (a drifted check-in window) happened the first time. Consolidating onto one
+  builder is the right answer and is not a safe drive-by: the two differ
+  _deliberately_ in `is_valid`, because the authenticated endpoint's selection
+  query has already applied the stricter window while the public one computes
+  the permissive check, so a shared builder needs that as a parameter and the
+  blast radius includes a public kiosk endpoint.
+- **LOC-41 — (name, building) uniqueness for locations has no database
+  constraint behind it.** `Location.__table_args__` declares four plain
+  indexes and no `UniqueConstraint`, so the rule lives only in
+  `LocationService.create_location` / `update_location` as a read-then-write
+  with no lock — two concurrent creates can both pass it. Pass 3 capped both
+  checks with `.limit(1)` so a duplicate pair can no longer turn every later
+  write of that name into a 500, but the duplicates themselves remain possible.
+  Adding the constraint is a decision rather than a chore for two reasons:
+  MySQL permits repeated NULLs in a unique index, so `UNIQUE (organization_id,
+name, building)` would not stop duplicates where `building IS NULL` — which
+  is precisely the case the application check handles with an explicit `IS NULL`
+  branch — and existing installations may already hold duplicate pairs that a
+  migration would have to surface and resolve before the constraint could be
+  created.
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area
 per tick and appends findings. New "needs owner decision" items should be

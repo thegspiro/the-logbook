@@ -441,7 +441,7 @@ export const MembersAdminPage: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen">
-        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl py-8">
           <div className="flex h-64 items-center justify-center">
             <div className="text-theme-text-muted" role="status" aria-live="polite">
               Loading...
@@ -455,7 +455,7 @@ export const MembersAdminPage: React.FC = () => {
   if (error && !editingRoles && !editingMembers && !editingProfile && !resetPasswordUser && !resetMfaUser) {
     return (
       <div className="min-h-screen">
-        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl py-8">
           <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
             <div className="flex">
               <div className="ml-3">
@@ -470,7 +470,7 @@ export const MembersAdminPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl py-8">
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-theme-text-primary text-2xl font-bold">Member Management</h2>

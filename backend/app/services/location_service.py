@@ -10,7 +10,6 @@ from uuid import UUID
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.core.utils import generate_display_code
 from app.models.event import Event
@@ -52,7 +51,16 @@ class LocationService:
             dup_query = dup_query.where(Location.building == location_data.building)
         else:
             dup_query = dup_query.where(Location.building.is_(None))
-        result = await self.db.execute(dup_query)
+        # `.limit(1)` is load-bearing, not an optimization. This rule has no
+        # unique constraint behind it (only a plain `ix_locations_name`) and it
+        # is a read-then-write, so two concurrent creates can both pass it and
+        # leave a duplicate pair behind. Unbounded, `scalar_one_or_none()` then
+        # raises MultipleResultsFound on every later create or update of that
+        # name — not a ValueError, so `handle_service_errors` renders it as a
+        # 500 with a generic message, and the one name nobody can save again is
+        # diagnosable only from the logs. Capped at one row, multiplicity is
+        # unrepresentable and the duplicate still reports as a clean 400.
+        result = await self.db.execute(dup_query.limit(1))
         existing = result.scalar_one_or_none()
         if existing:
             raise ValueError(
@@ -146,7 +154,8 @@ class LocationService:
                 dup_query = dup_query.where(Location.building == effective_building)
             else:
                 dup_query = dup_query.where(Location.building.is_(None))
-            result = await self.db.execute(dup_query)
+            # Capped for the same reason as `create_location`'s — see there.
+            result = await self.db.execute(dup_query.limit(1))
             existing = result.scalar_one_or_none()
             if existing:
                 raise ValueError(
@@ -235,9 +244,10 @@ class LocationService:
         """
         Get events at this location whose check-in window is open right now.
 
-        The window is per-event — FLEXIBLE opens N minutes before start (default
-        30), STRICT opens at ``actual_start_time``, WINDOW opens N minutes either
-        side — so the exact boundaries are resolved via the canonical
+        The window is per-event — FLEXIBLE opens ``check_in_minutes_before``
+        minutes before start (the column defaults to 60), STRICT opens at
+        ``actual_start_time``, WINDOW opens N minutes either side — so the exact
+        boundaries are resolved via the canonical
         ``EventService._get_check_in_window`` per candidate rather than assuming a
         fixed 1-hour lead. The old hardcoded "1 hour before start" returned a
         superset, so the kiosk showed an active check-in QR for STRICT and
@@ -270,7 +280,13 @@ class LocationService:
                     Event.actual_end_time >= now,
                 )
             )
-            .options(selectinload(Event.rsvps))
+            # No `selectinload(Event.rsvps)` here. It was eager-loading every
+            # RSVP row of every event in the window, and no caller reads the
+            # collection: the two display endpoints project scalar columns
+            # only, and `NfcTagService._only_event_checked_into` runs its own
+            # query narrowed to one member's open check-ins. The kiosk polls
+            # this every 30 seconds, so a drill with 150 RSVPs was loading 150
+            # unread rows a poll, per open event, on a public endpoint.
             .order_by(Event.start_datetime)
         )
 
@@ -320,7 +336,7 @@ class LocationService:
             select(Event)
             .where(Event.location_id == str(location_id))
             .where(Event.organization_id == str(organization_id))
-            .where(Event.is_cancelled == False)  # noqa: E712
+            .where(Event.is_cancelled.is_(False))
             .where(
                 or_(
                     # New event starts during existing event
@@ -398,8 +414,8 @@ class LocationService:
             select(Location)
             .join(Organization, Organization.id == Location.organization_id)
             .where(Location.display_code == display_code)
-            .where(Location.is_active == True)  # noqa: E712
-            .where(Organization.active == True)  # noqa: E712
+            .where(Location.is_active.is_(True))
+            .where(Organization.active.is_(True))
         )
         return result.scalar_one_or_none()
 
