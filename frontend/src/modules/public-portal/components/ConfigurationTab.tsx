@@ -14,23 +14,44 @@
 import React, { useState, useEffect } from 'react';
 import { Save, AlertCircle } from 'lucide-react';
 import { usePortalConfig } from '../hooks/usePublicPortal';
+import { formatNumber } from '../../../utils/dateFormatting';
+
+// The bounds the update endpoint enforces (PublicPortalConfigUpdate).
+const MIN_RATE_LIMIT = 1;
+const MAX_RATE_LIMIT = 100000;
 
 const ConfigurationTab: React.FC = () => {
   const { config, loading, updateConfig } = usePortalConfig();
 
-  const [defaultRateLimit, setDefaultRateLimit] = useState(1000);
+  // Held as the text in the box, not a number. As a number the field had two
+  // ways to stop being a controlled input: a cleared box parsed to NaN, and a
+  // config response without the field set it to undefined — React warned on
+  // both, and a save sent the bad value on to a 422.
+  const [rateLimitText, setRateLimitText] = useState('1000');
+  const [rateLimitError, setRateLimitError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (config) {
-      setDefaultRateLimit(config.default_rate_limit);
+    if (typeof config?.default_rate_limit === 'number') {
+      setRateLimitText(String(config.default_rate_limit));
     }
   }, [config]);
 
   const handleSave = async () => {
+    const rateLimit = Number(rateLimitText);
+    if (
+      !rateLimitText.trim() ||
+      !Number.isInteger(rateLimit) ||
+      rateLimit < MIN_RATE_LIMIT ||
+      rateLimit > MAX_RATE_LIMIT
+    ) {
+      setRateLimitError(`Enter a whole number from ${MIN_RATE_LIMIT} to ${formatNumber(MAX_RATE_LIMIT)}.`);
+      return;
+    }
+    setRateLimitError(null);
     setSaving(true);
     try {
-      await updateConfig({ default_rate_limit: defaultRateLimit });
+      await updateConfig({ default_rate_limit: rateLimit });
     } finally {
       setSaving(false);
     }
@@ -59,12 +80,27 @@ const ConfigurationTab: React.FC = () => {
           <input
             id="portal-default-rate-limit"
             type="number"
-            value={defaultRateLimit}
-            onChange={(e) => setDefaultRateLimit(parseInt(e.target.value, 10))}
-            min={1}
-            max={100000}
+            value={rateLimitText}
+            onChange={(e) => {
+              setRateLimitText(e.target.value);
+              setRateLimitError(null);
+            }}
+            min={MIN_RATE_LIMIT}
+            max={MAX_RATE_LIMIT}
+            step={1}
+            aria-invalid={rateLimitError ? true : undefined}
+            aria-describedby={rateLimitError ? 'portal-default-rate-limit-error' : undefined}
             className="form-input"
           />
+          {rateLimitError && (
+            <p
+              id="portal-default-rate-limit-error"
+              role="alert"
+              className="mt-1 text-sm text-red-700 dark:text-red-400"
+            >
+              {rateLimitError}
+            </p>
+          )}
           <p className="text-theme-text-muted mt-1 text-xs">
             Recommended: 1000 for public websites, 10000 for high-traffic sites
           </p>

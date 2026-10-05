@@ -1576,7 +1576,7 @@ async def get_program_enrollments(
     return [
         ProgramEnrollmentWithUserResponse(
             **ProgramEnrollmentResponse.model_validate(enrollment).model_dump(),
-            user_name=user.full_name,
+            user_name=user.display_name,
             user_email=user.email,
         )
         for enrollment, user in rows

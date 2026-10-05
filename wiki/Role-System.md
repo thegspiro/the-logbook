@@ -432,3 +432,71 @@ would have revoked nothing: a client gate is not a gate, and a training officer
 refused by the screen could still pull the whole roster — member eligibility
 and EVOC standing — straight from the API. The endpoint's documented permission
 was also wrong, claiming `scheduling.view`, which it never accepted.
+
+## Permission movements, September 24 – October 4, 2026
+
+Every change below is an **addition** or a **narrowing of what a screen
+offers**; nothing in this window took a grant away from a seeded position.
+
+### Two new system positions
+
+| Position (slug)                                                           | Priority | Holds                                                                                                                                                                                                                                                     | Migration      |
+| ------------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| **Assistant Membership Coordinator** (`assistant_membership_coordinator`) | 50       | `prospective_members.manage`, a read-only roster (`users.view`, `members.view`, `positions.view`) and the member baseline. No member-record edits or position assignment. `members.manage_id_cards` from 2026-10-02                                       | `43e9df281412` |
+| **Compliance Officer** (`compliance_officer`)                             | 60       | `compliance.view`/`.manage`, `reports.view`/`.manage`, `documents.view`/`.manage`, `forms.view`, `training.manage` with `training.view_all` and `training.configure` (the Compliance Officer dashboard is gated on `training.manage`), a read-only roster | `3c918c06466d` |
+
+Both are seeded for every agency type and offered in the onboarding position
+editor. The Membership Coordinator and Assistant Membership Coordinator are the
+two positions emailed when an applicant withdraws from their status page. The
+Compliance Officer is the reviewer of a default **Compliance** suggestion box,
+created **inactive** because nobody holds the new position yet, and is CC'd on
+urgent certification-expiry alerts. An existing department's own
+`compliance_officer` position is kept and made the reviewer.
+
+### New permissions
+
+| Permission                  | Held by default                                                                     | Gates                                                                                        |
+| --------------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `system.manage_link_domain` | Nobody but the wildcard IT Manager                                                  | Changing the address emailed links use, on **Settings → Email** (2026-09-25)                 |
+| `apparatus.manage_nfc_tags` | Chief, Deputy Chief, Assistant Chief, President, Vice President, Apparatus Officer  | Writing an apparatus's NFC shift check-in tag (2026-10-02)                                   |
+| `locations.manage_nfc_tags` | Chief, Deputy Chief, Assistant Chief, President, Vice President, Facilities Manager | Writing a room's NFC check-in tag; turning on a room kiosk's **Badge check-in** (2026-10-02) |
+
+Both tag grants decide only **who the app offers the writer to**. A tag carries
+no secret, and writing it never reaches the server, so the grant cannot stop a
+generic NFC app writing the same link — and need not: the member who taps it
+still signs in, and the event's own check-in rules apply. Migration
+`5bed4c485d2f` writes them, and `members.manage_id_cards` for the Assistant
+Membership Coordinator, onto existing departments — gated per
+`docs/rules/migrations.md`, so a department that emptied or customised a
+position is left alone.
+
+**Quartermaster** gains `inventory.check_manage` (`f73b449bdb8b`, 2026-09-30):
+authoring the apparatus checklists its stock rides on. Reading check results
+stays with `inventory.check_view`.
+
+### What existing grants now do differently
+
+- **Another member's ID card** needs `members.manage` or
+  `members.manage_id_cards` (2026-09-30). It was open to every `members.view`
+  holder — every member — though the card is a scannable credential. This is a
+  screen rule: the profile data the card is built from is directory
+  information `GET /users/{id}/with-roles` still serves to `members.view`, and
+  scanning (`/members/scan`, the check-in station) never renders the badge.
+- **A target role is a grant** (MP-31, 2026-09-30). Saving an applicant's target
+  role runs the role-grant ceiling against the saver, conversion runs it
+  against the converter, and automatic conversion applies the role only while
+  whoever chose it is active and still holds everything it grants.
+- **Re-saving positions** holds only the positions being added to the granter's
+  ceiling (2026-09-29). Keeping a member's existing higher position no longer
+  refuses the save or raises a privilege-escalation alert.
+- **Sign-offs carry no permission gate** (2026-09-28). The officers a
+  Multi-Signer Approval stage names sign from `/prospective-members/sign-offs`;
+  the server accepts only a role the stage asks for and the signer holds, and
+  shows them the applicant's name and stage only.
+- **`users.edit` without `members.manage` gets no edit forms on a redacted
+  colleague profile**, and profile saves now return the same redacted record a
+  read does (2026-09-30).
+- **Probationary accounts are active** (2026-10-03). `ACTIVE_ACCOUNT_STATUSES =
+(ACTIVE, PROBATIONARY)`: probationary and junior members can sign in, be
+  scheduled and receive messages. Before this every probationary account was
+  refused at sign-in.

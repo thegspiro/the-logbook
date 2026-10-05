@@ -159,7 +159,7 @@ describe('MemberProfilePage assigned inventory', () => {
 
     // Quick Stats is hidden from a plain viewer (nothing in it is theirs to
     // see), so the name heading is the render anchor.
-    await screen.findByRole('heading', { name: 'jdoe' });
+    await screen.findByRole('heading', { name: 'Jane Doe' });
     await waitFor(() => expect(getEnabledModules).toHaveBeenCalled());
     // Let the module-enabled state settle; the inventory fetch would fire on
     // the commit that follows it.
@@ -270,7 +270,7 @@ describe('MemberProfilePage leaves of absence', () => {
   it('does not ask for a colleague’s leaves without members.manage', async () => {
     renderWithRouter(<MemberProfilePage />);
 
-    await screen.findByRole('heading', { name: 'jdoe' });
+    await screen.findByRole('heading', { name: 'Jane Doe' });
     await waitFor(() => expect(getEnabledModules).toHaveBeenCalled());
 
     expect(getMemberLeaves).not.toHaveBeenCalled();
@@ -329,7 +329,7 @@ describe('MemberProfilePage membership and privacy', () => {
   it('hides a redacted address and an empty Quick Stats from a colleague, in a two-column layout', async () => {
     renderWithRouter(<MemberProfilePage />);
 
-    await screen.findByRole('heading', { name: 'jdoe' });
+    await screen.findByRole('heading', { name: 'Jane Doe' });
     expect(screen.queryByText('Address')).not.toBeInTheDocument();
     expect(screen.queryByText('No address on file.')).not.toBeInTheDocument();
     expect(screen.queryByText('Quick Stats')).not.toBeInTheDocument();
@@ -341,7 +341,7 @@ describe('MemberProfilePage membership and privacy', () => {
     grantedPermissions = ['members.view', 'users.view'];
     renderWithRouter(<MemberProfilePage />);
 
-    await screen.findByRole('heading', { name: 'jdoe' });
+    await screen.findByRole('heading', { name: 'Jane Doe' });
     expect(screen.queryByRole('link', { name: 'ID Card' })).not.toBeInTheDocument();
   });
 
@@ -659,7 +659,7 @@ describe('MemberProfilePage membership and privacy', () => {
     nfcIdCardsConnected = false;
     renderWithRouter(<MemberProfilePage />);
 
-    await screen.findByRole('heading', { name: 'jdoe' });
+    await screen.findByRole('heading', { name: 'Jane Doe' });
     expect(screen.getByTestId('profile-grid-two')).toBeInTheDocument();
 
     nfcIdCardsConnected = true;
@@ -814,5 +814,46 @@ describe('MemberProfilePage edit and restricted-PII gates on a colleague', () =>
     // Contact, Address and Emergency Contacts.
     expect(screen.getAllByRole('button', { name: 'Edit' })).toHaveLength(3);
     expect(screen.getByRole('button', { name: 'Upload photo' })).toBeInTheDocument();
+  });
+});
+
+describe('MemberProfilePage preferred name', () => {
+  const terry: UserWithRoles = {
+    ...targetUser,
+    first_name: 'John',
+    middle_name: 'Terry',
+    last_name: 'Heather',
+    preferred_name: 'Terry',
+    full_name: 'John Heather',
+    display_name: 'Terry Heather',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    routeUserId = TARGET_ID;
+    grantedPermissions = [];
+    getUserWithRoles.mockReset();
+    getUserWithRoles.mockResolvedValue(terry);
+    checkContactInfoEnabled.mockReset();
+    checkContactInfoEnabled.mockResolvedValue({ enabled: true, show_email: true, show_phone: true, show_mobile: true });
+    getEnabledModules.mockReset();
+    getEnabledModules.mockResolvedValue({ enabled_modules: [] });
+  });
+
+  it('heads the page with the name the member goes by and states the legal name beneath it', async () => {
+    renderWithRouter(<MemberProfilePage />);
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Terry Heather' })).toBeInTheDocument();
+    expect(screen.getByText('Legal name: John Terry Heather')).toBeInTheDocument();
+    // The initials avatar follows the preferred name too.
+    expect(screen.getByText('T')).toBeInTheDocument();
+  });
+
+  it('adds no legal-name line for a member without a preferred name', async () => {
+    getUserWithRoles.mockResolvedValue(targetUser);
+    renderWithRouter(<MemberProfilePage />);
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Jane Doe' })).toBeInTheDocument();
+    expect(screen.queryByText(/Legal name:/)).not.toBeInTheDocument();
   });
 });

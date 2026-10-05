@@ -83,7 +83,11 @@ export interface MemberLookupResult {
   id: string;
   first_name: string;
   last_name: string;
+  preferred_name?: string | null | undefined;
+  /** Legal name (first + last). */
   full_name: string;
+  /** Preferred (else first) + last name. */
+  display_name?: string | undefined;
   membership_number?: string;
   rank?: string;
   station?: string;

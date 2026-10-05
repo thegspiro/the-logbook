@@ -191,7 +191,7 @@ FRONTEND_PORT=7880
 BACKEND_PORT=7881
 
 # Timezone
-TZ=America/New_York
+TZ=America/New_York   # container clock; the department's timezone is set in Settings → Organization → Profile
 ```
 
 After changing `.env`, restart:
@@ -219,7 +219,8 @@ This stack runs in **production posture**. The setup script configures a
   setup script writes it from the HTTPS URL you give it, and on an update fills
   it in when it is missing or still points at `localhost`; if you change your
   public address later, change it here too. A `localhost` value stops the
-  backend from starting (`CRITICAL: FRONTEND_URL ...`), and the update path
+  backend from starting (`CRITICAL: FRONTEND_URL ...`) unless `ALLOWED_ORIGINS`
+  names a public address, which is then used for links instead; the update path
   stops before restarting anything if the kept `.env` still has one.
 - **API docs (`/docs`) are OFF by default** — enabling them blocks boot in production.
 - **Leave `TRUSTED_PROXY_IPS` empty** — the compose publishes the backend port

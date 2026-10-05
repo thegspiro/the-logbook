@@ -291,6 +291,115 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### A reverse proxy you run yourself keeps its own upload limit (2026-09-30)
+
+The bundled proxies — the frontend container's nginx, the `production`
+profile's nginx and the host-nginx site file — now all allow **60 MB**
+uploads; the frontend's nginx had nginx's 1 MB default, which refused any
+larger upload before it reached the application. A proxy you run yourself
+(Nginx Proxy Manager, SWAG, a host nginx with your own config, a cloud load
+balancer) keeps whatever limit it was given: **raise its body-size limit to at
+least 60 MB** (`client_max_body_size 60M;` for nginx), or larger uploads are
+still refused with 413.
+
+### A malformed Host header is answered with 400 (2026-09-24)
+
+Starlette 1.7.0 tightens the Host-header allowlist: wherever it is active
+(`TRUSTED_HOSTS` set, or derived from `ALLOWED_ORIGINS` in production), a
+request with a missing or malformed `Host` header now receives **400**. Make
+sure health checks and any external proxy send the real hostname. CORS
+responses now always carry `Vary: Origin`.
+
+### Steps in this release that do not reverse (2026-09-24 – 2026-10-04)
+
+Read this before planning a rollback past this release; the
+[back-up-first](#before-every-upgrade-back-up-and-do-not-downgrade-to-fix-a-fork)
+rule applies with more force than usual.
+
+- **No downgrade at all:** `b795d1b3401b` (untouched email templates moved to
+  the then-current default) and `6394fbf42581` (clears the duplicate-vote hash
+  on voided ballots so the member can vote again — irreversible by design).
+- **Downgrade loses data:** the inventory NFC revisions `b713c2e8ee26`
+  (storage-area tags and every recorded scan), `7ad83f52735c` (shelf audits)
+  and `45b36bae9098` (compartment tags), and the suggestion-box revisions
+  `0010291816fd` (status history and responses to submitters) and
+  `e79309de6735` (idea-board publishing and votes).
+- **Downgrade restores from a backup table:** `15c5bc7700aa` (the email
+  template reset) puts each template back from `email_template_backups`.
+
+### Scheduled reminders no longer duplicate across workers (2026-10-04)
+
+A worker whose scheduler claim had lapsed could take it back without learning
+another worker held it, so on a multi-worker deployment two or more workers ran
+every scheduled task (event and shift reminders, certification-expiry and
+inactivity alerts) and members received them more than once. Renewal is now
+conditional on still holding the claim (CRON-40). Nothing to configure. If you
+saw duplicate reminders, they should stop after the restart.
+
+### Probationary and junior members can sign in and be scheduled (2026-10-03)
+
+A member whose status is **Probationary** — which includes every junior
+member, whose membership type derives to it — used to be refused at sign-in
+with "Account is inactive. Please contact an administrator.", and an officer
+adding one to a shift was told the member "is no longer active in this
+organization". Probationary now counts as an active account everywhere the
+application asks whether an account is active (`ACTIVE_ACCOUNT_STATUSES` in
+`models/user.py`).
+
+After upgrading, those members can sign in, sign themselves up for open
+shifts, and appear on the platoon roster, the availability summary and the
+shift compliance report. **A department that does not want probationary
+members signing themselves up for shifts** should add the membership type to
+**Excluded from Self-Signup** in Scheduling's **Eligibility** settings —
+account status is not the lever for that
+policy. **If you kept a Probationary account from signing in on purpose,
+it can sign in after this upgrade:** set it to Inactive or Suspended instead. About forty other screens (training compliance, rosters, quorum and
+others) still count only fully active members; that is recorded as an open
+decision, not a defect.
+
+### Training requirements can exempt existing members (2026-10-03)
+
+Migration `d058b5e7c1f4` adds three nullable date columns for it. Every
+requirement keeps today's behaviour until someone sets a cutoff, so nothing
+changes at upgrade. Two things do, for every department: the dashboard,
+Compliance Matrix and member status now **honour role-scoped requirements**
+(My Training always did), and the compliance exports and forecast print **N/A**
+where a requirement does not apply to a member, rather than grading them
+against it. Expect some percentages to move once.
+
+### Seeded positions gain checklist, NFC-tag and ID-card grants (2026-09-30, 2026-10-02)
+
+Two migrations **add** grants to the seeded positions already stored. Each is
+gated on evidence that the row is still the department's seeded position, so a
+position your department created, emptied, or re-purposed is left alone.
+
+| Migration      | Position                                                        | Gains                                                       | Only while the row                       |
+| -------------- | --------------------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------------- |
+| `f73b449bdb8b` | Quartermaster                                                   | `inventory.check_manage` (build equipment checklists)       | still holds `inventory.manage`           |
+| `5bed4c485d2f` | President, Vice President, Chief, Deputy Chief, Assistant Chief | `apparatus.manage_nfc_tags` and `locations.manage_nfc_tags` | is not empty                             |
+| `5bed4c485d2f` | Apparatus Officer                                               | `apparatus.manage_nfc_tags`                                 | is not empty                             |
+| `5bed4c485d2f` | Facilities Manager                                              | `locations.manage_nfc_tags`                                 | is not empty                             |
+| `5bed4c485d2f` | Assistant Membership Coordinator                                | `members.manage_id_cards`                                   | still holds `prospective_members.manage` |
+
+The two NFC grants are new and only decide who the application **offers** the
+tag writer to. `members.manage_id_cards` is not new: the Assistant Membership
+Coordinator who gains it can issue and revoke ID cards and open other
+members' cards. Remove any of these on the positions screen if your
+department assigns that work differently. Downgrading either revision revokes
+the grant from the same rows, including one added by hand afterwards.
+
+### Only badge officers can open another member's ID card (2026-09-30)
+
+The **ID Card** button on a colleague's profile, and the card page itself, now
+require `members.manage` or `members.manage_id_cards` when the card is not
+your own. A member keeps their own card. Positions holding only `members.view`
+lose the button on other members' profiles; grant `members.manage_id_cards` to
+anyone who prints or checks badges for others. Printing member badges
+(**Print Badges** on the member list, `/members/print-labels`, and the label
+API's `membership` module) follows the same rule from 2026-10-04: a position
+holding only `members.view` can no longer print them, and a script calling
+`/api/v1/labels/*` with `module: "membership"` as such a member now receives 403.
+
 ### Close any election that is OPEN before you upgrade (2026-09-30)
 
 Do not upgrade over an election whose status is **Open**. Close it first, or
@@ -313,6 +422,76 @@ certified record and is left exactly as it was. An election that is still in
 **Draft** or **Nominations** has no votes and is unaffected. Only an election
 that is accepting votes across the deploy is exposed, which is why the
 instruction is simply to close it, or not to upgrade until it has closed.
+
+### An applicant on an Election Vote stage needs an election package to advance (2026-09-30)
+
+An applicant is no longer advanced off an **Election Vote** stage, or
+converted from one, until an election package exists for them. Packages are
+now created by the server whenever an applicant reaches the stage by any path
+— single or bulk Advance, Skip, Back, placing them on the stage, or a deleted
+stage's fallback. Before, only a single Advance click in the browser created
+one, so applicants who arrived any other way never appeared among the packages
+waiting for a ballot.
+
+**Applicants already sitting on a vote stage without a package are refused on
+Advance** after the upgrade. Open each one and press **Create Package** in the
+drawer's election package section. Draft and ready packages advance as before,
+so a department that votes at a meeting and records the result by hand is not
+held to a ballot. Pipelines with no vote stage are unaffected. No migration.
+
+### Training credit from an event: finalizing writes the records, and approving needs `training.manage` (2026-09-29)
+
+Finalizing a **Training** event's attendance now completes the training credit
+and links each record to the event it came from (`training_records.source_event_id`,
+migration `2b15c5a8ba82`). Approving that credit through the emailed link
+(`/training/approve/:token`) now requires **`training.manage`**, as viewing the
+roster already did; it used to require `events.manage`, so a position holding
+only `events.manage` can no longer complete an approval. Training events also
+stop crediting administrative hours.
+
+**Nothing is backfilled.** A past event credits its attendees only if it is
+reopened and finalized again. Reversing `2b15c5a8ba82` drops the links.
+
+### Re-enter Target Solutions credentials (2026-09-29)
+
+A **Target Solutions** provider on the **External Training Integrations** page now
+reads Target Solutions' Training Records API and matches members by email. It
+needs both an **API key** and an **API secret**: a provider saved before this
+upgrade fails every connection test and sync with "Target Solutions API key
+and secret are both required" until both are entered. Syncs then run hourly,
+with a daily review of the previous 30 days.
+
+### A target role chosen before this upgrade is not applied by automatic conversion (2026-09-29)
+
+An applicant's **target role** — the position they receive when converted —
+is now held to the permission ceiling of whoever chose it (security finding
+MP-31: a coordinator could otherwise convert an applicant into an
+administrator account). The server records who chose each role. **A role
+stored before the upgrade has no recorded chooser, so automatic conversion
+skips it**: the member is created with the default position and the
+applicant's activity log says a leader must assign the role. Manual
+**Convert** still applies it, within the converting officer's own ceiling;
+clearing and re-choosing the role records a chooser. No migration.
+
+### The public portal's admin API requires `settings.manage` (2026-09-29)
+
+The thirteen `/api/v1/public-portal/*` administration endpoints (API keys,
+configuration, the published-fields whitelist, logs and usage) checked only
+that the caller was signed in. They now require **`settings.manage`**, the same
+permission the **Public Portal** screen always required. Nothing changes in the
+application; **a script or integration that called these endpoints with a
+plain member's credentials now receives 403** and needs an account holding
+`settings.manage`.
+
+### Refusals on finalized attendance now answer 409 (2026-09-29)
+
+Eleven event routes that refuse a change because the event's attendance is
+finalized now return **409** with one plain sentence ("Attendance for this
+event has been finalized, so … is no longer available. A department leader can
+reopen attendance …"). They used to return 400 or 404 with an internal
+`ATTENDANCE_LOCKED::` code, or a generic error. Nothing changes in the
+application; **a script or integration that matched the old status or text
+should match 409.**
 
 ### Recurring events keep their local time, and series edits stop moving dates (2026-09-28)
 
@@ -349,6 +528,53 @@ on your sign-off" row), which lists only the applicants waiting on a role they
 hold. If a pipeline has stages marked Required that your department does not
 actually enforce, clear the Required flag on those stages in Pipeline Settings
 rather than expecting Convert to step over them.
+
+### Applicant badges printed before this upgrade carry the applicant's status link (2026-09-28)
+
+Applicant labels used to encode the applicant's **status token** — the only
+credential for the public status page, which can read and **withdraw** the
+application. Labels now print a short record id instead (workflow review
+W17-3). **Badges printed before the upgrade still carry the token: collect and
+destroy them**, and reprint any you still need. The print page now also opens
+for a coordinator holding only `prospective_members.manage`.
+
+### Members are told when an equipment request is decided (2026-09-28)
+
+A member now receives an in-app notice, a push notification where enabled and
+an email when their equipment request is approved, declined or issued, through
+a new **Equipment Request Update** rule (migration `fb7da5b05833`) that is on
+by default. **Deny** is now **Decline**, and the quartermaster's review note is
+shown to the member — write it accordingly. Switch the rule off under
+notification rules if your department does not want the notices.
+
+### The Email Notifications switch now covers every optional email (2026-09-28)
+
+Every email the platform sends to a member's account is now classified as
+**required** (account and security, ballots, department messages, leaving the
+department, store receipts, skills-test results, overdue equipment) or
+**optional** (reminders, shift and inventory notices, store announcements,
+volunteer calls, election notices, suggestion-box notices and officer-duty
+emails). A member who has **Email Notifications** switched off stops receiving
+**every** optional kind — including shift, inventory, store, election and
+suggestion-box emails that some senders used to send regardless. Certification
+escalations likewise stop reaching an opted-out member's personal address.
+Members can now also turn individual optional emails off in their notification
+settings; their earlier Event and Training Reminder choices are carried over.
+
+If an optional email must reach everyone, make it required on
+**Communications → Member Emails & Texts** (`/communications/member-emails`),
+which lists every member email and whether it can be turned off. Making an
+email required is audited and one-way from that screen.
+
+### Creating a member with a welcome email needs a password while email is off (2026-09-27)
+
+`POST /api/v1/users` with `send_welcome_email: true` and no `password` now
+returns **400** while the department's email cannot send, instead of creating
+an account nobody can sign in to. **Add Member** requires **Set initial
+password** in that state, the CSV import withdraws its welcome-email option,
+and **Convert to Member** offers a three-way password choice. Scripts that
+create members through the API should send a password, or turn the welcome
+email off and set passwords afterwards.
 
 ### Every email template is reset to the new design (2026-09-27)
 
@@ -397,6 +623,50 @@ drops the backup table. Anything edited after the upgrade is overwritten by
 the pre-upgrade values, since only those render correctly on the older
 release.
 
+### Replies go to the department, and the "do not reply" line is removed (2026-09-25)
+
+Every email now carries a **Reply-To** of the department's own contact
+address, unless the sender names another (ballots still name the election
+administrator). Make sure that mailbox is read: members can now reply to any
+notice. Migration `3f3b315165ed` removes the exact seeded line "Please do not
+reply to this email." from every saved footer library; nothing else in a
+footer changes.
+
+### Two new seeded positions, an open Compliance suggestion box, and "Chief" (2026-09-24, 2026-09-25)
+
+- **Assistant Membership Coordinator** (`43e9df281412`) and **Compliance
+  Officer** (`3c918c06466d`) are added to every onboarded department, held by
+  nobody. The Assistant Membership Coordinator receives applicant-withdrawal
+  notices with the Membership Coordinator. The Compliance Officer carries
+  training, compliance, reports and documents management, and becomes the copy
+  recipient of certification-expiry alerts — which previously resolved to
+  nobody.
+- **A Compliance suggestion box, reviewed by the Compliance Officer, is seeded
+  and switched on** (`3c918c06466d`, `7d2b4e8a1c35`). Members can file to it
+  from the day of the upgrade, but **reports wait unread until somebody holds
+  Compliance Officer.** Appoint one, or switch the box off under
+  **Administration → Forms & Comms → Suggestion Boxes**. A box your department
+  already edited is not switched on.
+- **The seeded "Fire Chief" position and rank now read "Chief"**
+  (`d4e1a7c93b58`). Only the display name changes, and only where it was still
+  exactly "Fire Chief": the `fire_chief` code, its permissions and its holders
+  are untouched, and a title your department chose is kept. Downgrading
+  restores "Fire Chief" on the same rows, including one a department renamed to
+  "Chief" itself.
+
+Downgrading removes a seeded position only if nobody holds it, and the seeded
+box only if it is unedited and empty.
+
+### Property-return reminders now go out daily — expect one round on the first run (2026-09-24)
+
+The 30- and 90-day reminders to dropped members still holding department
+property were implemented but never scheduled. A new daily task,
+`property_return_reminders` (07:45), now sends them. **On the first run after
+the upgrade, which happens at server start, every dropped member who has passed
+a threshold without its reminder receives one email** — the latest threshold
+only, never both at once — and the configured notify roles get the matching
+summary. Tell whoever handles separations before you upgrade.
+
 ### Every inventory item starts out "Needs a label" (2026-09-23)
 
 Inventory items now record when their barcode label was printed. Migration
@@ -428,6 +698,9 @@ edited goes back to needing a label. Details in
 A new **Suggestions** item appears in every member's sidebar, and a
 **Suggestion Boxes** screen under **Administration → Forms & Comms**. Nothing
 is live until someone creates a box: with none, the page tells members "No suggestion boxes yet — Your department has not opened any suggestion boxes."
+_(Superseded 2026-09-24: an upgrade from this point on also seeds a
+**Compliance** box that is switched on — see "Two new seeded positions, an open
+Compliance suggestion box, and "Chief"" above.)_
 
 **Three migrations** (`80e2004cd691`, `394600cbfae2`, `9cb132ad83dc`). Two add
 tables. The middle one **adds a grant**: `suggestions.manage` is written onto

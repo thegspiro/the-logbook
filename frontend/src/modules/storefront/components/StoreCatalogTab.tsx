@@ -59,7 +59,7 @@ export const StoreCatalogTab: React.FC = () => {
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+        <label className="text-theme-text-secondary touch:min-h-11 flex items-center gap-2 text-sm">
           <input
             type="checkbox"
             className="form-checkbox"

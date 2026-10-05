@@ -31,6 +31,7 @@ import { useRanks } from '../hooks/useRanks';
 import type { UserWithRoles } from '../types/role';
 import { isAdministrativeMember } from '../utils/membership';
 import { canViewMemberIdCard } from '../utils/memberIdCardAccess';
+import { displayNameOf, givenName } from '../utils/memberName';
 
 const STATUS_COLORS: Record<string, string> = {
   active: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
@@ -173,9 +174,10 @@ export const MemberIdCardPage: React.FC = () => {
     );
   }
 
-  const displayName =
-    member.full_name || `${member.first_name ?? ''} ${member.last_name ?? ''}`.trim() || member.username;
-  const initials = (member.first_name?.[0] ?? member.username?.[0] ?? '?').toUpperCase();
+  // The card carries the name the member goes by — it is what colleagues
+  // know them as at a scene; the legal name is on their profile.
+  const displayName = displayNameOf(member) || member.username;
+  const initials = (givenName(member)[0] ?? member.username?.[0] ?? '?').toUpperCase();
   const qrValue = getQRValue();
   const isAdministrative = isAdministrativeMember(undefined, member.membership_type);
 

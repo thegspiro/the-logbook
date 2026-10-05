@@ -5,7 +5,10 @@ read/acknowledgment tracking, and multi-channel (in-app / email / SMS) delivery.
 This document covers the **Department Messages** feature. Email templates and the
 outbound message-history log are adjacent and documented separately.
 **Suggestion boxes** _(2026-09-23)_ live in the same frontend module and are
-documented in [their own section](#suggestion-boxes-2026-09-23) below.
+documented in [their own section](#suggestion-boxes-2026-09-23) below, as are
+the [member email policy](#member-email-policy-2026-09-28) every sender reads,
+[in-app notification stacks](#in-app-notification-stacks-2026-09-28), and a
+pointer to the [email redesign](#email-templates-the-solid-tab-redesign-2026-09-27).
 
 ## Overview
 
@@ -92,8 +95,10 @@ fans the message out (excluding the author):
   at every priority**, and **unconditionally** per member — deliberately _not_
   filtered by the member's `email_notifications` preference or by consent, so a
   member can never claim they weren't informed. Important/urgent messages get an
-  `[IMPORTANT]`/`[URGENT]` subject prefix. (The `email_notifications` preference
-  still governs the separate reminder/alert flows.)
+  `[IMPORTANT]`/`[URGENT]` subject prefix. In the member email policy it is
+  the **required** kind `department_messages`, so it is also listed under
+  "Always emailed to you" on the member's settings — see
+  [Member email policy](#member-email-policy-2026-09-28).
 - **SMS:** `SMSService.send_bulk_sms` when Twilio is enabled and the member has a
   `mobile`/`phone`, **and** the member has granted express **SMS consent**
   (`ConsentType.SMS_NOTIFICATIONS`, checked via `ConsentService.granted_user_ids`,
@@ -219,7 +224,13 @@ carries it to existing installations' `is_system` position rows (see
 ### The default Compliance box _(2026-09-24)_
 
 Every department gets a box named **Compliance** whose reviewer is the seeded
-**Compliance Officer** position (`compliance_officer`): onboarding creates it
+**Compliance Officer** position (`compliance_officer`, new in #2673 and offered
+in the onboarding position editor for every agency type; it carries compliance,
+reports and documents management, `training.manage` — which gates the
+Compliance Officer dashboard — with `training.view_all` and
+`training.configure`, a read-only roster, and the member baseline). The same
+slug is what the certification-expiry compliance CC and the
+`{{compliance_officer_*}}` email signature variables resolve to: onboarding creates it
 (`SuggestionService.seed_compliance_box`) and migration `3c918c06466d` adds it
 to existing departments. Anonymous submissions are allowed and follow-up is on,
 so an anonymous reporter can still be asked questions.
@@ -242,17 +253,20 @@ administrator has already saved is left as they set it.
 
 ### Anonymity is structural
 
-| What        | Anonymous submission                                                                                                                                                                                                                                                |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Author      | `submitted_by` NULL; submitter-side `suggestion_messages.author_id` NULL                                                                                                                                                                                            |
-| Audit       | No `suggestion_submitted` entry (named submissions only)                                                                                                                                                                                                            |
-| Timestamps  | `created_at` / `updated_at`, attachment `created_at` and the file's mtime pinned to 12:00:00 UTC of the day; an anonymous reply does not bump `updated_at`. The UI shows these as a date only                                                                       |
-| Screenshots | Magic-byte type check (PNG/JPEG/WebP/GIF), ≤5 files, ≤10 MB each; re-encoded to WebP (q85, ≤2560²), which drops EXIF; stored as `{uuid}.webp` with the original filename discarded                                                                                  |
-| Follow-up   | Only in a follow-up box: `secrets.token_urlsafe(32)` returned once in the receipt; only its SHA-256 digest is stored. Key routes take the key in the POST body and still require a session ("the key proves authorship, the session proves the caller is a member") |
+| What        | Anonymous submission                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Author      | `submitted_by` NULL; submitter-side `suggestion_messages.author_id` NULL                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Audit       | No `suggestion_submitted` entry (named submissions only)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Timestamps  | `created_at` / `updated_at`, attachment `created_at` and the file's mtime pinned to 12:00:00 UTC of the day; an anonymous reply does not bump `updated_at`. The UI shows these as a date only                                                                                                                                                                                                                                                                                                                                                                                               |
+| Screenshots | Magic-byte type check (PNG/JPEG/WebP/GIF), ≤5 files, ≤10 MB each; re-encoded to WebP (q85, ≤2560²), which drops EXIF; stored as `{uuid}.webp` with the original filename discarded                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Logging     | _(2026-09-30)_ The submission and follow-up routes (`UNLOGGED_PATH` in `app/core/logging.py`) are written to no access log: uvicorn's access log and `IPLoggingMiddleware` skip them, and the bundled nginx configs drop the line (`$access_loggable`) and raise the error log to `crit`. A failure there writes no `error_logs` row (`is_excluded_path`), the frontend's `reportApiError` does not report it, and `POST /errors/log` discards one an older cached build sends (`is_excluded_client_path`). The structured log still records the failure with route and time, no user or IP |
+| Follow-up   | Only in a follow-up box: `secrets.token_urlsafe(32)` returned once in the receipt; only its SHA-256 digest is stored. Key routes take the key in the POST body and still require a session ("the key proves authorship, the session proves the caller is a member")                                                                                                                                                                                                                                                                                                                         |
 
-Accepted limits — server-side timing correlation (access log, the reviewer
-email's send time, session activity), unrecoverable keys, screenshot content,
-and exact file `ctime` — are recorded in
+Accepted limits — server-side timing correlation (the reviewer email's send
+time, in-app `sent_at`, session activity), a reverse proxy the operator runs in
+front of the app (it logs these routes unless configured the same way;
+`docs/deployment/aws.md` shows how for its host nginx), unrecoverable keys,
+screenshot content, and exact file `ctime` — are recorded in
 [`KNOWN_LIMITATIONS.md`](./KNOWN_LIMITATIONS.md) under "Suggestion Boxes — What
 Anonymity Does and Does Not Cover".
 
@@ -281,8 +295,16 @@ members only. Each recipient gets an in-app notification (category
 `suggestions`, linking to the submission), a web push where push is configured,
 and **their own email**, so no recipient sees another's address. Every channel
 **carries a link and never the content**, and nothing identifying the submitter
-goes into the notification row. Email is not gated on the member's email
-preference: for a reviewer it is the channel of record (CLAUDE.md pitfall #18).
+goes into the notification row.
+
+**The email follows the member's choice** _(2026-09-28)_. It is the optional
+kind `EmailKind.SUGGESTION_BOX` ("Suggestion box"), checked with
+`member_receives_email` per recipient, so a reviewer who switches it off — or
+turns **Email Notifications** off — gets the bell entry and the push but no
+email, unless the department has made the kind required on Member Emails &
+Texts. The bell entry is written either way. (Until #2774 this paragraph said
+the email ignored preferences as the reviewer's channel of record; the policy
+classifies it as optional because the box and the bell carry the same notice.)
 
 | Event                                 | Recipients                                                     | Email template                                |
 | ------------------------------------- | -------------------------------------------------------------- | --------------------------------------------- |
@@ -307,9 +329,17 @@ two new-submission rows above; replies, forwards and status changes are the
 conversation itself and always go out.
 
 Anonymous submitters are never notified. Audit events: `suggestion_box_created`,
-`suggestion_box_updated`, `suggestion_submitted` (named only),
-`suggestion_disposition_changed`, `suggestion_forwarded`,
+`suggestion_box_updated`, `suggestion_box_deleted`, `suggestion_submitted`
+(named only), `suggestion_disposition_changed`, `suggestion_forwarded`,
 `suggestion_forward_withdrawn`.
+
+**The submit form states the screenshot rules** _(2026-09-29)_ the server
+enforces — formats, 10 MB, scaling to 2560 px on the longest side, first frame
+only for an animated GIF. `SuggestionSubmitForm.tsx` keeps them as constants
+shared with the dropzone's `accept` / `maxSizeMB`, mirroring
+`ALLOWED_SCREENSHOT_MIME`, `MAX_SCREENSHOT_BYTES` and
+`SCREENSHOT_MAX_DIMENSIONS` in `suggestion_service.py`; the backend is what
+refuses or resizes.
 
 ### Idea board
 
@@ -363,14 +393,94 @@ and vote on.
 
 ### Suggestion box migrations
 
-| Revision       | What it does                                                                                                                                                      | Downgrade                                                                                                            |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `80e2004cd691` | Creates the five box/suggestion tables, each guarded on absence (no-op after `create_all`)                                                                        | Drops them — **every suggestion, attachment record and message**; files under `uploads/suggestions` are left on disk |
-| `394600cbfae2` | Adds `suggestions.manage` to `is_system` rows for `fire_chief`, `deputy_chief`, `assistant_chief`, `president`, `communications_officer` where absent             | Removes it from the same rows, including a deliberate post-upgrade grant                                             |
-| `9cb132ad83dc` | Creates `suggestion_forwards`                                                                                                                                     | Drops it — every forward, suggestions intact                                                                         |
-| `e79309de6735` | Adds `suggestion_boxes.public_board_enabled` (default off), the four `suggestions.published_*` columns, and `suggestion_votes`; every step guarded                | Drops them — **every vote and every published copy**; submissions untouched                                          |
-| `0010291816fd` | Creates `suggestion_status_events`; backfills one step for each suggestion already past `new`, dated `disposition_updated_at` (earlier steps were never recorded) | Drops it — **every public response**; dispositions on `suggestions` survive                                          |
-| `1ae1ffbc445e` | Widens `notification_rules.trigger` and the two `template_type` enums with `suggestion_submitted`; creates `suggestion_box_watchers`                              | Deletes rules and templates of that value, narrows the enums, drops the watchers table                               |
+| Revision       | What it does                                                                                                                                                            | Downgrade                                                                                                            |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `80e2004cd691` | Creates the five box/suggestion tables, each guarded on absence (no-op after `create_all`)                                                                              | Drops them — **every suggestion, attachment record and message**; files under `uploads/suggestions` are left on disk |
+| `394600cbfae2` | Adds `suggestions.manage` to `is_system` rows for `fire_chief`, `deputy_chief`, `assistant_chief`, `president`, `communications_officer` where absent                   | Removes it from the same rows, including a deliberate post-upgrade grant                                             |
+| `9cb132ad83dc` | Creates `suggestion_forwards`                                                                                                                                           | Drops it — every forward, suggestions intact                                                                         |
+| `e79309de6735` | Adds `suggestion_boxes.public_board_enabled` (default off), the four `suggestions.published_*` columns, and `suggestion_votes`; every step guarded                      | Drops them — **every vote and every published copy**; submissions untouched                                          |
+| `0010291816fd` | Creates `suggestion_status_events`; backfills one step for each suggestion already past `new`, dated `disposition_updated_at` (earlier steps were never recorded)       | Drops it — **every public response**; dispositions on `suggestions` survive                                          |
+| `1ae1ffbc445e` | Widens `notification_rules.trigger` and the two `template_type` enums with `suggestion_submitted`; creates `suggestion_box_watchers`                                    | Deletes rules and templates of that value, narrows the enums, drops the watchers table                               |
+| `3c918c06466d` | Seeds the `compliance_officer` system position and an inactive **Compliance** box reviewed by it into existing departments; keeps a department's own position or box    | Removes only unassigned seeded positions and seeded boxes that received nothing                                      |
+| `7d2b4e8a1c35` | Switches on each Compliance box still exactly as `3c918c06466d` seeded it (seeded name and description, no creator, never saved, has a reviewer); also merges two heads | Switches the same signature back off                                                                                 |
+
+## Member email policy _(2026-09-28)_
+
+Every email to a member's account belongs to one `EmailKind` in
+`app/services/email_policy.py`, classified **required** or **optional** (with a
+default). Senders ask `member_receives_email` / `recipients_for` rather than
+reading preferences themselves; all 28 sender call sites also pass
+`department_required_kinds(org)`, a required argument so a sender cannot
+forget it.
+
+| Required (always sent)                                                                                                                      | Optional (on by default)                                                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Account and security, election ballots, department messages, leaving the department, store receipts, skills test results, overdue equipment | Event reminders, training and certification reminders, shift notices, equipment and inventory updates, store announcements, volunteer calls, election notices, suggestion box; officer duty emails (event, scheduling, training, election administration, quartermaster, membership and store administration) |
+
+**Order of decision for one member and one kind:** required by the system or
+by the department → sent; master switch (`email_notifications`) off → not sent;
+an explicit per-kind choice in `notification_preferences["email_kinds"]`; the
+legacy `event_reminders` / `training_reminders` choice where the kind replaces
+one; otherwise the kind's default. A malformed value counts as no choice.
+
+- **Department-required kinds** live in
+  `Organization.settings["email_policy"]["required_kinds"]`.
+  `PUT /api/v1/email-templates/member-email-policy` (`settings.manage` or
+  `organization.update_settings`) replaces the list, is audited, and refuses
+  a kind that is not optional with 400 — the move is one-way.
+- `GET /api/v1/email-templates/member-email-policy` (those two, or
+  `notifications.manage`) lists every kind with its label, what it includes,
+  why, and `can_edit`, plus the alerts `SmsAlert` allows to be texted. It backs
+  **Member Emails & Texts** at `/communications/member-emails` (Administration →
+  Forms & Comms).
+- `GET /api/v1/users/me/email-choices` returns the member's switchable kinds and
+  the labels of the ones always sent. Officer duty kinds are offered only to a
+  member holding a management permission.
+- Saving notification preferences merges `email_kinds` per kind and no longer
+  discards other stored keys (it had wiped the scheduling dashboard layout).
+- Two behaviours changed with the move: certification escalations no longer
+  reach an opted-out member's **personal** address (officers' copies are
+  unchanged), and an election report or eligibility summary an officer asks for
+  is always sent while the automatic report at close follows the officer's
+  choice.
+
+## In-app notification stacks _(2026-09-28)_
+
+The inbox (`/notifications?tab=inbox`) and the dashboard's My Updates card fold
+two or more notifications sharing a raw `category` into one expandable stack
+(`utils/notificationStacks.ts`, `components/NotificationStack.tsx`). Nothing is
+merged on the server: each row keeps its own link and read state. Pinned and
+uncategorized rows never stack; on the dashboard a stack is one row that opens
+the inbox.
+
+Two self-scoped endpoints share one definition of "stackable"
+(`NotificationsService._stackable_unread_filters`: in-app, unread, categorized,
+unpinned, unexpired), so a stack's badge can count pages not yet loaded and its
+**Mark all read** clears them too:
+
+```
+GET    /api/v1/notifications/my/unread-by-category   # {category: unread count}
+POST   /api/v1/notifications/my/read-category        # mark one category read
+```
+
+No schema change.
+
+## Email templates: the solid-tab redesign _(2026-09-27)_
+
+Every email renders into the solid-tab shell in `app/services/email_theme.py`,
+and migration `15c5bc7700aa` reset every stored template of a shipped type to
+it, keeping the old content in `email_template_backups`. Per-template
+stylesheets are no longer honoured. The editor's **Previous version (before the
+redesign)** panel loads a backup's wording back as an unsaved draft
+(`GET /api/v1/email-templates/{id}/backups`). Test sends and previews use the
+deployment's live links, the department's real contact details, the admin's own
+name and today-relative dates, and the department's next event or shift where
+one exists. Operator-facing detail is in
+[the wiki](../wiki/Module-Communications.md#email-redesign-and-test-sends-2026-09-27),
+the upgrade effect in
+[UPGRADING.md](./UPGRADING.md#every-email-template-is-reset-to-the-new-design-2026-09-27),
+and what the shell does not reach in
+[KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md#email-design--what-the-solid-tab-shell-does-not-reach-2026-09-27).
 
 ## User documentation
 

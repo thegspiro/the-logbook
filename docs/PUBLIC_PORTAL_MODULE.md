@@ -44,7 +44,7 @@ Read-only API endpoints that:
 - Enforce rate limiting per API key
 - Log all access attempts
 - Return only explicitly whitelisted data
-- Use aggressive caching
+- _(Planned, not built: response caching — the public API does not cache)_
 
 #### 3. Database Models
 
@@ -155,6 +155,16 @@ GET /api/public/v1/stats/volunteer-hours
 
 ### Admin Endpoints (Internal Only)
 
+**All of them require `settings.manage`** _(2026-09-29)_. Until then every
+handler in `public_portal_admin.py` took only `get_current_user`, and the router
+sits behind `module_gate`, which checks that the module is on and nothing else —
+so any signed-in member of an organization with the Public Information module
+enabled could list, create and revoke public API keys, change the portal
+configuration, and edit the whitelist that decides which member fields the
+public API publishes. The admin screen was already gated on `settings.manage`;
+the API behind it was not. Queries were already org-scoped.
+`tests/test_public_portal_admin_permissions.py` pins all 13 handlers.
+
 ```
 POST /api/v1/public-portal/enable
 - Enable public portal
@@ -264,6 +274,47 @@ organization has no row for, **disabled**. Nothing seeded the table before, so
 the Data Exposure Control screen was empty on every installation. A disabled
 row and a missing one are identical to `filter_data_by_whitelist`, so this
 changes nothing about what the public API returns.
+
+### Usage statistics _(2026-09-24)_
+
+`GET /api/v1/public-portal/usage-stats` feeds the admin screen's **Statistics**
+tab ("Traffic to the public API"). Until 2026-09-24 the tab read twenty-two
+field names and the endpoint sent nine: the rest rendered as `0`, a
+response-time tile printed `undefinedms`, and the **Attention Required** banner
+— driven by error rate, suspicious requests and rate-limit hits, each coalesced
+to 0 — could never appear. A dashboard that cannot report a problem looks
+exactly like one with no problem to report.
+
+What it reports now:
+
+- **Rolling windows** — **Last 24 Hours** and **Last 7 Days** request counts,
+  **Unique IPs (24h)**, and **Responses & Errors (last 24h)** — computed as
+  rolling windows, alongside the calendar `requests_today` / `_this_week` /
+  `_this_month` counts the endpoint already had.
+- **Error rate** is `null` when no request arrived in 24 hours, and the tile
+  shows "—" with _"No requests in 24h"_ rather than a reassuring 0.00%.
+- **Rate-limit hits** have a producer. A 429 is raised by the
+  `authenticate_api_key` dependency, which runs before the handler body that
+  calls `log_access`, so no 429 row had ever been written; `_log_refusal` now
+  commits one (best-effort — a logging failure never replaces the 429). The
+  401 half (an unknown key, which cannot be attributed to an organization) is
+  still unlogged — PUB-8 in `docs/security-review/PUB-03-public-surface-webhooks.md`.
+- **Top Endpoints (last 7 days)** measures each endpoint against the week's
+  total, not against the ten shown; the average response time is the all-time
+  mean and is no longer shown under a "(24h)" heading.
+
+No schema change or migration. `tests/test_public_portal_usage_stats.py`.
+
+### Admin screen wording _(2026-09-29)_
+
+The Configuration tab offers **Rate Limiting** only — the Allowed Origins and
+Caching controls were removed, since nothing reads them (above). The disabled
+banner names all three steps to publish anything: enable the portal, create an
+API key, and turn on the fields to share under **Data Control**. The key dialog
+is titled **API Key Created** (_"Copy this key now and store it somewhere safe.
+This is the only time it is shown; you can't view it again."_), and revoking
+asks with **Keep Key** as the cancel button. The access log's timing column is
+**Response Time**.
 
 ## Implementation Phases
 

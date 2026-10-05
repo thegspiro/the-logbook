@@ -20,6 +20,7 @@ import { escapeCsvCell } from '../utils/csv';
 import { SkeletonCard } from '../components/ux/Skeleton';
 import { EmptyState } from '../components/ux/EmptyState';
 import { SortableHeader, type SortDirection } from '../components/ux/SortableHeader';
+import { expectArray } from '../utils/asArray';
 
 const MONTHS = [
   'January',
@@ -101,7 +102,10 @@ const MemberTrainingStatusPage: React.FC = () => {
     setLoading(true);
     try {
       const data = await trainingService.getMemberPeriodStatus(startDate, endDate);
-      setRows(data.members);
+      // Verified, not substituted: an empty roster here reads as "no member
+      // trained this period", so a body that is not this shape (a captive
+      // portal's HTML page) takes the load-failure path instead.
+      setRows(expectArray(data?.members, 'member training status'));
     } catch {
       toast.error('Failed to load member training status');
     } finally {
@@ -213,13 +217,13 @@ const MemberTrainingStatusPage: React.FC = () => {
           <div className="border-theme-surface-border inline-flex overflow-hidden rounded-lg border">
             <button
               onClick={() => setMode('month')}
-              className={`px-3 py-1.5 text-sm ${mode === 'month' ? 'bg-red-600/20 text-red-700 dark:text-red-400' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+              className={`touch-target-phone px-3 py-1.5 text-sm ${mode === 'month' ? 'bg-red-600/20 text-red-700 dark:text-red-400' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
             >
               Month
             </button>
             <button
               onClick={() => setMode('range')}
-              className={`px-3 py-1.5 text-sm ${mode === 'range' ? 'bg-red-600/20 text-red-700 dark:text-red-400' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+              className={`touch-target-phone px-3 py-1.5 text-sm ${mode === 'range' ? 'bg-red-600/20 text-red-700 dark:text-red-400' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
             >
               Custom range
             </button>

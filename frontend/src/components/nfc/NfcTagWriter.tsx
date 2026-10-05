@@ -115,7 +115,7 @@ export const NfcTagWriter: React.FC<NfcTagWriterProps> = (props) => {
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((prev) => !prev)}
-        className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-1.5 text-sm transition-colors max-md:min-h-11"
+        className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 inline-flex items-center gap-1.5 text-sm transition-colors"
       >
         <Nfc className="h-4 w-4" aria-hidden="true" />
         Set up an NFC tag

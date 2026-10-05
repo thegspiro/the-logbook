@@ -102,7 +102,7 @@ const BulkAddItemsModal: React.FC<BulkAddItemsModalProps> = ({ isOpen, onClose, 
           type="button"
           onClick={() => void submit()}
           disabled={saving || parsed.length === 0}
-          className="flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-40"
+          className="flex items-center gap-1.5 rounded-md bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:opacity-40"
         >
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackagePlus className="h-4 w-4" />}
           Add {parsed.length || ''} item{parsed.length === 1 ? '' : 's'}

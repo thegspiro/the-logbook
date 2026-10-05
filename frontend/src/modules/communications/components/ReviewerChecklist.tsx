@@ -27,10 +27,7 @@ const ReviewerChecklist: React.FC<ReviewerChecklistProps> = ({ legend, items, se
           <p className="text-theme-text-muted text-sm">None found.</p>
         ) : (
           visible.map((item) => (
-            <label
-              key={item.id}
-              className="text-theme-text-primary flex items-center gap-2 text-sm max-md:min-h-[44px]"
-            >
+            <label key={item.id} className="text-theme-text-primary touch:min-h-[44px] flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
                 className="form-checkbox"

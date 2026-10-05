@@ -484,6 +484,66 @@ named ("N modules you did not enable are hidden") with a control to reveal
 them, so a department that cannot find Inventory learns it is off rather than
 concluding the permission does not exist.
 
+## Found by the September 24 – October 4 Documentation Pass (2026-10-04)
+
+Five items surfaced while bringing the guides up to date with the window's
+pull requests (`docs/CHANGE_AUDIT_2026-09-24_TO_10-04.md`). None is new
+behaviour from that window except where noted; each is recorded here so the
+guides can point at one place and an owner can decide it.
+
+- **External Training — the Map User button does nothing.** On the External
+  Training Integrations page, an unmapped provider user shows a **Map User**
+  button with no click handler (`ExternalTrainingPage.tsx`). A provider user
+  that does not match a member by email can only be mapped through the API
+  (`PATCH /training/external/providers/{id}/user-mappings/{mapping_id}`).
+  ✅ **Resolved 2026-10-04:** each user now has a member dropdown, as categories
+  do. The fix also repaired two endpoint defects the button had hidden: both
+  user-mapping endpoints selected the `User.full_name` property as a column and
+  answered 500 once any mapping had a member (so the Users tab came back
+  empty), and an explicit `internal_user_id: null` was ignored, so a mapping
+  could not be cleared. Mapping now also moves the user's not-yet-imported
+  records to the member (`test_external_training_user_mapping.py`).
+- **Email Templates — the redesign banner still says to press Reset.** The
+  blue banner on Communications → Email Templates reads "Templates you have
+  never edited already use it — press Reset on any you have customised to
+  adopt it." Since migration `15c5bc7700aa` (#2754) every template already uses
+  the solid-tab design, edited or not, so the advice now only discards a
+  department's own wording. Earlier wording is restored from the template's
+  **Previous version (before the redesign)** panel, not from Reset.
+  ✅ **Resolved 2026-10-04:** the banner now says every email uses the current
+  design and there is nothing to adopt, points to **Previous version**, and
+  says Reset replaces wording without changing the design
+  (`EmailTemplatesPage.tsx`; pinned in `EmailTemplatesPage.tab.test.tsx`).
+- **NFC tag and ID-card hashes depend on `ENCRYPTION_SALT`.** Every NFC tag
+  UID and member card UID is stored only as a SHA-256 peppered with the
+  installation's encryption salt (`nfc_tag_service.py`). Changing
+  `ENCRYPTION_SALT` therefore orphans every registered tag and card: taps stop
+  matching and each must be registered again. `docs/KEY_ROTATION.md` already
+  says not to change the salt; this is one more reason. **Accepted.**
+  ✅ **Covered 2026-10-05:** the owner chose to keep the salt as the pepper
+  rather than add a separate secret, which would force every tag and card to
+  be registered again. `KEY_ROTATION.md`, `BACKUP.md` and `DEPLOYMENT.md` now
+  name NFC tags and ID cards among what a changed or mismatched salt breaks.
+- **Probationary counts as active only where `User.is_active` is read**
+  (#2886). Sign-in, scheduling, messaging recipients and the other
+  `is_active` callers now admit probationary and junior members. About forty
+  other places compare `status == ACTIVE` by hand — training compliance,
+  certification alerts, rosters, reports, meeting quorum, administrative
+  continuity — and still leave them out. Some (quorum, continuity) may be
+  right to, depending on bylaws. **Pending an owner decision per site.**
+- **Another member's ID card is gated in the screens, not the API** (#2860).
+  The profile's **ID Card** button and the card page now require
+  `members.manage` or `members.manage_id_cards` for someone else's card, but
+  the shared label page `/members/print-labels` still prints colleagues'
+  badges for anyone holding `members.view`.
+  ✅ **Resolved 2026-10-04:** the label API's `membership` module and
+  `/members/print-labels` now require `members.manage` or
+  `members.manage_id_cards`, matching the card page
+  (`test_label_service.py::test_members_view_alone_cannot_print_member_badges`).
+  The card's contents — name and membership number — remain directory
+  information that `members.view` reads; what is gated is the assembled,
+  scannable badge.
+
 ## Room Kiosk Badge Check-In — A Copied Card Works With Nobody Watching (2026-10-03)
 
 **Accepted by the owner on 2026-10-02.** A room with **Badge check-in** on
@@ -1332,7 +1392,7 @@ that added the purchase request, expense report and check request shots.
 | Guide section             | What exists                                                                                                                              | State                |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
 | Create Budget form        | `financeStore.createBudget` over a working API, **no component calls it**. `BudgetsPage` is read-only — it has no create control at all. | ❌ Store action only |
-| Add Approval Step form    | `ApprovalChainsSettingsPage` renders a chain's steps and offers no way to add, edit or remove one.                                       | ❌ Not built         |
+| Add Approval Step form    | Built 2026-09-29 (#2839): `ApprovalChainsSettingsPage` adds, edits, deletes and reorders steps, and edits a chain.                       | ✅ Built             |
 | Create Dues Schedule form | `financeStore.createDuesSchedule`, **no component calls it**.                                                                            | ❌ Store action only |
 | QuickBooks export mapping | `GET/POST/PUT /finance/export/mappings` and the `qbAccountName` types exist; no page, no route, no consumer.                             | ❌ API + types only  |
 | Export logs               | `GET /finance/export/logs` and an `ExportLog` interface; no page, no route, no consumer.                                                 | ❌ API + types only  |
@@ -5463,6 +5523,11 @@ needs a decision rather than a patch:
     the next shift's start.
 - **W46-13 — Fail and Out of service carry no required note.** An item marked
   out of service takes the rig off the fleet board with no reason recorded.
+  ✅ Resolved 2026-10-04 (#2882): the check form now requires a note on a Fail
+  or Out of service the member chose (one a count, reading or expiry already
+  explains is exempt) before it submits. The requirement is enforced by the
+  form only; the server still accepts a failed item without a note from a
+  direct API call.
 - **W46-14 — The seeded Quartermaster holds no `inventory.check_*` grant.**
   ✅ Resolved: the owner granted `inventory.check_manage` (authoring only),
   seeded and backfilled by migration `f73b449bdb8b` — see "The seeded
@@ -5549,6 +5614,27 @@ Found driving W51 (`docs/workflow-review/W51-minutes.md`).
     UTC-combined value (which spares hand corrections), with a dry run; or
     leaving the old rows and noting it.
 
+## Action Items — Who Is Assigned, and Who Closes (2026-10-04)
+
+Found driving W52 (`docs/workflow-review/W52-action-items.md`).
+
+- **W52-6 — Nothing can be assigned to a member.**
+  - The only screen that creates action items, the minutes page, takes a typed
+    assignee name. `minutes_action_items.assignee_id` stays empty, so the
+    Action Items page's "Assigned to me" never matches anything created there.
+  - Meeting action items, which do carry a user (`assigned_to`), have no
+    screen at all.
+  - The fix is a member picker on the minutes form, setting `assignee_id`
+    alongside the name. Decide who may be assigned, and whether items already
+    assigned by name should be matched to members.
+- **W52-7 — An assignee cannot close their own item.**
+  - Every action-item update needs `minutes.manage`, so a member assigned an
+    item can neither mark it in progress nor done. The secretary closes it for
+    them.
+  - One option: let the assignee change only status and completion notes, keyed
+    on `assignee_id`, which depends on W52-6. It widens a write permission, so
+    it is the owner's decision.
+
 ## CC-7 — A Cohort Shift Can Move Classes That Already Happened (2026-10-03)
 
 `CourseCohortService.shift_remaining` bounds which classes move in one of two
@@ -5591,6 +5677,50 @@ nothing about which behaviour is wanted.
 `from_sequence` branch and say so in the endpoint's docs, or keep the current
 reach and have the UI warn when a requested shift would move a class whose date
 has passed. See [`docs/app-review/course-cohorts.md`](./app-review/course-cohorts.md) → Pass 3.
+
+## Documents — Folders Cannot Be Restricted or Managed From the Screen (2026-10-04)
+
+Found driving W53 (`docs/workflow-review/W53-documents.md`, W53-4).
+
+- **What the screen offers:** Create Folder takes a name and a description,
+  so every folder made there is visible to all members. Nothing on the screen
+  renames, moves or deletes a folder.
+- **What the API already supports:**
+  - restricting a folder: `PATCH /documents/folders/{id}` with `visibility`,
+    `allowed_roles` or `required_permissions`;
+  - moving one: `parent_id`;
+  - deleting one: `DELETE /documents/folders/{id}`.
+- **The result:** a department cannot create its own leadership-only folder,
+  or tidy a misnamed one, without the API.
+- **Decisions needed before building it:**
+  - which visibility options to offer (leadership, owner, roles);
+  - what deleting a non-empty folder does;
+  - whether system folders may be renamed or moved.
+
+## Legal Documents — History, Attribution and Formatting Gaps (2026-10-04)
+
+Found driving W54 (`docs/workflow-review/W54-org-chart-and-legal.md`, W54-3 to
+W54-5). Publishing, reverting and the permission split all work; these three
+need an owner decision before anything is built.
+
+- **W54-3 — A revert leaves no trace on the screen.** After "Revert to the
+  built-in text", the published history reads "Replaced — published by …" and
+  stops. Nothing says when the built-in text came back, or who restored it;
+  only the audit log knows. So the history cannot do what the page says it is
+  for: show what members saw on a given date. Fixing it needs a revert row or
+  "replaced at / replaced by" columns, which is a migration.
+- **W54-4 — Edits to someone else's proposal are not attributed.** A
+  publisher may edit any draft. The card keeps "Sam Ortiz proposed this" with
+  no sign of the edit, and the published history names only the publisher.
+  - Option: an "edited by" column.
+  - Option: publishers comment on a proposal rather than editing it.
+- **W54-5 — Department text is plain paragraphs only.** A proposal starts
+  from the built-in text flattened to plain text, and `/privacy` renders
+  department text as paragraphs only. So headings become capitalised
+  paragraphs and lists become lines starting with "- ". This is by design: no
+  markup reaches a public page. The decision is whether to support a small,
+  safe set (headings, lists) so that adapting the built-in text does not make
+  the page look worse.
 
 ## Process
 

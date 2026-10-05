@@ -297,7 +297,7 @@ const MyEquipmentPage: React.FC = () => {
           <button
             type="button"
             onClick={() => void loadInventory()}
-            className="text-theme-text-muted hover:text-theme-text-primary inline-flex items-center gap-1.5 text-sm transition-colors max-md:min-h-[44px]"
+            className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-[44px] inline-flex items-center gap-1.5 text-sm transition-colors"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
@@ -490,7 +490,7 @@ const MyEquipmentPage: React.FC = () => {
                     maxQty: g.maxQty,
                   });
                 }}
-                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary rounded border px-3 py-1.5 text-xs whitespace-nowrap transition-colors max-md:min-h-[44px] max-md:min-w-[44px]"
+                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary touch:min-h-[44px] touch:min-w-[44px] rounded border px-3 py-1.5 text-xs whitespace-nowrap transition-colors"
               >
                 <CornerDownLeft className="mr-1 inline h-3 w-3" />
                 Notify quartermaster of return
@@ -542,7 +542,7 @@ const MyEquipmentPage: React.FC = () => {
                     setExtendDate('');
                     setExtendModal({ open: true, checkoutId: c.checkout_id });
                   }}
-                  className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary active:bg-theme-surface-secondary rounded border px-3 py-2 text-xs whitespace-nowrap transition-colors max-md:min-h-[44px] max-md:min-w-[44px] sm:py-1.5"
+                  className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary active:bg-theme-surface-secondary touch:min-h-[44px] touch:min-w-[44px] rounded border px-3 py-2 text-xs whitespace-nowrap transition-colors sm:py-1.5"
                 >
                   <CalendarClock className="mr-1 inline h-3 w-3" />
                   Extend
@@ -558,7 +558,7 @@ const MyEquipmentPage: React.FC = () => {
                       maxQty: 1,
                     })
                   }
-                  className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary active:bg-theme-surface-secondary rounded border px-3 py-2 text-xs whitespace-nowrap transition-colors max-md:min-h-[44px] max-md:min-w-[44px] sm:py-1.5"
+                  className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary active:bg-theme-surface-secondary touch:min-h-[44px] touch:min-w-[44px] rounded border px-3 py-2 text-xs whitespace-nowrap transition-colors sm:py-1.5"
                 >
                   <CornerDownLeft className="mr-1 inline h-3 w-3" />
                   Notify quartermaster of return

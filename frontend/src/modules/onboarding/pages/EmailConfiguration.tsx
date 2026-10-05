@@ -815,7 +815,7 @@ const EmailConfiguration: React.FC = () => {
                 className={`flex w-full items-center justify-center rounded-lg px-6 py-3 font-semibold transition-all duration-300 ${
                   connectionTested
                     ? 'bg-green-700 text-white hover:bg-green-800'
-                    : 'disabled:bg-theme-surface disabled:text-theme-text-muted bg-blue-600 text-white hover:bg-blue-700'
+                    : 'disabled:bg-theme-surface disabled:text-theme-text-muted bg-red-800 text-white hover:bg-red-900'
                 }`}
               >
                 {testingConnection ? (

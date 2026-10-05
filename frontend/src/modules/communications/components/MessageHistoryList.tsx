@@ -120,7 +120,7 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
         <h2 className="text-theme-text-primary text-lg font-semibold">Message History</h2>
         <button
           onClick={() => setShowTestForm(!showTestForm)}
-          className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+          className="flex items-center gap-2 rounded-md bg-red-800 px-4 py-2 text-sm text-white hover:bg-red-900"
         >
           <Send className="h-4 w-4" />
           Send Test Email
@@ -165,7 +165,7 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
                 void handleSendTest();
               }}
               disabled={isSendingTest || !testEmail.trim()}
-              className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+              className="flex items-center gap-2 rounded-md bg-red-800 px-4 py-2 text-sm text-white hover:bg-red-900 disabled:opacity-50"
             >
               {isSendingTest ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               {isSendingTest ? 'Sending...' : 'Send Test'}

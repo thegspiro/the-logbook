@@ -84,6 +84,13 @@ one.** The check is `require_permission("inventory.view_medical",
 
 A matching **email-signature office** ships with the role.
 
+> **`equipment_check.*` is `inventory.check_*` now** _(renamed 2026-08-31)_.
+> The table records the grants as they shipped; a migration renamed the stored
+> keys, so these positions now hold `inventory.check_view` / `.check_submit` /
+> `.check_manage`. Since 2026-09-30 the Quartermaster also seeds with
+> `inventory.check_manage` (authoring only), applied to existing departments by
+> migration `f73b449bdb8b`.
+
 ---
 
 ## Pages
@@ -99,11 +106,24 @@ Writes on both pages require the corresponding `manage` permission.
 a shelf life, "what am I about to lose" is the question that brings someone to
 the page; "what do we stock" is the reference behind it.
 
+**The headline tiles** _(labels from 2026-09-29)_ read **Expiring within 30
+days** and **Low stock** — the latter was "Below reorder point", which was
+wrong: it counts items **at or below** their reorder point. A category's
+threshold reads "Low stock at _N_ or below" for the same reason. A search that
+matches nothing on **All supplies** says **No matching supplies**, rather than
+the empty-catalog **No medical supplies yet**.
+
 ### Receive delivery
 
 Books a whole shipment as **one dated lot per item line** — item, lot number,
 expiration, quantity — under a single received date. This is the only way to
 add stock to a lot-tracked item; see [Lots and on-hand](#lots-and-on-hand).
+
+Each line is a group named **Line 1**, **Line 2**… with **Remove line _n_**, so
+a screen reader can tell which line's **Item**, **Qty**, **Lot #** and
+**Expires** it is in _(2026-09-30)_. Success reads "Delivery recorded: _n_
+lines". The add-supply form's "No medical supply categories exist yet" notice
+links to the **Medical Supply Categories** page it names.
 
 ### Naming
 
@@ -154,6 +174,22 @@ Medical supplies use the same dated-lot machinery as other consumables
   counting them would hide exactly the shortage most in need of ordering.
 - One shared helper backs the reorder alert, the items grid and the CSV export,
   so the three cannot disagree.
+- **The item page's Stock Lots panel agrees** _(2026-09-30, workflow review
+  W47)_. It totalled every lot as ready units, expired ones included, so the
+  item page and Medical Supplies disagreed about the same item. It now counts
+  only in-date lots, adds "· _N_ expired" when there are any, and names each
+  lot on its quantity and delete controls ("Delete lot 4471A").
+- **A retired item's lots are gone from expiry figures** _(2026-09-30)_. They
+  were still listed as expiring stock, counted in the medical summary, and
+  mailed in the supply-expiry alert — for an item nobody could issue.
+
+> **Open: the dashboard's Low stock disagrees with this page** _(W47-6)_. The
+> main dashboard's low-stock widget sums each category's `quantity` column,
+> which a lot-stocked item leaves at 0, so a category of lot-stocked supplies
+> reads as empty whatever its lots hold; and it counts medical categories that
+> the gear list it links to excludes. Medical Supplies' own **Low stock** tile
+> counts from item reorder points and is right. Recorded in
+> [KNOWN_LIMITATIONS](./KNOWN_LIMITATIONS.md).
 
 > **"On hand" is not editable on a lot-stocked item** _(fixed 2026-08-17)_. The
 > field writes `quantity`, but a lot-stocked item's count comes from its lots —
@@ -189,9 +225,13 @@ lots are fetched per domain.
 Two boundary decisions inside that:
 
 - **The deployed-on-apparatus sections go to every recipient.** That is
-  checklist content governed by `equipment_check.*` — a different permission
-  axis, not the supply domain.
-- **The SMS carries only a count**, so it is not split, and it says so.
+  checklist content governed by `inventory.check_*` (named `equipment_check.*`
+  until 2026-08-31) — a different permission axis, not the supply domain.
+
+**Email only.** An earlier version of this section said an SMS carried the
+count. Since 2026-08-16 low-stock and expiring-supply notices are email-only:
+SMS is reserved for the alerts in the `SmsAlert` allowlist, which names neither
+_(corrected 2026-10-04)_.
 
 ### Two defects worth knowing about, both fixed
 

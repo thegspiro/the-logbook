@@ -183,7 +183,10 @@ application briefly to show the columns.]**
 
 > "**Emails must be unique** — every member needs a different email address."
 
-> "**Leave membership number blank** to have the system assign one."
+> "**Leave membership number blank** to have the system assign one — but only
+> if membership ID numbers are enabled with **Auto-Generate IDs** on, in
+> Members administration → Settings. Otherwise the member is imported without
+> one."
 
 > "**Role names must match** — use the exact role name from your Roles page.
 > 'Firefighter,' not 'FF' or 'fire fighter.' A name that doesn't match will
@@ -335,6 +338,18 @@ and events.view permissions]**
 > "For example, let's create a 'Social Media Coordinator' position. They need to
 > view events so they can post about them, and maybe manage the public portal
 > settings. Toggle on the permissions they need, save, and you're done."
+
+> "And that public-portal part really does need **settings.manage**. Until
+> late September, the portal's admin screens — API keys, access logs, which
+> fields are published — answered any signed-in member. They don't now, so if
+> something outside The Logbook was calling them as an ordinary member, expect
+> it to start getting refused. The portal's **Configuration** tab is down to
+> **Rate Limiting**; the allowed-origins and caching boxes went because nothing
+> read them."
+
+**[PRODUCTION NOTE — 2026-10-04. New line (2026-09-29), about 15 seconds;
+re-time Chapter 4. No new footage needed unless you cut to the Configuration
+tab.]**
 
 ### ASSIGNING MULTIPLE POSITIONS (13:30 – 14:00)
 
@@ -490,20 +505,33 @@ the browser console for CSP, not the server log."]**
 
 ### EVENTS SETTINGS (18:00 – 19:00)
 
-**[SCREEN: Navigate to Events → Settings (EventsSettingsTab)]**
+**[SCREEN: Navigate to Events → Event settings (EventsSettingsTab); show the
+section list: Visibility, Categories, Attendance, Outreach Types, Hour
+Tracking, Pipeline, Email, Public Form, Headline Metrics]**
 
 > "Each module has its own settings page. Let's walk through the most important
 > ones, starting with Events."
 
-> "In Events settings, you can configure event types — business meetings,
-> training drills, social events, fundraisers. You can set default RSVP
-> deadlines, enable or disable QR code check-in, and control whether event
-> request approval is required."
+> "In **Event settings**, **Visibility** and **Categories** shape how events
+> are sorted — which categories members filter by, and your own categories on
+> top of the built-in types. **Pipeline**, **Email** and **Public Form** cover
+> event requests from the public: how they're handled, what's sent, and the
+> form itself."
 
-**[SCREEN: Show event type configuration, QR check-in toggle]**
+**[SCREEN: The Attendance section: "Who can see who's going", then the
+per-event-type choice of who takes attendance requests]**
 
-**[CALLOUT: "QR Check-In generates a unique QR code for each event for
-contactless attendance tracking"]**
+> "And **Attendance** answers two questions: who can see who's going, and who
+> takes an 'I was there' request when an event's own organizer and alternate
+> can't — a position you pick per event type. Leave a type unset and it goes to
+> the Secretary."
+
+**[CALLOUT: "QR Check-In is switched on per event, on the event itself"]**
+
+**[PRODUCTION NOTE — 2026-10-04. Rewritten. There are no default RSVP
+deadlines and no department-wide QR check-in switch in Event settings —
+pre-existing errors. The attendance-request fallback is new (2026-10-02). New
+footage needed.]**
 
 ### TRAINING SETTINGS (19:00 – 20:00)
 
@@ -532,9 +560,23 @@ thresholds]**
 
 **[SCREEN: Show creating or editing a shift template]**
 
-> "You can also configure shift swap rules — whether swaps need officer approval,
-> how far in advance members can request swaps, and blackout dates when swaps
-> aren't allowed."
+**[SCREEN: Administration → Scheduling → Settings. Show the section list:
+General, Apparatus, Platoons, Eligibility, Notifications, Shift Reports,
+Outside Apparatus. Open Notifications and hold on the "Not in effect yet"
+notice.]**
+
+> "The rest lives under Scheduling **Settings**, in seven sections — General,
+> Apparatus, Platoons, Eligibility, Notifications, Shift Reports, and Outside
+> Apparatus, the list of other departments' rigs your members ride on. There
+> are no swap rules to set: every trade goes to an officer who isn't in it, and
+> that isn't configurable. And read the yellow notice on **Notifications** —
+> those switches are saved but not in effect yet, so turning one off does not
+> stop that notice."
+
+**[PRODUCTION NOTE — 2026-10-04. Rewritten. The previous take promised swap
+rules, an advance-notice window and swap blackout dates; none has ever existed
+in Scheduling settings. Wrong before this window; found, not caused, by it.
+Outside Apparatus is new (2026-09-27). New footage needed.]**
 
 ### ELECTIONS SETTINGS (21:00 – 22:00)
 
@@ -682,6 +724,20 @@ member preview.]**
 > you've set a deployment-wide Cloudflare account, it's a **default for
 > organizations that haven't chosen**, not an override for ones that have."
 
+**[SCREEN: Settings → Email, the "Email link address" card showing the
+current address and where it came from; then Change address]**
+
+> "Last card on that page, and check it once: **Email link address**. Every
+> link in an outgoing email — password resets, ballots, approvals — starts with
+> it. The card says where it came from, `FRONTEND_URL` or your allowed
+> origins, and warns you if it only works on the server itself. If it's wrong,
+> fix `FRONTEND_URL` — or, if you hold **system.manage_link_domain**, change it
+> right here. It applies to the whole installation."
+
+**[PRODUCTION NOTE — 2026-10-04. New beat (2026-09-25), about 20 seconds;
+re-time Chapter 7. Out of the box only the IT Manager's wildcard holds
+`system.manage_link_domain`. Use a documentation domain on screen.]**
+
 ### CALENDAR SYNC (25:30 – 26:00)
 
 > "The calendar sync integration lets members export their events and shifts
@@ -828,6 +884,19 @@ print.]**
 > your app is in a container on one segment and the printer is on another,
 > somebody at a desk can ping that printer all day and it will still fail from
 > the app."
+
+> "And before any of it works, the server has to be told it may. Set
+> **`LABEL_PRINTER_ALLOWED_NETWORKS`** in the environment to the printers'
+> addresses or subnet — `192.0.2.0/24`, say — and restart. **Empty is the
+> default, and empty means off**: no printer is ever contacted, however it's
+> registered. That's deliberate — it's an operator decision, not something an
+> organization admin can switch on, because otherwise the print socket is a way
+> to make your server knock on anything it can reach."
+
+**[PRODUCTION NOTE — 2026-10-04. Added. The allowlist has existed since
+2026-08-24 and the chapter never said so — the commonest reason a correctly
+registered printer never prints. Pre-existing omission. About 15 seconds;
+re-time Chapter 7. Use RFC 5737 addresses on screen.]**
 
 > "And nothing checks the address when you save it. Registration succeeds
 > either way. The failure shows up at print time, or when somebody hits Check
@@ -1129,7 +1198,9 @@ delivery pass that compresses this chapter must not drop either.]**
 > "One: if you want ID cards, turn on the NFC ID Cards integration and grant
 > `members.manage_id_cards` to whoever issues them, and `members.check_in` to
 > whoever runs a station. It ships off, and it is enforced on the server — not
-> just by hiding a screen."
+> just by hiding a screen. One grant is already made for you: since October
+> 2026 the seeded **Assistant Membership Coordinator** position holds
+> `members.manage_id_cards`."
 
 > "Two: register your label printers, and check the address is reachable from
 > the server."
@@ -1232,9 +1303,11 @@ delivery pass that compresses this chapter must not drop either.]**
 > author and submit equipment checklists.**"
 
 > "No seeded position grants `inventory.*`, so this only reaches positions you
-> built yourself. Usually a quartermaster. It is deliberate — a checklist is a
-> list of inventory items — but if it is wider than you want, replace the
-> wildcard with the specific grants."
+> built yourself. It is deliberate — a checklist is a list of inventory items —
+> but if it is wider than you want, replace the wildcard with the specific
+> grants. Separately, the seeded **Quartermaster** position has been given the
+> checklist-managing permission itself, `inventory.check_manage`, since
+> September 30 — where its grants were still as shipped."
 
 ### GMAIL AND MICROSOFT 365 EMAIL NEVER WORKED (ADDED 2026-09-06)
 
@@ -1362,13 +1435,25 @@ delivery pass that compresses this chapter must not drop either.]**
 > So the person with the keys to the server was the only person who could sign
 > off a purchase."
 
-> "Here's what that actually cost departments, and it's worse than it sounds.
-> With no approval chain configured at all, requests **skip approval
-> entirely** — they don't fail, they just go through. But build a chain, which
-> needed the configure permission, so in practice an IT manager did it — and
-> don't also grant approve — and **every submitted request lands in Pending
-> Approval with nobody able to action it.** The half-configured state is the
-> one that strands records."
+> "Here's what that actually cost departments. A submitted request waits in
+> **Pending Approval** for somebody holding the approve permission — and with
+> nobody holding it, **every submitted request sat there with nobody able to
+> action it.** A request no chain applied to was stranded the same way."
+
+**[SCREEN: Finance → Approvals: a pending request with Approve and Deny; then a
+purchase request's detail page showing the same two buttons]**
+
+> "Since the end of September there's somewhere to do it, too: a **Finance →
+> Approvals** screen lists everything waiting, and the request's own page has
+> **Approve** and **Deny** for whoever holds the permission — including a
+> request no approval chain applies to."
+
+**[PRODUCTION NOTE — 2026-10-04. Rewritten. "With no approval chain configured
+at all, requests skip approval entirely" was wrong: such a request waits in
+Pending Approval. Until 2026-09-30 nothing in the app could move it; the
+Approvals screen arrived 2026-09-29 and approve/deny for chain-less requests on
+2026-09-30. New footage needed for the screen cue; about 10 seconds longer,
+re-time this chapter.]**
 
 **[CALLOUT: "Gated grant — only where finance is exactly view + manage"]**
 

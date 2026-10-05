@@ -70,10 +70,11 @@ The resolved as-of date drives the requirement date window, waiver proration
 
 ### Deliberate exception: certificate "expiring soon" lookahead
 
-The certificate "expiring soon" lookahead **always uses the real
-`date.today()`**, never the resolved as-of date. For example,
-`CompetencyMatrixService` computes `expiring_threshold = date.today() + 90 days`
-independently of `include_current_month`. Excluding the current month must not
+The certificate "expiring soon" lookahead **always uses the actual current
+date**, never the resolved as-of date. For example, `CompetencyMatrixService`
+computes `expiring_threshold = today + 90 days`, where `today` is the
+department's date from `resolve_org_today()`, independently of
+`include_current_month`. Excluding the current month must not
 hide a certificate that is genuinely about to expire.
 
 ### Legacy behavior
@@ -230,14 +231,14 @@ Each report stores:
 | Organization has no compliance config                                     | Compliance calculations use hardcoded defaults until config is created; the in-progress current month **is** included (legacy behavior preserved) |
 | `include_current_month = false` mid-month                                 | Compliance evaluates as of the last day of the previous month; the in-progress month does not count against members                               |
 | Requirement `include_current_month = NULL`                                | Inherits the org-level `include_current_month` default                                                                                            |
-| Certificate expiring within 90 days while `include_current_month = false` | Still surfaces as "expiring soon" — the lookahead uses the real `date.today()`, not the resolved as-of date                                       |
+| Certificate expiring within 90 days while `include_current_month = false` | Still surfaces as "expiring soon" — the lookahead uses the department's actual date, not the resolved as-of date                                  |
 
 ---
 
 ## Frontend Page
 
-**URL**: `/compliance/config`
-**Permission**: `settings.manage`
+**URL**: `/training/compliance-config` (the screen calls `GET`/`PUT /compliance/config`, which is the API path, not the page — corrected 2026-10-04)
+**Permission**: `compliance.manage` **or** `settings.manage`
 
 The `ComplianceRequirementsConfigPage` provides:
 
@@ -258,8 +259,23 @@ refuses to update them).
 
 Linked from the compliance officer dashboard navigation.
 
+**Saving shows the server's reason** _(2026-09-29)_. A refused save used to say
+only "Failed to save configuration" — for example an At-Risk Threshold of 95
+above a Compliant threshold of 90, which the server rejects with
+"at_risk_threshold must be less than or equal to compliant_threshold". Both the
+configuration save and the profile save now show that reason. Every field on the
+four tabs is labelled for screen readers, and the tab buttons report which is
+open.
+
+**On a phone** _(2026-10-03)_ the tabs, **Save Configuration**, **Save
+Schedule** and its icon buttons meet the 44px touch minimum, and the status words
+pass AA contrast. A configuration response that is not the expected shape (a
+captive-portal page on station Wi-Fi) now takes the page's load-error path
+instead of filling the form with "Compliant: >= undefined%" and crashing the
+Profiles tab; the requirements and report lists degrade to empty.
+
 ---
 
-**Document Version**: 1.1
-**Last Updated**: 2026-05-29
+**Document Version**: 1.2
+**Last Updated**: 2026-10-04
 **Maintainer**: Development Team

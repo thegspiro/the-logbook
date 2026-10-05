@@ -137,7 +137,9 @@ export const inventoryService = {
     const response = await api.get<MembersInventoryListResponse>('/inventory/members-summary', {
       params: Object.keys(params).length > 0 ? params : undefined,
     });
-    return response.data;
+    // An empty roster reads as "nobody holds any gear", which is a claim the
+    // quartermaster acts on; a body without the list is a failed load.
+    return { ...response.data, members: expectArray(response.data?.members, 'member list') };
   },
 
   async getUserInventory(userId: string): Promise<UserInventoryResponse> {
@@ -147,7 +149,18 @@ export const inventoryService = {
 
   async getImpactPlannerOptions(): Promise<ImpactPlannerOptions> {
     const response = await api.get<ImpactPlannerOptions>('/inventory/impact-planner/options');
-    return response.data;
+    // Filter choices only: a malformed body leaves the planner with nothing to
+    // pick rather than taking the page down.
+    const data = response.data;
+    return {
+      statuses: asArray(data?.statuses),
+      membership_types: asArray(data?.membership_types),
+      ranks: asArray(data?.ranks),
+      stations: asArray(data?.stations),
+      positions: asArray(data?.positions),
+      categories: asArray(data?.categories),
+      size_fields: asArray(data?.size_fields),
+    };
   },
 
   async analyzeImpact(request: ImpactPlannerRequest): Promise<ImpactPlannerResult> {
@@ -1179,7 +1192,9 @@ export const inventoryService = {
     const response = await api.get<ChargeManagementResponse>('/inventory/charges', {
       params: chargeStatus ? { charge_status: chargeStatus } : undefined,
     });
-    return response.data;
+    // "No charges" is a statement about what members owe, so an unreadable
+    // body must surface as a failed load rather than an empty ledger.
+    return { ...response.data, items: expectArray(response.data?.items, 'charges') };
   },
 
   // Return requests

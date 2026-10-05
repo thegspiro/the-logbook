@@ -419,7 +419,7 @@ const ImpactPlannerPage: React.FC = () => {
 
         <Link
           to="/inventory/admin"
-          className="text-theme-text-muted hover:text-theme-text-primary mb-4 inline-flex items-center gap-1.5 text-sm"
+          className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 mb-4 inline-flex items-center gap-1.5 text-sm"
         >
           <ArrowLeft className="h-4 w-4" /> Back to Admin
         </Link>
@@ -524,7 +524,7 @@ const ImpactPlannerPage: React.FC = () => {
                   ) : (
                     <button
                       onClick={() => setShowSaveForm(true)}
-                      className="mt-2 text-xs text-blue-600 hover:underline dark:text-blue-400"
+                      className="touch:min-h-11 mt-2 text-xs text-blue-800 hover:underline dark:text-blue-400"
                     >
                       Save current filters as a plan
                     </button>

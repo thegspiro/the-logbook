@@ -3,6 +3,7 @@ import { Plus, Trash2, ChevronUp, ChevronDown, Calendar, UserCheck, Globe } from
 import type { PipelineTaskConfig } from '../../types/event';
 import type { PipelineSectionProps } from './types';
 import { useRanks } from '../../hooks/useRanks';
+import { displayNameOf } from '../../utils/memberName';
 
 const PipelineSection: React.FC<PipelineSectionProps> = ({
   settings,
@@ -47,7 +48,7 @@ const PipelineSection: React.FC<PipelineSectionProps> = ({
           <option value="">No default (manually assign)</option>
           {members.map((m) => (
             <option key={m.id} value={m.id}>
-              {m.first_name} {m.last_name}
+              {displayNameOf(m)}
               {m.rank ? ` — ${formatRank(m.rank)}` : ''}
             </option>
           ))}

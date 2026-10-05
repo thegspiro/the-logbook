@@ -237,14 +237,14 @@ const TrainingSessionLinkageCard: React.FC<TrainingSessionLinkageCardProps> = ({
   const header = (action: React.ReactNode) => (
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
       <div className="flex items-center gap-2">
-        <Link2 className="h-6 w-6 text-red-600" aria-hidden="true" />
+        <Link2 className="h-5 w-5" aria-hidden="true" />
         <h2 className="text-theme-text-primary text-lg font-medium">Requirements & Programs</h2>
       </div>
       {action}
     </div>
   );
 
-  const cardClass = 'card border-l-4 border-l-red-600 p-6';
+  const cardClass = 'card p-6';
 
   if (!session) {
     return (
