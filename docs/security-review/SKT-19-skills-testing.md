@@ -983,7 +983,9 @@ all, iterating whatever was stored. Included in this finding's scope, and its
 `docs/KNOWN_LIMITATIONS.md` entry now names the create route too, not just
 update.
 
-### SKT4-3 — MED — `GET /summary`'s aggregates can disclose a single test's result in a small cohort — OPEN / FLAGGED
+### SKT4-3 — MED — `GET /summary`'s aggregates can disclose a single test's result in a small cohort — ✅ FIXED (2026-10-05)
+
+**Resolved (owner decision, gate to `training.manage`):** `get_testing_summary` computes `pass_rate` and `average_score` only for a caller who can manage tests; everyone else gets the counts and `null` for both. Test: `test_skill_testing_summary_disclosure.py`. As found:
 
 `get_testing_summary` (`skills_testing.py:3532-3658`) is open to
 `get_current_user` — any authenticated member, no `training.manage`

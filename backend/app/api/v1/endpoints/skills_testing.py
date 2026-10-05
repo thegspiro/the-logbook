@@ -3686,48 +3686,54 @@ async def get_testing_summary(
     )
     tests_this_month = tests_this_month_result.scalar() or 0
 
-    # Pass rate (validated non-practice tests only). A member-run result nobody
-    # has signed off is a submission, not yet the department's finding — folding
-    # it into the pass rate would let the headline number move on evaluations an
-    # officer may still reject.
-    completed_tests_result = await db.execute(
-        select(func.count(SkillTest.id)).where(
-            SkillTest.organization_id == org_id,
-            SkillTest.status == "completed",
-            SkillTest.validated_at.isnot(None),
-            SkillTest.is_practice.is_(False),
-        )
-    )
-    completed_count = completed_tests_result.scalar() or 0
-
+    # Outcome figures are for officers only (owner decision SKT4-3). Any
+    # member may read this summary, and in a small department one validated
+    # test is the whole population, so the "average score" is that member's
+    # exact score, whatever the test's own disclosure settings say.
     pass_rate = None
-    if completed_count > 0:
-        passed_tests_result = await db.execute(
+    average_score = None
+    if _can_manage_tests(current_user):
+        # Pass rate (validated non-practice tests only). A member-run result nobody
+        # has signed off is a submission, not yet the department's finding — folding
+        # it into the pass rate would let the headline number move on evaluations an
+        # officer may still reject.
+        completed_tests_result = await db.execute(
             select(func.count(SkillTest.id)).where(
                 SkillTest.organization_id == org_id,
                 SkillTest.status == "completed",
                 SkillTest.validated_at.isnot(None),
-                SkillTest.result == "pass",
                 SkillTest.is_practice.is_(False),
             )
         )
-        passed_count = passed_tests_result.scalar() or 0
-        pass_rate = round((passed_count / completed_count) * 100, 1)
+        completed_count = completed_tests_result.scalar() or 0
 
-    # Average score (validated non-practice tests with scores)
-    avg_score_result = await db.execute(
-        select(func.avg(SkillTest.overall_score)).where(
-            SkillTest.organization_id == org_id,
-            SkillTest.status == "completed",
-            SkillTest.validated_at.isnot(None),
-            SkillTest.overall_score.isnot(None),
-            SkillTest.is_practice.is_(False),
+        if completed_count > 0:
+            passed_tests_result = await db.execute(
+                select(func.count(SkillTest.id)).where(
+                    SkillTest.organization_id == org_id,
+                    SkillTest.status == "completed",
+                    SkillTest.validated_at.isnot(None),
+                    SkillTest.result == "pass",
+                    SkillTest.is_practice.is_(False),
+                )
+            )
+            passed_count = passed_tests_result.scalar() or 0
+            pass_rate = round((passed_count / completed_count) * 100, 1)
+
+        # Average score (validated non-practice tests with scores)
+        avg_score_result = await db.execute(
+            select(func.avg(SkillTest.overall_score)).where(
+                SkillTest.organization_id == org_id,
+                SkillTest.status == "completed",
+                SkillTest.validated_at.isnot(None),
+                SkillTest.overall_score.isnot(None),
+                SkillTest.is_practice.is_(False),
+            )
         )
-    )
-    avg_score_raw = avg_score_result.scalar()
-    average_score = (
-        round(float(avg_score_raw), 1) if avg_score_raw is not None else None
-    )
+        avg_score_raw = avg_score_result.scalar()
+        average_score = (
+            round(float(avg_score_raw), 1) if avg_score_raw is not None else None
+        )
 
     # Review queue depth. Only meaningful to someone who can act on it, and it
     # is an org-wide count — a member would learn how many other people's
