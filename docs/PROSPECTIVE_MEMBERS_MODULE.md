@@ -10,12 +10,13 @@ The Prospective Members module provides a complete applicant tracking system for
 
 - **Configurable Pipeline**: Drag-and-drop stage builder with twelve stage types (form submission, document upload, election/vote, manual approval, meeting, status-page toggle, automated email, reference check, checklist, interview requirement, multi-signer approval, and medical screening)
 - **Dual View Modes**: Kanban board with drag-and-drop or sortable paginated table
-- **Inactivity Timeout System**: Automatic deactivation with configurable timeouts, per-stage overrides, two-phase warnings, and auto-purge
+- **Inactivity Timeout System**: Automatic deactivation with configurable timeouts, per-stage overrides and two-phase warnings. The auto-purge setting is stored but **not wired** (see [Auto-Purge](#auto-purge)); inactive applications are purged by hand
 - **Applicant Lifecycle**: Six statuses (active, on_hold, withdrawn, converted, rejected, inactive) with full audit trail
-- **Withdraw / Archive**: Applicants can voluntarily withdraw; withdrawn applications are archived and reactivatable
-- **Election Package Integration**: Auto-generates election packages when applicants reach an election_vote stage, bundling applicant data for the secretary to build a ballot
+- **Withdraw / Archive**: A coordinator, or since 2026-09-24 the applicant from their status page, can withdraw; withdrawn applications are kept and reactivatable
+- **Election Package Integration**: The server creates an election package whenever an applicant enters an election_vote stage, by any route (2026-09-30), bundling applicant data for the secretary to build a ballot; no package, no advance past the vote
 - **Desired Membership Type**: Applicants indicate their preferred membership type (regular or administrative) via the interest form; coordinators can change it inline at any pipeline stage
-- **Conversion Flow**: Convert successful applicants to regular member (starts as probationary) or administrative member, pre-filled from the applicant's desired membership type
+- **Conversion Flow**: Convert successful applicants with a member class and starting status taken from the pipeline's per-track `conversion_config` (2026-09-30), the application's target role (2026-09-24), and an explicit choice of password delivery (2026-09-27). Held until every Required stage is complete (2026-09-28)
+- **Signer sign-off**: Officers named on a Multi-Signer Approval stage sign from a Sign-offs page with no pipeline permission (2026-09-28)
 - **Bulk Operations**: Select multiple applicants for batch advance, hold, or reject actions
 - **Cross-Module Integration**: Links to Forms (data collection), Elections (membership votes via election packages), and Notifications (alerts)
 
@@ -215,7 +216,7 @@ Normal ──(warning threshold)──> Warning ──(timeout reached)──> I
 1. **Normal**: Applicant has recent activity within the timeout window
 2. **Warning**: Applicant's idle time has passed the warning threshold percentage (default 80%)
 3. **Inactive**: Applicant's idle time has exceeded the timeout — automatically deactivated
-4. **Purged**: If auto-purge is enabled, inactive applicants are permanently deleted after the purge period
+4. **Purged**: _Designed, not wired._ The intent is that inactive applicants are permanently deleted after the purge period, but no scheduled task reads `auto_purge_enabled` — see [Auto-Purge](#auto-purge)
 
 ### Configuration
 
@@ -273,7 +274,27 @@ Helper function: `getEffectiveTimeoutDays(config)` returns the computed timeout 
 
 ### Auto-Purge
 
-When enabled, auto-purge permanently deletes inactive applicant records after the configured period.
+> **Not wired** _(recorded 2026-09-30)_. The settings page stores
+> `auto_purge_enabled` and `purge_days_after_inactive`, but no scheduled task
+> reads them, so nothing is purged automatically (CLAUDE.md pitfall #19).
+> Wiring it needs `deactivated_at` (stored since `77d4aa7798dd`) and a decision
+> on notifying coordinators first. See `docs/KNOWN_LIMITATIONS.md` → "Prospective
+> Members — Purge Is Manual; Auto-Purge Is Not Wired".
+
+**Manual purge** — **Purge Selected** on the Inactive Applications tab →
+`POST /prospective-members/pipelines/{pipeline_id}/purge-inactive`
+(`prospective_members.manage`). Fixed 2026-09-30 (#2835): the service used to
+delete only `withdrawn` rows, which that tab never lists, and the page toasted
+"Purged N" from the selection size. It now deletes only rows still `inactive`,
+org-scoped and under a row lock; removes each application's uploaded documents
+from disk **before** the rows (the DB cascade never reached the files — a file
+that cannot be removed raises 400 before any row is deleted, so a retry can
+finish); writes an audit event with the count and the requested ids, no
+applicant details; and returns the number actually deleted. The store rethrows
+failures and the page toasts the server's count, saying when fewer were deleted
+than selected.
+
+The design intent for auto-purge, once wired:
 
 **Security rationale:**
 
@@ -297,28 +318,87 @@ When enabled, auto-purge permanently deletes inactive applicant records after th
 | `rejected`  | Red          | Application was rejected                  |
 | `inactive`  | Slate (dark) | Deactivated due to inactivity timeout     |
 
+#### Lifecycle stamps _(2026-09-24, migration `77d4aa7798dd`)_
+
+`deactivated_at`, `deactivated_reason`, `reactivated_at`, `withdrawn_at` and
+`withdrawal_reason` are stored on `prospective_members` (with `target_role_id`).
+They had readers — the drawer's "Deactivated:", "Last reactivated:" and
+withdrawal lines, and the applicant table's columns — and no producer, so every
+one rendered blank. They are **historical, not mirrors of `status`**:
+`_apply_status_change`, the single choke point for every transition, single and
+bulk, stamps forward and never clears. The migration backfilled them from
+`prospect_activity_log` on the same rule, filling only NULLs (re-runnable); a
+prospect whose transition predates the log stays NULL rather than being given a
+guessed date.
+
+**Clearing a field in an edit form persists** _(2026-09-30, #2859)_. The
+drawer's phone, date of birth and address fields, an emptied stage description
+in the Pipeline Builder, and every field the Interview form owns now send an
+explicit `null` on update (`blankToNull`); `update_interview` writes through
+`apply_updates` with the endpoint dumping `exclude_unset`. They used the
+create-path `|| undefined`, so an emptied box survived behind a success toast
+(CLAUDE.md pitfall #1). The drawer also shows an address with any part set, not
+only one with a street and a city.
+
+**Add Applicant needs a pipeline** _(2026-09-28, W16)_. The button is disabled
+("Set up a pipeline first") until one exists; it used to open a form whose
+submit returned silently.
+
 ### Actions
 
-| Action     | Available When            | Effect                                                                                                                                                                                                                                                                                                                              |
-| ---------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Advance    | Active                    | Moves applicant to the next pipeline stage; auto-creates election package if target is election_vote stage; auto-sends email if target is automated_email stage. **Refused off an `election_vote` stage whose package reads _Added to Ballot_ or _Not Elected_** — see [Stage completion gates](#stage-completion-gates-2026-09-13) |
-| Regress    | Active (not first stage)  | Moves applicant back to the previous pipeline stage; resets that stage's progress to `IN_PROGRESS`. Logged as `prospect_regressed`                                                                                                                                                                                                  |
-| Hold       | Active                    | Sets status to on_hold                                                                                                                                                                                                                                                                                                              |
-| Reject     | Active, On Hold, Inactive | Sets status to rejected                                                                                                                                                                                                                                                                                                             |
-| Withdraw   | Active, On Hold           | Sets status to withdrawn; archives the application                                                                                                                                                                                                                                                                                  |
-| Reactivate | Inactive, Withdrawn       | Returns applicant to active status at their previous stage                                                                                                                                                                                                                                                                          |
-| Convert    | Active (final stage)      | Creates member record, sets status to converted. Carries the same `election_vote` gate as Advance _(2026-09-14, MP-30)_                                                                                                                                                                                                             |
+| Action     | Available When            | Effect                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ---------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Advance    | Active                    | Moves applicant to the next pipeline stage; the server creates the election package if the target is an election_vote stage; sends the email if the target is an automated_email stage, and completes that stage once it is sent (2026-09-24). **Refused off an `election_vote` stage with no package** (2026-09-30). **Refused off an `election_vote` stage whose package reads _Added to Ballot_ or _Not Elected_** — see [Stage completion gates](#stage-completion-gates-2026-09-13) |
+| Regress    | Active (not first stage)  | Moves applicant back to the previous pipeline stage; resets that stage's progress to `IN_PROGRESS`. Logged as `prospect_regressed`                                                                                                                                                                                                                                                                                                                                                       |
+| Hold       | Active                    | Sets status to on_hold                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Reject     | Active, On Hold, Inactive | Sets status to rejected                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Withdraw   | Active, On Hold           | Sets status to withdrawn; archives the application                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Reactivate | Inactive, Withdrawn       | Returns applicant to active status at their previous stage                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Convert    | Active (final stage)      | Creates member record, sets status to converted. Carries the same `election_vote` gate as Advance _(2026-09-14, MP-30)_, and is refused while any Required stage is not COMPLETED _(2026-09-28)_                                                                                                                                                                                                                                                                                         |
 
 ### Withdraw / Archive
 
 When an applicant (or their coordinator) decides to withdraw from the process:
 
-1. Click "Withdraw" in the detail drawer or table action menu
+1. Click **Withdraw** in the detail drawer or table action menu
 2. Confirm the withdrawal in the confirmation prompt (optional reason field)
 3. The application moves to the **Withdrawn** tab
 4. Withdrawn applicants can be reactivated by a coordinator at any time
 
 The Withdrawn tab on the main page shows all withdrawn applications with name, last stage, withdrawal date, and reason.
+
+#### Enable Status Page stages are wired _(2026-09-25, #2721)_
+
+The `status_page_toggle` stage shipped with an editor and stored config and no
+reader (pitfall #19). `public_status_enabled_for()` now decides per applicant:
+the latest Enable Status Page stage they have reached overrides the pipeline's
+`public_status_enabled` either way; an applicant who has reached none follows
+the switch, so existing pipelines behave as before. It is derived from
+position, not stored, so regressing undoes it. The status read, the
+self-withdrawal and the stage-email tracker link all ask that one function. On
+arrival via `_advance_current_step`, an enabling stage emails the status link
+(restarting the link's 30-day inactivity window) and a disabling stage sends
+nothing; both then complete through `_complete_on_arrival_step`, the path the
+automated-email stage now shares. A failed send, or no applicant email, leaves
+the stage open; a final stage never completes itself.
+
+#### Hiding upcoming stages _(2026-09-24)_
+
+`membership_pipelines.public_show_future_stages` (migration `1b52ea3a079e`,
+NOT NULL, server default 1 — so no pipeline changes on upgrade; idempotent both
+ways because `repair_schema` can add the column first). Pipeline Settings shows
+it as **Show upcoming stages** under the status-page switch, disabled while the
+page is off and no Enable Status Page stage exists. When off, the public
+status response lists only the public-visible stages the applicant has
+completed, withholds the current stage name and its action card, and returns
+`total_stages: null` — the count alone would say how many remain. The page then
+reads "N completed".
+
+**Unavailable is not "not found"** _(2026-09-28, W17-2)_. Only a 404/400/422
+reads **Application Not Found**; any other failure reads **Status Unavailable**
+with **Try again**. An outage used to tell the applicant their application did
+not exist. The withdraw dialog's label no longer reads "Reason (optional)
+(optional)".
 
 #### Applicant self-withdrawal _(2026-09-24)_
 
@@ -339,33 +419,41 @@ Each applicant has an optional `desired_membership_type` field (`'regular'` or `
 
 **Changing it in the pipeline:** The Applicant Detail Drawer displays the current membership type as a pair of toggle buttons between the Contact Info and Application Data sections. A coordinator can click the alternate type to change it at any time. The change takes effect immediately via an inline API update.
 
-**How it flows through to conversion:** The Conversion Modal reads the applicant's `desired_membership_type` to pre-select the membership type. If the applicant never specified a type, it defaults to regular. When converting, selecting "Regular Member" creates the member with `probationary` membership status (since all regular members begin with a probationary period).
+**How it flows through to conversion** _(changed 2026-09-30)_: the applicant's type picks a **track** — `regular` → operational, `administrative` → administrative — and the pipeline's `conversion_config` says what each track becomes (see [Conversion](#conversion)). The Conversion Modal pre-fills **Member class** and **Starting status** from that rule; it no longer offers Regular / Administrative cards.
 
 ### Conversion
 
-When an applicant reaches the final pipeline stage and is approved:
+When an applicant reaches the final pipeline stage and is approved, the coordinator clicks **Convert** in the drawer. `ConversionModal` is two steps — **Review Applicant**, then **Set Up Account** — and posts to `POST /prospective-members/prospects/{prospect_id}/transfer`.
 
-1. Coordinator clicks "Convert to Member" in the detail drawer or action menu
-2. Conversion modal appears with membership type pre-selected from the applicant's desired membership type:
-   - **Regular Member**: Starts as probationary — all regular members go through a probationary period
-   - **Administrative Member**: Non-operational support role
-3. The coordinator can override the pre-selected type if needed
-4. On confirmation, the system:
-   - Creates a new member record in the membership module
-   - Sets the applicant status to `converted`
-   - Records the conversion timestamp
+**What the member becomes — `conversion_config`** _(2026-09-30, #2836, migration `601fdb28ab8c`)_. A nullable JSON column on `membership_pipelines`, one outcome per track: `{"operational": {"member_class", "member_status"}, "administrative": {...}}`, where `member_status` is `probationary` or `regular`. NULL means the defaults, which are what the Convert dialog produced before: operational → probationary operational, administrative → regular administrative. The pipeline response always carries the **effective** outcomes, defaults filled in, so the frontend holds no copy of them. One rule, `resolve_conversion_outcome`, is applied by automatic conversion — which fixes automatic conversion, which used to ignore the applicant's track and make everyone a probationary operational member. Pipeline Settings → **When an Applicant Becomes a Member** edits it; create and duplicate carry it. `_do_transfer` writes `member_class` / `member_status` directly, so outcomes the legacy `membership_type` cannot spell (probationary administrative) survive. Precedence: explicit `member_class` + `member_status`, then a legacy `membership_type` (old API callers, unchanged), then the pipeline rule.
+
+**Target role** _(2026-09-24, #2656, migration `77d4aa7798dd`)_. `target_role_id` (FK to `positions`, `SET NULL`) is stored on the application, settable on Add Applicant, the drawer's contact editor and the Convert dialog; `target_role_name` is serialized from the relationship. `_do_transfer` uses an explicit `role_ids` when given and the stored target role otherwise — which also reaches automatic conversion. Before this, `role_ids` was always empty and every converted member got the default `member` position alone. The Add Applicant form did not actually send the field until #2841 (2026-09-29). **MP-31** (#2829, 2026-09-30): saving a target role runs the role-grant ceiling against the saver (on update, only when it changes), and the server records the chooser in `metadata.target_role_set_by`, discarding any client-supplied value. Manual conversion checks the role actually applied against the converting member. Automatic conversion applies the stored role only while its chooser is active and still holds every permission it grants; otherwise the member gets the default position and the activity log says a leader must assign it. A role saved before 2026-09-30 has no recorded chooser and so is never applied automatically.
+
+**Password delivery** _(2026-09-27, #2751)_. `TransferProspectRequest` takes an optional `password` (checked like `POST /users`) beside `send_welcome_email`. The dialog asks **How will they get their password?** — email a temporary one (withdrawn when `GET /users/welcome-email-available` says email cannot send; that endpoint now also admits `members.manage` and `prospective_members.manage`), set one now, or set it later with Reset Password. The endpoint refuses a welcome email it cannot deliver; neither email nor password stays allowed. The result screen shows the assigned membership number and what is left to do. Automatic conversion sends the welcome email after the approval commits, and when none goes out records it on the activity log and notifies the approver in-app.
+
+**Required stages** _(2026-09-28, #2771, W16-1)_. Transfer — manual and automatic — is refused while any Required stage is not COMPLETED (`_incomplete_required_steps`); a skipped stage does not count. A manual Convert grades the current stage with the same gate Advance uses, so an unsigned Multi-Signer Approval stage returns "Approval still needed from: …".
+
+**Notes** _(2026-09-30, #2859)_. `notes` (max 2000) is passed through `transfer_to_membership` to `_do_transfer` and recorded on the `transferred_to_membership` activity entry, which the drawer's activity log now renders. Before this the dialog's notes were never sent.
+
+**Identifier collisions** _(2026-09-29, #2845 / #2823)_. The username, email and department-email checks count deactivated rows, as the unique indexes do; generated usernames and department emails step past a deactivated one. A typed `membership_id` that belonged to a former member is refused unless it goes back to that member.
+
+On success the system creates the member record, applies class/status/role, sets the applicant to `converted`, links `converted_to_member_id`, and records the conversion.
 
 ---
 
 ## Election Package Integration
 
-When a pipeline includes an `election_vote` stage, the system automatically creates an **election package** when an applicant advances to that stage. This bridges the Prospective Members and Elections modules.
+When a pipeline includes an `election_vote` stage, the server creates an **election package** when an applicant enters that stage. This bridges the Prospective Members and Elections modules.
+
+**Server-side creation** _(2026-09-30, #2851)_. `ensure_election_package_on_entry` creates the package for an `election_vote` step on entry, idempotent per prospect + step (a package for that step, or a legacy one with no step, counts as existing). It is called from `_advance_current_step` (single and bulk advance, skip, sign-off, integration auto-advance), `regress_prospect`, `assign_stage`, `delete_step`'s fallback and `create_prospect`, inside the mover's transaction under its prospect row lock, with a locking existence read. The snapshot build moved into `_stage_election_package`, shared with the manual create endpoint; stage history is read after a flush so the stage just completed counts. Before this, only the frontend store's `advanceApplicant` created a package, in a second request, so every other route left applicants on the vote with none (and re-entry by Advance stacked a second draft). The vote-stage gate now refuses to advance or convert off an `election_vote` stage with **no** package; the drawer's **Create Package** fixes an applicant who reached the stage before this. A pipeline with no vote stage is unaffected — the check is in the vote-stage gate, not the shared `_election_block_reason`.
+
+**Ballot identity in the drawer** _(2026-09-24, #2652)_. `mapElectionPackageResponse` now carries `election_title`, `election_status` and `election_end_date`; it copied only `election_id`, so the drawer's link to the deciding ballot never rendered. `mapperFieldIntegrity.test.ts` guards fields a component reads that no mapper assigns.
 
 ### How It Works
 
 ```
 Applicant advances to election_vote stage
-  → Election package auto-created (status: draft)
+  → Election package created server-side on entry (status: draft)
   → Coordinator reviews and edits package
   → Coordinator marks package as "Ready for Ballot" (status: ready)
   → Secretary picks up ready packages in Elections module
@@ -463,11 +551,16 @@ The leadership Pipeline Overview report additionally provides year-over-year app
 
 ### Default Role Assignments
 
-| Role                   | Permission                   |
-| ---------------------- | ---------------------------- |
-| IT Administrator       | Full access (wildcard)       |
-| Secretary              | `prospective_members.manage` |
-| Membership Coordinator | `prospective_members.manage` |
+| Role                                            | Permission                                                                                           |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| IT Administrator                                | Full access (wildcard)                                                                               |
+| Secretary                                       | `prospective_members.manage`                                                                         |
+| Membership Coordinator                          | `prospective_members.manage`                                                                         |
+| Assistant Membership Coordinator _(2026-09-24)_ | `prospective_members.manage` (plus read-only roster, and `members.manage_id_cards` since 2026-10-02) |
+
+**Sign-offs need no module permission** _(2026-09-28)_. `GET /prospective-members/my-sign-offs` and `POST /prospective-members/prospects/{prospect_id}/approve-step` are reachable by any signed-in member with the module on: the officers a Multi-Signer Approval stage names rarely hold `prospective_members.*`. The service lists and accepts only stages asking for a role the caller holds, and returns the applicant's name and stage only — never the record. The last required signature completes the stage and advances the applicant.
+
+**Applicant labels** _(2026-09-28, W17-3/W17-4)_. `/prospective-members/print-labels` takes `prospective_members.view` **or** `.manage` (a manage-only coordinator used to get Access Denied), and labels print `_short_id(id)` — never the status token, which the label preview used to return to staff and every printed badge carried.
 
 ---
 
@@ -784,7 +877,25 @@ Prospect advances to automated_email stage
   → Builds HTML email from configured sections
   → Sends via organization's SMTP settings
   → Logs success/failure in prospect activity log
+  → On success, completes the stage through complete_step (2026-09-24)
 ```
+
+**The stage completes itself once its email is sent** _(2026-09-24, #2655)_.
+An automated-email stage used to send on arrival and then sit in progress until
+a coordinator clicked past it. It now completes through `complete_step` as soon
+as the send succeeds — same gates, activity entry and optional completion
+notice as a manual completion — and consecutive email stages chain. A failed
+send leaves the stage open, so a coordinator can see the applicant never
+received it. A stage flagged final is never completed this way: sending an email
+is not the approval (and, with `auto_transfer_on_approval`, the conversion) that
+stage stands for. Applicants already sitting on an email stage are not completed
+retroactively.
+
+**`FRONTEND_URL` reaches the container** _(2026-09-24, #2655)_. The compose
+files' backend environment block is a whitelist with no `env_file`, and
+`FRONTEND_URL` was not on it, so every emailed link — the status tracker
+included — was built from `http://localhost:3000`. It is passed through now;
+see `docs/UPGRADING.md` → "`FRONTEND_URL` must be a public address".
 
 ### Email Pipeline Architecture
 
@@ -796,15 +907,15 @@ Prospect advances to automated_email stage
 
 ### Edge Cases
 
-| Scenario                                     | Behavior                                                                      |
-| -------------------------------------------- | ----------------------------------------------------------------------------- |
-| Organization has no SMTP settings configured | Email sending is skipped with a warning log; stage advancement is not blocked |
-| Email sending fails (SMTP error)             | Email marked as `FAILED` with error message; prospect still advances          |
-| Multiple workers running                     | Redis lock ensures only one worker processes emails at a time                 |
-| Worker crashes while holding Redis claim     | Claim auto-expires after TTL; next cycle reclaims                             |
-| Application shutdown                         | Redis claim key is explicitly deleted                                         |
-| Empty custom section content                 | Section is omitted from email body                                            |
-| HTML in user-provided content                | All content is HTML-escaped before inclusion in email template                |
+| Scenario                                     | Behavior                                                                                                                                         |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Organization has no SMTP settings configured | No email goes out and the applicant stays on the stage, which is the sign to fix email                                                           |
+| Email sending fails (SMTP error)             | The stage stays open (not completed), so the applicant does not move past it _(corrected 2026-10-04: this row said the prospect still advanced)_ |
+| Multiple workers running                     | Redis lock ensures only one worker processes emails at a time                                                                                    |
+| Worker crashes while holding Redis claim     | Claim auto-expires after TTL; next cycle reclaims                                                                                                |
+| Application shutdown                         | Redis claim key is explicitly deleted                                                                                                            |
+| Empty custom section content                 | Section is omitted from email body                                                                                                               |
+| HTML in user-provided content                | All content is HTML-escaped before inclusion in email template                                                                                   |
 
 ---
 

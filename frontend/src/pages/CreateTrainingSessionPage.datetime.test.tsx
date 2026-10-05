@@ -47,3 +47,16 @@ describe('CreateTrainingSessionPage date/time bindings', () => {
     expect(source).toContain("updateField('end_datetime', formatForDateTimeInput(end, tz))");
   });
 });
+
+describe('CreateTrainingSessionPage date/time labels', () => {
+  // The visible "Start Date & Time" text was a bare <label> with no `for`, so
+  // the date input had no accessible name and a screen reader announced the
+  // start, end and RSVP pickers identically as "date".
+  it('associates every date/time control with its visible label', () => {
+    const ids = [...source.matchAll(/<DateTimeQuarterHour\s+value=\{[^}]*\}\s+id="([^"]+)"/g)].map((m) => m[1] ?? '');
+    expect(ids).toHaveLength(dateTimeValueBindings().length);
+    for (const id of ids) {
+      expect(source).toContain(`htmlFor="${id}"`);
+    }
+  });
+});

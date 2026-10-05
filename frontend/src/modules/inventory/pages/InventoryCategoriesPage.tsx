@@ -201,12 +201,12 @@ const InventoryCategoriesPage: React.FC = () => {
   );
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
+    <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
       <Breadcrumbs />
 
       <Link
         to="/inventory/admin"
-        className="text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1 text-sm"
+        className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 flex items-center gap-1 text-sm"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Admin
@@ -271,30 +271,33 @@ const InventoryCategoriesPage: React.FC = () => {
         <div className="card-grid gap-4">
           {categories.map((cat) => (
             <div key={cat.id} className="card-secondary flex flex-col p-5">
-              <div className="mb-3 flex items-start justify-between">
-                <div className="flex min-w-0 items-center gap-2.5">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
-                    <Tag className="h-4 w-4 text-blue-500" />
-                  </div>
-                  <h3 className="text-theme-text-primary line-clamp-2 font-semibold">{cat.name}</h3>
+              <div className="mb-3 flex min-w-0 items-center gap-2.5">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
+                  <Tag className="h-4 w-4 text-blue-500" />
                 </div>
+                <h3 className="text-theme-text-primary line-clamp-2 font-semibold">{cat.name}</h3>
+              </div>
+              {/* Edit shares the type badge's row, not the title's: at its 44px
+                  touch size beside the title it cut a 320px phone's category
+                  names to half their length. */}
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <span
+                  className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${
+                    ITEM_TYPE_COLORS[cat.item_type] ?? ITEM_TYPE_COLORS['other'] ?? ''
+                  }`}
+                >
+                  {getItemTypeLabel(cat.item_type)}
+                </span>
                 {canManage && (
                   <button
                     onClick={() => openEditModal(cat)}
                     aria-label={`Edit ${cat.name}`}
-                    className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover shrink-0 rounded-md p-1.5 transition-colors"
+                    className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover touch-target-phone shrink-0 rounded-md p-1.5 transition-colors"
                   >
                     <Pencil className="h-4 w-4" />
                   </button>
                 )}
               </div>
-              <span
-                className={`mb-3 inline-flex self-start rounded-full border px-2.5 py-1 text-xs font-medium ${
-                  ITEM_TYPE_COLORS[cat.item_type] ?? ITEM_TYPE_COLORS['other'] ?? ''
-                }`}
-              >
-                {getItemTypeLabel(cat.item_type)}
-              </span>
               {cat.description && (
                 <p className="text-theme-text-secondary mb-3 line-clamp-2 text-sm">{cat.description}</p>
               )}

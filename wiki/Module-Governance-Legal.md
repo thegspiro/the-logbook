@@ -40,17 +40,19 @@ person `settings.manage` and carry on.
 ## How a change reaches the public page
 
 1. Someone with `legal.propose` opens **Governance → Legal Documents** and
-   drafts a revision. A draft is **not public**.
+   clicks **Propose a revision**. A draft is **not public**.
 2. They record a **change note** — the bylaw, SOP, statute or counsel note
    behind the new wording. This is required; the point of proposing rather
    than editing in place is that somebody later can see the reason.
-3. Someone with `legal.publish` publishes it. The new wording goes live, and
-   the revision it replaced is **archived**, not deleted.
+3. Someone with `legal.publish` clicks **Publish** on the draft and confirms
+   with **Publish it** (_"Everyone who visits /privacy [or /terms] sees this text
+   immediately. The version published now is archived, not deleted."_). The new
+   wording goes live, and the revision it replaced is **archived**, not deleted.
 4. `/privacy` and `/terms` serve the new text to anonymous visitors
    immediately.
 
-**Revert to default** returns a document to the platform wording. It needs
-`legal.publish`.
+**Revert to the built-in text** (confirmed with **Use the default**) returns a
+document to the platform wording. It needs `legal.publish`.
 
 ## Where the text actually lives
 

@@ -57,6 +57,7 @@ from app.services.event_service import (
     attendance_locked_error,
 )
 from app.services.location_service import LocationService
+from app.utils.json_ids import json_array_contains
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import is_in_org
 from app.utils.org_timezone import local_and_utc_dates, resolve_scheduling_timezone
@@ -82,9 +83,7 @@ _APPROVER_EDITABLE_FIELDS = frozenset(
 
 
 def _display_name(user: User) -> str:
-    return f"{user.first_name or ''} {user.last_name or ''}".strip() or (
-        user.username or "Member"
-    )
+    return user.display_name or (user.username or "Member")
 
 
 @dataclass
@@ -1341,7 +1340,9 @@ class TrainingSessionService:
 
         return {
             "user_id": str(rsvp.user_id),
-            "user_name": _display_name(user),
+            # Legal name: the roster is stored on the approval that grants
+            # training credit, a training record of note.
+            "user_name": user.full_name or (user.username or "Member"),
             "user_email": user.email or "",
             "checked_in_at": _iso(check_in),
             "checked_out_at": _iso(check_out),
@@ -1897,9 +1898,7 @@ class TrainingSessionService:
                 select(User).where(User.id == str(finalized_by))
             )
             submitter = submitter_result.scalar_one_or_none()
-            submitter_name = (
-                f"{submitter.first_name} {submitter.last_name}" if submitter else None
-            )
+            submitter_name = submitter.display_name if submitter else None
 
             # Build approval URL
             approval_url = f"{settings.FRONTEND_URL}/training/approve/{approval_token}"
@@ -2517,7 +2516,7 @@ class TrainingSessionService:
                 ProgramRequirement.program_id == str(program_id),
                 ProgramRequirement.phase_id
                 == (str(phase_id) if phase_id is not None else None),
-                TrainingRequirement.category_ids.contains([str(category_id)]),
+                json_array_contains(TrainingRequirement.category_ids, category_id),
                 TrainingRequirement.requirement_type == RequirementType.HOURS,
             )
         )

@@ -17,7 +17,7 @@ The backend uses **Python 3.13+ with FastAPI** - a modern, high-performance fram
 | ------------------- | ----------------------------------- |
 | **Runtime**         | Python 3.13+                        |
 | **Framework**       | FastAPI                             |
-| **ORM**             | SQLAlchemy 2.0 (async)              |
+| **ORM**             | SQLAlchemy 2.1 (async)              |
 | **Migrations**      | Alembic                             |
 | **Validation**      | Pydantic                            |
 | **Server**          | Uvicorn (ASGI)                      |
@@ -136,7 +136,7 @@ is_valid = await verify_audit_chain(db)
 
 ### Async Database Operations
 
-SQLAlchemy 2.0 with async/await:
+SQLAlchemy 2.1 with async/await:
 
 ```python
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -579,7 +579,7 @@ redis-cli info server
 ## Resources
 
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
-- [SQLAlchemy 2.0 Documentation](https://docs.sqlalchemy.org/en/20/)
+- [SQLAlchemy Documentation](https://docs.sqlalchemy.org/)
 - [Pydantic Documentation](https://docs.pydantic.dev/)
 - [Alembic Documentation](https://alembic.sqlalchemy.org/)
 - [Python 3.13 Release Notes](https://docs.python.org/3.13/whatsnew/3.13.html)

@@ -183,3 +183,57 @@ class TestShipValidatesOncePerRunOffLoop:
         assert captured == []
         assert state.last_shipped_id == 0
         db.commit.assert_not_awaited()
+
+
+class TestAValueErrorInTheRunIsNotBlamedOnTheUrl:
+    """A misconfiguration must name the setting that is actually wrong.
+
+    The URL guard and the batch loop both raised `ValueError` into one
+    handler, so anything the loop raised — a missing or malformed audit
+    signing key being the realistic case — was reported to the operator as
+    "unsafe collector URL". That sends them to `AUDIT_SHIP_WEBHOOK_URL`, which
+    is fine, while the key stays broken.
+    """
+
+    @pytest.mark.usefixtures("_shipping_env")
+    async def test_a_signing_key_failure_does_not_mention_the_url(self, monkeypatch):
+        monkeypatch.setattr(audit_ship_module, "assert_outbound_url_safe", MagicMock())
+
+        def _broken_key():
+            raise ValueError("AUDIT signing key is not configured")
+
+        monkeypatch.setattr(audit_ship_module, "_get_audit_signing_key", _broken_key)
+
+        state = SimpleNamespace(last_shipped_id=0, last_shipped_at=None)
+        db = _fake_db(state, [[SimpleNamespace(id=1)]])
+        client, captured = _collector()
+
+        async with client:
+            results = await ship_new_audit_logs(db, client=client)
+
+        assert "unsafe collector URL" not in (results["error"] or "")
+        assert "signing key" in results["error"]
+        # Nothing was delivered and the watermark did not move.
+        assert captured == []
+        assert results["shipped_entries"] == 0
+        assert state.last_shipped_id == 0
+
+    @pytest.mark.usefixtures("_shipping_env")
+    async def test_an_unsafe_url_still_reports_the_url_and_ships_nothing(
+        self, monkeypatch
+    ):
+        def _reject(*_args, **_kwargs):
+            raise ValueError("resolves to a private/internal IP")
+
+        monkeypatch.setattr(audit_ship_module, "assert_outbound_url_safe", _reject)
+
+        state = SimpleNamespace(last_shipped_id=0, last_shipped_at=None)
+        db = _fake_db(state, [[SimpleNamespace(id=1)]])
+
+        results = await ship_new_audit_logs(db)
+
+        assert "unsafe collector URL" in results["error"]
+        assert results["shipped_entries"] == 0
+        # Validated before the watermark is read, so no row lock is taken and
+        # no state row is created for a run that cannot ship.
+        db.execute.assert_not_called()

@@ -61,40 +61,49 @@ frontend/src/modules/medical-screening/
 
 ### `screening_requirements` Table
 
-| Column              | Type            | Description                                                      |
-| ------------------- | --------------- | ---------------------------------------------------------------- |
-| `id`                | `String(36)`    | UUID primary key                                                 |
-| `organization_id`   | `String(36)`    | FK to organizations                                              |
-| `name`              | `String(200)`   | Requirement name (e.g., "Annual Physical Exam")                  |
-| `screening_type`    | `ScreeningType` | Type of screening                                                |
-| `description`       | `Text`          | Detailed description                                             |
-| `frequency_months`  | `Integer`       | Months between required screenings (NULL = one-time)             |
-| `applies_to_roles`  | `JSON`          | Array of role IDs this requirement applies to                    |
-| `is_active`         | `Boolean`       | Whether requirement is currently enforced                        |
-| `grace_period_days` | `Integer`       | Days after expiration before marking non-compliant (default: 30) |
-| `created_at`        | `DateTime`      | Creation timestamp                                               |
-| `updated_at`        | `DateTime`      | Last update timestamp                                            |
+| Column              | Type            | Description                                                                                                                  |
+| ------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `id`                | `String(36)`    | UUID primary key                                                                                                             |
+| `organization_id`   | `String(36)`    | FK to organizations                                                                                                          |
+| `name`              | `String(200)`   | Requirement name (e.g., "Annual Physical Exam")                                                                              |
+| `screening_type`    | `ScreeningType` | Type of screening                                                                                                            |
+| `description`       | `Text`          | Detailed description                                                                                                         |
+| `frequency_months`  | `Integer`       | Months between required screenings (NULL = one-time)                                                                         |
+| `applies_to_roles`  | `JSON`          | Array of role IDs. Stored, **not read** — every active member and prospect is evaluated (the dialog says "Not enforced yet") |
+| `is_active`         | `Boolean`       | Whether requirement is currently enforced                                                                                    |
+| `grace_period_days` | `Integer`       | Days after expiration before marking non-compliant (default: 30)                                                             |
+| `created_at`        | `DateTime`      | Creation timestamp                                                                                                           |
+| `updated_at`        | `DateTime`      | Last update timestamp                                                                                                        |
 
 ### `screening_records` Table
 
-| Column            | Type               | Description                                         |
-| ----------------- | ------------------ | --------------------------------------------------- |
-| `id`              | `String(36)`       | UUID primary key                                    |
-| `organization_id` | `String(36)`       | FK to organizations                                 |
-| `requirement_id`  | `String(36)`       | FK to screening_requirements                        |
-| `user_id`         | `String(36)`       | FK to users (nullable — NULL if prospect)           |
-| `prospect_id`     | `String(36)`       | FK to prospective_members (nullable — NULL if user) |
-| `screening_type`  | `ScreeningType`    | Type of screening                                   |
-| `status`          | `ScreeningStatus`  | Current status                                      |
-| `scheduled_date`  | `DateTime`         | When screening is scheduled                         |
-| `completed_date`  | `DateTime`         | When screening was completed                        |
-| `expiration_date` | `DateTime`         | When this screening expires                         |
-| `provider_name`   | `EncryptedText` 🔒 | Name of medical provider                            |
-| `result_summary`  | `EncryptedText` 🔒 | Brief result description                            |
-| `result_data`     | `EncryptedJSON` 🔒 | Structured result data (scores, measurements)       |
-| `reviewed_by`     | `String(36)`       | FK to users (reviewer)                              |
-| `reviewed_at`     | `DateTime`         | When review occurred                                |
-| `notes`           | `EncryptedText` 🔒 | Additional notes                                    |
+| Column            | Type               | Description                                          |
+| ----------------- | ------------------ | ---------------------------------------------------- |
+| `id`              | `String(36)`       | UUID primary key                                     |
+| `organization_id` | `String(36)`       | FK to organizations                                  |
+| `requirement_id`  | `String(36)`       | FK to screening_requirements, `SET NULL` (see below) |
+| `user_id`         | `String(36)`       | FK to users (nullable — NULL if prospect)            |
+| `prospect_id`     | `String(36)`       | FK to prospective_members (nullable — NULL if user)  |
+| `screening_type`  | `ScreeningType`    | Type of screening                                    |
+| `status`          | `ScreeningStatus`  | Current status                                       |
+| `scheduled_date`  | `DateTime`         | When screening is scheduled                          |
+| `completed_date`  | `DateTime`         | When screening was completed                         |
+| `expiration_date` | `DateTime`         | When this screening expires                          |
+| `provider_name`   | `EncryptedText` 🔒 | Name of medical provider                             |
+| `result_summary`  | `EncryptedText` 🔒 | Brief result description                             |
+| `result_data`     | `EncryptedJSON` 🔒 | Structured result data (scores, measurements)        |
+| `reviewed_by`     | `String(36)`       | FK to users (reviewer)                               |
+| `reviewed_at`     | `DateTime`         | When review occurred                                 |
+| `notes`           | `EncryptedText` 🔒 | Additional notes                                     |
+
+> **Deleting a requirement keeps its records** _(2026-09-29)_. `requirement_id`
+> is `ondelete="SET NULL"`, but `ScreeningRequirement.records` was declared
+> `cascade="all, delete-orphan"`, so the ORM deleted every record filed under a
+> requirement before the database's `SET NULL` could apply. The relationship
+> now uses `passive_deletes=True` with no delete cascade: a deleted
+> requirement only unlinks its records, which stay in each member's history.
+> Pinned by `tests/test_medical_screening_requirement_delete_keeps_records.py`.
+> Records deleted that way before the fix are gone.
 
 > 🔒 **Encrypted at rest** _(2026-08-09, app-review MS-1)_. These four columns
 > carry the module's PHI and use the transparent `EncryptedText` /

@@ -246,12 +246,8 @@ export const eventService = {
   /**
    * Get eligible members for check-in
    */
-  async getEligibleMembers(
-    eventId: string
-  ): Promise<Array<{ id: string; first_name: string; last_name: string; email: string | null }>> {
-    const response = await api.get<Array<{ id: string; first_name: string; last_name: string; email: string | null }>>(
-      `/events/${eventId}/eligible-members`
-    );
+  async getEligibleMembers(eventId: string): Promise<Array<EligibleCheckInMember>> {
+    const response = await api.get<EligibleCheckInMember[]>(`/events/${eventId}/eligible-members`);
     return response.data;
   },
 
@@ -1976,12 +1972,24 @@ export interface BatchReturnResponse {
   results: BatchReturnResultItem[];
 }
 
+export interface EligibleCheckInMember {
+  id: string;
+  first_name: string;
+  last_name: string;
+  preferred_name?: string | null;
+  email: string | null;
+}
+
 export interface MemberInventorySummary {
   user_id: string;
   username: string;
   first_name?: string;
   last_name?: string;
+  preferred_name?: string | null;
+  /** Legal name (first + last). */
   full_name?: string;
+  /** Preferred (else first) + last name. */
+  display_name?: string;
   membership_number?: string;
   permanent_count: number;
   checkout_count: number;

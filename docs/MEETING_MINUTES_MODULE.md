@@ -8,9 +8,10 @@ The Meeting Minutes module enables organizations to create, manage, and publish 
 
 ### Key Capabilities
 
-- **8 Meeting Types**: Business, special, committee, board, trustee, executive, annual, other — each with tailored default sections
+- **8 Minutes Types**: Business, special, committee, board, trustee, executive, annual, other — each with tailored default sections. A **meeting** record (`meetings.meeting_type`) accepts only five of them — business, special, committee, board, other — see [Meetings and minutes are two records](#meetings-and-minutes-are-two-records-2026-10-03)
 - **Template System**: Configurable templates with default sections, header/footer configs, and meeting type defaults
 - **Dynamic Sections**: Add, remove, reorder, and edit sections within minutes
+- **Approval Workflow**: Draft → submitted → approved (or rejected back for changes), with separation of duties — the submitter cannot approve
 - **Publish Workflow**: Approved minutes are published as styled HTML to the Documents module
 - **Event Linking**: Minutes can be linked to events for context
 - **Full-Text Search**: Search across minutes titles and section content
@@ -30,59 +31,70 @@ The Meeting Minutes module enables organizations to create, manage, and publish 
 
 ### Enums
 
-| Enum           | Values                                                                                   |
-| -------------- | ---------------------------------------------------------------------------------------- |
-| `MeetingType`  | `business`, `special`, `committee`, `board`, `trustee`, `executive`, `annual`, `other`   |
-| `MinuteStatus` | `draft`, `review`, `approved`                                                            |
-| `DocumentType` | `policy`, `procedure`, `form`, `report`, `minutes`, `training`, `certificate`, `general` |
-| `SourceType`   | `upload`, `generated`, `linked`                                                          |
+| Enum            | Values                                                                                                      |
+| --------------- | ----------------------------------------------------------------------------------------------------------- |
+| `MeetingType`   | `business`, `special`, `committee`, `board`, `trustee`, `executive`, `annual`, `other`                      |
+| `MinutesStatus` | `draft`, `submitted`, `approved`, `rejected` (UI: Draft, Awaiting approval, Approved, Returned for changes) |
+| `DocumentType`  | `policy`, `procedure`, `form`, `report`, `minutes`, `training`, `certificate`, `general`                    |
+| `SourceType`    | `upload`, `generated`, `linked`                                                                             |
 
 ### Key Files
 
-| File                                                       | Purpose                                                                    |
-| ---------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `backend/app/models/minute.py`                             | SQLAlchemy models, MeetingType/MinuteStatus enums, default section presets |
-| `backend/app/models/document.py`                           | Document and DocumentFolder models                                         |
-| `backend/app/schemas/minute.py`                            | Pydantic schemas for minutes and templates                                 |
-| `backend/app/schemas/document.py`                          | Pydantic schemas for documents and folders                                 |
-| `backend/app/services/minute_service.py`                   | Minutes CRUD, search, section management                                   |
-| `backend/app/services/template_service.py`                 | Template CRUD, default template creation                                   |
-| `backend/app/services/document_service.py`                 | Document/folder CRUD, system folder initialization, publish target         |
-| `backend/app/api/v1/endpoints/minutes.py`                  | Minutes and template API endpoints                                         |
-| `backend/app/api/v1/endpoints/documents.py`                | Document and folder API endpoints                                          |
-| `frontend/src/modules/minutes/pages/MinutesPage.tsx`       | Minutes list, create modal with template selector                          |
-| `frontend/src/modules/minutes/pages/MinutesDetailPage.tsx` | Section editor, reorder, publish                                           |
-| `frontend/src/modules/minutes/index.ts`                    | Module barrel export                                                       |
-| `frontend/src/modules/minutes/routes.tsx`                  | Route definitions                                                          |
-| `frontend/src/modules/minutes/services/api.ts`             | Module axios instance with auth interceptors                               |
-| `frontend/src/modules/minutes/store/minutesStore.ts`       | Zustand store for minutes CRUD                                             |
-| `frontend/src/modules/minutes/types/minutes.ts`            | TypeScript types and interfaces                                            |
-| `frontend/src/pages/MinutesPage.tsx`                       | Re-export from module (backward compatibility)                             |
-| `frontend/src/pages/MinutesDetailPage.tsx`                 | Re-export from module (backward compatibility)                             |
-| `frontend/src/pages/DocumentsPage.tsx`                     | Folder browsing, document viewer                                           |
+| File                                                       | Purpose                                                                                                |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `backend/app/models/minute.py`                             | SQLAlchemy models, MeetingType/MinuteStatus enums, default section presets                             |
+| `backend/app/models/document.py`                           | Document and DocumentFolder models                                                                     |
+| `backend/app/schemas/minute.py`                            | Pydantic schemas for minutes and templates                                                             |
+| `backend/app/schemas/document.py`                          | Pydantic schemas for documents and folders                                                             |
+| `backend/app/services/minute_service.py`                   | Minutes CRUD, search, section management                                                               |
+| `backend/app/services/template_service.py`                 | Template CRUD, default template creation                                                               |
+| `backend/app/services/document_service.py`                 | Document/folder CRUD, system folder initialization, publish target                                     |
+| `backend/app/api/v1/endpoints/minutes.py`                  | Minutes and template API endpoints                                                                     |
+| `backend/app/api/v1/endpoints/documents.py`                | Document and folder API endpoints                                                                      |
+| `frontend/src/modules/minutes/pages/MinutesPage.tsx`       | Meetings list with each meeting's minutes linked beneath it; Record Minutes dialog (creates a meeting) |
+| `frontend/src/modules/minutes/pages/MinutesDetailPage.tsx` | Section editor, reorder, publish                                                                       |
+| `frontend/src/modules/minutes/index.ts`                    | Module barrel export                                                                                   |
+| `frontend/src/modules/minutes/routes.tsx`                  | Route definitions                                                                                      |
+| `frontend/src/modules/minutes/services/api.ts`             | Module axios instance with auth interceptors                                                           |
+| `frontend/src/modules/minutes/store/minutesStore.ts`       | Zustand store for minutes CRUD                                                                         |
+| `frontend/src/modules/minutes/types/minutes.ts`            | TypeScript types and interfaces                                                                        |
+| `frontend/src/pages/MinutesPage.tsx`                       | Re-export from module (backward compatibility)                                                         |
+| `frontend/src/pages/MinutesDetailPage.tsx`                 | Re-export from module (backward compatibility)                                                         |
+| `frontend/src/pages/DocumentsPage.tsx`                     | Folder browsing, document viewer                                                                       |
 
 ---
 
 ## Minutes Lifecycle
 
+_(Corrected 2026-10-04. This section described a `review` status that does
+not exist and an approved record that could be sent back to review; neither
+matches the service.)_
+
 ```
-Draft  ──(submit for review)──>  Review  ──(approve)──>  Approved
-  ^                                 |                        |
-  |                                 v                        v
-  +──────────── (return to draft) ──+                   (publish)
-                                                            |
-                                                            v
-                                                      Document created
-                                                   in Documents module
+Draft ──(Submit for Approval)──> Submitted ──(Approve Minutes)──> Approved ──(publish)──> Document
+  ^                                  |                                              in Documents
+  |                                  v
+  +──(any edit)── Rejected <──(Reject Minutes, reason required)
 ```
 
 ### Status Rules
 
-| Status     | Can Edit Sections | Can Change Status         | Can Publish |
-| ---------- | ----------------- | ------------------------- | ----------- |
-| `draft`    | Yes               | → `review`                | No          |
-| `review`   | Yes               | → `approved` or → `draft` | No          |
-| `approved` | No (locked)       | → `review`                | Yes         |
+| Status      | Can edit sections                                                 | Next                                                               | Can publish | Can delete |
+| ----------- | ----------------------------------------------------------------- | ------------------------------------------------------------------ | ----------- | ---------- |
+| `draft`     | Yes                                                               | → `submitted`                                                      | No          | Yes        |
+| `submitted` | No                                                                | → `approved` (by someone other than the submitter) or → `rejected` | No          | No         |
+| `rejected`  | Yes — an edit returns it to `draft` and clears the rejection      | → `submitted`                                                      | No          | No         |
+| `approved`  | No (locked; action items accept status and completion notes only) | —                                                                  | Yes         | No         |
+
+**Separation of duties.** `approve_minutes` calls `assert_different_person`, so
+the officer who submitted a record cannot approve it ("You cannot approve your
+own meeting minutes…"). Since 2026-10-03 the detail page does not offer the
+submitter **Approve Minutes**; it reads _"Waiting for another officer to
+approve. You submitted these minutes, so you cannot approve them."_ **Reject
+Minutes** stays available to them as a way to withdraw.
+
+**Who sees what.** Callers without `minutes.manage` see approved, non-executive
+minutes only; the list endpoint decides this server-side.
 
 ---
 
@@ -252,7 +264,7 @@ The generated HTML includes:
 
 ### Custom Folders
 
-Users with `meetings.manage` permission can:
+Users with `documents.manage` permission can:
 
 - Create custom folders with name, description, icon, and color
 - Delete custom folders (moves contained documents to parent or root)
@@ -264,18 +276,32 @@ Users with `meetings.manage` permission can:
 
 ### Minutes Endpoints
 
-| Method   | Path                             | Permission        | Description                           |
-| -------- | -------------------------------- | ----------------- | ------------------------------------- |
-| `GET`    | `/api/v1/minutes`                | `meetings.view`   | List minutes with filtering           |
-| `POST`   | `/api/v1/minutes`                | `meetings.manage` | Create new minutes                    |
-| `GET`    | `/api/v1/minutes/search`         | `meetings.view`   | Search minutes by title/content       |
-| `GET`    | `/api/v1/minutes/{id}`           | `meetings.view`   | Get minutes detail with sections      |
-| `PUT`    | `/api/v1/minutes/{id}`           | `meetings.manage` | Update minutes and sections           |
-| `DELETE` | `/api/v1/minutes/{id}`           | `meetings.manage` | Delete minutes                        |
-| `POST`   | `/api/v1/minutes/{id}/publish`   | `meetings.manage` | Publish approved minutes to documents |
-| `GET`    | `/api/v1/minutes/templates`      | `meetings.view`   | List templates                        |
-| `POST`   | `/api/v1/minutes/templates`      | `meetings.manage` | Create template                       |
-| `DELETE` | `/api/v1/minutes/templates/{id}` | `meetings.manage` | Delete template                       |
+_(Corrected 2026-10-04: the router is mounted at `/api/v1/minutes-records`, not
+`/api/v1/minutes`, and is gated on `minutes.view` / `minutes.manage`, not the
+`meetings.*` permissions this table used to name.)_
+
+| Method   | Path                                                | Permission       | Description                                                                                                   |
+| -------- | --------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/api/v1/minutes-records`                           | `minutes.view`   | List minutes (non-managers get approved, non-executive only); each item carries `meeting_id` since 2026-10-03 |
+| `GET`    | `/api/v1/minutes-records/stats`                     | `minutes.view`   | Counts, including minutes awaiting approval                                                                   |
+| `GET`    | `/api/v1/minutes-records/search`                    | `minutes.view`   | Search minutes by title/content                                                                               |
+| `GET`    | `/api/v1/minutes-records/{id}`                      | `minutes.view`   | Minutes detail with sections                                                                                  |
+| `POST`   | `/api/v1/minutes-records`                           | `minutes.manage` | Create minutes                                                                                                |
+| `POST`   | `/api/v1/minutes-records/from-meeting/{meeting_id}` | `minutes.manage` | Create minutes from a meeting record (title, date, type, location, attendees)                                 |
+| `PUT`    | `/api/v1/minutes-records/{id}`                      | `minutes.manage` | Update a draft or rejected record                                                                             |
+| `DELETE` | `/api/v1/minutes-records/{id}`                      | `minutes.manage` | Delete a draft                                                                                                |
+| `POST`   | `/api/v1/minutes-records/{id}/submit`               | `minutes.manage` | Submit a draft or rejected record for approval                                                                |
+| `POST`   | `/api/v1/minutes-records/{id}/approve`              | `minutes.manage` | Approve (not by the submitter)                                                                                |
+| `POST`   | `/api/v1/minutes-records/{id}/reject`               | `minutes.manage` | Reject with a reason                                                                                          |
+| `POST`   | `/api/v1/minutes-records/{id}/publish`              | `minutes.manage` | Publish approved minutes to Documents                                                                         |
+| `GET`    | `/api/v1/minutes-records/templates`                 | `minutes.view`   | List templates                                                                                                |
+| `POST`   | `/api/v1/minutes-records/templates`                 | `minutes.manage` | Create template                                                                                               |
+| `PUT`    | `/api/v1/minutes-records/templates/{id}`            | `minutes.manage` | Update template                                                                                               |
+| `DELETE` | `/api/v1/minutes-records/templates/{id}`            | `minutes.manage` | Delete template                                                                                               |
+
+Motions, action items and quorum have their own sub-routes under
+`/{id}/motions`, `/{id}/action-items` and `/{id}/quorum`, all `minutes.manage`.
+Meeting records themselves are a separate router at `/api/v1/meetings`.
 
 ### List Response Counts _(2026-08-17)_
 
@@ -305,14 +331,14 @@ is missing rather than deciding the step is done.
 
 ### Document Endpoints
 
-| Method   | Path                             | Permission        | Description                                |
-| -------- | -------------------------------- | ----------------- | ------------------------------------------ |
-| `GET`    | `/api/v1/documents/folders`      | `meetings.view`   | List folders (auto-creates system folders) |
-| `POST`   | `/api/v1/documents/folders`      | `meetings.manage` | Create custom folder                       |
-| `DELETE` | `/api/v1/documents/folders/{id}` | `meetings.manage` | Delete custom folder                       |
-| `GET`    | `/api/v1/documents`              | `meetings.view`   | List documents with filtering              |
-| `GET`    | `/api/v1/documents/{id}`         | `meetings.view`   | Get document detail with content           |
-| `DELETE` | `/api/v1/documents/{id}`         | `meetings.manage` | Delete document                            |
+| Method   | Path                             | Permission         | Description                                |
+| -------- | -------------------------------- | ------------------ | ------------------------------------------ |
+| `GET`    | `/api/v1/documents/folders`      | `documents.view`   | List folders (auto-creates system folders) |
+| `POST`   | `/api/v1/documents/folders`      | `documents.manage` | Create custom folder                       |
+| `DELETE` | `/api/v1/documents/folders/{id}` | `documents.manage` | Delete custom folder                       |
+| `GET`    | `/api/v1/documents`              | `documents.view`   | List documents with filtering              |
+| `GET`    | `/api/v1/documents/{id}`         | `documents.view`   | Get document detail with content           |
+| `DELETE` | `/api/v1/documents/{id}`         | `documents.manage` | Delete document                            |
 
 ---
 
@@ -324,8 +350,10 @@ All queries are scoped to `organization_id`. Users can only access minutes and d
 
 ### Permission Model
 
-- **`meetings.view`**: Read access to minutes, templates, folders, and documents
-- **`meetings.manage`**: Write access — create, update, delete, publish
+- **`minutes.view`**: Read access to minutes and templates (approved, non-executive minutes only without `minutes.manage`)
+- **`minutes.manage`**: Write access — create, update, delete, submit, approve, reject, publish
+- **`meetings.view` / `meetings.manage`**: the meeting records at `/api/v1/meetings`
+- **`documents.view` / `documents.manage`**: folders and documents, including published minutes
 
 ### Input Sanitization
 
@@ -335,7 +363,7 @@ All queries are scoped to `organization_id`. Users can only access minutes and d
 
 ### Edit Protection
 
-Approved minutes are locked — status must be changed back to `review` or `draft` before content can be modified.
+Only `draft` and `rejected` minutes can be edited. Submitted and approved minutes are locked; on approved minutes an action item accepts only its status and completion notes.
 
 ### Audit Logging
 
@@ -414,6 +442,45 @@ The minutes module was refactored to follow the standard module conventions used
 
 ---
 
-**Document Version**: 1.1
-**Last Updated**: 2026-03-12
+## Meetings and minutes are two records _(2026-10-03)_
+
+The **Minutes** page (`/minutes`) lists **meeting** records (`/api/v1/meetings`)
+and, since 2026-10-03, each meeting's **minutes** (`/api/v1/minutes-records`)
+as links beneath its card. **Record Minutes** creates a meeting; the book icon
+on its card creates minutes from it (`POST …/from-meeting/{meeting_id}`) or,
+when it already has some, opens the newest. On an event page, **More → Create
+Meeting** creates a meeting from a business meeting event, with attendees from
+its check-ins.
+
+Found driving workflow review W51 (`docs/workflow-review/W51-minutes.md`):
+
+| Finding                                                                     | What changed                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| W51-1 (HIGH) Minutes from a meeting carried the wrong date and time         | `MinuteService.create_from_meeting` combined the meeting's date and start time with `tzinfo=timezone.utc`; both are the department's wall clock. It now reads them in the organization's scheduling timezone (`resolve_scheduling_timezone`) and converts to UTC. A meeting dated 1 Oct with no time no longer reads "September 30 at 7:00 PM"; a 7:00 PM meeting no longer reads 2:00 PM. **Existing rows are not corrected** — see W51-8                       |
+| W51-2 (HIGH) The Minutes page never led back to minutes                     | `MinutesListItem` carries `meeting_id` (additive). The page loads every set of minutes the caller may see, all pages, and links them under their meeting with their state (Draft / Awaiting approval / Approved / Returned for changes). **Pending Approval** reads the minutes stats endpoint rather than the meeting records' own status, which nothing advances (it read 0 while minutes waited)                                                              |
+| W51-3 The book icon wrote a second set of minutes                           | It opens the newest existing set ("Open the minutes of …"); only a meeting with none gets new minutes; double-clicks are guarded. The API still accepts a second set (e.g. from another tab)                                                                                                                                                                                                                                                                     |
+| W51-4 Executive, Trustee and Annual meetings could not be recorded          | `meetings.meeting_type` is a database ENUM of five types and the dialog offered all eight minutes types, so those three were refused with a 422 the dialog explained as a missing title or date. The dialog and the type filter now offer the five; a refused create shows the server's reason. Recording a closed (executive) session as its own meeting type needs a migration on `meetings.meeting_type` and a mapping in `create_from_meeting` — **flagged** |
+| W51-5 An action item's due date read a day early                            | Rendered with `formatCalendarDate` (a calendar day stored at UTC midnight was being converted to Chicago time)                                                                                                                                                                                                                                                                                                                                                   |
+| W51-6 The submitter was offered Approve                                     | Replaced by the "Waiting for another officer to approve" notice; Reject stays as a withdraw                                                                                                                                                                                                                                                                                                                                                                      |
+| W51-7 Meetings list                                                         | Dates read "Thu, Oct 1, 2026 at 7:00 PM" instead of `2026-10-01` / `19:00`; the create dialog is a named modal dialog; **Start Recording** stays disabled without the required date; the card's icon buttons have `aria-label`s naming the meeting and are 44px on phones                                                                                                                                                                                        |
+| W51-8 (flagged) Minutes already created from meetings keep the shifted date | A backfill could recompute from `meeting_id`, but cannot tell a date a secretary corrected by hand from a shifted one — owner decision, `docs/KNOWN_LIMITATIONS.md`                                                                                                                                                                                                                                                                                              |
+| W51-9 (open) A meeting's own status badge never moves                       | Nothing advances a meeting record's status, so it reads "Draft" beside approved minutes                                                                                                                                                                                                                                                                                                                                                                          |
+
+Related, 2026-09-26: a meeting created from an event copied its date and times
+from the event's UTC timestamp, so a 7 PM Eastern meeting read 11 PM and one
+after 8 PM landed on the next day; it now uses the department's date and time.
+
+**Copy pass** _(2026-09-29)_: the page reads "Record meetings, write up their
+minutes, and track action items"; the first tile is **Total Meetings**; the
+empty state is **No Meetings Recorded** / "Record your first meeting to start
+keeping minutes."; deleting a meeting warns "Delete this meeting with its
+attendees and action items? Minutes already created from it are kept."; the
+detail page's status badge reads Draft / Submitted / Approved / Rejected
+instead of the raw value; and an unlinked record reads "No event linked. Link
+the business meeting event these minutes record."
+
+---
+
+**Document Version**: 1.2
+**Last Updated**: 2026-10-04
 **Maintainer**: Development Team

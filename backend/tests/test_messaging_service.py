@@ -173,7 +173,12 @@ class TestInboxQuery:
         authors = MagicMock(
             all=MagicMock(
                 return_value=[
-                    SimpleNamespace(id="author-0", first_name=None, last_name=None)
+                    SimpleNamespace(
+                        id="author-0",
+                        first_name=None,
+                        last_name=None,
+                        preferred_name=None,
+                    )
                 ]
             )
         )
@@ -419,6 +424,7 @@ class TestAcknowledgmentReport:
             id=uid,
             first_name=first,
             last_name="",
+            display_name=first,
             username=first.lower(),
             roles=[SimpleNamespace(id=r, name=r) for r in roles],
             status=SimpleNamespace(value=status),
@@ -849,7 +855,10 @@ class TestGetInboxMessage:
             all=MagicMock(
                 return_value=[
                     SimpleNamespace(
-                        id="author-1", first_name="Shelly", last_name="Hernandez"
+                        id="author-1",
+                        first_name="Shelly",
+                        last_name="Hernandez",
+                        preferred_name=None,
                     )
                 ]
             )
@@ -913,6 +922,7 @@ class TestRevokedRowsAreOutOfTheLiveFigures:
                     id=f"u{i}",
                     first_name="Pat",
                     last_name=f"R{i}",
+                    display_name=f"Pat R{i}",
                     username=f"pat{i}",
                     status="active",
                 ),

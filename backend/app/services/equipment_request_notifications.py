@@ -73,8 +73,7 @@ def _subject_safe(text: str) -> str:
 
 
 def _display_name(user: User) -> str:
-    name = f"{user.first_name or ''} {user.last_name or ''}".strip()
-    return name or user.username or ""
+    return user.display_name or user.username or ""
 
 
 def _status_message(req: EquipmentRequest, outcome: str) -> str:

@@ -30,18 +30,24 @@ _rules_ and the member notification inbox are covered under
   Settings → Notifications (SMS also requires express consent under My Account →
   Security → Privacy Choices); the in-app notification is always delivered, and
   the department-message **email cannot be opted out of** — it is the record
-  that the member was notified.
+  that the member was notified. Since 2026-09-28 every other member email is on
+  one required/optional list, with a switch per optional email for members and
+  a **Member Emails & Texts** page for leadership (see
+  [below](#member-emails-and-notification-stacks-2026-09-28)).
+- **Notification stacks** _(2026-09-28)_ — two or more in-app notifications of
+  one category fold into one expandable row in the inbox and on the dashboard.
 
 ## Pages
 
-| Page                        | Route                                         | Audience    | Permission                                                                                  |
-| --------------------------- | --------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------- |
-| Messages (inbox)            | `/messages`                                   | All members | Authenticated                                                                               |
-| Department Messages (admin) | `/communications/messages`                    | Officers    | `notifications.manage`                                                                      |
-| Email Templates             | `/communications/email-templates`             | Admins      | `settings.manage`                                                                           |
-| ↳ **Footers** tab           | `/communications/email-templates?tab=footers` | Admins      | `settings.manage` **or** `organization.update_settings` _(2026-08-10; linkable 2026-08-11)_ |
-| Suggestions                 | `/suggestions`                                | All members | Authenticated — the **Review** tab appears only for a box's reviewers _(2026-09-23)_        |
-| Suggestion Box Management   | `/communications/suggestion-boxes`            | Admins      | `suggestions.manage` — configures boxes, **does not read them** _(2026-09-23)_              |
+| Page                        | Route                                         | Audience    | Permission                                                                                                                              |
+| --------------------------- | --------------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Messages (inbox)            | `/messages`                                   | All members | Authenticated                                                                                                                           |
+| Department Messages (admin) | `/communications/messages`                    | Officers    | `notifications.manage`                                                                                                                  |
+| Email Templates             | `/communications/email-templates`             | Admins      | `settings.manage`                                                                                                                       |
+| ↳ **Footers** tab           | `/communications/email-templates?tab=footers` | Admins      | `settings.manage` **or** `organization.update_settings` _(2026-08-10; linkable 2026-08-11)_                                             |
+| Suggestions                 | `/suggestions`                                | All members | Authenticated — the **Review** tab appears only for a box's reviewers _(2026-09-23)_                                                    |
+| Suggestion Box Management   | `/communications/suggestion-boxes`            | Admins      | `suggestions.manage` — configures boxes, **does not read them** _(2026-09-23)_                                                          |
+| Member Emails & Texts       | `/communications/member-emails`               | Admins      | View: `settings.manage`, `organization.update_settings` or `notifications.manage`; make an email required: the first two _(2026-09-28)_ |
 
 Members also see messages needing their attention (unread, unacknowledged, or
 persistent) on the **dashboard** "Department Messages" card and in the
@@ -87,11 +93,43 @@ that suggestion only.
   timestamps, screenshots re-encoded (EXIF and filenames dropped). An anonymous
   submitter follows up with a one-time key whose SHA-256 digest alone is
   stored; a lost key cannot be recovered. What it does **not** cover —
-  correlation by someone with access to the server's own logs — is in
+  correlation by someone with access to the server's database, mail records,
+  or a proxy the operator runs in front of the app — is in
   `docs/KNOWN_LIMITATIONS.md`.
 - **Emails carry a link, never the content.** Anonymous submitters are never
   emailed.
 - **Not gated by the Communications module switch**, which defaults off.
+
+**Added 2026-09-24 → 09-30:**
+
+- **A default Compliance box** in every department, reviewed by the new seeded
+  **Compliance Officer** position, anonymous-optional with follow-up. It is
+  created **open**, so reports filed before anyone holds the position wait
+  unread — appoint one promptly. Migrations `3c918c06466d` (seed, inactive) and
+  `7d2b4e8a1c35` (switch on unedited seeds). The position also signs email as
+  `{{compliance_officer_name}}` and friends.
+- **Notices.** Reviewers get a bell entry, a web push where configured, and an
+  email; **Also notify** names positions or members who are told a box received
+  something but cannot open it. A **Suggestion Submitted** notification rule
+  switches the new-submission notices off. The email is the optional
+  "Suggestion box" kind a member can turn off.
+- **Status history and public responses.** In a follow-up box the submitter
+  sees a timeline from receipt through each status, and reviewers can write a
+  **Response to the submitter** (2,000 characters) that appears on it under
+  "Reviewers", never a name.
+- **Idea board**, per box and off by default: reviewers publish their own title
+  and summary (never the submission, screenshots or sender) and every member
+  can vote.
+- **Delete a box.** An empty box deletes after a confirmation; one with
+  submissions offers **Archive instead** and needs its name typed for **Delete
+  permanently**. Audited as `suggestion_box_deleted`.
+- **Not logged** _(2026-09-30)_. Submission and follow-up requests are left out
+  of the bundled nginx and backend access logs, and a failed one is not filed on
+  Error Monitoring under the member's name. A proxy the operator runs in front
+  must be configured the same way.
+- **The submit form states the screenshot rules**: PNG, JPEG, WebP or GIF, 10 MB
+  each, scaled to 2560 px on the longest side, animated GIFs to their first
+  frame.
 
 API under `/api/v1/suggestions` (`/boxes`, `/mine`, `/follow-up/*`, `/review/*`,
 `/admin/*`). Engineering detail:
@@ -219,15 +257,31 @@ want to say the same thing to everybody:
 Departments can rename, reword, add and delete these; a footer names its own
 lines and toggles the contact and address blocks.
 
+**Since 2026-09-28** a footer switches **phone**, **email** and **website**
+separately (`show_phone` / `show_email` / `show_website`; a footer saved
+before inherits all three from its old `show_contact`, which now means "any
+part is shown"), and the editor shows the value each switch would print, or
+"Not set, so it will not appear". A **Department contact details** card above
+the footer list edits those values in place — they are the organization's own
+phone, email, website and mailing address, saved through
+`PATCH /organization/profile` with only those keys. Without `settings.manage`
+the card is read-only.
+
 **Where replies go.** Every message carries a `Reply-To` set to the
 department's own contact email, the address templates show as
 `{{organization_email}}`. The code sending a message can name a different one;
 the ballot, for example, names its election administrator. The sending address
 is often an unattended relay or `noreply@` account, and members reply to
 notices anyway. When the department has no contact email set, no `Reply-To` is
-added and replies go to the sending address, as before. A department that
-saved its footer library before this change keeps its own wording, including
-any "do not reply" line; edit it under **Footers** to match.
+added and replies go to the sending address, as before.
+
+> **The seeded "do not reply" line is gone from saved libraries too**
+> _(2026-09-25)_. A department that had saved its footer library kept the
+> seeded "Please do not reply to this email." line, because saving writes the
+> whole library. Migration `3f3b315165ed` removes that exact line from every
+> stored footer and leaves every other line alone, including any wording of
+> the same idea a department typed itself. Its downgrade restores the line
+> only on an untouched Internal footer.
 
 ### How it renders
 
@@ -298,6 +352,14 @@ under every US department's own address.
 
 ## Email Design & Rendering (2026-08-10)
 
+> **Superseded for the design itself.** The white-card-and-header-band look
+> described here was replaced twice: by the centred-masthead shell (2026-09-25, #2708 — migration
+> `f0d76814a9ab` moved untouched templates onto it), and on
+> 2026-09-27 by the solid-tab shell, which every template was reset to — see
+> [Email redesign and test sends](#email-redesign-and-test-sends-2026-09-27).
+> "Untouched templates track the built-in stylesheet" no longer applies: no
+> template keeps a stylesheet of its own. The fixes listed below still stand.
+
 - **One stylesheet, one document shell, one table style.**
   `app/services/email_theme.py` is shared by the template service, the storefront
   and the election report, replacing three copies with drifting hex codes. The
@@ -347,6 +409,126 @@ under every US department's own address.
 - `inventory_notification_service` passed **no organization** to `render()`, so
   every `{{organization_*}}` variable was silently dropped from inventory change
   emails.
+
+## Email redesign and test sends _(2026-09-27)_
+
+**One design, applied to every template.** Every email renders into the
+solid-tab shell (`app/services/email_theme.py`): the department's logo and name
+centred at the top, a solid tab in the notice's accent naming its category with
+one piece of urgency on the right (a deadline or time limit), the title on a
+card tinted with the accent, the white message card, any callout cards under it,
+and a centred footer. Mail apps that honour `prefers-color-scheme` (Apple Mail,
+Outlook.com) get a dark rendering. Welcome emails are green; red is kept for
+official notices.
+
+- **Migration `15c5bc7700aa` reset every stored template of a shipped type**,
+  edited ones included — subject, both bodies, footer choice and colour — and
+  cleared `css_styles`. Each reset row's previous values went to the new
+  `email_template_backups` table first. Custom-type templates (none can be
+  created) and rows already on the default were left alone. The downgrade
+  restores from the backups. Full operator text in
+  [UPGRADING](https://github.com/thegspiro/the-logbook/blob/main/docs/UPGRADING.md#every-email-template-is-reset-to-the-new-design-2026-09-27).
+- **Per-template stylesheets are gone.** The editor's **CSS Styles** box is
+  removed; the API still accepts `css_styles` but does not store it.
+- **Previous version panel.** A template with a backup shows **Previous
+  version (before the redesign)** above the editor. **Load this wording** puts
+  the backed-up subject, plain text, title and message into the current design
+  as an unsaved draft (asking first if it would replace unsaved edits); check
+  the preview and **Save**, or **Discard**. The old header, colours and
+  stylesheet are not brought back. `GET /api/v1/email-templates/{id}/backups`,
+  read-only, `settings.manage` or `organization.update_settings`.
+- **Event-request templates** (Events → Settings → Email) are wrapped in the
+  shell with the subject as the heading and the public footer; a body written
+  as a whole HTML page is reduced to its `<body>`, and a template's own
+  `{{organization_logo_img}}` renders empty because the masthead carries the
+  logo.
+- **Election rollback and deletion alerts** now send the editable **Election
+  Rollback Alert** and **Election Deleted** templates.
+- **Event reminders lead with a date tile** (month over day, in the
+  department's timezone) beside the title — new variables `event_month` and
+  `event_day`. Migration `ba5c348d7045` moves event-reminder rows still
+  identical to the reset body onto it.
+- Two days earlier, `b795d1b3401b` (#2736) had moved every template still
+  matching **any** previously shipped default onto the then-current design by
+  SHA-256, which is why untouched templates stopped reading **Edited**. The
+  reset above superseded it for appearance.
+
+> **The Templates tab banner** _(corrected 2026-10-04)_ now reads "Every email
+> uses the current design, including templates your department had edited —
+> there is nothing to adopt", points to **Previous version** for wording the
+> redesign replaced, and says Reset replaces wording without changing the
+> design. Before that it still told admins to press Reset "to adopt it", which
+> since `15c5bc7700aa` only discarded their wording.
+
+**Test sends and previews look like the real email** _(2026-09-28)_:
+
+- **Links** keep the real sender's path on this deployment's `FRONTEND_URL`, not
+  `example.com`.
+- **The department's own** phone, address and other `{{organization_*}}` values
+  fill the footer, blanks included, instead of "Sample Fire Department".
+- **The greeting names the admin** the test goes to (first name where the real
+  sender uses one); names that belong to someone else stay sample.
+- **Dates are placed relative to today** on the department's calendar and
+  formatted as the real sender formats them.
+- **The department's next record** fills event reminders (next event that is not
+  cancelled or a draft), series-end reminders, and shift reminder, assignment
+  and decline notices (next shift, with its apparatus). With no record the
+  samples stay; values typed into the preview still win.
+- **Attachments** are attached to the test send under the real rule.
+
+**A logo is validated when it changes** _(2026-09-28)_. Emails, the app icons
+and the login page all render the organization logo, so a changed logo on the
+Settings profile save now gets onboarding's validation: PNG or JPEG only,
+bounded size and dimensions, re-encoded. A link is refused ("Upload the logo as
+a PNG or JPEG file rather than a link."). An unchanged stored logo is not
+re-checked.
+
+**Email link address** _(2026-09-25 → 09-28)_. **Settings → Email** has an
+**Email link address** card showing the address every emailed link starts with
+and where it came from (`FRONTEND_URL`, or picked from `ALLOWED_ORIGINS`), with
+warnings for loopback, `http://`, an address that differs from the one being
+browsed, and — since #2770 — a **station-only** address (private or link-local
+IP, `.local`, `.lan`, `.internal`, `.intranet`, `.home.arpa`, `.localdomain`, or
+a single-label name). A holder of `system.manage_link_domain` (no default role;
+the System Owner's wildcard matches) can change it there, to a host the server
+already accepts. **Email Templates** shows the same warning, linking to that
+card, whenever the address is loopback or station-only. Startup logs a
+non-blocking warning for a station-only `FRONTEND_URL` when email is on. Detail
+in
+[EMAIL_DELIVERABILITY](https://github.com/thegspiro/the-logbook/blob/main/docs/EMAIL_DELIVERABILITY.md#links-inside-emails-2026-09-24).
+
+## Member emails and notification stacks _(2026-09-28)_
+
+**Every member email is on one list.** `app/services/email_policy.py` classes
+each email to a member's account as **required** (account and security,
+election ballots, department messages, leaving the department, store receipts,
+skills test results, overdue equipment) or **optional** (event and training
+reminders, shift notices, equipment and inventory updates, store announcements,
+volunteer calls, election notices, suggestion box, and officer duty emails).
+Senders ask the policy instead of reading preferences themselves, so **Email
+Notifications** off now stops every optional email — before, it stopped some
+and not others.
+
+- **Members** get a switch per optional email on Settings → Notifications
+  (**Emails you can turn off**) and a list of **Always emailed to you**. The
+  old **Event Reminders** / **Training Reminders** switches are gone; choices
+  made with them are still honoured.
+- **Leadership** opens **Communications → Member Emails & Texts**
+  (`/communications/member-emails`) to see every email, whether members can
+  turn it off, and which alerts may be texted. With `settings.manage` or
+  `organization.update_settings` they can switch **Require for every member**
+  on an optional email; every sender then delivers it regardless of the
+  member's choices. One-way, audited.
+- API: `GET`/`PUT /api/v1/email-templates/member-email-policy`,
+  `GET /api/v1/users/me/email-choices`.
+
+**Same-category notifications stack.** Two or more in-app notifications sharing
+a category (validation prompts, follow-up alerts) fold into one row in the
+inbox — "5 attendance validations", **Latest:** the newest subject, an unread
+badge and **Mark all read** — that expands to the individual rows. Pinned
+notifications never stack. On the dashboard a stack is one My Updates row that
+opens the inbox. `GET /api/v1/notifications/my/unread-by-category` and
+`POST /api/v1/notifications/my/read-category`, both self-scoped.
 
 ## The Send Log is your own send log _(2026-09-05)_
 

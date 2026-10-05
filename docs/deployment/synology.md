@@ -92,6 +92,8 @@ sudo sed -i "s|^ALLOWED_ORIGINS=.*|ALLOWED_ORIGINS=http://${NAS_IP}:3000|" .env
 
 # Links in outgoing email are built from FRONTEND_URL; use the address members
 # will open (your HTTPS hostname once a reverse proxy is in front)
+# A LAN IP only opens inside the station's network; with email on, the
+# startup log warns that members reading mail elsewhere cannot follow links.
 sudo sed -i "s|^FRONTEND_URL=.*|FRONTEND_URL=http://${NAS_IP}:3000|" .env
 
 # Set production mode
@@ -121,7 +123,8 @@ sudo docker compose ps
 > `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so every
 > later `docker compose ...` command stays hardened. In production the app
 > **refuses to start** if required secrets are missing or weak, if `DEBUG` or API
-> docs are enabled, or if HTTPS isn't enforced — terminate TLS at the DSM reverse
+> docs are enabled, if HTTPS isn't enforced, or if `FRONTEND_URL`
+> points at `localhost` with no address other than localhost in `ALLOWED_ORIGINS` to use instead — terminate TLS at the DSM reverse
 > proxy (see [Reverse Proxy with DSM](#reverse-proxy-with-dsm)).
 
 ### Step 6: Access The Logbook

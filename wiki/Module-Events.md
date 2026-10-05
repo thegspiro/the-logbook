@@ -14,8 +14,11 @@ The Events module manages department events with QR code check-in, recurring eve
 - **Event Templates** — Save and reuse event configurations
 - **RSVP Management** — Going/Maybe/Not Going with RSVP overrides for admins
 - **Booking Prevention** — Prevents double-booking of locations at the same time
-- **Event Attachments** — Upload documents, images, or files to events
+- **Event Attachments** — The API stores, lists and serves attachments (`/events/{id}/attachments`), but no screen uploads one: the create form says "Files can't be attached from the app yet." _(corrected 2026-09-29)_
 - **Reminders** — Configurable multi-tier reminders (e.g., 24 hours and 1 hour before)
+- **Organizer & alternate** — _(2026-10-03)_ Every event names an organizer and an optional alternate; they decide its attendance requests and can transfer it. See [Organizer, alternate and transfer](#organizer-alternate-and-transfer-2026-10-03)
+- **"I was there" attendance requests** — _(2026-09-30)_ A member with no check-in can ask to be marked present for 30 days after the event. See [Attendance requests](#attendance-requests-i-was-there-2026-09-30)
+- **Room NFC tags & kiosk ID-card check-in** — _(2026-10-02)_ A tag by a room's door checks a member in to whatever is open in the room; a room kiosk can accept member ID-card taps. See [Room tags and badge check-in](#room-tags-and-badge-check-in-2026-10-02)
 - **Post-Event Validation** — Organizers receive notifications to review/finalize attendance. **Finalizing closes the event**: the roster is fixed, hours are credited to everyone checked in, and the linked training record is written. Reopening needs `events.reopen_attendance`, deliberately kept out of `events.manage` so the organizer who closed an event cannot quietly reopen it and change numbers already fed into hours and compliance
 - **Past Events Tab** — Managers can browse historical events (hidden from regular members by default)
 - **Attendee Management** — Add/remove attendees directly from event detail page
@@ -26,16 +29,17 @@ The Events module manages department events with QR code check-in, recurring eve
 
 ## Pages
 
-| URL                      | Page                                                                                                                                                                           | Permission       |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------- |
-| `/events`                | Events List                                                                                                                                                                    | Authenticated    |
-| `/events/:id`            | Event Detail                                                                                                                                                                   | Authenticated    |
-| `/events/:id/qr-code`    | Event QR Code                                                                                                                                                                  | Authenticated    |
-| `/events/:id/check-in`   | Self Check-In                                                                                                                                                                  | Authenticated    |
-| `/events/:id/edit`       | Edit Event                                                                                                                                                                     | `events.manage`  |
-| `/events/:id/monitoring` | Check-In Monitoring                                                                                                                                                            | `events.manage`  |
-| `/events/:id/analytics`  | Event Analytics                                                                                                                                                                | `analytics.view` |
-| `/events/admin`          | Events Admin Hub — the sidebar entry is labeled **Manage Events** and points at `/events` since 2026-08-13; Create/Settings deep-link here via `?tab=create` / `?tab=settings` | `events.manage`  |
+| URL                               | Page                                                                                                                                                                           | Permission       |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------- |
+| `/events`                         | Events List                                                                                                                                                                    | Authenticated    |
+| `/events/:id`                     | Event Detail                                                                                                                                                                   | Authenticated    |
+| `/events/:id/qr-code`             | Event QR Code                                                                                                                                                                  | Authenticated    |
+| `/events/:id/check-in`            | Self Check-In                                                                                                                                                                  | Authenticated    |
+| `/events/:id/edit`                | Edit Event                                                                                                                                                                     | `events.manage`  |
+| `/events/:id/monitoring`          | Check-In Monitoring                                                                                                                                                            | `events.manage`  |
+| `/events/:id/analytics`           | Event Analytics                                                                                                                                                                | `analytics.view` |
+| `/locations/:locationId/check-in` | Room check-in — where a room's NFC tag lands; forwards to the open event's `/events/:id/check-in` _(2026-10-02)_                                                               | Authenticated    |
+| `/events/admin`                   | Events Admin Hub — the sidebar entry is labeled **Manage Events** and points at `/events` since 2026-08-13; Create/Settings deep-link here via `?tab=create` / `?tab=settings` | `events.manage`  |
 
 ---
 
@@ -53,6 +57,15 @@ GET    /api/v1/events/{id}/attendees         # List attendees
 POST   /api/v1/events/{id}/attendees         # Add attendee
 POST   /api/v1/events/{id}/duplicate         # Duplicate event
 GET    /api/v1/events/{id}/qr-code           # Get QR code
+POST   /api/v1/events/{id}/transfer          # Hand to a new organizer/alternate; scope "this" | "future" (2026-10-03)
+GET    /api/v1/events/settings/position-options          # Positions for the attendance-request fallback (2026-10-03)
+POST   /api/v1/events/{id}/attendance-petitions          # "I was there" request (2026-09-30)
+GET    /api/v1/events/{id}/attendance-petitions/mine     # The caller's request and can_request
+GET    /api/v1/events/{id}/attendance-petitions          # All requests (organizer, alternate or events.manage)
+POST   /api/v1/events/{id}/attendance-petitions/{pid}/approve
+POST   /api/v1/events/{id}/attendance-petitions/{pid}/reject
+PUT    /api/v1/locations/{id}/badge-check-in             # Per-room ID-card kiosk switch, locations.manage_nfc_tags (2026-10-02)
+POST   /api/public/v1/display/{code}/badge-tap           # Unauthenticated kiosk card tap (2026-10-02)
 ```
 
 ---
@@ -243,7 +256,7 @@ DELETE /api/v1/event-requests/email-templates/{id}         # Delete template
 ### Recurrence Improvements
 
 - **Recurrence editing**: Edit recurrence pattern on existing events
-- **Edit all future**: Updates only future occurrences in a series
+- **Edit all future**: Updates the edited occurrence and every later one in the series (UI: **This and all future events**). _(2026-09-28)_ Times are applied as a shift, not copied — see [Recurring series keep their dates and times](#recurring-series-keep-their-dates-and-times-2026-09-28)
 - **Recurrence exceptions**: Exclude individual occurrences from a recurring series without affecting others
 - **Series overview & navigation**: Recurring event detail pages show series badge, "View All in Series" link, and series management actions
 
@@ -415,20 +428,23 @@ POST   /api/v1/events/{id}/end                   # Bulk checkout all checked-in 
 ### API Endpoints — Recurring Events
 
 ```
-POST   /api/v1/events/{id}/series               # Get all events in a recurring series
-PUT    /api/v1/events/{id}/series/future         # Update all future events in series
+PATCH  /api/v1/events/{id}/update-future         # Update this and all later occurrences
 DELETE /api/v1/events/{id}/series                # Delete entire series
+POST   /api/v1/events/{id}/cancel-series         # Cancel the series (optionally future only)
+
+# Corrected 2026-10-04: this block listed POST /series and PUT /series/future,
+# which do not exist. The frontend reads a series through the events list.
 ```
 
 ### Edge Cases — Recurring Events
 
-| Scenario                           | Behavior                                                                    |
-| ---------------------------------- | --------------------------------------------------------------------------- |
-| Monthly-by-weekday with "5th week" | Falls back to last occurrence when month has fewer than 5 weeks             |
-| Annual events on Feb 29            | Shifts to Feb 28 in non-leap years                                          |
-| Delete single occurrence           | Does not affect other occurrences in the series                             |
-| "Edit all future"                  | Only modifies events after the current date; past occurrences are unchanged |
-| Duplicate detection                | Checks time + location overlap before creating each occurrence              |
+| Scenario                           | Behavior                                                                                                                                                   |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Monthly-by-weekday with "5th week" | Falls back to last occurrence when month has fewer than 5 weeks                                                                                            |
+| Annual events on Feb 29            | Shifts to Feb 28 in non-leap years                                                                                                                         |
+| Delete single occurrence           | Does not affect other occurrences in the series                                                                                                            |
+| "Edit all future"                  | Modifies the anchor occurrence and every later one (`start_datetime >= anchor`); earlier occurrences are unchanged — the boundary is the anchor, not today |
+| Duplicate detection                | Checks time + location overlap before creating each occurrence                                                                                             |
 
 ---
 
@@ -731,3 +747,191 @@ mid-finalize blocks and then finds the event closed rather than landing as
 checked-in-but-uncredited behind a lock. The bulk paths (`update_future_events`,
 `cancel_series`, `delete_event_series`) were reading the finalized state without
 holding the rows at all.
+
+## Recurring series keep their dates and times _(2026-09-28)_
+
+Found driving workflow review W18 (`docs/workflow-review/W18-events-and-recurring.md`).
+
+- **Series were stepped in UTC.** `_generate_recurrence_dates` added seven days
+  to the stored UTC instant, so a weekly 7:00 PM Chicago drill (`00:00Z`)
+  read 6:00 PM from 2 November. Custom weekdays, Nth-weekday patterns and skip
+  dates were matched against the UTC day — the next day for any US evening
+  event — while the client sends all three as the department's calendar. The
+  generator now steps in wall-clock time in the department's zone and converts
+  each occurrence back to UTC; `create_recurring_event` and
+  `run_rolling_recurrence_extend` (resolving the zone once per organization)
+  both pass it.
+- **`update_future_events` collapsed the series onto one date.** It copied
+  every payload field onto every later occurrence, and the edit form always
+  sends `start_datetime` / `end_datetime`. Times are now applied as a change:
+  each occurrence moves by the anchor's own wall-clock shift and takes its new
+  length, an RSVP deadline keeps its lead ahead of each occurrence's start, and
+  unchanged times leave every occurrence alone. The finalized-attendance guard
+  fires only when times actually change.
+- A cancelled occurrence reads "Series of N" rather than "Occurrence of N";
+  the schedule controls are named ("Series end date", "Date to skip", "Start
+  time" / "End time" via `DateTimeQuarterHour`'s new `timeLabel`).
+
+> **Not repaired:** rows already stored. A series spanning a DST change is an
+> hour off after it; evening series with custom weekdays, Nth-weekday patterns
+> or skip dates may be a day out; a series edited with "This and all future
+> events" may have later occurrences collapsed onto one date, which the rows
+> cannot recover. Regenerating from the parent's pattern would move events
+> members RSVP'd to — flagged (W18-3), and covered for operators in
+> `docs/UPGRADING.md`.
+
+## RSVP closes with the event; the past-event page _(2026-09-29 → 09-30)_
+
+- **List card and dashboard timeline** offered Going / Not Going / Change RSVP
+  / Leave Waitlist on events past their end or deadline, and the API answered 400. `isRsvpClosed()` in `utils/eventHelpers.ts` mirrors the two time checks
+  in `EventService.create_or_update_rsvp` and gates both. An unparseable date
+  counts as open, so the server makes the call.
+- **Add to Calendar** is hidden once the event has ended (scheduled end passed
+  or `actual_end_time` set). **View QR Code** is hidden once self check-in
+  cannot succeed — window closed, cancelled, or finalized. The close is the
+  new `check_in_closes_at` on the event detail response, from
+  `EventService._get_check_in_window`, so a WINDOW event's after-end minutes
+  are honoured rather than re-derived in the browser.
+- **W19** (`docs/workflow-review/W19-rsvp.md`): RSVP Activity prints labels,
+  not stored values; "1 person"; the RSVP dialog's choices are 44px on a
+  phone. Flagged: waitlist promotion notifies **in-app only** (W19-1, no email
+  — pitfall 18), and writes no `rsvp_history` row (W19-3).
+
+## Attendance requests ("I was there") _(2026-09-30)_
+
+New table `event_attendance_petitions` (migration `0ff2dfd2e9a2`, additive,
+guarded; downgrade drops it), unique on `(event_id, user_id)` — one request
+per member per event, a double tap included. Responses are excluded from the
+client API cache.
+
+- **Eligibility is the server's** (`GET …/attendance-petitions/mine` returns
+  `can_request` and `unavailable_reason`): not draft or cancelled; the check-in
+  window (`_get_check_in_window`) has closed — while self check-in still works
+  the answer is "Check in instead"; within `PETITION_WINDOW_DAYS = 30` of the
+  event's effective end; and not already present (`checked_in` or an
+  `override_check_in_at`). Requested times cannot be in the future.
+- **Approval writes the same manager override Edit Times writes** onto the
+  RSVP, so crediting stays on one path — finalize credits it. Approval is
+  therefore refused while attendance is finalized (`attendance_locked_error`);
+  declining is not. Nobody decides their own request.
+- **Notices:** the request goes to reviewers in-app and by email
+  (`EmailKind.EVENT_DUTIES`); the decision goes to the member
+  (`EVENT_REMINDERS`).
+
+## Organizer, alternate and transfer _(2026-10-03)_
+
+`events.organizer_id` / `alternate_organizer_id` (migration `90070d4a2f6f`;
+the organizer is backfilled from `created_by`, so existing routing is
+unchanged). `event_organizer_service.py` owns routing and handover.
+
+- **Routing for attendance requests:** organizer + alternate; failing both
+  (left, or the only one set is the requester), the position chosen per event
+  type in `org.settings.events.attendance_request_fallback_positions`
+  (**Event settings → Attendance → Attendance requests**, default "Secretary"),
+  then the `secretary` position, then every `events.manage` holder — never
+  nobody.
+- **Decision rights:** organizer, alternate, or `events.manage`. The creator no
+  longer decides once the event is handed over. The page gates on the server's
+  `can_manage_organizers` rather than comparing ids.
+- **`POST /events/{id}/transfer`**, scope `this` or `future` (upcoming
+  occurrences plus the series parent; past occurrences keep their organizer).
+  Open requests are re-addressed, the new and relieved members are told, and
+  the change is audit-logged. The series-end reminder goes to the organizer
+  pair, and rolling series copy it.
+- **UI:** Organizer / Alternate pickers on Create Event (`Me (default)`), an
+  **Organized by** row with **Transfer event** on the detail page, and the
+  **Transfer Event** dialog (**Apply to**: this and all future events in the
+  series / this event only).
+
+## An attendance-lock refusal is a 409 with its sentence _(2026-09-29)_
+
+Services refuse a write on finalized attendance with `attendance_locked_error()`
+— a sentence behind the internal `ATTENDANCE_LOCKED::` prefix. Eleven routes
+mishandled it: the marker went out raw (400, or 404 on the cohort cancels)
+from the legacy `POST /training/sessions/{id}/finalize`, `PATCH
+…/update-future`, `DELETE …/series`, `POST …/cancel-series`, the cohort shift /
+cancel / class reschedule / class cancel routes and the event-request schedule
+and postpone moves; bulk add's per-row errors carried it on a race; and `PATCH
+/events/{id}`, `DELETE /events/{id}` and cancel sanitized first, where
+`safe_error_detail`'s 300-character cap replaced a long refusal (an edit that
+also picked a category, or any update-future save) with "An unexpected error
+occurred". One mapping now serves all of them: `attendance_lock_reason()` in
+`event_service.py` and `attendance_lock_http_error()` in
+`app/api/attendance_lock.py`, applied to the raw error **before** sanitizing.
+`POST /events/{id}/cancel` also stopped turning its own 404 into a 500.
+
+## Room tags and badge check-in _(2026-10-02)_
+
+- **Room NFC tags.** `NfcTagTarget.ROOM_CHECK_IN` writes
+  `/locations/<id>/check-in`. The landing page (`RoomCheckInPage`) asks the
+  existing org-scoped `GET /locations/{id}/display` what is in its check-in
+  window: one event forwards to its `/events/:id/check-in`, several ask "Which
+  event are you here for?", none says "Nothing to check in to" with **Check
+  again**. Attendance is still the event's own self check-in. Room cards on
+  **Check-In QR Codes** offer **Write NFC tag** with the room link; the kiosk
+  code is never written to a tag. LOC5-32-1 (`docs/security-review/LOC5-32-locations-kiosk.md`)
+  then redacted `event_description` on that endpoint to match its public
+  sibling, since it had gained a caller.
+- **Who writes tags** (migration `5bed4c485d2f`, additive, gated per
+  `docs/rules/migrations.md`): `apparatus.manage_nfc_tags` — President, Vice
+  President, Chief, Deputy Chief, Assistant Chief, Apparatus Officer;
+  `locations.manage_nfc_tags` — the same leadership and the Facilities
+  Manager; `members.manage_id_cards` added to the Assistant Membership
+  Coordinator. Both tag grants gate only the app's writer — writing never
+  reaches the server and a tag carries no secret.
+- **Kiosk badge check-in.** `locations.nfc_badge_check_in_enabled` (migration
+  `040ae44ad286`, server default off for every room) is switched per room with
+  `PUT /locations/{id}/badge-check-in` (`locations.manage_nfc_tags`, audited,
+  refused while the NFC ID Cards integration is off) — not a field on the
+  general location form. `POST /api/public/v1/display/{code}/badge-tap`
+  re-checks both switches on every tap; the room decides the event (exactly
+  one in its window; an overlap is refused unless the member is checked in to
+  exactly one, i.e. a check-out); the tap goes through
+  `NfcTagService.check_in` with the station's bounce guard. The response
+  carries a first name and last initial only. 60 taps a minute per IP and per
+  room; every tap that moves attendance is audited (`nfc_kiosk_badge_tap`). New
+  error code **LB-EVT-005** for a room without badge check-in. The accepted
+  risk — a copied card works unattended — is in `docs/KNOWN_LIMITATIONS.md`.
+
+## Check-in, templates, requests and settings fixes _(2026-09-28 → 10-04)_
+
+- **W20** (`W20-check-in.md`): the self check-in success screen said "Training
+  Record Created" on every Training event. `QRCheckInData.records_training` is
+  now computed with the same test the record writer uses (pitfall 29) and gates
+  the notice, now headed "Training Record". The manual check-in dialog's
+  buttons are named "Check in {name}"; monitoring prints "Going".
+- **W21** (`W21-templates-admin-analytics.md`): moving the start carries the end
+  with it (`handleStartDateChange`); a template edit sends cleared optional
+  fields as `null` (pitfall 1, update path); a template's default start is the
+  next hour on the department's clock. Flagged: template **Delete** soft-deletes
+  (W21-5) and analytics' "Avg Attendance Rate" pools upcoming events (W21-6).
+- **W22** (`W22-event-request.md`): public form fields get `id`/`htmlFor` and a
+  checkbox group a `<fieldset>`; pipeline tasks get `aria-pressed`; coordinator
+  lists use `formatRank`. Flagged: the requester is never given their status
+  link (W22-4).
+- **W23** (`W23-locations-kiosk-guest.md`): Locations' create/edit/delete,
+  wizard and station-mode controls are gated on the permissions their
+  endpoints check. Flagged: a guest whose event creates prospects lands in no
+  pipeline when none is `is_default` (W23-1), and no screen lists guest
+  sign-ins (W23-2).
+- **A single-event create with Require RSVP needs an RSVP Deadline**, as
+  `EventCreate.validate_dates` already required; the form asks instead of
+  rendering the 422's `{field, message}` array as a React child, which crashed
+  the page (2026-09-27, `getErrorDetail()` at 43 call sites).
+- **Event settings on phones** (2026-10-02): `AdminHubFrame`'s header wraps
+  (shared by every administration hub), a deep-linked Settings tab scrolls into
+  view, long category/outreach IDs wrap, icon-only controls use
+  `touch-target-phone`, headings step h1 › h2 › h3, and a malformed response
+  takes the load-error path instead of the ErrorBoundary.
+- **Event detail** (2026-10-04): roster Check In / Edit Times / Remove and the
+  remove confirmation use `touch-target-phone`; the notification panel's
+  Send / Confirm and the check-in modal's bulk add move to `btn-info` /
+  `btn-success`; every card uses the `card` utility.
+- **First-time members** (2026-09-29): an unnarrowed empty list reads "No
+  upcoming events yet" with a Learning Center link; the QR page explains the
+  code before its window opens.
+- **Copy pass** (2026-09-29, #2779): "Events settings" → "Event settings",
+  "Successfully Checked In!" → "You're Checked In", check-in window option
+  descriptions, "Minutes After End", "Keep Event" / "Keep Series" / "Keep It
+  Running", and "Notify members who RSVP'd Going or Maybe" on the cancel
+  dialog. Training guide 04 tables the old and new wording.

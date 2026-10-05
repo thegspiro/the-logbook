@@ -5,7 +5,7 @@
 # ============================================
 # Web Framework
 # ============================================
-fastapi==0.141.1
+fastapi==0.142.2
 # starlette pinned explicitly (normally transitive): the 1.x line carries
 # the security fixes pip-audit flagged; fastapi>=0.141 accepts it.
 starlette==1.7.0
@@ -24,12 +24,12 @@ mcp==2.2.0
 # ============================================
 # Database - MySQL
 # ============================================
-sqlalchemy==2.1.1
+sqlalchemy==2.1.2
 alembic==1.20.0
 pymysql==1.2.0  # Held: 1.2.1+ removed escape_bytes_prefixed, which aiomysql 0.3.2 calls for every bytes param (see docs/KNOWN_LIMITATIONS.md)
 aiomysql==0.3.2
 greenlet==3.5.6  # Required by SQLAlchemy for async operations
-cryptography==50.0.1  # Required by PyMySQL for secure connections; includes CVE-2026-69247 fix
+cryptography==50.0.2  # Required by PyMySQL for secure connections; includes CVE-2026-69247 fix
 
 # ============================================
 # Redis & Caching
@@ -40,7 +40,7 @@ hiredis==3.4.2
 # ============================================
 # Authentication & Security
 # ============================================
-PyJWT[crypto]==2.15.0
+PyJWT[crypto]==2.15.1
 bcrypt==5.0.0
 python-multipart==0.0.32
 pyotp==2.10.0
@@ -62,7 +62,7 @@ jinja2==3.1.6
 # ============================================
 # SMS
 # ============================================
-twilio==9.11.1
+twilio==9.11.2
 
 # ============================================
 # Web Push (PWA notifications)
@@ -74,9 +74,9 @@ pywebpush==2.5.0
 # ============================================
 # File Storage
 # ============================================
-boto3==1.43.102  # AWS S3
-azure-storage-blob==12.30.3
-google-cloud-storage==3.15.0
+boto3==1.43.107  # AWS S3
+azure-storage-blob==12.31.0
+google-cloud-storage==3.16.0
 python-magic==0.4.27
 
 # ============================================
@@ -107,13 +107,13 @@ tzdata>=2026.4  # Timezone data for zoneinfo (Python 3.9+ built-in)
 # ============================================
 # Payments
 # ============================================
-stripe==15.6.1
+stripe==16.0.0
 
 # ============================================
 # Monitoring & Logging
 # ============================================
 loguru==0.7.3
-sentry-sdk==2.70.0
+sentry-sdk==2.71.0
 psutil==7.2.2  # System monitoring for health checks
 
 # ============================================
@@ -132,9 +132,9 @@ celery==5.6.3
 # ============================================
 msal==1.39.0
 msgraph-core==1.5.1
-google-auth==2.58.1
-google-auth-oauthlib==1.4.1
-google-api-python-client==2.200.0
+google-auth==2.59.1
+google-auth-oauthlib==1.5.0
+google-api-python-client==2.201.0
 
 # ============================================
 # Development & Testing
@@ -144,8 +144,8 @@ pytest-asyncio==1.4.0
 pytest-cov==7.1.0
 pytest-randomly==5.0.0
 pytest-timeout==2.4.0
-hypothesis==6.168.1  # schemathesis 4.x requires >=6.130.12
-schemathesis==4.28.0
+hypothesis==6.168.3  # schemathesis 4.x requires >=6.130.12
+schemathesis==4.29.0
 # Pinned because these two move together. 4.24.3 called
 # CanonicalSchema.is_satisfiable(), which jsonschema-rs 0.50 removed, and an
 # unbounded transitive upgrade made every generated API contract case fail
@@ -161,23 +161,23 @@ schemathesis==4.28.0
 # the same way). Read that range off the schemathesis release being pinned
 # before changing this line; the dependency bot does not read this comment and
 # has now proposed an out-of-range bump twice.
-jsonschema-rs==0.57.1
-faker==40.39.0
+jsonschema-rs==0.58.4
+faker==40.40.0
 
 # Code Quality
 black==26.5.1
 flake8==7.4.1
 flake8-pytest-style==2.2.0
-mypy==2.3.1
-isort==9.0.1
+mypy==2.4.0
+isort==9.0.2
 # pylint declares a hard upper bound on isort, so the two only move together:
 # an isort bump on its own makes this file unresolvable. 3.x capped it at <7,
 # 4.0.7 at <9, and 4.0.8 widens it to <10. Raise pylint past the cap in the
 # same commit that raises isort.
-pylint==4.0.9
+pylint==4.1.1
 
 # ============================================
 # Utilities
 # ============================================
-python-dotenv==1.2.3
+python-dotenv==1.2.4
 click==8.5.0

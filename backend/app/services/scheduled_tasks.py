@@ -1247,7 +1247,7 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                 for hours in due_intervals:
                     for user in recipients:
                         prefs = user.notification_preferences or {}
-                        user_name = f"{user.first_name} {user.last_name}"
+                        user_name = user.display_name
 
                         # In-app notification — always created regardless of
                         # email preference so users who opt out of email still
@@ -1474,7 +1474,9 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
                         from app.services.email_service import wrap_email_body
 
                         full_event_url = f"{settings.FRONTEND_URL}/events/{event.id}"
-                        e_first = _html.escape(creator.first_name or "")
+                        e_first = _html.escape(
+                            creator.preferred_name or creator.first_name or ""
+                        )
                         e_title = _html.escape(event.title or "")
                         email_service = EmailService(organization=org)
                         sent_count, _ = await email_service.send_email(
@@ -1493,7 +1495,7 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
                                 f"Review Event</a></p>",
                             ),
                             text_body=(
-                                f"Hi {creator.first_name},\n\n"
+                                f"Hi {creator.preferred_name or creator.first_name},\n\n"
                                 f'Your event "{event.title}" has ended. '
                                 f"{checked_in_count} of {rsvp_count} attendees checked in.\n\n"
                                 f"Please review and confirm the attendance records and "
@@ -1843,7 +1845,9 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                         full_url = (
                             f"{settings.FRONTEND_URL}/scheduling?shift={shift.id}"
                         )
-                        e_first = _html.escape(officer.first_name or "")
+                        e_first = _html.escape(
+                            officer.preferred_name or officer.first_name or ""
+                        )
                         e_shift_date = _html.escape(shift_date_str)
                         email_service = EmailService(organization=org)
 
@@ -1897,7 +1901,7 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                                 "Review Shift</a></p>",
                             ),
                             text_body=(
-                                f"Hi {officer.first_name},\n\n"
+                                f"Hi {officer.preferred_name or officer.first_name},\n\n"
                                 f"Your shift on {shift_date_str} "
                                 "has ended. "
                                 f"{att_count} member"
@@ -2104,8 +2108,9 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                     roster.append(
                         {
                             "user_id": str(assignment.user_id),
-                            "name": user.full_name or user.email or "Member",
-                            "first_name": user.first_name,
+                            "name": user.display_name or user.email or "Member",
+                            # The greeting uses the name the member goes by.
+                            "first_name": user.preferred_name or user.first_name,
                             "email": user.email,
                             "position": pos_value,
                             "position_label": position_label(pos_value),
@@ -3019,7 +3024,9 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                                 else "End-of-Shift Summary"
                             )
 
-                            e_first = _html.escape(user.first_name or "")
+                            e_first = _html.escape(
+                                user.preferred_name or user.first_name or ""
+                            )
                             sent, _ = await email_svc.send_email(
                                 to_emails=[user.email],
                                 subject=subject,
@@ -3039,7 +3046,7 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                                     "View Shift Details</a></p>",
                                 ),
                                 text_body=(
-                                    f"Hi {user.first_name or ''},\n\n"
+                                    f"Hi {user.preferred_name or user.first_name or ''},\n\n"
                                     f"End-of-Shift Summary\n"
                                     f"Date: {shift_date_str}\n"
                                     f"Time: {time_range}\n"
@@ -3267,7 +3274,9 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
                     department_required_kinds(org),
                 ):
                     try:
-                        e_first = _html.escape(trainee.first_name or "")
+                        e_first = _html.escape(
+                            trainee.preferred_name or trainee.first_name or ""
+                        )
                         e_date = _html.escape(shift_date_str)
                         sent, _ = await email_svc.send_email(
                             to_emails=[trainee.email],
@@ -3287,7 +3296,7 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
                                 "Review Report</a></p>",
                             ),
                             text_body=(
-                                f"Hi {trainee.first_name or ''},\n\n"
+                                f"Hi {trainee.preferred_name or trainee.first_name or ''},\n\n"
                                 f"{trainee_message}\n\n"
                                 f"Review Report: {full_url}"
                             ),
@@ -3307,7 +3316,7 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
                 # spamming them with one email per overdue report)
                 officer_subject = f"Trainee report unacknowledged — {shift_date_str}"
                 officer_message = (
-                    f"{trainee.full_name or trainee.email or 'Trainee'} "
+                    f"{trainee.display_name or trainee.email or 'Trainee'} "
                     f"has not acknowledged the shift report you filed for "
                     f"{shift_date_str} ({ack_days}+ days overdue)."
                 )
@@ -4240,6 +4249,7 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
     Daily at 07:00.
     """
     from app.services.email_service import EmailService
+    from app.services.email_theme import WRAP_STYLE, with_subline
     from app.services.inventory_service import InventoryService
 
     def _row_domain(item) -> str:
@@ -4259,15 +4269,18 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
             # will not match the item's own quantity column, and an unexplained
             # mismatch reads as a bug rather than as the count that matters.
             source = "in-date lots" if from_lots else "on hand"
+            # The category rides under the item name rather than taking a
+            # fourth column, which ran the table past a phone-width card.
             items_html += (
-                f"<tr><td style='padding:6px 12px;border-bottom:1px solid #eee;'>"
-                f"{_html.escape(item.name)}</td>"
-                f"<td style='padding:6px 12px;border-bottom:1px solid #eee;'>"
-                f"{_html.escape(cat_name)}</td>"
-                f"<td style='padding:6px 12px;border-bottom:1px solid #eee;text-align:center;'>"
+                f"<tr><td style='padding:8px;border-bottom:1px solid #eee;"
+                f"vertical-align:top;{WRAP_STYLE}'>"
+                f"{with_subline(_html.escape(item.name), _html.escape(cat_name))}</td>"
+                f"<td style='padding:8px;border-bottom:1px solid #eee;"
+                f"vertical-align:top;text-align:center;'>"
                 f"<strong style='color:#dc2626;'>{on_hand}</strong>"
                 f"<br><span style='color:#6b7280;font-size:11px;'>{source}</span></td>"
-                f"<td style='padding:6px 12px;border-bottom:1px solid #eee;text-align:center;'>"
+                f"<td style='padding:8px;border-bottom:1px solid #eee;"
+                f"vertical-align:top;text-align:center;'>"
                 f"{item.reorder_point}</td></tr>"
             )
 
@@ -4275,10 +4288,9 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
             '<table style="width:100%;border-collapse:collapse;margin:16px 0;">'
             "<thead>"
             '<tr style="background:#f3f4f6;">'
-            '<th style="padding:8px 12px;text-align:left;">Item</th>'
-            '<th style="padding:8px 12px;text-align:left;">Category</th>'
-            '<th style="padding:8px 12px;text-align:center;">Current Qty</th>'
-            '<th style="padding:8px 12px;text-align:center;">Reorder Point</th>'
+            '<th style="padding:8px;text-align:left;">Item</th>'
+            '<th style="padding:8px;text-align:center;">Current Qty</th>'
+            '<th style="padding:8px;text-align:center;">Reorder Point</th>'
             "</tr></thead>"
             f"<tbody>{items_html}</tbody></table>"
         )
@@ -4534,7 +4546,7 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
             html_body = wrap_email_body(
                 org,
                 "Overdue Equipment",
-                f"<p>Hello {_html.escape(user_obj.first_name or 'Member')},</p>"
+                f"<p>Hello {_html.escape(user_obj.preferred_name or user_obj.first_name or 'Member')},</p>"
                 f"<p>The following items are overdue for return:</p>"
                 f'<ul style="margin:16px 0;">{items_list}</ul>'
                 f"<p>Please return these items as soon as possible.</p>",
@@ -4567,6 +4579,7 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
     Tiers: 180 days, 90 days, 30 days, past due.
     """
     from app.services.email_service import EmailService
+    from app.services.email_theme import WRAP_STYLE, with_subline
     from app.services.inventory_service import InventoryService
 
     async def process(db_session: AsyncSession, org: Organization) -> int:
@@ -4589,24 +4602,31 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
                 return ""
             rows = ""
             for it in items:
+                # The serial or asset tag rides under the item name; as its
+                # own column it pushed the table past a phone-width card.
+                ident = it.get("serial_number") or it.get("asset_tag")
                 rows += (
-                    f"<tr><td style='padding:6px 12px;border-bottom:1px solid #eee;'>"
-                    f"{_html.escape(it['item_name'])}</td>"
-                    f"<td style='padding:6px 12px;border-bottom:1px solid #eee;'>"
-                    f"{_html.escape(it.get('serial_number') or it.get('asset_tag') or 'N/A')}</td>"
-                    f"<td style='padding:6px 12px;border-bottom:1px solid #eee;'>"
-                    f"{it['retirement_date']}</td>"
-                    f"<td style='padding:6px 12px;border-bottom:1px solid #eee;text-align:center;'>"
+                    f"<tr><td style='padding:8px;border-bottom:1px solid #eee;"
+                    f"vertical-align:top;{WRAP_STYLE}'>"
+                    + with_subline(
+                        _html.escape(it["item_name"]),
+                        _html.escape(str(ident)) if ident else "",
+                    )
+                    + "</td>"
+                    f"<td style='padding:8px;border-bottom:1px solid #eee;"
+                    f"vertical-align:top;white-space:nowrap;'>"
+                    f"{_html.escape(str(it['retirement_date']))}</td>"
+                    f"<td style='padding:8px;border-bottom:1px solid #eee;"
+                    f"vertical-align:top;text-align:center;'>"
                     f"<strong style='color:{color};'>{it['days_until_retirement']}d</strong></td></tr>"
                 )
             return f"""
                 <h3 style="color:{color};margin-top:16px;">{title} ({len(items)})</h3>
                 <table style="width:100%;border-collapse:collapse;margin:8px 0;">
                     <thead><tr style="background:#f3f4f6;">
-                        <th style="padding:8px 12px;text-align:left;">Item</th>
-                        <th style="padding:8px 12px;text-align:left;">ID</th>
-                        <th style="padding:8px 12px;text-align:left;">Retirement Date</th>
-                        <th style="padding:8px 12px;text-align:center;">Days</th>
+                        <th style="padding:8px;text-align:left;">Item</th>
+                        <th style="padding:8px;text-align:left;">Retires</th>
+                        <th style="padding:8px;text-align:center;">Days</th>
                     </tr></thead>
                     <tbody>{rows}</tbody>
                 </table>
@@ -4679,17 +4699,45 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
 
     window_days = 30
 
+    # Three columns, not six: a phone gives the email about 300px of card, and
+    # six columns of headers alone overran it, pushing the stock count — the
+    # number the officer acts on — off the right edge. Where an item is and
+    # how long it has left ride as a second line under the item and the date.
     def _cell(content: str, extra: str = "") -> str:
         return (
-            f"<td style='padding:6px 12px;border-bottom:1px solid #eee;{extra}'>"
-            f"{content}</td>"
+            "<td style='padding:8px;border-bottom:1px solid #eee;"
+            f"vertical-align:top;{extra}'>{content}</td>"
+        )
+
+    def _th(label: str, align: str = "left") -> str:
+        return f'<th style="padding:8px;text-align:{align};">{label}</th>'
+
+    def _stacked(primary: str, secondary: str) -> str:
+        """*primary* over a smaller grey *secondary*; both already escaped."""
+        if not secondary:
+            return primary
+        return (
+            f"{primary}<br><span style='color:#6b7280;font-size:12px;'>"
+            f"{secondary}</span>"
         )
 
     def _days_label(days: Optional[int], color: str) -> str:
         if days is None:
-            return "&mdash;"
-        text = "expired" if days < 0 else f"{days}d"
+            return ""
+        text = "expired" if days < 0 else f"{days}d left"
         return f"<strong style='color:{color};'>{text}</strong>"
+
+    def _expires_cell(
+        expiration: Optional[date], days: Optional[int], color: str
+    ) -> str:
+        # The fallback is markup, so it is never passed through escape():
+        # doing so is what mailed a literal "&mdash;" for an undated row.
+        when = _html.escape(str(expiration)) if expiration else "&mdash;"
+        return _cell(_stacked(when, _days_label(days, color)), "white-space:nowrap;")
+
+    # Long unbroken names (a part number, a lot code) must wrap inside the
+    # cell rather than widen the table past the card.
+    _wrap = "word-break:break-word;overflow-wrap:anywhere;"
 
     async def process(db_session: AsyncSession, org: Organization) -> int:
         # One department-local date for every count in the email; the job runs
@@ -4731,20 +4779,29 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
                 return ""
             body = ""
             for item in rows:
-                days = item.get("days_until_expiration")
+                location = " &middot; ".join(
+                    _html.escape(str(part))
+                    for part in (
+                        item.get("apparatus_name"),
+                        item.get("compartment_name"),
+                    )
+                    if part
+                )
                 body += (
                     "<tr>"
-                    + _cell(_html.escape(str(item.get("item_name") or "Unknown")))
-                    + _cell(_html.escape(str(item.get("apparatus_name") or "&mdash;")))
                     + _cell(
-                        _html.escape(str(item.get("compartment_name") or "&mdash;"))
+                        _stacked(
+                            _html.escape(str(item.get("item_name") or "Unknown")),
+                            location,
+                        ),
+                        _wrap,
                     )
-                    + _cell(_html.escape(str(item.get("expiration_date") or "&mdash;")))
-                    + _cell(_days_label(days, color), "text-align:center;")
-                    + _cell(
-                        str(item.get("ready_stock", 0)),
-                        "text-align:center;",
+                    + _expires_cell(
+                        item.get("expiration_date"),
+                        item.get("days_until_expiration"),
+                        color,
                     )
+                    + _cell(str(item.get("ready_stock", 0)), "text-align:center;")
                     + "</tr>"
                 )
             return f"""
@@ -4752,12 +4809,7 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
                 <p style="color:#6b7280;font-size:13px;margin:4px 0;">{note}</p>
                 <table style="width:100%;border-collapse:collapse;margin:8px 0;">
                     <thead><tr style="background:#f3f4f6;">
-                        <th style="padding:8px 12px;text-align:left;">Item</th>
-                        <th style="padding:8px 12px;text-align:left;">Apparatus</th>
-                        <th style="padding:8px 12px;text-align:left;">Compartment</th>
-                        <th style="padding:8px 12px;text-align:left;">Expires</th>
-                        <th style="padding:8px 12px;text-align:center;">In</th>
-                        <th style="padding:8px 12px;text-align:center;">Ready stock</th>
+                        {_th("Item")}{_th("Expires")}{_th("Ready stock", "center")}
                     </tr></thead>
                     <tbody>{body}</tbody>
                 </table>
@@ -4772,12 +4824,16 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
                     (lot.expiration_date - today).days if lot.expiration_date else None
                 )
                 color = "#dc2626" if days is not None and days < 0 else "#ca8a04"
+                lot_label = (
+                    f"Lot {_html.escape(str(lot.lot_number))}" if lot.lot_number else ""
+                )
                 body += (
                     "<tr>"
-                    + _cell(_html.escape(item_name or "Unknown"))
-                    + _cell(_html.escape(lot.lot_number or "&mdash;"))
-                    + _cell(_html.escape(str(lot.expiration_date or "&mdash;")))
-                    + _cell(_days_label(days, color), "text-align:center;")
+                    + _cell(
+                        _stacked(_html.escape(item_name or "Unknown"), lot_label),
+                        _wrap,
+                    )
+                    + _expires_cell(lot.expiration_date, days, color)
                     + _cell(str(lot.quantity), "text-align:center;")
                     + "</tr>"
                 )
@@ -4791,11 +4847,7 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
                 </p>
                 <table style="width:100%;border-collapse:collapse;margin:8px 0;">
                     <thead><tr style="background:#f3f4f6;">
-                        <th style="padding:8px 12px;text-align:left;">Item</th>
-                        <th style="padding:8px 12px;text-align:left;">Lot</th>
-                        <th style="padding:8px 12px;text-align:left;">Expires</th>
-                        <th style="padding:8px 12px;text-align:center;">In</th>
-                        <th style="padding:8px 12px;text-align:center;">Qty</th>
+                        {_th("Item")}{_th("Expires")}{_th("Qty", "center")}
                     </tr></thead>
                     <tbody>{body}</tbody>
                 </table>
@@ -5107,7 +5159,7 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
 
                 for recipient in recipients:
                     prefs = recipient.notification_preferences or {}
-                    user_name = f"{recipient.first_name} {recipient.last_name}"
+                    user_name = recipient.display_name
 
                     # In-app notification
                     try:

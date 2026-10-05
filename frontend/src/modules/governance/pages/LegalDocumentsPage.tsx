@@ -253,6 +253,8 @@ const LegalDocumentsPage: React.FC = () => {
             key={documentType}
             type="button"
             role="tab"
+            id={`legal-tab-${documentType}`}
+            aria-controls="legal-document-panel"
             aria-selected={activeType === documentType}
             className={`mobile-touch-target px-4 py-2 text-sm font-medium whitespace-nowrap ${
               activeType === documentType
@@ -267,7 +269,12 @@ const LegalDocumentsPage: React.FC = () => {
       </div>
 
       {active ? (
-        <div className="space-y-6">
+        <div
+          className="space-y-6"
+          role="tabpanel"
+          id="legal-document-panel"
+          aria-labelledby={`legal-tab-${active.documentType}`}
+        >
           <section className="card space-y-3 p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-theme-text-primary text-lg font-semibold">What members see now</h2>

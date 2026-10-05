@@ -89,8 +89,7 @@ def can_manage_organizers(event: Event, user: User) -> bool:
 
 
 def _display_name(user: User) -> str:
-    full = f"{user.first_name or ''} {user.last_name or ''}".strip()
-    return full or user.username
+    return user.display_name or user.username
 
 
 def _event_type_value(event: Event) -> str:

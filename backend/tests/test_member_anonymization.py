@@ -157,6 +157,26 @@ class TestAnonymizeMember:
         assert leave.leave_type == LeaveType.MEDICAL  # operational fact kept
         assert leave.start_date == date(2026, 1, 1)
 
+    async def test_clears_the_preferred_name_the_display_name_prefers(self, db_session):
+        """A scrub that leaves `preferred_name` keeps naming the member.
+
+        `format_display_name` prefers it over `first_name`, so every shift
+        board, roster and notification would read "Terry Member-1a2b3c4d" —
+        the anonymization visibly failing on the surfaces members actually
+        see, while the audited `first_name` column looks correctly scrubbed.
+        """
+        org = await _make_org(db_session)
+        user = await _make_departed_member(
+            db_session, org, first_name="Patricia", preferred_name="Pat"
+        )
+        assert user.display_name == "Pat Firefighter"
+
+        await MemberAnonymizationService(db_session).anonymize_member(user)
+
+        assert user.preferred_name is None
+        assert "Pat" not in user.display_name
+        assert user.display_name.startswith("Former Member-")
+
     async def test_two_members_anonymize_without_unique_collisions(self, db_session):
         org = await _make_org(db_session)
         user_a = await _make_departed_member(db_session, org)

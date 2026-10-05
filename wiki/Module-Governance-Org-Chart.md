@@ -22,11 +22,15 @@ edit affordances shown.
 A **node** is a seat: a title, an optional statement of what that seat is
 responsible for, optional contact email and phone, and a position in the tree
 under its parent. Seats are ordered among their siblings, and a seat can be
-unpublished to keep it off the chart while you work on it.
+hidden to keep it off the chart while you work on it: switch off **Show this
+position to members** (_"Turn off to prepare a reorganization before members
+see it."_). Hiding a position also hides every position below it on the
+chart.
 
 **A seat holds several people.** A department with two deputy chiefs puts both
 in one box rather than inventing two boxes that mean the same thing. Holders
-are ordered within the seat.
+are ordered within the seat. A seat with nobody in it still appears on the
+chart, marked **Vacant**.
 
 **A holder need not be a member of the department.** A holder row carries
 either a `user_id` or a plain `display_name`, which is how the town attorney,

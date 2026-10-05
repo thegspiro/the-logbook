@@ -15,7 +15,9 @@ from app.api.dependencies import _collect_user_permissions, _has_permission
 from app.core.permissions import (
     ALL_PERMISSIONS,
     LEGACY_PERMISSION_ALIASES,
+    describe_invalid_permission_grants,
     expand_legacy_permissions,
+    invalid_permission_grants,
     permission_matches,
     permission_matches_any,
 )
@@ -167,3 +169,30 @@ class TestInventoryWildcardCoversChecklists:
         the widening is the wildcard's doing, not the namespace's."""
         for name in self.CHECK_PERMISSIONS:
             assert not permission_matches(name, {"inventory.view"}), name
+
+
+class TestInvalidPermissionGrants:
+    """Role validation accepts exactly what ``permission_matches`` honours."""
+
+    def test_catalog_names_are_valid(self):
+        assert invalid_permission_grants([p.name for p in ALL_PERMISSIONS]) == []
+
+    def test_global_wildcard_is_valid(self):
+        assert invalid_permission_grants(["*"]) == []
+
+    def test_module_wildcard_on_a_catalog_module_is_valid(self):
+        assert invalid_permission_grants(["inventory.*", "members.*"]) == []
+
+    def test_retired_names_are_valid(self):
+        assert invalid_permission_grants(list(LEGACY_PERMISSION_ALIASES)) == []
+
+    def test_unknown_names_and_wildcards_are_reported_sorted(self):
+        assert invalid_permission_grants(
+            ["users.view", "zzz.*", "users.fly", "*.view", "users"]
+        ) == ["*.view", "users", "users.fly", "zzz.*"]
+
+    def test_message_stays_short_enough_to_reach_the_client(self):
+        invalid = [f"stale.permission_number_{i}" for i in range(40)]
+        message = describe_invalid_permission_grants(invalid)
+        assert len(message) <= 300
+        assert message.endswith("and 35 more")

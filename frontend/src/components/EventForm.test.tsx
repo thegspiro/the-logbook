@@ -1250,4 +1250,21 @@ describe('EventForm', () => {
       );
     });
   });
+
+  // Create Event crashed the whole Events hub when this lookup answered 200
+  // with a body that was not the settings shape (a captive portal's HTML page):
+  // `visibleTypes.includes` ran on undefined. It now gets the same fallback a
+  // failed request already had — every event type offered.
+  describe('a visible-types response that is not its declared shape', () => {
+    it('keeps every event type on offer instead of crashing', async () => {
+      const lookup = vi.mocked(apiModule.eventService.getVisibleEventTypesWithCategories);
+      // Once, and asserted consumed below, so it cannot leak into a later test.
+      lookup.mockResolvedValueOnce('<html>Sign in to Wi-Fi</html>' as never);
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+
+      await waitFor(() => expect(lookup).toHaveBeenCalled());
+      expect(await screen.findByRole('heading', { name: 'Event Details', level: 2 })).toBeInTheDocument();
+      expect(screen.getAllByText('Business Meeting').length).toBeGreaterThan(0);
+    });
+  });
 });

@@ -211,6 +211,62 @@ class TestComplianceStatus:
         assert summary.expiring_soon_count == 1
         assert summary.is_fully_compliant is True  # still compliant
 
+    async def test_a_screening_expiring_today_counts_as_expiring_soon(
+        self, service, org_id, user_id
+    ):
+        """Day zero is the day it matters most, and the list already shows it.
+
+        The boundary was ``0 < days_until_exp <= 30``, so a screening whose
+        expiration date is today was compliant (``expiration_date >= today``)
+        and simultaneously absent from ``expiring_soon_count``. Meanwhile
+        ``get_expiring_soon`` selects ``expiration_date >= today``, so the list
+        the summary links to *did* name it. The two surfaces disagreed about
+        the same member on the single day the warning is most useful.
+        """
+        req = make_requirement(org_id)
+        rec = make_record(
+            org_id,
+            user_id=user_id,
+            status=ScreeningStatus.PASSED,
+            expiration_date=date.today(),
+        )
+
+        with patch.object(
+            service, "list_requirements", return_value=[req]
+        ), patch.object(service, "list_records", return_value=[rec]):
+            summary = await service.get_compliance_status(org_id, user_id=user_id)
+
+        assert summary.expiring_soon_count == 1
+        # Still compliant today — it has not lapsed until tomorrow.
+        assert summary.is_fully_compliant is True
+        assert summary.items[0].days_until_expiration == 0
+
+    async def test_an_expired_screening_is_not_merely_expiring_soon(
+        self, service, org_id, user_id
+    ):
+        """The other side of the same boundary, so widening it stays honest.
+
+        An already-lapsed screening is reported by ``non_compliant_count``; it
+        must not also be counted as "expiring soon", which would read as though
+        there were still time to act.
+        """
+        req = make_requirement(org_id)
+        rec = make_record(
+            org_id,
+            user_id=user_id,
+            status=ScreeningStatus.PASSED,
+            expiration_date=date.today() - timedelta(days=1),
+        )
+
+        with patch.object(
+            service, "list_requirements", return_value=[req]
+        ), patch.object(service, "list_records", return_value=[rec]):
+            summary = await service.get_compliance_status(org_id, user_id=user_id)
+
+        assert summary.expiring_soon_count == 0
+        assert summary.non_compliant_count == 1
+        assert summary.is_fully_compliant is False
+
     async def test_no_expiration_means_always_compliant(self, service, org_id, user_id):
         """A passing record with no expiration date is considered indefinitely compliant."""
         req = make_requirement(org_id)
@@ -352,14 +408,16 @@ class TestResolveNames:
     """
 
     async def test_composes_full_names_and_keys_by_id(self, service, mock_db, org_id):
-        user_row = (str(uuid4()), "Dana", "Reyes")
+        # Members carry a preferred name, which wins over the first name.
+        user_row = (str(uuid4()), "Dana", "Reyes", "Dee")
+        plain_row = (str(uuid4()), "Ana", "Ortiz", None)
         prospect_row = (str(uuid4()), "Sam", "Okafor")
         req_row = (str(uuid4()), "Annual Physical")
 
         # One execute() per non-empty id set, in call order: users, prospects,
         # requirements.
         results = []
-        for rows in ([user_row], [prospect_row], [req_row]):
+        for rows in ([user_row, plain_row], [prospect_row], [req_row]):
             r = MagicMock()
             r.all.return_value = rows
             results.append(r)
@@ -367,12 +425,13 @@ class TestResolveNames:
 
         out = await service._resolve_names(
             org_id,
-            user_ids={user_row[0]},
+            user_ids={user_row[0], plain_row[0]},
             prospect_ids={prospect_row[0]},
             requirement_ids={req_row[0]},
         )
 
-        assert out["users"][user_row[0]] == "Dana Reyes"
+        assert out["users"][user_row[0]] == "Dee Reyes"
+        assert out["users"][plain_row[0]] == "Ana Ortiz"
         assert out["prospects"][prospect_row[0]] == "Sam Okafor"
         assert out["requirements"][req_row[0]] == "Annual Physical"
 

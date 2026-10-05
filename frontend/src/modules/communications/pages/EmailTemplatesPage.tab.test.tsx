@@ -139,6 +139,17 @@ describe('EmailTemplatesPage editor layout', () => {
     expect(source).toMatch(/const PREVIEW_DEBOUNCE_MS = \d+/);
   });
 
+  it('does not tell admins to press Reset to adopt the design', () => {
+    // Migration 15c5bc7700aa moved every template onto the current design,
+    // edited ones included. The banner that predated it told admins to press
+    // Reset "to adopt it", which since then only discards their wording.
+    const flat = source.replace(/\s+/g, ' ');
+    expect(flat).not.toContain('to adopt it');
+    expect(flat).not.toContain('A new email design is available');
+    expect(flat).toContain('there is nothing to adopt');
+    expect(flat).toContain('<span className="font-semibold">Previous version</span>');
+  });
+
   it('binds Ctrl+S once rather than on every render', () => {
     // The handler previously had no dependency array, so for a textarea it
     // was a listener added and removed per character typed.

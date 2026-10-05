@@ -1070,12 +1070,12 @@ export const VendorsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
+      <div className="mx-auto max-w-5xl py-6 sm:py-8">
         <Breadcrumbs />
 
         <Link
           to="/inventory/admin"
-          className="text-theme-text-muted hover:text-theme-text-secondary mb-6 flex items-center gap-1 text-sm"
+          className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 mb-6 flex items-center gap-1 text-sm"
         >
           <ArrowLeft className="h-4 w-4" /> Back to Admin
         </Link>
@@ -1156,7 +1156,7 @@ export const VendorsPage: React.FC = () => {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <label className="text-theme-text-muted flex shrink-0 items-center gap-3 text-sm max-md:ps-3.5">
+          <label className="text-theme-text-muted mobile-touch-target flex shrink-0 items-center justify-start gap-3 text-sm max-md:ps-3.5">
             <input
               type="checkbox"
               className="form-checkbox"

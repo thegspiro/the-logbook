@@ -132,7 +132,9 @@ async def _make_org(db, label="Roster FD"):
     return org
 
 
-async def _add_member(db, org, last_name, status=UserStatus.ACTIVE):
+async def _add_member(
+    db, org, last_name, status=UserStatus.ACTIVE, preferred_name=None
+):
     suffix = uuid.uuid4().hex[:8]
     user = User(
         id=str(uuid.uuid4()),
@@ -141,6 +143,7 @@ async def _add_member(db, org, last_name, status=UserStatus.ACTIVE):
         email=f"member-{suffix}@example.org",
         first_name="Pat",
         last_name=last_name,
+        preferred_name=preferred_name,
         status=status,
     )
     db.add(user)
@@ -180,6 +183,18 @@ class TestConsentRoster:
             "Refused",
             "Unasked",
         ]
+
+    async def test_roster_carries_the_name_a_member_goes_by(self, db_session):
+        org = await _make_org(db_session)
+        await _add_member(db_session, org, "Heather", preferred_name="Terry")
+        await _add_member(db_session, org, "Plain")
+
+        roster = await ConsentService(db_session).roster(org.id, ConsentType.PHOTO_USE)
+
+        by_last = {m["last_name"]: m for m in roster["members"]}
+        assert by_last["Heather"]["preferred_name"] == "Terry"
+        assert by_last["Heather"]["first_name"] == "Pat"
+        assert by_last["Plain"]["preferred_name"] is None
 
     async def test_roster_carries_no_contact_fields(self, db_session):
         org = await _make_org(db_session)

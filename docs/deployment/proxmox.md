@@ -101,6 +101,8 @@ sed -i "s|^ALLOWED_ORIGINS=.*|ALLOWED_ORIGINS=http://${LXC_IP}:3000|" .env
 
 # Links in outgoing email are built from FRONTEND_URL; use the address members
 # will open (your HTTPS hostname once a reverse proxy is in front)
+# A LAN IP only opens inside the station's network; with email on, the
+# startup log warns that members reading mail elsewhere cannot follow links.
 sed -i "s|^FRONTEND_URL=.*|FRONTEND_URL=http://${LXC_IP}:3000|" .env
 
 # Start the application (production — see the note below)
@@ -119,7 +121,8 @@ docker compose ps
 > `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so every
 > later `docker compose ...` command stays hardened. In production the app
 > **refuses to start** if required secrets are missing or weak, if `DEBUG` or API
-> docs are enabled, or if HTTPS isn't enforced — terminate TLS at the reverse
+> docs are enabled, if HTTPS isn't enforced, or if `FRONTEND_URL`
+> points at `localhost` with no address other than localhost in `ALLOWED_ORIGINS` to use instead — terminate TLS at the reverse
 > proxy (see [Reverse Proxy Setup](#reverse-proxy-setup)).
 
 ### Step 4: Access The Logbook
@@ -281,15 +284,32 @@ pct create 201 local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst \
 
 3. Enable SSL with Let's Encrypt
 
+4. Keep anonymous suggestion-box submissions out of its access log. Nginx Proxy
+   Manager logs every request per proxy host, and a line holding the client IP
+   and the exact second of an anonymous submission identifies the member. Add the
+   `$access_loggable` map and `access_log … if=$access_loggable` shown in the next
+   section through NPM's custom nginx configuration, or turn access logging off
+   for the Logbook host. The Logbook's own containers already leave these
+   requests out of their logs.
+
 ### Nginx on the Same LXC
 
 ```bash
 apt install -y nginx certbot python3-certbot-nginx
 
 cat > /etc/nginx/sites-available/logbook << 'EOF'
+# Anonymous suggestion-box submissions and follow-ups are never access-logged:
+# a line holding the client IP and the exact second would identify the member.
+map $request_uri $access_loggable {
+    "~^/api/v1/suggestions/(boxes/[^/?]+/submissions(\?|$)|follow-up/)" 0;
+    default 1;
+}
+
 server {
     listen 80;
     server_name logbook.yourdomain.com;
+
+    access_log /var/log/nginx/access.log combined if=$access_loggable;
 
     location / {
         proxy_pass http://localhost:3000;

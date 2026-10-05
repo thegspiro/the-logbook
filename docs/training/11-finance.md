@@ -66,6 +66,7 @@ approve their own request, whatever they hold.
 | `/finance/budgets/:id`                | Budget detail                      |
 | `/finance/settings`                   | Fiscal years and budget categories |
 | `/finance/settings/approval-chains`   | Approval chain builder             |
+| `/finance/approvals`                  | Approvals (`finance.approve`)      |
 | `/finance/purchase-requests`          | Purchase request list              |
 | `/finance/purchase-requests/new`      | Create a purchase request          |
 | `/finance/purchase-requests/:id`      | Purchase request detail            |
@@ -87,14 +88,21 @@ Navigate to **Finance** to view the department-wide financial dashboard.
 The dashboard provides a high-level summary of your department's financial health:
 
 - **Budget Health** -- Total budgeted, total spent, total encumbered, total remaining, and percent used across all budgets in the active fiscal year
-- **Pending Approvals Count** -- How many requests are waiting for your action
+- **Pending Approvals Count** -- How many requests across the department are waiting on an approval step. If you hold `finance.approve`, the card opens the [Approvals](#approving-and-denying-requests) screen
 - **Pending Purchase Requests** -- Count of purchase requests awaiting approval
 - **Pending Expense Reports** -- Count of expense reports awaiting approval
 - **Pending Check Requests** -- Count of check requests awaiting approval
 - **Dues Collection Rate** -- Percentage of expected dues that have been collected
 - **Recent Transactions** -- A feed of recent financial activity across the department
 
+Below the cards, **Quick Links** open each area. An **Approvals** link ("Approve
+or deny requests waiting on a step") leads the list for members holding
+`finance.approve`, and is hidden from everyone else, because the page behind it
+would only show them Access Denied.
+
 ![Finance dashboard with budget health cards and recent transactions](./images/11-01-finance-dashboard.png)
+
+**[SCREENSHOT — REPLACE `11-01-finance-dashboard.png`.** The header subtitle now reads "Budgets, spending, and requests at a glance"; the Quick Links begin with **Approvals** for a `finance.approve` holder, and the dues link is titled **Dues** ("Track member dues and payments"). Capture as the Treasurer so the Approvals link and the linked Pending Approvals card both show.**]**
 
 > **Hint:** The dashboard automatically scopes to the active fiscal year. If no fiscal year is active, the budget health section displays zeroes. Set up your fiscal year first (see [Fiscal Years](#fiscal-years)).
 
@@ -202,12 +210,12 @@ Rather than deleting a category, you can deactivate it by setting `isActive` to 
 
 ### Edge Cases
 
-| Scenario                                  | Behavior                                                                                                                            |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Deleting a category with existing budgets | Not permitted -- reassign or delete the budgets first                                                                               |
-| Deactivating a category                   | The category is hidden from new budget creation but existing budgets retain their category assignment                               |
-| Category with no QB account name          | The category can still be used for budgets; export mapping can be configured separately in the QuickBooks Export settings           |
-| Self-referential parent                   | The parent category cannot reference itself -- the `parent_category_id` FK points to `budget_categories.id` with SET NULL on delete |
+| Scenario                                  | Behavior                                                                                                                                                                                                                      |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Deleting a category with existing budgets | Permitted, and destructive -- its budgets in every fiscal year are deleted with it, and requests charged to them are left with no budget. The confirmation says so (corrected 2026-10-04); deactivate instead to keep history |
+| Deactivating a category                   | The category is hidden from new budget creation but existing budgets retain their category assignment                                                                                                                         |
+| Category with no QB account name          | The category can still be used for budgets; export mapping can be configured separately in the QuickBooks Export settings                                                                                                     |
+| Self-referential parent                   | The parent category cannot reference itself -- the `parent_category_id` FK points to `budget_categories.id` with SET NULL on delete                                                                                           |
 
 ---
 
@@ -366,7 +374,7 @@ When multiple chains could apply to a request, the system selects the most speci
 | **Amount range match** | +2     | The chain has min/max amount thresholds and the request amount falls within the range. Chains where the amount falls outside the range are skipped.                                 |
 | **Default chain**      | +1     | The chain is marked as `isDefault` for the entity type.                                                                                                                             |
 
-The chain with the highest score wins. If no chain matches at all, the request transitions directly to `PENDING_APPROVAL` status without any approval step records (requiring manual approval).
+The chain with the highest score wins. If no chain matches at all (or the matching chain has no steps), the request transitions directly to `PENDING_APPROVAL` status without any approval step records, and is decided by hand from its detail page — see [When No Approval Chain Applies](#when-no-approval-chain-applies-2026-09-30).
 
 ### Chain Fields
 
@@ -384,68 +392,105 @@ The chain with the highest score wins. If no chain matches at all, the request t
 ### Creating an Approval Chain
 
 1. Navigate to **Finance > Settings > Approval Chains**.
-2. Click **Create Approval Chain**.
-3. Enter the chain **name** and optional **description**.
-4. Select what the chain **applies to** (Purchase Request, Expense Report, or Check Request).
-5. Optionally set **min amount** and **max amount** thresholds.
-6. Optionally select a **budget category** to restrict matching.
-7. Check **Is Default** if this should be the fallback chain for this entity type.
-8. Optionally add **steps** inline during creation.
-9. Click **Save**.
+2. Click **New Chain**.
+3. Enter the chain **Name** and optional **Description**.
+4. Choose what it **Applies To**: Purchase Requests, Expense Reports, or Check Requests.
+5. Optionally choose a **Budget Category** (or leave **Any category**).
+6. Optionally set **Min Amount ($)** and **Max Amount ($)**.
+7. Tick **Default chain (preferred when no more specific chain matches)** if this should be the fallback for its request type.
+8. Click **Create Chain**.
+
+A new chain has no steps. Until you add some, the chain card says _"No steps
+yet. Requests routed to this chain get no approval steps."_ — and a request
+routed to it is decided by hand from its detail page (see
+[No chain applies](#when-no-approval-chain-applies-2026-09-30)).
 
 ![Approval chain configuration page with the chain list and step builder](./images/11-06-approval-chains.png)
 
-### Adding Steps to a Chain
+**[SCREENSHOT — REPLACE `11-06-approval-chains.png`.** The page subtitle now reads "Set who approves purchase requests, expense reports, and check requests", and an expanded chain now carries an **Add step** button, a pencil (**Edit chain**) beside the trash icon in its header, and on each step **Move up** / **Move down**, **Edit step** and **Delete step** controls. Capture one chain expanded with two or three steps, one of them an Email approver.**]**
 
-After creating the chain (or during creation), add steps to define the approval workflow:
+### Editing a Chain _(2026-09-29)_
 
-1. Click **Add Step** on the chain detail view.
-2. Enter a **step name** (e.g., "Captain Review", "Chief Approval", "Treasurer Notification").
-3. Set the **step order** (starting from 1) to control the sequence.
-4. Select the **step type**:
+The pencil in a chain's header opens **Edit chain**: **Name**, **Description**
+and **Active** — _"Only active chains are used for newly submitted requests.
+Turning a chain off does not change requests already going through it."_ Click
+**Save chain**. What a chain applies to, its category, its amount range and its
+default flag are set when it is created; to change those, create a new chain and
+delete or deactivate the old one.
 
-| Step Type        | Behavior                                                                                                                                                 |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Approval**     | The step blocks the workflow until the assigned approver explicitly approves or denies. A denial stops the entire chain and marks the request as Denied. |
-| **Notification** | The step sends a notification to the specified recipient(s) and auto-advances to the next step (status changes to Sent). It does not block the workflow. |
+### Adding Steps to a Chain _(built 2026-09-29)_
 
-5. Select the **approver type** (determines who receives the approval request or notification):
+Expand a chain and click **Add step**. The **Add step** dialog asks for:
 
-| Approver Type     | Assigns To                                                                                                                                                                                                                                    |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Position**      | Any member holding a specific position (e.g., "Captain", "Chief"). Enter the position title in the **Approver Value** field.                                                                                                                  |
-| **Permission**    | Any member with a specific permission. Enter the permission string (e.g., `finance.approve`) in the **Approver Value** field.                                                                                                                 |
-| **Specific User** | A specific named member. Enter the user ID in the **Approver Value** field.                                                                                                                                                                   |
-| **Email**         | An external email address (e.g., an outside accountant or board member). Enter the email address in the **Approver Value** field. The system generates a secure approval token (valid for 7 days) and sends an email with approve/deny links. |
+| Field                            | Shown when           | What it does                                                                                                                                                                                             |
+| -------------------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Step name**                    | Always               | e.g. "Treasurer review", "Chief approval"                                                                                                                                                                |
+| **Step type**                    | Always               | **Approval** — _"The request waits here until someone approves or denies it."_ **Notification** — marked sent on the request's timeline and does not hold the request up. **It does not send an email.** |
+| **Approver type**                | Approval steps       | **None**, **Position**, **Permission**, **Specific member** or **Email**                                                                                                                                 |
+| _Approver value_                 | An approver type set | A list of positions, permissions or members to pick from (a text box if your account cannot load that list), or **Approver email** for the Email type                                                    |
+| **Allow self-approval by email** | Email approvers only | Lets that address approve through the emailed link even when it is the requester's own email                                                                                                             |
+| **Auto-approve under ($)**       | Approval steps       | _"A request for less than this amount is approved at this step automatically when it is submitted."_ Leave blank to always require approval                                                              |
 
-6. Optionally configure:
-   - **Notification Emails** -- Additional email addresses to CC when this step activates.
-   - **Email Template** -- An email template to use for the notification.
-   - **Allow Self-Approval** -- Whether the person who submitted the request can also approve at this step (default: false).
-   - **Auto-Approve Under** -- A dollar amount below which this step is automatically approved (status: Auto-Approved). Useful for low-dollar purchases that do not need chief-level review.
-   - **Required** -- Whether this step is mandatory or can be skipped (default: true).
-7. Click **Save Step**.
+Click **Add step**. A new step goes to the end of the chain; use the arrow
+buttons beside it to **Move up** or **Move down**, the pencil to **Edit step**
+(then **Save step**), and the trash icon to **Delete step**.
 
-> **Corrected 2026-08-12.** Not built. See
-> [Finance — Five Guide Sections With No Screen](../KNOWN_LIMITATIONS.md#finance--five-guide-sections-with-no-screen-2026-08-09),
-> which records what exists behind each of these: an API, a store
-> action, or types — but no page and no control that reaches them.
-> The steps above describe the intended design.
->
-> `ApprovalChainsSettingsPage` renders a chain's steps and offers no way to
-> add, edit or remove one.
+What the dialog says about approvers is the rule the system actually applies,
+and it differs from what the approver type suggests:
+
+- **Anyone with `finance.approve` can approve or deny any approval step in The
+  Logbook**, whatever approver type and value the step names. The type and
+  value record who the department _expects_ to decide; they do not restrict who
+  can.
+- **Only the Email type contacts anyone.** When a request reaches an Email
+  step, that address is sent a link to approve or deny it (if email sending is
+  set up). Position, Permission and Specific member steps send nothing — the
+  request simply appears on the [Approvals](#approving-and-denying-requests)
+  screen.
+- **Members approving in The Logbook can never approve their own request**,
+  whatever **Allow self-approval by email** says; that box governs the emailed
+  link only.
+
+The dialog does not offer **Notification Emails**, **Email Template** or
+**Required**: the backend stores those fields but nothing reads them, so a
+control for them would change nothing.
+
+**Deleting a step is not a tidy-up.** The confirmation says what it does: the
+step is removed from every request routed through the chain, including the
+record of who approved or denied it and their notes. A request waiting on that
+step moves to the next one — and an Email approver on that next step is **not**
+sent a link — and a request with no later step is left waiting with nothing to
+approve. It cannot be undone. Prefer deactivating the chain and building a new
+one when requests are in flight.
+
+> **Before 2026-09-29** this screen could create and delete chains but not
+> touch their steps — the endpoints existed and nothing called them, so a chain
+> could not be given any step without the API. And creating a chain from the
+> page failed with a 422 (_applies_to missing_), because the page sent field
+> names the backend did not read. Both are fixed; the earlier "Not built" note
+> here and the matching row in
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#finance--five-guide-sections-with-no-screen-2026-08-09)
+> no longer describe the screen.
+
+> **Screenshot needed:**
+> _[Finance → Settings → Approval Chains → expand a chain → **Add step**, with Step type **Approval**, Approver type **Email**, an approver email filled in, the **Allow self-approval by email** box and the **Auto-approve under ($)** field visible, and the help text under Approver type readable.]_
+
+> **Screenshot needed:**
+> _[Treasurer or admin holding finance.configure_approvals and positions.view, /finance/settings/approval-chains. The Add step dialog over an expanded purchase-request chain: Step type Approval, Approver type Position, the position picker set to Treasurer, Auto-approve under ($) = 250. The finance.approve help text under Approver type must be visible.]_
+
+> **Screenshot needed:**
+> _[Treasurer or admin holding finance.configure_approvals, /finance/settings/approval-chains. The Delete step confirmation over a chain with three steps, showing the history-removal and waiting-request warnings and the Delete step / Keep it buttons. Never confirm.]_
 
 ### Previewing Chain Resolution
 
-Before submitting a request, you can preview which approval chain will apply:
+> **Corrected 2026-10-04.** There is no **Preview** tool on the Approval
+> Chains page. `GET /finance/approval-chains/preview?entity_type=…&amount=…`
+> answers the question — which chain a request of that type, amount and
+> category would get — and the frontend service has a method for it, but no
+> screen calls it. To check a configuration from the UI, submit a test request
+> and read its approval timeline.
 
-1. On the **Approval Chains** settings page, use the **Preview** tool.
-2. Select an **entity type** (purchase_request, expense_report, or check_request), enter an **amount**, and optionally select a **category**.
-3. The system shows which chain would match and which steps would be created.
-
-This helps verify that your chain configuration produces the expected workflow before members start submitting requests.
-
-> **Hint:** Set up at least one default chain for each entity type (Purchase Request, Expense Report, Check Request) before members begin submitting requests. Without a matching chain, requests enter Pending Approval status without step records, requiring manual processing.
+> **Hint:** Set up at least one default chain for each request type (Purchase Request, Expense Report, Check Request) before members begin submitting requests. Without a matching chain, a request waits in Pending Approval with no approval steps, and a `finance.approve` holder has to decide it from its detail page.
 
 ### Example Chain Configuration
 
@@ -483,15 +528,86 @@ As a request moves through its approval chain, each step has a status:
 
 | Scenario                                             | Behavior                                                                                                                                                                                            |
 | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| No approval chain matches a submitted request        | The request moves to Pending Approval status without step records, requiring manual processing                                                                                                      |
+| No approval chain matches a submitted request        | The request moves to Pending Approval status without step records. A `finance.approve` holder other than the requester approves or denies it from its detail page (2026-09-30)                      |
 | Approver denies at step 2 of 3                       | The entire chain stops. The request is marked Denied with the denial reason. Remaining steps are not processed                                                                                      |
-| Self-approval when `allowSelfApproval` is false      | The step appears in pending approvals but the submitter cannot act on their own request -- another approver with the matching role/permission must act                                              |
-| Multiple members hold the "Captain" position         | Any one of them can approve the step -- it is a first-come approval                                                                                                                                 |
+| Self-approval when `allowSelfApproval` is false      | The step appears on the Approvals screen but the submitter cannot act on their own request -- another `finance.approve` holder must act                                                             |
+| Multiple members hold the "Captain" position         | Any one of them can approve the step -- it is a first-come approval. So can any other `finance.approve` holder: the approver type is not enforced                                                   |
 | Auto-approve threshold set to $200 on a $150 request | The step is automatically created with status Auto-Approved and the chain advances to the next step                                                                                                 |
 | Editing a chain after requests have been submitted   | Existing in-flight requests continue using the step records that were created at submission time. The edited chain applies only to newly submitted requests                                         |
 | External email approver (Email type)                 | The approver receives an email with a secure approval token (valid for 7 days). No Logbook account is required. Expired tokens are rejected                                                         |
 | External approver uses the link a second time        | The link works once. Acting on it clears the token, so reopening it later reports **Approval not found**, and a duplicate click racing the first is refused rather than recording a second decision |
 | Denial does not release encumbrance                  | By design -- denial happens during the approval flow (before the request reaches Approved status), so no encumbrance exists to release                                                              |
+
+---
+
+## Approving and Denying Requests
+
+**Required Permission:** `finance.approve`
+
+_(New 2026-09-29.)_ Before this there was no screen for it: the approve and
+deny endpoints existed, and an approver could act only through the API or an
+emailed link.
+
+### The Approvals screen
+
+**Finance > Approvals** (`/finance/approvals`), also reached from the
+dashboard's **Pending Approvals** card and its **Approvals** quick link, lists
+every request currently waiting on an approval step — one row per request,
+showing **Request**, **Type**, **Requested by**, **Amount**, **Step** and
+**Submitted**, with **Approve** and **Deny** buttons.
+
+The list is **department-wide, not "assigned to me"**. As the page says:
+_"Anyone with finance approval permission can approve or deny them."_ A step
+naming the Captain position can be decided by any `finance.approve` holder.
+
+- **Approve** opens **Approve request** with an optional **Notes** box (_"Shown
+  on the request's approval timeline."_). If more steps follow, the request
+  moves to the next one.
+- **Deny** opens **Deny request** and requires a **Reason**. Denying ends the
+  request — no later steps run — and the reason is saved on the request.
+
+If you raised the request yourself, the approval is refused with the
+separation-of-duties message (see [Separation of Duties](#separation-of-duties-2026-08-01)).
+
+> **Screenshot needed:**
+> _[Finance → Approvals as the Treasurer, with three or four waiting requests of mixed types (purchase request, expense report, check request) showing the Request, Type, Requested by, Amount, Step and Submitted columns and the Approve / Deny buttons on each row.]_
+
+### On the request's own page
+
+Each purchase request, expense report and check request detail page shows,
+above its approval timeline, a yellow panel — _"Waiting on **(step name)**. You
+can approve or deny this step."_ — with the same **Approve** and **Deny**
+buttons, when three things hold: the request is pending approval, you hold
+`finance.approve`, and the step it is waiting on is an **Approval** step (a
+notification step is never offered). It uses the same dialogs as the Approvals
+screen, and the page reloads the request afterwards.
+
+### When No Approval Chain Applies _(2026-09-30)_
+
+A request submitted when no chain matches — or when the matching chain has no
+steps — waits in **Pending Approval** with no approval steps, and every
+step-based action needs a step. Until 2026-09-30 such a request could not be
+moved by anyone.
+
+Its detail page now shows a panel to `finance.approve` holders: _"No approval
+chain applies to this request. Approve or deny it here."_
+
+- **Approve** asks for an optional **Note** (_"Saved in the audit log."_) and
+  marks the request approved — with the same budget effect as a completed
+  chain, so a purchase request is encumbered and a budget cap still applies.
+- **Deny** requires a **Reason** (_"The requester sees this reason."_) and
+  marks it denied.
+- **The requester cannot approve their own request** — the panel says _"You
+  submitted this request, so someone else has to approve it. You can still
+  deny it."_ and offers only **Deny**.
+
+Both decisions are written to the audit log
+(`finance.manual_approval_approved` / `finance.manual_approval_denied`). These
+requests do not appear on the Approvals screen, which lists step-based
+approvals only.
+
+> **Screenshot needed:**
+> _[A purchase request detail page in Pending Approval with no approval chain configured, viewed by the Treasurer: the "No approval chain applies to this request. Approve or deny it here." panel with its Approve and Deny buttons, and the approval timeline reading "This request has no approval steps."]_
 
 ---
 
@@ -548,17 +664,19 @@ Purchase request numbers are auto-generated in the format **PR-YYYY-0001**, wher
 | **Facility**         | No       | If the purchase is for a specific fire station or facility            |
 | **Notes**            | No       | Additional notes for approvers                                        |
 
-4. Click **Save as Draft** to save without submitting, or click **Submit** to send it into the approval workflow.
+4. Click **Create Request**. The request is saved as a **Draft** — the form says so: _"Saved as a draft. Submit it for approval from the next page."_ Editing a draft later saves with **Save Changes**.
 
 ![Create Purchase Request form with budget, vendor, and priority fields](./images/11-08-create-purchase-request.png)
 
+**[SCREENSHOT — REPLACE `11-08-create-purchase-request.png`.** The subtitle now reads "Saved as a draft. Submit it for approval from the next page.", the budget field is labelled **Budget** (was Budget Category), the description placeholder reads "What you're buying and why", and the button is **Create Request**.**]**
+
 ### Submitting a Purchase Request
 
-If you saved as a draft:
+Every new request starts as a draft:
 
-1. Navigate to **Finance > Purchase Requests** and find your draft.
-2. Open the request detail page.
-3. Review the details and click **Submit**.
+1. Navigate to **Finance > Purchase Requests** and find your draft (creating one takes you straight to it).
+2. Open the request detail page. Its approval timeline reads _"Approval steps are added when you submit this request."_
+3. Review the details and click **Submit for Approval**.
 
 Once submitted, the system resolves the budget category from the linked budget, matches an approval chain (see [Approval Chains](#approval-chains)), and creates the approval step records. The request status changes to **Pending Approval**.
 
@@ -572,6 +690,8 @@ Open a purchase request to see its detail page at `/finance/purchase-requests/:i
 - Budget impact (estimated amount vs. budget remaining)
 
 ![Purchase request detail with its status and approval chain](./images/11-12-purchase-request-detail.png)
+
+**[SCREENSHOT — REPLACE `11-12-purchase-request-detail.png`.** The action buttons read **Submit for Approval** / **Cancel Request**, a pending request now shows the yellow "Waiting on … You can approve or deny this step." panel with **Approve** and **Deny** to a `finance.approve` holder, and a draft's timeline reads "Approval steps are added when you submit this request." Capture a pending request as the Treasurer (not the requester).**]**
 
 ### Progressing a Purchase Request After Approval
 
@@ -661,9 +781,11 @@ Expense report numbers are auto-generated in the format **ER-YYYY-0001**, where 
 | **Merchant**      | No       | Where the purchase was made                              |
 | **Receipt URL**   | No       | Link to or upload of the receipt                         |
 
-5. Click **Save as Draft** or **Submit**. The total amount is automatically calculated as the sum of all line items.
+5. Click **Create Report**. The report is saved as a **Draft**; open it and click **Submit for Approval** to send it into the approval chain. The total amount is automatically calculated as the sum of all line items.
 
 ![Create Expense Report form with header fields and the line items section](./images/11-10-create-expense-report.png)
+
+**[SCREENSHOT — REPLACE `11-10-create-expense-report.png`.** The subtitle now reads "Saved as a draft. Submit it for approval from the next page." and the empty line-item list reads "No line items yet. Use “Add Item” to add each expense."; the expense type list is unchanged.**]**
 
 ### Expense Types
 
@@ -698,6 +820,8 @@ Open an expense report to see its detail page at `/finance/expenses/:id`. The de
 - Payment status and method (once paid)
 
 ![Expense report detail with its line items and approval status](./images/11-14-expense-report-detail.png)
+
+**[SCREENSHOT — REPLACE `11-14-expense-report-detail.png`.** **Submit for Approval** replaces Submit, line items show their expense type by name ("Mileage", not `mileage`), and a pending report shows the Approve / Deny panel to a `finance.approve` holder.**]**
 
 **Marking as Paid:**
 
@@ -778,9 +902,11 @@ Check request numbers are auto-generated in the format **CK-YYYY-0001**, where Y
 | **Purpose**       | No       | Internal description of why the check is needed          |
 | **Notes**         | No       | Additional notes for approvers                           |
 
-4. Click **Save as Draft** or **Submit**.
+4. Click **Create Check Request**. It is saved as a **Draft**; open it and click **Submit for Approval**.
 
 ![Create Check Request form with payee, amount, and budget fields](./images/11-12-create-check-request.png)
+
+**[SCREENSHOT — REPLACE `11-12-create-check-request.png`.** The budget field is labelled **Budget** (was "Budget (Optional)").**]**
 
 ### Issuing a Check
 
@@ -797,12 +923,14 @@ The system records the check number and the issuance date. The check amount is a
 
 ![Check request detail with payee, amount and approval status](./images/11-16-check-request-detail.png)
 
+**[SCREENSHOT — REPLACE `11-16-check-request-detail.png`.** **Submit for Approval** and **Void Request** replace Submit and Void, and a pending request shows the Approve / Deny panel to a `finance.approve` holder.**]**
+
 ### Voiding an Issued Check
 
 If a check needs to be voided after issuance (e.g., lost in the mail, payment cancelled):
 
 1. Open the issued check request.
-2. Click **Void Check**.
+2. Click **Void Request**.
 3. Confirm the void action.
 
 The check status changes to **Voided**. The amount is subtracted from the budget's spent total (floored at zero to prevent negative spent values).
@@ -1071,7 +1199,7 @@ The CSV includes these columns:
 
 | Column      | Description                                                                                                       |
 | ----------- | ----------------------------------------------------------------------------------------------------------------- |
-| **Date**    | Transaction date in MM/DD/YYYY format                                                                             |
+| **Date**    | Transaction date in MM/DD/YYYY format, on the department's calendar (see below)                                   |
 | **Type**    | Transaction type: `Bill Pmt` (purchase request), `Check` (check request), or `Expense` (expense report line item) |
 | **Num**     | Reference number (request number, check number, or report number)                                                 |
 | **Name**    | Vendor, payee, or merchant name                                                                                   |
@@ -1085,6 +1213,13 @@ The export includes:
 - **Purchase Requests** with Paid status, filtered by `paidAt` date
 - **Check Requests** with Issued status, filtered by `checkDate`
 - **Expense Reports** with Paid status (one row per line item), filtered by `paidAt` date
+
+> **Dates are the department's day** _(2026-09-25)_. Payment and check dates are
+> stored as UTC timestamps, and the export used to print the UTC date — so a
+> payment recorded on a US evening was booked on the next day in QuickBooks.
+> The **Date** column now uses the timezone set under **Settings → Organization
+> → Profile → Timezone** (America/New_York when none is set). An export taken
+> before this date may disagree with a new one for evening payments.
 
 ### Export Logs
 
@@ -1234,29 +1369,59 @@ Before closing the fiscal year:
 
 ---
 
+## Changes September 24 – October 4, 2026
+
+- **Saving a fiscal year, or clearing a field, now works** _(2026-09-30)_. The
+  Finance pages send field names in one style (`startDate`) and the server read
+  only the other (`start_date`). Creating a fiscal year was refused with a 422
+  for "missing" dates, and an edit silently dropped every two-word field — a
+  purchase request whose **Budget** you cleared reported success and kept the
+  old budget. The server now accepts both spellings on every Finance form, and
+  an emptied field is cleared rather than ignored.
+- **Approvals, step editing and no-chain decisions** — see
+  [Approving and Denying Requests](#approving-and-denying-requests) and
+  [Adding Steps to a Chain](#adding-steps-to-a-chain-built-2026-09-29).
+- **Wording** _(2026-09-29)_. Request detail pages say **Submit for Approval**,
+  **Cancel Request** and **Void Request** where they said Submit, Cancel and
+  Void; the dues page is titled **Dues** ("What members owe and have paid, by
+  dues schedule"); budget pages say **Remaining** and "% used" where they said
+  Available and "% utilized"; and the budget detail page's empty transaction
+  panel reads **Not available yet** — _"Individual transactions for this budget
+  aren't listed here yet."_ — instead of "No transactions yet", which implied a
+  list that would fill in. Deleting a budget category now warns that its
+  budgets in every fiscal year are deleted too and requests charged to them are
+  left without a budget.
+- **An emailed approval link that was already used** says _"This step has
+  already been approved"_ (or "denied", "approved automatically") — it used to
+  print the internal status, such as "auto_approved".
+- **Denial reasons read correctly in dark mode** _(2026-10-03)_; the panel was a
+  light-only red block.
+
+---
+
 ## Troubleshooting
 
-| Issue                                                                 | Solution                                                                                                                                                                                                                                                                                                                  |
-| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| "Cannot see the Finance module"                                       | Finance is an optional module. Your department administrator must enable it in **Settings > Organization > Modules**.                                                                                                                                                                                                     |
-| "No fiscal years available when creating a request"                   | An active fiscal year must exist. Ask an officer with `finance.manage` permission to create and activate a fiscal year in **Finance > Settings**.                                                                                                                                                                         |
-| "My purchase request was auto-approved with no review"                | No approval chain matched your request (based on entity type, amount, and category). An officer with `finance.configure_approvals` permission should set up approval chains in **Finance > Settings > Approval Chains**. Use the Preview tool to verify chain matching.                                                   |
-| "I submitted a request but no one received the approval notification" | Verify that the approval chain step has a valid approver. For Position-type steps, at least one member must hold that position. For Permission-type steps, at least one member must have the `finance.approve` permission.                                                                                                |
-| "Insufficient available budget"                                       | The approval, payment or check would take the budget's spent plus encumbered past its amount budgeted, and the cap has no override. Raise the budget amount, or cancel or deny other requests against it.                                                                                                                 |
-| "Cannot edit my purchase request"                                     | Purchase requests can only be edited in **Draft** or **Submitted** status. Once in Pending Approval or later, they cannot be modified. Cancel and re-create if changes are needed.                                                                                                                                        |
-| "Dues show as Overdue immediately"                                    | Check the **due date** and **grace period** on the dues schedule. If the due date plus grace period has already passed, newly generated records may appear overdue. Adjust the schedule settings or due date if needed.                                                                                                   |
-| "QuickBooks export is missing some transactions"                      | The export only includes Purchase Requests with Paid status, Check Requests with Issued status, and Expense Reports with Paid status within the selected date range. Verify the transactions have reached the correct terminal status. Also check that account mappings are configured for all categories.                |
-| "Approval chain not matching the expected chain"                      | Use the **Preview** tool on the Approval Chains settings page to see which chain matches for a given entity type, amount, and category. The most specific match wins -- see [Chain Resolution](#chain-resolution-specificity) for the scoring rules.                                                                      |
-| "Cannot void an issued check"                                         | Voiding is only permitted for checks with **Issued** status. If the check has already been voided, it cannot be voided again.                                                                                                                                                                                             |
-| "Member dues not generated for a new member"                          | The **Generate Dues** action only creates records for members who do not already have a record for that schedule. If a member joined after the initial generation, run Generate Dues again -- it will create a record only for that member.                                                                               |
-| "Cannot delete a budget category"                                     | Categories with existing budgets cannot be deleted. Reassign or delete the associated budgets first, then delete the category.                                                                                                                                                                                            |
-| "Cannot delete an approval chain"                                     | Verify there are no active requests using step records from that chain. Wait for all associated requests to reach a terminal status (Paid, Denied, Cancelled, Voided, Issued) before deleting.                                                                                                                            |
-| "Encumbered amount not released after denial"                         | This is expected behavior. Denial happens during the approval flow, before the request reaches Approved status, so no encumbrance was ever created. The budget was never affected.                                                                                                                                        |
-| "Late fee not applied"                                                | Late fees must be manually applied by updating the member dues record. The `lateFeeAmount` on the schedule defines the fee amount, and the `lateFeeApplied` field on the individual record tracks whether it has been applied.                                                                                            |
-| "I need to change the amount on an approved purchase request"         | The estimated amount cannot be changed after the request leaves Draft/Submitted status. However, when marking the request as **Paid**, you can enter the **actual amount**, which is what gets recorded against the budget. The difference between estimated (encumbered) and actual (spent) is reconciled automatically. |
-| "External email approver link expired"                                | External approval tokens are valid for 7 days. If the link has expired, the request must be handled through the system by an internal approver, or the approval chain can be modified to add a new step.                                                                                                                  |
-| "Payment recorded but status still shows Partial"                     | Payments are cumulative. The status changes to Paid only when `amountPaid >= amountDue`. Record another payment for the remaining balance to reach the full amount.                                                                                                                                                       |
-| "How do I see what I need to approve?"                                | Navigate to the Finance Dashboard -- your pending approval count is displayed prominently. Click through to see the individual requests awaiting your action. You need the `finance.approve` permission to see and act on pending approvals.                                                                              |
+| Issue                                                                 | Solution                                                                                                                                                                                                                                                                                                                                                   |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "Cannot see the Finance module"                                       | Finance is an optional module. Your department administrator must enable it in **Settings > Organization > Modules**.                                                                                                                                                                                                                                      |
+| "No fiscal years available when creating a request"                   | An active fiscal year must exist. Ask an officer with `finance.manage` permission to create and activate a fiscal year in **Finance > Settings**.                                                                                                                                                                                                          |
+| "My request is Pending Approval with no approval steps"               | No approval chain matched it (based on request type, amount, and category), or the matching chain has no steps. A `finance.approve` holder other than you can approve or deny it from its detail page. To route future requests, an officer with `finance.configure_approvals` sets up chains and their steps in **Finance > Settings > Approval Chains**. |
+| "I submitted a request but no one received the approval notification" | Only **Email** approver steps send anything. Position, Permission and Specific member steps notify nobody — the request appears on **Finance > Approvals** for every `finance.approve` holder. If the department expects an email, use an Email step, and check that email sending is set up.                                                              |
+| "Insufficient available budget"                                       | The approval, payment or check would take the budget's spent plus encumbered past its amount budgeted, and the cap has no override. Raise the budget amount, or cancel or deny other requests against it.                                                                                                                                                  |
+| "Cannot edit my purchase request"                                     | Purchase requests can only be edited in **Draft** or **Submitted** status. Once in Pending Approval or later, they cannot be modified. Cancel and re-create if changes are needed.                                                                                                                                                                         |
+| "Dues show as Overdue immediately"                                    | Check the **due date** and **grace period** on the dues schedule. If the due date plus grace period has already passed, newly generated records may appear overdue. Adjust the schedule settings or due date if needed.                                                                                                                                    |
+| "QuickBooks export is missing some transactions"                      | The export only includes Purchase Requests with Paid status, Check Requests with Issued status, and Expense Reports with Paid status within the selected date range. Verify the transactions have reached the correct terminal status. Also check that account mappings are configured for all categories.                                                 |
+| "Approval chain not matching the expected chain"                      | The most specific match wins -- see [Chain Resolution](#chain-resolution-specificity) for the scoring rules. There is no Preview control on the page; `GET /finance/approval-chains/preview` answers it through the API, or submit a test request and read its approval timeline.                                                                          |
+| "Cannot void an issued check"                                         | Voiding is only permitted for checks with **Issued** status. If the check has already been voided, it cannot be voided again.                                                                                                                                                                                                                              |
+| "Member dues not generated for a new member"                          | The **Generate Dues** action only creates records for members who do not already have a record for that schedule. If a member joined after the initial generation, run Generate Dues again -- it will create a record only for that member.                                                                                                                |
+| "Deleting a category removed its budgets"                             | That is what deleting does: a category's budgets in every fiscal year are deleted with it (the database cascades), and requests charged to them lose their budget. It cannot be undone. Deactivate a category (`isActive` false) to retire it while keeping its history.                                                                                   |
+| "Cannot delete an approval chain"                                     | Verify there are no active requests using step records from that chain. Wait for all associated requests to reach a terminal status (Paid, Denied, Cancelled, Voided, Issued) before deleting.                                                                                                                                                             |
+| "Encumbered amount not released after denial"                         | This is expected behavior. Denial happens during the approval flow, before the request reaches Approved status, so no encumbrance was ever created. The budget was never affected.                                                                                                                                                                         |
+| "Late fee not applied"                                                | Late fees must be manually applied by updating the member dues record. The `lateFeeAmount` on the schedule defines the fee amount, and the `lateFeeApplied` field on the individual record tracks whether it has been applied.                                                                                                                             |
+| "I need to change the amount on an approved purchase request"         | The estimated amount cannot be changed after the request leaves Draft/Submitted status. However, when marking the request as **Paid**, you can enter the **actual amount**, which is what gets recorded against the budget. The difference between estimated (encumbered) and actual (spent) is reconciled automatically.                                  |
+| "External email approver link expired"                                | External approval tokens are valid for 7 days. If the link has expired, the request must be handled through the system by an internal approver, or the approval chain can be modified to add a new step.                                                                                                                                                   |
+| "Payment recorded but status still shows Partial"                     | Payments are cumulative. The status changes to Paid only when `amountPaid >= amountDue`. Record another payment for the remaining balance to reach the full amount.                                                                                                                                                                                        |
+| "How do I see what I need to approve?"                                | Open **Finance > Approvals**, or click the **Pending Approvals** card on the Finance Dashboard. It lists every request waiting on a step, department-wide. You need `finance.approve`. Requests with no chain are not on it; they show their own Approve / Deny panel on the detail page.                                                                  |
 
 ---
 

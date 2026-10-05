@@ -98,27 +98,36 @@ const TrainingOfficerDashboard: React.FC = () => {
     });
 
   return (
-    <div data-page-main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <header className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-theme-text-primary flex items-center gap-3 text-3xl font-bold">
-            <GraduationCap className="h-8 w-8 text-red-700" />
+    <div data-page-main className="py-8">
+      <header className="mb-8 flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-theme-text-primary flex items-center gap-3 text-2xl font-bold sm:text-3xl">
+            <GraduationCap className="h-8 w-8 shrink-0 text-red-700" aria-hidden="true" />
             Training Officer Dashboard
           </h1>
           <p className="text-theme-text-muted">
             Compliance, expiring certifications, hours, and what needs your attention
           </p>
         </div>
-        <div className="flex gap-2">
-          <button title="Refresh Data" onClick={() => void fetchData()} className="bg-theme-input-bg rounded-lg p-2">
-            <RefreshCw className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
+        <div className="flex shrink-0 gap-2">
+          <button
+            type="button"
+            title="Refresh Data"
+            aria-label="Refresh data"
+            onClick={() => void fetchData()}
+            className="bg-theme-input-bg btn-icon"
+          >
+            <RefreshCw className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
           </button>
           <button
+            type="button"
             title="Dashboard Settings"
+            aria-label="Dashboard settings"
+            aria-expanded={showSettings}
             onClick={() => setShowSettings((x) => !x)}
-            className="bg-theme-input-bg rounded-lg p-2"
+            className="bg-theme-input-bg btn-icon"
           >
-            <Settings className="h-5 w-5" />
+            <Settings className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
       </header>

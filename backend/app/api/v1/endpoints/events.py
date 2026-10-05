@@ -277,8 +277,7 @@ def _display_name(user) -> Optional[str]:
     """
     if not user:
         return None
-    full_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
-    return full_name or user.username
+    return user.display_name or user.username
 
 
 async def _resolve_display_names(
@@ -374,7 +373,7 @@ def _build_rsvp_response(rsvp, user=None) -> RSVPResponse:
         override_duration_minutes=rsvp.override_duration_minutes,
         overridden_by=rsvp.overridden_by,
         overridden_at=rsvp.overridden_at,
-        user_name=f"{user.first_name} {user.last_name}" if user else None,
+        user_name=user.display_name if user else None,
         user_email=user.email if user else None,
     )
 
@@ -2042,6 +2041,7 @@ async def get_eligible_members(
             "id": member.id,
             "first_name": member.first_name,
             "last_name": member.last_name,
+            "preferred_name": member.preferred_name,
             "email": policy.email_for(member),
         }
         for member in members

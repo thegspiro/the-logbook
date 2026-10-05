@@ -2499,8 +2499,10 @@ export const SHOTS = [
       // By the aria-label, not the visible text: the label overrides it for
       // the accessible name, and the text itself is `sm:inline` — on a narrow
       // viewport the button is the icon alone.
+      // The label names the shift since #2788 ("Sign up for shift on <date>,
+      // <time> (<unit>)"), so match its fixed prefix.
       await page
-        .getByLabel("Sign up for this shift")
+        .getByLabel(/^Sign up for shift on /)
         .first()
         .waitFor({ timeout: 20_000 });
       await page.waitForTimeout(800);
@@ -2562,7 +2564,7 @@ export const SHOTS = [
     doc: "03-scheduling.md",
     line: 2158,
     anchor: "The offline banner on the Shift Reports tab",
-    alt: "The Shift Reports tab offline banner — reports will be saved locally and submitted when connectivity returns",
+    alt: "The Shift Reports tab offline banner — reports are saved on this device and sent automatically when you're back online",
     route: "/scheduling?tab=shift-reports",
     prepare: async (page) => {
       // A page-level fake rather than `context.setOffline(true)`. The context
@@ -2578,13 +2580,13 @@ export const SHOTS = [
         });
         window.dispatchEvent(new Event("offline"));
       });
-      const banner = page.getByText(/You're offline\. Reports will be saved/);
+      const banner = page.getByText(/You're offline\. Reports are saved/);
       await banner.waitFor({ timeout: 20_000 });
       await banner.evaluate((el) => el.scrollIntoView({ block: "center" }));
       await page.waitForTimeout(400);
     },
     selector:
-      "div:has(> svg) >> text=/You're offline\\. Reports will be saved/",
+      "div:has(> svg) >> text=/You're offline\\. Reports are saved/",
   },
   {
     id: "02-90-crew-summary-table",
@@ -3780,8 +3782,10 @@ export const SHOTS = [
         .first()
         .fill("Station Duties");
       await page.waitForTimeout(1500);
+      // Each row's button is named for its requirement since #2788
+      // ("Edit <name>"), not the generic "Edit requirement".
       await page
-        .getByRole("button", { name: "Edit requirement" })
+        .getByRole("button", { name: /^Edit Station Duties/ })
         .first()
         .click({ timeout: 20_000 });
       await page.waitForTimeout(2500);
@@ -4680,7 +4684,8 @@ export const SHOTS = [
     alt: "Assigning items to a member by scanning or searching, with two items staged",
     route: "/inventory/admin/members",
     prepare: async (page) => {
-      await clickByName(/^Assign$/)(page);
+      // "Assign items to <member>" since #2821; the visible text is still Assign.
+      await clickByName(/^Assign items to /)(page);
       // Staged through the live search rather than the camera: a headless
       // browser has no camera, and the typed path is the one a desk assignment
       // actually uses. Two items, so the staged list reads as a list.
@@ -4707,13 +4712,11 @@ export const SHOTS = [
     prepare: async (page) => {
       // The member the seeder issues a full kit to. Any other row holds one
       // item, and a "batch" return of one row shows none of the mechanism.
-      const row = page
-        .locator("div")
-        .filter({ hasText: /Nadia Belhaj/ })
-        .filter({ has: page.getByRole("button", { name: /^Return$/ }) })
-        .last();
-      await row
-        .getByRole("button", { name: /^Return$/ })
+      // The row buttons carry the member's name since #2821 ("Return items
+      // from <member>"), so the button finds the row by itself.
+      await page
+        .getByRole("button", { name: /^Return items from Nadia Belhaj/ })
+        .first()
         .click({ timeout: 15_000 });
       await page.waitForTimeout(1200);
       await page
@@ -5340,6 +5343,20 @@ export const SHOTS = [
             headers: { "X-CSRF-Token": decodeURIComponent(csrf) },
           });
         }
+        // Pinned here rather than through the card's Pin control. Since #2775
+        // the inbox folds unpinned rows of one category into a stack, so with
+        // more than one shift assignment the card sits inside a collapsed
+        // stack and the first aria-expanded button the old click found was the
+        // stack header. A pinned row never stacks, so pinning first puts the
+        // card at the top on its own.
+        const shift = logs.find((l) => l.subject === "New Shift Assignment");
+        if (shift) {
+          await fetch(`/api/v1/notifications/my/${shift.id}/pin?pinned=true`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "X-CSRF-Token": decodeURIComponent(csrf) },
+          });
+        }
       });
       await page.reload({ waitUntil: "networkidle" });
 
@@ -5360,12 +5377,13 @@ export const SHOTS = [
         .first()
         .click({ timeout: 15_000 });
       await page.waitForTimeout(700);
-      await card.locator('button[title="Pin notification"]').first().click({
-        timeout: 15_000,
-      });
-      // Pinning re-sorts the list to put this card first; give the reorder a
-      // moment before shooting.
-      await page.waitForTimeout(1200);
+      // Already pinned above, so the expanded card shows Unpin; confirm it
+      // rather than shooting a card whose pin did not take.
+      await card
+        .locator('button[title="Unpin notification"]')
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(500);
     },
     fullPage: true,
   },
@@ -5835,7 +5853,7 @@ export const SHOTS = [
     line: 446,
     anchor:
       'Screenshot of the Prospective Members pipeline with several applicants selected and the "Print Badges"',
-    alt: "The prospective members bulk-action bar with Print Badges, Advance All and the rest",
+    alt: "The prospective members bulk-action bar with Print Badges, Advance Selected and the rest",
     route: "/prospective-members",
     prepare: async (page) => {
       // Each kanban card carries its own "Select <name>" checkbox; the bulk
@@ -8128,8 +8146,9 @@ export const SHOTS = [
       const card = heading.locator(
         "xpath=ancestor::div[contains(@class,'card-secondary')][1]",
       );
+      // Named for the item since #2821 ("Issue Job Shirt").
       await card
-        .getByRole("button", { name: /^Issue$/ })
+        .getByRole("button", { name: /^Issue Job Shirt/ })
         .first()
         .click();
       const dialog = page.locator('[role="dialog"]');
@@ -9282,12 +9301,13 @@ export const SHOTS = [
     line: 1002,
     anchor:
       "Screenshot of the officer analytics dashboard showing the summary metric cards",
-    alt: "Shift report analytics with summary cards, per-trainee table and monthly hours",
+    alt: "Your reporting summary — reports written, shift hours covered and calls covered, the crew summary table and reports written per month",
     route: "/scheduling?tab=shift-reports",
-    // Clipped to the card. The analytics render at the top of Filed by Me
+    // Clipped to the card. The summary renders at the top of Written by me
     // rather than in a view of their own, so a full-page shot here is the same
-    // picture as 02-31 with a different caption under it.
-    selector: 'div:has(> h3:text("Shift Report Analytics"))',
+    // picture as 02-31 with a different caption under it. The card was
+    // "Shift Report Analytics" under an h3 until #2756/#2762.
+    selector: 'div:has(> h2:text("Your reporting summary"))',
   },
   {
     id: "02-35-shift-reports-my-reports",
@@ -11617,7 +11637,9 @@ export const SHOTS = [
       const selectAll = page.locator("thead th:first-child button");
       await selectAll.waitFor({ state: "visible", timeout: 15_000 });
       await selectAll.click();
-      await clickByName("Advance All")(page);
+      // "Advance Selected" since #2783: the bar acts on the ticked rows, and
+      // "All" read as the whole pipeline.
+      await clickByName("Advance Selected")(page);
       // Both toasts, not just the first: the success one renders immediately
       // and the skipped one follows the response, so waiting on either alone
       // races the capture.
@@ -12487,7 +12509,8 @@ export const SHOTS = [
       'Screenshot of the Size Preferences modal titled "Sizes — Jane Doe"',
     alt: "Size preferences modal for one member",
     route: "/inventory/admin/members",
-    prepare: clickByName(/^Sizes$/),
+    // "Edit sizes for <member>" since #2821; the visible text is still Sizes.
+    prepare: clickByName(/^Edit sizes for /),
     fullPage: false,
   },
   {

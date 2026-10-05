@@ -50,7 +50,7 @@ const BoardCard: React.FC<BoardCardProps> = ({ entry, isVoting, onToggleVote }) 
         type="button"
         className={`flex min-h-[44px] min-w-[44px] shrink-0 flex-col items-center justify-center self-start rounded-md border px-2 py-1 text-sm font-semibold disabled:opacity-60 ${
           entry.hasVoted
-            ? 'border-blue-800 bg-blue-800 text-white'
+            ? 'border-red-800 bg-red-800 text-white'
             : 'border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover'
         }`}
         aria-pressed={entry.hasVoted}
@@ -154,7 +154,7 @@ const SuggestionBoardPanel: React.FC<SuggestionBoardPanelProps> = ({ boxes }) =>
   const pillClass = (active: boolean) =>
     `touch-target-phone rounded-full border px-3 py-1 text-sm whitespace-nowrap ${
       active
-        ? 'border-blue-800 bg-blue-800 text-white'
+        ? 'border-red-800 bg-red-800 text-white'
         : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover'
     }`;
 

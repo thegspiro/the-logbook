@@ -293,14 +293,14 @@ const CreateTrainingSessionPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div data-page-main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+      <div data-page-main className="mx-auto max-w-5xl py-8">
         {/* Header */}
         <div className="mb-8">
           <button
             onClick={() => void navigate('/training/officer')}
-            className="text-theme-text-muted hover:text-theme-text-primary mb-4 flex items-center transition-colors"
+            className="text-theme-text-muted hover:text-theme-text-primary mb-4 flex min-h-11 items-center transition-colors"
           >
-            <ArrowLeft className="mr-2 h-5 w-5" />
+            <ArrowLeft className="mr-2 h-5 w-5" aria-hidden="true" />
             Back to Training Dashboard
           </button>
           <h1 className="text-theme-text-primary flex items-center space-x-3 text-3xl font-bold">
@@ -399,22 +399,26 @@ const CreateTrainingSessionPage: React.FC = () => {
                   9:00 AM and then changing the minutes left 5:00 AM behind. */}
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
+                  <label htmlFor="session-start" className="text-theme-text-primary mb-2 block text-sm font-semibold">
                     Start Date & Time <span className="text-red-700">*</span>
                   </label>
                   <DateTimeQuarterHour
                     value={formData.start_datetime}
+                    id="session-start"
+                    timeLabel="Start time"
                     onChange={(v) => updateField('start_datetime', v)}
                     className="form-input py-3"
                     required
                   />
                 </div>
                 <div>
-                  <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
+                  <label htmlFor="session-end" className="text-theme-text-primary mb-2 block text-sm font-semibold">
                     End Date & Time <span className="text-red-700">*</span>
                   </label>
                   <DateTimeQuarterHour
                     value={formData.end_datetime}
+                    id="session-end"
+                    timeLabel="End time"
                     onChange={(v) => updateField('end_datetime', v)}
                     className="form-input py-3"
                     required
@@ -447,7 +451,7 @@ const CreateTrainingSessionPage: React.FC = () => {
 
               {/* Recurring Training */}
               <div className="space-y-4">
-                <div className="flex items-center space-x-3">
+                <label className="mobile-touch-target flex cursor-pointer items-center justify-start space-x-3">
                   <input
                     type="checkbox"
                     id="is-recurring"
@@ -455,20 +459,24 @@ const CreateTrainingSessionPage: React.FC = () => {
                     onChange={(e) => setIsRecurring(e.target.checked)}
                     className="form-checkbox"
                   />
-                  <label htmlFor="is-recurring" className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                  <span className="text-theme-text-secondary flex items-center gap-2 text-sm">
                     <Repeat className="h-4 w-4" />
                     Make this a recurring training session
-                  </label>
-                </div>
+                  </span>
+                </label>
 
                 {isRecurring && (
                   <div className="space-y-4 border-l-2 border-red-500/30 pl-6">
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       <div>
-                        <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
+                        <label
+                          htmlFor="recurrence-pattern"
+                          className="text-theme-text-primary mb-2 block text-sm font-semibold"
+                        >
                           Repeats <span className="text-red-700">*</span>
                         </label>
                         <select
+                          id="recurrence-pattern"
                           value={recurrencePattern}
                           onChange={(e) => setRecurrencePattern(e.target.value as RecurrencePattern)}
                           className="form-input py-3"
@@ -481,10 +489,14 @@ const CreateTrainingSessionPage: React.FC = () => {
                         </select>
                       </div>
                       <div>
-                        <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
+                        <label
+                          htmlFor="recurrence-end"
+                          className="text-theme-text-primary mb-2 block text-sm font-semibold"
+                        >
                           Repeat Until <span className="text-red-700">*</span>
                         </label>
                         <input
+                          id="recurrence-end"
                           type="date"
                           value={recurrenceEndDate}
                           onChange={(e) => setRecurrenceEndDate(e.target.value)}
@@ -683,7 +695,7 @@ const CreateTrainingSessionPage: React.FC = () => {
 
               {/* RSVP Settings */}
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div className="flex items-center space-x-3">
+                <label className="mobile-touch-target flex cursor-pointer items-center justify-start space-x-3">
                   <input
                     type="checkbox"
                     id="requires_rsvp"
@@ -691,11 +703,9 @@ const CreateTrainingSessionPage: React.FC = () => {
                     onChange={(e) => updateField('requires_rsvp', e.target.checked)}
                     className="form-checkbox"
                   />
-                  <label htmlFor="requires_rsvp" className="text-theme-text-secondary text-sm">
-                    Require RSVP
-                  </label>
-                </div>
-                <div className="flex items-center space-x-3">
+                  <span className="text-theme-text-secondary text-sm">Require RSVP</span>
+                </label>
+                <label className="mobile-touch-target flex cursor-pointer items-center justify-start space-x-3">
                   <input
                     type="checkbox"
                     id="is_mandatory"
@@ -703,20 +713,20 @@ const CreateTrainingSessionPage: React.FC = () => {
                     onChange={(e) => updateField('is_mandatory', e.target.checked)}
                     className="form-checkbox"
                   />
-                  <label htmlFor="is_mandatory" className="text-theme-text-secondary text-sm">
-                    Mandatory Training
-                  </label>
-                </div>
+                  <span className="text-theme-text-secondary text-sm">Mandatory Training</span>
+                </label>
               </div>
 
               {formData.requires_rsvp && (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div>
-                    <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
+                    <label htmlFor="rsvp-deadline" className="text-theme-text-primary mb-2 block text-sm font-semibold">
                       RSVP Deadline <Optional />
                     </label>
                     <DateTimeQuarterHour
                       value={formData.rsvp_deadline ?? ''}
+                      id="rsvp-deadline"
+                      timeLabel="RSVP deadline time"
                       onChange={(v) => updateField('rsvp_deadline', v)}
                       className="form-input py-3"
                     />

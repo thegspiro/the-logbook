@@ -505,7 +505,7 @@ const EmailTemplatesPage: React.FC = () => {
               <h2 className="text-theme-text-primary text-lg font-semibold">Scheduled Emails</h2>
               <button
                 onClick={() => setShowScheduleForm(!showScheduleForm)}
-                className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+                className="flex items-center gap-2 rounded-md bg-red-800 px-4 py-2 text-sm text-white hover:bg-red-900"
               >
                 <Plus className="h-4 w-4" />
                 Schedule Email
@@ -520,21 +520,25 @@ const EmailTemplatesPage: React.FC = () => {
 
         {/* History Tab */}
         {activeTab === 'history' && <MessageHistoryList templates={templates} />}
-        {/* A department that has already edited a notice keeps its wording:
-              ensure_default_templates only ever creates missing rows, and the
-              migrations that carry a redesign (f0d76814a9ab, then
-              b795d1b3401b for every earlier shipped version) rewrite only
-              fields still identical to a default this codebase shipped. So an
-              edited template reaches the new design when — and only when —
-              somebody presses Reset. Which nothing in the UI would otherwise
-              say, leaving an admin to conclude the redesign skipped them. */}
+        {/* Migration 15c5bc7700aa reset every shipped template to the
+              solid-tab design, edited ones included, and saved each edited
+              template's wording to email_template_backups. So there is no
+              longer a design to "adopt" by pressing Reset: Reset now only
+              replaces a department's wording with the default, which is the
+              opposite of what an admin who followed the old advice wanted.
+              Their wording comes back through the editor's Previous version
+              panel instead. The text stays true on an installation that never
+              had backups, which is why the Previous version sentence is
+              conditional rather than a promise. */}
         {activeTab === 'templates' && (
           <div className="mb-6 flex items-start gap-3 rounded-lg border border-blue-500/30 bg-blue-500/10 p-4">
             <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-blue-700 dark:text-blue-400" />
             <p className="text-sm text-blue-800 dark:text-blue-200">
-              A new email design is available. Templates you have never edited already use it — press{' '}
-              <span className="font-semibold">Reset</span> on any you have customised to adopt it. Your CC/BCC settings
-              are kept.
+              Every email uses the current design, including templates your department had edited — there is nothing to
+              adopt. If the redesign reset a template you had customised, your earlier wording is saved under{' '}
+              <span className="font-semibold">Previous version</span> in that template&apos;s editor.{' '}
+              <span className="font-semibold">Reset</span> replaces a template&apos;s wording with the default; it does
+              not change the design.
             </p>
           </div>
         )}

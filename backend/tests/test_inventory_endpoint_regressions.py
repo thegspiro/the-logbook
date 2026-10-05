@@ -13,6 +13,7 @@ from app.api.v1.endpoints.inventory import (
     list_storage_areas,
 )
 from app.models.inventory import EquipmentKitItem, StorageArea, StorageLocationType
+from app.models.user import User
 from app.services.inventory_service import InventoryService
 
 
@@ -132,19 +133,39 @@ async def test_equipment_kit_persists_optional_line_flag():
     assert line_items[0].optional is True
 
 
-def _checkout(*, due, is_returned=False, is_overdue=False):
+def _checkout(*, due, is_returned=False, is_overdue=False, preferred_name=None):
     return SimpleNamespace(
         id=str(uuid4()),
         item_id=str(uuid4()),
         item=SimpleNamespace(name="Gas Meter"),
         user_id=str(uuid4()),
-        user=SimpleNamespace(first_name="Nadia", last_name="Belhaj"),
+        user=User(
+            first_name="Nadia", last_name="Belhaj", preferred_name=preferred_name
+        ),
         checked_out_at=datetime(2026, 8, 12, tzinfo=timezone.utc),
         expected_return_at=due,
         is_returned=is_returned,
         is_overdue=is_overdue,
         checkout_reason="CO investigation",
     )
+
+
+def test_checkout_response_names_the_borrower_by_their_preferred_name():
+    """A checkout list is an everyday screen, not a custody record: the member
+    known as "Nina" is listed as Nina, not by the legal first name."""
+    tomorrow = datetime.now(timezone.utc) + timedelta(days=1)
+
+    body = _build_checkout_response(_checkout(due=tomorrow, preferred_name="Nina"))
+
+    assert body["user_name"] == "Nina Belhaj"
+
+
+def test_checkout_response_falls_back_to_the_legal_first_name():
+    tomorrow = datetime.now(timezone.utc) + timedelta(days=1)
+
+    body = _build_checkout_response(_checkout(due=tomorrow))
+
+    assert body["user_name"] == "Nadia Belhaj"
 
 
 def test_checkout_response_reports_a_past_due_loan_as_overdue():

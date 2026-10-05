@@ -1,9 +1,13 @@
 import React, { useCallback, useState } from 'react';
 import { useDialog } from '../../hooks/useDialog';
-import type { Candidate } from '../../types/election';
+import type { BallotItem, Candidate } from '../../types/election';
+import { ballotItemTitlesById, candidateContestLabel } from '../../utils/electionHelpers';
 
 interface RecordPaperBallotsModalProps {
   candidates: Candidate[];
+  // Names the contest of an item's Approve/Deny row by the item's title
+  // rather than its raw id (W50-30).
+  ballotItems?: BallotItem[] | undefined;
   recording: boolean;
   error: string | null;
   attestationsRequired?: number;
@@ -23,6 +27,7 @@ interface RecordPaperBallotsModalProps {
  */
 const RecordPaperBallotsModal: React.FC<RecordPaperBallotsModalProps> = ({
   candidates,
+  ballotItems,
   recording,
   error,
   attestationsRequired = 0,
@@ -45,6 +50,7 @@ const RecordPaperBallotsModal: React.FC<RecordPaperBallotsModalProps> = ({
     [onClose]
   );
 
+  const itemTitles = ballotItemTitlesById(ballotItems);
   const entries = candidates
     .map((c) => ({ candidate_id: c.id, count: parseInt(counts[c.id] ?? '', 10) }))
     .filter((e) => Number.isFinite(e.count) && e.count > 0);
@@ -99,7 +105,12 @@ const RecordPaperBallotsModal: React.FC<RecordPaperBallotsModalProps> = ({
                 <label htmlFor={`paper-count-${candidate.id}`} className="text-theme-text-primary text-sm">
                   {candidate.name}
                   {candidate.position && (
-                    <span className="text-theme-text-muted ml-1 text-xs">({candidate.position})</span>
+                    <>
+                      {' '}
+                      <span className="text-theme-text-muted text-xs">
+                        ({candidateContestLabel(candidate, itemTitles)})
+                      </span>
+                    </>
                   )}
                 </label>
                 <input

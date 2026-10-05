@@ -73,6 +73,16 @@ and skills testing status.]**
 
 **[CALLOUT: Arrow pointing to compliance percentage]**
 
+> "On a brand-new department that number reads **Not set up** instead — with no
+> requirements there's nothing to measure anyone against, and a hundred percent
+> would be a lie. Until you've built the basics, a **Set up training for your
+> department** checklist sits at the top of this page and walks you through it
+> in order."
+
+**[B-ROLL: A fresh department's Training dashboard — the "Set up training for
+your department" guide and the Department Compliance card reading "Not set
+up". Added 2026-10-04; about 12 seconds, re-time Chapter 2.]**
+
 > "**Upcoming Expirations** — this is your early warning system. It looks
 > ninety days ahead and shows you the next five, each with the number of days
 > left. If you see a cluster of CPR certs going in the same month, that's your
@@ -219,9 +229,22 @@ form pre-filled with its values]**
 
 > "**Requirement Name:** 'CPR/AED Certification.'
 > **Category:** 'Medical' — categories help organize and filter.
-> **Recurrence:** 'Every 2 years' — the system will automatically flag members
+> **Frequency:** 'Every 2 Years' — the system will automatically flag members
 > when their completion date is approaching the two-year mark.
 > **Required Hours:** If there's a minimum hour requirement, enter it here."
+
+**[SCREEN: Scroll to the "Existing Members" section: Apply to everyone /
+Exempt existing members / Give a catch-up deadline]**
+
+> "And decide what happens to the people already on your roster. **Existing
+> Members** gives you three choices: hold everyone to it now, exempt anyone
+> who joined before a cutoff, or give existing members a catch-up deadline.
+> Adding a requirement in March shouldn't make half the department
+> non-compliant overnight."
+
+**[PRODUCTION NOTE — 2026-10-04. The field is labelled **Frequency**, not
+"Recurrence" (pre-existing). Existing Members is new (2026-10-03), about 15
+seconds; re-time Chapter 3 and re-record the form.]**
 
 > "Create requirements for each item: CPR, Hazmat Awareness, SCBA Fit Testing,
 > Blood-Borne Pathogens, Ladder Operations — whatever your department and state
@@ -329,11 +352,24 @@ record to open the Attachments panel]**
 "Require instructor confirmation" checkbox]**
 
 > "When you create a training session, Step 3 has a **Require instructor
-> confirmation** box. This now controls what finalizing the session does. Leave
-> it unchecked — the default — and finalizing immediately completes every
-> attendee's record, no extra approval, no confirmation email. Check it, and the
-> session stays pending after you finalize until an officer confirms it from the
-> emailed notification."
+> confirmation** box. This controls what happens when the class is over and
+> someone presses **Finalize Attendance** on the event page. Leave it unchecked
+> — the default — and finalizing completes every checked-in attendee's training
+> record, with the minutes they were actually there. Check it, and those
+> records stay in progress until an officer who holds training management
+> approves them — from the emailed link, or **Review and approve** on the
+> event's training card — and they can adjust each member's minutes before
+> they do."
+
+**[SCREEN: An ended Training event: Finalize Attendance, then the training
+card's "Review and approve" opening the approval page with per-member
+minutes]**
+
+**[PRODUCTION NOTE — 2026-10-04. Rewritten. Credit now comes from finalizing
+the Training event's attendance (2026-09-29); before that, finalizing wrote
+no record for most events, and the emailed link opened nothing. A Training
+event can be finalized only after it ends. Approving needs `training.manage`,
+not `events.manage`. New footage needed; re-time Chapter 4.]**
 
 **[SCREENSHOT NEEDED]:** _The Create Training Session form Step 3 with the "Require instructor confirmation" checkbox and its 'records marked pending until instructor confirms' helper text._
 
@@ -373,8 +409,14 @@ a member's perspective]**
 > "The member selects the requirement, enters the details, and uploads their
 > certificate. The submission goes to you for review and approval."
 
-> "You'll see pending submissions in your dashboard. Review the documentation,
-> approve or reject with notes, and the member's record is updated."
+> "Each new submission sends everyone holding the Training Officer position a
+> notification, and they queue on **Review Submissions**. Review the
+> documentation, then **Approve**, **Request Revision** or **Reject** with
+> notes, and the member's record is updated. If you change their hours or turn
+> it down, they're told why; a plain approval just lands on their record."
+
+**[PRODUCTION NOTE — 2026-10-04. The in-app notices both ways are new
+(2026-09-28). Re-record the review cue to show the three buttons.]**
 
 **[PRODUCTION: RE-SHOOT this beat. The Submit Training form was rebuilt on
 2026-08-23 — nothing narrated above is wrong, but every frame of the old form
@@ -503,3 +545,10 @@ report, the cohort wizard, a skills test scorecard.]**
   most likely to be watched as standalone clips by _existing_ users — the course
   picker fixes requirements that silently never matched anything. Give both clean
   in-points.
+- **2026-09-30 pass.** "Finalizing a training session" was rewritten: a Training
+  event credits records when its **attendance is finalized** on the event page,
+  and a ticked **Require instructor confirmation** holds them for **Approve and
+  record** on the approval page, which the training officers' email and
+  **Review and approve** on the event both open. Also added: the **Not set up** compliance card and the setup
+  checklist for a new department (film against an empty demo org), and the
+  **Review Submission** notification. Adds ~0:40; re-time Chapters 2 and 4.

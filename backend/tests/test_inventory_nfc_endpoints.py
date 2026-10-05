@@ -16,6 +16,7 @@ from pydantic import ValidationError
 from app.api.dependencies import get_current_user
 from app.api.v1.endpoints.inventory_nfc import router
 from app.core.database import get_db
+from app.models.user import User
 from app.schemas.inventory_nfc import (
     MAX_AUDIT_TAPS,
     InventoryAuditScheduleUpdate,
@@ -531,10 +532,12 @@ class TestResolveMember:
         card_service.resolve_tag.assert_not_awaited()
 
     async def test_returns_the_member_and_never_the_identifier(self):
-        member = SimpleNamespace(
+        # The kiosk greets the member by the name they go by.
+        member = User(
             id=uuid.uuid4(),
             first_name="Dana",
             last_name="Reyes",
+            preferred_name="Dee",
             username="dreyes",
             membership_number="117",
         )
@@ -551,7 +554,7 @@ class TestResolveMember:
         assert response.status_code == 200
         assert response.json() == {
             "user_id": str(member.id),
-            "member_name": "Dana Reyes",
+            "member_name": "Dee Reyes",
             "membership_number": "117",
         }
         assert set(InventoryNfcMemberResponse.model_fields) == {

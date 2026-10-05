@@ -208,13 +208,17 @@ Logbook members, subject to these rules:
 - **No blanking.** An empty inbound value never clears an existing Logbook
   value.
 - **Respects sync direction.** Inbound changes are applied only when the org's
-  `sync_direction` is `pull` or `both`. A push-only org returns pulled contacts
-  for review but writes nothing.
+  `sync_direction` is `pull` or `both` (**Pull** or **Bidirectional** in the
+  form). A push-only org returns pulled contacts for review but writes nothing,
+  and the manual pull's toast says so: "Pulled N contacts but did not apply
+  them. Set sync direction to Pull or Bidirectional to update members."
 
 ### Automatic scheduled sync
 
-Set `auto_sync_enabled: true` on the integration (a checkbox in the connect
-form) to have the background scheduler sync the org automatically.
+Set `auto_sync_enabled: true` on the integration — the connect form's
+**Sync automatically every 30 minutes…** checkbox —
+to have the background scheduler sync the org automatically. Without it nothing
+is pushed or pulled on a schedule, whatever the direction.
 
 - Runs every 30 minutes via the in-process scheduler
   (`run_salesforce_auto_sync` in `scheduled_tasks.py`, registered in
@@ -287,23 +291,20 @@ partial paginated query results, and never logs Salesforce response bodies.
 
 ### Organization Settings
 
-Salesforce configuration is stored in the `integrations` table with `provider_type = 'salesforce'`. The `config` JSON column holds:
+Salesforce configuration is stored in the `integrations` table with `integration_type = 'salesforce'`. The `config` JSON column holds:
 
 ```json
 {
   "instance_url": "https://yourinstance.salesforce.com",
   "client_id": "...",
-  "client_secret": "...",
-  "refresh_token": "...",
   "api_version": "v62.0",
   "environment": "production",
-  "sync_direction": "bidirectional",
+  "sync_direction": "both",
   "sync_types": ["members", "training", "events"],
   "match_strategy": "email",
   "graceful_fields": true,
   "auto_sync_enabled": false,
-  "field_mappings": { ... },
-  "webhook_secret": "..."
+  "field_mappings": { ... }
 }
 ```
 

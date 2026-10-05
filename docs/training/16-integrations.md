@@ -622,7 +622,7 @@ same tag rewritten.
 
 ## Training Provider Integrations
 
-Training provider integrations are configured from **Training Admin > Integrations** (separate from the general integrations page). See [Training & Certification > External Training Integrations](./02-training.md#external-training-integrations) for details.
+Training provider integrations are configured from **Training Admin > Setup > Integrations** — the **External Training Integrations** screen, separate from the general integrations page. See [Training & Certification > External Training Integrations](./02-training.md#external-training-integrations) for details.
 
 Available training providers:
 
@@ -634,6 +634,12 @@ Available training providers:
 
 ### Setting up Target Solutions
 
+> **Set up before 2026-09-29? Re-enter it.** Until then a Target Solutions
+> provider was sent to the Vector Solutions API — a different credential,
+> returning certifications rather than completions — so it imported nothing
+> useful. Edit the provider, enter the key and secret as below, press **Test**,
+> then **Sync Now**.
+
 Target Solutions provides a **Training Records API** URL that looks like
 `https://app.targetsolutions.com/tsapp/api/?action=reports.buildReport&reportType=completionsall&key=…&secret=…`.
 Split it into three fields rather than pasting it whole:
@@ -643,6 +649,9 @@ Split it into three fields rather than pasting it whole:
 | API Base URL | `https://app.targetsolutions.com/tsapp/api/` |
 | API Key      | the value after `key=`                       |
 | API Secret   | the value after `secret=`                    |
+
+> **Screenshot needed:**
+> _[Training Officer or admin (training.manage) at /training/admin?page=setup&tab=integrations → Add Provider → Target Solutions, details step: API Base URL with its helper text, API Key and API Secret \* holding only obviously fake values (demo-key / demo-secret) or empty, Enable Auto-Sync switched on (it starts off) with Pull new completions: Every hour and Daily 30-day review at 02:00 with its timezone helper. Never save, and never type a real key or secret.]_
 
 The key and secret are stored encrypted and are never returned by the API or
 shown again. A base URL that still contains a key, secret or token is
@@ -655,12 +664,17 @@ matched by the report's **Email** column against their Logbook email (ignoring
 case and spaces; deleted members are skipped). A member who cannot be matched
 yet is listed under **User Mappings**, and is matched automatically on a later
 sync once their email is on file — unless an officer has already set or cleared
-that mapping by hand. Synced completions wait under **Imports** for an officer
+that mapping by hand. To map one by hand, pick the member from the user's
+dropdown under **Mappings → Users** _(2026-10-04)_; their waiting completions
+move to that member immediately. Synced completions wait under **Imports** for an officer
 to import them, as for every provider.
+
+> **Screenshot needed:**
+> _[Training Admin → Setup → Integrations → add a Target Solutions provider: the form with **API Base URL** `https://app.targetsolutions.com/tsapp/api/`, **API Key** and **API Secret \*** filled with placeholder values, and under **Sync Settings** **Enable Auto-Sync** on, **Pull new completions** set to **Every hour** and **Daily 30-day review at** 02:00. Use a demo key, never a real one.]_
 
 ### Syncing on a schedule
 
-Turn on **Auto-Sync**. A Target Solutions provider then runs two kinds of sync:
+Under **Sync Settings**, turn on **Enable Auto-Sync**. A Target Solutions provider then runs two kinds of sync:
 
 | Run                     | When                                                      | Asks Target Solutions for                                 |
 | ----------------------- | --------------------------------------------------------- | --------------------------------------------------------- |
@@ -687,6 +701,9 @@ Details:
   passed. Run a connection test after saving the provider.
 - A completion **deleted** in Target Solutions is not removed here, because the
   report only lists completions that still exist.
+- The provider card's **Auto-Sync** line shows both, e.g. "Every 1h · review
+  daily at 02:00". Other providers show only "Every _N_h" and their form has a
+  single **Sync Interval**, scheduled from the previous sync as before.
 
 ---
 
