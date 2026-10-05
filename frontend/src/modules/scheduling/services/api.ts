@@ -19,6 +19,7 @@ import type {
   AssignmentCreate,
   AssignmentUpdate,
   SwapRequestCreate,
+  ExchangeCandidate,
   SwapRequestReview,
   SwapRequestFilters,
   PaginatedResponse,
@@ -1183,6 +1184,12 @@ export const schedulingService = {
   async closeLateSignup(shiftId: string): Promise<ShiftRecord> {
     const response = await api.delete<ShiftRecord>(`/scheduling/shifts/${shiftId}/late-signup`);
     return response.data;
+  },
+
+  /** Seats the caller could exchange their seat on a shift for. */
+  async getExchangeCandidates(shiftId: string): Promise<ExchangeCandidate[]> {
+    const response = await api.get<ExchangeCandidate[]>(`/scheduling/shifts/${shiftId}/exchange-candidates`);
+    return asArray(response.data);
   },
 
   /** Members who could take over the caller's seat on a shift. */

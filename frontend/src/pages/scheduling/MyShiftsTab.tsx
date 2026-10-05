@@ -23,6 +23,7 @@ import { Link, useSearchParams } from 'react-router';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import type { ShiftRecord, ShiftAttendanceRecord } from '../../modules/scheduling/services/api';
+import type { ExchangeCandidate } from '../../modules/scheduling/types';
 import type { Assignment } from '../../types/scheduling';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatTime, getTodayLocalDate, formatDateCustom } from '../../utils/dateFormatting';
@@ -34,6 +35,18 @@ import { useSchedulingStore } from '../../modules/scheduling/store/schedulingSto
 import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 import { CalendarSubscribeCard } from './CalendarSubscribeCard';
 import { MyHoursSummary } from './MyHoursSummary';
+
+interface SwapFormState {
+  mode: 'open' | 'shift' | 'exchange';
+  target_shift_id: string;
+  exchange_key: string;
+  reason: string;
+}
+
+const EMPTY_SWAP_FORM: SwapFormState = { mode: 'open', target_shift_id: '', exchange_key: '', reason: '' };
+
+// A member can hold one seat per shift, so shift + member names an exchange.
+const exchangeKey = (c: ExchangeCandidate) => `${c.shift_id}:${c.user_id}`;
 
 interface MyShiftsTabProps {
   onViewShift?: (shift: ShiftRecord) => void;
@@ -61,9 +74,13 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
   // Swap request modal
   const [showSwapModal, setShowSwapModal] = useState(false);
   const [swapAssignment, setSwapAssignment] = useState<Assignment | null>(null);
-  const [swapForm, setSwapForm] = useState({ target_shift_id: '', reason: '' });
+  const [swapForm, setSwapForm] = useState<SwapFormState>(EMPTY_SWAP_FORM);
   const [submittingSwap, setSubmittingSwap] = useState(false);
   const [availableShifts, setAvailableShifts] = useState<ShiftRecord[]>([]);
+  // Exchange picker: seats the server says both members qualify for. `null`
+  // until loaded, so "loading" and "nobody qualifies" read differently.
+  const [exchangeCandidates, setExchangeCandidates] = useState<ExchangeCandidate[] | null>(null);
+  const [exchangeError, setExchangeError] = useState<string | null>(null);
 
   // Time off modal
   const [showTimeOffModal, setShowTimeOffModal] = useState(false);
@@ -164,7 +181,9 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
 
   const openSwapRequest = async (assignment: Assignment) => {
     setSwapAssignment(assignment);
-    setSwapForm({ target_shift_id: '', reason: '' });
+    setSwapForm(EMPTY_SWAP_FORM);
+    setExchangeCandidates(null);
+    setExchangeError(null);
     setShowSwapModal(true);
     // Load available shifts for the picker
     try {
@@ -177,14 +196,40 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
     }
   };
 
+  const chooseExchange = async () => {
+    setSwapForm((p) => ({ ...p, mode: 'exchange' }));
+    if (!swapAssignment || exchangeCandidates !== null) return;
+    setExchangeError(null);
+    try {
+      const candidates = await schedulingService.getExchangeCandidates(swapAssignment.shift_id);
+      setExchangeCandidates(candidates);
+      const first = candidates[0];
+      if (first) setSwapForm((p) => ({ ...p, exchange_key: exchangeKey(first) }));
+    } catch (err) {
+      setExchangeCandidates([]);
+      setExchangeError(getErrorMessage(err, 'Could not load who you can exchange with.'));
+    }
+  };
+
+  const selectedExchange = exchangeCandidates?.find((c) => exchangeKey(c) === swapForm.exchange_key);
+
   const handleSwapRequest = async () => {
     if (!swapAssignment) return;
+    if (swapForm.mode === 'exchange' && !selectedExchange) {
+      toast.error('Choose who to exchange with');
+      return;
+    }
     setSubmittingSwap(true);
     try {
       await schedulingService.createSwapRequest({
         offering_shift_id: swapAssignment.shift_id,
         requesting_shift_id:
-          swapForm.target_shift_id && swapForm.target_shift_id !== 'pick' ? swapForm.target_shift_id : undefined,
+          swapForm.mode === 'exchange'
+            ? selectedExchange?.shift_id
+            : swapForm.mode === 'shift' && swapForm.target_shift_id && swapForm.target_shift_id !== 'pick'
+              ? swapForm.target_shift_id
+              : undefined,
+        target_user_id: swapForm.mode === 'exchange' ? selectedExchange?.user_id : undefined,
         reason: swapForm.reason || undefined,
       });
       toast.success('Swap request sent — track it on the Requests tab');
@@ -715,10 +760,10 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                 <div role="group" aria-labelledby="swap-type-label" className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    aria-pressed={!swapForm.target_shift_id}
-                    onClick={() => setSwapForm((p) => ({ ...p, target_shift_id: '' }))}
+                    aria-pressed={swapForm.mode === 'open'}
+                    onClick={() => setSwapForm((p) => ({ ...p, mode: 'open', target_shift_id: '' }))}
                     className={`rounded-lg border p-3 text-left text-sm transition-colors ${
-                      !swapForm.target_shift_id
+                      swapForm.mode === 'open'
                         ? 'text-theme-text-primary border-violet-500 bg-violet-500/10'
                         : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover'
                     }`}
@@ -733,10 +778,12 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                   </button>
                   <button
                     type="button"
-                    aria-pressed={Boolean(swapForm.target_shift_id)}
-                    onClick={() => setSwapForm((p) => ({ ...p, target_shift_id: availableShifts[0]?.id ?? 'pick' }))}
+                    aria-pressed={swapForm.mode === 'shift'}
+                    onClick={() =>
+                      setSwapForm((p) => ({ ...p, mode: 'shift', target_shift_id: availableShifts[0]?.id ?? 'pick' }))
+                    }
                     className={`rounded-lg border p-3 text-left text-sm transition-colors ${
-                      swapForm.target_shift_id
+                      swapForm.mode === 'shift'
                         ? 'text-theme-text-primary border-violet-500 bg-violet-500/10'
                         : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover'
                     }`}
@@ -744,10 +791,67 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                     <span className="block font-medium">Specific Shift</span>
                     <span className="text-theme-text-muted text-xs">Choose which shift you want</span>
                   </button>
+                  <button
+                    type="button"
+                    aria-pressed={swapForm.mode === 'exchange'}
+                    onClick={() => {
+                      void chooseExchange();
+                    }}
+                    className={`col-span-2 rounded-lg border p-3 text-left text-sm transition-colors ${
+                      swapForm.mode === 'exchange'
+                        ? 'text-theme-text-primary border-violet-500 bg-violet-500/10'
+                        : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover'
+                    }`}
+                  >
+                    <span className="block font-medium">Exchange With a Member</span>
+                    <span className="text-theme-text-muted text-xs">Trade seats: you take theirs, they take yours</span>
+                  </button>
                 </div>
               </div>
+              {/* Exchange picker — the server lists only seats both members qualify for */}
+              {swapForm.mode === 'exchange' && (
+                <div>
+                  <label htmlFor="swap-exchange" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                    Exchange With
+                  </label>
+                  {exchangeCandidates === null ? (
+                    <p className="text-theme-text-muted text-sm">Loading who you can exchange with...</p>
+                  ) : exchangeError ? (
+                    <p className="text-sm text-red-700 dark:text-red-300">{exchangeError}</p>
+                  ) : exchangeCandidates.length === 0 ? (
+                    <p className="text-theme-text-muted text-sm">
+                      No upcoming seat you could exchange for. Both members must be qualified for the seat they would
+                      take.
+                    </p>
+                  ) : (
+                    <>
+                      <select
+                        id="swap-exchange"
+                        value={swapForm.exchange_key}
+                        onChange={(e) => setSwapForm((p) => ({ ...p, exchange_key: e.target.value }))}
+                        className={inputCls}
+                      >
+                        {exchangeCandidates.map((c) => (
+                          <option key={exchangeKey(c)} value={exchangeKey(c)}>
+                            {formatDateCustom(
+                              c.shift_date + 'T12:00:00',
+                              { weekday: 'short', month: 'short', day: 'numeric' },
+                              tz
+                            )}
+                            {c.start_time ? ` ${formatTime(c.start_time, tz)}` : ''} — {c.user_name || 'Member'}
+                            {c.position ? ` (${positionLabel(c.position)})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-theme-text-muted mt-1 text-xs">
+                        Only members qualified for your seat, on seats you are qualified for, are listed.
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
               {/* Target shift picker — only shown when "Specific Shift" is selected */}
-              {swapForm.target_shift_id && (
+              {swapForm.mode === 'shift' && (
                 <div>
                   <label
                     htmlFor="swap-target-shift"
@@ -802,7 +906,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                 onClick={() => {
                   void handleSwapRequest();
                 }}
-                disabled={submittingSwap}
+                disabled={submittingSwap || (swapForm.mode === 'exchange' && !selectedExchange)}
                 className="rounded-lg bg-violet-600 px-4 py-2 text-white hover:bg-violet-700 disabled:opacity-50"
               >
                 {submittingSwap ? 'Submitting...' : 'Submit Request'}

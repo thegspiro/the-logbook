@@ -3448,6 +3448,12 @@ there wasn't one, which is the shape every one-way offer has. A duty officer
 can now approve the offer too, which hands the seat to the member named; on the
 Requests tab it reads "→ Offered to _name_".
 
+- **Exchanging shifts with someone needs both of you qualified.** On My Shifts,
+  _Request swap → Exchange With a Member_ lists only seats you are qualified
+  for, held by members qualified for yours — a driver can trade with another
+  driver seat, but not with a firefighter who isn't cleared to drive. Giving
+  your shift away without taking one back isn't an exchange, and isn't limited
+  this way.
 - **A request goes away when its seat does.** If you leave a shift — withdraw,
   decline, take approved time off, go on leave, or an officer removes or
   reassigns you — any pending swap or offer for that seat is cancelled, and you

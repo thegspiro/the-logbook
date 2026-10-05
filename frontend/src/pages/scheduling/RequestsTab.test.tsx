@@ -322,6 +322,73 @@ describe('RequestsTab', () => {
     expect(mockReviewSwapRequest).toHaveBeenCalledTimes(1);
   });
 
+  describe('an exchange the members are not both qualified for', () => {
+    const exchange = {
+      id: 'swap-x',
+      requesting_user_id: 'user-2',
+      requesting_user_name: 'Jane Doe',
+      target_user_id: 'user-3',
+      target_user_name: 'Sam Ortiz',
+      offering_shift_id: 'shift-1',
+      offering_shift_date: '2026-10-08',
+      requesting_shift_id: 'shift-2',
+      requesting_shift_date: '2026-10-10',
+      status: 'pending',
+      created_at: '2026-10-01T00:00:00Z',
+    };
+    const notQualified = {
+      response: {
+        status: 400,
+        statusText: 'Bad Request',
+        data: {
+          code: 'LB-SCHED-002',
+          detail: 'The requesting member is not qualified for the Officer seat they would take',
+        },
+      },
+    };
+
+    beforeEach(() => {
+      mockCheckPermission.mockReturnValue(true);
+      mockGetSwapRequests.mockResolvedValue({ items: [exchange], total: 1, skip: 0, limit: 20 });
+      mockReviewSwapRequest.mockRejectedValueOnce(notQualified).mockResolvedValue({});
+    });
+
+    it('names the member on the other side of the exchange', async () => {
+      renderWithRouter(<RequestsTab />);
+
+      expect(await screen.findByText(/with Sam Ortiz/)).toBeInTheDocument();
+    });
+
+    it('offers the override, and approves with it when the officer confirms', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<RequestsTab />);
+
+      await user.click(await screen.findByRole('button', { name: 'Approve swap for Jane Doe' }));
+      expect(await screen.findByText(/not qualified for the Officer seat/)).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Approve anyway' }));
+
+      await waitFor(() => {
+        expect(mockReviewSwapRequest).toHaveBeenLastCalledWith('swap-x', {
+          status: 'approved',
+          override_qualification: true,
+        });
+      });
+    });
+
+    it('leaves the request pending when the officer keeps it', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<RequestsTab />);
+
+      await user.click(await screen.findByRole('button', { name: 'Approve swap for Jane Doe' }));
+      await user.click(await screen.findByRole('button', { name: 'Keep it pending' }));
+
+      await waitFor(() => {
+        expect(screen.queryByRole('button', { name: 'Approve anyway' })).not.toBeInTheDocument();
+      });
+      expect(mockReviewSwapRequest).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('says an empty list is filtered, so an answered request is not mistaken for none', async () => {
     const user = userEvent.setup();
     renderWithRouter(<RequestsTab />);

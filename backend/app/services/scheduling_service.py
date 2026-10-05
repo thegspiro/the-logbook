@@ -391,6 +391,9 @@ class SchedulingService:
         # path which sets nothing gets an empty list rather than AttributeError.
         self.last_assignment_warnings: List[Dict[str, Any]] = []
         self.last_generation_warnings: List[str] = []
+        # Whether the last swap review needed the qualification override, so
+        # the endpoint audits the override only when it actually waived one.
+        self.last_review_overrode_qualification = False
 
     # ============================================
     # Generic Helpers
@@ -5437,6 +5440,20 @@ class SchedulingService:
                 if target_user.scalar_one_or_none() is None:
                     return None, "Target user not found"
 
+            # A two-way exchange is refused here, not left to fail at review:
+            # a member must not be able to put an exchange with someone who
+            # cannot work their seat in front of the duty officer at all.
+            if requesting_shift_id and target_user_id:
+                exchange_error = await self._exchange_request_error(
+                    organization_id,
+                    requesting_user_id,
+                    offering_shift,
+                    target_user_id,
+                    requesting_shift_id,
+                )
+                if exchange_error:
+                    return None, exchange_error
+
             swap_request = ShiftSwapRequest(
                 organization_id=organization_id,
                 requesting_user_id=requesting_user_id,
@@ -5456,6 +5473,253 @@ class SchedulingService:
         except Exception as e:
             await self.db.rollback()
             return None, str(e)
+
+    async def _active_assignment(
+        self, organization_id: UUID, shift_id: Any, user_id: Any
+    ) -> Optional[ShiftAssignment]:
+        result = await self.db.execute(
+            select(ShiftAssignment).where(
+                ShiftAssignment.shift_id == str(shift_id),
+                ShiftAssignment.user_id == str(user_id),
+                ShiftAssignment.organization_id == str(organization_id),
+                ShiftAssignment.assignment_status.notin_(
+                    self.INACTIVE_ASSIGNMENT_STATUSES
+                ),
+            )
+        )
+        return result.scalars().first()
+
+    async def _qualified_for_seat(
+        self, organization_id: UUID, user_id: Any, shift: Shift, position: Any
+    ) -> bool:
+        """Whether a member may work a specific seat, by the signup rule.
+
+        Exchanges deliberately reuse ``get_eligible_positions`` — rank grants,
+        qualifications, completed training, EVOC and the department's open
+        positions — rather than a ladder of their own. A position a captain's
+        rank grants (driver, firefighter, …) is what "that position or higher"
+        means here, and a second definition would let a trade allow what
+        signup refuses, or the reverse.
+        """
+        from app.services.shift_eligibility_service import ShiftEligibilityService
+
+        member = (
+            await self.db.execute(
+                select(User).where(
+                    User.id == str(user_id),
+                    User.organization_id == str(organization_id),
+                )
+            )
+        ).scalar_one_or_none()
+        if member is None:
+            return False
+        eligible = await ShiftEligibilityService(self.db).get_eligible_positions(
+            member, str(organization_id), str(shift.id)
+        )
+        return self._seat_in(eligible, position)
+
+    @staticmethod
+    def _seat_in(eligible: List[str], position: Any) -> bool:
+        # A seat with no position is judged the way the candidate check judges
+        # a shift with no named seats: any eligibility at all will do.
+        position_value = getattr(position, "value", position)
+        if not position_value:
+            return bool(eligible)
+        return str(position_value).lower() in {str(v).lower() for v in eligible}
+
+    #: How far ahead the exchange picker looks, and how many seats it lists.
+    #: A trade is arranged weeks out, not months, and the list is read by a
+    #: person on a phone.
+    EXCHANGE_HORIZON_DAYS = 90
+    EXCHANGE_CANDIDATE_LIMIT = 200
+
+    async def get_exchange_candidates(
+        self, organization_id: UUID, shift_id: UUID, user_id: UUID
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Seats ``user_id`` could exchange their seat on ``shift_id`` for.
+
+        Returns None when the caller holds no active seat on the shift. Lists
+        only pairs that pass ``_exchange_qualification_error`` — the caller
+        cleared for the other seat, its holder cleared for the caller's — on
+        upcoming, open shifts the caller is not already on, held by members
+        not already on the caller's shift. Leave, overlap and capacity are
+        left to approval, which re-checks everything against live state.
+        """
+        from app.services.shift_eligibility_service import ShiftEligibilityService
+
+        offering_shift = await self.get_shift_by_id(shift_id, organization_id)
+        if offering_shift is None:
+            return None
+        mine = await self._active_assignment(organization_id, shift_id, user_id)
+        if mine is None:
+            return None
+        if mine.is_training:
+            return []
+        caller = (
+            await self.db.execute(
+                select(User).where(
+                    User.id == str(user_id),
+                    User.organization_id == str(organization_id),
+                )
+            )
+        ).scalar_one_or_none()
+        if caller is None:
+            return []
+
+        active = ShiftAssignment.assignment_status.notin_(
+            self.INACTIVE_ASSIGNMENT_STATUSES
+        )
+        callers_shifts = select(ShiftAssignment.shift_id).where(
+            ShiftAssignment.user_id == str(user_id),
+            ShiftAssignment.organization_id == str(organization_id),
+            active,
+        )
+        on_offering_shift = select(ShiftAssignment.user_id).where(
+            ShiftAssignment.shift_id == str(shift_id),
+            ShiftAssignment.organization_id == str(organization_id),
+            active,
+        )
+        today = await resolve_org_today(self.db, organization_id)
+        rows = (
+            await self.db.execute(
+                select(ShiftAssignment, Shift, User)
+                .join(Shift, ShiftAssignment.shift_id == Shift.id)
+                .join(User, ShiftAssignment.user_id == User.id)
+                .where(
+                    ShiftAssignment.organization_id == str(organization_id),
+                    Shift.organization_id == str(organization_id),
+                    User.organization_id == str(organization_id),
+                    active,
+                    ShiftAssignment.is_training.is_(False),
+                    ShiftAssignment.user_id.notin_(on_offering_shift),
+                    Shift.id.notin_(callers_shifts),
+                    Shift.status != ShiftStatus.CANCELLED,
+                    Shift.is_finalized.is_(False),
+                    Shift.shift_date >= today,
+                    Shift.shift_date
+                    <= today + timedelta(days=self.EXCHANGE_HORIZON_DAYS),
+                )
+                .order_by(Shift.shift_date, Shift.start_time, User.last_name)
+            )
+        ).all()
+        if not rows:
+            return []
+
+        eligibility = ShiftEligibilityService(self.db)
+        caller_eligible = await eligibility.get_eligible_positions_bulk(
+            caller,
+            str(organization_id),
+            sorted({str(shift.id) for _, shift, _ in rows}),
+        )
+        holder_eligible: Dict[str, List[str]] = {}
+        results: List[Dict[str, Any]] = []
+        for seat, shift, holder in rows:
+            if not self._seat_in(caller_eligible.get(str(shift.id), []), seat.position):
+                continue
+            if str(holder.id) not in holder_eligible:
+                holder_eligible[str(holder.id)] = (
+                    await eligibility.get_eligible_positions(
+                        holder, str(organization_id), str(offering_shift.id)
+                    )
+                )
+            if not self._seat_in(holder_eligible[str(holder.id)], mine.position):
+                continue
+            results.append(
+                {
+                    "shift_id": str(shift.id),
+                    "shift_date": shift.shift_date,
+                    "start_time": shift.start_time,
+                    "user_id": str(holder.id),
+                    "user_name": holder.full_name,
+                    "position": getattr(seat.position, "value", seat.position),
+                }
+            )
+            if len(results) >= self.EXCHANGE_CANDIDATE_LIMIT:
+                break
+        return results
+
+    async def _exchange_qualification_error(
+        self,
+        organization_id: UUID,
+        requester_id: Any,
+        offered_seat: ShiftAssignment,
+        offering_shift: Shift,
+        target_id: Any,
+        target_seat: ShiftAssignment,
+        requested_shift: Shift,
+        *,
+        for_reviewer: bool = False,
+    ) -> Optional[str]:
+        """Why two members cannot trade seats, or None when both qualify.
+
+        Seats stay with their shifts: each member works the *other's* seat
+        afterwards, so each must be cleared for the seat they take. A driver
+        and an officer exchange only if the driver is also cleared as officer.
+        ``for_reviewer`` words the refusal for the duty officer rather than
+        for the member asking.
+        """
+        if not await self._qualified_for_seat(
+            organization_id, target_id, offering_shift, offered_seat.position
+        ):
+            seat = position_label(offered_seat.position) or "offered"
+            if for_reviewer:
+                return (
+                    f"The member asked to exchange is not qualified for the "
+                    f"{seat} seat they would take"
+                )
+            return f"The member you asked is not qualified for your {seat} seat"
+        if not await self._qualified_for_seat(
+            organization_id, requester_id, requested_shift, target_seat.position
+        ):
+            seat = position_label(target_seat.position) or "requested"
+            if for_reviewer:
+                return (
+                    f"The requesting member is not qualified for the {seat} "
+                    f"seat they would take"
+                )
+            return f"You are not qualified for their {seat} seat"
+        return None
+
+    async def _exchange_request_error(
+        self,
+        organization_id: UUID,
+        requester_id: Any,
+        offering_shift: Shift,
+        target_id: Any,
+        requested_shift_id: Any,
+    ) -> Optional[str]:
+        if str(target_id) == str(requester_id):
+            return "You cannot exchange a shift with yourself"
+        if str(requested_shift_id) == str(offering_shift.id):
+            return "Choose a different shift to exchange for"
+        requested_shift = await self.get_shift_by_id(
+            requested_shift_id, organization_id
+        )
+        if requested_shift is None:
+            return "Requested shift not found"
+        offered_seat = await self._active_assignment(
+            organization_id, offering_shift.id, requester_id
+        )
+        if offered_seat is None:
+            return "You are not assigned to the offering shift"
+        target_seat = await self._active_assignment(
+            organization_id, requested_shift.id, target_id
+        )
+        if target_seat is None:
+            return "That member is not on the shift you asked to exchange for"
+        # Same refusal as handing a seat over: a training seat carries the
+        # trainee's program and evaluator, which an exchange cannot move.
+        if offered_seat.is_training or target_seat.is_training:
+            return "A training seat cannot be exchanged"
+        return await self._exchange_qualification_error(
+            organization_id,
+            requester_id,
+            offered_seat,
+            offering_shift,
+            target_id,
+            target_seat,
+            requested_shift,
+        )
 
     async def get_swap_requests(
         self,
@@ -5554,8 +5818,15 @@ class SchedulingService:
         reviewer_id: UUID,
         status: SwapRequestStatus,
         reviewer_notes: Optional[str] = None,
+        override_qualification: bool = False,
     ) -> Tuple[Optional[ShiftSwapRequest], Optional[str]]:
         """Review a swap against current state under row-level locks.
+
+        An exchange whose members are not both cleared for the seat they would
+        take raises ``CodedValueError`` (``SCHED_EXCHANGE_NOT_QUALIFIED``) so
+        the screen can offer the override. ``override_qualification`` waives
+        only that position check; every other live-state check — leave,
+        overlap, capacity, and the EVOC driver block — still applies.
 
         In a two-person exchange, positions are seats belonging to their shifts,
         so only the two ``user_id`` values change.  In a one-way move, the
@@ -5589,6 +5860,7 @@ class SchedulingService:
 
             # Seats the approval takes away from the members who held them.
             vacated: List[Tuple[Any, Any]] = []
+            waive_eligibility = False
 
             # Enforce separation of duties before mutating either the request
             # or its assignments. Participant acceptance, if added later, must
@@ -5724,6 +5996,25 @@ class SchedulingService:
                         "offer. Reassign it from the shift roster instead."
                     )
 
+                waive_eligibility = False
+                if target_assign and requested_shift:
+                    qualification_error = await self._exchange_qualification_error(
+                        organization_id,
+                        swap_request.requesting_user_id,
+                        req_assignment,
+                        offering_shift,
+                        swap_request.target_user_id,
+                        target_assign,
+                        requested_shift,
+                        for_reviewer=True,
+                    )
+                    if qualification_error and not override_qualification:
+                        raise CodedValueError(
+                            qualification_error,
+                            error_code=ErrorCode.SCHED_EXCHANGE_NOT_QUALIFIED,
+                        )
+                    waive_eligibility = bool(qualification_error)
+
                 moving_ids = {str(req_assignment.id)}
                 if target_assign:
                     moving_ids.add(str(target_assign.id))
@@ -5780,6 +6071,7 @@ class SchedulingService:
                         exclude_assignment_ids=moving_ids,
                         require_mutable=True,
                         reject_past=True,
+                        enforce_position_eligibility=not waive_eligibility,
                         context=context,
                     )
                     if error:
@@ -5821,6 +6113,14 @@ class SchedulingService:
             swap_request.reviewed_by = reviewer_id
             swap_request.reviewed_at = datetime.now(timezone.utc)
             swap_request.reviewer_notes = reviewer_notes
+            # Recorded on the request itself, where anyone reading the
+            # Requests tab later sees it; the endpoint also writes an audit
+            # event. Only when the override was actually needed.
+            if waive_eligibility:
+                swap_request.reviewer_notes = (
+                    f"{self.QUALIFICATION_OVERRIDE_NOTE} {reviewer_notes or ''}"
+                ).strip()
+            self.last_review_overrode_qualification = waive_eligibility
             await self.db.commit()
             await self.db.refresh(swap_request)
 
@@ -6087,6 +6387,10 @@ class SchedulingService:
                 swap_request.requesting_user_id,
                 exc,
             )
+
+    #: Prefixed to the reviewer's notes when an officer approves an exchange
+    #: whose members are not both qualified for the seats they take.
+    QUALIFICATION_OVERRIDE_NOTE = "[Approved with qualification override]"
 
     #: Recorded on a swap withdrawn because its seat went away. Shown on the
     #: Requests tab, so it names the cause rather than the mechanism.

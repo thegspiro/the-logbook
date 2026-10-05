@@ -12,6 +12,8 @@ const mockDeclineAssignment = vi.fn();
 const mockUpdateAssignment = vi.fn();
 const mockGetOpenShifts = vi.fn();
 const mockGetMyHoursHistory = vi.fn();
+const mockGetExchangeCandidates = vi.fn();
+const mockCreateSwapRequest = vi.fn();
 
 vi.mock('../../modules/scheduling/services/api', () => ({
   schedulingService: {
@@ -26,7 +28,8 @@ vi.mock('../../modules/scheduling/services/api', () => ({
     // throws and the whole load falls into its catch, leaving an empty list.
     getMyAttendanceHistory: vi.fn().mockResolvedValue([]),
     getShifts: vi.fn().mockResolvedValue({ shifts: [], total: 0 }),
-    createSwapRequest: vi.fn().mockResolvedValue({}),
+    createSwapRequest: (...args: unknown[]) => mockCreateSwapRequest(...args) as unknown,
+    getExchangeCandidates: (...args: unknown[]) => mockGetExchangeCandidates(...args) as unknown,
     createTimeOff: vi.fn().mockResolvedValue({}),
   },
 }));
@@ -267,6 +270,62 @@ describe('MyShiftsTab', () => {
       await user.click(specific);
       expect(specific).toHaveAttribute('aria-pressed', 'true');
       expect(open).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    describe('exchanging with a member', () => {
+      beforeEach(() => {
+        mockCreateSwapRequest.mockReset();
+        mockCreateSwapRequest.mockResolvedValue({});
+        mockGetExchangeCandidates.mockReset();
+        mockGetExchangeCandidates.mockResolvedValue([
+          {
+            shift_id: 'shift-z',
+            shift_date: day(12),
+            start_time: `${day(12)}T12:00:00Z`,
+            user_id: 'user-9',
+            user_name: 'Sam Ortiz',
+            position: 'firefighter',
+          },
+        ]);
+      });
+
+      it('lists only what the server offers and sends a two-way exchange', async () => {
+        const user = userEvent.setup();
+        renderWithRouter(<MyShiftsTab onViewShift={mockOnViewShift} />);
+
+        const [swap] = await screen.findAllByRole('button', { name: /^Swap shift on / });
+        await user.click(swap as HTMLElement);
+        await user.click(await screen.findByRole('button', { name: /Exchange With a Member/ }));
+
+        const picker = await screen.findByLabelText('Exchange With');
+        expect(within(picker).getAllByRole('option')).toHaveLength(1);
+        expect(within(picker).getByRole('option', { name: /Sam Ortiz/ })).toBeInTheDocument();
+        expect(mockGetExchangeCandidates).toHaveBeenCalledWith('shift-a');
+
+        await user.click(screen.getByRole('button', { name: 'Submit Request' }));
+
+        await waitFor(() => {
+          expect(mockCreateSwapRequest).toHaveBeenCalledWith({
+            offering_shift_id: 'shift-a',
+            requesting_shift_id: 'shift-z',
+            target_user_id: 'user-9',
+            reason: undefined,
+          });
+        });
+      });
+
+      it('says so when nobody qualifies, and will not submit', async () => {
+        mockGetExchangeCandidates.mockResolvedValue([]);
+        const user = userEvent.setup();
+        renderWithRouter(<MyShiftsTab onViewShift={mockOnViewShift} />);
+
+        const [swap] = await screen.findAllByRole('button', { name: /^Swap shift on / });
+        await user.click(swap as HTMLElement);
+        await user.click(await screen.findByRole('button', { name: /Exchange With a Member/ }));
+
+        expect(await screen.findByText(/No upcoming seat you could exchange for/)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Submit Request' })).toBeDisabled();
+      });
     });
   });
 });
