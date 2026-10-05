@@ -38,7 +38,7 @@ findings' own citations, because nothing moved.
 still-open findings' own cited lines directly against current code** rather
 than trusting an empty `git diff` alone:
 
-- **SF-9 (app-review, MED, still open)** — `record_payment`
+- **SF-9 (app-review, MED) — resolved 2026-10-05**, see `docs/app-review/storefront.md` → SF-9. As recorded at the time: `record_payment`
   (`storefront_service.py:1918`) is still a plain
   `get_order` read (`:1930`) followed by
   `order.amount_paid = _money(Decimal(order.amount_paid or 0) + applied)`

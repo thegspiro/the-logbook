@@ -154,7 +154,18 @@ on the follow-up branch. Nothing else from the pass-5 work was affected; the
 storefront tally lock, the auth lockout lock and the scheduled-email org filter
 were all inside the merge.
 
-### SF-9 — MED — Concurrent payment recording loses money off the ledger — FLAGGED
+### SF-9 — MED — Concurrent payment recording loses money off the ledger — ✅ FIXED (2026-10-05)
+
+**Resolved 2026-10-05 (owner decision, option (a)):** `record_payment` reads
+the order with a row lock (`get_order(for_update=True)`, which also re-reads
+past the identity map), and settling the remaining balance (`amount=None`)
+reads that balance under the same lock, so two settlements cannot each pay
+it. `bulk_mark_paid` rolls back after a refused order, so no lock is carried
+into the next one; each successful payment commits its own. `apply_payment_event`
+also locks the payment event and marks it applied in the same commit as the
+payment, so one event cannot be applied twice. Covered by
+`test_storefront_payment_race.py` (both cases fail on the old code). The
+concurrent-duplicate-webhook 500 below is unchanged.
 
 **What:** `record_payment` is a read-modify-write on a money column with no row
 lock — `get_order` (plain `SELECT`), then
