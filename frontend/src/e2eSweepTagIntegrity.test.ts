@@ -27,12 +27,15 @@ import { fileURLToPath } from 'node:url';
 const E2E = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'e2e');
 
 /**
- * Five minutes. It has to sit under the *smallest* sweep's budget, not the
- * largest: mobile-presentation declares 400s, so a ten-minute threshold called
- * it ordinary while the workflow treated it as a sweep — the two halves of this
- * file disagreeing, which is what the second assertion below exists to catch.
- * Nothing else in the suite declares a budget at all, so ordinary tests sit on
- * Playwright's 30s default, an order of magnitude clear of this.
+ * Five minutes. It has to sit under the *smallest* @sweep budget, which is
+ * mobile-presentation's 720_000 — otherwise this file calls a test ordinary
+ * while the workflow treats it as a sweep, and the two halves disagree, which
+ * is what the second assertion below exists to catch. Nothing else in the suite
+ * declares a budget at all, so ordinary tests sit on Playwright's 30s default,
+ * an order of magnitude clear of this.
+ *
+ * Both margins are wide on purpose: raise this only if an ordinary test ever
+ * needs a budget above it, and lower it if a sweep is ever budgeted below it.
  */
 const SWEEP_THRESHOLD_MS = 300_000;
 

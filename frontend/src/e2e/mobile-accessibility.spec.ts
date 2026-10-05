@@ -227,10 +227,14 @@ test.describe('mobile accessibility', () => {
   test.describe.configure({ retries: 0 });
 
   test('every feature meets WCAG AA in every theme and reflows to 320px @sweep', async ({ page }) => {
-    // ~50 routes, each rendered in three themes with an axe run apiece. A clean
-    // run is around ten minutes; the headroom is for CI, where this shares a
-    // runner and a tighter cap was once reached by load alone.
-    test.setTimeout(2_400_000);
+    // ~50 routes, each rendered in three themes with an axe run apiece. Measured
+    // at 16.0 min on a dedicated CI runner (2026-10-04); the budget is 2x that,
+    // the multiple every @sweep test uses. It no longer shares a runner — the
+    // frontend-e2e matrix gives each sweep its own — so the old 40 min, set when
+    // it did and when a clean run was believed to be ten minutes, was headroom
+    // for a condition that has gone. The job cap in ci.yml is derived from this
+    // number, so lowering it here is what lets that cap come down.
+    test.setTimeout(1_920_000);
 
     // Contrast is measured on the settled page, not mid-animation. `EmptyState`
     // fades in over one second (`animate-fade-in`, opacity 0 -> 1) and the audit

@@ -922,18 +922,21 @@ jobs:
   frontend-e2e:
     name: Frontend E2E (${{ matrix.leg.name }})
     runs-on: ubuntu-latest
-    # Floored by the largest per-test budget inside a leg, not by the measured
-    # wall clock. `mobile-dialogs` declares `test.setTimeout(1_800_000)`, so a
-    # cap under ~33 min (30 plus install) would cancel the job before that test
-    # could time out and report — replacing an assertion failure with a bare
-    # job timeout, which is the exact loss the note at the top of this file
-    # warns about and which cancelled #2890 twice.
+    # Derived, not chosen: the cap must exceed the largest per-test budget in any
+    # leg plus that leg's setup, or it cancels the job before the test can time
+    # out and report — replacing an assertion failure with a bare job timeout,
+    # the exact loss the note at the top of this file warns about and the thing
+    # that cancelled #2890 twice.
     #
-    # So the cap barely moves. The win from the split below is wall clock, not
-    # this number: the serial suite ran ~28.5 min, the longest leg is a single
-    # sweep. The cap is a hang guard, and a generous one costs nothing when no
-    # leg is near it.
-    timeout-minutes: 38
+    # The largest budget is mobile-accessibility's 1_920_000 (32 min). Setup
+    # measured 0.4-0.6 min across all five legs on 2026-10-04 (the Playwright
+    # cache hits); 35 leaves room for the cold-cache install the lockfile hash
+    # invalidates. Re-derive this if a @sweep budget changes — the spec files
+    # are the source, this is the consequence.
+    #
+    # The legs themselves run far below it: 2.4 min for each `rest` shard, 6.0 /
+    # 7.7 / 16.1 for the sweeps. The cap is a hang guard, not a target.
+    timeout-minutes: 35
     # No `needs:` — see the note on backend-test-integration.
     defaults:
       run:
