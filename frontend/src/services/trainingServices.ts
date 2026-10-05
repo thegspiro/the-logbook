@@ -23,7 +23,10 @@ import type {
 import type {
   CohortAdHocClassCreate,
   CohortClassReschedule,
+  CohortMakeupCreate,
   CohortMemberAdd,
+  CohortMissedClass,
+  CohortMissedClassDecisionResult,
   CohortOperationResult,
   CohortSchedulePreviewRequest,
   CohortSchedulePreviewResponse,
@@ -2146,5 +2149,33 @@ export const courseCohortService = {
 
   async removeMember(cohortId: string, userId: string): Promise<void> {
     await api.delete(`/training/cohorts/${cohortId}/members/${userId}`);
+  },
+
+  /** Classes held before a member joined, and the decision for each. */
+  async listMissedClasses(cohortId: string, userId: string): Promise<CohortMissedClass[]> {
+    const response = await api.get<CohortMissedClass[]>(
+      `/training/cohorts/${cohortId}/members/${userId}/missed-classes`
+    );
+    return response.data;
+  },
+
+  async creditMissedClass(cohortId: string, userId: string, classId: string): Promise<CohortMissedClassDecisionResult> {
+    const response = await api.post<CohortMissedClassDecisionResult>(
+      `/training/cohorts/${cohortId}/members/${userId}/missed-classes/${classId}/credit`
+    );
+    return response.data;
+  },
+
+  async scheduleMakeup(
+    cohortId: string,
+    userId: string,
+    classId: string,
+    data: CohortMakeupCreate
+  ): Promise<CohortMissedClassDecisionResult> {
+    const response = await api.post<CohortMissedClassDecisionResult>(
+      `/training/cohorts/${cohortId}/members/${userId}/missed-classes/${classId}/makeup`,
+      data
+    );
+    return response.data;
   },
 };

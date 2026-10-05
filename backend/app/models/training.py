@@ -813,6 +813,13 @@ class CohortMemberStatus(str, enum.Enum):
     COMPLETED = "completed"
 
 
+class MissedClassResolution(str, enum.Enum):
+    """What an officer decided for a class held before a member joined"""
+
+    CREDITED = "credited"
+    MAKEUP_SCHEDULED = "makeup_scheduled"
+
+
 class DateRollPolicy(str, enum.Enum):
     """How a computed class date is adjusted when it lands on a skipped day"""
 
@@ -1125,6 +1132,14 @@ class CourseCohortClass(Base):
     # not accept it for.
     counts_toward_certification = Column(Boolean, default=True, nullable=False)
     cancellation_reason = Column(Text)
+    # Set on a make-up session scheduled for one late-joining member (W27-3).
+    # Such a class is never itself a class a later joiner "missed": it was
+    # somebody else's catch-up, not part of the course.
+    makeup_for_class_id = Column(
+        String(36),
+        ForeignKey("course_cohort_classes.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
@@ -1197,6 +1212,67 @@ class CourseCohortMember(Base):
 
     __table_args__ = (
         UniqueConstraint("cohort_id", "user_id", name="uq_cohort_member_user"),
+    )
+
+
+class CohortMissedClass(Base):
+    """An officer's decision for a class held before a member joined (W27-3).
+
+    A member added to a running cohort is RSVP'd only to classes still to come,
+    so every class before they joined needs a decision: credit them for it
+    (they covered the material elsewhere), or schedule a make-up session for
+    them alone. One row per member and class; a class with no row is still
+    awaiting a decision.
+    """
+
+    __tablename__ = "course_cohort_missed_classes"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    cohort_id = Column(
+        String(36),
+        ForeignKey("course_cohorts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    cohort_member_id = Column(
+        String(36),
+        ForeignKey("course_cohort_members.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    cohort_class_id = Column(
+        String(36),
+        ForeignKey("course_cohort_classes.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    resolution = Column(
+        Enum(MissedClassResolution, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
+    training_record_id = Column(
+        String(36),
+        ForeignKey("training_records.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    makeup_class_id = Column(
+        String(36),
+        ForeignKey("course_cohort_classes.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    recorded_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    recorded_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint(
+            "cohort_member_id", "cohort_class_id", name="uq_cohort_missed_class"
+        ),
     )
 
     def __repr__(self):

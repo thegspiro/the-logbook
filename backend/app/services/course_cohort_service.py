@@ -36,23 +36,29 @@ from app.models.location import Location
 from app.models.training import (
     CohortClassStatus,
     CohortMemberStatus,
+    CohortMissedClass,
     CohortStatus,
     CourseClass,
     CourseCohort,
     CourseCohortClass,
     CourseCohortMember,
+    MissedClassResolution,
     ProgramEnrollment,
     ProgramPhase,
     TrainingCategory,
     TrainingCourse,
     TrainingProgram,
+    TrainingRecord,
     TrainingRequirement,
     TrainingSession,
+    TrainingStatus,
+    TrainingType,
 )
 from app.models.user import Organization, User
 from app.schemas.course_cohort import (
     CohortAdHocClassCreate,
     CohortClassReschedule,
+    CohortMakeupCreate,
     CohortMemberAdd,
     CohortSchedulePreviewRequest,
     CohortShiftRequest,
@@ -104,6 +110,11 @@ def _shift_local_days(value: datetime, delta: timedelta, tz: ZoneInfo) -> dateti
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
     return (value.astimezone(tz) + delta).astimezone(timezone.utc)
+
+
+def _as_utc(value: datetime) -> datetime:
+    """MySQL DATETIME reads back naive; comparing it with an aware value raises."""
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
 def _counts_toward_certification(value: Optional[bool]) -> bool:
@@ -856,6 +867,28 @@ class CourseCohortService:
         if not cohort:
             raise ValueError("Cohort not found")
 
+        cohort_class = await self._insert_ad_hoc_class(
+            cohort, data, organization_id, actor_id
+        )
+        await self.db.commit()
+        await self.db.refresh(cohort_class)
+        return cohort_class
+
+    async def _insert_ad_hoc_class(
+        self,
+        cohort: CourseCohort,
+        data: CohortAdHocClassCreate,
+        organization_id: UUID,
+        actor_id: UUID,
+        makeup_for_class_id: Optional[str] = None,
+    ) -> CourseCohortClass:
+        """Build an ad-hoc class with its event and session, without committing.
+
+        Shared by ``add_ad_hoc_class`` and ``schedule_makeup_class``, so a
+        make-up session is validated, sequenced and realized exactly like any
+        other added class.
+        """
+        cohort_id = cohort.id
         class_course = await self._get_course(data.class_course_id, organization_id)
         if not class_course:
             raise ValueError("Invalid class course")
@@ -927,6 +960,7 @@ class CourseCohortService:
             counts_toward_certification=_counts_toward_certification(
                 data.counts_toward_certification
             ),
+            makeup_for_class_id=makeup_for_class_id,
         )
         self.db.add(cohort_class)
         await self.db.flush()
@@ -951,9 +985,6 @@ class CourseCohortService:
                 actor_id=actor_id,
                 cohort_classes=[cohort_class],
             )
-
-        await self.db.commit()
-        await self.db.refresh(cohort_class)
         return cohort_class
 
     async def shift_remaining(
@@ -1455,6 +1486,451 @@ class CourseCohortService:
 
     # ── reads ────────────────────────────────────────────────────────
 
+    # ── late joiners (W27-3) ─────────────────────────────────────────
+
+    async def _active_roster_member(
+        self, cohort_id: UUID, user_id: UUID, organization_id: UUID
+    ) -> CourseCohortMember:
+        result = await self.db.execute(
+            select(CourseCohortMember).where(
+                CourseCohortMember.cohort_id == str(cohort_id),
+                CourseCohortMember.user_id == str(user_id),
+                CourseCohortMember.organization_id == str(organization_id),
+                CourseCohortMember.status == CohortMemberStatus.ACTIVE,
+            )
+        )
+        member = result.scalar_one_or_none()
+        if member is None:
+            raise ValueError("That member is not on this cohort's roster")
+        return member
+
+    async def _missed_class_rows(
+        self, member: CourseCohortMember, organization_id: UUID
+    ) -> List[CourseCohortClass]:
+        """Classes held before this member joined that they were not on.
+
+        A class counts when it started before the member was added, is not
+        cancelled, and is not somebody's make-up session — and the member holds
+        no RSVP for it. The last condition keeps out everyone placed by
+        generation, which RSVPs the whole roster to every class, past ones
+        included, for a deliberately back-dated cohort.
+        """
+        if member.added_at is None:
+            return []
+        result = await self.db.execute(
+            select(CourseCohortClass)
+            .where(
+                CourseCohortClass.cohort_id == member.cohort_id,
+                CourseCohortClass.organization_id == str(organization_id),
+                CourseCohortClass.status != CohortClassStatus.CANCELLED,
+                CourseCohortClass.makeup_for_class_id.is_(None),
+                CourseCohortClass.scheduled_start < member.added_at,
+            )
+            .order_by(CourseCohortClass.sequence)
+        )
+        rows = list(result.scalars().all())
+        event_ids = [r.event_id for r in rows if r.event_id]
+        invited: set = set()
+        if event_ids:
+            rsvp_result = await self.db.execute(
+                select(EventRSVP.event_id).where(
+                    EventRSVP.event_id.in_(event_ids),
+                    EventRSVP.user_id == member.user_id,
+                )
+            )
+            invited = set(rsvp_result.scalars().all())
+        return [r for r in rows if not r.event_id or r.event_id not in invited]
+
+    async def _missed_class_resolutions(
+        self, member: CourseCohortMember
+    ) -> Dict[str, CohortMissedClass]:
+        result = await self.db.execute(
+            select(CohortMissedClass).where(
+                CohortMissedClass.cohort_member_id == member.id
+            )
+        )
+        return {r.cohort_class_id: r for r in result.scalars().all()}
+
+    async def list_missed_classes(
+        self, cohort_id: UUID, user_id: UUID, organization_id: UUID
+    ) -> List[Dict[str, Any]]:
+        """Each class this member joined too late for, with the decision taken."""
+        member = await self._active_roster_member(cohort_id, user_id, organization_id)
+        rows = await self._missed_class_rows(member, organization_id)
+        resolutions = await self._missed_class_resolutions(member)
+        makeup_ids = [
+            r.makeup_class_id for r in resolutions.values() if r.makeup_class_id
+        ]
+        makeups: Dict[str, CourseCohortClass] = {}
+        if makeup_ids:
+            makeup_result = await self.db.execute(
+                select(CourseCohortClass).where(
+                    CourseCohortClass.id.in_(makeup_ids),
+                    CourseCohortClass.organization_id == str(organization_id),
+                )
+            )
+            makeups = {c.id: c for c in makeup_result.scalars().all()}
+        out = []
+        for row in rows:
+            resolution = resolutions.get(row.id)
+            makeup = (
+                makeups.get(resolution.makeup_class_id)
+                if resolution and resolution.makeup_class_id
+                else None
+            )
+            out.append(
+                {
+                    "cohort_class": row,
+                    "resolution": resolution,
+                    "makeup_class": makeup,
+                    "pending": self._is_pending(resolution, makeup),
+                }
+            )
+        return out
+
+    @staticmethod
+    def _is_pending(
+        resolution: Optional[CohortMissedClass],
+        makeup: Optional[CourseCohortClass],
+    ) -> bool:
+        """Still needs a decision: none taken, or the make-up was cancelled."""
+        if resolution is None:
+            return True
+        if resolution.resolution == MissedClassResolution.MAKEUP_SCHEDULED:
+            return makeup is None or makeup.status == CohortClassStatus.CANCELLED
+        return False
+
+    async def _missed_class_for_decision(
+        self,
+        cohort_id: UUID,
+        user_id: UUID,
+        cohort_class_id: UUID,
+        organization_id: UUID,
+    ) -> Tuple[CourseCohortMember, CourseCohortClass, Optional[CohortMissedClass]]:
+        member = await self._active_roster_member(cohort_id, user_id, organization_id)
+        rows = await self._missed_class_rows(member, organization_id)
+        cohort_class = next((r for r in rows if r.id == str(cohort_class_id)), None)
+        if cohort_class is None:
+            raise ValueError("That class is not one this member joined too late for")
+        resolution = (await self._missed_class_resolutions(member)).get(cohort_class.id)
+        makeup = None
+        if resolution and resolution.makeup_class_id:
+            makeup = await self._get_cohort_class(
+                UUID(resolution.makeup_class_id), organization_id, cohort_id=cohort_id
+            )
+        if not self._is_pending(resolution, makeup):
+            if resolution and resolution.resolution == MissedClassResolution.CREDITED:
+                raise ValueError("This member has already been credited for that class")
+            raise ValueError(
+                "A make-up session is already scheduled for that class; cancel it "
+                "first to decide differently"
+            )
+        return member, cohort_class, resolution
+
+    def _record_decision(
+        self,
+        existing: Optional[CohortMissedClass],
+        member: CourseCohortMember,
+        cohort_class: CourseCohortClass,
+        resolution: MissedClassResolution,
+        actor_id: UUID,
+        *,
+        training_record_id: Optional[str] = None,
+        makeup_class_id: Optional[str] = None,
+    ) -> CohortMissedClass:
+        row = existing or CohortMissedClass(
+            organization_id=member.organization_id,
+            cohort_id=member.cohort_id,
+            cohort_member_id=member.id,
+            cohort_class_id=cohort_class.id,
+        )
+        row.resolution = resolution
+        row.training_record_id = training_record_id
+        row.makeup_class_id = makeup_class_id
+        row.recorded_by = str(actor_id)
+        row.recorded_at = datetime.now(timezone.utc)
+        if existing is None:
+            self.db.add(row)
+        return row
+
+    async def credit_missed_class(
+        self,
+        cohort_id: UUID,
+        user_id: UUID,
+        cohort_class_id: UUID,
+        organization_id: UUID,
+        actor_id: UUID,
+    ) -> Tuple[CohortMissedClass, TrainingRecord, List[str]]:
+        """Credit a late joiner for a class held before they joined.
+
+        Writes a completed training record for the class — its course, its
+        credit hours, its date on the department's calendar — and, when the
+        class feeds a pipeline requirement, applies it to the member's
+        enrollment as an officer sign-off. The credit is keyed on the record
+        (``OFFICER_APPLY``), not the class's session, so re-finalizing that
+        session's attendance can neither double it nor sweep it away.
+
+        Returns the decision, the record, and any warnings: a pipeline that
+        refuses the credit leaves the record standing, because the member did
+        cover the class, and says why.
+        """
+        cohort = await self.get_cohort(cohort_id, organization_id)
+        if not cohort:
+            raise ValueError("Cohort not found")
+        member, cohort_class, existing = await self._missed_class_for_decision(
+            cohort_id, user_id, cohort_class_id, organization_id
+        )
+
+        course = (
+            await self._get_course(UUID(cohort_class.class_course_id), organization_id)
+            if cohort_class.class_course_id
+            else None
+        )
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
+        class_date = local_date(cohort_class.scheduled_start, tz)
+        hours = cohort_class.credit_hours
+        if hours is None:
+            duration = cohort_class.scheduled_end - cohort_class.scheduled_start
+            hours = round(duration.total_seconds() / 3600, 2)
+
+        record = TrainingRecord(
+            organization_id=str(organization_id),
+            user_id=member.user_id,
+            course_id=course.id if course else None,
+            category_id=cohort_class.category_id,
+            course_name=(course.name if course else cohort_class.title)[:255],
+            training_type=(
+                course.training_type
+                if course and course.training_type
+                else TrainingType.CONTINUING_EDUCATION
+            ),
+            completion_date=class_date,
+            hours_completed=hours,
+            credit_hours=hours,
+            status=TrainingStatus.COMPLETED,
+            instructor=cohort_class.instructor,
+            location=cohort_class.location,
+            notes=(
+                f"Credited by an officer for {cohort.name}, class "
+                f"{cohort_class.sequence} ({cohort_class.title}): the member "
+                "joined the cohort after it was held."
+            ),
+            created_by=str(actor_id),
+        )
+        self.db.add(record)
+        await self.db.flush()
+        decision = self._record_decision(
+            existing,
+            member,
+            cohort_class,
+            MissedClassResolution.CREDITED,
+            actor_id,
+            training_record_id=record.id,
+        )
+        await self.db.commit()
+
+        warnings: List[str] = []
+        if (
+            cohort.program_id
+            and cohort_class.requirement_id
+            and cohort_class.counts_toward_certification
+        ):
+            from app.services.training_program_service import TrainingProgramService
+
+            applied, error = await TrainingProgramService(
+                self.db
+            ).apply_training_to_requirement(
+                user_id=member.user_id,
+                organization_id=organization_id,
+                program_id=cohort.program_id,
+                requirement_id=cohort_class.requirement_id,
+                hours=float(hours),
+                verified_by=actor_id,
+                source_id=record.id,
+                completed_on=class_date,
+            )
+            if not applied and error:
+                warnings.append(f"Recorded, but not applied to the pipeline: {error}")
+
+        try:
+            from app.services.qualification_service import QualificationService
+
+            if await QualificationService(self.db).sync_from_training_record(record):
+                await self.db.commit()
+        except Exception as e:  # The record is saved; a qualification can follow.
+            logger.error(f"Failed to sync qualification from cohort credit: {e}")
+
+        await self.db.refresh(decision)
+        return decision, record, warnings
+
+    async def schedule_makeup_class(
+        self,
+        cohort_id: UUID,
+        user_id: UUID,
+        cohort_class_id: UUID,
+        data: CohortMakeupCreate,
+        organization_id: UUID,
+        actor_id: UUID,
+    ) -> Tuple[CohortMissedClass, CourseCohortClass]:
+        """Schedule a make-up session for one late joiner.
+
+        The session copies the missed class — course, credit hours, pipeline
+        linkage, certification eligibility — onto the new date, and only this
+        member is RSVP'd to it. It is credited the ordinary way, when its
+        attendance is finalized; nothing is credited by scheduling it.
+        """
+        cohort = await self.get_cohort(cohort_id, organization_id)
+        if not cohort:
+            raise ValueError("Cohort not found")
+        member, cohort_class, existing = await self._missed_class_for_decision(
+            cohort_id, user_id, cohort_class_id, organization_id
+        )
+        if not cohort_class.class_course_id:
+            raise ValueError(
+                "That class has no course to schedule a make-up of; credit it instead"
+            )
+
+        makeup = await self._insert_ad_hoc_class(
+            cohort,
+            CohortAdHocClassCreate(
+                title=f"Make-up: {cohort_class.title}"[:255],
+                description=cohort_class.description,
+                class_course_id=UUID(cohort_class.class_course_id),
+                scheduled_start=data.scheduled_start,
+                scheduled_end=data.scheduled_end,
+                credit_hours=cohort_class.credit_hours,
+                instructor_id=data.instructor_id
+                or (
+                    UUID(cohort_class.instructor_id)
+                    if cohort_class.instructor_id
+                    else None
+                ),
+                instructor=data.instructor or cohort_class.instructor,
+                location_id=data.location_id
+                or (
+                    UUID(cohort_class.location_id) if cohort_class.location_id else None
+                ),
+                location=data.location or cohort_class.location,
+                category_id=(
+                    UUID(cohort_class.category_id) if cohort_class.category_id else None
+                ),
+                requirement_id=(
+                    UUID(cohort_class.requirement_id)
+                    if cohort_class.requirement_id
+                    else None
+                ),
+                phase_id=(
+                    UUID(cohort_class.phase_id) if cohort_class.phase_id else None
+                ),
+                counts_toward_certification=cohort_class.counts_toward_certification,
+                invite_roster=False,
+            ),
+            organization_id,
+            actor_id,
+            makeup_for_class_id=cohort_class.id,
+        )
+        await self._rsvp_users_to_classes(
+            user_ids=[member.user_id],
+            cohort_classes=[makeup],
+            organization_id=organization_id,
+        )
+        decision = self._record_decision(
+            existing,
+            member,
+            cohort_class,
+            MissedClassResolution.MAKEUP_SCHEDULED,
+            actor_id,
+            makeup_class_id=makeup.id,
+        )
+        await self.db.commit()
+        await self.db.refresh(decision)
+        await self.db.refresh(makeup)
+        return decision, makeup
+
+    async def _pending_missed_counts(
+        self, members: Sequence[CourseCohortMember], organization_id: UUID
+    ) -> Dict[str, int]:
+        """How many missed classes still need a decision, per roster row.
+
+        The roster detail's view of ``list_missed_classes``, batched: four
+        queries for the whole roster rather than several per member, since it
+        runs on every load of the cohort page.
+        """
+        active = [
+            m
+            for m in members
+            if m.status == CohortMemberStatus.ACTIVE and m.added_at is not None
+        ]
+        if not active:
+            return {}
+        latest_join = max(_as_utc(m.added_at) for m in active)
+        class_result = await self.db.execute(
+            select(CourseCohortClass).where(
+                CourseCohortClass.cohort_id == active[0].cohort_id,
+                CourseCohortClass.organization_id == str(organization_id),
+                CourseCohortClass.status != CohortClassStatus.CANCELLED,
+                CourseCohortClass.makeup_for_class_id.is_(None),
+                CourseCohortClass.scheduled_start < latest_join,
+            )
+        )
+        classes = list(class_result.scalars().all())
+        if not classes:
+            return {}
+
+        event_ids = [c.event_id for c in classes if c.event_id]
+        invited: set = set()
+        if event_ids:
+            rsvp_result = await self.db.execute(
+                select(EventRSVP.event_id, EventRSVP.user_id).where(
+                    EventRSVP.event_id.in_(event_ids),
+                    EventRSVP.user_id.in_([m.user_id for m in active]),
+                )
+            )
+            invited = {(row[0], row[1]) for row in rsvp_result.all()}
+
+        decision_result = await self.db.execute(
+            select(CohortMissedClass).where(
+                CohortMissedClass.cohort_member_id.in_([m.id for m in active])
+            )
+        )
+        decisions = {
+            (d.cohort_member_id, d.cohort_class_id): d
+            for d in decision_result.scalars().all()
+        }
+        makeup_ids = [
+            d.makeup_class_id for d in decisions.values() if d.makeup_class_id
+        ]
+        makeups: Dict[str, CourseCohortClass] = {}
+        if makeup_ids:
+            makeup_result = await self.db.execute(
+                select(CourseCohortClass).where(
+                    CourseCohortClass.id.in_(makeup_ids),
+                    CourseCohortClass.organization_id == str(organization_id),
+                )
+            )
+            makeups = {c.id: c for c in makeup_result.scalars().all()}
+
+        counts: Dict[str, int] = {}
+        for member in active:
+            joined = _as_utc(member.added_at)
+            pending = 0
+            for cohort_class in classes:
+                if _as_utc(cohort_class.scheduled_start) >= joined:
+                    continue
+                if (cohort_class.event_id, member.user_id) in invited:
+                    continue
+                decision = decisions.get((member.id, cohort_class.id))
+                makeup = (
+                    makeups.get(decision.makeup_class_id)
+                    if decision and decision.makeup_class_id
+                    else None
+                )
+                if self._is_pending(decision, makeup):
+                    pending += 1
+            if pending:
+                counts[member.id] = pending
+        return counts
+
     async def list_cohorts(
         self,
         organization_id: UUID,
@@ -1616,6 +2092,10 @@ class CourseCohortService:
                 )
                 .order_by(CourseCohortMember.added_at)
             )
+            member_rows = member_result.all()
+            pending = await self._pending_missed_counts(
+                [member for member, _, _ in member_rows], organization_id
+            )
             members = [
                 {
                     "row": member,
@@ -1627,8 +2107,9 @@ class CourseCohortService:
                     "progress_percentage": (
                         enrollment.progress_percentage if enrollment else None
                     ),
+                    "missed_classes_pending": pending.get(member.id, 0),
                 }
-                for member, user, enrollment in member_result.all()
+                for member, user, enrollment in member_rows
             ]
 
         counts = await self._cohort_counts(

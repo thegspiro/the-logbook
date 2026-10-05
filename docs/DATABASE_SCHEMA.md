@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**287 tables · 4721 columns · 932 foreign keys**
+**288 tables · 4732 columns · 940 foreign keys**
 
 ---
 
@@ -594,8 +594,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`basic_apparatus`](#basic_apparatus) | `BasicApparatus` | 10 | Lightweight apparatus/vehicle definition for shift scheduling. |
 | [`competency_matrices`](#competency_matrices) | `CompetencyMatrix` | 11 | Competency Matrix model |
 | [`course_classes`](#course_classes) | `CourseClass` | 25 | Course Class model — one row of a multi-class course's syllabus. |
-| [`course_cohort_classes`](#course_cohort_classes) | `CourseCohortClass` | 25 | Course Cohort Class model — a syllabus row materialized onto real dates. |
+| [`course_cohort_classes`](#course_cohort_classes) | `CourseCohortClass` | 26 | Course Cohort Class model — a syllabus row materialized onto real dates. |
 | [`course_cohort_members`](#course_cohort_members) | `CourseCohortMember` | 10 | Course Cohort Member model — the roster of one cohort. |
+| [`course_cohort_missed_classes`](#course_cohort_missed_classes) | `CohortMissedClass` | 10 | An officer's decision for a class held before a member joined (W27-3). |
 | [`course_cohorts`](#course_cohorts) | `CourseCohort` | 24 | Course Cohort model — one scheduled run of a multi-class course. |
 | [`external_category_mappings`](#external_category_mappings) | `ExternalCategoryMapping` | 12 | External Category Mapping model |
 | [`external_training_imports`](#external_training_imports) | `ExternalTrainingImport` | 25 | External Training Import model |
@@ -8024,6 +8025,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `phase_id` | VARCHAR(36) | yes | FK |  | → `program_phases.id` ON DELETE SET NULL |
 | `counts_toward_certification` | BOOL | no |  | `True` |  |
 | `cancellation_reason` | TEXT | yes |  |  |  |
+| `makeup_for_class_id` | VARCHAR(36) | yes | FK |  | → `course_cohort_classes.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
@@ -8068,6 +8070,34 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Constraints**
 
 - UNIQUE `uq_cohort_member_user` (`cohort_id`, `user_id`)
+
+### `course_cohort_missed_classes`
+
+**CohortMissedClass** · `app/models/training.py`
+
+> An officer's decision for a class held before a member joined (W27-3). A member added to a running cohort is RSVP'd only to classes still to come, so every class before they joined needs a decision: credit them for it (they covered the material elsewhere), or schedule a make-up session for them alone. One row per member and class; a class with no row is still awaiting a decision.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `cohort_id` | VARCHAR(36) | no | FK, IDX |  | → `course_cohorts.id` ON DELETE CASCADE |
+| `cohort_member_id` | VARCHAR(36) | no | FK |  | → `course_cohort_members.id` ON DELETE CASCADE |
+| `cohort_class_id` | VARCHAR(36) | no | FK |  | → `course_cohort_classes.id` ON DELETE CASCADE |
+| `resolution` | ENUM(`credited`, `makeup_scheduled`) | no |  |  |  |
+| `training_record_id` | VARCHAR(36) | yes | FK |  | → `training_records.id` ON DELETE SET NULL |
+| `makeup_class_id` | VARCHAR(36) | yes | FK |  | → `course_cohort_classes.id` ON DELETE SET NULL |
+| `recorded_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `recorded_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `ix_course_cohort_missed_classes_cohort_id` (`cohort_id`)
+- `ix_course_cohort_missed_classes_organization_id` (`organization_id`)
+
+**Constraints**
+
+- UNIQUE `uq_cohort_missed_class` (`cohort_member_id`, `cohort_class_id`)
 
 ### `course_cohorts`
 
@@ -9987,7 +10017,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (344 references)
+### → `users` (345 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10044,6 +10074,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `course_cohort_classes` | `instructor_id` | SET NULL | yes |
 | `course_cohort_members` | `added_by` | SET NULL | yes |
 | `course_cohort_members` | `user_id` | CASCADE | no |
+| `course_cohort_missed_classes` | `recorded_by` | SET NULL | yes |
 | `course_cohorts` | `created_by` | SET NULL | yes |
 | `course_cohorts` | `generated_by` | SET NULL | yes |
 | `department_message_deliveries` | `recipient_id` | CASCADE | no |
@@ -10336,7 +10367,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (233 references)
+### → `organizations` (234 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10374,6 +10405,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `course_classes` | `organization_id` | CASCADE | no |
 | `course_cohort_classes` | `organization_id` | CASCADE | no |
 | `course_cohort_members` | `organization_id` | CASCADE | no |
+| `course_cohort_missed_classes` | `organization_id` | CASCADE | no |
 | `course_cohorts` | `organization_id` | CASCADE | no |
 | `department_message_recipients` | `organization_id` | CASCADE | no |
 | `department_messages` | `organization_id` | CASCADE | no |
@@ -10752,6 +10784,19 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `prospect_step_progress` | `prospect_id` | CASCADE | no |
 | `screening_records` | `prospect_id` | CASCADE | yes |
 
+### → `training_records` (8 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `course_cohort_missed_classes` | `training_record_id` | SET NULL | yes |
+| `external_training_imports` | `training_record_id` | SET NULL | yes |
+| `multi_agency_trainings` | `training_record_id` | SET NULL | yes |
+| `renewal_tasks` | `new_record_id` | SET NULL | yes |
+| `renewal_tasks` | `training_record_id` | SET NULL | yes |
+| `training_effectiveness_evaluations` | `training_record_id` | CASCADE | yes |
+| `training_submissions` | `training_record_id` | SET NULL | yes |
+| `xapi_statements` | `training_record_id` | SET NULL | yes |
+
 ### → `training_requirements` (8 references)
 
 | From table | Column | On delete | Nullable |
@@ -10800,18 +10845,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `inventory_nfc_scans` | `storage_area_id` | SET NULL | yes |
 | `inventory_nfc_tags` | `storage_area_id` | CASCADE | yes |
 | `storage_areas` | `parent_id` | CASCADE | yes |
-
-### → `training_records` (7 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `external_training_imports` | `training_record_id` | SET NULL | yes |
-| `multi_agency_trainings` | `training_record_id` | SET NULL | yes |
-| `renewal_tasks` | `new_record_id` | SET NULL | yes |
-| `renewal_tasks` | `training_record_id` | SET NULL | yes |
-| `training_effectiveness_evaluations` | `training_record_id` | CASCADE | yes |
-| `training_submissions` | `training_record_id` | SET NULL | yes |
-| `xapi_statements` | `training_record_id` | SET NULL | yes |
 
 ### → `check_template_compartments` (6 references)
 
@@ -10986,6 +11019,22 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `expense_line_items` | `budget_id` | SET NULL | yes |
 | `purchase_requests` | `budget_id` | SET NULL | yes |
 
+### → `course_cohort_classes` (3 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `course_cohort_classes` | `makeup_for_class_id` | SET NULL | yes |
+| `course_cohort_missed_classes` | `cohort_class_id` | CASCADE | no |
+| `course_cohort_missed_classes` | `makeup_class_id` | SET NULL | yes |
+
+### → `course_cohorts` (3 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `course_cohort_classes` | `cohort_id` | CASCADE | no |
+| `course_cohort_members` | `cohort_id` | CASCADE | no |
+| `course_cohort_missed_classes` | `cohort_id` | CASCADE | no |
+
 ### → `forms` (3 references)
 
 | From table | Column | On delete | Nullable |
@@ -11091,13 +11140,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `check_item_deployed_lots` | `template_item_id` | CASCADE | no |
 | `shift_equipment_check_items` | `template_item_id` | SET NULL | yes |
-
-### → `course_cohorts` (2 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `course_cohort_classes` | `cohort_id` | CASCADE | no |
-| `course_cohort_members` | `cohort_id` | CASCADE | no |
 
 ### → `departure_clearances` (2 references)
 
@@ -11230,6 +11272,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `course_cohort_classes` | `course_class_id` | SET NULL | yes |
+
+### → `course_cohort_members` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `course_cohort_missed_classes` | `cohort_member_id` | CASCADE | no |
 
 ### → `dues_schedules` (1 references)
 

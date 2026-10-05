@@ -405,6 +405,36 @@ export interface CourseCohortMember {
   display_name?: string;
   email?: string;
   progress_percentage?: number;
+  /** Classes held before this member joined that still need a decision. */
+  missed_classes_pending?: number;
+}
+
+/** A class held before a late joiner was added, and what was decided for it. */
+export interface CohortMissedClass {
+  cohort_class_id: string;
+  sequence: number;
+  title: string;
+  scheduled_start: string;
+  scheduled_end: string;
+  credit_hours?: number | null;
+  resolution?: 'credited' | 'makeup_scheduled' | null;
+  /** No decision yet, or the make-up session was cancelled. */
+  pending: boolean;
+  training_record_id?: string | null;
+  makeup_class_id?: string | null;
+  makeup_scheduled_start?: string | null;
+  makeup_status?: string | null;
+  recorded_at?: string | null;
+}
+
+export interface CohortMakeupCreate {
+  scheduled_start: string;
+  scheduled_end: string;
+}
+
+export interface CohortMissedClassDecisionResult {
+  missed_class: CohortMissedClass;
+  warnings: string[];
 }
 
 export interface CourseCohortDetail extends CourseCohort {
