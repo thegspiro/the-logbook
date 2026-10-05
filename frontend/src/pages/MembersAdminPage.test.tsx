@@ -160,8 +160,24 @@ describe('MembersAdminPage — Reset Password (workflow review W11)', () => {
 });
 
 describe('MembersAdminPage — Manage Members for a position (workflow review W11)', () => {
-  const member2 = { ...member, id: 'user-2', username: 'review_member2', full_name: 'Imogen One', roles: [] };
-  const member3 = { ...member, id: 'user-3', username: 'review_member3', full_name: 'Ian Two', roles: [] };
+  const member2 = {
+    ...member,
+    id: 'user-2',
+    username: 'review_member2',
+    first_name: 'Imogen',
+    last_name: 'One',
+    full_name: 'Imogen One',
+    roles: [],
+  };
+  const member3 = {
+    ...member,
+    id: 'user-3',
+    username: 'review_member3',
+    first_name: 'Ian',
+    last_name: 'Two',
+    full_name: 'Ian Two',
+    roles: [],
+  };
 
   beforeEach(() => {
     vi.mocked(userService.getUsersWithRoles).mockReset();

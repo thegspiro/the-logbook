@@ -56,6 +56,7 @@ import { formatShortDateTime, localToUTC } from '../utils/dateFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
 import { positionLabel } from '../modules/scheduling/utils/positionLabels';
 import { asArray, expectArray } from '../utils/asArray';
+import { displayNameOf } from '../utils/memberName';
 
 const isRecord = (value: unknown): value is Record<string, string> => typeof value === 'object' && value !== null;
 
@@ -117,6 +118,8 @@ interface OrgMember {
   id: string;
   first_name: string;
   last_name: string;
+  preferred_name?: string | null | undefined;
+  display_name?: string | undefined;
   rank?: string;
 }
 
@@ -776,7 +779,7 @@ const EventRequestsTab: React.FC = () => {
                                 </option>
                                 {members.map((m) => (
                                   <option key={m.id} value={m.id}>
-                                    {m.first_name} {m.last_name}
+                                    {displayNameOf(m)}
                                     {m.rank ? ` — ${formatRank(m.rank)}` : ''}
                                   </option>
                                 ))}

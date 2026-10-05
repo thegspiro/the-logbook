@@ -917,7 +917,7 @@ async def assign_request(
     old_assignee = event_request.assigned_to
     event_request.assigned_to = data.assigned_to
 
-    assignee_name = f"{assignee.first_name} {assignee.last_name}".strip()
+    assignee_name = assignee.display_name
     activity = EventRequestActivity(
         request_id=event_request.id,
         action="assigned",

@@ -239,7 +239,7 @@ class ShiftEligibilityService:
                     "members": [
                         {
                             "user_id": u.id,
-                            "user_name": u.full_name,
+                            "user_name": u.display_name,
                             "rank": u.rank,
                         }
                         for u in members
@@ -656,7 +656,7 @@ class ShiftEligibilityService:
             members.append(
                 {
                     "user_id": str(user.id),
-                    "user_name": user.full_name,
+                    "user_name": user.display_name,
                     "rank": user.rank,
                     "rank_display_name": (
                         rank_entry["display_name"] if rank_entry else None

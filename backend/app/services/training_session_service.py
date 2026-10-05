@@ -82,9 +82,7 @@ _APPROVER_EDITABLE_FIELDS = frozenset(
 
 
 def _display_name(user: User) -> str:
-    return f"{user.first_name or ''} {user.last_name or ''}".strip() or (
-        user.username or "Member"
-    )
+    return user.display_name or (user.username or "Member")
 
 
 @dataclass
@@ -1341,7 +1339,9 @@ class TrainingSessionService:
 
         return {
             "user_id": str(rsvp.user_id),
-            "user_name": _display_name(user),
+            # Legal name: the roster is stored on the approval that grants
+            # training credit, a training record of note.
+            "user_name": user.full_name or (user.username or "Member"),
             "user_email": user.email or "",
             "checked_in_at": _iso(check_in),
             "checked_out_at": _iso(check_out),
@@ -1897,9 +1897,7 @@ class TrainingSessionService:
                 select(User).where(User.id == str(finalized_by))
             )
             submitter = submitter_result.scalar_one_or_none()
-            submitter_name = (
-                f"{submitter.first_name} {submitter.last_name}" if submitter else None
-            )
+            submitter_name = submitter.display_name if submitter else None
 
             # Build approval URL
             approval_url = f"{settings.FRONTEND_URL}/training/approve/{approval_token}"

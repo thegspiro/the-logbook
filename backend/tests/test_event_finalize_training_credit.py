@@ -16,6 +16,7 @@ import pytest
 
 from app.models.event import EventType
 from app.models.training import TrainingStatus
+from app.models.user import User
 from app.services.event_service import EventService
 from app.services.training_session_service import (
     EventTrainingCredit,
@@ -409,7 +410,9 @@ class TestSnapshot:
             override_check_out_at=start + timedelta(hours=3),
             override_duration_minutes=None,
         )
-        user = SimpleNamespace(first_name="Pat", last_name="Tester", email=None)
+        # A preferred name is set so the roster's legal name is what's checked:
+        # the approval grants training credit and is a record of note.
+        user = User(first_name="Pat", last_name="Tester", preferred_name="PT")
 
         entry = TrainingSessionService._attendee_snapshot_entry(
             event, rsvp, user, start + timedelta(hours=4), 180

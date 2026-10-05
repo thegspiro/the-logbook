@@ -162,7 +162,7 @@ class StrugglingMemberService:
                     {
                         "enrollment": enrollment,
                         "user_id": str(enrollment.user_id),
-                        "member_name": user.full_name if user else "Unknown",
+                        "member_name": user.display_name if user else "Unknown",
                         "enrollment_id": str(enrollment.id),
                         "program_id": str(enrollment.program_id),
                         "program_name": program.name if program else "Unknown",

@@ -9,6 +9,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Monitor, Smartphone, Loader2, Eye, RefreshCw, Type, Users } from 'lucide-react';
 import type { EmailTemplatePreview } from '../types';
+import { displayNameOf } from '../../../utils/memberName';
 
 type PreviewMode = 'desktop' | 'mobile' | 'text';
 
@@ -21,8 +22,10 @@ const PREVIEW_MODES: { mode: PreviewMode; icon: React.ElementType; title: string
 interface PreviewMember {
   id: string;
   full_name?: string | undefined;
+  display_name?: string | undefined;
   first_name?: string | undefined;
   last_name?: string | undefined;
+  preferred_name?: string | null | undefined;
   email?: string | undefined;
 }
 
@@ -125,7 +128,7 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
         >
           <option value="">Sample data (default)</option>
           {members.map((m) => {
-            const name = m.full_name || [m.first_name, m.last_name].filter(Boolean).join(' ') || m.email || m.id;
+            const name = displayNameOf(m) || m.email || m.id;
             return (
               <option key={m.id} value={m.id}>
                 {name}

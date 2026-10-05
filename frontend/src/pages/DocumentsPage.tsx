@@ -710,7 +710,7 @@ const DocumentsPage: React.FC = () => {
                                     e.stopPropagation();
                                     void handleDownloadDocument(doc);
                                   }}
-                                  className="text-theme-text-muted touch-target-phone p-1 transition-all hover:text-amber-700 dark:hover:text-amber-400 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100"
+                                  className="text-theme-text-muted touch-target-phone p-1 transition-all hover:text-amber-700 dark:hover:text-amber-400 pointer-fine:opacity-0 pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100"
                                   title="Download document"
                                 >
                                   <Download className="h-4 w-4" />
@@ -722,7 +722,7 @@ const DocumentsPage: React.FC = () => {
                                     e.stopPropagation();
                                     setDeleteConfirm(doc.id);
                                   }}
-                                  className="text-theme-text-muted touch-target-phone p-1 transition-all hover:text-red-800 dark:hover:text-red-400 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100"
+                                  className="text-theme-text-muted touch-target-phone p-1 transition-all hover:text-red-800 dark:hover:text-red-400 pointer-fine:opacity-0 pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100"
                                   title="Delete document"
                                 >
                                   <Trash2 className="h-4 w-4" />
