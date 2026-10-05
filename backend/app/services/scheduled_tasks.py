@@ -353,7 +353,7 @@ SCHEDULE = {
         "cron": "0 8 * * 1",
     },
     "supply_expiration_alerts": {
-        "description": "Send weekly alerts for consumables expiring on apparatus and the replacement lots held for them, flagging which have no in-date stock behind them",
+        "description": "Send weekly alerts for consumables on apparatus that are expiring, reported used, or short, and the expiring replacement lots held for them, flagging which have no in-date stock behind them",
         "frequency": "weekly",
         "recommended_time": "Monday 07:15",
         "cron": "15 7 * * 1",
@@ -4678,9 +4678,28 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
     return await _for_each_org(db, "nfpa_retirement_alerts", process)
 
 
+def _supply_summary(expiring: int, restock: int, shelf_lots: int) -> str:
+    """One clause per kind of row, naming only the kinds present.
+
+    Used for the subject, the opening line and the plain-text body, so the
+    three cannot drift apart. Example: "2 expiring on apparatus, 1 to restock
+    on apparatus, 3 stock lots expiring".
+    """
+    parts = []
+    if expiring:
+        parts.append(f"{expiring} expiring on apparatus")
+    if restock:
+        parts.append(f"{restock} to restock on apparatus")
+    if shelf_lots:
+        noun = "stock lot" if shelf_lots == 1 else "stock lots"
+        parts.append(f"{shelf_lots} {noun} expiring")
+    return ", ".join(parts)
+
+
 async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
     """
-    Alert supply officers about expiring supplies. Weekly on Mondays at 07:15.
+    Alert supply officers about supplies that need replacing. Weekly on Mondays
+    at 07:15.
 
     Covers both ends of the same shelf-to-truck loop: consumables deployed on
     apparatus (from the equipment-check templates) and the replacement lots
@@ -4774,6 +4793,53 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
         needs_reorder = [i for i in deployed if i.get("ready_stock", 0) <= 0]
         swap_ready = [i for i in deployed if i.get("ready_stock", 0) > 0]
 
+        # The overview returns more than expiring items: a crew's report that
+        # something was used or pulled, and a counted position below its
+        # target, belong on the same worklist but have no date to expire by.
+        # Calling the whole email "Expiring Supplies" told the officer a
+        # tourniquet was about to expire when a crew had reported it used, so
+        # the wording counts the two kinds separately.
+        def _is_expiring(item: dict) -> bool:
+            days = item.get("days_until_expiration")
+            return days is not None and days <= window_days
+
+        expiring_count = sum(1 for i in deployed if _is_expiring(i))
+        restock_count = len(deployed) - expiring_count
+
+        def _status_cell(item: dict, color: str) -> str:
+            """The date for an expiring row; for any other row, why it is here."""
+            if _is_expiring(item):
+                return _expires_cell(
+                    item.get("expiration_date"),
+                    item.get("days_until_expiration"),
+                    color,
+                )
+            if item.get("restock_needed"):
+                note = str(item.get("restock_note") or "").strip()
+                return _cell(
+                    _stacked(
+                        f"<strong style='color:{color};'>Restock reported</strong>",
+                        _html.escape(note),
+                    ),
+                    _wrap,
+                )
+            on_truck = item.get("quantity_on_truck")
+            target = item.get("target_quantity")
+            if item.get("is_short") and on_truck is not None and target is not None:
+                return _cell(
+                    f"<strong style='color:{color};'>Short</strong>"
+                    f"<br><span style='color:#6b7280;font-size:12px;'>"
+                    f"{on_truck} of {target} aboard</span>",
+                    "white-space:nowrap;",
+                )
+            # Shouldn't be reachable — every row the overview returns is one
+            # of the three — but a date (or a dash) is the honest fallback.
+            return _expires_cell(
+                item.get("expiration_date"),
+                item.get("days_until_expiration"),
+                color,
+            )
+
         def _deployed_section(title: str, rows: list, color: str, note: str) -> str:
             if not rows:
                 return ""
@@ -4796,11 +4862,7 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
                         ),
                         _wrap,
                     )
-                    + _expires_cell(
-                        item.get("expiration_date"),
-                        item.get("days_until_expiration"),
-                        color,
-                    )
+                    + _status_cell(item, color)
                     + _cell(str(item.get("ready_stock", 0)), "text-align:center;")
                     + "</tr>"
                 )
@@ -4809,7 +4871,7 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
                 <p style="color:#6b7280;font-size:13px;margin:4px 0;">{note}</p>
                 <table style="width:100%;border-collapse:collapse;margin:8px 0;">
                     <thead><tr style="background:#f3f4f6;">
-                        {_th("Item")}{_th("Expires")}{_th("Ready stock", "center")}
+                        {_th("Item")}{_th("Status")}{_th("Ready stock", "center")}
                     </tr></thead>
                     <tbody>{body}</tbody>
                 </table>
@@ -4872,10 +4934,11 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
             if not emails or (not deployed and not rows):
                 continue
 
+            summary = _supply_summary(expiring_count, restock_count, len(rows))
             html_body = wrap_email_body(
                 org,
-                "Expiring Supplies",
-                f"<p>Supplies expiring within {window_days} days:</p>"
+                "Supplies to Replace",
+                f"<p>{_html.escape(summary)}.</p>"
                 + _deployed_section(
                     "On apparatus — no replacement stock",
                     needs_reorder,
@@ -4893,15 +4956,12 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
             )
             success_count, _ = await email_svc.send_email(
                 to_emails=emails,
-                subject=(
-                    f"Expiring Supplies — {len(deployed)} on apparatus, "
-                    f"{len(rows)} in stock"
-                ),
+                subject=f"Supplies to Replace — {summary}",
                 html_body=html_body,
                 text_body=(
-                    f"{len(deployed)} item(s) on apparatus and {len(rows)} "
-                    f"stock lot(s) expire within {window_days} days. "
-                    f"{len(needs_reorder)} have no replacement stock on hand."
+                    f"{summary} (expiring means within {window_days} days). "
+                    f"{len(needs_reorder)} on apparatus have no replacement "
+                    "stock on hand."
                 ),
             )
             sent_any = sent_any or success_count > 0
