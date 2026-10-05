@@ -1223,6 +1223,54 @@ def expand_legacy_permissions(granted: set[str]) -> set[str]:
     return expanded
 
 
+#: Modules a ``<module>.*`` wildcard may name: the prefix of some catalog
+#: permission, which is the same split ``permission_matches`` resolves a
+#: wildcard by. A wildcard on any other prefix would be stored and grant
+#: nothing.
+_WILDCARD_MODULES = frozenset(p.name.partition(".")[0] for p in ALL_PERMISSIONS)
+
+#: Longest list of rejected grants named in a validation message. The endpoint
+#: layer's ``safe_error_detail`` replaces any message over 300 characters with
+#: a generic one, so naming every stale grant on a large role would hide all of
+#: them.
+_INVALID_GRANTS_SHOWN = 5
+
+
+def invalid_permission_grants(permissions: Iterable[str]) -> list[str]:
+    """Return the entries of *permissions* that no permission check honours.
+
+    A role may store more than catalog names: ``*`` (the System Owner role), a
+    ``<module>.*`` wildcard (what the setup wizard's Manage checkbox writes)
+    and a retired name from ``LEGACY_PERMISSION_ALIASES``. All three are
+    resolved by ``permission_matches``, so validating a role's list against the
+    bare catalog rejected every edit to a role holding one of them — the
+    editor sends the role's whole stored list back, wildcards included.
+
+    Accepting a wildcard here is not a grant: the endpoint's grant ceiling
+    still requires the caller to hold whatever a wildcard confers.
+    """
+    catalog = set(get_all_permissions())
+    invalid = set()
+    for perm in permissions:
+        if perm in catalog or perm == "*" or perm in _LEGACY_PERMISSION_KEYS:
+            continue
+        module, _, action = perm.partition(".")
+        if action == "*" and module in _WILDCARD_MODULES:
+            continue
+        invalid.add(perm)
+    return sorted(invalid)
+
+
+def describe_invalid_permission_grants(invalid: list[str]) -> str:
+    """The validation message for *invalid*, kept short enough to reach the
+    client (see ``_INVALID_GRANTS_SHOWN``)."""
+    shown = ", ".join(invalid[:_INVALID_GRANTS_SHOWN])
+    hidden = len(invalid) - _INVALID_GRANTS_SHOWN
+    if hidden > 0:
+        shown += f" and {hidden} more"
+    return f"Invalid permissions: {shown}"
+
+
 # ============================================
 # Membership Types (no permissions)
 # ============================================
