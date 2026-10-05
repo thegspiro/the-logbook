@@ -11,6 +11,9 @@
  * `pointer-fine:` is the right gate: it hides only for a mouse or trackpad,
  * which can hover to reveal. This walks the source and fails on a hide gated
  * on a width breakpoint instead.
+ *
+ * A control hidden until hover must also show while focus is inside its group:
+ * otherwise a keyboard user tabs onto an invisible button (WCAG 2.4.7).
  */
 
 import { describe, it, expect } from 'vitest';
@@ -22,6 +25,9 @@ const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 
 /** A width breakpoint that hides an element outright, e.g. `sm:opacity-0`. */
 const WIDTH_GATED_HIDE = /(?<![\w-])(?:sm|md|lg|xl|2xl):opacity-0(?![\w./-])/g;
+
+/** A hover reveal, e.g. `pointer-fine:group-hover/item:opacity-100`; group 1 is the group name. */
+const HOVER_REVEAL = /pointer-fine:group-hover(\/[\w-]+)?:opacity-/g;
 
 const collectSourceFiles = (dir: string): string[] => {
   const found: string[] = [];
@@ -51,6 +57,24 @@ describe('hover-reveal integrity', () => {
     expect(
       offenders,
       'Use pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 — a width breakpoint hides the control on touch tablets, which cannot hover to reveal it'
+    ).toEqual([]);
+  });
+
+  it('reveals hover-only controls on keyboard focus too', () => {
+    const offenders: string[] = [];
+    for (const file of collectSourceFiles(SRC)) {
+      const lines = fs.readFileSync(file, 'utf8').split('\n');
+      lines.forEach((line, i) => {
+        for (const match of line.matchAll(HOVER_REVEAL)) {
+          if (!line.includes(`pointer-fine:group-focus-within${match[1] ?? ''}:opacity-`)) {
+            offenders.push(`${path.relative(SRC, file)}:${i + 1}`);
+          }
+        }
+      });
+    }
+    expect(
+      offenders,
+      'Pair pointer-fine:group-hover:opacity-100 with pointer-fine:group-focus-within:opacity-100 — a keyboard user cannot hover'
     ).toEqual([]);
   });
 

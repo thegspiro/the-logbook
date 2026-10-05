@@ -115,7 +115,7 @@ export default function FacilitiesDashboard() {
   const totalPages = Math.max(1, Math.ceil(displayedTotal / FACILITIES_PAGE_SIZE));
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
