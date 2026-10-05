@@ -682,10 +682,9 @@ export const ALL_ROUTES: RouteCheck[] = [
     maxSmallTargets: 0,
     maxTinyText: 0,
     permissions: SCHEDULING_ADMIN,
-    // A preset's description, not the panel heading: the heading renders in
-    // the load-error state too, which is what this entry measured until
-    // helpers.ts served `/notifications/rules` a list.
-    expectText: 'Notify members when they are assigned to a shift',
+    // A control that renders once the organization settings have loaded,
+    // not the panel heading, which renders before they have.
+    expectText: 'Enable decline/drop notifications',
   },
   {
     path: '/scheduling/admin/settings/outside-apparatus',
