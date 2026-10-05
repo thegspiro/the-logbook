@@ -16,6 +16,28 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR TBD** — Feature 02 (Permissions & roles), pass 7. Branch
+`claude/security-review-permissions-roles`, opened by this iteration; number
+recorded in a follow-up commit on the same branch once opened.
+
+<details>
+<summary>Superseded — prior Open PR note (PR #2924 merged, docs-only; rotation picked up Feature 02 — the state this PR opened from), preserved for history</summary>
+
+**None open from the prior pass.** PR
+[#2924](https://github.com/thegspiro/the-logbook/pull/2924) (Feature 01,
+Auth & session lifecycle, pass 7) merged — docs-only (only `PROGRESS.md` and
+`AUTH-01-auth-session.md` changed), 0 fixes, 0 new findings, so per the
+docs-only-PR rule there is nothing else to record about it beyond clearing
+this row. Independently re-confirmed via the REST pulls listing (state=open)
+that no `claude/security-review-*` PR existed. Rotation row 01 stayed ✅.
+This iteration picked up Feature 02 (Permissions & roles, pass 7), recorded
+above once its own PR was opened.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 01, Auth & session lifecycle, pass 7, PR #2924, before it merged), preserved for history</summary>
+
 **PR [#2924](https://github.com/thegspiro/the-logbook/pull/2924)**: branch
 `claude/security-review-auth-session`, Feature 01 (Auth & session
 lifecycle), pass 7.
@@ -38,6 +60,8 @@ lifecycle), pass 7.
 
 Full write-up:
 [`AUTH-01-auth-session.md`](./AUTH-01-auth-session.md) → Pass 7.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #2917 merged, docs-only; rotation picked up Feature 01 — the state this PR opened from), preserved for history</summary>
@@ -17518,7 +17542,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
-| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
+| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
@@ -17558,6 +17582,43 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-05 — PR #2924 merge recorded; Feature 02 (Permissions & roles, pass 7) — 0 fixed, 0 new findings (PERM-5 re-confirmed open), 1 cross-track note
+
+**Closure.** PR [#2924](https://github.com/thegspiro/the-logbook/pull/2924)
+(Feature 01, Auth & session lifecycle, pass 7) merged, docs-only (only
+`PROGRESS.md` and `AUTH-01-auth-session.md` changed) — per the docs-only-PR
+rule there is nothing to record beyond clearing the **Open PR** row, which
+still named it. Independently re-confirmed via the REST pulls listing
+(state=open) that no `claude/security-review-*` PR exists. Proceeded to
+Feature 02.
+
+**Feature 02, pass 7.** Not a zero-delta pass: 113 commits touched
+`backend/alembic/versions/` since pass 6's baseline (`ea2b1ef87`, PR #2596),
+and six of the eleven scoped files changed — `dependencies.py` (a WebSocket
+handshake carve-out), `roles.py` and two services (display-name plumbing),
+`core/permissions.py` (+176 lines: eight new seeded permissions, two new
+positions, a display-label rename), and `users.py` (+427 lines: welcome-email
+gating, membership-number collision handling, profile-redaction symmetry —
+none of it touching the ceiling/continuity call sites). All eleven files read
+in full regardless. Every new seeded permission/position has its own
+Pitfall #23 migration, checked by name. **PERM-5 re-confirmed open**, reproduced
+directly against the current `DEFAULT_POSITIONS` (Secretary/Membership
+Coordinator still hold `members.manage` without `*`). **Cross-track note:**
+an unmerged PR (#2918, branch `claude/gracious-goodall-z1bv9g`, a workflow-review
+track, not this rotation) already implements PERM-5's narrow "last `*`
+holder" fix, bundled with the separate W11-8 concurrency fix; this pass left
+both finding rows open rather than duplicating that work, and named the
+option it already chose. Zero new findings otherwise. Gate: backend
+flake8/black/isort clean (versions pinned to CI's), `validate_migrations.py
+--strict` (512 revisions, single head), `check_route_permissions.py --strict`
+(244 routes), `check_docs_links.py` (428 files), 1448 scoped + 212
+standing-guard backend tests passed (after running one pending migration the
+sandbox's test database was missing — an environment gap, not an app defect),
+full backend unit suite (12574 passed, 1 pre-existing skip), frontend
+typecheck and lint clean. Full write-up:
+[`PERM-02-permissions-roles.md`](./PERM-02-permissions-roles.md) → Pass 7.
+Rotation row 02 → ✅. Next: Feature 03 (Public surface & webhooks).
 
 ### 2026-10-05 — PR #2917 merge recorded; Feature 01 (Auth & session lifecycle, pass 7) — 0 fixed, 0 new findings, 0 flagged
 
