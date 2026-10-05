@@ -24,6 +24,7 @@ import {
   CheckCircle2,
   BookOpen,
 } from 'lucide-react';
+import { useAuthStore } from '../stores/authStore';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import type { SkillTemplateListItem } from '../types/skillsTesting';
 import { FormStatus } from '../constants/enums';
@@ -177,6 +178,11 @@ const TemplateRow: React.FC<{
 
 const SkillsTestingTemplatesTab: React.FC = () => {
   const navigate = useNavigate();
+  const checkPermission = useAuthStore((s) => s.checkPermission);
+  // The API reports the review queue to training.manage holders only (a
+  // member gets 0, since the count is of other people's evaluations), so the
+  // card is shown to the people it counts for and nobody else.
+  const canValidate = checkPermission('training.manage');
   const {
     templates,
     templatesLoading,
@@ -244,7 +250,7 @@ const SkillsTestingTemplatesTab: React.FC = () => {
     <div className="py-6">
       {/* Summary Cards */}
       {!summaryLoading && summary && (
-        <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className={`mb-6 grid grid-cols-2 gap-4 ${canValidate ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
           <SummaryCard
             label="Templates"
             value={summary.total_templates}
@@ -257,28 +263,26 @@ const SkillsTestingTemplatesTab: React.FC = () => {
             icon={<Users className="h-5 w-5 text-purple-600" />}
             color="bg-purple-100 dark:bg-purple-900/30"
           />
-          {/* Swapped in when member-run results are waiting: a queue nobody
-              clears blocks candidates from getting credit, so it outranks the
-              pass rate for attention while it is non-zero. */}
-          {summary.pending_validation ? (
+          {/* Always on for an officer, zero included: a queue that only
+              appeared while non-empty also hid the pass rate whenever it did,
+              and an empty queue is worth knowing at a glance. */}
+          {canValidate && (
             <SummaryCard
               label="Needs Validation"
-              value={summary.pending_validation}
+              value={summary.pending_validation ?? 0}
               icon={<CheckCircle2 className="h-5 w-5 text-purple-600" />}
               color="bg-purple-100 dark:bg-purple-900/30"
-              // The tile counted the queue without being a way into it, so an
-              // officer read "3" and then had to find the right tab and set a
-              // dropdown to see which three.
+              // A way into the queue, not only a count of it: the tile opens
+              // the Test Records tab filtered to exactly those tests.
               onClick={() => void navigate('/training/admin?page=skills-testing&tab=tests&status=pending_validation')}
             />
-          ) : (
-            <SummaryCard
-              label="Pass Rate"
-              value={percentOrDash(summary.pass_rate)}
-              icon={<TrendingUp className="h-5 w-5 text-green-600" />}
-              color="bg-green-100 dark:bg-green-900/30"
-            />
           )}
+          <SummaryCard
+            label="Pass Rate"
+            value={percentOrDash(summary.pass_rate)}
+            icon={<TrendingUp className="h-5 w-5 text-green-600" />}
+            color="bg-green-100 dark:bg-green-900/30"
+          />
           <SummaryCard
             label="Avg Score"
             value={percentOrDash(summary.average_score)}

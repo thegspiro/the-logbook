@@ -1149,21 +1149,6 @@ branch, and a date-stamped sequence collides the moment two people work on the
 same day. Before merging a migration, re-check `revision` against the current
 main rather than against your merge-base.
 
-## Skills Testing — No Summary Dashboard (2026-08-09)
-
-`docs/training/09-skills-testing.md` pictures a **Skills Testing Summary
-dashboard** with "six stat cards in a 3x2 grid: Total Templates, Published,
-…", and elsewhere a **Pending Validation** card on that same dashboard.
-
-There is no such page. Skills testing lives under
-`/training/admin?page=skills-testing` with two tabs, Templates and Test
-Records. The Templates tab carries **four** stat cards — Templates, Tests This
-Month, Pass Rate, Avg Score — and no pending-validation figure anywhere.
-
-Three placeholders in that guide describe this dashboard and are left open.
-The validation workflow itself shipped (2026-08-08); what is missing is the
-officer-facing surface that would show how much of it is waiting.
-
 ## Integrations — No Calendar-Feed Configuration Screen (2026-08-09)
 
 `docs/training/16-integrations.md` pictures an **iCalendar configuration**
