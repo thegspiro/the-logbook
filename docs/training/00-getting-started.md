@@ -149,6 +149,9 @@ signed out after a period of inactivity. Sign in again."_
 
 ---
 
+> **Screenshot needed:**
+> _[Throwaway demo member (never a real member) at /login, immediately after changing the password on My Account → Password: the sign-in page showing the green notice "Your password was changed, and you have been signed out everywhere. Sign in with your new password." Leave the username and password fields empty.]_
+
 ## Understanding the Interface
 
 The Logbook uses a sidebar navigation layout by default. Your department can
@@ -163,6 +166,9 @@ order. The main areas of the screen are:
 3. **Header/Breadcrumb (Top)** - Shows your current location and provides context actions
 
 ![Dashboard showing the sidebar navigation, main content, and header](./images/00-04-dashboard-overview.png)
+
+> **Screenshot needed:**
+> _[Administrator (all modules on) at /dashboard, 1280×900 viewport, with Navigation Layout set to Top bar: the More dropdown open at the right-hand end of the top bar, showing at least one overflowed group under its own label with separators between groups. The page must not scroll sideways.]_
 
 ### Confirmations look like the app, not like the browser _(2026-08-09)_
 
@@ -297,6 +303,9 @@ The dashboard is your landing page after login. It provides an at-a-glance view 
 
 ![Dashboard stats cards, notifications, upcoming events, and upcoming shifts](./images/00-07-dashboard-panels.png)
 
+> **Screenshot needed:**
+> _[Fire Chief (or another officer holding a role named on a Multi-Signer Approval stage, with an applicant waiting at that stage) at /dashboard: clip to the Needs you panel showing "<Name> is waiting on your sign-off" with the stage name beneath and the Review button. Use a demo applicant, not a real person.]_
+
 **[SCREENSHOT — REPLACE `00-04-dashboard-overview.png` and
 `00-07-dashboard-panels.png`.** The scheduling tiles are new. **Caption which
 permissions the capturing account held** — what a reader sees depends on their
@@ -369,6 +378,9 @@ unrelated notifications stay where they are.
 
 ---
 
+> **Screenshot needed:**
+> _[Admin at /notifications?tab=inbox, with everything unpinned first: at least two unread notifications of one category (for example two attendance-validation prompts from ended events) collapsed into a stack showing "N attendance validations", "Latest: …", the "N unread" badge and Mark all read, beside ordinary single cards. Then a second capture of the same stack expanded to its individual cards. Do not press Mark all read.]_
+
 ## Account Settings
 
 To update your personal settings, click **My Account** in the sidebar. This takes you to `/account`, which is separate from the organization settings.
@@ -395,6 +407,9 @@ From here you can:
 > [Privacy & Your Data](./17-privacy-data-rights.md).
 
 ---
+
+> **Screenshot needed:**
+> _[A throwaway demo member created for the capture (never a real member) at /account?tab=security, right after Verify & enable: the "Save your recovery codes" panel with the code grid, Copy codes and Done. The codes are secrets: use a disposable account and regenerate or blur them afterwards; do not capture the QR code or the manual key.]_
 
 ## Login & Session Edge Cases
 

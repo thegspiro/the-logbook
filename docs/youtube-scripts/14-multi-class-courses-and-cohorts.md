@@ -172,8 +172,9 @@ Confirm step, then click Generate.]**
 
 > "There it is. Fifteen training events on the department calendar, each with
 > its own training session. Your recruits already have the whole schedule, they
-> check in with the QR code the same as any other event, and the hours flow into
-> their pipeline. That was one screen."
+> check in with the QR code the same as any other event, and when each class's
+> attendance is finalized the hours flow into their pipeline. That was one
+> screen."
 
 **[TRANSITION: When plans change]**
 
@@ -208,7 +209,7 @@ appears.]**
 
 **[CALLOUT: "Cancelled, not deleted — people see the change"]**
 
-### SHIFT AND ADD (8:00 – 8:45)
+### SHIFT REMAINING AND THE ROSTER (8:00 – 8:45)
 
 **[SCREEN: Click Shift remaining, enter 7, click Apply; the remaining dates
 all move.]**
@@ -347,9 +348,10 @@ timeline with attendance counts.]**
 
 **[SCREEN: edit one generated training session; show Requirement, Course, and Program selectors.]**
 
-> "A session can now link to a requirement, course, and program. Approval feeds
-> progress only when those records belong to this organization and form a valid
-> program relationship. A generated cohort already supplies its course context;
+> "A session can now link to a requirement, course, and program. Finalized
+> attendance — and approval, where the session asks for it — feeds progress only
+> when those records belong to this organization and form a valid program
+> relationship. A generated cohort already supplies its course context;
 > add a program requirement only when attendance should satisfy that requirement.
 > Deleting a program cannot delete a requirement it does not own, and editing the
 > syllabus still does not retroactively reschedule a running cohort."

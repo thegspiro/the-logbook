@@ -156,11 +156,16 @@ Shift"]**
 
 **[SCREEN: Fill in form fields quickly]**
 
-> "Scroll down to the check-in settings. Toggle on 'QR Code Check-In.'"
+> "Every event gets its own check-in QR code — there's nothing to switch on.
+> Scroll to **Check-In Settings** and pick the **Check-In Window**: Flexible,
+> Strict, or Window."
 
-**[SCREEN: Show toggling the QR check-in switch]**
+**[SCREEN: Open the **Check-In Window** dropdown: "Flexible - Opens before the
+start, closes when the event ends" (the default), "Strict - Only while the
+event is running", "Window - Opens before the start, closes after the end".
+— REWRITTEN 2026-09-30; there has never been a QR on/off toggle on this form]**
 
-> "Save the event. The system generates a unique QR code automatically."
+> "Save the event. The QR code is ready straight away."
 
 **[SCREEN: Show the event detail page with the QR code visible]**
 
@@ -169,15 +174,16 @@ Shift"]**
 **[SCREEN: Navigate to the QR Code page (EventQRCodePage). Show the large,
 printable QR code.]**
 
-> "When members arrive, they scan the code with their phone. Check-in is
-> instant, contactless, and automatic."
+> "When members arrive, they scan the code, sign in if they need to, and tap
+> **Check In to This Event**. Their screen says 'You're Checked In'."
 
-**[SCREEN: Simulate scanning the QR code. Show the check-in confirmation.]**
+**[SCREEN: Simulate scanning the QR code. Tap **Check In to This Event**. Show
+**You're Checked In**.]**
 
 > "No more paper sign-in sheets. No more chasing people down after the event.
 > Attendance just works."
 
-**[CALLOUT: "QR Check-In — automatic attendance tracking"]**
+**[CALLOUT: "QR Check-In — contactless attendance tracking"]**
 
 ---
 
@@ -305,9 +311,15 @@ is new (2026-09-27). Re-record all three cues; the short now runs closer to
 
 **[SCREEN: Show a phone scanning the QR code (simulated or actual)]**
 
-> "Enter the six-digit code from your app to verify."
+> "Enter the six-digit code from your app and press **Verify & enable**."
 
-**[SCREEN: Enter the code. Show success confirmation.]**
+**[SCREEN: The **Save your recovery codes** panel — **Copy codes**, **Done**.
+Demo account only; never show real codes.]**
+
+> "Now the part people skip: these ten recovery codes. Copy them and keep them
+> somewhere safe — they're shown once. Then press **Done**."
+
+**[SCREEN: The card now reads "Two-factor authentication is on".]**
 
 > "Done. From now on, login requires both your password and a code from your
 > app. Even if someone gets your password, they can't get in without your
@@ -330,26 +342,34 @@ is new (2026-09-27). Re-record all three cues; the short now runs closer to
 
 **[SCREEN: Click Scheduling. The calendar view loads.]**
 
-> "Click Scheduling. The calendar shows all shifts — color coded by type and
-> coverage status."
+> "Click Scheduling. The Schedule board shows every shift, colour coded by
+> whether it still needs people."
 
-**[SCREEN: Show the calendar in month view with shifts displayed]**
+**[SCREEN: Show the board in month view with shifts displayed]**
 
-> "Green means fully staffed. Yellow means minimum staffing. Red means a gap
-> that needs filling."
+**[REWRITTEN 2026-09-30 — the board's chips mean open seats, not staffing
+tiers: red or amber with a number is open seats, green is full, blue is a
+shift you're on, grey is a shift with no crew size set. The filters are All
+shifts, Needs staffing and My shifts. The previous take described
+green/yellow/red staffing levels and a station filter, from the calendar the
+board replaced. Short 8AH covers the chips in more depth.]**
 
-**[SCREEN: Click on a specific shift to see details]**
+> "Red or amber with a number means that many seats are open. Green means it's
+> full. Grey just means nobody set how many people it wants."
 
-> "Click any shift to see who's assigned, what positions are filled, and what's
-> still open."
+**[SCREEN: Select a day to open the crew panel]**
 
-**[SCREEN: Show the shift detail popup with assigned members]**
+> "Pick a day to see who's on each shift and which seats are still open."
 
-> "Switch between week and month view. Filter by station or shift type."
+**[SCREEN: Show the Month / Week toggle and the **All shifts**, **Needs
+staffing**, **My shifts** filters]**
 
-**[SCREEN: Show toggling views and filters]**
+> "Switch between month and week. Filter to what needs staffing, or just your
+> own shifts."
 
-> "Your personal shifts are highlighted so you always know when you're on duty."
+**[SCREEN: Show a blue chip]**
+
+> "Your own shifts are blue, so you always know when you're on duty."
 
 **[SCREEN: Show the highlighted personal shifts]**
 
@@ -392,20 +412,22 @@ is new (2026-09-27). Re-record all three cues; the short now runs closer to
 
 ---
 
-**[SCREEN: Scheduling → Settings → Close-out rules card]**
+**[SCREEN: Scheduling → Settings → **General** → the **Shift close-out rules**
+card]**
 
 > "Want to make sure every apparatus is verified ready before a shift closes
 > out? Turn on one setting."
 
 **[SCREEN: Toggle on "Require end-of-shift equipment checks"]**
 
-> "In Inventory Admin → Equipment Checklists → Checklist settings, switch on
+> "In Scheduling settings, General, under **Shift close-out rules**, switch on
 > 'Require end-of-shift equipment checks.'"
 
-**[EDITOR NOTE (2026-08-31): the checklist timing settings moved out of
-Scheduling with the rest of the feature. The Equipment section of Scheduling
-settings is now a signpost to Inventory with no Save button — four settings that
-were stored and read by no code were removed from it.]**
+**[EDITOR NOTE (2026-09-30): corrected. The 2026-08-31 note sent viewers to
+Inventory Admin → Checklist settings for this switch; it is on the **Shift
+close-out rules** card of Scheduling → Settings → General. What did
+move to Inventory Admin → Equipment Checklists → **Checklist settings** are the
+start- and end-of-shift _reminders_, which prompt members but block nothing.]**
 
 **[SCREEN: An officer opening the finalize dialog with checks outstanding —
 Finalize is blocked]**
@@ -443,9 +465,9 @@ Finalize is blocked]**
 
 > "Want a copy of your entire department record? One click."
 
-**[SCREEN: Click your name → Settings → Security tab]**
+**[SCREEN: Click your name → My Account → Privacy]**
 
-> "Settings. Security tab. Scroll to 'Your Data.'"
+> "My Account. Privacy. Scroll to 'Your Data.'"
 
 **[SCREEN: Click "Download my data"; a file downloads]**
 
@@ -474,9 +496,9 @@ Finalize is blocked]**
 
 > "Everyone else got the text and you didn't? Here's the fix."
 
-**[SCREEN: Settings → Privacy → Privacy Choices, showing "(not answered)"]**
+**[SCREEN: My Account → Privacy → Privacy Choices, showing "(not answered)"]**
 
-> "Settings, Privacy, Privacy Choices. See 'not answered'? That counts as no."
+> "My Account, Privacy, Privacy Choices. See 'not answered'? That counts as no."
 
 **[CALLOUT: "Not answered = no. Silence is never consent."]**
 
@@ -489,6 +511,10 @@ Finalize is blocked]**
 > "Check the box. Done. You're on the list."
 
 > "None of these are required to be a member. Turn them on or off any time."
+
+> "That box and the **Urgent Text Messages** switch under Notifications are the
+> same setting — turning on either one turns on both. You also need a mobile
+> number on file."
 
 ---
 
@@ -582,9 +608,11 @@ reference field]**
 > already sends — event reminders, training expiring, schedule changes,
 > maintenance due, elections. All of it."
 
-**[SCREEN: My Account > Notifications; the Push notifications toggle]**
+**[SCREEN: My Account > Notifications; the **Push Notifications on This
+Device** toggle]**
 
-> "My Account, Notifications, switch on **Push notifications**, accept the
+> "My Account, Notifications, switch on **Push Notifications on This Device**,
+> accept the
 > permission prompt. That's it — you don't turn it on per category."
 
 **[SCREEN: iPhone — Safari share sheet > Add to Home Screen]**
@@ -710,10 +738,11 @@ credentials to one member]**
 > "Load the roster quietly. Check it. Then issue credentials from Member
 > Management when you're actually ready."
 
-**[CALLOUT: "Off for imports. On for Add Member."]**
+**[CALLOUT: "Off for imports. On for Add Member — when email is set up."]**
 
-> "Add Member is unchanged — you're creating one person deliberately there, so it
-> still offers to email them."
+> "Add Member still offers to email them — you're creating one person
+> deliberately there — as long as email is set up. If it isn't, both screens
+> make you set the passwords yourself."
 
 ---
 
@@ -737,11 +766,15 @@ requests]**
 > have requested or filed them. You can't just blank out who did that without
 > making the record a lie."
 
-**[SCREEN: The member profile > status control > Deactivate; then Anonymize]**
+**[SCREEN: The member's profile, Membership card, Status "Dropped Voluntary"
+→ **Anonymize member** → the **Anonymize Member** dialog with the name typed.
+— REWRITTEN 2026-09-30; "Deactivate, then Anonymize" was wrong: a deactivated
+member is gone from the app, so there is nothing left to anonymize]**
 
-> "The right move is **Deactivate, then Anonymize**. It strips their personal
-> information and leaves those records owned, so your financial trail still makes
-> sense."
+> "The right move is to drop them — once their gear's back they're archived —
+> then **Anonymize member** from their profile. The refusal itself now says so:
+> archive, then anonymize. It strips their personal information and leaves those
+> records owned, so your financial trail still makes sense."
 
 **[CALLOUT: "Anonymize ≠ delete — and that's the point"]**
 
@@ -1642,8 +1675,9 @@ change.
 **[0:00 — SCREEN: The sidebar, the new **Suggestions** item below Messages.
 Open it on the **Submit** tab.]**
 
-> "Your department can now run suggestion boxes — as many as it likes, each with
-> its own reviewers."
+> "Your department can run as many suggestion boxes as it likes, each with its
+> own reviewers — and every department starts with one for compliance
+> concerns."
 
 **[0:10 — SCREEN: Choose a box, type a title and details, tick **Submit
 anonymously**. The screenshot warning appears.]**
@@ -1701,7 +1735,10 @@ barcode; it flips back to **Needs a label**.]**
 > the gear doesn't match any more."
 
 **Production:** the item count on screen should be under 500 so the select-all
-link appears; above 500 it is replaced by a "narrow the filters" message.
+link appears. Above 500 the bar reads "N match — select-all is limited to 500"
+and offers **Print labels for all N matching** instead (up to 5,000, printed in
+parts). The scan-to-confirm beat needs a handheld scanner or typed codes; the
+capture harness has no camera.
 
 ---
 
@@ -1756,7 +1793,8 @@ card visibly does not move at sign-in and does move at End Event.
 "3 / 3 spots filled", **Event Full**.]**
 
 > "The Event Information card shows how full it is. If someone drops out, the
-> first person waiting moves to Going automatically, and gets told."
+> first person waiting moves to Going automatically, and gets a notification in
+> the app — keep an eye on the bell. There's no email for this one."
 
 **[0:34 — SCREEN: As an officer, **Manage Events → Settings → Attendance**:
 **Who can see who's going** — **Only event managers** or **Everyone in the
@@ -1783,3 +1821,634 @@ department**.]**
   event walkthrough (Chapter 3, right after RSVP Settings) covers the per-event
   dropdown and all three of its choices. Use the same labels here, and point
   officers there in the description.
+
+---
+
+## SHORT 8AV: Your Old Email Wording Is Still There
+
+**Length:** 45 seconds
+**Extracted From:** Script 7, "Your emails look different now"
+**Audience:** Secretaries, administrators
+**Added:** 2026-09-30
+
+**[0:00 — SCREEN: A department's dues notice in an inbox, on the new solid-tab
+design, with the shipped wording.]**
+
+> "You upgraded, every email moved to the new design — and the dues notice you
+> spent two years getting right is back to the stock wording."
+
+**[0:10 — SCREEN: Communications → Email Templates → pick the template. The
+**Previous version (before the redesign)** panel above the editor.]**
+
+> "It isn't gone. Open the template and look above the editor: **Previous
+> version, before the redesign**."
+
+**[0:20 — SCREEN: **Show the old wording**, then **Load this wording**. The
+preview shows the department's words inside the new design. **Save**.]**
+
+> "**Load this wording** puts your subject and message into the new design.
+> Check the preview, then **Save**. Nothing changes until you do."
+
+**[0:36 — CALLOUT: "Your words come back. The old colours and header don't."]**
+
+> "Only the wording comes back — the old header, colours and stylesheet stay
+> retired."
+
+**Production:** the panel only appears on a template the upgrade reset from an
+edited version. On a fresh demo department there is none, so edit a template on
+an older build before upgrading the capture instance, or film against a
+restored copy. Do not read the blue "press Reset" banner on the Templates tab
+aloud — it predates the upgrade and is out of date.
+
+---
+
+## SHORT 8AW: Your Emailed Links Open "localhost"
+
+**Length:** 45 seconds
+**Extracted From:** Script 3, Email Configuration
+**Audience:** IT managers, administrators
+**Added:** 2026-09-30
+
+**[0:00 — SCREEN: A member's password-reset email; tapping the link opens a
+"can't reach localhost" page on a phone.]**
+
+> "A member taps the link in their reset email and gets 'can't reach this site'.
+> Every link The Logbook emails is built from one address — and yours is
+> pointing at the server itself."
+
+**[0:10 — SCREEN: Settings → Email → the **Email link address** card with the
+red "This address only works on the server itself" alert.]**
+
+> "Settings, Email. The **Email link address** card shows it, and says so in red
+> when it only works on the server."
+
+**[0:20 — SCREEN: As the IT Manager (System Owner): type the public address,
+**Save**, confirm **Change address**.]**
+
+> "Type the address members actually use, save, confirm. No restart. Out of the
+> box only the System Owner can change it, because it decides where every
+> password reset and ballot sends people."
+
+**[0:34 — SCREEN: **Go back to the server setting**.]**
+
+> "Changed your mind? **Go back to the server setting** undoes it."
+
+**[0:40 — CALLOUT: "Links already sent keep the old address — send them again."]**
+
+**Production:** show RFC 2606 example domains (`logbook.example.org`) only;
+never a real department's address. The loopback alert needs `FRONTEND_URL` at
+`localhost` and no public address in `ALLOWED_ORIGINS` (otherwise that origin is
+substituted automatically), on a non-production capture instance — a production
+build refuses to start in that state.
+
+---
+
+## SHORT 8AX: Turn Off Just the Emails You Don't Need
+
+**Length:** 35 seconds
+**Extracted From:** Script 6, Notifications
+**Audience:** All members
+**Added:** 2026-09-30
+
+**[0:00 — SCREEN: My Account → Notifications.]**
+
+> "Too much email from the department? You don't have to turn it all off."
+
+**[0:08 — SCREEN: **Emails you can turn off** — switch off one, e.g. store
+announcements.]**
+
+> "Under **Emails you can turn off**, each kind has its own switch. Turn off just
+> the ones you don't want."
+
+**[0:18 — SCREEN: **Always emailed to you**.]**
+
+> "These you can't: sign-in and security, ballots, department messages, your
+> receipts. Your department has to be able to show you were told."
+
+**[0:26 — SCREEN: The bell with a badge.]**
+
+> "Switching an email off never hides the notice from your bell."
+
+**[0:30 — CALLOUT: "Press Save Preferences."]**
+
+---
+
+## SHORT 8AY: Make an Optional Email Required
+
+**Length:** 40 seconds
+**Extracted From:** Script 4
+**Audience:** Chiefs, administrators
+**Added:** 2026-09-30
+
+**[0:00 — SCREEN: Administration → Forms & Comms → **Member Emails & Texts**,
+the **Always sent** section.]**
+
+> "Everything the system emails your members is on one page. **Always sent** —
+> sign-in, ballots, department messages, receipts — nobody can turn off."
+
+**[0:12 — SCREEN: **Members can turn off** → the Quartermaster duties card →
+switch on **Require for every member**.]**
+
+> "The rest members can switch off. If one can't be optional in your department
+> — say the quartermaster's alerts — require it."
+
+**[0:22 — SCREEN: The card's badge now reads **Required by your department**.
+Cut to a member's My Account → Notifications, where it now appears under
+**Always emailed to you**.]**
+
+> "Now it's on everyone's always-emailed list. It only works one way: you can't
+> make a ballot optional."
+
+**[0:34 — CALLOUT: "Needs settings.manage or organization.update_settings.
+Every change is audit-logged."]**
+
+---
+
+## SHORT 8AZ: Your Department Already Has a Compliance Box
+
+**Length:** 35 seconds
+**Extracted From:** Script 7, Chapter 7
+**Audience:** Chiefs, administrators
+**Added:** 2026-09-30
+
+**[0:00 — SCREEN: Administration → Forms & Comms → Suggestion Boxes. The
+**Compliance** box, "Reviewers: Compliance Officer".]**
+
+> "Every department starts with a suggestion box you didn't create: Compliance.
+> Members can report a policy, safety or training-record concern in it from day
+> one."
+
+**[0:12 — SCREEN: The positions screen; assign a member to **Compliance
+Officer**.]**
+
+> "Only the **Compliance Officer** position reviews it. So fill the seat — until
+> somebody holds it, those reports sit in a box nobody reads."
+
+**[0:24 — SCREEN: As that member, Suggestions shows the **Review** tab.]**
+
+> "The moment they hold the position, the Review tab appears for them."
+
+**[0:30 — CALLOUT: "The position also carries training management. Choose
+accordingly."]**
+
+**Production:** film on the demo department, where `lnakamura` already holds
+the seat, or appoint a scratch member and remove them afterwards.
+
+---
+
+## SHORT 8BA: Vote on What Gets Done — the Idea Board
+
+**Length:** 40 seconds
+**Extracted From:** Script 7, Chapter 7
+**Audience:** All members
+**Added:** 2026-09-30
+
+**[0:00 — SCREEN: Suggestions → **Idea board**, sorted **Top**.]**
+
+> "Some suggestion boxes put the good ideas in front of everyone. Suggestions,
+> **Idea board**."
+
+**[0:10 — SCREEN: Tap the vote arrow on an idea; the count goes up. Tap again;
+it comes back down.]**
+
+> "Tap to vote. Tap again to take it back. One vote per idea."
+
+**[0:20 — SCREEN: The status pills (Open, Accepted, Implemented); an Accepted
+idea with a response under **Reviewers**.]**
+
+> "You can see what's been accepted or done — and what the reviewers said about
+> it."
+
+**[0:30 — CALLOUT: "Written by the reviewers. Nobody's name is on the board."]**
+
+> "Every idea here was written up by the reviewers — never the original, never
+> who sent it."
+
+**Production:** film as `nbelhaj` on the demo's **Training ideas** board, which
+has two published ideas and seeded votes. Reset any vote cast on camera.
+
+---
+
+## SHORT 8BB: Bring a Former Member Back
+
+**Length:** 50 seconds
+**Extracted From:** Script 7, Chapter 4
+**Audience:** Administrators, membership coordinators
+**Added:** 2026-09-30
+
+**[0:00 — SCREEN: Members → **Filter by status** → **Archived**.]**
+
+> "A member who left and was archived isn't gone. Filter to Archived."
+
+**[0:08 — SCREEN: The green **Reactivate** icon on the row → the **Reactivate
+Member** dialog.]**
+
+> "Reactivate brings their profile, training and history back as they were — and
+> their old membership number, unless someone else holds it now."
+
+**[0:20 — SCREEN: **Continue prior service** and **Restart at zero**, the
+department's default marked; the **Return date**.]**
+
+> "**Continue prior service** keeps their earlier years and leaves out only the
+> time away. **Restart at zero** starts them over and keeps the old years on
+> record as prior service. Set the return date, then **Reactivate**."
+
+**[0:36 — SCREEN: Their profile's **Service History** card.]**
+
+> "Their Service History shows every stint. Years of service now count only the
+> time someone was actually in the department."
+
+**[0:44 — CALLOUT: "Archived, not deactivated — a deactivated member isn't on
+this list at all."]**
+
+**Production:** the Archived filter and the Reactivate icon show only to
+`members.manage`. The demo needs one archived member.
+
+---
+
+## SHORT 8BC: Hours Sent Back? Fix and Resubmit
+
+**Length:** 40 seconds
+**Extracted From:** Script 7, Admin Hours Tracking
+**Audience:** All members who log admin hours
+**Added:** 2026-09-30
+
+**[0:00 — SCREEN: **My Admin Hours**, a row marked rejected.]**
+
+> "Your officer sent your hours back. You don't have to start again."
+
+**[0:08 — SCREEN: **Edit & resubmit** → "Returned with: <reason>" → change the
+end time → **Resubmit**; toast "Entry resubmitted for review".]**
+
+> "**Edit & resubmit** shows why it came back. Fix it, resubmit, and it goes
+> back into the queue."
+
+**[0:22 — SCREEN: Another pending entry → **Withdraw** → "Withdraw these
+hours?" → **Withdraw**. The row stays, marked withdrawn.]**
+
+> "Logged something by mistake? **Withdraw** it. It stays in your history but
+> counts for nothing and never reaches an approver."
+
+**[0:34 — CALLOUT: "Hours from event attendance can be withdrawn, not edited."]**
+
+---
+
+## SHORT 8BD: Did the Drill Count? Finalize It
+
+**Length:** 40 seconds
+**Extracted From:** Script 5 / Script 16, training events
+**Audience:** Training officers, event organizers
+**Added:** 2026-09-30
+
+**[0:00 — SCREEN: Create a Training event; under **Training details
+(optional)**, pick the course.]**
+
+> "A training event only puts hours on members' records when its attendance is
+> finalized. Here's the whole loop."
+
+**[0:10 — SCREEN: After the event: one member left early — **Edit Times** on
+their row.]**
+
+> "Members check in. Somebody left early? Fix their time with **Edit Times**."
+
+**[0:20 — SCREEN: **Finalize Attendance**; toast "N training records
+completed".]**
+
+> "Then **Finalize Attendance**. The toast tells you how many training records it
+> completed (or, if your training officer approves sessions, that they're
+> waiting on that approval) — and names anyone it couldn't credit because they
+> had no time."
+
+**[0:32 — CALLOUT: "Training events count as training, not admin hours."]**
+
+> "Need to correct it later? **Reopen Attendance**, fix it, finalize again —
+> records are updated, not doubled."
+
+**Production:** needs a Training event that has already ended in the demo. Use
+a Training event whose session does not require training-officer approval;
+otherwise the toast reads "Waiting for training officer approval". Never show an
+approval-link URL on screen.
+
+---
+
+## SHORT 8BE: Your Public Form Asks Visitors to Sign In
+
+**Length:** 40 seconds
+**Extracted From:** Script 7, Forms Module
+**Audience:** Form managers, secretaries
+**Added:** 2026-09-30
+
+**[0:00 — SCREEN: A private browser window: a public form filled in, Submit →
+"Authentication is required to submit this form."]**
+
+> "A neighbour fills in your public form, presses Submit, and gets told to sign
+> in. They don't have an account. That's the default."
+
+**[0:12 — SCREEN: Forms → the form's **Share** → **Public Access** on → tick
+**Allow submissions without signing in**. The footnote changes to "Anyone can
+submit this form without signing in."]**
+
+> "Open **Share**, and under **Public Access** tick **Allow submissions without
+> signing in**. It saves as you tick it."
+
+**[0:26 — SCREEN: The private window again; submit → **Submission Received**.]**
+
+> "Now anyone with the link can send it."
+
+**[0:32 — CALLOUT: "A one-submission-per-person form always needs a sign-in."]**
+
+**Production:** use a demo form and a private window so no session cookie
+carries over. Walkthrough: `training/07-documents-forms.md`, Public Forms.
+
+---
+
+## SHORT 8BF: Scan the Shelf, Then the Gear
+
+**Length:** 40 seconds
+**Extracted From:** `training/05-inventory.md`, Storage Areas
+**Audience:** Quartermasters
+**Added:** 2026-09-30
+
+**[0:00 — SCREEN: Inventory → Storage Areas → **Put away**. "Scan the shelf
+label first, then each item going onto it."]**
+
+> "Putting a delivery away used to mean editing every item's location. Now:
+> scan the shelf, then the gear."
+
+**[0:10 — SCREEN: Scan a shelf label ("Filing onto …"), then four items; press
+**File 4 items on <shelf>**.]**
+
+> "Shelf first, then everything going onto it. One button files the lot."
+
+**[0:20 — SCREEN: The result, one item skipped: "assigned to a member — return
+it first".]**
+
+> "Anything that shouldn't move — like an item still assigned to a member — is
+> skipped, with the reason."
+
+**[0:28 — SCREEN: A bag's storage area → **Check contents** → scan everything
+→ "N of M found" and the missing list.]**
+
+> "And to check a bag or bin, **Check contents**, scan what's in it, and it tells
+> you what's missing."
+
+**Production:** use a handheld scanner or type the codes — the capture harness
+has no camera. Seeded data only.
+
+---
+
+## SHORT 8BG: What Nobody Has Touched in Six Months
+
+**Length:** 35 seconds
+**Extracted From:** `training/05-inventory.md`, Inventory Administration
+**Audience:** Quartermasters, chiefs
+**Added:** 2026-09-30
+
+**[0:00 — SCREEN: Inventory Administration → **Items Not Seen**, **Not seen
+in** 180 days.]**
+
+> "Is that gear still on the shelf, or did it walk off a year ago? Items Not
+> Seen."
+
+**[0:08 — SCREEN: Rows reading "Never" at the top; others naming the last thing
+that happened — Returned, Checked out, NFC tap — and how long ago.]**
+
+> "Everything nobody has handled lately, with the last thing that happened to it
+> and when. 'Never' means never."
+
+**[0:18 — SCREEN: Pick a **Category**, then **Download CSV**.]**
+
+> "Narrow it to a category and download the list for your next walk-through."
+
+**[0:26 — CALLOUT: "Editing the record doesn't count. Someone has to have
+handled it."]**
+
+> "Works with or without NFC tags."
+
+---
+
+## SHORT 8BH: Borrow the Loaner Radio at the Kiosk
+
+**Length:** 50 seconds
+**Extracted From:** Script 6, My Equipment
+**Audience:** Members, quartermasters
+**Added:** 2026-09-30
+
+**[0:00 — SCREEN: A tablet at the station: "Tap your ID card to start". Tap a
+card → "Hi, <name>".]**
+
+> "Need the loaner radio and the quartermaster's not around? Tap your card on the
+> kiosk."
+
+**[0:10 — SCREEN: Tap the radio's tag → "Borrow Loaner Radio 1?" with its due
+date → **Borrow it**.]**
+
+> "Tap the item, check the due date, borrow it. It shows up on your My Issued
+> Gear page."
+
+**[0:20 — SCREEN: The next member taps their card straight away and is
+greeted.]**
+
+> "Walk away — the next person just taps their card. The kiosk forgets you after
+> a minute anyway."
+
+**[0:28 — SCREEN: Later: tap the radio → "Is anything damaged or missing?" →
+describe it → **Return as damaged**.]**
+
+> "Bringing it back? Tap it again. If something's broken, say so — it's marked
+> damaged with your note, so the quartermaster sees it before the next person
+> does."
+
+**[0:42 — CALLOUT: "Only gear your quartermaster opened to the kiosk."]**
+
+**Production:** needs a **real Android tablet with Chrome, real ID cards and
+real tags** — like 8AG and 8AJ, this cannot be captured in the harness. Before
+filming: turn on NFC tag tracking and the NFC ID Cards integration, switch on
+**Allow self-checkout at the kiosk** with a **Kiosk loan period (days)** on the
+category, and grant `inventory.kiosk` to the operator — no seeded position holds
+it.
+
+---
+
+## SHORT 8BI: An Applicant Is Waiting on Your Signature
+
+**Length:** 45 seconds
+**Extracted From:** Script 4, Prospective Members Pipeline
+**Audience:** Chiefs, presidents and other officers who sign off applicants
+**Added:** 2026-09-30
+
+**[0:00 — SCREEN: Dashboard → **Needs you**: "<Name> is waiting on your
+sign-off" → **Review**.]**
+
+> "An applicant can't become a member until the officers named on their
+> approval stage sign. If that's you, your dashboard says so."
+
+**[0:10 — SCREEN: The **Sign-offs** page: "President: signed", "Chief:
+waiting" → **Sign as Chief**, add a note, confirm.]**
+
+> "The Sign-offs page shows who's signed and who hasn't. **Sign as** your office,
+> add a note if you want, done. You don't need access to the applicant pipeline
+> for this."
+
+**[0:26 — SCREEN: The coordinator's **Convert**, refused earlier with "Approval
+still needed from: chief"; now it runs.]**
+
+> "Until every required stage is complete, the coordinator's Convert is refused
+> — and it names who's still to sign."
+
+**Production:** seed a Multi-Signer Approval stage first, and film the signer
+as an officer with no `prospective_members` permission to show the page needs
+none.
+
+---
+
+## SHORT 8BJ: Can't Find It? Look Under More
+
+**Length:** 30 seconds
+**Extracted From:** Script 6
+**Audience:** All members
+**Added:** 2026-09-30
+
+**[0:00 — SCREEN: A laptop with the top-bar layout; the right-hand end of the
+bar shows **More**.]**
+
+> "Switched to the top bar and half the menu disappeared? It didn't."
+
+**[0:08 — SCREEN: Open **More**: groups that didn't fit, under their own names.
+Open a page inside it; **More** turns bold.]**
+
+> "Groups that don't fit move into **More**, under their own names. And More
+> turns bold when you're on one of its pages."
+
+**[0:18 — SCREEN: A phone: the drawer from the bottom bar; the fade and the
+**More** pill at the bottom.]**
+
+> "On a phone, the drawer fades at the bottom and shows a More button when
+> there's more below."
+
+**[0:26 — CALLOUT: "Nothing's missing — it's under More."]**
+
+**Production:** capture as an administrator in the demo department. Switch to
+the top bar under Settings → General → **Navigation Layout** → **Top bar**, and
+set it back afterwards. Resize the window so at least one group moves into More.
+
+---
+
+## SHORT 8BK: You'll Hear Back About Your Gear Request
+
+**Length:** 45 seconds
+**Extracted From:** Script 6, My Equipment
+**Audience:** Members, quartermasters
+**Added:** 2026-09-30
+
+**[0:00 — SCREEN: My Issued Gear → **Request Equipment** → submit; toast
+"Request sent to the quartermaster for review".]**
+
+> "Asked the quartermaster for new gloves? You don't have to keep checking."
+
+**[0:10 — SCREEN: The quartermaster: Gear Requests → **Review** → types a note →
+**Decline**.]**
+
+**[0:18 — SCREEN: The member's phone: the bell notice "Your equipment request
+was declined: <item>", then the email with "From the quartermaster:".]**
+
+> "When it's approved, declined or issued, you get a notice in the bell and an
+> email — with the quartermaster's note."
+
+**[0:30 — SCREEN: **My Requests** — Declined, "Quartermaster: <note>".]**
+
+> "Quartermasters: write that note for the member. They read it."
+
+**[0:38 — CALLOUT: "Departments can switch it off: Notification Rules →
+Equipment Request Update."]**
+
+---
+
+## SHORT 8BL: A Leave Covers Meetings and Shifts Together
+
+**Length:** 45 seconds
+**Extracted From:** Script 7, Waiver Management
+**Audience:** Secretaries, membership officers
+**Added:** 2026-09-30
+
+**[0:00 — SCREEN: Members → Admin → Waivers → **Create Waiver** → **Applies
+To** with two boxes.]**
+
+> "Putting a member on leave? Two boxes decide what it excuses."
+
+**[0:10 — SCREEN: Point to **Meeting Attendance & Shift Requirements**.]**
+
+> "Meetings and shifts are one box, because a leave of absence excuses both —
+> scheduling, attendance and membership standing all read it that way."
+
+**[0:22 — SCREEN: Tick and untick **Training Requirements**; the line below
+changes.]**
+
+> "Leave **Training Requirements** unticked if their training should stay on
+> schedule. Tick it to adjust their training for the time away too."
+
+**[0:34 — SCREEN: The line under the boxes, then **Create Waiver**.]**
+
+> "The line under the boxes tells you exactly what will be created. Read it,
+> then create."
+
+---
+
+## SHORT 8BM: Your Weekly Drill Stays at 7 PM
+
+**Length:** 50 seconds
+**Extracted From:** Script 4, Events
+**Audience:** Event organizers
+**Added:** 2026-09-30
+
+**[0:00 — SCREEN: Create a weekly recurring drill at 7:00 PM. Scroll the
+calendar past the daylight-saving change; the drill still reads 7:00 PM.]**
+
+> "A weekly drill at seven stays at seven — right through the clock change."
+
+**[0:14 — SCREEN: Edit one occurrence → **This and all future events** → move
+the start to 7:30 PM → save. Later occurrences each move thirty minutes, on
+their own dates.]**
+
+> "Need to move the rest of the series? Edit one, choose **This and all future
+> events**, and change the time. Every later drill moves by the same amount and
+> keeps its own date."
+
+**[0:34 — CALLOUT: "Series made before 28 September 2026? Check them."]**
+
+> "One catch: series created before this fix weren't repaired. Some sit an hour
+> off after the clock change, and any you'd edited with 'this and all future'
+> may have collapsed onto one date. Check yours, and recreate any that are
+> wrong."
+
+**Production:** create the series in the demo department on camera; the
+department timezone must observe daylight saving.
+
+---
+
+## SHORT 8BN: Rode With Another Department? Log It
+
+**Length:** 40 seconds
+**Extracted From:** Script 6, Scheduling
+**Audience:** Members, scheduling officers
+**Added:** 2026-09-30
+
+**[0:00 — SCREEN: My Shifts → Hours → **Shifts with other departments** → **Log
+outside shift**.]**
+
+> "Covered a shift on the next town's engine? Log it so it counts toward your
+> hours."
+
+**[0:10 — SCREEN: Set Start; tap **+12 hours**. Pick the department and the
+apparatus from the lists.]**
+
+> "Set the start, tap plus twelve or plus twenty-four. Pick the department and
+> the apparatus from the list — not free text, so leadership can count it."
+
+**[0:22 — SCREEN: Save; the entry counts straight away.]**
+
+> "It counts the moment you save. An officer can mark it not counted, with a
+> reason."
+
+**[0:30 — CALLOUT: "Unit not listed? Ask a scheduling officer to add it under
+Outside Apparatus."]**

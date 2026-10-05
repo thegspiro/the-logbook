@@ -175,7 +175,7 @@ The `MEMBER_DROPPED` template type declares these variables, all using `{{variab
 | `{{items_list_html}}`    | HTML table of the outstanding items        | (name, serial #, asset tag, condition, value) |
 | `{{items_list_text}}`    | Plain-text list of the outstanding items   | (same, for the text body)                     |
 | `{{performed_by_name}}`  | Name of the officer who performed the drop | Chief John Smith                              |
-| `{{performed_by_title}}` | Title/rank of the officer                  | Fire Chief                                    |
+| `{{performed_by_title}}` | Title/rank of the officer                  | Chief                                         |
 
 ### Attachments
 

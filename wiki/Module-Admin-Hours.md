@@ -82,6 +82,9 @@ finding AH-1). The form says so above its fields.
 3. **Withdraw** asks first ("Withdraw these hours?", **Keep it** / **Withdraw**)
    and keeps the entry in the member's history as _withdrawn_
 
+> **Screenshot needed:**
+> _[Member (no admin_hours.manage), /admin-hours, My Hours list with one pending row and one rejected row showing "Rejected: <reason> — edit and resubmit it, or withdraw it." and the Edit & resubmit / Withdraw buttons; a second capture with the inline edit form open on the rejected row showing "Returned with:" and the Resubmit button. Use demo data only.]_
+
 ### Approval
 
 1. Admin navigates to **Admin Hours > Manage**

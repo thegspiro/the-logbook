@@ -58,8 +58,8 @@ tablet, checking training status on a laptop.]**
 
 **[SCREEN: Show 2FA prompt if applicable]**
 
-> "If this is your first login, I'd recommend immediately going to your User
-> Settings to change your password and set up 2FA if it's not already required."
+> "If this is your first login, I'd recommend going straight to **My Account**
+> to change your password and set up two-factor if it's not already required."
 
 ### THE MEMBER DASHBOARD (2:30 – 4:30)
 
@@ -193,6 +193,9 @@ this narration walks. The demo seeder produces both.]**
 > "Choose Yes, No, or Maybe. If you choose No, you can optionally add a reason.
 > Your RSVP can be changed anytime before the RSVP deadline."
 
+> "Once that deadline passes, or the event has ended, the RSVP buttons go away.
+> Missed it? Check in when you get there, or ask an officer to record you."
+
 **[SCREEN: Click "Yes" and show the confirmation]**
 
 > "That's it. Your officers can now see you're coming. Done in five seconds."
@@ -203,7 +206,9 @@ of 1 on the waitlist"]**
 
 > "If an event has a limit and it's already full, a Yes puts you on the waitlist
 > instead. The Event Information card shows how full it is, your RSVP shows your
-> place in line, and if a spot opens you're moved to Going automatically."
+> place in line, and if a spot opens you're moved to Going automatically. You'll
+> see that in your notifications in the app — 'You're off the waitlist' — so
+> keep an eye on the bell. There's no email for this one."
 
 **[CALLOUT: "RSVP in 5 seconds — no more group text chains"]**
 
@@ -614,6 +619,10 @@ yours until then"]**
 > "And if nobody answers, the offer closes the day before the shift and you,
 > them and the duty officer all get told. It won't quietly sit there."
 
+> "Same if either of you comes off that shift before it's settled — you take
+> time off, you withdraw, an officer moves you. The swap is cancelled on its
+> own, and you both get an email and a notice saying so."
+
 > "One thing you can't hand over: a training seat. It carries your program and
 > your evaluating officer, so moving it would file your training against
 > somebody else."
@@ -778,9 +787,9 @@ appear.]**
 
 **[SCREEN: Walk through selecting candidates and submitting the ballot]**
 
-> "Your vote is confidential — only the aggregate results are visible to
-> officers. You can only vote once per election, so make sure you're done
-> before submitting."
+> "In an anonymous election — which is the default — the system records that
+> you voted, but not how. Officers see the totals, not your choices. You can
+> only vote once per election, so make sure you're done before submitting."
 
 **[SCREEN: Show the confirmation screen with the vote receipt]**
 
@@ -788,7 +797,7 @@ appear.]**
 > was recorded without revealing who you voted for. Save it if you ever want to
 > verify your vote was counted."
 
-**[CALLOUT: "Your vote is confidential — only aggregate results are published. Save your receipt!"]**
+**[CALLOUT: "Anonymous elections (the default) record that you voted, not how. Save your receipt!"]**
 
 ### MEETING MINUTES (19:30 – 20:00)
 

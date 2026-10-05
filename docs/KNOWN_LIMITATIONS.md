@@ -5730,6 +5730,82 @@ need an owner decision before anything is built.
   safe set (headings, lists) so that adapting the built-in text does not make
   the page look worse.
 
+## Events — Files Cannot Be Attached From the App (2026-09-30)
+
+`POST /api/v1/events/{id}/attachments` (`events.manage`) accepts a file, and
+the event detail page lists and downloads whatever is attached — but no screen
+uploads one. `eventService.uploadAttachment` has no caller, and there is no
+upload control anywhere in the events UI. Until 2026-09-29 the event form's
+attachments note promised uploads from the detail page; it now says "Files
+can't be attached from the app yet." A department that needs a file on an event
+attaches it through the API. Building the control, or dropping the endpoint, is
+an owner decision.
+
+## Inventory — NFC Tags and Items Not Seen: Open Decisions (2026-09-30)
+
+Workflow review W44 (`docs/workflow-review/W44-nfc.md`) and the NFC design left
+these for the owner. None is a defect in the sense of code doing something it
+was not meant to; each is a definition or a trade-off.
+
+- **A new item reads "Never" and sorts first on Items Not Seen (W44-2).**
+  Creating or importing an item is not treated as seeing it, so an import made
+  an hour ago heads the report. That is deliberate — a new item nobody has
+  handled is still unaccounted for — but whether creation should count is
+  undecided.
+- **Tag Items in Bulk cannot tell apart two items with the same name (W44-3).**
+  The tagging card shows name, serial, asset tag, category and storage area.
+  Two items that share a name and have neither serial nor asset tag look
+  identical, because the untagged-items response does not carry the barcode
+  every item has.
+- **Items Not Seen still names a deleted storage area (W44-4)**, while the
+  item's own page shows "--" for the same link.
+- **A barcode put-away is not a sighting.** It is recorded only as an audit
+  event with no per-item row, so it neither counts as seeing an item on Items
+  Not Seen nor appears in its **Last seen** column. An NFC put-away does both.
+- **An unlocked written tag can be rewritten by anyone with an NFC app.**
+  Inside the app a rewritten tag is ignored, because a tag pointing anywhere but
+  the department's own site is refused. From a phone's home screen, though, it
+  could open a different website. The mitigation is the department's: lock
+  tags in public view after writing (permanent), or link them by serial rather
+  than by a written link. See `wiki/Inventory-NFC-Tags.md` → _Looking after
+  tags_.
+
+## Member Emails — An Opted-Out Officer or Nominee Hears Nothing for Email-Only Alerts (2026-09-30)
+
+**Open (owner decision).** Since 2026-09-28 every member email is either always
+sent or optional (`app/services/email_policy.py`), and a member's **Email
+Notifications** switch, or their own switch for one optional email, stops it.
+For most optional emails the in-app entry still arrives. For these it does not,
+because they have no in-app copy:
+
+- **Quartermaster duties** — low-stock, shelf-audit digest, gear due for
+  retirement, supplies expiring, and failed equipment checks. The conditions
+  still show on the Inventory screens, but nothing tells an opted-out officer
+  to look.
+- **The third-party nominee's accept-or-decline email** (`_notify_nominee`,
+  under **Election notices**). A nominee who has opted out is never told they
+  must accept before nominations close; the pending nomination shows only on
+  the election page.
+- **Membership and store administration** — if every officer opts out, nobody
+  is told a member was archived or an applicant withdrew.
+
+There is also no administrator view of which members have opted out of what.
+Options: make these kinds required by default, give them in-app copies, or rely
+on each department switching on **Require for every member** for them under
+**Administration → Forms & Comms → Member Emails & Texts** (`settings.manage`
+or `organization.update_settings`).
+
+## Shift Reports — "Your Reporting Summary" Counts the Whole Department (2026-09-30)
+
+An officer's **Written by me** view on **Scheduling → Shift Reports** opens with
+a card headed **Your reporting summary** — **Reports written**, **Shift hours
+covered**, **Calls covered**, the crew summary and **Reports written per
+month**. Its figures come from `GET /training/shift-reports/officer-analytics`,
+which totals every report in the organization, not only the viewer's. The list
+below the card is the viewer's own. Either scope the endpoint to the officer or
+retitle the card; until then an officer in a department with several report
+writers reads the department's numbers as their own.
+
 ## Process
 
 ## OPS-7 — Audit Shipping Can Deliver A Batch Twice (2026-10-04)

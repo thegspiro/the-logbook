@@ -142,6 +142,9 @@ Navigate to **Medical Screening > Requirements** tab to view all requirements.
 > unlinked. Records already lost to an earlier delete are not recoverable from
 > the application; restore them from a backup if they matter.
 
+> **Screenshot needed:**
+> _[Admin with medical_screening.manage, /medical-screening, Requirements tab. Click the delete button on a seeded requirement that has records filed under it and capture the Delete Requirement confirmation, reading "Screening records filed under it are kept, but will no longer be linked to a requirement.", with both buttons visible. Never confirm. No member names or results in frame.]_
+
 ### Role-Based Requirements
 
 > **Corrected 2026-10-04 — not enforced.** **Applies to Roles** is stored and

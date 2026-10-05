@@ -38,23 +38,30 @@ calculations, and what members see on their end.
 2. Click the **Create Waiver** tab.
 3. Fill in the form:
 
-   | Field          | Description                                                                                                                         |
-   | -------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-   | **Member**     | Select the member from the dropdown (sorted by last name).                                                                          |
-   | **Applies To** | Multi-select checkboxes: _Training_, _Meetings_, _Shifts_. Pick any combination.                                                    |
-   | **Leave Type** | Choose one: _Leave of Absence_, _Medical_, _Military_, _Personal_, _Administrative_, _New Member_, or _Other_.                      |
-   | **Start Date** | First day the member is on leave.                                                                                                   |
-   | **End Date**   | Last day the member is on leave (must be on or after start date). Leave blank and check **Permanent** for waivers with no end date. |
-   | **Reason**     | Optional free-text explanation.                                                                                                     |
+   | Field          | Description                                                                                                                                  |
+   | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+   | **Member**     | Select the member from the dropdown (sorted by last name).                                                                                   |
+   | **Applies To** | Two checkboxes: _Training Requirements_ and _Meeting Attendance & Shift Requirements_. Tick one or both; the hint says what will be created. |
+   | **Leave Type** | Choose one: _Leave of Absence_, _Medical_, _Military_, _Personal_, _Administrative_, _New Member_, or _Other_.                               |
+   | **Start Date** | First day the member is on leave.                                                                                                            |
+   | **End Date**   | Last day the member is on leave (must be on or after start date). Leave blank and check **Permanent** for waivers with no end date.          |
+   | **Reason**     | Optional free-text explanation.                                                                                                              |
 
 4. Click **Create Waiver**.
 
-**Applies To options (multi-select):**
+**Applies To options:**
 
-- **Training + Meetings + Shifts** (all selected): Creates a Leave of Absence and automatically creates a linked training waiver with matching dates. This is the most common choice.
-- **Training only**: Creates a standalone training waiver without a Leave of Absence. The member's meeting attendance and shift scheduling are not affected.
-- **Meetings and/or Shifts only** (Training unchecked): Creates a Leave of Absence with `exempt_from_training_waiver = true`. Training requirements are not adjusted.
-- Any combination of the three is valid.
+There are two options, not three. Meetings and shifts are one choice because a
+Leave of Absence has no field saying which of the two it covers — scheduling,
+attendance and tier grading all treat a leave as excusing both. (Until
+2026-09-28 the form offered them as separate boxes, but ticking _Meeting
+Attendance_ alone still created a leave that excused every shift.) A waiver
+that excuses meetings but not shifts is not possible today; see
+`docs/KNOWN_LIMITATIONS.md` (W13-5).
+
+- **Both ticked**: Creates a Leave of Absence and automatically creates a linked training waiver with matching dates. This is the most common choice.
+- **Training Requirements only**: Creates a standalone training waiver without a Leave of Absence. The member's meeting attendance and shift scheduling are not affected.
+- **Meeting Attendance & Shift Requirements only**: Creates a Leave of Absence with `exempt_from_training_waiver = true`. Training requirements are not adjusted.
 
 **Permanent waivers:**
 

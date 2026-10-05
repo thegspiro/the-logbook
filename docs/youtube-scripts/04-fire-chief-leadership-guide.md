@@ -122,14 +122,25 @@ event participation, member activity]**
 > set the start and end time. Remember, the system handles timezone conversion
 > automatically, so enter times in your local timezone."
 
+**[SCREEN: With Training chosen, expand **Training details (optional)** — course,
+category, requirement.]**
+
+> "Choosing Training opens an optional **Training details** section — the
+> course, category and requirement this drill counts toward. When the organizer
+> finalizes attendance, every member who checked in is credited on their
+> training record. Leave the details blank and it's filed under the event name
+> as Continuing Education. And training events don't count toward admin hours
+> — they count toward training."
+
 **[SCREEN: Set date and time fields]**
 
 > "**Location** — select from your department's locations, or enter a custom
 > address. **Description** — add details about what the drill will cover."
 
-> "**RSVP Settings** — you can set an RSVP deadline, require RSVPs, set a
-> minimum or maximum headcount. If you want a minimum of 15 members to run the
-> drill, set that here and the system will warn you if RSVPs fall short."
+> "**RSVP Settings** — you can require RSVPs with a deadline, cap the headcount
+> with **Max Attendees**, and allow guests. If you tick **Require RSVP** on a
+> one-off event, the deadline is required too — the form marks it with an
+> asterisk and won't create the event without it."
 
 **[SCREEN: Configure RSVP settings]**
 
@@ -147,9 +158,9 @@ three choices; then Manage Events → Settings → Attendance.]**
 the re-timing of later chapters that the elections note below already calls
 for, rather than re-timing twice.
 
-> "**QR Check-In** — enable this and the system generates a unique QR code for
-> the event. Members scan it with their phone when they arrive for instant,
-> contactless attendance tracking."
+> "**QR Check-In** — there's nothing to switch on. Every event gets a QR code.
+> Members scan it, and one tap on **Check In to This Event** records their
+> attendance. **Check-In Settings** decides when that window opens."
 
 **[CALLOUT: "QR Check-In = no more paper sign-in sheets"]**
 
@@ -227,7 +238,7 @@ RSVP list and check-in status]**
 
 **[SCREEN: Show the RSVP breakdown — yes/no/maybe counts and member names]**
 
-> "If you have QR check-in enabled, there's also a monitoring view."
+> "And while members are checking in, there's a monitoring view."
 
 **[SCREEN: Navigate to Event Check-In Monitoring (EventCheckInMonitoringPage)]**
 
@@ -238,14 +249,19 @@ RSVP list and check-in status]**
 
 **[SCREEN: Navigate to Event Analytics (EventAnalyticsPage)]**
 
-> "The Event Analytics page shows attendance trends across all events. Which
-> events get the best turnout? Which members consistently attend or consistently
-> miss? Which day of the week works best?"
+> "The Event Analytics page shows attendance and check-in rates across your
+> events: **Total Events**, **Avg Attendance Rate**, **Total RSVPs** and
+> **Check-in Rate** across the top, then an **Event Type Distribution**, a
+> **Monthly Event Trend**, and **Top Events by Attendance**."
 
-**[SCREEN: Show charts and filters for event analytics]**
+**[SCREEN: Show the four stat cards, then the three charts, with the Period
+selector]**
 
-> "This data is gold for planning. If Tuesday drills get 80% attendance but
-> Thursday drills only get 40%, maybe it's time to move drill night."
+> "Use it to see which kinds of event draw people and how that moves month to
+> month. It doesn't break attendance down by member or by day of the week — for
+> an individual's record, open their profile. And one caution: the average
+> attendance rate counts RSVPs to events that haven't happened yet as no-shows,
+> so compare past periods, not a range that runs into next month."
 
 **[TRANSITION: Member management]**
 
@@ -846,17 +862,18 @@ showing the screening tile reading 'unknown']**
 
 **[SCREEN: Show the report type selection]**
 
-> "Let's generate a Training Compliance report. Select 'Training Compliance,'
-> set the date range, and choose which member groups to include."
+> "Let's check certifications. Under **Compliance**, select **Generate Report**
+> on **Certification Expiration**. It doesn't use the date range — only
+> reports marked **Date Range** do."
 
-**[SCREEN: Generate the report. Show it loading and then displaying with charts
-and tables.]**
+**[SCREEN: Generate the report from the Certification Expiration card. Show the
+table with its Days Left column.]**
 
-> "The report shows each member's certification status — current, expiring soon,
-> or expired. It highlights exactly who needs attention and which certifications
-> are most at risk."
+> "It lists every member's certifications and expiration dates, and flags the
+> expired and expiring ones. For whether members meet your training
+> requirements, the card beside it is **Compliance Status**."
 
-> "Export this as a PDF for your officer meeting, or as a CSV for further
+> "Print it to PDF for your officer meeting, or export it as a CSV for further
 > analysis in a spreadsheet."
 
 **[SCREEN: Show the export options]**
@@ -886,9 +903,14 @@ on.]**
 **[CALLOUT: Key reports for officer meetings]**
 
 > "For your monthly officer meeting, I recommend three standing reports:
-> **Training Compliance** — who's current and who's not. **Attendance Summary**
-> — participation trends across events. **Scheduling Coverage** — where are the
-> gaps and how are we addressing them."
+> **Compliance Status** — who's current and who's not. **Event Attendance** —
+> participation trends across events. And on Scheduling Reports, **Coverage** —
+> where are the gaps and how are we addressing them."
+
+> "And if your members help staff other departments' units, Scheduling Reports,
+> **Member Hours** now shows it under **Outside apparatus staffed** — shifts,
+> hours and member counts per unit. Those outside shifts count toward the
+> scheduling compliance report, and officers can reject any that shouldn't."
 
 > "Having this data readily available transforms officer meetings from guessing
 > games into informed decision-making."
@@ -914,12 +936,14 @@ on.]**
 > "**Before Events:** Pull up the event detail to see who's coming. If it's a
 > training event, verify the instructor and materials are set."
 
-> "**During Events:** If QR check-in is enabled, the attendance tracks itself.
-> If not, the event manager handles it."
+> "**During Events:** Members scan the QR code and tap Check In; the event
+> manager checks in anyone without a phone."
 
 > "**After Events:** Review attendance, then **finalize** it. That locks the
 > roster, credits the hours — and, if any applicants were in the room, it's what
-> moves them to their next pipeline stage."
+> moves them to their next pipeline stage. After that, a change to the event is
+> refused with a sentence saying attendance is finalized. Reopening it is a
+> department leader's permission — correct it, then finalize again."
 
 > "**Weekly:** Review analytics for trends. Check prospective member pipeline
 > progress. Review any pending actions from the previous meeting minutes."
@@ -975,7 +999,9 @@ on.]**
 > sign up means RSVP Going—not Maybe, waitlisted, or no response. All active
 > members stays inside this department. No reminders disables delivery. Optional
 > events default to sign-ups; mandatory events default to all active members
-> until I make an explicit choice. Email still follows each member's preference."
+> until I make an explicit choice. Email still follows each member's own Event
+> reminders switch — unless you make it mandatory: Administration, Forms &
+> Comms, Member Emails & Texts, Require Event reminders for every member."
 >
 > "Flexible self-check-in now opens sixty minutes early. Strict opens at the
 > actual or scheduled start; Window defaults to fifteen minutes on either side.
@@ -1093,3 +1119,19 @@ are the two things a chief will ask about within the first minute.
 > the operational officer positions. And the Testing Checklist page is switched
 > off; it is a module now, and it comes back at Settings, Modules. Nothing
 > anybody recorded in it is lost."
+
+---
+
+## EDITOR — 2026-09-30 PASS
+
+Rewritten in place because the old take was **wrong**: the **QR Check-In**
+beat (there is no toggle; every event has a code), the RSVP headcount beat
+(there is no minimum headcount or shortfall warning — only **Max Attendees**),
+the **Event Analytics** beat (no per-member or day-of-week view), and the
+**Generating Reports** beat (there is no "Training Compliance" report and no
+member-group picker — film **Certification Expiration**). Added: Training
+details on a Training event, the RSVP-deadline requirement, the Required-stage
+hold and **Sign-offs** before Convert, the Convert dialog's class, status and
+password choices, one-way swap offers, outside-apparatus hours, the
+finalized-attendance refusal, and the mandatory Event reminders switch. Adds
+~1:30; re-time Chapters 3–8 and the clip table from the recorded take.

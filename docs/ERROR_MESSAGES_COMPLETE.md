@@ -367,23 +367,22 @@ and the SMTP connection entries (#1–#6).
 
 #### 15. Generic Form Validation Error
 
-**Message**: `"Please fix the errors before continuing"`
+**Message**: the single error itself, or with several a list headed `"Fix N errors:"`, one `•` line per error (fallback `"Fix the highlighted fields and try again."`)
 
-**Quality**: ❌ **POOR** - No details about what's wrong
+**Quality**: ✅ **GOOD** - Names every problem at once (previously the generic "Please fix the errors before continuing")
 
 **Current Behavior**:
 
-- Location: `frontend/src/modules/onboarding/pages/OrganizationSetup.tsx:561`
+- Location: `frontend/src/modules/onboarding/pages/OrganizationSetup.tsx` (`handleContinue`)
 - Triggered when: Form has validation errors
-- User sees: Generic message, no error list
+- User sees: A toast listing each error, shown for 8 seconds when there are several
 
-**Should Say**:
+**Example**:
 
 ```
-"Please fix the following errors:
+Fix 2 errors:
 • Organization name is required
-• Tax ID must be exactly 9 digits (currently 8)
-• Physical address ZIP code is invalid"
+• ZIP code is required
 ```
 
 **Troubleshooting**:
@@ -395,7 +394,7 @@ and the SMTP connection entries (#1–#6).
    - Phone: Valid format with area code
 3. **Review addresses**: Complete street, city, state, ZIP
 
-**Fix Priority**: **CRITICAL** - Users can't tell what's wrong
+**Fix Priority**: NONE - Done
 
 ---
 
@@ -714,15 +713,17 @@ and the SMTP connection entries (#1–#6).
 
 **Current Behavior**:
 
-- Location: `backend/app/api/v1/endpoints/auth.py:123`
+- Location: `backend/app/api/v1/endpoints/auth.py` (`login`), code `LB-AUTH-006`
 - Intentionally vague for security
+- A **locked** account gets this same message while `ACCOUNT_LOCKOUT_REVEAL` is off (the default). The lock follows `MAX_LOGIN_ATTEMPTS` consecutive failures (default 5) — wrong two-factor codes included since 2026-09-28 — and lasts `ACCOUNT_LOCKOUT_DURATION_MINUTES` (default 15)
 
 **Troubleshooting**:
 
 1. **Check username**: Case-sensitive, no spaces
 2. **Verify password**: Ensure caps lock is off
-3. **Try password reset**: If forgotten
+3. **Try password reset**: If forgotten — a completed reset also clears a lock
 4. **Check account status**: May be inactive
+5. **Suspect a lock** if a password the member is sure of keeps failing: wait out the lockout, or an administrator resets the password (see [TROUBLESHOOTING.md → Account Lockout](./TROUBLESHOOTING.md#account-lockout))
 
 **Fix Priority**: NONE - Intentionally vague for security
 
@@ -1121,6 +1122,8 @@ and the SMTP connection entries (#1–#6).
 "Server is not responding. Please try again in a few moments."
 ```
 
+In the setup wizard this already reads "Cannot connect to server. Check your internet connection and try again." (`modules/onboarding/utils/errorHandler.ts`); other screens still show their own wording.
+
 **Troubleshooting**:
 
 1. **Check internet**: Verify network connection
@@ -1144,6 +1147,8 @@ and the SMTP connection entries (#1–#6).
 ```
 "Request timed out. The server is taking too long to respond. Try again."
 ```
+
+In the setup wizard this reads "Request timed out. The server took too long to respond. Try again."
 
 **Troubleshooting**:
 
@@ -1169,6 +1174,8 @@ and the SMTP connection entries (#1–#6).
 "Configuration error: Server access blocked. Contact your administrator."
 ```
 
+In the setup wizard an error that mentions CORS now reads "Connection blocked by security policy. Ask whoever installed The Logbook to check its allowed origins."
+
 **Troubleshooting** (for admins):
 
 1. Add frontend URL to ALLOWED_ORIGINS in .env
@@ -1184,13 +1191,13 @@ and the SMTP connection entries (#1–#6).
 
 #### 51. Failed to Read Image File
 
-**Message**: `"Failed to read image file"`
+**Message**: `"Could not read that image. Try a different file."` (was `"Failed to read image file"`)
 
 **Quality**: ⚠️ **NEEDS IMPROVEMENT** - No details
 
 **Current Behavior**:
 
-- Location: `frontend/src/modules/onboarding/pages/DepartmentInfo.tsx:70`
+- Location: `frontend/src/modules/onboarding/pages/OrganizationSetup.tsx` (`handleLogoChange`), now worded `"Could not read that image. Try a different file."`
 - Generic FileReader error
 
 **Should Say**:
@@ -1357,14 +1364,14 @@ Every error should have:
 
 #### 62. Inactivity Timeout
 
-**Message**: `"You have been logged out due to inactivity."`
+**Message**: `"You were signed out after a period of inactivity. Sign in again."` (reworded 2026-09-29)
 
 **Quality**: ✅ **GOOD** - Clear reason, appears on login redirect
 
 **Current Behavior**:
 
-- Location: `frontend/src/components/layout/AppLayout.tsx:33`
-- Triggered when: No user activity (mouse/keyboard/scroll/touch) for 30 minutes
+- Location: shown by `frontend/src/pages/LoginPage.tsx`; the idle timer is `frontend/src/hooks/useIdleTimer.ts` (mounted by `AppLayout.tsx`)
+- Triggered when: No user activity (mouse/keyboard/scroll/touch) for the configured session timeout (default 15 minutes); a warning toast appears 60 seconds before
 - User sees: Redirected to login page with message
 
 **Troubleshooting**: Log in again. No data loss for saved work.
@@ -1375,14 +1382,15 @@ Every error should have:
 
 #### 63. Invalid Reset Link
 
-**Message**: `"Invalid password reset link. Please request a new reset link from the login page."`
+**Message**: `"This password reset link is invalid or has expired. Please request a new one from the login page."`
 
 **Quality**: ✅ **GOOD** - Clear action with guidance
 
 **Current Behavior**:
 
-- Location: `backend/app/api/v1/endpoints/auth.py:525`
-- Triggered when: POST to validate-reset-token with missing token
+- Location: `backend/app/api/v1/endpoints/auth.py` (`validate_reset_token`)
+- Triggered when: the reset page checks a token that is unknown or expired
+- A link opened with no token at all is caught by the page first: "This link is incomplete. Open the full link from your email, or request a new one."
 
 ---
 
@@ -1394,8 +1402,8 @@ Every error should have:
 
 **Current Behavior**:
 
-- Location: `backend/app/services/auth_service.py:602`
-- Triggered when: Reset token older than 30 minutes
+- Location: `backend/app/services/auth_service.py` (`reset_password`)
+- Triggered when: Reset token older than 30 minutes. The forgot-password confirmation states the same expiry ("The link will expire in 30 minutes.") — before 2026-09-28 it said an hour
 
 ---
 
@@ -1407,8 +1415,34 @@ Every error should have:
 
 **Current Behavior**:
 
-- Location: `backend/app/services/auth_service.py:592`
+- Location: `backend/app/services/auth_service.py` (`reset_password`)
 - Triggered when: Token not found (already used, or invalid)
+
+---
+
+#### 65a. Too Many Reset Attempts
+
+**Message** (reset page, on arrival): `"This connection has made too many password-reset attempts. Wait N minutes, then reload this page. If you haven't used this link yet, it still works until it expires."` under the heading **Too Many Attempts**; on submit: `"Too many attempts. Wait N minutes and try again — the link still works until it expires."`
+
+**Quality**: ✅ **GOOD** - States the wait and that the link is not spent
+
+**Current Behavior**:
+
+- Since 2026-09-28; before that a rate-limited link was reported as "Invalid Reset Link"
+- Triggered when: requesting a link, opening it and submitting share one budget of 3 requests per 5 minutes per address (`rate_limit_password_reset`)
+
+---
+
+#### 65b. No Reset Link Was Sent
+
+**Message**: the heading **No Reset Link Was Sent** with the server's explanation, e.g. `"This organization uses Google for authentication. Please reset your password through Google."`
+
+**Quality**: ✅ **GOOD** - Names where to reset
+
+**Current Behavior**:
+
+- Since 2026-09-28; before that the page always said "Check Your Email"
+- Triggered when: the organization's sign-in method is not local passwords, so no token is issued
 
 ---
 
@@ -1728,31 +1762,31 @@ Every error should have:
 
 #### 88. Unable to Generate Report
 
-**Message**: `"Unable to generate report. Please check your connection and try again."`
+**Message**: the server's reason when it gives one, otherwise `"Failed to generate report"`
 
 **Quality**: ✅ **GOOD**
 
 **Current Behavior**:
 
-- Location: `frontend/src/pages/ReportsPage.tsx`
+- Location: `frontend/src/modules/reports/store/reportsStore.ts` (`generateReport`), shown in a dismissible banner on `/reports`
 - Triggered when: POST `/api/v1/reports/generate` fails
 
-**Troubleshooting**: Check network connection, verify `reports.manage` permission, ensure data exists for the report type.
+**Troubleshooting**: Check network connection, verify `reports.view` permission (most reports also need the permission of the module whose people they list — `members.view` for the roster, `training.manage` for the training reports, and so on), ensure data exists for the report type.
 
 ---
 
 #### 89. Invalid Report Type
 
-**Message**: `"Invalid report type"`
+**Message**: `"Unknown report type: <type>"` (HTTP 400)
 
 **Quality**: ⚠️ **NEEDS IMPROVEMENT** - Should list valid types
 
 **Current Behavior**:
 
-- Location: `backend/app/api/v1/endpoints/reports.py`
-- Triggered when: report_type not in supported list
+- Location: `backend/app/services/reports_service.py` (`generate_report`), raised by `backend/app/api/v1/endpoints/reports.py`
+- Triggered when: report_type not in supported list. The Reports page only sends supported types, so this comes from a direct API call
 
-**Valid Types**: `member_roster`, `training_summary`, `event_attendance`
+**Valid Types**: `member_roster`, `training_summary`, `event_attendance`, `training_progress`, `annual_training`, `department_overview`, `admin_hours`, `certification_expiration`, `apparatus_status`, `inventory_status`, `compliance_status`, `call_volume`, `pipeline_overview` — see [TROUBLESHOOTING.md → Available Report Types](./TROUBLESHOOTING.md#available-report-types)
 
 ---
 
@@ -1861,19 +1895,24 @@ Every error should have:
 
 **Status**: ✅ GOOD - Clear, specific messages added in Feb 2026 overhaul
 
-| Error                                                       | Quality | Troubleshooting                                                                                                                 |
-| ----------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| "Item not found"                                            | ✅      | Item ID does not exist or does not belong to your organization. Verify the item ID.                                             |
-| "Item is already assigned to another user"                  | ✅      | Unassign or return the item from the current holder before reassigning.                                                         |
-| "Item is not assigned to the expected user"                 | ✅      | A concurrent operation changed the item's assignee. Refresh and retry.                                                          |
-| "Invalid assignment type"                                   | ✅      | Must be one of: `permanent`, `temporary`, `checkout`. Check the enum values.                                                    |
-| "Invalid condition"                                         | ✅      | Condition must be: `excellent`, `good`, `fair`, `poor`, `damaged`. Previously fell back silently; now rejects invalid values.   |
-| "Pool items must have a quantity of at least 1"             | ✅      | When creating a pool-type item, set `quantity >= 1`.                                                                            |
-| "Insufficient quantity available"                           | ✅      | Cannot issue more units than are currently on hand. Check available pool quantity.                                              |
-| "Clearance line item not found"                             | ✅      | The line item ID does not belong to the specified clearance. Verify you're resolving items within the correct clearance record. |
-| "Duplicate entry for key 'uq_item_org_barcode'"             | ✅      | Another item in the same organization has this barcode. Change the barcode or update the existing item.                         |
-| "Duplicate entry for key 'uq_item_org_asset_tag'"           | ✅      | Another item in the same organization has this asset tag. Change the tag or update the existing item.                           |
-| "Item not found" (scan modal)                               | ✅      | The scanned barcode/QR code doesn't match any item. Verify the code is correct.                                                 |
-| "Network error - please check your connection" (scan modal) | ✅      | A network error occurred during the scan lookup. Check connectivity and retry.                                                  |
-| "Item is not currently checked out"                         | ✅      | Cannot return an item that has no active checkout. Check the item's current status.                                             |
-| "No items selected for label generation"                    | ✅      | Select at least one item before generating labels.                                                                              |
+| Error                                                                                            | Quality | Troubleshooting                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| "Item not found"                                                                                 | ✅      | Item ID does not exist or does not belong to your organization. Verify the item ID.                                                                                                                                                                                                                                                                    |
+| "Item is already assigned to another user"                                                       | ✅      | Unassign or return the item from the current holder before reassigning.                                                                                                                                                                                                                                                                                |
+| "Item is not assigned to the expected user"                                                      | ✅      | A concurrent operation changed the item's assignee. Refresh and retry.                                                                                                                                                                                                                                                                                 |
+| "Invalid assignment type"                                                                        | ✅      | Must be one of: `permanent`, `temporary`, `checkout`. Check the enum values.                                                                                                                                                                                                                                                                           |
+| "Invalid condition"                                                                              | ✅      | Condition must be: `excellent`, `good`, `fair`, `poor`, `damaged`. Previously fell back silently; now rejects invalid values.                                                                                                                                                                                                                          |
+| "Pool items must have a quantity of at least 1"                                                  | ✅      | When creating a pool-type item, set `quantity >= 1`.                                                                                                                                                                                                                                                                                                   |
+| "Insufficient quantity available"                                                                | ✅      | Cannot issue more units than are currently on hand. Check available pool quantity.                                                                                                                                                                                                                                                                     |
+| "Clearance line item not found"                                                                  | ✅      | The line item ID does not belong to the specified clearance. Verify you're resolving items within the correct clearance record.                                                                                                                                                                                                                        |
+| "Duplicate entry for key 'uq_item_org_barcode'"                                                  | ✅      | Another item in the same organization has this barcode. Change the barcode or update the existing item.                                                                                                                                                                                                                                                |
+| "Duplicate entry for key 'uq_item_org_asset_tag'"                                                | ✅      | Another item in the same organization has this asset tag. Change the tag or update the existing item.                                                                                                                                                                                                                                                  |
+| "Item not found" (scan modal)                                                                    | ✅      | The scanned barcode/QR code doesn't match any item. Verify the code is correct.                                                                                                                                                                                                                                                                        |
+| "Network error - please check your connection" (scan modal)                                      | ✅      | A network error occurred during the scan lookup. Check connectivity and retry.                                                                                                                                                                                                                                                                         |
+| "Item is not currently checked out"                                                              | ✅      | Cannot return an item that has no active checkout. Check the item's current status.                                                                                                                                                                                                                                                                    |
+| "No items selected for label generation"                                                         | ✅      | Select at least one item before generating labels.                                                                                                                                                                                                                                                                                                     |
+| "Row N: Quantity cannot be negative: '-3'" / "Purchase price cannot be negative: …" (CSV import) | ✅      | Since 2026-09-29 the row is skipped and the rest of the file imports. Correct the value and import that row again. Rows stored with a negative value before then break the item list — see TROUBLESHOOTING.md → Inventory CSV Import Issues.                                                                                                           |
+| "Row N: Category '…' not found — item imported without category" (CSV import warning)            | ✅      | The item was imported; set its category on the item, or create the category and re-import.                                                                                                                                                                                                                                                             |
+| "No item found for this NFC tag" (`/inventory/tag/:code`)                                        | ✅      | Heading over the reason the server gave (or "Could not look up this tag."). Usually the tag is not linked to an active item, is marked lost, or is on a retired item: link it again, or **Mark found** a tag marked lost (see `wiki/Inventory-NFC-Tags.md`). A malformed code reads "This does not look like one of this department's equipment tags." |
+| "No storage area has the barcode SA-…" (Storage Areas → Scan shelf label)                        | ✅      | The code matches none of the areas loaded on the screen. Check the label, or reprint it from Storage Areas → Print labels.                                                                                                                                                                                                                             |
+| WebSocket closed with code 4003 "Inventory module is not enabled"                                | ✅      | Live updates are off because Inventory is switched off. Turn the module on, then reload the page — the browser does not retry a 4003.                                                                                                                                                                                                                  |

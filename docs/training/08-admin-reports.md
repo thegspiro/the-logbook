@@ -182,6 +182,12 @@ seeded position removes it.
 
 ---
 
+> **Screenshot needed:**
+> _[System Owner during setup at `/onboarding/it-team`: step 7 IT & Backup Contacts with its "Optional. Choose Skip for now if your department has no IT contact." line, one demo IT contact filled in, the Recovery contacts note, and both Continue to Email and Skip for now in frame. Demo names and example.org addresses only; no real phone numbers.]_
+
+> **Screenshot needed:**
+> _[Anonymous on a fresh install, then the new System Owner (scripts/screenshots/wizard-walk.mjs), at `/onboarding/apparatus`: Engine 1 carrying Officer, Driver, Firefighter, Firefighter and EMT chips — two Firefighter seats visible — and the + EMT add chip. Crop to the unit card; the administrator password from the previous step must not be in frame.]_
+
 ## Organization Settings
 
 **Required Permission:** `settings.manage`
@@ -269,6 +275,9 @@ Configure how membership IDs are assigned:
 - Set the ID format (prefix, numeric pattern)
 - View and manage the next available ID number
 
+> **Screenshot needed:**
+> _[Admin holding settings.edit at `/members/admin/settings/ids`: the Membership IDs section with numbering and auto-generation on, pattern `{YYYY}-{SEQ}`, Minimum digits 3, Restart the count each year on, The year follows set to Our fiscal year starting July — so the fiscal-year naming select and the "The next member will be numbered …" line are both visible.]_
+
 ### The rest of Members Administration → Settings _(2026-09-11)_
 
 Contact Visibility and Membership IDs (above) are two of **five** sections on
@@ -318,6 +327,9 @@ It is the same editor the setup wizard shows at step 4, so a department that
 set its ladder during installation is looking at its own answers here.
 
 ![The Operational Ranks section — the rank ladder with each rank's fillable shift seats](./images/08-79-members-settings-ranks.png)
+
+> **Screenshot needed:**
+> _[Admin at `/members/admin/settings/ranks`: the Delete rank confirmation over the Operational Ranks ladder for a rank nobody holds, showing its message and the Keep it / Delete buttons. Press Keep it afterwards; never confirm.]_
 
 ![The Membership Tiers section — the tier ladder and what each tier confers](./images/08-80-members-settings-tiers.png)
 
@@ -657,6 +669,15 @@ department ran the module before this date.
 **[SCREENSHOT — REPLACE `08-08-public-portal.png`.** The Configuration tab now shows only **Rate Limiting** and the **Security Best Practices** notice (now at AAA contrast, and themed in dark mode) — the Allowed Origins and Caching sections are gone. The disabled banner reads "The portal is disabled. External websites can't read any of your data until you enable it, create an API key, and turn on the fields to share under Data Control." There was never a domain or branding setting; the caption should not promise one.**]**
 
 ---
+
+> **Screenshot needed:**
+> _[Administrator (settings.manage) at `/admin/public-portal`, API Keys tab → Create API Key: the dialog with "Department website" typed into Key Name and the other fields blank. Never submit it, and never capture the API Key Created dialog — it shows a live, full key.]_
+
+> **Screenshot needed:**
+> _[Administrator at `/admin/public-portal`, Statistics tab: the full tab. An unseeded demo showing zeros, with Error Rate reading — / No requests in 24h, is acceptable. If access-log rows can be seeded, include a few 4xx and one 429 so Rate Limits Hit is non-zero; do not trigger the Attention Required banner with made-up data unless the caption says so.]_
+
+> **Screenshot needed:**
+> _[Administrator at `/admin/public-portal`, Data Control tab on the demo department: the Events, Organization and Stats sections with every toggle off, the yellow PII badges on phone, email, mailing_address and physical_address, and the Sensitive (PII) card reading 0. Do not flip any toggle — a toggle saves immediately and publishes the field.]_
 
 ## Integrations _(2026-04-11)_
 
@@ -1674,6 +1695,9 @@ pending; it sits in the dashboard's **Needs you** panel with an
 
 ![The dashboard's My Updates feed — unread rows dotted amber, the unread count in the header, and Older Items linking to the full inbox](./images/08-60-dashboard-notification-cards.png)
 
+> **Screenshot needed:**
+> _[Admin at `/dashboard`: the My Updates card (section[aria-labelledby='my-updates-heading']) with one stacked row such as "3 attendance validations" and "Latest: …" among ordinary notification and message rows.]_
+
 ### Department Messages
 
 Administrators post department announcements from **Communications → Messages**
@@ -1903,6 +1927,52 @@ A new shared utility (`utils/colorContrast.ts`) provides WCAG-compliant color fu
 
 ---
 
+## The email link address _(2026-09-25)_
+
+**Where:** **Settings → Email** (`/settings?tab=email`) · **Reading:**
+`settings.manage` · **Changing:** `system.manage_link_domain`
+
+Settings → Email opens with the **Email link address** card: the address every
+emailed link — password resets, ballots, approvals, reminders — starts with,
+for the whole installation. The line under it says where the address came from:
+
+- **Set by the FRONTEND_URL setting** — the server's own configuration;
+- **Picked automatically from ALLOWED_ORIGINS**, because `FRONTEND_URL` was
+  left at `localhost`, which only the server itself can open;
+- **Set on this screen by an IT administrator**.
+
+A red warning means the address only works on the server itself. Amber warnings
+mean it is `http://`, it only works inside the station's network, or it differs
+from the address you are browsing on. Check the card once after an upgrade.
+
+**Changing it.** The IT Manager — the only default position holding
+`system.manage_link_domain`, through its all-access grant — can type a new
+address under **Change address** (or use **Use the address I'm on now**), press
+**Save**, and confirm **Change address** (**Keep current address** backs out).
+It takes effect without a restart. It must be an address the server already
+accepts, listed under the field; anything else is refused with the reason.
+**Go back to the server setting** removes the saved address. Emails already
+sent keep the old address, so re-send ballots and have members request a new
+password reset.
+
+Everyone else sees the card read-only, and **Changing it on the server
+instead** explains the `FRONTEND_URL` route for Docker, Unraid and AWS.
+
+| Scenario                                       | Behavior                                                             |
+| ---------------------------------------------- | -------------------------------------------------------------------- |
+| A department other than the server's own saves | Refused. Only the department the server was set up for can change it |
+| No Redis                                       | Other workers pick up a change within a minute                       |
+| A saved address the server no longer serves    | Ignored, and links fall back to the server's own address             |
+| Any change                                     | Written to the audit log as `email_link_domain_changed`              |
+
+> **Screenshot needed:**
+> _[IT Manager (the demo's System Owner) at `/settings?tab=email`, clipped to section[aria-labelledby="email-link-domain-heading"], with GET /api/v1/organization/settings/email/link-domain route-mocked to a public https address (e.g. https://logbook.oakvillefd.example.org; source frontend_url, is_https true, is_loopback false, is_private_network false, allowed_hosts [that host]): the address with its copy button, "Set by the FRONTEND_URL setting.", the Change address field with Save, and the allowed-host hint. Captured from http://localhost:3000 the "You are viewing this site at…" warning and Use the address I'm on now also appear — keep them and say so in the caption, or capture from a matching origin. Never press Save; do not expose a real department hostname.]_
+
+> **Screenshot needed:**
+> _[IT Manager at `/settings?tab=email` with the same mock: a second allowed address typed into Change address and Save pressed, showing the "Change the email link address?" dialog with its consequence text ("Every email sent from now on — including password resets and ballots — will link to …") and the Change address / Keep current address buttons. Press Keep current address afterwards; nothing is saved.]_
+
+---
+
 ## Email Template Editor Improvements (2026-04-08)
 
 The email template editor has been significantly improved with new productivity features, testing capabilities, and standardized branding.
@@ -2051,6 +2121,9 @@ one, the button reports the failure rather than a delivery.
 ![Send Test to Me, under the rendered preview it sends](./images/08-58-template-send-test.png)
 
 **[SCREENSHOT — REPLACE `08-58-template-send-test.png`.** The preview pane shows the retired centred-masthead shell (re-shot 2026-09-25); since 2026-09-27 every template renders in the solid-tab shell — accent tab naming the category, title on a tinted card, white message card, centred footer _(#2754)_. Same state: **Send Test to Me** under the preview**]**
+
+> **Screenshot needed:**
+> _[Administrator with settings.manage at `/communications/email-templates`, with the backend's FRONTEND_URL set to a LAN address (e.g. http://192.168.1.50:7880) and EMAIL_ENABLED=true, then restarted: the yellow notice "Emails link to http://192.168.1.50:7880, which only works on your station's network…" with its Change the email link address link, and the Save bar beneath. Crop to the notice and the bar; no credentials in frame.]_
 
 ### Template Search
 
@@ -2997,6 +3070,15 @@ January 1 to today, not the last 365 days.
   **Categories** tab. What the summary ranks is hours logged, not the limits
   they were logged under.
 
+> **Screenshot needed:**
+> _[Admin holding admin_hours.manage at `/admin-hours/manage`, Categories tab: two categories, one with Require approval on and a 4h threshold, one with it off — one row showing "Approval: Required", "Auto-approved under 4h" and "Manual entries: always reviewed" side by side, and one showing "Approval: Not required" and "Manual entries: always reviewed" side by side.]_
+
+> **Screenshot needed:**
+> _[Member at `/admin-hours`, period This month: the My Hours list with one pending manual entry showing Edit and Withdraw, and one rejected entry showing its red "Rejected: <reason> — edit and resubmit it, or withdraw it." line and the Edit & resubmit button. Crop to the list, not the whole page.]_
+
+> **Screenshot needed:**
+> _[Member at `/admin-hours`: the inline edit form open on a rejected entry, showing "Returned with: <reason>", the Category, Start Time, End Time and Description fields, and the Resubmit and Cancel buttons.]_
+
 ## Scheduling Staffing Tiles on the Dashboard _(2026-08-23)_
 
 Seven tiles — Today's Staffing, Future Coverage Gaps, Open Slots, Pending
@@ -3427,6 +3509,12 @@ The blocked-countries list now says what it does not show: _"Countries blocked
 in the server's BLOCKED_COUNTRIES setting are not listed."_ — those are set at
 deploy time and apply to the whole installation (see
 [Configuration → Security](../../wiki/Configuration-Security.md#geoip-country-blocking)).
+
+> **Screenshot needed:**
+> _[Member at `/ip-security/my-requests`: My IP Exceptions with the New Request form open — IP address (203.0.113.x), Select a use case, Duration (days, 1–90) and details — plus the Show expired, rejected, and revoked requests checkbox. Do not submit.]_
+
+> **Screenshot needed:**
+> _[Administrator holding security.manage at `/ip-security`: the Pending Requests tab with its count badge and one pending request showing IP, use case, duration and the Approve / Reject actions. Seed the request with a documentation-range address (203.0.113.x); never capture a real client IP, and do not capture the Blocked Attempts tab with live addresses.]_
 
 ### Navigation and layout _(2026-09-25 to 10-04)_
 

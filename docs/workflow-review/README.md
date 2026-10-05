@@ -58,7 +58,9 @@ scripts/workflow-review/start.sh --stop      # stop the servers and the driver
 
 **It never touches the application or test database.** The review runs in
 `logbook_workflow_review` (override with `WR_DB_NAME`) and Redis db 3
-(`WR_REDIS_DB`). A review onboards a department, and an organization left in
+(`WR_REDIS_DB`). The backend and Vite dev server listen on `WR_BACKEND_PORT`
+(default 3001) and `WR_FRONTEND_PORT` (default 3000), and run state lives in
+`WR_STATE_DIR` (default `.workflow-review/`). A review onboards a department, and an organization left in
 `intranet_db` makes the onboarding tests fail with "An organization has already
 been created". `start.sh` refuses a `WR_DB_NAME` equal to `DB_NAME`.
 
@@ -69,7 +71,7 @@ key, salt and secret key are generated on first run and kept in
 the next, so they must survive a restart. `--reset` keeps them.
 
 `start.sh` without `--reset` keeps the data: activities build on each other (the
-members added in W07 are the members scheduled in W32), so a run resets only
+members added in W08 are the members scheduled in W32), so a run resets only
 when the database is in a state no later run can use.
 
 ### Who a run can act as
@@ -162,7 +164,7 @@ The same contract as the [application review](../app-review/README.md):
 
 ## Finding IDs
 
-`W<nn>-<n>`, numbered within the activity: `W07-3` is the third finding from
+`W<nn>-<n>`, numbered within the activity: `W08-3` is the third finding from
 adding a member. Severity is **CRITICAL / HIGH / MED / LOW / NIT**, scored by
 what happens to the department, not by how hard the fix is: a member who cannot
 sign in is HIGH however small the patch.

@@ -30,7 +30,9 @@ docker compose up -d
 > `-f docker-compose.yml -f docker-compose.prod.yml` on every command) so all the
 > commands below stay hardened; `install.sh` sets this automatically. In
 > production the app **refuses to start** if required secrets are missing or
-> weak, if `DEBUG` or API docs are enabled, or if HTTPS isn't enforced.
+> weak, if `DEBUG` or API docs are enabled, if HTTPS isn't enforced, or if
+> `FRONTEND_URL` points at `localhost` and `ALLOWED_ORIGINS` names no address
+> other than localhost to use instead.
 
 ---
 

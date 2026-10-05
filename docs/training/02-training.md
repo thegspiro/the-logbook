@@ -181,6 +181,12 @@ rebuilt; the certificate now attaches inline.**]**
 
 ---
 
+> **Screenshot needed:**
+> _[Member (the submitter) at /notifications?tab=inbox: a "Training submission approved with changes — <course>" notice expanded, showing a "• Hours: 3 → 2" line, the officer's notes and the View My Submissions button. Demo data only.]_
+
+> **Screenshot needed:**
+> _[Member at /training/submit with one of their submissions in revision_requested state and a reviewer note: the returned-submission notice at the top of Submit Training showing the officer's note, "Returned <date> · Your hours are not counted yet", and the Fix and Resubmit and Withdraw buttons. Demo data only.]_
+
 ## Course Library
 
 Navigate to **Training > Course Library** to browse available training courses.
@@ -710,6 +716,9 @@ From **Training > My Training**, find your program under **Active Program Enroll
 
 ![A member's full pipeline progress — the current phase marked You are here, with milestones and every requirement](./images/02-93-member-full-progress.png)
 
+> **Screenshot needed:**
+> _[Member enrolled in one program with at least two requirements, at /training/my-training: crop to the Pipeline Progress card — the program name as the card heading, the status chip and overall percentage, each requirement row as "<name> · N%" with its status, and the View full progress link. Demo data only.]_
+
 ### Attending a session for a phase you have not reached
 
 A training session can be **tied to a phase** of a program, and that tie is what
@@ -1123,6 +1132,9 @@ Both actions require `training.manage` and are recorded in the audit log.
 
 ---
 
+> **Screenshot needed:**
+> _[Member holding the Training Officer position at /notifications?tab=inbox: a "Training submission awaiting approval — <demo member>" card expanded to its body with the Review Submission button, or collapsed into an "N training submissions awaiting approval" stack. Seed the submissions after the upgrade so the prompts exist.]_
+
 ## Finalizing a Training Session
 
 **Required Permission:** `events.manage` to finalize; `training.manage` to approve
@@ -1151,6 +1163,9 @@ redirects there:
   each member's credited time and lets the officer set the approved minutes (0
   gives that member no credit) before recording it. Approving needs
   `training.manage`.
+
+> **Screenshot needed:**
+> _[Training Officer (training.manage) at /training/approve/:token for a pending approval: the header (event title, Course, Event date, Approve by), the roster with Credited minutes and Approved minutes (one row edited to 0), and the Approval notes field. Never press Approve and record. Capture the page only — no browser address bar, so the token is not visible.]_
 
 > **Screenshot needed:**
 > _[`/training/approve/<token>` for a Training event that requires confirmation: **Approve training credit** above the session title, the **Course** / **Event date** / **Approve by** details, the roster table (**Member**, **Check-in**, **Check-out**, **Credited minutes**, **Approved minutes**, **Note**) with one member's approved minutes edited, and **Approve and record**.]_
@@ -1602,6 +1617,9 @@ The shift report system supports a multi-stage review workflow:
 ![The shift report review modal with approve and flag actions, redaction checkboxes and reviewer notes](./images/02-36-shift-report-review-modal.png)
 
 ![A trainee's own shift reports with the personal statistics card above them](./images/02-35-shift-reports-my-reports.png)
+
+> **Screenshot needed:**
+> _[Member without training.manage, no shift reports yet, at /scheduling?tab=shift-reports: the "Shift reports about you" heading, the "No shift reports yet" explanation and the three tiles (the shift itself / your officer's feedback / a place to acknowledge it). No view toggle should be visible.]_
 
 ### Officer Analytics Dashboard _(2026-03-29)_
 
