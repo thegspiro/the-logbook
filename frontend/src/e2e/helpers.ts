@@ -376,6 +376,16 @@ export interface MockOptions {
    * under the Platoons URL — green, and about the wrong page.
    */
   platoonsEnabled?: boolean;
+  /**
+   * Serve a member record at `/users/:id/with-roles` and an empty audit
+   * history beside it.
+   *
+   * Opt-in because the catch-all `{}` is what every other ratcheted page that
+   * reads a member was measured against; the member edit and audit-history
+   * pages need a record with an id to get past their load-error states, and a
+   * pass over those would otherwise measure the error panel under their names.
+   */
+  memberRecord?: boolean;
 }
 
 /**
@@ -387,6 +397,7 @@ const routes = ({
   empty = false,
   permissions = [],
   platoonsEnabled = false,
+  memberRecord = false,
 }: MockOptions): [string, () => unknown][] => [
   // Catch-all. Anything not listed below answers with an empty object rather
   // than reaching the dev-server proxy, which has no backend behind it.
@@ -662,6 +673,24 @@ const routes = ({
       total: 1,
     }),
   ],
+  ...(memberRecord ? memberRecordRoutes() : []),
+];
+
+const memberRecordRoutes = (): [string, () => unknown][] => [
+  [
+    '**/api/v1/users/*/with-roles',
+    () => ({
+      ...TEST_USER,
+      organization_id: 'org-1',
+      full_name: `${TEST_USER.first_name} ${TEST_USER.last_name}`,
+      membership_number: '100',
+      status: 'active',
+      membership_type: 'active',
+      emergency_contacts: [],
+      roles: [],
+    }),
+  ],
+  ['**/api/v1/users/*/audit-history**', () => []],
 ];
 
 /**

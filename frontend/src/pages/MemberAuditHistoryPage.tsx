@@ -126,7 +126,16 @@ export const MemberAuditHistoryPage: React.FC = () => {
     userService
       .getUserWithRoles(userId)
       .then((userData) => {
-        if (requestedUserIdRef.current === userId) setUser(userData);
+        if (requestedUserIdRef.current !== userId) return;
+        // The history is fetched only once a member with an id has loaded, so
+        // a body without one (a captive portal's 200) left this page on its
+        // spinner for good: nothing ever cleared the loading state.
+        if (!userData?.id) {
+          setError('Unable to load member information.');
+          setLoading(false);
+          return;
+        }
+        setUser(userData);
       })
       .catch(() => {
         if (requestedUserIdRef.current !== userId) return;

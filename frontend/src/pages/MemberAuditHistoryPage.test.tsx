@@ -142,3 +142,26 @@ describe('MemberAuditHistoryPage', () => {
     });
   });
 });
+
+describe('MemberAuditHistoryPage — a malformed member response', () => {
+  beforeEach(() => {
+    mockGetHistory.mockReset();
+    mockGetHistory.mockResolvedValue([entry]);
+    mockGetUserWithRoles.mockReset();
+  });
+
+  // The history is requested only once a member with an id has loaded. A 200
+  // whose body is not a member (a captive portal's page) used to leave the
+  // officer on "Loading audit history..." indefinitely, with nothing to retry.
+  it.each([
+    ['an HTML page', '<html>Sign in to Wi-Fi</html>'],
+    ['an object with no id', {}],
+  ])('reports a failed load for %s instead of spinning forever', async (_label, body) => {
+    mockGetUserWithRoles.mockResolvedValue(body);
+    renderWithRouter(<MemberAuditHistoryPage />);
+
+    expect(await screen.findByText('Unable to load member information.')).toBeInTheDocument();
+    expect(screen.queryByText('Loading audit history...')).not.toBeInTheDocument();
+    expect(mockGetHistory).not.toHaveBeenCalled();
+  });
+});

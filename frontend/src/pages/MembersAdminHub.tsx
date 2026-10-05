@@ -132,7 +132,7 @@ export const MembersAdminHub: React.FC = () => {
                 cannot change them should still be able to see where they live
                 and who to ask, which a hidden card cannot tell them. */}
             <section className="card p-4">
-              <h3 className="text-theme-text-primary text-sm font-semibold">Roster settings</h3>
+              <h2 className="text-theme-text-primary text-sm font-semibold">Roster settings</h2>
               <p className="text-theme-text-muted mt-1 text-xs">
                 Moved here from Settings. Some sections need a separate permission, and the settings page shows only the
                 ones you can change.

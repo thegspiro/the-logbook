@@ -383,7 +383,7 @@ export const WaiverManagementPage: React.FC = () => {
         )}
 
         <div className="border-theme-surface-border border-b">
-          <nav className="flex space-x-1 overflow-x-auto" aria-label="Waiver tabs">
+          <nav className="flex space-x-1 overflow-x-auto" aria-label="Waiver tabs" data-mobile-scroll-region>
             {tabs.map((tab) => (
               <button
                 key={tab.id}
@@ -416,7 +416,7 @@ export const WaiverManagementPage: React.FC = () => {
                 <p className="text-theme-text-muted">No active waivers.</p>
                 <button
                   onClick={() => handleTabChange('create')}
-                  className="touch-target-phone mt-3 text-sm text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                  className="touch-target-phone mt-3 text-sm text-blue-800 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
                 >
                   Create a new waiver
                 </button>
@@ -470,7 +470,7 @@ export const WaiverManagementPage: React.FC = () => {
                         <td className="px-4 py-3">
                           <Link
                             to={`/members/${waiver.user_id}`}
-                            className="touch-target-phone text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                            className="touch-target-phone text-sm font-medium text-blue-800 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
                           >
                             {waiver.member_name}
                           </Link>
@@ -786,7 +786,7 @@ export const WaiverManagementPage: React.FC = () => {
                           <td className="px-4 py-3">
                             <Link
                               to={`/members/${waiver.user_id}`}
-                              className="touch-target-phone text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                              className="touch-target-phone text-sm font-medium text-blue-800 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
                             >
                               {waiver.member_name}
                             </Link>

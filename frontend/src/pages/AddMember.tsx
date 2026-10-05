@@ -673,7 +673,7 @@ const AddMember: React.FC = () => {
                             });
                           }
                         }}
-                        className={`form-input pr-10 ${errors.password ? 'border-red-500' : 'border-theme-input-border'}`}
+                        className={`form-input pr-12 ${errors.password ? 'border-red-500' : 'border-theme-input-border'}`}
                         placeholder="Minimum 12 characters"
                         autoComplete="new-password"
                       />
@@ -681,7 +681,7 @@ const AddMember: React.FC = () => {
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
                         aria-label={showPassword ? 'Hide password' : 'Show password'}
-                        className="text-theme-text-muted hover:text-theme-text-primary absolute inset-y-0 right-0 flex items-center pr-3"
+                        className="text-theme-text-muted hover:text-theme-text-primary absolute inset-y-0 right-0 flex w-11 items-center justify-center"
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
