@@ -645,7 +645,7 @@ export const TrainingAdminPage: React.FC = () => {
         role="tabpanel"
         aria-labelledby={`training-admin-section-tab-${activePage}`}
       >
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl">
           {/* Inner tab bar */}
           <div className="border-theme-surface-border border-b">
             {/* Declared an intentional scroll region so the mobile pass stops
