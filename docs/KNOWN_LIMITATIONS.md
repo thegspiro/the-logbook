@@ -3614,40 +3614,16 @@ detail and the guard test that now covers it. Has its own CHANGELOG entry
 2026-09-04).
 -->
 
-## FE3-34-5 — An Offline Queue Item Can Still Sync Under the Next Member's Identity if the Sign-In Purge Silently Fails (2026-08-31, reopened 2026-09-07)
-
-`claimDeviceForMember()` (`frontend/src/stores/authStore.ts:180-198`) awaits
-`purgeLocalMemberData()` before `isAuthenticated` is ever set on a device
-change, which does close the original timing race: there is no window where
-a new member's live session coexists with the previous member's still-queued
-items _as a race_. But `purgeLocalMemberData()`'s own contract (its
-file-level docstring) is to never throw and always settle, specifically so a
-purge failure can never block sign-in — every IndexedDB `clear()` call in
-`offlineQueue.ts`/`shiftReportOfflineQueue.ts`/`genericOfflineQueue.ts`
-resolves its `onerror` the same as its `onsuccess`, and the outer `bounded()`
-wrapper resolves with a fallback zero if a store takes longer than 3s. When
-IndexedDB is blocked, slow, or otherwise fails, the purge silently no-ops:
-`claimDeviceForMember` still proceeds to record the new member as device
-owner and the caller still authenticates them, while the previous member's
-queue entries can remain with no owner tag distinguishing them from
-anything queued afterward. If IndexedDB recovers later in the same session,
-the offline sync engine drains the queue under the new member's now-live
-cookies with no way to tell the entries apart.
-
-Originally found in `docs/security-review/FE3-34-frontend-shared.md`
-(pass 3), the fix above landed independently and was initially read as a
-full closure. Reopened by Codex review on PR #2379 (`docs/security-review/
-FE4-34-frontend-shared.md`, pass 4) once it identified the purge-failure gap
-the guard tests don't cover (they only assert `purgeLocalMemberData()` was
-called, not that the underlying clears succeeded).
-
-Not fixed because the safe remediation is a product/architecture decision:
-gating authentication on confirmed deletion would reintroduce the exact
-"member stuck signed in on a shared terminal" risk `purgeLocalMemberData()`
-was designed to avoid, so the correct direction is instead tagging each
-queued item with a validated owner checked at sync time — which needs a
-decision on how to treat already-queued, untagged legacy entries, not a
-drive-by patch.
+<!--
+FE3-34-5 (filed 2026-08-31, reopened 2026-09-07) is resolved and removed per
+this page's own convention. Every offline queue entry now records the member
+who queued it, each drain sends only the signed-in member's own, and entries
+queued before the owner was recorded are held for that member to send as
+theirs or discard rather than syncing automatically — so a sign-in purge that
+silently fails no longer lets the previous member's work go out under the
+next member's session. See docs/security-review/FE4-34-frontend-shared.md
+(FE3-34-5) for the fix and its guard tests.
+-->
 
 ## FE5-34-1 — The Inventory Item Catalog Serves Its Unconstrained `color` Field From a Client-Side Cache (2026-09-07)
 

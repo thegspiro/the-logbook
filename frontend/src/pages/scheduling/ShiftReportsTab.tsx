@@ -70,10 +70,11 @@ import { getErrorMessage } from '../../utils/errorHandling';
 import { saveDraft, loadDraft, deleteDraft } from '../../utils/shiftReportDrafts';
 import {
   enqueueShiftReport,
-  listPendingReports,
+  listOwnPendingReports,
   dequeueShiftReport,
   pendingReportCount,
 } from '../../utils/shiftReportOfflineQueue';
+import { isOwnedByCurrentMember } from '../../utils/offlineQueueOwner';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useOverlaySurface } from '../../hooks/useOverlaySurface';
 import { EmptyState } from '../../components/ux/EmptyState';
@@ -508,10 +509,13 @@ export const ShiftReportsTab: React.FC = () => {
   useEffect(() => {
     if (!isOnline) return;
     const syncQueue = async () => {
-      const pending = await listPendingReports();
+      // Only this member's own reports go out under their session (FE3-34-5).
+      const pending = await listOwnPendingReports();
       if (pending.length === 0) return;
       let synced = 0;
       for (const entry of pending) {
+        // Asked again per entry: the member can change while earlier ones send.
+        if (!isOwnedByCurrentMember(entry)) continue;
         try {
           await shiftCompletionService.batchCreateReports(entry.payload);
           await dequeueShiftReport(entry.id);

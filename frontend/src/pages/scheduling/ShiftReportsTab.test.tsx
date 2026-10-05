@@ -58,7 +58,7 @@ vi.mock('../../modules/scheduling/services/api', () => ({
 vi.mock('../../utils/shiftReportOfflineQueue', () => ({
   pendingReportCount: () => Promise.resolve(0),
   enqueueShiftReport: () => Promise.resolve(),
-  listPendingReports: () => Promise.resolve([]),
+  listOwnPendingReports: () => Promise.resolve([]),
   dequeueShiftReport: () => Promise.resolve(),
 }));
 

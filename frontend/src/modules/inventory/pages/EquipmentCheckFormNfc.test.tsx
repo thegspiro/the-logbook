@@ -45,7 +45,7 @@ vi.mock('../../../stores/authStore', () => ({
 }));
 vi.mock('../../../utils/offlineQueue', () => ({
   enqueueCheck: vi.fn().mockResolvedValue('queued'),
-  listPendingChecks: vi.fn().mockResolvedValue([]),
+  listOwnPendingChecks: vi.fn().mockResolvedValue([]),
   dequeueCheck: vi.fn(),
   markCheckSubmitted: vi.fn(),
   markRetry: vi.fn(),
