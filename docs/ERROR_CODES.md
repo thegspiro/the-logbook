@@ -52,6 +52,7 @@ fails if this document misses a curated code).
 | LB-AUTH-009 | Invalid CSRF token (usually a stale tab after a newer login).          | Reload the page; close duplicate tabs.                                                                                                   |
 | LB-AUTH-010 | Self-registration attempted while disabled.                            | An administrator creates accounts from the Members page, or enables `REGISTRATION_ENABLED`.                                              |
 | LB-AUTH-011 | MFA challenge expired (too long between password and code entry).      | Start the login again and enter the code promptly.                                                                                       |
+| LB-AUTH-012 | Session refreshed by another tab at the same moment (not token theft). | Nothing — the app retries with the new session. A reload picks it up if one ever shows.                                                  |
 
 ## Permissions (LB-PERM)
 

@@ -87,6 +87,7 @@ from app.services.auth_service import (
     RESET_TOKEN_EXPIRY_MINUTES,
     AuthFailure,
     AuthService,
+    RefreshTokenSuperseded,
 )
 from app.services.branding_service import get_primary_branding
 from app.services.security_monitoring import security_monitor
@@ -1621,6 +1622,15 @@ async def refresh_token(
     try:
         new_access_token, new_refresh_token = await auth_service.refresh_access_token(
             rt
+        )
+    except RefreshTokenSuperseded:
+        # 409, not 401: the session is alive and the shared cookie jar already
+        # holds the tokens the parallel request was issued. A 401 here would
+        # send this tab to the login page for no reason.
+        raise CodedHTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This session was just refreshed by another request.",
+            error_code=ErrorCode.AUTH_REFRESH_SUPERSEDED,
         )
     except OperationalError as exc:
         logger.error(f"Database connection error during token refresh: {exc}")

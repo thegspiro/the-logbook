@@ -12,7 +12,7 @@ from typing import Optional, Tuple
 from uuid import UUID, uuid4
 
 from loguru import logger
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -31,6 +31,20 @@ from app.models.user import Organization, PasswordHistory, Role
 from app.models.user import Session as UserSession
 from app.models.user import User, UserStatus
 from app.utils.password_expiry import is_password_expired
+
+
+class RefreshTokenSuperseded(Exception):
+    """A concurrent refresh rotated the presented token first.
+
+    Two requests carrying the same valid refresh token — two tabs sharing one
+    cookie jar is the usual way — both find the session, and only one rotation
+    can win. The loser is not a replay: the token was current when it was
+    read. Revoking every session for it (the replay response) logged a member
+    out of every device with an audit trail claiming token theft (AUTH-21).
+    The browser already holds the winner's cookies, so the loser's caller
+    only needs to retry with them.
+    """
+
 
 RESET_TOKEN_EXPIRY_MINUTES = 30
 
@@ -421,6 +435,10 @@ class AuthService:
 
         Returns:
             Tuple of (new_access_token, new_refresh_token) or (None, None)
+
+        Raises:
+            RefreshTokenSuperseded: a concurrent request presenting the same
+                token rotated it first. Nothing is revoked.
         """
         try:
             # Decode refresh token
@@ -488,18 +506,41 @@ class AuthService:
             new_refresh_token = create_refresh_token(token_data)
 
             # Rotate and immediately invalidate the token that was just used.
-            session.token = new_access_token
-            session.refresh_token = new_refresh_token
-            session.expires_at = datetime.now(timezone.utc) + timedelta(
-                minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
+            # Conditional on the token still being the one presented: InnoDB
+            # re-reads the row under the UPDATE's lock, so of two concurrent
+            # refreshes exactly one matches and the other affects no rows.
+            # That tells a double-fire apart from a replay without locking
+            # the row for the read above, on the hottest path in auth.
+            now = datetime.now(timezone.utc)
+            rotation = await self.db.execute(
+                update(UserSession)
+                .where(
+                    UserSession.id == session.id,
+                    UserSession.refresh_token == refresh_token,
+                )
+                .values(
+                    token=new_access_token,
+                    refresh_token=new_refresh_token,
+                    expires_at=now
+                    + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+                    # Set in Python (UTC) to avoid a timezone mismatch with
+                    # MySQL's onupdate=func.now() server-side default.
+                    last_activity=now,
+                )
+                .execution_options(synchronize_session=False)
             )
-            # Explicitly set last_activity in Python (UTC) to avoid timezone
-            # mismatch with MySQL's onupdate=func.now() server-side default.
-            session.last_activity = datetime.now(timezone.utc)
+            if rotation.rowcount == 0:
+                logger.info(
+                    f"Concurrent refresh for user {user_id}: the token was "
+                    "rotated by a parallel request; no sessions revoked."
+                )
+                raise RefreshTokenSuperseded()
             await self.db.commit()
 
             return new_access_token, new_refresh_token
 
+        except RefreshTokenSuperseded:
+            raise
         except Exception as e:
             logger.error(f"Token refresh failed: {e}")
             return None, None
