@@ -1,6 +1,185 @@
 # Security Review 07 — Users & Organizations
 
-**Prefix:** `USR` · **Iteration:** 07 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6) · **PR:** [#1814](https://github.com/thegspiro/the-logbook/pull/1814) (pass 1), [#1949](https://github.com/thegspiro/the-logbook/pull/1949) (pass 2), [#2402](https://github.com/thegspiro/the-logbook/pull/2402) (pass 4)
+**Prefix:** `USR` · **Iteration:** 07 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7) · **PR:** [#1814](https://github.com/thegspiro/the-logbook/pull/1814) (pass 1), [#1949](https://github.com/thegspiro/the-logbook/pull/1949) (pass 2), [#2402](https://github.com/thegspiro/the-logbook/pull/2402) (pass 4), [#2602](https://github.com/thegspiro/the-logbook/pull/2602) (pass 6)
+
+---
+
+## Pass 7 (2026-10-05)
+
+**Scope:** full domain since pass 6's merge (PR #2602, head `5ee64545d`):
+`endpoints/users.py`, `endpoints/organizations.py`, `endpoints/member_status.py`,
+`endpoints/member_leaves.py`, `services/user_service.py`,
+`services/organization_service.py`, `services/member_leave_service.py`,
+`models/user.py`, `schemas/user.py`, `schemas/organization.py`, and this
+feature's own MCP surface (`app/mcp/tools/members.py`,
+`app/mcp/tools/organization.py`).
+
+**Not a zero-delta pass.** Three weeks of real feature work landed since pass
+6 (2026-09-15): `git diff 5ee64545d..origin/main --stat` across the ten
+declared files shows 1,259 insertions / 215 deletions across all ten (none
+byte-identical this time), from ~29 non-merge commits — preferred names,
+per-kind optional email choices, the phone bottom-navigation preference, an
+IT-administrator-configurable email link domain, pattern-based membership-ID
+generation (prefix/sequence/year tokens, fiscal-year support), length-of-
+service tracking across a break in membership (`member_service_periods`),
+logo upload validation on the organization profile, and several correctness
+fixes (deactivated-row uniqueness collisions, profile-write redaction parity
+with the read, a role-grant-ceiling false positive on a full role-set
+replace). Every file's diff read in full against the checklist; `members.py`
+(MCP) also diffed (`organization.py` MCP tool unchanged — 0 lines).
+
+**Verified good ✅ (new this pass):**
+
+- **Email link domain is correctly isolated from the generic settings path.**
+  `OrganizationService.update_organization_settings` now strips the
+  `email_link_domain` key from any incoming `settings_update` dict before the
+  deep merge (`organization_service.py:429-436`, SEC-labelled in its own
+  comment), so a `settings.manage` holder — not just the far narrower
+  `system.manage_link_domain` grant the dedicated `PUT
+/organization/settings/email/link-domain` route requires — cannot plant
+  that key through any of the eight other call sites that reach the same
+  service method and skip both the extra permission and the allowed-host
+  check the dedicated route enforces. The filter is in the service layer, the
+  one place all nine call sites converge, rather than duplicated per-route.
+  Independently, `email_link_domain_service._writable_primary` fails closed
+  (`PermissionError`) unless the caller's own org is the single "primary"
+  organization the deployment serves, and `set_link_domain`/`clear_link_domain`
+  both route the submitted URL through `settings.validate_link_domain` (host
+  must be in `TRUSTED_HOSTS`/`ALLOWED_ORIGINS`) before it is stored or
+  applied — two independent backstops behind the permission gate. Confirmed
+  `system.manage_link_domain` (`core/permissions.py:489-496`) is granted to no
+  default position, matched only by the wildcard wildcard `*` (System
+  Owner/`it_manager`), by reading `DEFAULT_POSITIONS` directly rather than
+  trusting the comment.
+- **`assign_user_roles`'s narrowed escalation check does not open a grant
+  path.** The ceiling check (`_enforce_role_grant_ceiling`) now excludes role
+  ids the target already holds (`held = {str(r.id) for r in user.roles}`,
+  read via the same `selectinload(User.roles)` at the top of the handler,
+  before any mutation) from the set checked against the caller's own
+  permissions, fixing a false-positive (and false CRITICAL escalation report)
+  on a full-set replace that keeps an existing over-privileged role. Verified
+  this cannot be used to _add_ an unentitled grant: a role id still has to be
+  in `role_assignment.role_ids` to reach `roles` at all, and the only ids
+  excluded from the ceiling check are ones the target's own current row
+  already carries — so the set actually being checked is exactly "ids being
+  newly added", matching the code comment's own reasoning. `add_role_to_user`
+  (single-role add, not a full-set replace) was not touched and still checks
+  every role passed to it.
+- **Profile-write redaction now matches the read.** `_profile_response` (both
+  `update_contact_info` and `update_user_profile`) now redacts the returned
+  payload through the same `_redact_profile_for_viewer` helper
+  `get_user_with_roles` (the read) uses, for the identical reason that
+  function's own docstring states: before this pass, a `users.edit` holder
+  without `members.manage` who edited a colleague's own profile got back the
+  full unredacted row from the write response — date of birth, emergency
+  contacts, home address — even though the read redacts exactly those fields
+  for the same viewer. Read the diff in full rather than trusting the
+  docstring's own framing; the two exemptions (subject, `members.manage`) are
+  identical on both paths, confirmed by direct comparison of
+  `_redact_profile_for_viewer` against `get_user_with_roles`'s inlined
+  pre-pass-7 logic (now replaced by the same call).
+- **New `member_service_periods` table and its one FK are sound.**
+  `created_by` is `ondelete="SET NULL"` and correctly `nullable=True`
+  (CLAUDE.md Pitfall #2); `organization_id`/`user_id` are `ondelete="CASCADE"`,
+  both `nullable=False` (no Pitfall #2 concern — CASCADE needs no nullable
+  column). `change_member_status` now locks the target `User` row
+  (`.with_for_update()` + `populate_existing=True`) before reading
+  `previous_status` and deciding whether to open/close a service stint — a
+  genuine new Pitfall #27 guard: two officers dropping the same member at
+  once previously raced to both read "active" and both record a separation,
+  double-crediting the break. `MemberServiceHistoryService` itself is outside
+  this feature's declared scope (not independently re-audited this pass).
+- **Membership-ID pattern generation stays within existing invariants.** The
+  new `MembershipIdSettings.pattern`/`padding`/`start_number`/`reset_yearly`/
+  `year_basis`/`fiscal_year_label` fields are all bounded (`max_length`,
+  `ge`/`le`) and the `_pattern_is_usable` model validator (`schemas/
+organization.py`) rejects a pattern whose longest producible number exceeds
+  `MAX_MEMBERSHIP_NUMBER_LENGTH` — closing the same "unbounded stored
+  string reaching a fixed-width column" shape Pitfall-adjacent checks exist
+  for elsewhere, before it can reach `User.membership_number`. The counter
+  (`counter_year`) is deliberately excluded from the schema (kept in the
+  stored JSON, not client-writable) so a settings-screen save cannot roll it
+  back. `generate_next_membership_id` still locks the `Organization` row
+  `with_for_update()` before reading the counter (unchanged from pass 4);
+  the new `_first_free_membership_id` scan (shared with the read-only
+  preview) runs inside that same lock in the generator path, and
+  `_membership_number_ever_held` checks both `membership_number` and
+  `previous_membership_number` so a generated id can never collide with a
+  number a former member is owed back.
+- **Typed-in membership numbers now also check the reservation, not just
+  current use.** `ensure_membership_number_available` (used by both
+  `create_member` and `update_user_profile`'s manual-entry path) checks
+  `membership_number_in_use` (any current row — correctly _not_
+  `deleted_at`-filtered, since the unique index isn't either, matching this
+  pass's own `create_member`/`update_contact_info` fix for the same
+  deactivated-row collision shape) and `membership_number_reserved` (a former
+  member's number, held for their return) before accepting a typed-in value.
+  Both are plain counts scoped by `organization_id` — no cross-tenant
+  surface.
+- **The MCP roster tool's new `preferred_name` field and search clause stay
+  within this tool's existing, narrower-than-`GET /users` shape.**
+  `members.py`'s `_member()` now reports `full_name` (relabelled to the legal
+  name explicitly, via the new `format_legal_name` helper — previously this
+  field _was_ the display name under a different name, a latent naming
+  mismatch with the REST API's `full_name`, not a security issue since
+  nothing consumed it as an identifier), `display_name`, and `preferred_name`
+  — still no contact/PII fields, matching USR-8's own reasoning for why this
+  tool was left narrower than `GET /users` back in pass 6. The roster search
+  clause's new `User.preferred_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR)`
+  arm uses the same escaped `like_pattern()` as the pre-existing
+  first/last-name arms.
+- **No new `.ilike()`/`.like()` without `escape=`, raw `csv.writer`, or
+  `window.confirm`/`alert`/`prompt`** in any of the ten backend files
+  (grepped fresh this pass — 0 hits). `BottomNavigationPreference`'s stored
+  paths are validated by a bounded regex (`^/[a-z0-9][a-z0-9/-]{0,63}$`,
+  `max_length` 64 implicitly) but are compared against a frontend-owned tab
+  list and never rendered or used in a redirect — no injection or open-
+  redirect surface even though the value round-trips through a JSON column.
+- **`/users/me/email-choices`, `/users/me/bottom-navigation`, and
+  `/users/welcome-email-available`** are all new GET/PUT routes under
+  `/users`, which `frontend/src/utils/apiCache.ts`'s `UNCACHEABLE_PREFIXES`
+  already covers with a prefix-only (no trailing slash) `/users` entry — no
+  new entry needed. None return PII beyond what the existing roster/profile
+  endpoints already do (email-choices reports the caller's own notification
+  preferences; the other two are booleans/path lists).
+- **Re-verified, not re-derived — all three open findings unchanged, current
+  line numbers updated** (file growth, not regressions): **USR-5** (unbounded
+  lists) — `get_archived_members` now `member_status.py:771` (was 751),
+  `list_users_with_roles` now `users.py:824` (was 700), `leave_widget_summary`
+  still `member_leaves.py:53`, `MemberLeaveService.list_leaves` still
+  `member_leave_service.py:160`. **USR-8** (over-broad `GET /users` field
+  set) — `UserService.get_users_for_organization` still `user_service.py:24`,
+  `UserListResponse` now `schemas/user.py:462` (was 349 — the file grew
+  `preferred_name`/`display_name` fields above this class), `list_users`
+  still `users.py:102`-area (now `121`, same shift). **USR-10a**
+  (`_tier_member_counts` not a locking read) — `member_status.py:1051`
+  (helper, was 1031) and `:1088` (`update_membership_tier_config`, was
+  1068), both outside this pass's diff region (the membership-tier config
+  endpoints were not touched since pass 6). `docs/KNOWN_LIMITATIONS.md`'s
+  three matching entries updated with the current line numbers (no content
+  change — all three still accurate).
+
+**0 application-code defects found, 0 fixes needed, 0 new findings.** Every
+new surface this pass's real feature work introduced was reviewed against
+the checklist and found already correctly guarded by the feature's own
+authors — including one finding (the `email_link_domain` settings-path
+isolation) that is itself a security hardening landed in this window, now
+independently re-verified rather than taken on its commit message's word.
+
+## Completion gate (pass 7)
+
+| Check                                                                                                                                                                                                                                                                                                                                                                                                                                         | Result                                                       |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                                                                                                                 | ✅ 0 violations                                              |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                                                                                                          | ✅ clean (1876 files unchanged)                              |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                                                                                                     | ✅ clean                                                     |
+| `validate_migrations.py --strict`                                                                                                                                                                                                                                                                                                                                                                                                             | ✅ 512 revisions, single head `34d3d56d1479`                 |
+| `check_route_permissions.py --strict`                                                                                                                                                                                                                                                                                                                                                                                                         | ✅ 244 routes, 0 errors, 0 warnings                          |
+| `pytest tests/ -k "member_status or member_leave or property_return or user_list or platoon or users or organization or rank_grant or role_edit or audit_history or ceiling or administrative or membership_tier or capacity_locking or navigation_layout or setup_checklist or mcp or preferred_name or display_name or membership_number or membership_id or bottom_nav or email_choices or email_link_domain or service_period or rejoin"` | ✅ 1,179 passed, 1 pre-existing skip (`py_vapid`), 0 failed  |
+| `pytest tests/ -m "not integration and not slow and not docker"` (full unit suite — run broadly since this pass touched the shared `email_policy`/`NotificationPreferences` surface and the MCP roster tool)                                                                                                                                                                                                                                  | ✅ 12,625 passed, 1 pre-existing skip (`py_vapid`), 0 failed |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                                                                                                                                                                                                                            | ✅ 0 errors                                                  |
+| `cd frontend && npm run lint`                                                                                                                                                                                                                                                                                                                                                                                                                 | ✅ 0 errors, 0 warnings                                      |
+| Scoped frontend suite (`Members`, `MemberAdminEditPage`, `AddMember`, `UserSettingsPage`, `MemberProfilePage`, `BottomNavigationSettings`, `BottomNavigation`, `AppLayout.navigationLayout`, `memberName` — 9 files)                                                                                                                                                                                                                          | ✅ 191 passed                                                |
 
 ---
 
