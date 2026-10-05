@@ -12,7 +12,10 @@ import { formatTime } from '../utils/dateFormatting';
  * Can show metrics for a specific event or overall platform metrics.
  * Data is fetched from the backend API.
  */
-const AnalyticsDashboardPage: React.FC = () => {
+// `embedded` is the Events Administration tab, whose hub frame already supplies
+// the page's side gutter; the standalone routes keep their own padding.
+const AnalyticsDashboardPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
+  const shellPadding = embedded ? 'py-6' : 'p-6';
   const { id: eventId } = useParams<{ id?: string }>();
   const tz = useTimezone();
   const [metrics, setMetrics] = useState<QRCodeMetrics | null>(null);
@@ -67,7 +70,7 @@ const AnalyticsDashboardPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-7xl p-6">
+      <div className={`mx-auto max-w-7xl ${shellPadding}`}>
         {trail && <Breadcrumbs items={trail} />}
         <div className="flex items-center justify-center py-24">
           <div className="text-theme-text-secondary">Loading analytics...</div>
@@ -78,7 +81,7 @@ const AnalyticsDashboardPage: React.FC = () => {
 
   if (error || !metrics) {
     return (
-      <div className="mx-auto max-w-7xl p-6">
+      <div className={`mx-auto max-w-7xl ${shellPadding}`}>
         {trail && <Breadcrumbs items={trail} />}
         <div className="flex items-center justify-center py-24">
           <div className="text-center">
@@ -98,7 +101,7 @@ const AnalyticsDashboardPage: React.FC = () => {
   }
 
   return (
-    <div className="mx-auto min-h-screen max-w-7xl p-6">
+    <div className={`mx-auto min-h-screen max-w-7xl ${shellPadding}`}>
       {trail && <Breadcrumbs items={trail} />}
 
       {/* Header */}

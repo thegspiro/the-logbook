@@ -16,6 +16,115 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2940](https://github.com/thegspiro/the-logbook/pull/2940)**: branch
+`claude/security-review-storefront-payments`, Feature 04 (Storefront &
+payments), pass 7.
+
+- **Result:** 0 fixes, 0 new findings, 0 flagged.
+- **Method:** not a zero-delta pass (unlike pass 6) — 3 backend files and 22
+  frontend files had changed since pass 6's baseline (`a16635e60`, PR
+  #2598): a cosmetic `full_name`→`display_name` rename, a timezone-correctness
+  fix on the order-export CSV and two notice emails, a new member-email
+  opt-out filter (part of an app-wide feature already reviewed under `MSG-25`/
+  `CRON5-31`, checked here only at this feature's call site), 22 frontend
+  files of copy/UX polish and defensive response-shape hardening, and new
+  seeded positions carrying the same baseline storefront grants every other
+  baseline position already has. Six shared-collaborator files also changed;
+  each checked and found to have zero storefront-reachable effect.
+- **Still open:** SF-9 (`record_payment` has no row lock — MED), SF-11 (cart
+  has no max line count — LOW), order-export CSV unbounded pagination
+  (LOW/MED) — all three re-confirmed unchanged against current code, all
+  three already mirrored in `KNOWN_LIMITATIONS.md`.
+- **Gate:** backend flake8/black/isort clean, `validate_migrations.py
+--strict` (512 revisions, single head), `check_route_permissions.py
+--strict` (244 routes, 0 errors), scoped pytest (787 passed), 72
+  cross-cutting guard tests, full backend unit suite (12,600 passed, 1
+  pre-existing skip, 0 failed), frontend typecheck and lint clean, storefront
+  vitest suite (213 passed).
+- **Watching:** subscribed for CI/review events.
+
+Full write-up:
+[`SF-04-storefront-payments.md`](./SF-04-storefront-payments.md) → Pass 7.
+
+<details>
+<summary>Superseded — prior Open PR note (PR #2937 merged, docs-only; rotation picked up Feature 04 — the state this PR opened from), preserved for history</summary>
+
+**PR [#2937](https://github.com/thegspiro/the-logbook/pull/2937)**: branch
+`claude/security-review-public-webhooks`, Feature 03 (Public surface &
+webhooks), pass 7.
+
+- **Result:** 0 fixes, 0 new findings, 0 flagged.
+- **Method:** 5 of 13 scoped files had changed since pass 6's baseline
+  (`aa9928dcf`, PR #2597) — a new `branding.py` file (branded app-icon/
+  splash/email-logo assets), a new kiosk NFC badge-tap write in
+  `display.py`, a new self-service application-withdrawal write in
+  `portal.py`, plus the already-documented PUB-8 429-logging fix and an
+  unrelated timezone correctness fix in `calendar.py`. All read in full
+  against all seven checklist dimensions; the 8 unchanged files'
+  byte-identical status confirmed directly via `git diff`, not assumed.
+  Route-decorator count up from 20 to 28 (12 → 13 files).
+- **Still open:** PUB-8's 401-logging half, re-confirmed unchanged in
+  `docs/KNOWN_LIMITATIONS.md` — blocked on a nullable-column migration
+  decision, not attempted this pass.
+- **Gate:** backend flake8/black/isort clean, `validate_migrations.py
+--strict` (512 revisions, single head), `check_route_permissions.py
+--strict` (244 routes), `check_docs_links.py` clean (431 files), 871 scoped
+  - 184 standing-guard backend tests, full backend unit suite (12600
+    passed, 1 pre-existing skip), frontend typecheck and lint clean.
+- **Watching:** subscribed for CI/review events.
+
+Full write-up:
+[`PUB-03-public-surface-webhooks.md`](./PUB-03-public-surface-webhooks.md) →
+Pass 7.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (PR #2933 merged, docs-only; rotation picked up Feature 03 — the state this PR opened from), preserved for history</summary>
+
+**PR [#2933](https://github.com/thegspiro/the-logbook/pull/2933)**: branch
+`claude/security-review-permissions-roles`, Feature 02 (Permissions &
+roles), pass 7.
+
+- **Result:** 0 fixes, 0 new findings, 0 flagged. Docs-only diff.
+- **Method:** six of eleven scoped files had changed since pass 6's baseline
+  (`ea2b1ef87`, PR #2596) — 113 commits touched migrations alone. All 28
+  routes individually re-enumerated; unchanged.
+- **Still open:** PERM-5, re-confirmed unchanged and reproduced directly
+  against the current seed. A fix for it already exists on a different,
+  unmerged branch (PR #2918) — not duplicated here.
+- **Also in this PR:** the #2924 closure (docs-only, nothing else to
+  record).
+- **Gate:** backend flake8/black/isort clean, `validate_migrations.py
+--strict` (512 revisions, single head), `check_route_permissions.py
+--strict` (244 routes), `check_docs_links.py` clean, 1448 scoped + 212
+  standing-guard backend tests, full backend unit suite (12574 passed, 1
+  pre-existing skip), frontend typecheck and lint clean.
+- **Watching:** subscribed for CI/review events.
+
+Full write-up:
+[`PERM-02-permissions-roles.md`](./PERM-02-permissions-roles.md) → Pass 7.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (PR #2924 merged, docs-only; rotation picked up Feature 02 — the state this PR opened from), preserved for history</summary>
+
+**None open from the prior pass.** PR
+[#2924](https://github.com/thegspiro/the-logbook/pull/2924) (Feature 01,
+Auth & session lifecycle, pass 7) merged — docs-only (only `PROGRESS.md` and
+`AUTH-01-auth-session.md` changed), 0 fixes, 0 new findings, so per the
+docs-only-PR rule there is nothing else to record about it beyond clearing
+this row. Independently re-confirmed via the REST pulls listing (state=open)
+that no `claude/security-review-*` PR existed. Rotation row 01 stayed ✅.
+This iteration picked up Feature 02 (Permissions & roles, pass 7), recorded
+above once its own PR was opened.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 01, Auth & session lifecycle, pass 7, PR #2924, before it merged), preserved for history</summary>
+
 **PR [#2924](https://github.com/thegspiro/the-logbook/pull/2924)**: branch
 `claude/security-review-auth-session`, Feature 01 (Auth & session
 lifecycle), pass 7.
@@ -38,6 +147,8 @@ lifecycle), pass 7.
 
 Full write-up:
 [`AUTH-01-auth-session.md`](./AUTH-01-auth-session.md) → Pass 7.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #2917 merged, docs-only; rotation picked up Feature 01 — the state this PR opened from), preserved for history</summary>
@@ -17518,9 +17629,9 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
-| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
-| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
-| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
+| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
+| 03  | Public surface & webhooks | PUB    | `api/public/*` (28 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
+| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
@@ -17558,6 +17669,134 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-05 — Feature 04 (Storefront & payments, pass 7) — 0 fixed, 0 new findings, 6 real changes reviewed
+
+PR #2937 (Feature 03, pass 7) had already merged to `main` with
+`PROGRESS.md`'s Open PR row already current before this iteration started, so
+there was nothing to carry forward from Step 0 — confirmed via
+`list_pull_requests` (state=open) that no `claude/security-review-*` PR
+exists. Picked up Feature 04 (Storefront & payments) per the rotation table.
+
+**Not a zero-delta pass, unlike pass 6.** Diffed pass 6's closing merge
+(`a16635e60`, PR #2598) against current `HEAD` across the feature's full
+domain and its established shared collaborators. Found and read in full six
+real changes: a cosmetic `full_name` → `display_name` rename (two call
+sites), a timezone-correctness fix on the order-export CSV and two
+window-notice emails (UTC literal → org timezone), a new member-email
+opt-out filter wired into the notification service (part of an app-wide
+"required vs. optional email" feature already reviewed under `MSG-25` and
+`CRON5-31`, checked here only for what this feature's call site does with
+it — org-scoped lookup, required-kinds bypass checked first, documented
+fail-open on a lookup error), 22 frontend files of copy/UX polish and
+response-shape defensive hardening (no change to what the server trusts from
+the client), and new seeded positions carrying the same baseline
+`storefront.view`/`storefront.order` grants every other baseline position
+already carries (confirmed not a widening of `storefront.manage`). Six
+shared-collaborator files also changed; each checked and found to have zero
+storefront-reachable effect (a WebSocket-handshake typing fix, a
+load-handler correctness fix, an unrelated anonymous-route logging carve-out,
+an unrelated `admin_hub_service.py` empty-denominator fix with zero hits on
+any `_store_*` resolver, and two unrelated notification-trigger additions).
+
+**Three prior findings re-confirmed OPEN, re-read against current code, not
+assumed from the diff:** SF-9 (`record_payment` has no `for_update` lock —
+MED, needs an owner call on transaction boundaries shared with
+`bulk_mark_paid` and the PayPal webhook), SF-11 (`StoreOrderCreate.items` has
+no max length — LOW, needs a product decision on a legitimate cart-size
+ceiling), and the order-export CSV's unbounded pagination (LOW/MED, grouped
+with `AH-21`'s and `reportExportService`'s siblings pending a shared
+page-size/streaming decision). All three already mirrored in
+`KNOWN_LIMITATIONS.md`; re-verified unchanged there too, so no edit was
+needed.
+
+**Gate:** backend flake8/black/isort clean, `validate_migrations.py
+--strict` (512 revisions, single head), `check_route_permissions.py
+--strict` (244 routes, 0 errors), scoped pytest (`-k "storefront or
+payment"`, 787 passed), 72 cross-cutting guard tests, full backend unit
+suite (12,600 passed, 1 pre-existing skip, 0 failed), frontend typecheck and
+lint clean, `vitest run src/modules/storefront/ src/components/admin/` (213
+passed).
+
+Rotation row 04 → ✅ (pending PR merge). Next: Feature 05 (Finance &
+approvals).
+
+Full write-up: [`SF-04-storefront-payments.md`](./SF-04-storefront-payments.md) → Pass 7.
+
+### 2026-10-05 — PR #2933 merge recorded; Feature 03 (Public surface & webhooks, pass 7) — 0 fixed, 0 new findings, 2 new unauthenticated surfaces reviewed
+
+**Closure.** PR [#2933](https://github.com/thegspiro/the-logbook/pull/2933)
+(Feature 02, Permissions & roles, pass 7) merged, docs-only (only
+`PROGRESS.md` and `PERM-02-permissions-roles.md` changed) — per the
+docs-only-PR rule there is nothing to record beyond clearing the **Open PR**
+row, which still named it. Independently re-confirmed via `search_pull_requests`
+(`is:open head:claude/security-review-`) that no `claude/security-review-*`
+PR exists. Proceeded to Feature 03.
+
+**Feature 03, pass 7.** Not a zero-delta pass: 5 of 13 declared files changed
+since pass 6's baseline (`aa9928dcf`, PR #2597). Two genuinely new
+unauthenticated surfaces landed since then and were read in full against all
+seven checklist dimensions: a new `branding.py` (branded app-icon/splash/
+email-logo assets for the installable PWA, serving the deployment's one
+fixed organization — same single-tenant rule the login page's branding
+endpoint already uses) and a new kiosk NFC badge-tap write in `display.py`
+(the feature's first unauthenticated write that acts _for a member_ —
+checks a card UID, hashed and peppered before lookup, into whichever event
+is open in the tapped room, gated behind two independently-checked org-level
+switches, and returning only a first-name-and-initial display name). Also
+new: a self-service application-withdrawal write in `portal.py`, sharing its
+token-usability gate with the existing status read and locking the row
+before mutating it. All five new routes resolve their organization from a
+credential the request cannot forge and rate-limit ahead of any DB work; the
+withdrawal's free-text `reason` field is HTML-escaped at its one email call
+site. The one open item this feature carries, PUB-8's 401-logging half,
+re-confirmed unchanged and still correctly flagged in
+`docs/KNOWN_LIMITATIONS.md`. Zero new findings. Gate: backend
+flake8(7.4.1)/black(26.5.1)/isort(9.0.1) clean, `validate_migrations.py
+--strict` (512 revisions, single head), `check_route_permissions.py --strict`
+(244 routes), `check_docs_links.py` (431 files, 0 broken links), 871 scoped +
+184 standing-guard backend tests passed, full backend unit suite (12600
+passed, 1 pre-existing skip), frontend typecheck and lint clean. Full
+write-up:
+[`PUB-03-public-surface-webhooks.md`](./PUB-03-public-surface-webhooks.md) →
+Pass 7. Rotation row 03 → ✅. Next: Feature 04 (Storefront & payments).
+
+### 2026-10-05 — PR #2924 merge recorded; Feature 02 (Permissions & roles, pass 7) — 0 fixed, 0 new findings (PERM-5 re-confirmed open), 1 cross-track note
+
+**Closure.** PR [#2924](https://github.com/thegspiro/the-logbook/pull/2924)
+(Feature 01, Auth & session lifecycle, pass 7) merged, docs-only (only
+`PROGRESS.md` and `AUTH-01-auth-session.md` changed) — per the docs-only-PR
+rule there is nothing to record beyond clearing the **Open PR** row, which
+still named it. Independently re-confirmed via the REST pulls listing
+(state=open) that no `claude/security-review-*` PR exists. Proceeded to
+Feature 02.
+
+**Feature 02, pass 7.** Not a zero-delta pass: 113 commits touched
+`backend/alembic/versions/` since pass 6's baseline (`ea2b1ef87`, PR #2596),
+and six of the eleven scoped files changed — `dependencies.py` (a WebSocket
+handshake carve-out), `roles.py` and two services (display-name plumbing),
+`core/permissions.py` (+176 lines: eight new seeded permissions, two new
+positions, a display-label rename), and `users.py` (+427 lines: welcome-email
+gating, membership-number collision handling, profile-redaction symmetry —
+none of it touching the ceiling/continuity call sites). All eleven files read
+in full regardless. Every new seeded permission/position has its own
+Pitfall #23 migration, checked by name. **PERM-5 re-confirmed open**, reproduced
+directly against the current `DEFAULT_POSITIONS` (Secretary/Membership
+Coordinator still hold `members.manage` without `*`). **Cross-track note:**
+an unmerged PR (#2918, branch `claude/gracious-goodall-z1bv9g`, a workflow-review
+track, not this rotation) already implements PERM-5's narrow "last `*`
+holder" fix, bundled with the separate W11-8 concurrency fix; this pass left
+both finding rows open rather than duplicating that work, and named the
+option it already chose. Zero new findings otherwise. Gate: backend
+flake8/black/isort clean (versions pinned to CI's), `validate_migrations.py
+--strict` (512 revisions, single head), `check_route_permissions.py --strict`
+(244 routes), `check_docs_links.py` (428 files), 1448 scoped + 212
+standing-guard backend tests passed (after running one pending migration the
+sandbox's test database was missing — an environment gap, not an app defect),
+full backend unit suite (12574 passed, 1 pre-existing skip), frontend
+typecheck and lint clean. Full write-up:
+[`PERM-02-permissions-roles.md`](./PERM-02-permissions-roles.md) → Pass 7.
+Rotation row 02 → ✅. Next: Feature 03 (Public surface & webhooks).
 
 ### 2026-10-05 — PR #2917 merge recorded; Feature 01 (Auth & session lifecycle, pass 7) — 0 fixed, 0 new findings, 0 flagged
 
