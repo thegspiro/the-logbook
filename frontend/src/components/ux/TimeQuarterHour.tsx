@@ -25,6 +25,16 @@ interface TimeQuarterHourProps {
   preserveOffQuarterMinute?: boolean;
 }
 
+// Callers pass `form-input`: `w-full` with 16px side padding. Three of those in
+// one row shrink on a phone until "12" and "AM" no longer fit beside the native
+// arrow and the value disappears, and widening them instead pushes the row past
+// a 320px screen. So each select keeps a 4.25rem floor with 8px side padding:
+// room for its value, above the 44px touch minimum, and the row stays inside
+// 320px. Inline rather than `min-w-*` / `px-*` classes because index.css resets
+// `min-width: 0` on phone-width selects in unlayered CSS, which outranks
+// utilities, and a padding class could lose to the caller's `form-input`.
+const SELECT_FIT = { minWidth: '4.25rem', paddingLeft: '0.5rem', paddingRight: '0.5rem' } as const;
+
 const HOURS_12 = Array.from({ length: 12 }, (_, i) => {
   const hour12 = i === 0 ? 12 : i;
   return { display: String(hour12), value: i };
@@ -98,12 +108,13 @@ const TimeQuarterHour: React.FC<TimeQuarterHourProps> = ({
   const label = ariaLabel || placeholder || 'Time';
 
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex shrink-0 items-center gap-1.5">
       <select
         id={id}
         value={hour12Index !== null ? String(hour12Index) : ''}
         onChange={handleHourChange}
-        className={`${className ?? ''} touch:min-w-[44px]`}
+        className={className}
+        style={SELECT_FIT}
         required={required}
         aria-label={`${label} hour`}
       >
@@ -120,7 +131,8 @@ const TimeQuarterHour: React.FC<TimeQuarterHourProps> = ({
       <select
         value={minute !== null ? String(minute).padStart(2, '0') : ''}
         onChange={handleMinuteChange}
-        className={`${className ?? ''} touch:min-w-[44px]`}
+        className={className}
+        style={SELECT_FIT}
         required={required}
         aria-label={`${label} minute`}
       >
@@ -135,7 +147,8 @@ const TimeQuarterHour: React.FC<TimeQuarterHourProps> = ({
       <select
         value={period}
         onChange={handlePeriodChange}
-        className={`${className ?? ''} touch:min-w-[44px]`}
+        className={className}
+        style={SELECT_FIT}
         aria-label={`${label} AM/PM`}
       >
         <option value="AM">AM</option>

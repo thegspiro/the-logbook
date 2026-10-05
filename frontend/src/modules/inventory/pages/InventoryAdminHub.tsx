@@ -98,7 +98,7 @@ const NeedsAttention: React.FC<{
         <span className="flex-1">
           Some inventory services did not respond ({failedSources.join(', ')}). This queue may be incomplete.
         </span>
-        <button type="button" className="font-semibold underline" onClick={onRetry}>
+        <button type="button" className="touch:min-h-11 touch:min-w-11 font-semibold underline" onClick={onRetry}>
           Retry
         </button>
       </div>
@@ -646,7 +646,11 @@ export const InventoryAdminHub: React.FC = () => {
             failedSources.length > 0 && (
               <div className="alert-warning mb-8 flex items-center gap-2 text-sm" role="alert">
                 <span className="flex-1">Some figures on this page did not load ({failedSources.join(', ')}).</span>
-                <button type="button" className="font-semibold underline" onClick={() => void loadSummary()}>
+                <button
+                  type="button"
+                  className="touch:min-h-11 touch:min-w-11 font-semibold underline"
+                  onClick={() => void loadSummary()}
+                >
                   Retry
                 </button>
               </div>

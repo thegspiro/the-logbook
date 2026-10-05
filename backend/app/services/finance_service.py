@@ -67,6 +67,7 @@ from app.services.separation_of_duties import (
     assert_different_person,
 )
 from app.utils.csv_export import SafeCsvWriter
+from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
 from app.utils.org_timezone import resolve_scheduling_timezone
@@ -1140,6 +1141,7 @@ class FinanceService:
                 ApprovalChainStep.step_order,
                 User.first_name,
                 User.last_name,
+                User.preferred_name,
                 User.username,
             )
             .join(
@@ -1174,8 +1176,10 @@ class FinanceService:
 
         approvals = []
         for row in result:
-            requester_name = " ".join(filter(None, (row.first_name, row.last_name)))
-            requester_name = requester_name.strip() or row.username or "Unknown"
+            requester_name = format_display_name(
+                row.first_name, row.last_name, row.preferred_name
+            )
+            requester_name = requester_name or row.username or "Unknown"
             approvals.append(
                 {
                     "step_record_id": row.step_record_id,
@@ -1393,6 +1397,7 @@ class FinanceService:
                 entities.c.submitted_at,
                 User.first_name,
                 User.last_name,
+                User.preferred_name,
                 User.username,
             )
             .outerjoin(
@@ -1414,8 +1419,10 @@ class FinanceService:
 
         rows = []
         for row in result:
-            requester_name = " ".join(filter(None, (row.first_name, row.last_name)))
-            requester_name = requester_name.strip() or row.username or "Unknown"
+            requester_name = format_display_name(
+                row.first_name, row.last_name, row.preferred_name
+            )
+            requester_name = requester_name or row.username or "Unknown"
             rows.append(
                 {
                     "entity_type": row.entity_type,

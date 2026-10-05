@@ -277,7 +277,7 @@ const InventoryMaintenancePage: React.FC = () => {
   };
 
   const tabCls = (active: boolean) =>
-    `px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${active ? 'border-orange-500 text-orange-600 dark:text-orange-400' : 'border-transparent text-theme-text-muted hover:text-theme-text-primary'}`;
+    `touch:min-h-11 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${active ? 'border-orange-500 text-orange-600 dark:text-orange-400' : 'border-transparent text-theme-text-muted hover:text-theme-text-primary'}`;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
@@ -285,7 +285,7 @@ const InventoryMaintenancePage: React.FC = () => {
 
       <Link
         to="/inventory/admin"
-        className="text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1 text-sm"
+        className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 flex items-center gap-1 text-sm"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Admin

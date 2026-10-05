@@ -401,4 +401,34 @@ describe('AddMember', () => {
       expect((mockCreateMember.mock.calls[1]?.[0] as { username: string }).username).toBe('dreyes_2');
     });
   });
+
+  describe('preferred name', () => {
+    it('sends the name the member goes by, trimmed', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+      await fillRequired(user);
+      await user.type(screen.getByLabelText('Preferred Name'), ' Dee ');
+      await user.click(screen.getByRole('button', { name: /save member/i }));
+
+      await waitFor(() => expect(mockCreateMember).toHaveBeenCalled());
+      const payload = mockCreateMember.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(payload.preferred_name).toBe('Dee');
+      expect(payload.first_name).toBe('Dana');
+    });
+
+    it('omits it when left blank', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+      await fillRequired(user);
+      await user.type(screen.getByLabelText('Preferred Name'), '   ');
+      await user.click(screen.getByRole('button', { name: /save member/i }));
+
+      await waitFor(() => expect(mockCreateMember).toHaveBeenCalled());
+      expect(mockCreateMember.mock.calls[0]?.[0]).not.toHaveProperty('preferred_name');
+    });
+  });
 });

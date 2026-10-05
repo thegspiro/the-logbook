@@ -399,7 +399,10 @@ export interface CourseCohortMember {
   notes?: string;
   withdrawn_at?: string;
   added_at?: string;
+  /** Legal name (first + last). */
   full_name?: string;
+  /** Preferred (else first) + last name. */
+  display_name?: string;
   email?: string;
   progress_percentage?: number;
 }
@@ -1075,6 +1078,7 @@ export interface MemberEligibility {
   user_id: string;
   first_name?: string | null;
   last_name?: string | null;
+  preferred_name?: string | null;
   membership_number?: string | null;
   eligible: boolean;
   status: EligibilityStatus;
@@ -1452,7 +1456,7 @@ export interface ExternalUserMapping {
 }
 
 export interface ExternalUserMappingUpdate {
-  internal_user_id?: string;
+  internal_user_id?: string | null;
   is_mapped?: boolean;
 }
 

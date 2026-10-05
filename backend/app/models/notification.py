@@ -24,6 +24,7 @@ from sqlalchemy.sql import func
 
 from app.core.database import Base
 from app.core.utils import generate_uuid
+from app.utils.member_names import format_display_name
 
 
 class NotificationChannel(str, enum.Enum):
@@ -278,10 +279,14 @@ class NotificationLog(Base):
     def recipient_name(self) -> str | None:
         if not self.recipient:
             return None
-        first = getattr(self.recipient, "first_name", "") or ""
-        last = getattr(self.recipient, "last_name", "") or ""
-        full = f"{first} {last}".strip()
-        return full or None
+        # The name the member goes by — this is a notification log, not a
+        # record of note.
+        name = format_display_name(
+            getattr(self.recipient, "first_name", None),
+            getattr(self.recipient, "last_name", None),
+            getattr(self.recipient, "preferred_name", None),
+        )
+        return name or None
 
     @property
     def rule_name(self) -> str | None:

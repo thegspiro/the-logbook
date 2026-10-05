@@ -160,7 +160,7 @@ async def _build_member_specs(db, org_id, ids, extra_lines):
     )
     specs = []
     for u in rows.all():
-        name = " ".join(filter(None, [u.first_name, u.last_name])) or "Member"
+        name = u.display_name or "Member"
         barcode = _first_scannable_identifier(
             u.membership_number, fallback=_short_id(u.id)
         )
@@ -260,8 +260,8 @@ MODULE_LABELS: Dict[str, Tuple[Tuple[str, ...], SpecBuilder]] = {
     # itself requires inventory.manage, and a label document naming arbitrary
     # item ids is a read of it — accepting inventory.view (which every seeded
     # member holds) would leave this generic endpoint as a way around that.
-    # apparatus/facilities/membership stay view-level because their own pages
-    # are view-level; prospective_members.view is not a baseline grant.
+    # apparatus/facilities stay view-level because their own pages are
+    # view-level; prospective_members.view is not a baseline grant.
     "inventory": (("inventory.manage",), _build_inventory_specs),
     "apparatus": (("apparatus.view", "apparatus.manage"), _build_apparatus_specs),
     "prospective_members": (
@@ -269,7 +269,16 @@ MODULE_LABELS: Dict[str, Tuple[Tuple[str, ...], SpecBuilder]] = {
         _build_prospect_specs,
     ),
     "facilities": (("facilities.view", "facilities.manage"), _build_facility_specs),
-    "membership": (("members.view", "members.manage"), _build_member_specs),
+    # A member label is a badge: its barcode is what the check-in station and
+    # the badge scanner accept as "this member is here". It follows the ID-card
+    # rule (frontend/src/utils/memberIdCardAccess.ts) — members.manage or
+    # members.manage_id_cards — and never members.view, which every seeded
+    # position carries: that let any member print a colleague's badge through
+    # this endpoint while the card page itself refused them.
+    "membership": (
+        ("members.manage", "members.manage_id_cards"),
+        _build_member_specs,
+    ),
     # Manage-only like inventory: the storage-areas screen is, and printing
     # can assign a barcode to an area that lacks one.
     "storage_areas": (("inventory.manage",), _build_storage_area_specs),

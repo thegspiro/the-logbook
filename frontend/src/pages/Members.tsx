@@ -32,6 +32,7 @@ import type { SortDirection } from '../components/ux/SortableHeader';
 import type { MemberStats } from '../types/member';
 import { UserStatus } from '../constants/enums';
 import { buildCsv, downloadCsv } from '../utils/csv';
+import { displayNameOf } from '../utils/memberName';
 
 const Members: React.FC = () => {
   const navigate = useNavigate();
@@ -163,14 +164,18 @@ const Members: React.FC = () => {
 
   const filteredMembers = useMemo(() => {
     let result = members.filter((member) => {
-      const fullName = `${member.first_name || ''} ${member.last_name || ''}`.toLowerCase();
+      // Both the name the member goes by and their legal first name match, so
+      // "Terry" and "John" each find John "Terry" Heather.
+      const displayName = displayNameOf(member).toLowerCase();
+      const legalName = `${member.first_name || ''} ${member.last_name || ''}`.toLowerCase();
       const searchLower = searchQuery.toLowerCase();
 
       // Username is only searchable where it is also displayed: a member who
       // cannot see "@ladams" anywhere on the page cannot account for the row
       // that a search for "ladams" returns.
       const matchesSearch =
-        fullName.includes(searchLower) ||
+        displayName.includes(searchLower) ||
+        legalName.includes(searchLower) ||
         (canManageMembers && !!member.username && member.username.toLowerCase().includes(searchLower)) ||
         (member.membership_number && member.membership_number.toLowerCase().includes(searchLower)) ||
         (member.email && member.email.toLowerCase().includes(searchLower));
@@ -184,7 +189,7 @@ const Members: React.FC = () => {
     result = sortItems(result, sortField, sortDirection, (item, field) => {
       switch (field) {
         case 'name':
-          return `${item.first_name || ''} ${item.last_name || ''}`;
+          return displayNameOf(item);
         case 'status':
           return item.status;
         case 'hire_date':
@@ -490,6 +495,7 @@ const Members: React.FC = () => {
                     <div className="flex min-w-0 flex-1 items-center">
                       <Avatar
                         firstName={member.first_name}
+                        preferredName={member.preferred_name}
                         lastName={member.last_name}
                         photoUrl={member.photo_url}
                         size="md"
@@ -499,7 +505,7 @@ const Members: React.FC = () => {
                           to={`/members/${member.id}`}
                           className="text-theme-text-primary hover:text-theme-text-primary block truncate font-medium hover:underline max-md:py-2.5"
                         >
-                          {member.first_name} {member.last_name}
+                          {displayNameOf(member)}
                         </Link>
                         {canManageMembers && <div className="text-theme-text-muted text-sm">@{member.username}</div>}
                         {member.rank && (
@@ -535,7 +541,7 @@ const Members: React.FC = () => {
                           onClick={() => openMemberProfile(member.id)}
                           className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-2 text-blue-700 transition-colors hover:bg-blue-500/10 dark:text-blue-400"
                           title="View/Edit Profile"
-                          aria-label={`View or edit ${member.first_name} ${member.last_name}`}
+                          aria-label={`View or edit ${displayNameOf(member)}`}
                         >
                           <Edit className="h-4 w-4" />
                         </button>
@@ -544,7 +550,7 @@ const Members: React.FC = () => {
                             onClick={() => setReactivateModalMember(member)}
                             className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-2 text-green-700 transition-colors hover:bg-green-500/10 dark:text-green-400"
                             title="Reactivate"
-                            aria-label={`Reactivate ${member.first_name} ${member.last_name}`}
+                            aria-label={`Reactivate ${displayNameOf(member)}`}
                           >
                             <RotateCcw className="h-4 w-4" />
                           </button>
@@ -554,7 +560,7 @@ const Members: React.FC = () => {
                             onClick={() => handleDeleteMember(member)}
                             className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-2 text-red-700 transition-colors hover:bg-red-500/10 dark:text-red-400"
                             title="Delete"
-                            aria-label={`Delete ${member.first_name} ${member.last_name}`}
+                            aria-label={`Delete ${displayNameOf(member)}`}
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
@@ -692,7 +698,7 @@ const Members: React.FC = () => {
                               checked={selectedIds.has(member.id)}
                               onChange={() => toggleSelect(member.id)}
                               className="border-theme-input-border focus:ring-theme-focus-ring rounded-sm text-blue-600"
-                              aria-label={`Select ${member.first_name} ${member.last_name}`}
+                              aria-label={`Select ${displayNameOf(member)}`}
                             />
                           </td>
                         )}
@@ -700,6 +706,7 @@ const Members: React.FC = () => {
                           <div className="flex items-center">
                             <Avatar
                               firstName={member.first_name}
+                              preferredName={member.preferred_name}
                               lastName={member.last_name}
                               photoUrl={member.photo_url}
                               size="md"
@@ -709,7 +716,7 @@ const Members: React.FC = () => {
                                 to={`/members/${member.id}`}
                                 className="text-theme-text-primary hover:text-theme-text-primary font-medium hover:underline"
                               >
-                                {member.first_name} {member.last_name}
+                                {displayNameOf(member)}
                               </Link>
                               {canManageMembers && (
                                 <div className="text-theme-text-muted text-sm">@{member.username}</div>
@@ -780,7 +787,7 @@ const Members: React.FC = () => {
                                 onClick={() => openMemberProfile(member.id)}
                                 className="rounded-sm p-2 text-blue-700 transition-colors hover:bg-blue-500/10 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                                 title="View/Edit Profile"
-                                aria-label={`View or edit ${member.first_name} ${member.last_name}`}
+                                aria-label={`View or edit ${displayNameOf(member)}`}
                               >
                                 <Edit className="h-4 w-4" />
                               </button>
@@ -789,7 +796,7 @@ const Members: React.FC = () => {
                                   onClick={() => setReactivateModalMember(member)}
                                   className="rounded-sm p-2 text-green-700 transition-colors hover:bg-green-500/10 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
                                   title="Reactivate"
-                                  aria-label={`Reactivate ${member.first_name} ${member.last_name}`}
+                                  aria-label={`Reactivate ${displayNameOf(member)}`}
                                 >
                                   <RotateCcw className="h-4 w-4" />
                                 </button>
@@ -799,7 +806,7 @@ const Members: React.FC = () => {
                                   onClick={() => handleDeleteMember(member)}
                                   className="rounded-sm p-2 text-red-700 transition-colors hover:bg-red-500/10 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                                   title="Delete"
-                                  aria-label={`Delete ${member.first_name} ${member.last_name}`}
+                                  aria-label={`Delete ${displayNameOf(member)}`}
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </button>
@@ -837,9 +844,7 @@ const Members: React.FC = () => {
             deleteModalMember
               ? {
                   id: deleteModalMember.id,
-                  full_name:
-                    deleteModalMember.full_name ||
-                    `${deleteModalMember.first_name || ''} ${deleteModalMember.last_name || ''}`.trim(),
+                  display_name: displayNameOf(deleteModalMember),
                   username: deleteModalMember.username,
                   status: deleteModalMember.status,
                 }
@@ -858,10 +863,7 @@ const Members: React.FC = () => {
             reactivateModalMember
               ? {
                   id: reactivateModalMember.id,
-                  name:
-                    reactivateModalMember.full_name ||
-                    `${reactivateModalMember.first_name || ''} ${reactivateModalMember.last_name || ''}`.trim() ||
-                    reactivateModalMember.username,
+                  name: displayNameOf(reactivateModalMember) || reactivateModalMember.username,
                 }
               : null
           }

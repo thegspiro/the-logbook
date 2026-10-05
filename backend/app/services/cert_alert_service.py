@@ -323,8 +323,8 @@ class CertAlertService:
                             await self._log_in_app_notification(
                                 organization_id=organization_id,
                                 recipient_id=str(officer.id),
-                                subject=f"Member Cert Expiring: {record.course_name} - {member.full_name}",
-                                message=f"{member.full_name}'s {record.course_name} certification expires in {days_until} days.",
+                                subject=f"Member Cert Expiring: {record.course_name} - {member.display_name}",
+                                message=f"{member.display_name}'s {record.course_name} certification expires in {days_until} days.",
                                 action_url=f"/members/{member.id}/training",
                             )
 
@@ -349,7 +349,9 @@ class CertAlertService:
                                     )
                                 )
 
-                        e_first = _html.escape(member.first_name or "")
+                        e_first = _html.escape(
+                            member.preferred_name or member.first_name or ""
+                        )
                         e_course = _html.escape(record.course_name or "")
                         e_cert_num = (
                             _html.escape(record.certification_number or "")
@@ -382,7 +384,7 @@ class CertAlertService:
                         )
                         text_body = (
                             f"Certification Expiration Notice\n\n"
-                            f"Hello {member.first_name},\n\n"
+                            f"Hello {member.preferred_name or member.first_name},\n\n"
                             f"Your {record.course_name} certification expires on "
                             f"{record.expiration_date.strftime('%B %d, %Y')} ({days_until} days).\n\n"
                             f"Please renew before it expires."
@@ -429,10 +431,10 @@ class CertAlertService:
 
             days_expired = (today - record.expiration_date).days
             subject = (
-                f"EXPIRED Certification: {record.course_name} - {member.full_name}"
+                f"EXPIRED Certification: {record.course_name} - {member.display_name}"
             )
             message = (
-                f"{member.full_name}'s {record.course_name} certification "
+                f"{member.display_name}'s {record.course_name} certification "
                 f"expired on {record.expiration_date.strftime('%B %d, %Y')} "
                 f"({days_expired} days ago). No renewal has been logged."
             )
@@ -498,7 +500,7 @@ class CertAlertService:
                         to_emails.append(member.personal_email)
 
                 if to_emails or cc_emails:
-                    e_full_name = _html.escape(member.full_name or "")
+                    e_full_name = _html.escape(member.display_name or "")
                     e_course = _html.escape(record.course_name or "")
                     e_cert_num = (
                         _html.escape(record.certification_number or "")
@@ -519,7 +521,7 @@ class CertAlertService:
                     )
                     text_body = (
                         f"EXPIRED Certification: {record.course_name}\n\n"
-                        f"{member.full_name}'s certification expired on "
+                        f"{member.display_name}'s certification expired on "
                         f"{record.expiration_date.strftime('%B %d, %Y')} ({days_expired} days ago).\n\n"
                         f"No renewal has been logged."
                     )

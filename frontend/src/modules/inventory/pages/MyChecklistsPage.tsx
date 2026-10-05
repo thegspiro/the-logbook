@@ -453,7 +453,7 @@ export const MyChecklistsPage: React.FC = () => {
   // ------------------------------------------------------------------
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
@@ -865,7 +865,7 @@ export const MyChecklistsPage: React.FC = () => {
                             </span>
                           </div>
                         </div>
-                        <Play className="text-theme-text-muted h-4 w-4 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100" />
+                        <Play className="text-theme-text-muted h-4 w-4 transition-opacity pointer-fine:opacity-0 pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100" />
                       </button>
                     ))}
                   </div>

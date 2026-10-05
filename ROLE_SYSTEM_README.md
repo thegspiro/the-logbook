@@ -94,6 +94,7 @@ The following roles are automatically created for each organization:
      department running **one** supply line needs no second appointment. A
      department that splits the job drops those two and appoints an EMS Supply
      Officer _(2026-08-16)_
+   - Builds apparatus equipment checklists (`inventory.check_manage`, 2026-09-30)
    - Cannot be deleted
 
 5a. **EMS Supply Officer** (`ems_supply_officer`, Priority: 55) _(new 2026-08-16)_
@@ -177,6 +178,7 @@ The following roles are automatically created for each organization:
     - Can create, edit, and view users and members
     - Can assign roles to members
     - Receives the email when an applicant withdraws from their status page
+    - Can open any member's ID card page (`members.manage`)
     - Cannot be deleted
 
 13a. **Assistant Membership Coordinator** (`assistant_membership_coordinator`, Priority: 50) _(new 2026-09-24)_
@@ -229,7 +231,10 @@ Permissions are organized into the following categories:
 - `users.update_roles` - Update user roles
 - `members.view` - View member list
 - `members.manage` - Manage member profiles
-- `members.assign_roles` - Assign roles to members
+- `members.assign_roles` - Assign roles to members (registry name `members.assign_positions`; the old name is an alias)
+- `members.manage_id_cards` - Issue, suspend and revoke NFC ID cards, and — since 2026-09-30 — open **another** member's ID card page. Every member can open their own
+- `members.check_in` - Run the check-in station
+- `users.view_consents` - Read the photo-use consent roster
 
 ### Roles
 
@@ -266,7 +271,9 @@ Each module has view and manage permissions:
 - Training (`training.view`, `training.manage`)
 - Inventory (`inventory.view`, `inventory.manage`)
 - Scheduling (`scheduling.view`, `scheduling.manage`)
-- Locations (`locations.view`, `locations.create`, `locations.edit`, `locations.delete`, `locations.manage`)
+- Locations (`locations.view`, `locations.create`, `locations.edit`, `locations.delete`, `locations.manage`, `locations.manage_nfc_tags`)
+  - `locations.manage_nfc_tags` _(2026-10-02)_: write a room's NFC check-in tag, and switch a room's kiosk **Badge check-in** on or off. The tag itself carries no secret — writing happens on the officer's phone — so the grant decides who the app offers the writer to. Seeded on the Chief, Deputy Chief, Assistant Chief, President, Vice President and Facilities Manager
+- Apparatus `apparatus.manage_nfc_tags` _(2026-10-02)_: write an apparatus's NFC shift check-in tag. Kept apart from `apparatus.manage` so the Apparatus Officer can fit out the rig without full fleet management. Seeded on the same leadership and the Apparatus Officer
 
 **Governance Modules:**
 
@@ -298,6 +305,28 @@ Each module has view and manage permissions:
 - Vehicles (`vehicles.view`, `vehicles.manage`)
 - Budget (`budget.view`, `budget.manage`)
 - Audit (`audit.view`, `audit.export`)
+
+### Permission and position changes, September 24 – October 4, 2026
+
+| Date       | Change                                                                                                                                                                                                                                                                                                                                                                                                | Migration      |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| 2026-09-24 | New system position **Assistant Membership Coordinator** (see 13a above)                                                                                                                                                                                                                                                                                                                              | `43e9df281412` |
+| 2026-09-24 | New system position **Compliance Officer** (see 10a above), plus an inactive **Compliance** suggestion box that names it as reviewer                                                                                                                                                                                                                                                                  | `3c918c06466d` |
+| 2026-09-25 | The `fire_chief` position and rank are **labelled "Chief"** for every agency type (the top operational officer; a department running a Fire Chief and an EMS Chief adds them beneath it). The code `fire_chief` is unchanged. Only rows still carrying the exact seeded "Fire Chief" wording are renamed                                                                                              | `d4e1a7c93b58` |
+| 2026-09-25 | New `system.manage_link_domain` — change the address links in outgoing email use, on **Settings → Email**. Granted to **no** default position: only the wildcard IT Manager matches it, and a chief who wants to delegate it grants it explicitly                                                                                                                                                     | none           |
+| 2026-09-30 | **Quartermaster** gains `inventory.check_manage` — building the apparatus checklists its stock is carried on (authoring only; reading results stays with `inventory.check_view`)                                                                                                                                                                                                                      | `f73b449bdb8b` |
+| 2026-09-30 | Saving an applicant's **Target Role** is treated as granting it: the role-grant ceiling runs against whoever saves it, and again at conversion (MP-31). See [docs/PROSPECTIVE_MEMBERS_MODULE.md](./docs/PROSPECTIVE_MEMBERS_MODULE.md#conversion)                                                                                                                                                     | none           |
+| 2026-09-29 | Re-saving a member's positions holds only **newly added** positions to the granter's ceiling — keeping a higher position the member already holds no longer refuses the save or raises a false privilege-escalation alert                                                                                                                                                                             | none           |
+| 2026-09-30 | Another member's **ID card** page needs `members.manage` or `members.manage_id_cards` (it was open to every `members.view` holder). Enforced in the app: the profile data behind the card is directory information the API still serves to `members.view`                                                                                                                                             | none           |
+| 2026-10-02 | New `apparatus.manage_nfc_tags` and `locations.manage_nfc_tags` (above); `members.manage_id_cards` added to the Assistant Membership Coordinator. Additions are gated per `docs/rules/migrations.md` — written only onto non-empty system rows not already covering the grant, and the ID-card grant only while the assistant coordinator still runs the pipeline                                     | `5bed4c485d2f` |
+| 2026-10-03 | **Probationary members can sign in.** `User.is_active` meant `status == active` alone, so every Probationary account — and every junior member, whose status derives to it — was refused with "Account is inactive" and could not be scheduled. `ACTIVE_ACCOUNT_STATUSES = (ACTIVE, PROBATIONARY)` now backs both the Python and SQL forms, and shift eligibility and three scheduling rosters use it | none           |
+
+**Sign-offs are authorized by the position, not a permission** _(2026-09-28)_.
+`GET /prospective-members/my-sign-offs` and `POST .../approve-step` carry no
+permission gate: the officers a Multi-Signer Approval stage names (the Chief,
+the President) rarely hold `prospective_members.*`. The service accepts a
+signature only for a role the stage asks for **and** the caller holds, and
+returns the applicant's name and stage, never the record.
 
 ### Reads Gated at the Source, Not at the Report _(2026-08-09)_
 

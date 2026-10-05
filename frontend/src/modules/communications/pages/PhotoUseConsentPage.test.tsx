@@ -199,6 +199,25 @@ describe('PhotoUseConsentPage', () => {
     expect(screen.queryByText('Dana Agreed')).not.toBeInTheDocument();
   });
 
+  it('names a member as they go by, and finds them by either name', async () => {
+    mockGetRoster.mockResolvedValue({
+      ...roster,
+      members: [makeMember({ first_name: 'John', last_name: 'Heather', preferred_name: 'Terry' })],
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<PhotoUseConsentPage />);
+
+    expect(await screen.findByText('Terry Heather')).toBeInTheDocument();
+    expect(screen.queryByText('John Heather')).not.toBeInTheDocument();
+
+    const searchBox = screen.getByLabelText('Search members');
+    await user.type(searchBox, 'john');
+    expect(screen.getByText('Terry Heather')).toBeInTheDocument();
+    await user.clear(searchBox);
+    await user.type(searchBox, 'terry');
+    expect(screen.getByText('Terry Heather')).toBeInTheDocument();
+  });
+
   it('re-requests the roster with inactive members when the toggle is set', async () => {
     const user = userEvent.setup();
     renderWithRouter(<PhotoUseConsentPage />);

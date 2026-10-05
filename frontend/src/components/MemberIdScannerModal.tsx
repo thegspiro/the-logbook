@@ -20,6 +20,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { ScanLine, Camera, CameraOff, AlertCircle, Loader2, X, Flashlight, FlashlightOff } from 'lucide-react';
 import { inventoryService, type MemberInventorySummary } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
+import { displayNameOf } from '../utils/memberName';
 import { useHtml5Scanner } from '../hooks/useHtml5Scanner';
 import { useScanFeedback } from '../hooks/useScanFeedback';
 import { ScanSuccessFlash } from './ux/ScanSuccessFlash';
@@ -81,7 +82,7 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({ isOp
           if (match) {
             onMemberIdentified({
               userId: match.user_id,
-              memberName: match.full_name || match.username,
+              memberName: displayNameOf(match) || match.username,
             });
             return;
           }
@@ -103,7 +104,7 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({ isOp
         if (match) {
           onMemberIdentified({
             userId: match.user_id,
-            memberName: match.full_name || match.username,
+            memberName: displayNameOf(match) || match.username,
           });
         } else {
           setError(`No member found for "${decoded}"`);

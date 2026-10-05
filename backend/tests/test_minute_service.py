@@ -33,6 +33,7 @@ from app.models.minute import (
     MinutesStatus,
     MotionStatus,
 )
+from app.models.user import User
 from app.schemas.minute import (
     ActionItemCreate,
     ActionItemUpdate,
@@ -1474,7 +1475,8 @@ class TestCreateFromMeeting:
     async def test_create_from_meeting_with_attendees(
         self, service, mock_db, org_id, user_id
     ):
-        """create_from_meeting populates attendees from meeting attendees."""
+        """create_from_meeting populates attendees from meeting attendees,
+        named as each member goes by."""
         meeting_id = uuid4()
 
         # Mock attendee
@@ -1483,11 +1485,9 @@ class TestCreateFromMeeting:
         mock_attendee.present = True
         mock_attendee.excused = False
 
-        # Mock user lookup
-        mock_user = MagicMock()
-        mock_user.first_name = "John"
-        mock_user.last_name = "Doe"
-        mock_user.username = "jdoe"
+        mock_user = User(
+            first_name="John", last_name="Doe", preferred_name="Jack", username="jdoe"
+        )
 
         mock_meeting = MagicMock()
         mock_meeting.id = str(meeting_id)
@@ -1519,7 +1519,7 @@ class TestCreateFromMeeting:
         assert result is not None
         created = mock_db.add.call_args[0][0]
         assert len(created.attendees) == 1
-        assert created.attendees[0]["name"] == "John Doe"
+        assert created.attendees[0]["name"] == "Jack Doe"
         assert created.attendees[0]["present"] is True
 
     @pytest.mark.unit

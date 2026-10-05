@@ -9749,6 +9749,89 @@ New `EMAIL_USE_SSL` environment variable added to `.env.example` and `.env.examp
 
 ---
 
+## Late September 2026 Fixes (2026-09-24 → 10-04)
+
+### Problem: An upload larger than 1 MB fails with 413 Request Entity Too Large
+
+**Cause (Fixed 2026-09-30):** `frontend/nginx.conf` set no
+`client_max_body_size`, so nginx's 1 MB default applied to everything proxied
+to `/api` in the default Docker deployment — a single 2 MB phone screenshot
+was refused before the backend saw it. The infrastructure nginx and the AWS
+guide's host nginx allowed 50 MB, below the backend's own 60 MB ceiling
+(`MAX_REQUEST_BODY_SIZE`), so a maximum-size 50 MB prospect document (plus its
+multipart envelope) or a suggestion with five 10 MB screenshots failed there.
+
+**Solution:** All three now use `60M`. Rebuild the frontend image
+(`docker compose up -d --build`) to pick it up. A reverse proxy you maintain
+yourself — Nginx Proxy Manager, SWAG, a host nginx — has its own limit: set it
+to `60M` too, or it will still refuse first.
+
+### Problem: The `production` profile's nginx container will not start
+
+**Symptom:** `[emerg] cannot load certificate "/etc/nginx/ssl/fullchain.pem"`.
+
+**Cause (Changed 2026-09-30):** The container now reads
+`infrastructure/nginx/docker.conf` and its certificate from
+`infrastructure/nginx/ssl/` (`fullchain.pem`, `privkey.pem`), and will not start
+without both. See [DEPLOYMENT.md](DEPLOYMENT.md#docker-compose-production-profile)
+and [UPGRADING.md](UPGRADING.md).
+
+### Problem: The app is still reachable over plain HTTP on port 3000 behind the nginx container
+
+**Cause:** `--profile production` starts nginx but leaves the frontend's port
+3000 published. Pin
+`COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml:docker-compose.proxy.yml`
+in `.env`; the proxy file unpublishes port 3000 so nginx is the only way in.
+The installers respect that pin since 2026-09-30 — before, re-running one
+republished port 3000 until the next `docker compose up -d`.
+
+### Problem: Finance — creating a fiscal year fails with 422, or clearing a field does nothing
+
+**Cause (Fixed 2026-09-30):** The Finance pages sent camelCase field names and
+the server read only snake_case. Creates were refused for "missing" fields;
+updates silently dropped every multi-word field (a cleared **Budget** on a
+purchase request reported success and kept the old one). Every Finance request
+now accepts both spellings. Re-make any edit that "saved" without effect.
+
+### Problem: Finance — a request is stuck in Pending Approval with no approval steps
+
+**Cause:** No approval chain matched it, or the chain has no steps.
+**Solution (2026-09-30):** a `finance.approve` holder other than the requester
+opens the request and uses the **"No approval chain applies to this request"**
+panel's **Approve** or **Deny**. Add steps to the chain (Finance → Settings →
+Approval Chains → **Add step**, built 2026-09-29) to route future requests.
+
+### Problem: IP Security — New Request, Reject, Revoke or Add Country fails with 422
+
+**Cause (Fixed 2026-09-29):** the page posted camelCase bodies to snake_case
+schemas. **Approve** succeeded but dropped the duration override and notes —
+check exceptions approved before this date.
+
+### Problem: A time in an email, PDF or CSV is a day (or several hours) off
+
+**Cause (Fixed 2026-09-25 → 09-27):** emailed times, PDF dates and several CSV
+exports used UTC, and many "today" checks used the server's UTC date. They now
+use the timezone in **Settings → Organization → Profile → Timezone**
+(America/New_York when unset). **If times are still off, check that setting.**
+Training records created before 2026-09-27 from evening events keep their UTC
+date by design — see KNOWN_LIMITATIONS.md, "Today" Is the Department's Date.
+
+### Problem: A new member cannot sign in — nobody knows their password
+
+**Cause (Fixed 2026-09-27):** With email off, **Add Member** and prospect
+conversion generated a temporary password that only the (unsent) welcome email
+carried. Now Add Member requires **Set initial password** when email cannot
+send, Import Members withdraws **Send welcome emails now**, and the conversion
+dialog asks how the member gets a password. For an account created before the
+fix, use **Reset Password** in Member Management.
+
+### Problem: Requests with no or malformed `Host` header now get 400
+
+**Cause (2026-09-24):** starlette 1.7.0's `TrustedHostMiddleware` parses `Host`
+properly wherever the Host allowlist is active (production, staging, or any
+environment with `TRUSTED_HOSTS` set). Make health checks and proxies send the real hostname. See
+[Configuration → Security](../wiki/Configuration-Security.md#host-header-allowlist-2026-07).
+
 ## Still Stuck?
 
 1. **Search this guide** — Ctrl+F with keywords from your error. It is one file

@@ -97,6 +97,7 @@ from sqlalchemy.sql import and_, func
 
 from app.core.database import Base
 from app.core.utils import generate_uuid
+from app.utils.member_names import format_display_name, format_legal_name
 from app.utils.membership import (
     DEFAULT_CLASS,
     DEFAULT_STATUS,
@@ -307,6 +308,11 @@ class User(Base):
     first_name = Column(String(100))
     middle_name = Column(String(100))
     last_name = Column(String(100))
+    # The name a member goes by ("Terry" for John Terry Heather). It replaces
+    # first_name on everyday screens only; first_name stays the legal name of
+    # record that reports, training records, certificates, ballots and legal
+    # documents must carry. NULL means "goes by first_name".
+    preferred_name = Column(String(100), nullable=True)
     membership_number = Column(
         String(50)
     )  # Organization-assigned membership ID (e.g., "001", "M-042")
@@ -540,8 +546,18 @@ class User(Base):
 
     @property
     def full_name(self) -> str:
-        """Get user's full name"""
-        return f"{self.first_name} {self.last_name}".strip()
+        """The legal name of record: first and last name.
+
+        Reports, exports, training records, certificates, ballots and legal
+        documents read this. It deliberately ignores ``preferred_name`` — use
+        ``display_name`` for everyday references to a member.
+        """
+        return format_legal_name(self.first_name, self.last_name)
+
+    @property
+    def display_name(self) -> str:
+        """The name a member is known by: preferred name (else first) + last."""
+        return format_display_name(self.first_name, self.last_name, self.preferred_name)
 
     @hybrid_property
     def is_active(self) -> bool:

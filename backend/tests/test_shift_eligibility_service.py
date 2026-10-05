@@ -116,6 +116,7 @@ def _member(user_id, rank="ff", membership_type="active", platoon=None):
         membership_type=membership_type,
         platoon=platoon,
         full_name=f"Pat {rank.replace('_', ' ').title()}",
+        display_name=f"Pat {rank.replace('_', ' ').title()}",
     )
 
 

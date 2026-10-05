@@ -176,6 +176,48 @@ class TestRoster:
         with pytest.raises(ToolError, match="not a valid id"):
             await _call(server, principal, "get_member", member_id="nope")
 
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_a_preferred_name_is_shown_and_searchable(
+        self, server, org_with_members, db_session
+    ):
+        """Listed as "Sammy Rivera" and findable as Sammy; the legal name
+        stays in ``full_name``, as the members API reports it."""
+        org_id, admin_id, member_id = org_with_members
+        await db_session.execute(
+            text("UPDATE users SET preferred_name = 'Sammy' WHERE id = :id"),
+            {"id": member_id},
+        )
+        await db_session.flush()
+        principal = _principal(org_id, admin_id)
+
+        found = await _call(server, principal, "list_members", search="sammy")
+
+        assert [m["id"] for m in found["items"]] == [member_id]
+        one = found["items"][0]
+        assert one["display_name"] == "Sammy Rivera"
+        assert one["full_name"] == "Sam Rivera"
+        assert one["preferred_name"] == "Sammy"
+
+
+class TestMcpNameHelpers:
+    """DB-free: the shared name helpers every MCP tool reports names through."""
+
+    def test_display_name_prefers_the_preferred_name(self):
+        from app.mcp.tools._common import display_name
+        from app.models.user import User
+
+        assert (
+            display_name(
+                User(first_name="John", last_name="Heather", preferred_name="Terry")
+            )
+            == "Terry Heather"
+        )
+        assert display_name(User(first_name="John", last_name="Heather")) == (
+            "John Heather"
+        )
+        assert display_name(User(first_name=None, last_name=None)) is None
+        assert display_name(None) is None
+
 
 class TestGating:
     @pytest.mark.parametrize(

@@ -217,6 +217,16 @@ all move.]**
 > hasn't happened yet moves. Classes that already ran stay put — their
 > attendance records are attached to those dates."
 
+> "Two things it gets right for you. A seven o'clock class stays at seven
+> o'clock, even if the clocks change in between. And if any class it would move
+> already has its attendance finalized, it moves **nothing** and tells you why
+> — you never end up with half a schedule shifted."
+
+**[PRODUCTION NOTE — 2026-10-04. New line (fixed 2026-10-04: the shift used to
+move a class an hour across a daylight-saving change, and a finalized class
+partway through left the earlier ones moved). About 10 seconds; re-time
+Chapter 4.]**
+
 **[SCREEN: Click Add class; fill in a make-up session.]**
 
 > "Need a make-up night that was never on the syllabus? Add class. The roster

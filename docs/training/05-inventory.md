@@ -58,13 +58,13 @@ Navigate to **Inventory** in the sidebar. The inventory landing page shows all i
 
 Key pages in the inventory module:
 
-| Page                | URL                        | Description                                                              |
-| ------------------- | -------------------------- | ------------------------------------------------------------------------ |
-| **Items List**      | `/inventory`               | Browse all equipment and supplies with search, filters, and sorting      |
-| **My Issued Gear**  | `/inventory/my-equipment`  | View your personally assigned items and active checkouts                 |
-| **Item Detail**     | `/inventory/items/:id`     | Full item record with barcode, history, maintenance, and NFPA compliance |
-| **Storage Areas**   | `/inventory/storage-areas` | Hierarchical storage location management (Facility → Room → Area)        |
-| **Admin Dashboard** | `/inventory/admin`         | Summary statistics, low-stock alerts, and navigation to admin sub-pages  |
+| Page                | URL                        | Description                                                                              |
+| ------------------- | -------------------------- | ---------------------------------------------------------------------------------------- |
+| **Items List**      | `/inventory`               | Browse all equipment and supplies with search, filters, and sorting (`inventory.manage`) |
+| **My Issued Gear**  | `/inventory/my-equipment`  | View your personally assigned items and active checkouts                                 |
+| **Item Detail**     | `/inventory/items/:id`     | Full item record with barcode, history, maintenance, and NFPA compliance                 |
+| **Storage Areas**   | `/inventory/storage-areas` | Hierarchical storage location management (Facility → Room → Area) (`inventory.manage`)   |
+| **Admin Dashboard** | `/inventory/admin`         | Summary statistics, low-stock alerts, and navigation to admin sub-pages                  |
 
 ![Inventory Items list with search, category filter, and status pills](./images/05-01-inventory-items.png)
 
@@ -120,6 +120,16 @@ cycle attached.
 in dependency order on one screen. While any of them is missing, the admin hub
 carries a prompt into it naming exactly what is left.
 
+The items list points there too _(2026-09-29)_. A department with no items at
+all is told "Your department has no inventory items yet"; a quartermaster gets
+**Open the Setup Guide** beside **Add Item**, and a member is told items appear
+once a quartermaster adds them. A filter that matches nothing still reads "No
+items found", and a list that failed to load says "The items did not load" with
+**Retry**, rather than claiming the department is empty. The **Request
+Equipment** form makes the same distinction: an empty catalog reads "Your
+department has not listed any equipment yet", a failed load "The equipment list
+did not load", and only a search that found nothing says "Nothing matches that".
+
 ![The inventory admin hub with the "Finish inventory setup" prompt naming what is still missing](./images/05-72-setup-prompt.png)
 
 ### The four steps
@@ -141,6 +151,16 @@ bookmarked or reloaded without losing your place.
 A room is the place an item is kept: a station bay, a gear room, a supply
 closet. Name is the only required field; building and room number are optional
 and only help you tell two similar rooms apart later.
+
+> **Adding a room needs a location permission** _(2026-09-29)_. A room is a
+> location record, and creating one needs `locations.create` or
+> `locations.manage` — which the seeded Quartermaster position does not hold.
+> Without either, this step shows no form; it reads _"Adding a room needs
+> permission to create locations, which your position does not have. Use a room
+> listed above, or ask someone who manages locations to add the one you need."_
+> Before this, the form was offered anyway and every save failed with a
+> permission error. Whether quartermasters should be able to add rooms is an
+> open owner decision (see `docs/KNOWN_LIMITATIONS.md`).
 
 ![Step 1 of the inventory setup workflow, with no rooms declared yet](./images/05-73-setup-rooms.png)
 
@@ -165,6 +185,12 @@ offered again, so the step is safe to come back to: a second visit adds only
 what is missing. **Select all** ticks everything still available in one action.
 Everything created here is an ordinary category afterwards and can be edited or
 removed on the Categories page.
+
+**Continue saves what you ticked** _(2026-09-30)_. You do not have to press the
+add button first: **Continue** adds the ticked categories and then moves on. If
+saving them fails, the page stays on this step so nothing is silently lost.
+Before this fix, ticking categories and pressing Continue discarded the ticks,
+marked the step done, and left **First items** with an empty Category list.
 
 ![Step 3 offering the standard fire-service starter categories, one of them already added](./images/05-74-setup-categories.png)
 
@@ -222,6 +248,14 @@ Click on any item to open its edit form, where you can view and modify:
 
 ![Inventory item form with category, serial, condition and tracking fields](./images/05-05-item-form-modal.png)
 
+**[SCREENSHOT — REPLACE `05-05-item-form-modal.png`.** The form gained a help line under **Tracking Type** that follows the choice ("Individual: one record per physical item, such as a radio or an SCBA pack, tracked on its own, usually by serial number." / "Pool: one record for a stock of identical items, such as gloves or T-shirts, counted by quantity and handed out a few at a time."). Re-shoot with an Individual item in a category that requires serial numbers and maintenance, so **Serial # \*** and **Inspection Interval (days) \*** carry their required markers.**]**
+
+The form now says what the category demands _(2026-09-29)_. When the chosen
+category requires serial numbers, **Serial #** is marked required; when it
+requires maintenance, **Inspection Interval (days)** is required and must be at
+least 1. The server always refused such an item — the form now says so on the
+field instead of with an error after **Create**.
+
 ---
 
 ## Categories
@@ -272,7 +306,7 @@ The inventory system supports two tracking modes:
   with every unit out reads `0` on hand, never a negative number
 - Pool items must have a quantity of at least 1 when created
 
-> **Hint:** Set the tracking type when creating an item. It determines whether the item appears in the assignment workflow (individual) or the issue/return workflow (pool).
+> **Hint:** Set the tracking type when creating an item. It determines whether the item appears in the assignment workflow (individual) or the issue/return workflow (pool). The line under **Tracking Type** on the item form describes whichever one is selected _(2026-09-30)_.
 
 ---
 
@@ -480,6 +514,17 @@ When a quartermaster issues a **pool** item to a member, the system checks the m
 
 ![Pool item issue dialog warning that the quantity exceeds the member’s uniform allowance, with the "Override allowance" checkbox](./images/05-13-issue-allowance-exceeded.png)
 
+> **The pool dialog refuses what the server would refuse** _(2026-09-29)_.
+> **Issue** stays disabled while the quantity exceeds the allowance and
+> **Override allowance** is unticked — it used to send the request and show the
+> server's refusal. A quantity above what is on hand is reported ("Only _n_ on
+> hand.") and blocks the issue; on a return, above what the member holds
+> ("Only _n_ issued."). Both used to be silently lowered to the maximum, so a
+> quartermaster who typed 12 issued 8 without being told. A category with no
+> allowance now says "No issuance allowance is set for this category." instead
+> of "-1 of -1 used", and the list of current issuances names each holder
+> (a departed member reads "Former member").
+
 ### Edge Cases
 
 | Scenario                       | Behavior                                                                   |
@@ -497,11 +542,11 @@ When a quartermaster issues a **pool** item to a member, the system checks the m
 
 Once an equipment request has been **approved**, a quartermaster can **fulfill** it — turning the request into an actual issuance, checkout, or assignment in one step. Open the request from **Gear Requests** and click **Fulfill**.
 
-- The page opens on **Pending**, which is the review queue. Approved and
-  fulfilled requests are behind the status filter — switch it to **All** to see
-  a request's whole life.
-- The system routes fulfillment by the item's tracking type: a **pool** item becomes a pool issuance (allowance-checked unless overridden); an **individual** item becomes a checkout (for checkout requests) or an assignment.
-- The request then shows a terminal **Fulfilled** status and one line saying
+- The page opens on **Awaiting review**, which is the review queue. Approved
+  and issued requests are behind the status filter — switch it to **All** to
+  see a request's whole life.
+- The system routes fulfillment by the item's tracking type: a **pool** item becomes a pool issuance (allowance-checked unless overridden); an **individual** item becomes a checkout (for checkout requests) or an assignment. For pool stock the **Fulfill** dialog opens on issuance, and picking a pool item moves the method there _(2026-09-29)_ — it used to offer a checkout, which the server always refuses for pool stock.
+- The request then shows a terminal **Issued** status and one line saying
   which way it went and when — "Fulfilled via issuance on 8/11/2026".
 
 > **Corrected 2026-08-12.** That last line previously promised "who fulfilled
@@ -510,9 +555,59 @@ Once an equipment request has been **approved**, a quartermaster can **fulfill**
 > (`fulfillment_reference_id`) but nothing renders it, so tracing a fulfilled
 > request to what it created means finding that record by member and date.
 
+### The quartermaster and the member use the same words _(2026-09-28)_
+
+The stored statuses are workflow terms, and "denied" in particular reads as a
+verdict on the member. Both sides now show one set of labels — the
+quartermaster's badges, the **Filter by status** list and the member's own
+request list:
+
+| Stored    | Shown as            |
+| --------- | ------------------- |
+| pending   | **Awaiting review** |
+| approved  | **Approved**        |
+| denied    | **Declined**        |
+| fulfilled | **Issued**          |
+
+In the review dialog the button is **Decline** (not "Deny"), next to **Approve
+for later fulfillment** and **Approve & fulfill now**. The dialog reads **Member
+asked for:** and describes tracking in words ("Tracked individually" / "Issued
+from bulk stock"). When **Approve & fulfill now** is greyed out, hovering it
+says why: _"Nothing matching is on hand to issue right now — approve it and
+fulfil later"_. Toasts use the member's words too — "Request declined",
+"Issued to _name_". Filter values sent to the API are unchanged.
+
+**Review Notes now reach the member.** The placeholder says so ("Shown to the
+member on their request, e.g. why it was declined or when to expect it"), and
+the member's request list on **My Issued Gear** shows the note under the
+request. Before this, the dialog promised the note was "for the requester" but
+nothing displayed it, so a decline arrived with no reason.
+
+### The member is told the outcome _(2026-09-28)_
+
+Approving, declining or issuing a request now sends the requester a notice: an
+in-app bell entry linking to **My Issued Gear**, a web push where push is set
+up, and an email from the new editable **Equipment Request Update** email
+template (on the Email Templates page), carrying your review note. **Never a text
+message** — this is an administrative notice.
+
+- **Approve & fulfill now** sends one notice, when the item is issued, not an
+  "approved" one followed by an "issued" one.
+- A department can switch the whole notice off with the **Equipment Request
+  Update** notification rule (Notifications → Rules), which is on by default.
+- The email is optional for the member: it falls under **Equipment and
+  inventory updates** in the email choices on their own account settings, on
+  by default. The bell entry
+  still arrives if they turn the email off.
+
+Migration `fb7da5b05833` widens the template-type and rule-trigger columns for
+the new value; it changes no data.
+
 > **Note:** Fulfillment is **not** reversible by re-running it — each fulfill action creates a new issuance/checkout/assignment. Only requests in the **Approved** state can be fulfilled, which prevents accidentally fulfilling the same request twice.
 
 ![Gear Requests — a pending request, an approved one carrying Fulfill, and a fulfilled one with its terminal badge](./images/05-68-equipment-request-states.png)
+
+**[SCREENSHOT — REPLACE `05-68-equipment-request-states.png`.** The status badges and the filter now read **Awaiting review**, **Approved**, **Issued** and **Declined** (was Pending / Approved / Fulfilled / Denied), and the filter starts on **Awaiting review**. Re-shoot with **All** selected so one request in each of Awaiting review, Approved (carrying **Fulfill**) and Issued is in frame.**]**
 
 ---
 
@@ -528,7 +623,7 @@ When stock falls below an item's reorder point, the system generates alerts and 
 2. Set the **Reorder Point** — the stock level at which a reorder alert triggers.
 3. Save.
 
-When available stock drops to or below the reorder point, the item appears on the low-stock dashboard and triggers email and/or SMS notifications (if Twilio is enabled).
+When available stock drops to or below the reorder point, the item appears on the low-stock dashboard and in the daily low-stock email.
 
 ### Creating a Reorder Request
 
@@ -542,33 +637,49 @@ When available stock drops to or below the reorder point, the item appears on th
 
 ### Reorder Request Workflow
 
-| Status       | Description                                                                           |
-| ------------ | ------------------------------------------------------------------------------------- |
-| **Pending**  | Request submitted, awaiting approval                                                  |
-| **Approved** | Approved by a supervisor                                                              |
-| **Ordered**  | Purchase order placed with vendor (vendor name, PO number, expected delivery tracked) |
-| **Received** | Items received and stock quantities reconciled                                        |
+| Status                 | Description                                                                           |
+| ---------------------- | ------------------------------------------------------------------------------------- |
+| **Pending**            | Request submitted, awaiting approval                                                  |
+| **Approved**           | Approved by a supervisor                                                              |
+| **Ordered**            | Purchase order placed with vendor (vendor name, PO number, expected delivery tracked) |
+| **Partially received** | Some of the ordered quantity has been received                                        |
+| **Received**           | Items received and stock quantities reconciled                                        |
+| **Cancelled**          | Withdrawn before it was received                                                      |
 
 Each status transition is audit-logged with the user, timestamp, and any notes.
+The list, the status filter and the badges show these words _(2026-09-29)_ —
+they used to show the stored values (`partially_received`).
+
+> **Known limitation — a reorder made here cannot be received** _(2026-09-29,
+> workflow review W41-5)_. **Receive stock** needs the request linked to an
+> inventory item, and nothing on this page sets that link: the create and edit
+> forms have no item picker, and the low-stock quick fill copies only the item's
+> name. The **Receive stock** dialog now says an unlinked request cannot be
+> received here and is disabled, rather than failing at submit. Receive the
+> delivery with **Receive Stock** on the items list instead (see
+> [Receiving a delivery](#receiving-a-delivery)) until this is decided; it is
+> open in `docs/KNOWN_LIMITATIONS.md`.
 
 ![Reorder requests table with requested quantities and status](./images/05-14-reorder-requests.png)
 
 > **Edge case:** If an item's stock is replenished through a regular return or issuance reversal (not through the reorder workflow), the reorder request remains open. Admins should manually close or cancel outdated requests.
 
-### Low Stock SMS Alerts
+### Low Stock Alerts Are Email-Only
 
-When `TWILIO_ENABLED=True` in the environment configuration, low-stock alerts are sent via SMS to configured recipients in addition to email notifications.
+> **Corrected 2026-10-04.** This section used to describe SMS low-stock alerts
+> sent through Twilio, with recipients under "Settings > Notifications >
+> Inventory Alerts". No such text is sent: since 2026-08-16 SMS is limited to
+> the alerts in the `SmsAlert` allowlist (today, only urgent department
+> messages), and reordering is a business-hours decision made against an
+> itemised table a text cannot carry.
 
-SMS alerts include:
-
-- Item name
-- Current stock level
-- Reorder point threshold
-- Direct link to the reorder request page
-
-Configure SMS recipients in **Settings > Notifications > Inventory Alerts**.
-
-> **Edge case:** SMS alerts are rate-limited to one per item per 24-hour period to prevent alert fatigue. If stock continues to drop, the initial alert covers it. A new alert is sent only if stock was replenished and then dropped again.
+Once a day (07:00 where an external scheduler runs it), each department's
+low-stock items are emailed as a table — item, category, current quantity and
+reorder point. For an item stocked in dated lots the quantity counts in-date
+lots and says so. Each recipient gets only the rows they may see: gear rows go
+to inventory managers, medical-supply rows to whoever manages medical supplies,
+and someone holding both gets one complete email. An officer who has turned
+off their quartermaster duty emails is left out.
 
 ---
 
@@ -586,7 +697,7 @@ Each inventory item has a dedicated detail page at `/inventory/items/:id` with a
 ### Main Content (Tabbed)
 
 - **Overview**: Full item details, photos, purchase info, warranty
-- **History**: Chronological log of all status changes, assignments, checkouts, and returns
+- **History**: Chronological log of all status changes, assignments, checkouts, and returns — shown only to `inventory.manage` holders _(2026-09-29)_; a member opening their own gear used to get "Insufficient permissions" over an empty tab. Without it the page opens on **Stock Lots**
 - **Maintenance**: Maintenance records and upcoming scheduled maintenance
 - **NFPA Compliance**: (If NFPA tracking enabled) Lifecycle dates, ensemble info, exposures, inspections
 
@@ -617,13 +728,26 @@ starting from the item or from the person.
 
 **From the member** — kitting somebody out, several items at once:
 
-1. Go to **Inventory Admin > Members Equipment**.
-2. Click **Assign** on their row.
-3. Scan each item, or type a name, barcode, serial or asset tag and press
+1. Go to **Inventory Admin > Members**.
+2. Click **Assign** on their row. The **Distribute Items** dialog opens.
+3. Under **Intended duration**, choose **Ongoing assignment** ("Theirs until
+   they return it or leave, like turnouts.") or **Temporary loan** ("Lent for a
+   set time and due back on a date you choose.", which then asks for an
+   **Expected return**). Pool stock is issued from stock whichever you choose.
+4. Scan each item, or type a name, barcode, serial or asset tag and press
    **Enter**. Items stack up in a list with a quantity each, and anything added
    twice is refused with a notice rather than counted twice.
-4. Click **Assign _n_ Items**. Each item is applied independently, so one
-   failure does not lose the rest — the result list says what happened to each.
+5. Click **Review _n_ Items**, then **Confirm** in the **Confirm Distribution**
+   box. Each item is applied independently, so one failure does not lose the
+   rest — the result list says what happened to each.
+
+> **The review button says what it is waiting for** _(2026-09-30)_. With items
+> staged and no duration chosen, **Review _n_ Items** stays disabled and the
+> line beside it reads _"Choose Ongoing assignment or Temporary loan above to
+> continue."_; for a temporary loan with no date it reads _"Set the expected
+> return date to continue."_ There is still no default — choosing is deliberate,
+> so nobody hands out turnouts as a loan by accident. Before this the button
+> was disabled with no explanation.
 
 ### Viewing Your Assignments
 
@@ -633,6 +757,8 @@ Your assigned items appear in two places:
 - **Inventory > Items** - Items assigned to you are marked with your name
 
 ![Assigning items to a member by scanning or searching, with two items staged](./images/05-57-assign-scan-modal.png)
+
+**[SCREENSHOT — REPLACE `05-57-assign-scan-modal.png`.** The dialog's intro now reads "Hand gear to this member. Find each item by scanning its label or typing its name, serial number or barcode, then choose how long they keep it.", and each **Intended duration** option carries a one-line description under its name. Re-shoot **Distribute Items** with two items staged and **Ongoing assignment** chosen, so **Review 2 Items** is enabled; a second frame with no duration chosen would show the "Choose Ongoing assignment or Temporary loan above to continue." line.**]**
 
 ---
 
@@ -670,7 +796,7 @@ For events or training sessions where multiple items need to be processed at
 once, use these two screens.
 
 Both start from a **member**, not from a list of items — you pick the person on
-**Inventory Admin > Members Equipment** and the screen then works on their gear.
+**Inventory Admin > Members** and the screen then works on their gear.
 There is no separate entry in the admin menu for either.
 
 > **"Batch Checkout" is now "Item Distribution"** _(renamed 2026-08-26)_. The
@@ -695,17 +821,18 @@ There is no separate entry in the admin menu for either.
 
 ### Item Distribution
 
-1. Go to **Inventory Admin > Members Equipment**.
-2. Click **Assign** on the member's row.
+1. Go to **Inventory Admin > Members**.
+2. Click **Assign** on the member's row, and choose the **Intended duration**.
 3. Scan each item, or type a name, barcode, serial or asset tag and press
    **Enter**. Each addition appears in a staged list with its own quantity.
-4. Click **Assign _n_ Items**.
+4. Click **Review _n_ Items**, check the list (each line says whether it becomes
+   a permanent assignment, a temporary loan or a pool issuance), and confirm.
 
 Each item is processed individually — if one item fails (e.g., already checked out), the others still succeed. The results screen shows per-item success/failure status.
 
 ### Batch Return
 
-1. Go to **Inventory Admin > Members Equipment**.
+1. Go to **Inventory Admin > Members**.
 2. Click **Return** on the member's row. Everything they hold is listed and
    selected, with **Select All** / **Deselect All** above it.
 3. For each item, set the return condition (excellent, good, fair, poor, damaged).
@@ -723,7 +850,7 @@ Scanning is **inside the assign and return flows**, not a lookup screen of its
 own. You choose the person and what you are doing first, then scan; there is no
 "scan an item and pick an action afterwards" step.
 
-1. Go to **Inventory Admin > Members Equipment** (or **Assign Items** from the
+1. Go to **Inventory Admin > Members** (or **Assign Items** from the
    items list, which asks who first).
 2. Click **Assign** or **Return** on the member's row.
 3. Click **Start Camera** and hold the barcode or QR code up to it. Each
@@ -871,6 +998,9 @@ week listing them.
 4. The page moves to the next item after each link. **Skip this item** passes
    one over.
 
+If inventory NFC is off, the page says an administrator can turn it on under
+**NFC Tags** — a quartermaster's `inventory.manage` does not open that setting.
+
 ### Identifying a member by their ID card
 
 If your department issues NFC ID cards (Settings > Integrations > NFC ID
@@ -897,8 +1027,11 @@ Self-Service Kiosk** on a tablet and press **Start kiosk**.
 3. Tap **Done** when you are finished.
 
 The kiosk says why it will not lend something (for example, "Ask a
-quartermaster" for restricted gear). It forgets you after a minute without a
-tap.
+quartermaster" for restricted gear), in plain words without a support code. It
+forgets you after a minute without a tap — and since 2026-09-29 the next member
+can simply tap their own card while it is still greeting the last one; it used
+to answer "This tag is not linked to anything" until the first member pressed
+**Done**. A suspended card reads "This card is suspended. Ask an officer."
 
 ### Tapping without signal
 
@@ -937,7 +1070,7 @@ deletes their tags; re-link them afterwards.
 180 (the default) or 365 days. "Handled" means an NFC tap by a quartermaster,
 an assignment or return, a checkout or check-in, or an issuance or its return.
 Editing the item's record does not count. Items never handled at all are
-listed first as **Never**. Filter by **Category**, and use **Download CSV** for
+listed first as **Never** — including items created today, since being added is not being handled (an open owner decision, workflow review W44-2). Filter by **Category**, and use **Download CSV** for
 the full list.
 
 This report works whether or not NFC tags are turned on.
@@ -979,14 +1112,15 @@ Generate barcode labels for inventory items to attach to equipment.
 5. Print one of three ways:
    - **PDF** (recommended for sticker/thermal printers) — downloads a PDF sized to the exact label; open it and print with your label printer selected.
    - **Print Labels** — prints directly through the browser print dialog.
+   - **Print to _printer name_** — when your department has registered a network label printer (Settings → Label Printers), a **Label printer** picker and this button appear; the labels go straight to that printer with no print dialog. The page remembers the printer you last used on this browser. The button stays disabled, with the reason beside it, until the run can be sent: no printer chosen, a non-thermal size selected for a label printer, a size that does not match the printer's registered stock, or an item that has no stored barcode yet ("download the PDF once to assign them"). After a send the page reports how many labels went and any fault or warning the printer returned.
 
-   > **Corrected 2026-09-24.** This step used to list **Send to Printer** first.
-   > The inventory barcode page does not have that button: direct printing to a
-   > network label printer is offered on the shared label pages — members,
-   > applicants, apparatus and facilities — but the inventory page prints by PDF
-   > or browser dialog only. The section on
-   > [direct printing](#direct-printing-to-a-network-label-printer) below
-   > applies to those other pages.
+   > **Corrected 2026-10-04.** A 2026-09-24 note here said the inventory page
+   > had no direct-printing button and printed by PDF or browser dialog only.
+   > That was written while the network-printing change (#2651) was still
+   > merging; the inventory page has offered **Print to _printer_** since that
+   > release. The section on
+   > [direct printing](#direct-printing-to-a-network-label-printer) below covers
+   > registering the printer and applies here too.
 
 6. **Answer "Did the labels print correctly?"** — see
    [Knowing which items still need a label](#knowing-which-items-still-need-a-label-2026-09-23).
@@ -1261,8 +1395,12 @@ accepted, which is true, but it is not the confirmation a status-capable
 printer gives. If your printer's **Check status** says fault reporting is
 unavailable, treat a successful print as "sent", not as "printed".
 
-**Printing to it:** any label page now shows **Send to Printer** beside the PDF
-and Print buttons. It sends the records currently listed, at the size selected
+**Printing to it:** any label page now shows **Print to _printer name_** (or
+**Print to network printer** before one is chosen) beside the PDF and print
+buttons. On the shared label pages those read **PDF**, **Print in browser** and,
+in the settings panel, **Download test label** _(renamed 2026-09-29 from
+"Browser print dialog" and "Print Test Label", since that one downloads a
+PDF)_. It sends the records currently listed, at the size selected
 on the page, honouring **Copies per record**. Sending to a _receipt_ printer
 ignores the size chosen on the page — its stock is whatever roll is loaded —
 and the settings panel says so when one is selected. If the page's label size differs
@@ -1313,6 +1451,29 @@ Navigate to **Inventory Admin** and check the **Maintenance Due** section for it
 5. Save.
 
 ![Item inspections tab listing its service history](./images/05-52-item-maintenance.png)
+
+### The Maintenance page _(updated 2026-09-29)_
+
+**Inventory Admin > Maintenance** (`/inventory/admin/maintenance`) records work
+against an item with one of four actions — **Schedule maintenance**, **Open
+repair**, **Record inspection** or **Complete work** — and the line under the
+form says what the action does to the item's status:
+
+| Action                         | Effect on status                                                                   |
+| ------------------------------ | ---------------------------------------------------------------------------------- |
+| Open repair, failed inspection | "This will mark the item out of service."                                          |
+| Passed inspection              | "This records the inspection without changing the item's status."                  |
+| Record inspection, no result   | "Choose pass or fail. A failed inspection marks the item out of service."          |
+| Complete work                  | "The item will remain out of service until you deliberately return it to service." |
+| Schedule maintenance           | "This will schedule work without changing the item status."                        |
+
+Two fixes from workflow review W42:
+
+- **A passed inspection was described wrongly.** It shared Complete work's
+  line, which told the officer an assigned coat inspected and passed would stay
+  out of service. A pass leaves the status where it was.
+- **The completion date defaults to today in the department's timezone.** It
+  defaulted to the UTC date, which from 7 PM Central onwards is tomorrow.
 
 ### Only an inspection moves the inspection clock _(2026-09-13)_
 
@@ -1543,6 +1704,39 @@ When a member departs the department (dropped, retired, etc.), a **Departure Cle
 
 > **Hint:** When an item is resolved, any pending notification for that item is automatically cancelled (notification netting). This prevents duplicate or stale notifications from being sent.
 
+### Where a clearance shows up today _(2026-09-28)_
+
+A member **dropped** while holding department property gets a clearance
+automatically, and since 2026-09-28 it appears on the **Inventory
+Administration** attention list as "Unresolved departure clearance", naming the
+member ("Jane Smith · 2 outstanding") and linking to their row on **Members**.
+It used to be missing until something had already been returned, because the
+hub asked only for clearances in progress, and the row printed the member's
+internal id.
+
+Returning the items on **Members** gives the gear back but **does not resolve
+the clearance**, and no screen can resolve or complete one — so the clearance
+stays open and the member is never auto-archived. That is an open decision
+(workflow review W15-2) in `docs/KNOWN_LIMITATIONS.md`.
+
+### Property return reminders now go out _(2026-09-24)_
+
+The 30- and 90-day reminder emails to a dropped member still holding property
+were built but **never sent**: nothing ran them. They now run **daily** as the
+`property_return_reminders` scheduled task (07:45 where an external scheduler
+drives it), for each department separately, emailing the member and copying
+the officers the department notifies.
+
+Each run sends a member **at most one** reminder — the latest threshold they
+have passed, if it has not already gone. An earlier one is superseded, never
+sent late, so a member dropped four months before this release gets a single
+90-day reminder, not a 30-day and a 90-day on the same morning.
+
+> **Upgrade note:** the first daily run after upgrading sends that one reminder
+> to **every** dropped member who still holds property and is past 30 days. If
+> some of them have already handed gear back without it being recorded, record
+> those returns first.
+
 ---
 
 ## Gear Requests
@@ -1564,9 +1758,9 @@ Members can request equipment checkouts, pool issuances, or new purchases throug
 
 **Required Permission:** `inventory.manage`
 
-1. Navigate to **Inventory** and open the **Pending Requests** panel.
-2. Review the request details including the requester's name, item, and reason.
-3. Click **Approve** or **Deny** and optionally add review notes.
+1. Go to **Inventory Administration → Gear Requests** (`/inventory/admin/requests`), which opens on **Awaiting review**.
+2. Press **Review** on a request to see the requester's name, item, size and reason.
+3. Click **Decline**, **Approve for later fulfillment** or **Approve & fulfill now**, optionally with a review note — the member sees the note and is notified of the outcome (see [Equipment Request Fulfillment](#equipment-request-fulfillment)).
 
 > **Hint:** Items with a minimum rank restriction will prevent lower-ranked members from submitting requests for those items.
 
@@ -1655,13 +1849,13 @@ For SCBA items, additional fields track:
 
 **Required Permission:** `inventory.manage`
 
-Navigate to **Inventory Admin > Members** to see a per-member view of all equipment assignments across the department.
+Navigate to **Inventory Admin > Members** to see a per-member view of all equipment assignments across the department. The page is headed **Member Equipment** (it read "Members Equipment" before 2026-09-29), and each row's actions are named for the member ("Assign items to _name_"), so a screen reader can tell twenty **Assign** buttons apart.
 
 This view shows:
 
 - Each member with summary counts (permanent assignments, active checkouts, issued items, overdue count)
 - Expandable rows showing detailed inventory per member
-- **Assign Items** and **Return Items** buttons per member
+- **Assign**, **Return** and **Sizes** buttons per member
 
 ### Scanning a Member's ID Card
 
@@ -1754,6 +1948,7 @@ Navigate to **Inventory Admin > Gear Kits** (`/inventory/admin/kits`) to manage 
 - **Active/Inactive Filter** — Toggle to show only active or inactive kits
 - **Detail View** — Click a kit card to see the full composition (all items with quantities)
 - **Activate/Deactivate** — Toggle a kit's active status. Deactivating prevents new issuances but does not affect items already issued from that kit
+- **Issue** _(2026-09-29)_ — The issue action on a kit card (named "Issue _kit_ to a member") opens **Issue "_kit_" — Select a Member**. Choosing a member no longer issues straight away: a confirmation names the kit, the item count and the member ("Issue 6 items from "New Recruit PPE Kit" to Jane Smith."), with **Issue to _member_** and **Don't issue**. A mis-tap on the wrong row used to hand out the whole kit.
 
 ### Edge Cases
 
@@ -1797,11 +1992,20 @@ Navigate to **Inventory Admin > Variant Groups** (`/inventory/admin/variant-grou
 
 ### Edge Cases
 
-| Scenario               | Behavior                                                                                                                |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Group with no variants | Group exists but has no linked items; variants must be created separately or via the size/style auto-generation feature |
-| Pricing changes        | Changes to group-level pricing do not retroactively update existing item costs                                          |
-| Deactivated group      | Items retain their variant linkage for reporting but the group is hidden from new-item flows                            |
+| Scenario               | Behavior                                                                                          |
+| ---------------------- | ------------------------------------------------------------------------------------------------- |
+| Group with no variants | Group exists but has no linked items, **and nothing in the app can add one** — see the note below |
+| Pricing changes        | Changes to group-level pricing do not retroactively update existing item costs                    |
+| Deactivated group      | Items retain their variant linkage for reporting but the group is hidden from new-item flows      |
+
+> **Known limitation — a group made here stays empty** _(2026-09-29, workflow
+> review W40-7)_. The item form has no variant-group field, and **Generate
+> Sizes & Styles** creates a group of its own rather than filling
+> an existing one, so a group created on this page can never receive an item.
+> Its empty state now says so instead of pointing at a step that does not exist.
+> To get a populated group, start from **Generate Sizes & Styles** on the Add
+> Item form. Open in
+> `docs/KNOWN_LIMITATIONS.md`.
 
 ---
 
@@ -2075,8 +2279,22 @@ The import validates:
 - Category names match existing categories
 - Serial numbers are unique (no duplicates in file or existing inventory)
 - Data types are correct (numbers, dates, enum values)
+- **Quantity and purchase price are not negative** _(2026-09-29)_ — a negative value is a row error and the row is skipped
 
 Items that fail validation are skipped with error details. Successfully validated items are imported.
+
+> **Why negatives are refused now — and what to check** _(2026-09-29, workflow
+> review W43-1)_. A negative quantity or price used to be saved, after which
+> every item list that included the row failed with a server error, taking the
+> Items page and item search down. The import refuses them now, but an
+> installation that imported one before the fix still has it. Find such rows
+> with `SELECT id, name FROM inventory_items WHERE quantity < 0 OR
+purchase_price < 0` and correct them; the repair is open in
+> `docs/KNOWN_LIMITATIONS.md`.
+
+> **The file is chosen with the button, not dropped** _(2026-09-29)_. The
+> upload box no longer claims drag-and-drop, which it never supported. The file
+> input can now be reached and started from the keyboard.
 
 > **Hint:** Start with a small test import (5–10 items) to verify your CSV format before importing a large batch. The sample template includes all supported columns with example data.
 
@@ -2121,7 +2339,6 @@ These edge cases cover automatic behaviors during item creation, assignment, ret
 | Scenario                                              | Behavior                                                                                                                                                                    |
 | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Notification queue failure during inventory operation | All inventory state changes (assign, unassign, issue, return) catch notification failures silently. Inventory operations succeed even if notifications cannot be delivered. |
-| SMS low-stock alerts                                  | Rate-limited to one per item per 24 hours. A new alert is sent only if stock was replenished and then dropped again.                                                        |
 
 ---
 
@@ -2154,8 +2371,7 @@ These edge cases cover automatic behaviors during item creation, assignment, ret
 | Return request stuck in pending                      | Admin must approve return requests in Inventory Admin > Items. Check that the admin has `inventory.manage` permission.                                                                                                                                                                                                                             |
 | Quarantine item cannot be re-issued                  | Items in quarantine status must be inspected and cleared before re-issue. Change status from quarantine to available after inspection.                                                                                                                                                                                                             |
 | Size variant stock not matching total                | Each size variant tracks its own stock independently. The total shown is the sum of all variants. Verify per-size quantities in the item detail modal.                                                                                                                                                                                             |
-| Reorder request not triggering alerts                | Verify the item's `reorder_point` is set (pool items only). Stock must drop to or below the threshold. Email alerts require `EMAIL_ENABLED=True`; SMS alerts require `TWILIO_ENABLED=True`.                                                                                                                                                        |
-| SMS alerts not sending                               | Verify `TWILIO_ENABLED=True`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` are configured. Check that SMS recipients are configured in Settings > Notifications.                                                                                                                                                            |
+| Reorder request not triggering alerts                | Verify the item's `reorder_point` is set (pool items only). Stock must drop to or below the threshold. The alert is email-only and requires `EMAIL_ENABLED=True`.                                                                                                                                                                                  |
 | Kit issuance partially failed                        | If some kit components are out of stock, available items are still issued. Check the issuance result for per-component success/failure status. Reorder the missing components.                                                                                                                                                                     |
 | Member size preferences not showing during issuance  | The member must have size preferences recorded in their profile. If blank, the variant picker shows all sizes without pre-selection.                                                                                                                                                                                                               |
 | Item detail page shows "Item not found"              | Verify the item ID in the URL. The item may have been retired or deleted. Check that you are in the correct organization context.                                                                                                                                                                                                                  |
@@ -2233,13 +2449,21 @@ their items, their overdue checkouts and the value of what they hold, not the
 department's. The low-stock alerts and the per-location breakdown of departmental
 stock are not shown to a non-admin at all.
 
-The **item list** is not scoped, and is not meant to be — `inventory.view` is
-what lets a member browse the department's catalogue in order to request from it.
-A member's own kit lives on **My Issued Gear**, which is the page to open to see
-what somebody actually holds: their permanent assignments, checkouts, issued
-consumables and pending requests, each with a Request Return action.
+The **item list** (`/inventory`) is for quartermasters: the page needs
+`inventory.manage`. A member's business with the catalogue is their own kit and
+the requests they raise against it, both on **My Issued Gear** — the page to
+open to see what somebody actually holds: their permanent assignments,
+checkouts, issued consumables and pending requests, each with a return action.
+The request form there searches the catalogue on the member's `inventory.view`.
+
+> **Corrected 2026-10-04.** This paragraph used to say the item list was open
+> to anyone with `inventory.view` so members could browse it. The route is
+> gated on `inventory.manage`; members browse only through **Request
+> Equipment**.
 
 ![My Issued Gear as an ordinary member — the count tiles and their permanent assignments](./images/05-66-my-equipment.png)
+
+**[SCREENSHOT — REPLACE `05-66-my-equipment.png`.** The header now carries the line "The department equipment you are responsible for, and your requests for more.", and the third tile reads **Pending requests** (was **Pending**). Re-shoot as an ordinary member holding at least one item, with one open return notice so the tile is non-zero.**]**
 
 > **Edge case:** Users with `inventory.manage` (or `settings.manage`) see the department's figures rather than their own. The scoping applies only to users without those permissions.
 
@@ -2274,6 +2498,16 @@ The Storage Areas page now shows the **actual inventory items** assigned to each
 ![Storage areas page with an expanded area listing its items](./images/05-36-storage-areas.png)
 
 > **Edge case:** Storage areas with no items show an empty state message. Items without serial numbers display the item name and barcode instead.
+
+**[SCREENSHOT — REPLACE `05-36-storage-areas.png`.** Since this was shot the page gained **Scan shelf label**, **Put away**, **Put Away by NFC** and **Print _N_ labels** in its toolbar and a print action on each row (2026-09-24), and its subtitle now reads "Racks, shelves, and bins inside each room. Nest one inside another as needed." Leaf areas no longer show an expand toggle. Re-shoot with one area expanded to its item list.**]**
+
+> **Deleting a storage area waits until it is empty** _(2026-09-29)_. The
+> **Delete** dialog now refuses while the area holds items ("Move them to
+> another storage area first.") or has areas nested inside it ("Move or delete
+> those first."). Deleting only ever deactivated the area, which left its items
+> with a location that read "--" everywhere and orphaned the areas inside it.
+> The nested-area check counts from the full list; the old dialog's nested
+> warning had never once been shown.
 
 ### Barcode and Asset Tag Always Visible
 
@@ -2472,7 +2706,12 @@ Barcode label printing is now available across multiple modules — not just Inv
 | **Apparatus**  | `/apparatus/print-labels`           | Unit number, asset tag, apparatus type | Per-row "Print Label" action |
 | **Facilities** | `/facilities/print-labels`          |         Facility name, facility number | Header "Print Labels" button |
 | **Members**    | `/members/print-labels`             |         Member name, membership number | Bulk "Print Badges" button   |
-| **Prospects**  | `/prospective-members/print-labels` |   Applicant name, status token barcode | Bulk "Print Badges" button   |
+| **Prospects**  | `/prospective-members/print-labels` |  Applicant name, short record-id code¹ | Bulk "Print Badges" button   |
+
+¹ _(2026-09-28)_ An applicant label used to encode the applicant's status-page
+token, which opens and can withdraw their application without signing in. It
+now carries a short code made from the record id instead. Destroy applicant
+labels printed before then.
 
 ### Remembered Printer Preference
 
@@ -2862,6 +3101,31 @@ A safety follow-up selected on one reviewed request — "send to write-off
 review", say — was applying itself to the **next** request reviewed, even when
 that item was in perfectly good condition. Each review starts clean.
 
+### Receiving a pool return asks for the count _(2026-09-29)_
+
+When a member returns pool stock (gloves, T-shirts) through **Notify
+quartermaster of return**, the receive dialog's quantity box now starts
+**empty** and says "Count what came back. It must match the _n_ the member
+reported." It used to start at 1, which the server refused on every multi-unit
+return, and which invited a receipt nobody had counted. Conditions read as words
+("Out of service", not `out of_service`).
+
+**A charge needs an amount above $0** _(2026-09-29)_. On **Inventory Admin >
+Charges** (`/inventory/admin/charges`), **Apply Charge** now requires an amount
+greater than zero. A charge is final, and a blank or $0 entry used to be
+recorded as "charged $0.00" against the member.
+
+Two open items from the same review, both in `docs/KNOWN_LIMITATIONS.md`:
+
+- **Receiving gear back another way leaves the member's return notice open**
+  (W39-5). If you take the gear through **Return** on the members page instead
+  of receiving the notice, the notice stays in the returns queue, on the hub's
+  attention list and in the member's **Pending requests**, and can then only be
+  denied. Receive through the notice when there is one.
+- **A write-off raised for one returned pool unit retires the whole item**
+  (W41-6). The review dialog says so and requires a note and an
+  acknowledgement; there is no quantity write-off yet.
+
 ### The "Transfer is immediate" checkbox is gone
 
 Custody transfers have always taken effect immediately. The checkbox implied a
@@ -2876,8 +3140,14 @@ record who performed the transfer.**
 
 Equipment checklists are Inventory's now, and so are the settings that govern
 them. Go to **Inventory Admin > Equipment Checklists > Checklist settings**
-(`/inventory/admin/checklists/settings`). It needs the same permission as
-editing a checklist — if you can build one, you can set these.
+(`/inventory/admin/checklists/settings`). It needs the department-settings
+permission (`settings.manage` or `organization.update_settings`), because the
+four values are stored in the department's settings and written through that
+endpoint — building a checklist (`inventory.check_manage`) does not open it.
+
+> **Corrected 2026-10-04.** This used to say the page needed the same
+> permission as editing a checklist. It does not; a checklist author without
+> the settings grant is refused.
 
 There are four, in two groups.
 
@@ -2934,7 +3204,7 @@ are drawn from the same stock.
 | Template builder    | `/inventory/admin/checklists/templates/…`   | `inventory.check_manage`                                             |
 | Check Reports       | `/inventory/admin/checklists/reports`       | `inventory.check_view`                                               |
 | Expiring supply     | `/inventory/admin/checklists/supply`        | `inventory.check_view`                                               |
-| Checklist settings  | `/inventory/admin/checklists/settings`      | `inventory.check_manage`                                             |
+| Checklist settings  | `/inventory/admin/checklists/settings`      | `settings.manage` or `organization.update_settings`                  |
 
 **The old `/scheduling/equipment*` addresses no longer resolve** and land on the
 dashboard. The full before/after table is in
@@ -3024,6 +3294,85 @@ stocked in many places — gauze in a jump bag, a cabinet and two rigs — each
 counted on its own, so the position's required quantity and minimum stay with
 that position and never become a department-wide reorder point.
 
+### The Quartermaster builds checklists now _(2026-09-30)_
+
+`inventory.check_manage` is seeded on the Quartermaster, so the person who
+manages the stock a checklist is made of can author it. Existing departments get
+it through migration `f73b449bdb8b` (see
+[the hub section](#cards-no-longer-promise-pages-you-cannot-open)). It does not
+include **Check Reports** or the fleet board, which stay with
+`inventory.check_view`.
+
+### What changed in the builder _(2026-09-30 – 2026-10-04)_
+
+- **Editing a live checklist takes it off every shift, and the builder now says
+  so.** Saving changes unpublishes a checklist; a banner reads "**Crews can't
+  see this checklist right now.** Editing it took it off every shift it was on.
+  Publish it to put it back." with **Publish now**. Leaving with it unpublished
+  asks first — **Leave this checklist unpublished?**, with **Stay here** and
+  **Leave unpublished**. Before this, the checklist silently vanished from
+  crews' shifts until somebody noticed.
+- **It says which vehicles a checklist reaches** — "Used on …" — and warns when
+  it reaches none: "Not tied to a vehicle — crews will only see it on shifts
+  whose shift template names it." with **Choose a vehicle**. Publishing such a
+  checklist reads **Ready to publish · not tied to a vehicle**.
+- **The vehicle-type list is the real one.** It follows the apparatus types the
+  Apparatus module defines (quint, squad, command and others were missing) plus
+  your fleet's own custom types and any value already saved; "tower" and
+  "chief", which no vehicle could carry, are gone.
+- **Specific Apparatus offers only Apparatus-module units.** A checklist's unit
+  is stored against the Apparatus module's fleet, so a unit from the setup
+  wizard's basic apparatus list could not be saved (it failed as "Invalid
+  apparatus"); a department on basic apparatus assigns checklists **by type**,
+  which works. Pinning to one basic unit is an open item in
+  `docs/KNOWN_LIMITATIONS.md` (W46-20).
+- **Seat names are words** — the position filter on an item offers
+  "Driver/Operator", "Paramedic" and the rest, where it printed raw seat tokens
+  and left Paramedic out.
+
+### What changed for the crew doing the check _(2026-09-30 – 2026-10-04)_
+
+- **A failed item needs a note.** A **Fail** or **Out of service** the member
+  chose — not one a count, reading or expiry date already explains — must say
+  what is wrong before **Submit**: the note button reads **Note required**, the
+  box asks "What's wrong with it? (required)", and submitting without it says
+  "Add a note to each failed item saying what's wrong." and moves focus to the
+  note. (This closes W46-13.)
+- **Only Submit is pinned** at the bottom of the screen. **Overall Notes** was
+  pinned with it and covered about a third of a phone screen for the whole check.
+- **Pass and Fail are grouped under the item's name** and announce which is
+  chosen, so the answer is not conveyed by colour alone; the count box is named
+  ("SCBA quantity found").
+- **A check already filed says so.** **My Checklists** shows **Submitted for
+  this shift** instead of **Open checklist**, which used to walk the crew
+  through every item to a refusal at Submit. One "Equipment check submitted"
+  message appears, not two — and offline, the form's "saved offline" is no
+  longer contradicted. With nothing due it reads "Nothing to check right now.
+  When one of your shifts has an equipment checklist, it will show up here. If
+  you expected one, ask your shift officer."
+- **A member's own check log links back to My checklists**, not to the fleet
+  board, which refuses them.
+
+### What changed in the fleet views and reports _(2026-09-30 – 2026-10-04)_
+
+- **Fleet Readiness agrees with My Checklists** on whether a check is done; it
+  used to count a filed check as "waiting" by date alone.
+- **A rig a published checklist applies to no longer reads "No check
+  templates configured"**; a rig with nothing filed yet shows **No checks yet**.
+- **A check that took an item out of service counts** as both expected and
+  completed in the log and the fleet rate; it used to count as neither.
+- **The checklist console carries Fleet readiness and Check log links**, as its
+  hub card promised.
+- **The failure log's total is right.** It counted every item row on the server
+  against the matching failures — one failed flashlight read as "4 total
+  failures".
+
+**Still open** (in `docs/KNOWN_LIMITATIONS.md`): a new or re-scoped checklist
+counts as missed on days before it existed (W46-19); a check on a basic
+apparatus is stored with no apparatus, so per-truck reports are empty for it
+(W46-11); and a check filed ahead of its shift's date does not show on the board
+(W46-12).
+
 ## Requesting gear: the form browses now _(2026-09-05)_
 
 The request form was a search box over an empty state, so a member who did not
@@ -3048,6 +3397,28 @@ know what the department calls a thing had nowhere to start.
 ![Request Equipment at the product step: category filters across the top and one row per product with its on-hand count and number of sizes, or None on hand — you can still ask](./images/05-86-gear-request-products.png)
 
 ![The size step for Structural Coat: L preselected from the member's size on file, and XXL labelled none on hand but still selectable](./images/05-87-gear-request-size.png)
+
+**[SCREENSHOT — REPLACE `05-87-gear-request-size.png`.** The "Your size on file" line now ends "(from your profile).", and a size the department never carries reads **not stocked** rather than **none on hand**. Re-shoot the size step with **XXL** (stocked, none on hand) selected so the new notice box is in frame: "None in XXL on hand right now. — You can still submit the request. The quartermaster will decide whether to reorder, offer a substitute, or decline."**]**
+
+### "Not stocked" and "none on hand" are different now _(2026-09-28)_
+
+Both used to read "none on hand", which told a member whose size the
+department never carries that it had merely run out. The size buttons now say
+**not stocked** for a size the department does not carry and **none on hand**
+for a stocked size at zero, and choosing one shows a notice that says the
+request is still accepted and the quartermaster decides:
+
+| Situation                       | Notice                                                                                                                                                      |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Size not stocked                | "The department doesn't stock this item in _size_." — the quartermaster "will review it and decide whether to order it, offer a different size, or decline" |
+| Stocked size, none on hand      | "None in _size_ on hand right now." — the quartermaster "will decide whether to reorder, offer a substitute, or decline"                                    |
+| Pool item, more asked than held | "Only _n_ on hand in _size_." — "The quartermaster will decide how many to issue and whether to order the rest"                                             |
+
+The old note promised the quartermaster "will order or substitute", which
+committed the department to something it may decline. The member's size on file
+is labelled as coming "from your profile", the **Reason** placeholder asks why
+("worn out, doesn't fit, new member") because it helps the quartermaster decide,
+and submitting says "Request sent to the quartermaster for review".
 
 ### A member can ask for something you do not stock
 
@@ -3107,6 +3478,28 @@ me**, "Checked out" → **Temporary loans**.
 
 The quartermaster's member view (`/inventory/admin/members`) is untouched.
 
+### What the page now tells a member _(2026-09-28 – 2026-09-30)_
+
+- **It says what it is for**: "The department equipment you are responsible
+  for, and your requests for more."
+- **The third tile is Pending requests**, and it counts everything still
+  waiting on the quartermaster — gear requests not yet decided **and** return
+  notices for gear not yet received. It used to count gear requests only, so a
+  member who had pressed **Notify quartermaster of return** saw nothing pending.
+- **Empty sections explain themselves.** "Nothing has been issued to you yet."
+  is followed by how gear arrives and a link to the Learning Center's **Your
+  Issued Gear** walkthrough (`/learning/gear`); the temporary-loans section
+  says what a temporary loan is.
+- **My Requests shows the quartermaster's note** under each gear request
+  ("Quartermaster: …"), with the status in the same words the quartermaster
+  sees — Awaiting review, Approved, Declined, Issued.
+- **Notify quartermaster of return** says what happens next: "This tells the
+  quartermaster you are bringing it back. Hand the item in as usual; it stays on
+  your list until they confirm they have it."
+- **An extended temporary loan is due at the end of the day you chose**, in the
+  department's timezone — not at UTC midnight, which in the Americas fell on the
+  evening before.
+
 ## Editing an item's size _(2026-09-06)_
 
 The Edit Item dialog's Size field was a free-text box over the legacy `size`
@@ -3160,9 +3553,19 @@ visible cards is not rendered.
 
 > **`inventory.manage` implies neither `inventory.view_medical` nor
 > `inventory.check_*`.** Permission checking is exact match plus module
-> wildcard, which is why the seeded Quartermaster — who holds `inventory.manage`
-> and no check grant — was being shown Equipment Checklists and Check Reports
-> and refused by both.
+> wildcard, which is why the seeded Quartermaster — who then held
+> `inventory.manage` and no check grant — was being shown Equipment Checklists
+> and Check Reports and refused by both.
+>
+> **Since 2026-09-30 the Quartermaster builds the checklists.** The owner
+> decided the position that manages the stock a checklist is made of should
+> author it, so `inventory.check_manage` is seeded on the Quartermaster, and
+> migration `f73b449bdb8b` adds it to existing departments' system Quartermaster
+> rows that still hold `inventory.manage` and do not already cover checklist
+> management. **Authoring only:** reading results stays with
+> `inventory.check_view`, so a Quartermaster sees the **Equipment Checklists**
+> card but not **Check Reports**, unless you grant that too. A Quartermaster
+> position you have customised away from `inventory.manage` is left alone.
 
 The hub also admits **checklist officers and store managers**, whose consoles it
 links to. Previously it refused the very officers whose pages it advertised, and
@@ -3175,6 +3578,23 @@ looking, and for anyone without the inventory grant every one was refused, so
 the page listed all ten as unavailable. The figures are now requested only for
 the people they describe, and a viewer no card is open to is told so rather than
 being shown a heading over blank space.
+
+### Three hub fixes _(2026-09-27 – 2026-10-02)_
+
+- **The hub no longer crashes on a garbled response.** Each of the ten figure
+  sets is now checked for the shape its card relies on. A reply that is not
+  what the server should send — a captive portal's sign-in page on station
+  Wi-Fi is the usual culprit — is counted as a failed source and named in the
+  existing "some services did not respond" banner, instead of taking the whole
+  page down to the error screen.
+- **Pending returns are counted again.** The attention list asked for return
+  notices in a status that does not exist, so open return notices never
+  appeared there.
+- **A freshly dropped member's departure clearance is listed.** A clearance
+  starts as _initiated_ and becomes _in progress_ only once something comes
+  back; the hub asked for _in progress_ alone, so new clearances were missing.
+  The row now names the member ("Jane Smith · 4 outstanding") rather than
+  printing their internal id.
 
 ## The location panel and the list finally agree _(2026-09-06)_
 

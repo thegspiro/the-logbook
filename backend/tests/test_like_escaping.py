@@ -30,9 +30,17 @@ wildcard. That is why those four sites conform too instead of being exempted.
 ``.contains()`` is the third way in, and the one the first two tests missed:
 it builds a LIKE too, with the term dropped in raw unless ``autoescape=True``
 is passed. The public-portal access-log filter used it, so an admin searching
-for ``%`` matched every row. Column ``.contains()`` on a JSON array is a
-different operator entirely (``TrainingRequirement.category_ids.contains([id])``)
-and is left alone.
+for ``%`` matched every row.
+
+This test used to exempt a list argument, on the reading that
+``TrainingRequirement.category_ids.contains([id])`` was "a different operator
+entirely". It is not. ``contains_op`` is not in the ``JSON`` type's operator
+classes, so SQLAlchemy falls back to the string operator and emits the same
+``LIKE concat('%', ?, '%')`` — against ``'["id"]'``, the serialized list. The
+exemption therefore hid three sites from the one test written to catch them,
+and ``position=%`` returned every requirement in the org. All three now use
+``app.utils.json_ids.json_array_contains``, so the exemption covers nothing and
+is gone; the failure message names that helper as the remedy for a JSON column.
 """
 
 import ast
@@ -137,10 +145,6 @@ def test_column_contains_escapes_its_term():
         if ".contains(" not in source:
             continue
         for call in _sql_contains_calls(ast.parse(source)):
-            # A JSON array containment test is a different operator and takes
-            # no pattern.
-            if call.args and isinstance(call.args[0], (ast.List, ast.Tuple)):
-                continue
             autoescape = next(
                 (kw.value for kw in call.keywords if kw.arg == "autoescape"), None
             )
@@ -151,6 +155,7 @@ def test_column_contains_escapes_its_term():
     assert not offenders, (
         "These column .contains() calls build a LIKE with the caller's term "
         "dropped in raw, so a '%' matches every row. Pass autoescape=True, or "
-        "use like_pattern() with .like(..., escape=LIKE_ESCAPE_CHAR):\n  "
+        "use like_pattern() with .like(..., escape=LIKE_ESCAPE_CHAR). On a JSON "
+        "column it is also the wrong operator -- use json_array_contains():\n  "
         + "\n  ".join(offenders)
     )

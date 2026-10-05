@@ -37,9 +37,16 @@ from app.services.scheduling_service import SchedulingService
 
 pytestmark = pytest.mark.integration
 
-NOW = datetime.now(timezone.utc)
-#: Every department here is on UTC, so the resolvers' "today" is this one.
-TODAY = NOW.date()
+
+def _now() -> datetime:
+    # Read per test, not at import: collection can finish before midnight UTC
+    # and the test run after it, which shifts every day-based age by one.
+    return datetime.now(timezone.utc)
+
+
+def _today() -> date:
+    # Every department here is on UTC, so the resolvers' "today" is this one.
+    return _now().date()
 
 
 async def _org(db_session) -> Organization:
@@ -203,8 +210,8 @@ class TestCloseoutBacklog:
         await _shift(
             db_session,
             org,
-            start=NOW - timedelta(days=2, hours=12),
-            end=NOW - timedelta(days=2),
+            start=_now() - timedelta(days=2, hours=12),
+            end=_now() - timedelta(days=2),
         )
 
         value, context = await _metric(
@@ -220,7 +227,7 @@ class TestCloseoutBacklog:
     async def test_counts_a_shift_that_never_recorded_an_end_time(self, db_session):
         org = await _org(db_session)
         admin = await _admin(db_session, org)
-        await _shift(db_session, org, start=NOW - timedelta(days=3), end=None)
+        await _shift(db_session, org, start=_now() - timedelta(days=3), end=None)
 
         value, _ = await _metric(db_session, org, admin, "shifts_needing_closeout")
 
@@ -234,7 +241,7 @@ class TestCloseoutBacklog:
     ):
         org = await _org(db_session)
         admin = await _admin(db_session, org)
-        await _shift(db_session, org, start=NOW - timedelta(hours=2), end=None)
+        await _shift(db_session, org, start=_now() - timedelta(hours=2), end=None)
 
         value, _ = await _metric(db_session, org, admin, "shifts_needing_closeout")
 
@@ -252,7 +259,7 @@ class TestCloseoutBacklog:
         await db_session.flush()
         admin = await _admin(db_session, org)
         # Past the built-in twelve-hour floor, inside the department's forty-eight.
-        await _shift(db_session, org, start=NOW - timedelta(hours=20), end=None)
+        await _shift(db_session, org, start=_now() - timedelta(hours=20), end=None)
 
         value, _ = await _metric(db_session, org, admin, "shifts_needing_closeout")
 
@@ -274,7 +281,7 @@ class TestCloseoutBacklog:
         admin = await _admin(db_session, org)
         # Started four days ago, so it cleared the seventy-two hour cushion a
         # day ago: one day overdue, not four.
-        await _shift(db_session, org, start=NOW - timedelta(days=4), end=None)
+        await _shift(db_session, org, start=_now() - timedelta(days=4), end=None)
 
         value, context = await _metric(
             db_session, org, admin, "shifts_needing_closeout"
@@ -289,8 +296,8 @@ class TestCloseoutBacklog:
         await _shift(
             db_session,
             org,
-            start=NOW - timedelta(days=2, hours=12),
-            end=NOW - timedelta(days=2),
+            start=_now() - timedelta(days=2, hours=12),
+            end=_now() - timedelta(days=2),
             finalized=True,
         )
 
@@ -320,8 +327,8 @@ class TestCloseoutBacklog:
         await _shift(
             db_session,
             org,
-            start=NOW - timedelta(days=2, hours=12),
-            end=NOW - timedelta(days=2),
+            start=_now() - timedelta(days=2, hours=12),
+            end=_now() - timedelta(days=2),
             status=ShiftStatus.CANCELLED,
         )
 
@@ -335,8 +342,8 @@ class TestCloseoutBacklog:
         await _shift(
             db_session,
             org,
-            start=NOW + timedelta(hours=1),
-            end=NOW + timedelta(hours=13),
+            start=_now() + timedelta(hours=1),
+            end=_now() + timedelta(hours=13),
         )
 
         value, _ = await _metric(db_session, org, admin, "shifts_needing_closeout")
@@ -350,8 +357,8 @@ class TestCloseoutBacklog:
         await _shift(
             db_session,
             other,
-            start=NOW - timedelta(days=2, hours=12),
-            end=NOW - timedelta(days=2),
+            start=_now() - timedelta(days=2, hours=12),
+            end=_now() - timedelta(days=2),
         )
 
         value, _ = await _metric(db_session, org, admin, "shifts_needing_closeout")
@@ -373,30 +380,30 @@ class TestCloseoutBacklog:
         await _shift(
             db_session,
             org,
-            start=NOW - timedelta(days=2, hours=12),
-            end=NOW - timedelta(days=2),
+            start=_now() - timedelta(days=2, hours=12),
+            end=_now() - timedelta(days=2),
         )
-        await _shift(db_session, org, start=NOW - timedelta(days=3), end=None)
-        await _shift(db_session, org, start=NOW - timedelta(hours=2), end=None)
+        await _shift(db_session, org, start=_now() - timedelta(days=3), end=None)
+        await _shift(db_session, org, start=_now() - timedelta(hours=2), end=None)
         await _shift(
             db_session,
             org,
-            start=NOW - timedelta(days=5),
-            end=NOW - timedelta(days=4, hours=12),
+            start=_now() - timedelta(days=5),
+            end=_now() - timedelta(days=4, hours=12),
             finalized=True,
         )
         await _shift(
             db_session,
             org,
-            start=NOW - timedelta(days=6),
-            end=NOW - timedelta(days=5, hours=12),
+            start=_now() - timedelta(days=6),
+            end=_now() - timedelta(days=5, hours=12),
             status=ShiftStatus.CANCELLED,
         )
         await _shift(
             db_session,
             org,
-            start=NOW + timedelta(hours=1),
-            end=NOW + timedelta(hours=13),
+            start=_now() + timedelta(hours=1),
+            end=_now() + timedelta(hours=13),
         )
 
         value, _ = await _metric(db_session, org, admin, "shifts_needing_closeout")
@@ -417,8 +424,8 @@ class TestShortStaffed:
         shift = await _shift(
             db_session,
             org,
-            start=NOW + timedelta(days=1),
-            end=NOW + timedelta(days=1, hours=12),
+            start=_now() + timedelta(days=1),
+            end=_now() + timedelta(days=1, hours=12),
             min_staffing=3,
         )
         await _seat(db_session, org, shift, await _member(db_session, org))
@@ -434,8 +441,8 @@ class TestShortStaffed:
         shift = await _shift(
             db_session,
             org,
-            start=NOW + timedelta(days=1),
-            end=NOW + timedelta(days=1, hours=12),
+            start=_now() + timedelta(days=1),
+            end=_now() + timedelta(days=1, hours=12),
             min_staffing=2,
         )
         await _seat(db_session, org, shift, await _member(db_session, org))
@@ -457,8 +464,8 @@ class TestShortStaffed:
         shift = await _shift(
             db_session,
             org,
-            start=NOW + timedelta(days=1),
-            end=NOW + timedelta(days=1, hours=12),
+            start=_now() + timedelta(days=1),
+            end=_now() + timedelta(days=1, hours=12),
             min_staffing=None,
             positions=None,
         )
@@ -477,8 +484,8 @@ class TestShortStaffed:
         shift = await _shift(
             db_session,
             org,
-            start=NOW + timedelta(days=1),
-            end=NOW + timedelta(days=1, hours=12),
+            start=_now() + timedelta(days=1),
+            end=_now() + timedelta(days=1, hours=12),
             min_staffing=1,
         )
         await _seat(
@@ -503,8 +510,8 @@ class TestShortStaffed:
         shift = await _shift(
             db_session,
             org,
-            start=NOW + timedelta(days=1),
-            end=NOW + timedelta(days=1, hours=12),
+            start=_now() + timedelta(days=1),
+            end=_now() + timedelta(days=1, hours=12),
             min_staffing=None,
             positions=[
                 {"position": "officer", "required": True},
@@ -527,8 +534,8 @@ class TestShortStaffed:
         shift = await _shift(
             db_session,
             org,
-            start=NOW + timedelta(days=1),
-            end=NOW + timedelta(days=1, hours=12),
+            start=_now() + timedelta(days=1),
+            end=_now() + timedelta(days=1, hours=12),
             min_staffing=6,
             positions=[
                 {"position": "officer", "required": True},
@@ -566,8 +573,8 @@ class TestShortStaffed:
         shift = await _shift(
             db_session,
             org,
-            start=NOW + timedelta(days=1),
-            end=NOW + timedelta(days=1, hours=12),
+            start=_now() + timedelta(days=1),
+            end=_now() + timedelta(days=1, hours=12),
             positions=[
                 {"position": "officer", "required": True},
                 {"position": "driver", "required": True},
@@ -587,8 +594,8 @@ class TestShortStaffed:
         shift = await _shift(
             db_session,
             org,
-            start=NOW + timedelta(days=1),
-            end=NOW + timedelta(days=1, hours=12),
+            start=_now() + timedelta(days=1),
+            end=_now() + timedelta(days=1, hours=12),
             positions=[
                 {"position": "officer", "required": True},
                 {"position": "driver", "required": False},
@@ -615,8 +622,8 @@ class TestShortStaffed:
         await _shift(
             db_session,
             org,
-            start=NOW + timedelta(days=1),
-            end=NOW + timedelta(days=1, hours=12),
+            start=_now() + timedelta(days=1),
+            end=_now() + timedelta(days=1, hours=12),
             min_staffing=2,
             positions=[],
         )
@@ -634,8 +641,8 @@ class TestShortStaffed:
         shift = await _shift(
             db_session,
             org,
-            start=NOW + timedelta(days=1),
-            end=NOW + timedelta(days=1, hours=12),
+            start=_now() + timedelta(days=1),
+            end=_now() + timedelta(days=1, hours=12),
             min_staffing=1,
         )
         await _seat(
@@ -656,8 +663,8 @@ class TestShortStaffed:
         await _shift(
             db_session,
             org,
-            start=NOW + timedelta(days=30),
-            end=NOW + timedelta(days=30, hours=12),
+            start=_now() + timedelta(days=30),
+            end=_now() + timedelta(days=30, hours=12),
             min_staffing=4,
         )
 
@@ -680,17 +687,17 @@ class TestShortStaffed:
             await _shift(
                 db_session,
                 org,
-                start=NOW + timedelta(days=1, minutes=i),
-                end=NOW + timedelta(days=1, hours=12, minutes=i),
+                start=_now() + timedelta(days=1, minutes=i),
+                end=_now() + timedelta(days=1, hours=12, minutes=i),
                 min_staffing=4,
             )
 
         ctx = await AdminHubService(db_session)._context(admin)
         uncapped = await _short_staffed_shifts(
-            ctx, NOW, NOW + timedelta(days=7), max_candidates=500
+            ctx, _now(), _now() + timedelta(days=7), max_candidates=500
         )
         capped = await _short_staffed_shifts(
-            ctx, NOW, NOW + timedelta(days=7), max_candidates=2
+            ctx, _now(), _now() + timedelta(days=7), max_candidates=2
         )
 
         assert len(uncapped) == 5
@@ -715,8 +722,8 @@ class TestShortStaffed:
             await _shift(
                 db_session,
                 org,
-                start=NOW + timedelta(days=1, minutes=i),
-                end=NOW + timedelta(days=1, hours=12, minutes=i),
+                start=_now() + timedelta(days=1, minutes=i),
+                end=_now() + timedelta(days=1, hours=12, minutes=i),
                 min_staffing=4,
             )
 
@@ -725,10 +732,10 @@ class TestShortStaffed:
         sink_id = logger.add(messages.append, level="WARNING")
         try:
             capped = await _short_staffed_shifts(
-                ctx, NOW, NOW + timedelta(days=7), max_candidates=2
+                ctx, _now(), _now() + timedelta(days=7), max_candidates=2
             )
             uncapped = await _short_staffed_shifts(
-                ctx, NOW, NOW + timedelta(days=7), max_candidates=500
+                ctx, _now(), _now() + timedelta(days=7), max_candidates=500
             )
         finally:
             logger.remove(sink_id)
@@ -751,9 +758,9 @@ class TestHoursThisMonth:
         shift = await _shift(
             db_session,
             org,
-            start=NOW,
-            end=NOW + timedelta(hours=12),
-            shift_date=TODAY,
+            start=_now(),
+            end=_now() + timedelta(hours=12),
+            shift_date=_today(),
         )
         member = await _member(db_session, org)
         db_session.add(
@@ -769,7 +776,7 @@ class TestHoursThisMonth:
         value, context = await _metric(db_session, org, admin, "hours_this_month")
 
         assert value == "1.5"
-        assert context == f"since {TODAY.replace(day=1).strftime('%B')} 1"
+        assert context == f"since {_today().replace(day=1).strftime('%B')} 1"
 
     # Only a lower bound meant attendance recorded against a shift dated next
     # month counted towards "hours this month" — a figure that goes up when
@@ -778,15 +785,15 @@ class TestHoursThisMonth:
         org = await _org(db_session)
         admin = await _admin(db_session, org)
         next_month = (
-            TODAY.replace(year=TODAY.year + 1, month=1, day=1)
-            if TODAY.month == 12
-            else TODAY.replace(month=TODAY.month + 1, day=1)
+            _today().replace(year=_today().year + 1, month=1, day=1)
+            if _today().month == 12
+            else _today().replace(month=_today().month + 1, day=1)
         )
         shift = await _shift(
             db_session,
             org,
-            start=NOW + timedelta(days=40),
-            end=NOW + timedelta(days=40, hours=12),
+            start=_now() + timedelta(days=40),
+            end=_now() + timedelta(days=40, hours=12),
             shift_date=next_month,
         )
         member = await _member(db_session, org)
@@ -813,9 +820,9 @@ class TestHoursThisMonth:
         shift = await _shift(
             db_session,
             other,
-            start=NOW,
-            end=NOW + timedelta(hours=12),
-            shift_date=TODAY,
+            start=_now(),
+            end=_now() + timedelta(hours=12),
+            shift_date=_today(),
         )
         member = await _member(db_session, other)
         db_session.add(
@@ -843,8 +850,8 @@ class TestAttentionQueue:
         await _shift(
             db_session,
             org,
-            start=NOW + timedelta(hours=6),
-            end=NOW + timedelta(hours=18),
+            start=_now() + timedelta(hours=6),
+            end=_now() + timedelta(hours=18),
             min_staffing=4,
         )
 
@@ -863,8 +870,8 @@ class TestAttentionQueue:
         await _shift(
             db_session,
             org,
-            start=NOW + timedelta(days=5),
-            end=NOW + timedelta(days=5, hours=12),
+            start=_now() + timedelta(days=5),
+            end=_now() + timedelta(days=5, hours=12),
             min_staffing=4,
         )
 
@@ -879,8 +886,8 @@ class TestAttentionQueue:
         shift = await _shift(
             db_session,
             org,
-            start=NOW + timedelta(days=1),
-            end=NOW + timedelta(days=1, hours=12),
+            start=_now() + timedelta(days=1),
+            end=_now() + timedelta(days=1, hours=12),
         )
         db_session.add(
             ShiftSwapRequest(
@@ -889,7 +896,7 @@ class TestAttentionQueue:
                 requesting_user_id=member.id,
                 offering_shift_id=shift.id,
                 status=SwapRequestStatus.PENDING,
-                created_at=NOW - timedelta(days=3),
+                created_at=_now() - timedelta(days=3),
             )
         )
         await db_session.flush()
@@ -911,10 +918,10 @@ class TestAttentionQueue:
                 id=str(uuid.uuid4()),
                 organization_id=org.id,
                 user_id=member.id,
-                start_date=TODAY + timedelta(days=10),
-                end_date=TODAY + timedelta(days=12),
+                start_date=_today() + timedelta(days=10),
+                end_date=_today() + timedelta(days=12),
                 status=TimeOffStatus.PENDING,
-                created_at=NOW - timedelta(days=1),
+                created_at=_now() - timedelta(days=1),
             )
         )
         await db_session.flush()
@@ -939,8 +946,8 @@ class TestAttentionQueue:
                 id=str(uuid.uuid4()),
                 organization_id=org.id,
                 user_id=member.id,
-                start_date=TODAY + timedelta(days=10),
-                end_date=TODAY + timedelta(days=12),
+                start_date=_today() + timedelta(days=10),
+                end_date=_today() + timedelta(days=12),
                 status=TimeOffStatus.APPROVED,
             )
         )
@@ -963,8 +970,8 @@ class TestAttentionQueue:
         await _shift(
             db_session,
             other,
-            start=NOW + timedelta(hours=6),
-            end=NOW + timedelta(hours=18),
+            start=_now() + timedelta(hours=6),
+            end=_now() + timedelta(hours=18),
             min_staffing=4,
         )
 

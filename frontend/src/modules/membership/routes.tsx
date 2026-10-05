@@ -116,7 +116,11 @@ export const getMembershipRoutes = () => {
         path="/members/print-labels"
         element={
           <Suspense fallback={null}>
-            <ProtectedRoute requiredPermission="members.view">
+            {/* Member labels are badges, so this is the ID-card rule
+                (VIEW_OTHER_MEMBER_ID_CARD_PERMISSIONS in utils/memberIdCardAccess),
+                not the directory's. Written out because check_route_permissions.py
+                reads the list from this file. */}
+            <ProtectedRoute requiredAnyPermission={['members.manage', 'members.manage_id_cards']}>
               <MemberLabelPrintPage />
             </ProtectedRoute>
           </Suspense>

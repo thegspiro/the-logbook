@@ -150,7 +150,6 @@ app/services/membership_pipeline_service.py::link_event::User::linked_by
 #   - generate_report::User::user_id
 #     change_member_status verifies the target user in-org before calling this
 app/services/property_return_service.py::generate_report::User::performed_by
-app/services/property_return_service.py::generate_report::User::user_id
 
 # Reviewed 2026-09-06: safe unless noted.
 #   - _subscribe_once::PushSubscription::peeked_id

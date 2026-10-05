@@ -42,6 +42,25 @@ class TestBlankHandling:
         assert payload.model_dump(exclude_unset=True) == {"responsibility": None}
 
 
+class TestContactEmail:
+    """W54-1: "not-an-email" was stored and shown to every member as a
+    dead mailto: link."""
+
+    @pytest.mark.parametrize("schema", [OrgChartNodeCreate, OrgChartNodeUpdate])
+    def test_a_malformed_address_is_refused(self, schema):
+        with pytest.raises(ValidationError, match="contact email"):
+            schema(title="Chaplain", contactEmail="not-an-email")
+
+    @pytest.mark.parametrize("schema", [OrgChartNodeCreate, OrgChartNodeUpdate])
+    def test_a_real_address_is_kept_trimmed(self, schema):
+        payload = schema(title="Chaplain", contactEmail=" chaplain@example.org ")
+        assert payload.contact_email == "chaplain@example.org"
+
+    def test_a_cleared_address_still_clears(self):
+        payload = OrgChartNodeUpdate(contactEmail="")
+        assert payload.model_dump(exclude_unset=True) == {"contact_email": None}
+
+
 class TestNullTitle:
     """A null title is a 400, not a 500.
 

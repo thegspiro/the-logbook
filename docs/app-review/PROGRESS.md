@@ -23,7 +23,7 @@ been through a review pass.
 | A3  | Scheduled tasks & cron         | `endpoints/scheduled.py` (60 L), `services/scheduled_tasks.py` (4570 L), `cert_alert_service.py`, `property_return_reminder_service.py`                                                                                                                                   | CRON   | ✅     |
 | A4  | Email templates & delivery     | `endpoints/email_templates.py` (671 L), `services/email_template_service.py` (2739 L), `email_service.py` (1633 L)                                                                                                                                                        | MAIL   | ✅     |
 | A5  | Course cohorts & syllabus      | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx`                                                                                    | CC     | ✅     |
-| A6  | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L)                             | LIFE   | ⬜     |
+| A6  | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L)                             | LIFE   | ✅     |
 | A7  | Dashboard & action items       | `endpoints/dashboard.py` (456 L), `services/attendance_dashboard_service.py` (329 L); `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items`                                                                                                                | DASH   | ⬜     |
 | A8  | Locations & kiosk              | `endpoints/locations.py` (434 L, 8 routes), `services/location_service.py` (394 L), `api/public/display.py` (550 L, 4 routes); `pages/LocationKioskPage.tsx`, `RoomCheckInPage.tsx`, `RoomQRCodesPage.tsx`                                                                | LOC    | ✅     |
 | A9  | Platform ops & data lifecycle  | `services/admin_continuity_service.py` (216 L), `audit_ship_service.py` (136 L), `data_export_service.py` (169 L), `separation_of_duties.py` (70 L)                                                                                                                       | OPS    | ⬜     |
@@ -2417,6 +2417,63 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   1.6.0 installed against the repo's pinned 1.7.0 (2 failures). Neither fix
   touched the repository. See course-cohorts.md → Pass 3.
   Next: A6 member lifecycle & offboarding.
+- **A6 member lifecycle & offboarding ✅ (pass 3) — the +602 lines passes 1–2
+  never saw. 2 fixes, 1 hardening, 1 verification mechanised.** Every one of the
+  six services has grown since 2026-08-08, two by more than half
+  (`membership_tier_service` 267→471, `retention_service` 224→357), so this pass
+  went at the growth and at the half of `property_return_service` pass 2
+  recorded as _sampled rather than read_. **LIFE-5 (MED, fixed):**
+  `advance_all` committed the membership-type changes and _then_ wrote their
+  audit events, so on the scheduled path the audit trail was discarded —
+  `log_audit_event` opens a SAVEPOINT whose release does not commit the
+  enclosing transaction, `_for_each_org` never commits, and the task loop's
+  `async with async_session_factory()` only closes the session. **Measured
+  rather than reasoned about:** a cron-shaped advance moved a member from
+  `active` to `senior` and wrote **zero** `membership_tier_auto_advanced` rows;
+  after the fix, one, with the advancement still persisted. It matters more than
+  a missing log line because the job is unattended and **clears the operational
+  rank** of anyone it moves into an administrative tier — the audit row, which
+  carries `cleared_rank`, is the only record those permissions went away. The
+  endpoint path survived only because FastAPI's `get_session` commits on
+  teardown, which is not something a service should rely on for its own audit
+  trail. Fixed by auditing inside the same transaction and committing both
+  together, which also closes a smaller pre-existing hole on _both_ paths (the
+  change and its record used to commit separately). An AST scan of all six
+  services found this site and no other, so it is one fix, not a class.
+  **LIFE-6 (LOW, fixed as hardening):** `generate_report` resolved its member
+  with no `organization_id` filter. Pass 2 flagged it as defence-in-depth;
+  re-verified, the caller count has gone from two to **one** and that one does
+  pre-verify, so still not live — fixed rather than flagged a third time
+  because it is one line in the single path that builds a letter naming a member
+  and stating a chargeable liability. **Anonymization PII coverage mechanised:**
+  pass 2 did that diff by hand and recorded the obvious problem with having done
+  so; `User` has since gained a column (58→59). It is now a ratchet test — a new
+  column fails the build until somebody clears it or names it with a reason.
+  Re-run correctly, no PII column is missed, so pass 2's conclusion holds. Worth
+  knowing **how my first attempt got it wrong**, since the trap is now encoded
+  in the test: `sa_inspect(User).columns` is keyed by column name, which for an
+  encrypted field is not the attribute the service assigns (`mfa_secret` vs the
+  `_mfa_secret_encrypted` the service correctly writes), so diffing those
+  namespaces made a scrubbed field look untouched and briefly suggested MFA
+  secrets were ignored — against a docstring that promises them — when they are
+  cleared on three adjacent lines. **Verified good:** all six retention record
+  classes checked mechanically for the `timestamp_attr` they declare and an
+  `organization_id` column (a mismatch would fail inside the per-org `except`
+  and silently never sweep); `enforce()` confirmed cron-only, so its raw
+  `str(e)` errors never reach a client; both retention endpoints gated, scoped,
+  and actually committing; `advance_all`'s row-lock-and-recheck concurrency left
+  alone; no float on money anywhere in `property_return_service`. **Re-verified
+  still open:** LIFE-2 (FIN-7), LIFE-3 (NULL retention timestamps), the
+  pool-issuance valuation disagreement, and the anonymization docstring still
+  not mentioning that membership numbers survive. **One self-inflicted failure,
+  recorded because it is the second time:** the first lifecycle run showed 4
+  failures in `test_audit_retention_archival.py`, which were not a regression —
+  the probe that measured LIFE-5 cleaned up its org and user but not the audit
+  row it caused, and that row was the only one in `audit_logs`. A probe that
+  writes _through a service_ must clean up what the service wrote. Gate: tsc 0 ·
+  flake8 0 · black/isort clean · eslint 0 · docs links 422 files 0 broken ·
+  lifecycle-related tests **257 passed, 1 skipped**. **The whole-suite run caught one failure the targeted selection could not:** LIFE-6's org filter resolved a query `test_org_scoping_ratchet` had frozen in its baseline, so that entry went stale and the ratchet's both-directions check went red. Line removed (215 → 214 entries); the suite then ran **15,723 passed, 21 skipped, 0 failed**. The lesson is procedural — the pre-commit hook and the lifecycle selection both passed, because neither covers a check that sweeps the repo for a query _shape_; a change touching a globally-policed pattern wants the whole suite. See member-lifecycle.md →
+  Pass 3. Next: A7 dashboard & action items.
 - **A8 locations & kiosk ✅ (pass 3).** The feature has roughly doubled since
   pass 2 — `locations.py` 294 → 434 lines and 6 → 8 routes,
   `location_service.py` 279 → 394, `public/display.py` to 550 and 4 routes, plus

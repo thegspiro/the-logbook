@@ -13,6 +13,7 @@ import { Loader2, Search, Save, Users } from 'lucide-react';
 import { userService } from '../../../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { UserStatus } from '../../../constants/enums';
+import { displayNameOf } from '../../../utils/memberName';
 
 interface RosterRow {
   id: string;
@@ -39,7 +40,7 @@ export const PlatoonRosterPanel: React.FC = () => {
         .filter((u) => u.status === UserStatus.ACTIVE)
         .map((u) => ({
           id: String(u.id),
-          name: `${u.first_name || ''} ${u.last_name || ''}`.trim() || String(u.email || u.id),
+          name: displayNameOf(u) || String(u.email || u.id),
           platoon: u.platoon || '',
         }))
         .sort((a, b) => a.name.localeCompare(b.name));

@@ -436,7 +436,7 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
                   ? `&status=${encodeURIComponent(statusFilter)}`
                   : ''
             }`}
-            className="btn-icon border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover flex items-center gap-2 rounded-lg border px-3 text-sm font-medium"
+            className="btn-icon border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover flex shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-medium whitespace-nowrap"
             title="Export test records as CSV — one row per evaluated step"
           >
             <Download className="h-4 w-4" aria-hidden="true" />
@@ -444,7 +444,7 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
           </a>
           <button
             onClick={() => void navigate('/training/skills-testing/test/new')}
-            className="btn-primary flex items-center gap-2 font-medium"
+            className="btn-primary flex shrink-0 items-center gap-2 font-medium whitespace-nowrap"
           >
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">Start Test</span>

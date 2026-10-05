@@ -42,6 +42,7 @@ def _member(**kw):
         id=kw.get("id", str(uuid4())),
         username=kw.get("username", "jsmith"),
         full_name=kw.get("full_name", "Jane Smith"),
+        display_name=kw.get("display_name", kw.get("full_name", "Jane Smith")),
         organization_id=kw.get("organization_id", "org-1"),
         rank=kw.get("rank"),
         status=kw.get("status", UserStatus.ACTIVE),

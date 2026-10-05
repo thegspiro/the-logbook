@@ -142,6 +142,15 @@ lists: what setup requires and what it will ask for but can skip.]**
 > `America/Chicago`. Make sure this is correct — members will see event times,
 > shift schedules, and deadlines in this timezone."
 
+> "And it decides more than display. It's the department's clock: when 'today'
+> starts for expiry alerts and compliance, and the times printed in emails,
+> PDFs and exports. Set it wrong and a certificate can read as lapsed on its
+> last valid day."
+
+**[PRODUCTION NOTE — 2026-10-04. Added; about 10 seconds, re-time Chapter 2.
+Through late September 2026 compliance, alerts and printed times moved onto the
+department's date instead of the server's UTC date.]**
+
 **[SCREEN: Select a timezone from the dropdown]**
 
 **[CALLOUT: "All times are stored as UTC, displayed in your local timezone"]**
@@ -233,7 +242,8 @@ onboarding, or note that it can be enabled after first login.]**
 > authenticator apps. Scan the QR code with your app, enter the six-digit code
 > to verify, and you're set."
 
-> "If you skip this now, you can always enable it later from User Settings.
+> "If you skip this now, you can always enable it later from **My Account →
+> Security**.
 > But for any account with admin access, I'd set it up right away."
 
 **[SCREEN: Click "Next" to proceed]**
@@ -252,8 +262,8 @@ onboarding, or note that it can be enabled after first login.]**
 
 ### THE MODULE OVERVIEW (7:30 – 8:30)
 
-**[SCREEN: The ModuleOverview page loads — a grid/list of all available modules
-with toggle switches, organized by category.]**
+**[SCREEN: The ModuleOverview page loads — a grid/list of all available modules,
+organized by category, each card with **Enable**, **Later** and **Skip**.]**
 
 > "This is one of the most important steps — choosing which modules to enable.
 > The Logbook is fully modular. You only turn on what your department actually
@@ -329,7 +339,15 @@ Enabled state.]**
 
 > "And if you skip something now, this same list is under Settings → Modules.
 > A department that decides in March it wants the store can turn it on in
-> March."
+> March. **Later** and **Skip** both leave a module off; Later just keeps it
+> on your list of things to come back to."
+
+**[SCREEN: Click "Continue to Ranks & Positions"]**
+
+**[PRODUCTION NOTE — 2026-10-04. The module cards' buttons were renamed on
+2026-09-29 — **Enable**, **Later**, **Skip** (some read "Skip For Now" and
+"Ignore" before) — and they were never toggle switches. Re-record the overview
+pan and the continue button.]**
 
 **[TRANSITION: Progress to next section]**
 
@@ -422,7 +440,7 @@ positions with permission toggles.]**
 **[CALLOUT: Two-column layout]**
 
 > "**Positions** are organizational or operational roles that carry permissions —
-> Fire Chief, Captain, President, Secretary, Training Officer, IT Manager. A
+> Chief, Captain, President, Secretary, Training Officer, IT Manager. A
 > member can hold multiple positions."
 
 > "**Membership standing** is a classification, and it is **two facts, not
@@ -453,7 +471,7 @@ deciding shift access.]**
 
 **[SCREEN: Scroll through the positions list, highlighting each category]**
 
-> "**Operational Ranks:** Fire Chief, Deputy Chief, Assistant Chief, Captain,
+> "**Operational Ranks:** Chief, Deputy Chief, Assistant Chief, Captain,
 > Lieutenant, Engineer/Driver Operator, and Firefighter. Each has permissions
 > appropriate to their rank — the Chief has near-full access, a Firefighter has
 > view access to most things."
@@ -465,8 +483,15 @@ deciding shift access.]**
 
 > "**Specialist Positions:** Training Officer, Safety Officer, Quartermaster,
 > Scheduling Officer, Apparatus Officer, Facilities Manager, Communications
-> Officer, and Membership Coordinator. Each has permissions scoped to their
+> Officer, Membership Coordinator and Assistant Membership Coordinator, EMS
+> Supply Officer, and Compliance Officer. Each has permissions scoped to their
 > area."
+
+**[PRODUCTION NOTE — 2026-10-04. The top rank is seeded as plain **Chief**, not
+"Fire Chief" (migration `d4e1a7c93b58`, 2026-09-25 — label only; a department
+that renamed it keeps its own name). The Compliance Officer and Assistant
+Membership Coordinator positions were added 2026-09-24; EMS Supply Officer was
+already seeded and missing from this list. Re-record the positions scroll.]**
 
 ### CUSTOMIZING PERMISSIONS (15:00 – 15:30)
 
@@ -567,14 +592,15 @@ from the address given in step 1.]**
 
 ---
 
-## CHAPTER 7: IT Team & Backup Access (17:30 – 18:30)
+## CHAPTER 7: IT & Backup Contacts (17:30 – 18:30)
 
 > **EDITOR NOTE (2026-09-11): this chapter moved.** It is **step 7**, not step
 > 4 as the previous take had it. The narration is otherwise unchanged.
 
-### IT TEAM & BACKUP ACCESS (17:30 – 18:30)
+### IT & BACKUP CONTACTS (17:30 – 18:30)
 
-**[SCREEN: The ITTeamBackupAccess page loads.]**
+**[SCREEN: The ITTeamBackupAccess page loads, titled "IT & Backup Contacts".
+Retitled 2026-09-29 — re-record the opening frame.]**
 
 > "This step lets you configure backup access — who gets emergency access if the
 > System Owner is unavailable. In a fire department context, think of this as
@@ -584,7 +610,7 @@ from the address given in step 1.]**
 > during setup. These aren't full admin accounts — they're an emergency recovery
 > mechanism."
 
-**[SCREEN: Optionally add a backup email or skip]**
+**[SCREEN: Optionally add a backup email, or press "Skip for now"]**
 
 > "If your department has a shared leadership email or a Deputy Chief who should
 > have recovery access, add their email here. Otherwise, you can skip this and

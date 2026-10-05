@@ -42,7 +42,7 @@ interface BandRow {
 }
 
 const ROW_BUTTON_CLASS =
-  'inline-flex min-h-[44px] items-center justify-center gap-1.5 px-3 text-sm font-medium whitespace-nowrap max-md:flex-1';
+  'inline-flex min-h-9 touch:min-h-[44px] items-center justify-center gap-1.5 px-3 text-sm font-medium whitespace-nowrap max-md:flex-1';
 
 /** Numerals in the meta line are monospaced, matching how hours read elsewhere. */
 const Hours: React.FC<{ value: number }> = ({ value }) => (
@@ -228,7 +228,7 @@ export const NeedsYouBand: React.FC<NeedsYouBandProps> = ({
             <button
               type="button"
               onClick={onShowAll}
-              className="text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary min-h-[44px] w-full px-5 py-3 text-left text-sm font-medium transition-colors"
+              className="text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary touch:min-h-[44px] w-full px-5 py-3 text-left text-sm font-medium transition-colors"
             >
               +{hiddenCount} more need a response
             </button>
