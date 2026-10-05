@@ -230,6 +230,9 @@ The facilities dashboard shows:
 
 > **Hint:** If your department has the Facilities module disabled, you will see a simplified **Locations** page that provides basic location management for events and meetings.
 
+> **Screenshot needed:**
+> _[Plain member (no locations.\* or settings permissions), /locations, department with at least one station holding a room. Stations and rooms listed, with no QR toggle, kiosk URL, Add Station, Add Room, edit, delete, Change or Run Setup Wizard control. Do not capture a kiosk URL or display code.]_
+
 ### Printing Facility Labels
 
 The Facilities header has a **Print Labels** button that prints a barcode label for every facility (stations are typically few). It opens the shared label print page, where you pick a label size and download a PDF or print. The barcode encodes the **facility number**. The chosen printer is remembered for the facilities role.

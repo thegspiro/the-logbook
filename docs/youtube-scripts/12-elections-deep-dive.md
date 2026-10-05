@@ -302,7 +302,10 @@ the pending entry absent.]**
 > those members, period. Layer two: membership tier rules from your
 > organization settings. A tier can be marked not voting-eligible — think
 > social members — or can require a minimum meeting-attendance percentage
-> over a lookback window. The system computes each member's actual attendance
+> over a lookback window. That window starts on the day the member joined — or
+> came back, if they rejoined — when that's later, and it only counts meetings
+> that have actually happened. A new member isn't charged with meetings held
+> before they were here. The system computes each member's actual attendance
 > and denies members under the bar, with the percentage in the denial reason.
 > Layers three and four we covered: per-item voter types and per-item
 > attendance."
@@ -336,7 +339,9 @@ this row is still current.]**
 
 ### OVERRIDES (16:00 – 17:00)
 
-**[SCREEN: Grant an override on an ineligible member; the row turns blue]**
+**[SCREEN: The Overrides tab — click "+ Add Override", paste the ineligible
+member's user ID into "Member User ID", type a reason (ten characters minimum), click "Add Override". Back on the
+roster, their row turns blue and the "Voter Overrides" count goes up by one.]**
 
 > "Overrides are the escape hatch. A member whose standing was set wrong, an
 > excused absence your bylaws allow — grant an override with a reason, and
@@ -388,13 +393,19 @@ summary: sent / failed / skipped with reasons.]**
 > zero eligible items — nobody silently falls through the cracks, and the
 > skipped list is emailed to you for follow-up."
 
-> "Two operational notes. Ballot links are built from your server's
-> configured public URL — `FRONTEND_URL` — not from whoever clicked Send. If
-> members report dead links, that's the setting to check with IT. And tokens
-> expire at the election's end date, or thirty days, whichever comes first —
-> re-sending a ballot issues a fresh token."
+> "Two operational notes. Ballot links are built from the installation's
+> public address, not from whoever clicked Send. You can see it under
+> **Settings → Email**, on the **Email link address** card. If members report
+> dead links, have IT look there: the System Owner can correct it right on that
+> card, with no restart. Then re-send the ballots, because links already sent
+> keep the old address. And tokens expire at the election's end date, or thirty
+> days, whichever comes first — re-sending a ballot issues a fresh token."
 
-**[CALLOUT: "Ballot links come from FRONTEND_URL — set it correctly before election night"]**
+**[SCREEN: Settings → Email — the "Email link address" card at the top, showing
+the address and the line saying where it came from. Use a demo address; do not
+capture a real installation's hostname.]**
+
+**[CALLOUT: "Check Settings → Email → Email link address before election night"]**
 
 ---
 
@@ -1392,7 +1403,8 @@ PDF]**
 
 > "Opening freezes the eligible roll. The server checks it when issuing ballot
 > email and again when redeeming the token, so an old link cannot bypass the
-> snapshot. Use a secretary override for an approved late change. Null snapshots
+> snapshot. Use a voter override, on the Overrides tab, for an approved late
+> change. Null snapshots
 > exist only on legacy elections and keep their former live-roll behavior."
 
 ### Add to “RECORDING THE TALLY” — 0:40

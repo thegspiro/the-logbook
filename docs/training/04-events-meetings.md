@@ -220,6 +220,9 @@ appears only for an event that will actually record one, and no longer says
 "Created" before the record exists. Training credit from finalizing is
 described in [Training Credit from Events](#training-credit-from-events-2026-09-29).
 
+> **Screenshot needed:**
+> _[Member at /events/:id/check-in on a Training-type demo event inside its check-in window, after tapping Check In to This Event: the "You're Checked In" heading, the event name, and the green Training Record panel reading "Your attendance will be added to your training record when the event's attendance is finalized." Creates a check-in (mutates seed data). Do not capture the member's email or the URL bar.]_
+
 ### NFC Tags — a second way in _(2026-08-18)_
 
 A QR code has to be reprinted for every event and needs a working camera. In a
@@ -588,6 +591,9 @@ finalizing sends the attendance to training officers instead: members see the
 class as **In Progress** until an officer approves it on the approval page
 (linked from their email and from the event's Requirements & Programs card).
 
+> **Screenshot needed:**
+> _[Event organizer (events.manage) at /events/:eventId on an ended Training event with attendance still open: the "Finalize attendance?" confirmation, listing how each member's time is decided, that members with no credited time get no record, and that earlier admin-hours entries are removed, with Finalize and close / Keep it open. Press Keep it open; never confirm.]_
+
 **Training events do not credit Admin Hours.** Their attendance goes to the
 training records, and crediting admin hours as well counted the same hours
 twice. Finalizing a Training event removes any admin-hours entries that event
@@ -673,6 +679,9 @@ its attendance is finalized — however the event was created.
 4. To correct a finalized event, somebody who can reopen attendance (a chief)
    reopens it; change the details or times; finalize again.
 
+> **Screenshot needed:**
+> _[Admin with events.manage and training.manage at /events/admin?tab=create: Create Event with Event Type set to Training, scrolled to the "Training details (optional)" group, a course picked (so Training Type and Category fill), and the Create Training Session link line visible. Do not submit.]_
+
 **The reverse also works, in bulk.** If the training is a multi-class course — a recruit school, a five-night refresher — generate a **course cohort** instead and the platform creates the events _and_ their linked training sessions for you, one per class, with the roster already RSVP'd to each. See [Multi-Class Courses & Cohorts](02-training.md#multi-class-courses--cohorts) in the training guide.
 
 ---
@@ -732,6 +741,9 @@ Once a recurring series is created, each occurrence appears as an individual eve
   [Delete Series](#delete-series)).
 
 > **Hint:** Deleting a single occurrence from a series does not affect other occurrences. The system warns you when an edit will affect multiple events.
+
+> **Screenshot needed:**
+> _[Event organizer (events.manage) at /events/:id/edit on an occurrence of a weekly recurring demo event: the indigo "This event is part of a recurring series." panel above the form with "This and all future events" selected. Do not save.]_
 
 ### Series keep their dates and times _(2026-09-28)_
 

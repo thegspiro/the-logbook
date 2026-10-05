@@ -475,6 +475,12 @@ one when requests are in flight.
 > **Screenshot needed:**
 > _[Finance → Settings → Approval Chains → expand a chain → **Add step**, with Step type **Approval**, Approver type **Email**, an approver email filled in, the **Allow self-approval by email** box and the **Auto-approve under ($)** field visible, and the help text under Approver type readable.]_
 
+> **Screenshot needed:**
+> _[Treasurer or admin holding finance.configure_approvals and positions.view, /finance/settings/approval-chains. The Add step dialog over an expanded purchase-request chain: Step type Approval, Approver type Position, the position picker set to Treasurer, Auto-approve under ($) = 250. The finance.approve help text under Approver type must be visible.]_
+
+> **Screenshot needed:**
+> _[Treasurer or admin holding finance.configure_approvals, /finance/settings/approval-chains. The Delete step confirmation over a chain with three steps, showing the history-removal and waiting-request warnings and the Delete step / Keep it buttons. Never confirm.]_
+
 ### Previewing Chain Resolution
 
 > **Corrected 2026-10-04.** There is no **Preview** tool on the Approval

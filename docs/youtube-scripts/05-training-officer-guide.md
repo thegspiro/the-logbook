@@ -545,3 +545,10 @@ report, the cohort wizard, a skills test scorecard.]**
   most likely to be watched as standalone clips by _existing_ users — the course
   picker fixes requirements that silently never matched anything. Give both clean
   in-points.
+- **2026-09-30 pass.** "Finalizing a training session" was rewritten: a Training
+  event credits records when its **attendance is finalized** on the event page,
+  and a ticked **Require instructor confirmation** holds them for **Approve and
+  record** on the approval page, which the training officers' email and
+  **Review and approve** on the event both open. Also added: the **Not set up** compliance card and the setup
+  checklist for a new department (film against an empty demo org), and the
+  **Review Submission** notification. Adds ~0:40; re-time Chapters 2 and 4.

@@ -64,16 +64,17 @@ If not already installed:
 
 **IMPORTANT - Set these before clicking Apply:**
 
-| Setting               | Value                                  | Notes                      |
-| --------------------- | -------------------------------------- | -------------------------- |
-| **WebUI Port**        | 7880                                   | Or any available port      |
-| **API Port**          | 7881                                   | Or any available port      |
-| **Database Host**     | Your Unraid IP or MySQL container name |                            |
-| **Database Name**     | the_logbook                            | Create this database first |
-| **Database User**     | logbook_user                           | Create this user first     |
-| **Database Password** | _strong password_                      | **REQUIRED**               |
-| **Secret Key**        | Generate with: `openssl rand -hex 32`  | **REQUIRED**               |
-| **Encryption Key**    | Generate with: `openssl rand -hex 32`  | **REQUIRED**               |
+| Setting                 | Value                                                                     | Notes                                                                                                                                                                  |
+| ----------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **WebUI Port**          | 7880                                                                      | Or any available port                                                                                                                                                  |
+| **API Port**            | 7881                                                                      | Or any available port                                                                                                                                                  |
+| **Database Host**       | Your Unraid IP or MySQL container name                                    |                                                                                                                                                                        |
+| **Database Name**       | the_logbook                                                               | Create this database first                                                                                                                                             |
+| **Database User**       | logbook_user                                                              | Create this user first                                                                                                                                                 |
+| **Database Password**   | _strong password_                                                         | **REQUIRED**                                                                                                                                                           |
+| **Secret Key**          | Generate with: `openssl rand -hex 32`                                     | **REQUIRED**                                                                                                                                                           |
+| **Encryption Key**      | Generate with: `openssl rand -hex 32`                                     | **REQUIRED**                                                                                                                                                           |
+| **Public Site Address** | The address members open the site at, e.g. `https://logbook.yourdept.org` | Every link in outgoing email is built from it. Leave blank to use the first address in **Allowed Origins** (an advanced field — set it to the same `https://` address) |
 
 ### Step 4: Generate Security Keys
 
@@ -263,7 +264,7 @@ For maximum reliability:
 ```bash
 ENVIRONMENT=production          # Always production for Unraid
 DEBUG=false                     # MUST be false in production
-TZ=America/New_York            # Your timezone
+TZ=America/New_York            # Containers' clock; the department's dates follow Settings → General → Profile → Timezone
 
 # Database (REQUIRED)
 DB_HOST=192.168.1.10           # Your Unraid IP or container name
@@ -296,9 +297,9 @@ SMTP_USER=your-email@gmail.com
 SMTP_PASSWORD=your-app-password
 SMTP_FROM_EMAIL=noreply@yourdomain.com
 
-# Backups (run by the `backup` service in docker-compose.prod.yml;
+# Backups (run by the `backup` service in docker-compose-unraid.yml;
 # there is no on/off env flag — they run whenever that service is up)
-BACKUP_TIME=02:00              # Daily run time, UTC HH:MM
+BACKUP_TIME=02:00              # Daily run time, HH:MM in the backup container's TZ
 BACKUP_RETENTION_DAYS=30       # Prune archives older than this
 VERIFY_EVERY_N_BACKUPS=7       # Automated restore-drill cadence; 0 disables
 
@@ -381,10 +382,20 @@ ALLOWED_ORIGINS=https://logbook.yourdomain.com
 FRONTEND_URL=https://logbook.yourdomain.com
 ```
 
-In production, a `FRONTEND_URL` that still points at `localhost` (or any
-loopback address) **stops the backend from starting**: it logs
+If `FRONTEND_URL` still points at `localhost` (or any loopback address), the
+backend uses the first address other than localhost in `ALLOWED_ORIGINS` for
+email links instead and logs that it did; a LAN address counts. In production
+it **stops the backend from starting** only when `ALLOWED_ORIGINS` has no
+address other than localhost either: it logs
 `CRITICAL: FRONTEND_URL ...` and appears under "BLOCKING" in
-`python -m app.preflight`. The setup script refuses a `localhost` HTTPS origin,
+`python -m app.preflight`. The Community Apps template's **Public Site
+Address** field sets `FRONTEND_URL`; leaving it blank uses the first **Allowed
+Origins** address. A LAN address (`http://192.168.1.10:7880`, a `.local` name)
+starts, but with email on the log warns that links will not open for members
+reading mail away from the station.
+
+The address emails are actually using is shown on **Settings → Email → Email
+link address**, and an IT Manager can override it there without a restart. The setup script refuses a `localhost` HTTPS origin,
 and its update path (option 2) stops before restarting anything when the kept
 `.env` still has a loopback `FRONTEND_URL`. See
 [UPGRADING.md](../docs/UPGRADING.md#frontend_url-must-be-a-public-address-2026-09-25).
@@ -664,12 +675,22 @@ ORDER BY (data_length + index_length) DESC;
 2. Create proxy conf: `/mnt/user/appdata/swag/nginx/proxy-confs/logbook.subdomain.conf`
 
 ```nginx
+# Keep anonymous suggestion-box submissions out of the access log: a line with
+# the client IP and the exact second would identify the member. SWAG includes
+# *.subdomain.conf at http level, so the map can live in this file.
+map $request_uri $access_loggable {
+    "~^/api/v1/suggestions/(boxes/[^/?]+/submissions(\?|$)|follow-up/)" 0;
+    default 1;
+}
+
 server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
     server_name logbook.*;
 
     include /config/nginx/ssl.conf;
+
+    access_log /config/log/nginx/access.log combined if=$access_loggable;
 
     location / {
         include /config/nginx/proxy.conf;
@@ -704,13 +725,18 @@ server {
 5. Enable SSL with Let's Encrypt
 6. Save
 
+Nginx Proxy Manager keeps its own access log for each proxy host, which would
+record the client IP and exact second of every anonymous suggestion-box
+submission. Add the `$access_loggable` map shown for Swag through NPM's custom
+nginx configuration, or turn access logging off for this host.
+
 ---
 
 ## Backup Configuration
 
 ### Automated Backups
 
-Backups run automatically at `BACKUP_TIME` (default: 02:00 UTC daily).
+Backups run automatically at `BACKUP_TIME` (default: 02:00 daily, in the backup container's `TZ` — `America/New_York` unless you change it).
 
 Every `VERIFY_EVERY_N_BACKUPS` runs (default 7), the service performs an
 automated **restore drill** — it loads the fresh dump into a throwaway schema,

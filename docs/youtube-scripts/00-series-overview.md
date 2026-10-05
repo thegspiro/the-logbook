@@ -6,6 +6,11 @@
 > **01, 03, 04, 06, 07, 12, 13, 14, 15, and 16** contain word-for-word August
 > release inserts, and Short **8AF** covers Room QR rotation. Editors must apply
 > each script's explicit re-timing note before recording.
+>
+> **2026-09-30:** scripts **01–05** were brought up to date with the releases of
+> 24–30 September. Beats that were **wrong** were rewritten in place (listed
+> below under "Re-shoot list (2026-09-30)"); each script closes with an editor
+> note giving its re-timing.
 
 ## Series Structure
 
@@ -125,77 +130,122 @@ services.
 > cosmetic per shot but universal, so treat it as a reason to re-shoot a screen
 > you are already re-shooting, not a reason to redo the catalogue.
 
+> **⚠ Re-shoot list (2026-09-30).** Full disposition in
+> [`SCRIPT_CURRENCY.md`](./SCRIPT_CURRENCY.md). These beats taught something
+> that is not true and were rewritten; do not re-use their footage:
+>
+> | What changed                                                                                                                      | Footage affected               |
+> | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+> | **IT & Backup Contacts** has **Skip for now**, and sends no backup access code; module cards use **Enable / Later / Skip**        | Script 2, Chapters 4 and 7     |
+> | The top officer is seeded as **Chief**; the logo must be PNG or JPEG; setup ends on **Go to Department Setup**                    | Script 2, Chapters 2, 5 and 11 |
+> | The navigation layout is department-wide; there is no per-member override                                                         | Script 2, Chapter 10           |
+> | **IP Security** has no allowlists or blocklists — it is country blocking and member-filed exceptions                              | Script 3, Chapter 5            |
+> | Session timeout and password policy are environment settings, not a screen; **Create Custom Role**, Priority grants nothing       | Script 3, Chapters 4 and 5     |
+> | Event Settings has no QR check-in toggle and no default RSVP deadline; every event gets a QR code                                 | Script 3, Chapter 6            |
+> | Every event has a QR code (no toggle); Event Analytics has no per-member view; the report to film is **Certification Expiration** | Script 4, Chapters 3 and 7     |
+> | A Training event credits records when its **attendance is finalized**; approval is **Approve and record**                         | Script 5, Chapter 4            |
+>
+> Script 3 also gains a late-September upgrade section (head `601fdb28ab8c`),
+> and Script 1 a `FRONTEND_URL` beat, which a production server now refuses to
+> start without.
+
 ### Quick Tips / Shorts (1–3 minutes, extracted from role guides or standalone)
 
-| #   | Title                                                                              | Clip Source  |
-| --- | ---------------------------------------------------------------------------------- | ------------ |
-| 8a  | How to RSVP for an Event in 30 Seconds                                             | Script 6     |
-| 8b  | Checking Your Training Compliance Status                                           | Script 6     |
-| 8c  | Submitting a Shift Swap Request                                                    | Script 6     |
-| 8d  | Creating an Event with QR Check-In                                                 | Script 4/7   |
-| 8e  | Running a Department Election                                                      | Script 4     |
-| 8f  | Adding a New Member to the System                                                  | Script 3/7   |
-| 8g  | Setting Up Two-Factor Authentication                                               | Script 3     |
-| 8h  | Viewing the Scheduling Dashboard                                                   | Script 5/7   |
-| 8i  | Put Your Shifts in Your Phone Calendar                                             | Script 6     |
-| 8j  | Require End-of-Shift Checks Before Finalizing                                      | Script 5     |
-| 8k  | Download Everything The Logbook Knows About You                                    | Script 6     |
-| 8l  | Why You're Not Getting Department Texts                                            | Script 6     |
-| 8m  | You Waived Dues by Mistake — Undo It ⚠️ _(hold: needs the dues UI)_                | Script 7     |
-| 8n  | Recording a Dues Payment Twice Won't Charge Twice ⚠️ _(hold: needs the dues UI)_   | Script 7     |
-| 8o  | Schedule a Whole Recruit School in One Shot ⚠️ _(planned — not yet scripted)_      | Script 14    |
-| 8p  | Reordering Classes Doesn't Reschedule Them ⚠️ _(planned — not yet scripted)_       | Script 14    |
-| 8q  | Cohort or Recurring Session — Which Do I Want? ⚠️ _(planned — not yet scripted)_   | Script 14    |
-| 8r  | Get Department Alerts on Your Lock Screen                                          | Script 6 / 3 |
-| 8s  | Everything's Within Thumb Reach Now                                                | Script 6     |
-| 8t  | Fix the Whole CSV Before You Import Anyone                                         | Script 7 / 3 |
-| 8u  | Don't Email Sixty People a Password Link by Accident                               | Script 7     |
-| 8v  | "Can't Delete This Member" — Here's Why                                            | Script 3 / 7 |
-| 8w  | Sign Your Notices With the Right Officer's Name                                    | Script 7     |
-| 8x  | An Applicant Can't Read Their Own File                                             | Script 7     |
-| 8y  | "Taken Within the Last 180 Days"                                                   | Script 5     |
-| 8z  | Your Course Requirement Shows Everyone Incomplete                                  | Script 5     |
-| 8aa | Let Visitors Sign Themselves In at an Open House ⚠️ _(planned — 2026-08-09)_       | Script 4     |
-| 8ab | Your Open-House Sign-In Sheet Is Now a Recruiting List ⚠️ _(planned — 2026-08-09)_ | Script 4     |
-| 8ac | Every Scheduling Tab Works Again ⚠️ _(planned — 2026-08-09)_                       | Script 5     |
-| 8ad | That "Settings Saved" Toast Was Lying to You ⚠️ _(planned — 2026-08-09)_           | Script 5     |
-| 8ae | Emptying a Field Now Actually Empties It ⚠️ _(planned — 2026-08-09)_               | Script 3 / 7 |
-| 8af | Expired Doesn't Mean Finished — Reopen an Enrollment ⚠️ _(planned — 2026-08-09)_   | Script 9     |
-| 8ag | Read the Steps in Your Checklist Requirement ⚠️ _(planned — 2026-08-09)_           | Script 10    |
-| 8ah | Set Your Own Deadline-Warning Schedule ⚠️ _(planned — 2026-08-09)_                 | Script 11    |
-| 15a | Your Skills Test Results Are on My Training Now                                    | Script 15    |
-| 15b | Void, Cancel, Delete — Which One?                                                  | Script 15    |
-| 15c | Deliver a Failure in Person                                                        | Script 15    |
-| 15d | Your Notes Aren't Always for the Candidate                                         | Script 15    |
-| 15e | Stop Losing Scoring When Your Phone Locks                                          | Script 15    |
-| 15f | Why Your Old Test Says Seven Hours                                                 | Script 15    |
-| 15g | Editing a Skill Sheet Used to Rewrite Old Scorecards                               | Script 15    |
-| 15h | Any Member Can Run a Practice Test                                                 | Script 15    |
-| 15i | You Don't Have to Be an Officer to Run a Skills Test _(2026-08-08)_                | Script 15    |
-| 15j | You Can't Sign Off Your Own Skills Test _(2026-08-08)_                             | Script 15    |
-| 15k | Tap It Again to Clear a Mis-Tap ⚠️ _(planned — 2026-08-09)_                        | Script 15    |
-| 15l | "Candidate Did None of These" Is Not a Blank Step ⚠️ _(planned — 2026-08-09)_      | Script 15    |
-| 15m | Moving On No Longer Loses Your Stopwatch ⚠️ _(planned — 2026-08-09)_               | Script 15    |
-| 12a | "Why Can't This Member Vote?" — Eligibility Debugging                              | Script 12    |
-| 12b | Test Ballots — Practice Without Polluting the Results                              | Script 12    |
-| 12c | Closed Early? Here's Why Results Are Hidden                                        | Script 12    |
-| 12d | Your Vote Receipt — Proof Without Exposure                                         | Script 12    |
-| 12e | Proxy Voting in Two Minutes                                                        | Script 12    |
-| 12f | Nobody Won — Automatic Runoffs                                                     | Script 12    |
-| 12g | Quorum — Making Elections Count (Literally)                                        | Script 12    |
-| 12h | Why You Can't Reopen a Closed Election                                             | Script 12    |
-| 12i | Investigating a Disputed Election                                                  | Script 12    |
-| 12j | Choosing a Voting Method                                                           | Script 12    |
-| 12k | The Pre-Meeting Package                                                            | Script 12    |
-| 13a | Pay Your Store Order From Your Phone                                               | Script 13    |
-| 13b | Why There's No Zelle Button                                                        | Script 13    |
-| 13c | "I've Sent Payment" Doesn't Mean Paid                                              | Script 13    |
-| 13d | Close a Window, Get Your Vendor Order                                              | Script 13    |
-| 13e | Let PayPal Mark Your Orders Paid                                                   | Script 13    |
-| 13f | Paid But Not Ordered — Why Two Statuses                                            | Script 13    |
-| 13g | Your Department's Rule on Unpaid Orders                                            | Script 13    |
-| 13h | They Said Venmo and Paid Cash — Record It Right                                    | Script 13    |
-| 13i | Tell the Vendor, Tell the Members, One Click                                       | Script 13    |
+| #   | Title                                                                            | Clip Source   |
+| --- | -------------------------------------------------------------------------------- | ------------- |
+| 8a  | How to RSVP for an Event in 30 Seconds                                           | Script 6      |
+| 8b  | Checking Your Training Compliance Status                                         | Script 6      |
+| 8c  | Submitting a Shift Swap Request                                                  | Script 6      |
+| 8d  | Creating an Event with QR Check-In                                               | Script 4/7    |
+| 8e  | Running a Department Election                                                    | Script 4      |
+| 8f  | Adding a New Member to the System                                                | Script 3/7    |
+| 8g  | Setting Up Two-Factor Authentication                                             | Script 3      |
+| 8h  | Viewing the Scheduling Dashboard                                                 | Script 5/7    |
+| 8i  | Put Your Shifts in Your Phone Calendar                                           | Script 6      |
+| 8j  | Require End-of-Shift Checks Before Finalizing                                    | Script 5      |
+| 8k  | Download Everything The Logbook Knows About You                                  | Script 6      |
+| 8l  | Why You're Not Getting Department Texts                                          | Script 6      |
+| 8m  | You Waived Dues by Mistake — Undo It ⚠️ _(hold: needs the dues UI)_              | Script 7      |
+| 8n  | Recording a Dues Payment Twice Won't Charge Twice ⚠️ _(hold: needs the dues UI)_ | Script 7      |
+| 8o  | Schedule a Whole Recruit School in One Shot ⚠️ _(planned — not yet scripted)_    | Script 14     |
+| 8p  | Reordering Classes Doesn't Reschedule Them ⚠️ _(planned — not yet scripted)_     | Script 14     |
+| 8q  | Cohort or Recurring Session — Which Do I Want? ⚠️ _(planned — not yet scripted)_ | Script 14     |
+| 8r  | Get Department Alerts on Your Lock Screen                                        | Script 6 / 3  |
+| 8s  | Everything's Within Thumb Reach Now                                              | Script 6      |
+| 8t  | Fix the Whole CSV Before You Import Anyone                                       | Script 7 / 3  |
+| 8u  | Don't Email Sixty People a Password Link by Accident                             | Script 7      |
+| 8v  | "Can't Delete This Member" — Here's Why                                          | Script 3 / 7  |
+| 8w  | Sign Your Notices With the Right Officer's Name                                  | Script 7      |
+| 8x  | An Applicant Can't Read Their Own File                                           | Script 7      |
+| 8y  | "Taken Within the Last 180 Days"                                                 | Script 5      |
+| 8z  | Your Course Requirement Shows Everyone Incomplete                                | Script 5      |
+| 8aa | Change Your Email Footer Once, Not Thirty-Five Times                             | Script 7      |
+| 8ab | You Used the Last One — Tell the Truck                                           | Script 6      |
+| 8ac | Log a Whole Delivery in One Screen                                               | Script 7      |
+| 8ad | Why Your Reorder Alert Never Fired                                               | Script 7      |
+| 8ae | Three Boxes, Three Expiry Dates, One Bracket                                     | Script 6      |
+| 8af | Print a Room QR Code — and Know When It Stops Working                            | Standalone    |
+| 8ag | Tap Instead of Scan                                                              | Script 6      |
+| 8ah | Claim a Shift in One Tap                                                         | Script 6      |
+| 8ai | Every Tuesday Night, Once                                                        | Script 6      |
+| 8aj | Tap Your Card, Walk In                                                           | Script 6      |
+| 8ak | The Seal Says Nothing Was Touched — Not That It's Full                           | Script 5      |
+| 8al | Print the Roster at the Watch Desk                                               | Script 3      |
+| 8am | Who Do I Ask About This?                                                         | Script 4 / 6  |
+| 8an | The Ballot That Skipped the Life Members                                         | Script 12 / 4 |
+| 8ao | Where Did /testing Go?                                                           | Script 3      |
+| 8ap | Build a Check Template in One List                                               | Script 3 / 5  |
+| 8aq | Thread Colour on a Brass Plate                                                   | Script 13     |
+| 8ar | A Suggestion Box Nobody Can Trace                                                | Standalone    |
+| 8as | Label a Whole Storeroom in One Go                                                | Standalone    |
+| 8at | Applicants Move When You Close the Event Out                                     | Script 4      |
+| 8au | Who's Going — and Where You Stand on the Waitlist                                | Script 6      |
+| 8av | Your Old Email Wording Is Still There                                            | Script 7      |
+| 8aw | Your Emailed Links Open "localhost"                                              | Script 3      |
+| 8ax | Turn Off Just the Emails You Don't Need                                          | Script 6      |
+| 8ay | Make an Optional Email Required                                                  | Script 4      |
+| 8az | Your Department Already Has a Compliance Box                                     | Script 7      |
+| 15a | Your Skills Test Results Are on My Training Now                                  | Script 15     |
+| 15b | Void, Cancel, Delete — Which One?                                                | Script 15     |
+| 15c | Deliver a Failure in Person                                                      | Script 15     |
+| 15d | Your Notes Aren't Always for the Candidate                                       | Script 15     |
+| 15e | Stop Losing Scoring When Your Phone Locks                                        | Script 15     |
+| 15f | Why Your Old Test Says Seven Hours                                               | Script 15     |
+| 15g | Editing a Skill Sheet Used to Rewrite Old Scorecards                             | Script 15     |
+| 15h | Any Member Can Run a Practice Test                                               | Script 15     |
+| 15i | You Don't Have to Be an Officer to Run a Skills Test _(2026-08-08)_              | Script 15     |
+| 15j | You Can't Sign Off Your Own Skills Test _(2026-08-08)_                           | Script 15     |
+| 15k | Tap It Again to Clear a Mis-Tap ⚠️ _(planned — 2026-08-09)_                      | Script 15     |
+| 15l | "Candidate Did None of These" Is Not a Blank Step ⚠️ _(planned — 2026-08-09)_    | Script 15     |
+| 15m | Moving On No Longer Loses Your Stopwatch ⚠️ _(planned — 2026-08-09)_             | Script 15     |
+| 12a | "Why Can't This Member Vote?" — Eligibility Debugging                            | Script 12     |
+| 12b | Test Ballots — Practice Without Polluting the Results                            | Script 12     |
+| 12c | Closed Early? Here's Why Results Are Hidden                                      | Script 12     |
+| 12d | Your Vote Receipt — Proof Without Exposure                                       | Script 12     |
+| 12e | Proxy Voting in Two Minutes                                                      | Script 12     |
+| 12f | Nobody Won — Automatic Runoffs                                                   | Script 12     |
+| 12g | Quorum — Making Elections Count (Literally)                                      | Script 12     |
+| 12h | Why You Can't Reopen a Closed Election                                           | Script 12     |
+| 12i | Investigating a Disputed Election                                                | Script 12     |
+| 12j | Choosing a Voting Method                                                         | Script 12     |
+| 12k | The Pre-Meeting Package                                                          | Script 12     |
+| 13a | Pay Your Store Order From Your Phone                                             | Script 13     |
+| 13b | Why There's No Zelle Button                                                      | Script 13     |
+| 13c | "I've Sent Payment" Doesn't Mean Paid                                            | Script 13     |
+| 13d | Close a Window, Get Your Vendor Order                                            | Script 13     |
+| 13e | Let PayPal Mark Your Orders Paid                                                 | Script 13     |
+| 13f | Paid But Not Ordered — Why Two Statuses                                          | Script 13     |
+| 13g | Your Department's Rule on Unpaid Orders                                          | Script 13     |
+| 13h | They Said Venmo and Paid Cash — Record It Right                                  | Script 13     |
+| 13i | Tell the Vendor, Tell the Members, One Click                                     | Script 13     |
+
+> **Rows 8aa–8az follow Script 8 as written.** This table used to list eight
+> _planned_ shorts under 8aa–8ah; Script 8 later used those letters for the
+> shorts above, and the planned ones were never written. They remain ideas, not
+> scripts: open-house guest sign-in and the recruiting list (Script 4), every
+> Scheduling tab working again and the false "Settings Saved" toast (Script 5),
+> emptying a field (Script 3 / 7), reopening an expired enrollment (Script 9),
+> checklist steps (Script 10), and deadline-warning schedules (Script 11).
 
 ---
 

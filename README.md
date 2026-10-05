@@ -61,7 +61,7 @@ Unified location management that serves as the single source of truth for rooms,
 
 ### Member Directory & Tracking
 
-Member list, profiles, add/import, training history per member. Configurable drop notifications with CC recipients, personal email support, and editable email templates. Membership tiers (Probationary, Active, Senior, Life) with auto-advancement, tier-based training exemptions, and voting eligibility gated by meeting attendance.
+Member list, profiles, add/import, training history per member. Configurable drop notifications with CC recipients, personal email support, and editable email templates. Membership tiers (Probationary, Active, Senior, Life) with auto-advancement on credited years of service (time away between stints is not counted), tier-based training exemptions, and voting eligibility gated by meeting attendance.
 
 ### Meeting Minutes ([Documentation](docs/MEETING_MINUTES_MODULE.md))
 
@@ -87,7 +87,7 @@ Full election system with ballots and candidate management.
 
 ### Inventory Management
 
-Full CRUD with item types, status/condition tracking, category management, search and filtering.
+Full CRUD with item types, status/condition tracking, category management, search and filtering. Barcode or QR labels, optional NFC tags for put-away and shelf audits, and a self-service kiosk where members borrow and return loaner gear by tapping their ID card.
 
 ### Compliance Management
 
@@ -415,7 +415,7 @@ See the [Onboarding Guide](ONBOARDING.md) or the [project Wiki](https://github.c
 - **Multi-Factor Authentication** — TOTP-based 2FA
 - **Tamper-Proof Audit Logs** — Blockchain-inspired hash chain with enforced 7-year retention (signed archives before purge) and optional off-host shipping to a SIEM
 - **Session Security** — JWT with automatic timeout
-- **Rate Limiting** — Brute force protection (5 attempts = 30 min lockout)
+- **Rate Limiting** — Brute force protection (5 failed attempts = 15-minute lockout by default; wrong two-factor codes count toward it)
 - **Input Sanitization** — XSS and SQL injection prevention
 - **HIPAA-Oriented Security** — PHI encryption, audit retention, access controls (external audit required for compliance certification)
 - **Section 508 Accessible** — WCAG 2.1 Level AA compliance

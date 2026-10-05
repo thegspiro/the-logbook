@@ -177,6 +177,9 @@ open the full navigation drawer.
 
 ![Phone header with the menu button at the left edge and the department name beside it](./images/10-13-mobile-header-menu.png)
 
+> **Screenshot needed:**
+> _[Administrator (long menu) at /dashboard in a 390×844 phone viewport: bottom-bar More tapped so the navigation drawer is open and not yet scrolled, with the bottom fade and the More pill with its arrow visible above the drawer footer.]_
+
 ### Everything Is Thumb-Sized Now _(2026-08-08)_
 
 Every tappable control in the app now meets the **44-pixel touch minimum** on a

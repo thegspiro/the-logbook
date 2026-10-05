@@ -157,16 +157,27 @@ All settings are in `.env` file at: `/mnt/user/appdata/the-logbook/.env`
 ### Important Settings
 
 ```bash
-# Your Unraid IP (auto-detected)
-ALLOWED_ORIGINS=http://192.168.1.10:7880
+# The public HTTPS address of your reverse proxy (asked for by the setup script)
+ALLOWED_ORIGINS=https://logbook.yourdomain.com
+
+# Public site URL for links in emails (the setup script writes the same address)
+FRONTEND_URL=https://logbook.yourdomain.com
 
 # Ports (change if needed)
 FRONTEND_PORT=7880
 BACKEND_PORT=7881
 
-# Timezone
+# The containers' clock. The department's own dates (due dates, "today",
+# times in emails and exports) come from Settings → General → Profile → Timezone.
 TZ=America/New_York
 ```
+
+**Direct label printing** to a network printer needs
+`LABEL_PRINTER_ALLOWED_NETWORKS` (printer IPs or CIDR ranges, e.g.
+`192.168.10.0/24`), and the Unraid compose files do not pass it through. Add
+`LABEL_PRINTER_ALLOWED_NETWORKS: ${LABEL_PRINTER_ALLOWED_NETWORKS:-}` to the
+backend service's `environment:` block and set the value in `.env`. Left
+empty, direct printing stays off; browser and PDF printing are unaffected.
 
 After changing `.env`, restart:
 
@@ -187,11 +198,22 @@ This stack runs in **production posture**, and logins depend on HTTPS:
 - **Updates are validated too** (option 2): if your existing `.env` still has
   an `http://` origin or secure cookies disabled, the script runs the same
   HTTPS migration prompt. To knowingly keep a plaintext LAN trial for now,
-  re-run with `ALLOW_INSECURE_HTTP=yes` — and for such a trial, uncomment
-  `COOKIE_SECURE=false` in `.env` (browsers refuse to send the app's `Secure`
+  re-run with `ALLOW_INSECURE_HTTP=yes` — and for such a trial, add
+  `COOKIE_SECURE=false` to `.env`, or uncomment it if you built `.env` from
+  `unraid/.env.example` (browsers refuse to send the app's `Secure`
   auth cookies over plain `http://`, so logins fail without it). Delete that
   line again once your proxy is live: session cookies over cleartext HTTP are
   readable by anyone on the network path.
+- **`FRONTEND_URL`** is the address every link in outgoing email (password
+  resets, ballots, reminders) is built from. The setup script writes it from
+  the HTTPS URL you give it, and on an update fills it in when it is missing or
+  still `localhost`; if you change your public address later, change it here
+  too. Left at `localhost`, email links use the first non-localhost address in
+  `ALLOWED_ORIGINS` instead (a LAN address is accepted, with a startup
+  warning). The backend refuses to start (`CRITICAL: FRONTEND_URL ...`) only
+  if neither names anything but localhost, and
+  the update path stops before restarting anything in that case. The address
+  in use is shown on **Settings → Email → Email link address**.
 - The compose **publishes ports `7880`/`7881` in plaintext on all host
   interfaces** so your proxy can forward to them. Once HTTPS works, set
   `BIND_ADDRESS` in `.env` (e.g. `127.0.0.1` if the proxy runs on the same

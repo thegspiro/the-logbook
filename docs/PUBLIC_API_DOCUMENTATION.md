@@ -22,14 +22,17 @@ Contact your organization's administrator to obtain an API key. API keys are man
 
 ## Rate Limiting
 
-- Default limit: **1000 requests per hour** per API key
+- Default limit: **1000 requests per hour** per API key, counted per clock
+  hour. The department can change the default, or set a different limit on
+  one key
 - IP-based limit: **100 requests per minute** per IP address
-- Rate limit headers are included in responses:
-  - `X-RateLimit-Limit`: Your rate limit
-  - `X-RateLimit-Remaining`: Requests remaining
-  - `X-RateLimit-Reset`: Unix timestamp when limit resets
 
-When you exceed the rate limit, you'll receive a `429 Too Many Requests` response.
+When you exceed a limit, you'll receive a `429 Too Many Requests` response.
+The rate-limit headers come only on that 429, not on successful responses:
+
+- `X-RateLimit-Limit`: the limit you hit
+- `X-RateLimit-Remaining`: `0`
+- `X-RateLimit-Reset`: Unix timestamp when the hourly key limit resets (per-key 429 only)
 
 ## Response Format
 
@@ -65,16 +68,16 @@ The one exception is **422**, where `detail` is an array of per-field objects:
 
 ## Common Error Codes
 
-| Status Code | Description                                                        |
-| ----------- | ------------------------------------------------------------------ |
-| 400         | Malformed, expired, or already-acted-on request                    |
-| 401         | Invalid or missing API key                                         |
-| 403         | Portal disabled or insufficient permissions                        |
-| 404         | Unknown token, slug, or display code — or the record is not public |
-| 422         | Request failed validation (see the array form above)               |
-| 429         | Rate limit exceeded                                                |
-| 500         | Internal server error                                              |
-| 503         | Public portal is disabled                                          |
+| Status Code | Description                                                         |
+| ----------- | ------------------------------------------------------------------- |
+| 400         | Malformed, expired, or already-acted-on request                     |
+| 401         | Invalid or missing API key, or a form that needs a signed-in member |
+| 403         | Insufficient permissions                                            |
+| 404         | Unknown token, slug, or display code — or the record is not public  |
+| 422         | Request failed validation (see the array form above)                |
+| 429         | Rate limit exceeded                                                 |
+| 500         | Internal server error                                               |
+| 503         | Public portal is disabled                                           |
 
 > These are now declared in the OpenAPI schema per route, so a client
 > generated from `/openapi.json` handles them as real responses rather than
@@ -110,7 +113,7 @@ Retrieve basic information about the organization.
 
 **Endpoint:** `GET /organization/info`
 
-**Rate Limit:** 100 requests/hour
+**Rate Limit:** the API key's hourly limit (see [Rate Limiting](#rate-limiting))
 
 **Example Request:**
 
@@ -153,7 +156,7 @@ Retrieve aggregate statistics about the organization.
 
 **Endpoint:** `GET /organization/stats`
 
-**Rate Limit:** 100 requests/hour
+**Rate Limit:** the API key's hourly limit (see [Rate Limiting](#rate-limiting))
 
 **Example Request:**
 
@@ -189,7 +192,7 @@ Retrieve upcoming public events (community events, open houses, etc.).
 
 **Endpoint:** `GET /events/public`
 
-**Rate Limit:** 200 requests/hour
+**Rate Limit:** the API key's hourly limit (see [Rate Limiting](#rate-limiting))
 
 **Query Parameters:**
 
@@ -291,6 +294,7 @@ curl https://your-logbook-instance.com/api/public/v1/forms/a1b2c3d4e5f6
   "description": "Interested in joining? Fill out this form and we'll be in touch.",
   "category": "membership",
   "allow_multiple_submissions": true,
+  "require_authentication": false,
   "organization_name": "Springfield Volunteer Fire Department",
   "fields": [
     {
@@ -336,16 +340,27 @@ curl https://your-logbook-instance.com/api/public/v1/forms/a1b2c3d4e5f6
 - `member_lookup` field types are excluded from public responses
 - Slugs are 12-character hex strings (e.g., `a1b2c3d4e5f6`)
 - Returns 404 if the form is not found, not published, or not public
+- `require_authentication` and `allow_multiple_submissions` tell a client in
+  advance whether a signed-out visitor can submit (see below)
 
 ---
 
 ### 6. Submit Public Form
 
-Submit data to a public form. No authentication required.
+Submit data to a public form. No API key is used.
 
 **Endpoint:** `POST /forms/{slug}/submit`
 
-**Authentication:** Not required
+**Authentication:** None **only** when the form allows submissions without
+signing in — `require_authentication: false` on the GET response, which a form
+manager sets with **Allow submissions without signing in** under **Share →
+Public Access** — **and** allows multiple submissions. Otherwise the request
+must carry a signed-in member session (the app's cookies) for the form's own
+organization, or it is refused with **401** "Authentication is required to
+submit this form." Forms require sign-in by default; the event-request form
+generated from **Manage Events → Settings → Public Form** is the one created
+open. A session from a different organization gets **404**. When
+`CAPTCHA_ENABLED` is on, the submission also needs a CAPTCHA token.
 
 **Rate Limit:** 10 submissions/minute per IP (10-minute lockout if exceeded)
 
@@ -400,11 +415,12 @@ curl -X POST \
 
 **Error Responses:**
 
-| Status | Description                                               |
-| ------ | --------------------------------------------------------- |
-| 400    | Validation error (missing required field, invalid format) |
-| 404    | Form not found or not available                           |
-| 429    | Rate limit exceeded (try again in 10 minutes)             |
+| Status | Description                                                |
+| ------ | ---------------------------------------------------------- |
+| 400    | Validation error (missing required field, invalid format)  |
+| 401    | The form needs a signed-in member and the request has none |
+| 404    | Form not found or not available                            |
+| 429    | Rate limit exceeded (try again in 10 minutes)              |
 
 ---
 

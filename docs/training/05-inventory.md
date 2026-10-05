@@ -132,6 +132,9 @@ did not load", and only a search that found nothing says "Nothing matches that".
 
 ![The inventory admin hub with the "Finish inventory setup" prompt naming what is still missing](./images/05-72-setup-prompt.png)
 
+> **Screenshot needed:**
+> _[Quartermaster (inventory.manage) on a department with no inventory items, at /inventory/admin/items: the empty state "Your department has no inventory items yet" with the Open the Setup Guide and Add Item buttons. Capture outside the seeded demo department, the way 05-72 is captured by scripts/screenshots/inventory-setup.mjs.]_
+
 ### The four steps
 
 | Step               | What it produces     | Why it comes here                                                                       |
@@ -171,6 +174,9 @@ nest later on the full Storage Areas page (Rack → Shelf → Box); this step ke
 to one level so the catalog can get started.
 
 ![Step 2 of the setup workflow, adding storage areas to the selected room](./images/05-77-setup-storage.png)
+
+> **Screenshot needed:**
+> _[Quartermaster at /inventory/storage-areas: the "Delete <area>?" dialog for an area that holds items and has a shelf nested inside it, showing both red reasons and the disabled Delete button. Do not delete.]_
 
 ### Step 3 — Categories
 
@@ -309,6 +315,9 @@ The inventory system supports two tracking modes:
 > **Hint:** Set the tracking type when creating an item. It determines whether the item appears in the assignment workflow (individual) or the issue/return workflow (pool). The line under **Tracking Type** on the item form describes whichever one is selected _(2026-09-30)_.
 
 ---
+
+> **Screenshot needed:**
+> _[Quartermaster at /inventory/admin/pool: one pool card with Issuances expanded, showing two or three holders by name, each reading "<member> N · issued <date>" with its Return button. Use demo members only.]_
 
 ## Variant Groups
 
@@ -611,6 +620,29 @@ the new value; it changes no data.
 
 ---
 
+### What the member is told
+
+When you approve, decline or issue a request, the member gets a bell notice
+linking to **My Issued Gear**, a web push if push is set up, and an email titled
+"_Your equipment request was approved / declined / issued: <item>_". Anything
+you typed in the review box is included, and is also shown under the request
+on their **My Requests** list. **Approve & fulfill now** sends a single notice,
+when the item is issued. Texts are never sent.
+
+- A department can switch the notice off entirely (bell, push and email) with
+  an **Equipment Request Update** rule under **Notifications → Notification
+  Rules**. With no rule, it is on.
+- A member can turn off just the email under **My Account > Notifications**
+  (**Equipment and inventory updates**), unless the department has made that
+  email required.
+- The email's wording is the **Equipment Request Update** template, under
+  **Communications → Email Templates → Inventory & Property**.
+
+> **Screenshot needed:**
+> _[Member at /inventory/my-equipment: My Requests with seeded requests in Awaiting review, Issued and Declined, the declined one carrying "Quartermaster: <note>" beneath it.]_
+
+---
+
 ## Reorder Requests
 
 When stock falls below an item's reorder point, the system generates alerts and supports a formal reorder request workflow.
@@ -661,6 +693,9 @@ they used to show the stored values (`partially_received`).
 > open in `docs/KNOWN_LIMITATIONS.md`.
 
 ![Reorder requests table with requested quantities and status](./images/05-14-reorder-requests.png)
+
+> **Screenshot needed:**
+> _[Quartermaster at /inventory/admin/reorder: an Ordered request created on this page, with Receive stock open showing the red notice "This request isn't linked to an inventory item, so its stock can't be received here…" and the disabled Receive stock button. Do not submit.]_
 
 > **Edge case:** If an item's stock is replenished through a regular return or issuance reversal (not through the reorder workflow), the reorder request remains open. Admins should manually close or cancel outdated requests.
 
@@ -790,6 +825,9 @@ For items that are temporarily loaned (not permanently assigned), use the checko
 
 ---
 
+> **Screenshot needed:**
+> _[Quartermaster at /inventory/admin/returns: the Receive Item dialog for a multi-unit pool return, with a condition chosen, the quantity box empty, the hint "Count what came back. It must match the 2 the member reported." visible, and Receive disabled. Do not submit.]_
+
 ## Item Distribution and Batch Return
 
 For events or training sessions where multiple items need to be processed at
@@ -891,6 +929,9 @@ Needs the department-settings permission (`settings.manage` or
 Turning it off hides the NFC buttons and stops tags working, but keeps every
 link. Turning it back on restores them.
 
+> **Screenshot needed:**
+> _[Administrator at /inventory/admin/nfc: the NFC Tags page with "Use NFC tags for inventory items" ticked and the "What works on which phone" card below it. The harness line "This device cannot read or write NFC tags itself…" is accurate and can stay.]_
+
 ### Linking a tag to an item
 
 1. Open the item. The **NFC Tags** card is on the item page, shown to
@@ -911,12 +952,18 @@ frees a tag for reuse.
 > iPhones included, and stops working the moment you unlink it, because the
 > link names the tag, not the item.
 
+> **Screenshot needed:**
+> _[Quartermaster at /inventory/items/:id with NFC switched on and two seeded tags: one labelled "Inside left cuff", linked by serial, and one marked Lost. Crop to the NFC Tags card. Headless capture shows only the typed serial box and Link serial, so the caption must say the Write and Read buttons appear only in Chrome on Android. Only the …last-4 preview may be visible, never a full serial.]_
+
 ### Tapping items in the scanner
 
 In **Distribute** or **Return** for a member, tap **Tap NFC** next to **Start
 Camera**, then tap each item's tag. Each tap adds that item to the list, the
 same as a scanned barcode. Tap **Stop NFC** when done; closing the dialog also
 stops it.
+
+> **Screenshot needed:**
+> _[Manual capture on a real Android phone over HTTPS, quartermaster at /inventory/admin/members → Assign for a demo member, NFC on: the scanner with Tap NFC armed (reading "Stop NFC") and one tapped item in the list. Web NFC does not exist in the capture harness, so this cannot be a manifest entry.]_
 
 ### Putting items away by tap
 
@@ -937,11 +984,17 @@ that is assigned to a member, checked out, lost, stolen or retired is refused,
 and the message says why. Without an Android phone, choose the shelf from
 **Or pick a shelf** and enter item serials in the box.
 
+> **Screenshot needed:**
+> _[Quartermaster at /inventory/put-away with NFC on: choose a shelf from "Or pick a shelf" so the card reads "Items tapped now go on <shelf>", then enter two seeded item serials in the "Tag serial (or USB reader)" box, so "Put away this session" lists one "→ <shelf> (was <old shelf>)" and one "already on <shelf>". The unavailable-NFC line in place of Start tapping tags is acceptable in the harness.]_
+
 ### Last Seen
 
 The item page lists the item's recent NFC taps under **Last Seen (NFC)**: who
 tapped it, and where it was put away. Only quartermaster taps are recorded. A
 member opening a tag from their own phone leaves no record.
+
+> **Screenshot needed:**
+> _[Quartermaster at /inventory/items/:id with NFC on: crop to the Last Seen (NFC) card showing a "Moved from … to …" row and a "Found on … during a shelf audit" row, each with a time and the quartermaster's name. Seed it by driving put-away and one audit with typed serials.]_
 
 ### Auditing a shelf
 
@@ -969,6 +1022,9 @@ lists past audits; **View** opens one.
 > **Hint:** Audit one shelf or bin at a time. An audit covers exactly the
 > storage area you tapped, not the bins inside it.
 
+> **Screenshot needed:**
+> _[Quartermaster at /inventory/shelf-audit with NFC on: pick a seeded shelf, enter the serial of one item recorded there and of one recorded elsewhere, then press Finish audit. Capture the result card "1 of 2 expected found · 1 missing · 1 unexpected", Missing with its "Nothing has been marked lost" note, and the unexpected line ticked with "Move 1 selected onto <shelf>" enabled. Do not press Move. Recent audits should show below.]_
+
 ### Scheduling shelf audits
 
 **Required Permission:** `inventory.manage`
@@ -984,6 +1040,9 @@ or straight away if it has never been audited.
 
 While any scheduled shelf is overdue, quartermasters get one reminder email a
 week listing them.
+
+> **Screenshot needed:**
+> _[Admin (inventory.manage) at /inventory/shelf-audit with NFC on: the "Audit schedule (N due)" card with at least one never-audited area reading "never audited · due now" with its Audit now button, and one current area reading "next due <date>". The tap button's unavailable line is expected in the harness.]_
 
 ### Tagging many items at once
 
@@ -1001,6 +1060,9 @@ week listing them.
 If inventory NFC is off, the page says an administrator can turn it on under
 **NFC Tags** — a quartermaster's `inventory.manage` does not open that setting.
 
+> **Screenshot needed:**
+> _[Quartermaster at /inventory/admin/nfc/enroll with NFC on, after one typed serial has been linked: "1 tagged this session · N of M left", the current item's name and details, Read serials selected (Write links greyed out in the harness), the typed serial box and Skip this item. No full tag serial visible.]_
+
 ### Identifying a member by their ID card
 
 If your department issues NFC ID cards (Settings > Integrations > NFC ID
@@ -1008,6 +1070,9 @@ Cards), the **Scan Member ID** window on the inventory screens also shows
 **Or tap their ID card**. Tap it and hold the member's card to the phone. A
 card marked lost, or one belonging to an inactive member, is refused with the
 reason.
+
+> **Screenshot needed:**
+> _[Manual capture on a real Android phone over HTTPS, quartermaster at /inventory/admin/members → Scan Member ID, with inventory NFC and NFC ID Cards both on: the Scan Member ID window with "Or tap their ID card" below the camera controls. No card serial or member number may be visible. Not a manifest entry, because Web NFC is absent in the harness.]_
 
 ### Self-service kiosk
 
@@ -1018,6 +1083,9 @@ ID card.
 Categories**, turn on **Allow self-checkout at the kiosk**, and set a **Kiosk
 loan period (days)** if loans should be due back. Then open **Inventory Admin >
 Self-Service Kiosk** on a tablet and press **Start kiosk**.
+
+> **Screenshot needed:**
+> _[Admin (inventory.manage) at /inventory/admin/categories: edit a loaner category (e.g. "Loaner Radios") with "Allow self-checkout at the kiosk" switched on and "Kiosk loan period (days)" set to 14, so its help text is visible. Close without saving.]_
 
 **For members:**
 
@@ -1041,6 +1109,9 @@ message says what moved. After that, tap the shelf again. For a shelf audit, pre
 without signal it is kept on the phone and saved later. Finish an audit before
 closing the screen, because an unfinished one is not kept.
 
+> **Screenshot needed:**
+> _[Admin (inventory.manage) at /inventory/put-away with NFC on, then the browser set offline: the amber "No signal: keep tapping" banner with "Taps are saved on this phone and applied when signal returns." No taps needed; the tap button's unavailable line is expected on desktop.]_
+
 ### Apparatus compartment tags
 
 **Required Permission:** `inventory.check_manage` to tag compartments;
@@ -1050,6 +1121,9 @@ closing the screen, because an unfinished one is not kept.
 compartment's **⋯** menu, and link a tag. Stick it on that compartment. For an
 item to be answered by a tap, give the item its own tag and link its checklist
 row to the inventory item.
+
+> **Screenshot needed:**
+> _[Admin (inventory.check_manage) at /inventory/admin/checklists/templates/:templateId with inventory NFC on: the "NFC tags: <compartment>" dialog opened from a saved compartment's ⋯ menu, showing the serial box, Link serial and the compartment hint line. No write button is expected on desktop. Do not link or show a real tag serial; close without linking.]_
 
 **During a check** (Chrome on Android):
 
@@ -1074,6 +1148,9 @@ listed first as **Never** — including items created today, since being added i
 the full list.
 
 This report works whether or not NFC tags are turned on.
+
+> **Screenshot needed:**
+> _[Quartermaster at /inventory/admin/not-seen: default 180 days, All categories, with at least one "Never" row and one dated row showing its source (e.g. "Returned · 212 days ago"), and Download CSV enabled. NFC may be off, which shows the report needs no tags.]_
 
 ---
 
@@ -1135,6 +1212,9 @@ Labels include the barcode (Code 128 with the required quiet-zone margins, or a 
 
 ![Label print settings with the size presets and content options](./images/05-51-label-print-settings.png)
 
+> **Screenshot needed:**
+> _[Quartermaster (inventory.manage) at /inventory right after saving Add Item for one new item: the green line "1 item added. Label it now?" with Print label and Dismiss. Creates an item, so use a disposable demo item and delete it afterwards, or mark the shot as mutating seed data.]_
+
 ### Putting items away by scanning
 
 **Required Permission:** `inventory.manage`
@@ -1149,6 +1229,9 @@ The shelf cannot be changed while items are waiting to be filed — file or clea
 
 If the shelf was picked on screen rather than scanned, the result offers **Print shelf label**, so the next put-away can start with a scan. A shelf with no barcode yet is given one when its label prints.
 
+> **Screenshot needed:**
+> _[Quartermaster at /inventory/storage-areas: press Put away, type a seeded shelf's SA- code (e.g. SA-000003) and press Add, then two available item barcodes, so the panel reads "Filing onto <path> (SA-000003)", lists the two items and shows "File 2 items on <shelf>". Do not press File; no camera.]_
+
 ### Checking a bag, box or bin
 
 **Required Permission:** `inventory.manage`
@@ -1160,6 +1243,31 @@ A bag, box or bin is a storage area, so its label is a storage-area label. **Che
 3. An item that is recorded elsewhere is listed under **Doesn't belong here** with where it is recorded; **File it here** moves it into this container, with the same rules as Put away.
 
 Items assigned or checked out to a member, or otherwise recorded as away, are not counted as missing. If one is scanned inside the container anyway, it is listed under **Here, but the record disagrees** so the record can be corrected. Nothing is changed by checking alone.
+
+> **Screenshot needed:**
+> _[Quartermaster at /inventory/storage-areas: press Check contents, type a seeded bin's SA- code (e.g. the Uniform Bins area), then one item filed in it and one filed elsewhere, so the panel shows "1 of N found", "Not scanned yet (N)" and "Doesn’t belong here (1)" with its recorded location and File it here. Do not press File it here.]_
+
+### Shelf, rack and bin labels
+
+**Required Permission:** `inventory.manage`
+
+Storage areas carry barcodes too (`SA-000001` and so on), and they print from
+**Storage Areas**. **Print N labels** in the header prints a label for every
+area in view — the chosen facility or room, or your search results — and the
+printer icon on a row prints just that one. The **Print Storage Area Labels**
+page works like the other label pages: PDF, **Print in browser**, a registered
+label printer, QR, and **Start at label** for a partly used sheet. Each label
+shows the area's name and where it is ("_Station 1 › Rack A_") and encodes its
+barcode; an area that has no barcode yet is given one when it prints.
+
+**Scan shelf label** takes a shelf's code from the camera or a handheld scanner
+and jumps to that area, opening its parents and its item list. The address then
+ends in `?area=…`, so the view can be bookmarked or linked to. Shelf codes are
+read here and by **Put away** and **Check contents** on the same page. The assign
+and return scanner does not read them.
+
+> **Screenshot needed:**
+> _[Quartermaster at /inventory/storage-areas/print-labels?ids=<3–4 storage area ids>: the Print Storage Area Labels page with Settings closed, previews showing each area's name, its location/parent trail and its SA- barcode. Seeded areas only; if a printer is registered, show only an RFC 5737 documentation address.]_
 
 ### Choosing which items to label _(2026-09-23)_
 
@@ -1226,6 +1334,9 @@ question. It is never asked after **Download Test Label**.
   **Show them** (applies the filter) and **Print their labels** (opens the print
   page on that filter). **Not now** hides it until the page is reloaded; it is
   gone on its own once every item is labelled.
+
+> **Screenshot needed:**
+> _[Quartermaster (inventory.manage) at /inventory with no filter applied: crop to the line "N items need a label." with Show them, Print their labels and Not now above the table. The line hides under the Needs a Label filter, so leave filters clear.]_
 
 **The mark clears itself when the label goes out of date.** A label encodes one
 value — the item's **barcode**, or its **asset tag** if it has no barcode, or
@@ -1449,6 +1560,9 @@ Navigate to **Inventory Admin** and check the **Maintenance Due** section for it
 3. Click **Add Maintenance Record**.
 4. Enter the maintenance type, date, description, and cost.
 5. Save.
+
+> **Screenshot needed:**
+> _[Quartermaster at /inventory/admin/maintenance (or an item's Inspections tab → + Add Record): the "Log Maintenance — <item>" dialog with Record inspection selected and Pass chosen, the completion date showing today, and the note "This records the inspection without changing the item's status." Do not save.]_
 
 ![Item inspections tab listing its service history](./images/05-52-item-maintenance.png)
 
@@ -1677,6 +1791,9 @@ When a member departs the department (dropped, retired, etc.), a **Departure Cle
 > See
 > [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#inventory--departure-clearance-is-backend-only-2026-08-12).
 
+> **Screenshot needed:**
+> _[Quartermaster at /inventory/admin: crop to the Needs attention card showing an "Unresolved departure clearance · <demo member> · 1 outstanding · Due <date> · Review" row. Requires a demo member dropped while holding an item.]_
+
 ### Creating a Clearance
 
 **Required Permission:** `inventory.manage`
@@ -1754,6 +1871,9 @@ Members can request equipment checkouts, pool issuances, or new purchases throug
    - **Reason** — why you need the item
 4. Submit the request.
 
+> **Screenshot needed:**
+> _[Member at /inventory/my-equipment: Request Equipment → pick a garment → select the member's size on file that the department does not stock, so the chip reads "not stocked" and the "(from your profile)" line and the blue notice "The department doesn't stock this item in <size>." are visible. Do not submit.]_
+
 ### Reviewing Requests (Admin)
 
 **Required Permission:** `inventory.manage`
@@ -1763,6 +1883,9 @@ Members can request equipment checkouts, pool issuances, or new purchases throug
 3. Click **Decline**, **Approve for later fulfillment** or **Approve & fulfill now**, optionally with a review note — the member sees the note and is notified of the outcome (see [Equipment Request Fulfillment](#equipment-request-fulfillment)).
 
 > **Hint:** Items with a minimum rank restriction will prevent lower-ranked members from submitting requests for those items.
+
+> **Screenshot needed:**
+> _[Quartermaster at /inventory/admin/requests: Review on an Awaiting review request whose size the department does not stock — the dialog with Member asked for, the "not a size the department stocks" line, Tracking in words, Availability "n on hand", the note placeholder, and Decline / Approve for later fulfillment / Approve & fulfill now. Never click a decision.]_
 
 ---
 
@@ -1949,6 +2072,9 @@ Navigate to **Inventory Admin > Gear Kits** (`/inventory/admin/kits`) to manage 
 - **Detail View** — Click a kit card to see the full composition (all items with quantities)
 - **Activate/Deactivate** — Toggle a kit's active status. Deactivating prevents new issuances but does not affect items already issued from that kit
 - **Issue** _(2026-09-29)_ — The issue action on a kit card (named "Issue _kit_ to a member") opens **Issue "_kit_" — Select a Member**. Choosing a member no longer issues straight away: a confirmation names the kit, the item count and the member ("Issue 6 items from "New Recruit PPE Kit" to Jane Smith."), with **Issue to _member_** and **Don't issue**. A mis-tap on the wrong row used to hand out the whole kit.
+
+> **Screenshot needed:**
+> _[Quartermaster at /inventory/admin/kits: the "Issue <kit>?" confirmation after picking a demo member, reading 'Issue N items from "<kit>" to <member>.' with Don't issue and Issue to <member>. Do not confirm.]_
 
 ### Edge Cases
 
@@ -3071,6 +3197,9 @@ module enabled. Choosing the metrics, and who may see the queue, are covered in
 
 ---
 
+> **Screenshot needed:**
+> _[Quartermaster (inventory.manage) at /inventory/admin: the Needs attention queue with at least one "Pending return" row (member · item, Review action) and the Return Requests card carrying its count badge, with no "Some inventory services did not respond" banner. Needs a seeded return request in status "requested".]_
+
 ## Receiving, Returns and Condition _(2026-08-28)_
 
 ### Stock you received could not be issued
@@ -3499,6 +3628,9 @@ The quartermaster's member view (`/inventory/admin/members`) is untouched.
 - **An extended temporary loan is due at the end of the day you chose**, in the
   department's timezone — not at UTC midnight, which in the Americas fell on the
   evening before.
+
+> **Screenshot needed:**
+> _[Member with no gear, loans or requests at /inventory/my-equipment: the header with its subtitle, the three tiles at 0 (Issued to me, Temporary loans, Pending requests), the empty Issued to Me text with the Learning Center link, and the Active Temporary Loans explanation.]_
 
 ## Editing an item's size _(2026-09-06)_
 
