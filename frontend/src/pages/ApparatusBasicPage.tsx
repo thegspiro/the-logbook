@@ -326,7 +326,7 @@ export default function ApparatusBasicPage() {
           {filtered.map((apparatus) => {
             const typeInfo = getTypeInfo(apparatus.apparatus_type);
             return (
-              <div key={apparatus.id} className="card group hover:border-theme-text-muted/30 relative p-5">
+              <div key={apparatus.id} className="card group hover:border-theme-text-muted/30 p-5">
                 <div className="mb-3 flex items-start justify-between">
                   <div className="flex min-w-0 items-center gap-3">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-lg">
@@ -337,11 +337,20 @@ export default function ApparatusBasicPage() {
                       <p className="text-theme-text-secondary text-sm">{apparatus.unit_number}</p>
                     </div>
                   </div>
-                  {/* With a mouse the actions are hidden until hover, so they float
-                      over the corner instead of keeping their width beside a long
-                      name that would otherwise wrap a line early. */}
+                </div>
+
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <span className="bg-theme-surface-hover text-theme-text-secondary inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium">
+                    <Wrench className="h-3 w-3" /> {typeInfo?.label}
+                  </span>
+                  <span className="bg-theme-surface-hover text-theme-text-secondary inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium">
+                    <Users className="h-3 w-3" /> {apparatus.min_staffing || 0} crew
+                  </span>
+                  {/* The actions share this short badge row rather than the title's:
+                      hidden until hover with a mouse, they would still hold their
+                      width beside a long name and wrap it a line early. */}
                   {canManage && (
-                    <div className="pointer-fine:bg-theme-surface flex items-center gap-1 transition-opacity pointer-fine:absolute pointer-fine:top-3 pointer-fine:right-3 pointer-fine:rounded-lg pointer-fine:opacity-0 pointer-fine:shadow-sm pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100">
+                    <div className="ml-auto flex items-center gap-1 transition-opacity pointer-fine:opacity-0 pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100">
                       <button
                         onClick={() => openEdit(apparatus)}
                         title="Edit"
@@ -362,15 +371,6 @@ export default function ApparatusBasicPage() {
                       </button>
                     </div>
                   )}
-                </div>
-
-                <div className="mb-3 flex flex-wrap items-center gap-2">
-                  <span className="bg-theme-surface-hover text-theme-text-secondary inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium">
-                    <Wrench className="h-3 w-3" /> {typeInfo?.label}
-                  </span>
-                  <span className="bg-theme-surface-hover text-theme-text-secondary inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium">
-                    <Users className="h-3 w-3" /> {apparatus.min_staffing || 0} crew
-                  </span>
                 </div>
 
                 {apparatus.positions && apparatus.positions.length > 0 && (
