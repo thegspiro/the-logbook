@@ -431,6 +431,27 @@ TFOOT_STYLE = (
     "border-top:1px solid #e2e8f0;"
 )
 
+# A phone gives an email card roughly 300px, which holds three columns and
+# not six. Secondary detail — a serial number, a category, a percentage —
+# therefore rides as a smaller grey line under the value it qualifies rather
+# than taking a column of its own, and WRAP_STYLE lets an unbroken value such
+# as a serial number break inside its cell instead of widening the table past
+# the card, which is what pushed the right-hand columns off a phone screen.
+SUBLINE_STYLE = "color:#6b7280;font-size:12px;"
+WRAP_STYLE = "word-break:break-word;overflow-wrap:anywhere;"
+
+
+def with_subline(primary: str, secondary: str = "") -> str:
+    """*primary* over a smaller grey *secondary* line, for one table cell.
+
+    Both arguments are markup and must already be escaped. An empty
+    *secondary* returns *primary* unchanged, so a missing detail leaves no
+    blank line behind.
+    """
+    if not secondary:
+        return primary
+    return f'{primary}<br><span style="{SUBLINE_STYLE}">{secondary}</span>'
+
 
 # What each shipped body was built with, keyed by the body itself.
 #
