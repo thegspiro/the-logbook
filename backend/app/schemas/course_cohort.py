@@ -374,8 +374,10 @@ class CourseCohortMemberResponse(UTCResponseBase):
     withdrawn_at: Optional[datetime] = None
     added_at: Optional[datetime] = None
 
-    # Resolved so the roster renders names, not UUIDs
+    # Resolved so the roster renders names, not UUIDs. full_name is the legal
+    # name; display_name is the name the member goes by (preferred name).
     full_name: Optional[str] = None
+    display_name: Optional[str] = None
     email: Optional[str] = None
     progress_percentage: Optional[float] = None
 

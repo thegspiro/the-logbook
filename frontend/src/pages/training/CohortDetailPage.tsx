@@ -42,6 +42,7 @@ import {
   CohortClassStatus,
 } from '../../constants/enums';
 import { getErrorMessage } from '../../utils/errorHandling';
+import { displayNameOf } from '../../utils/memberName';
 import type { CourseCohortClass, CourseCohortDetail } from '../../types/training';
 
 type TabId = 'classes' | 'roster';
@@ -440,7 +441,7 @@ export const CohortDetailPage: React.FC = () => {
                 <li key={member.id} className="card-secondary flex flex-wrap items-center justify-between gap-3 p-4">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-theme-text-primary font-medium">{member.full_name ?? 'Member'}</span>
+                      <span className="text-theme-text-primary font-medium">{displayNameOf(member) || 'Member'}</span>
                       <span className={`badge ${COHORT_MEMBER_STATUS_COLORS[member.status] ?? ''}`}>
                         {member.status}
                       </span>
@@ -478,11 +479,11 @@ export const CohortDetailPage: React.FC = () => {
                       onClick={() =>
                         setRemoveTarget({
                           userId: member.user_id,
-                          name: member.full_name ?? 'this member',
+                          name: displayNameOf(member) || 'this member',
                         })
                       }
                       className="btn-icon hover:text-red-700 dark:hover:text-red-400"
-                      aria-label={`Remove ${member.full_name ?? 'member'}`}
+                      aria-label={`Remove ${displayNameOf(member) || 'member'}`}
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>

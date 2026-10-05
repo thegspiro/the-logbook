@@ -312,7 +312,7 @@ export default function RoomsSection({ facilityId, canCreate, canEdit, canDelete
                 </button>
               )}
               {(canCreate || canEdit || canDelete) && (
-                <div className="flex items-center gap-1 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100">
+                <div className="flex items-center gap-1 transition-opacity pointer-fine:opacity-0 pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100">
                   {canCreate && canNestDeeper && (
                     <button
                       onClick={() => openCreate(room.id)}

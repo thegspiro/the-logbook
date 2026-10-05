@@ -52,6 +52,7 @@ from app.services.shift_eligibility_service import (
 )
 from app.services.training_program_service import TrainingProgramService
 from app.utils.call_type_matching import matching_call_types
+from app.utils.member_names import format_display_name
 from app.utils.org_timezone import resolve_org_today
 
 #: ``settings["shift_reports"]["authorship"]`` value under which a shift's
@@ -770,7 +771,7 @@ class ShiftCompletionService:
             result.append(
                 {
                     "user_id": uid,
-                    "user_name": (user.full_name if user else "Unknown"),
+                    "user_name": (user.display_name if user else "Unknown"),
                     "position": pos.value if hasattr(pos, "value") else pos,
                     "has_active_enrollment": uid in enrollment_map,
                     "enrollment_id": enrollment_info.get("enrollment_id"),
@@ -2005,6 +2006,7 @@ class ShiftCompletionService:
                 ShiftCompletionReport.trainee_id,
                 User.first_name,
                 User.last_name,
+                User.preferred_name,
                 func.count(ShiftCompletionReport.id).label("reports"),
                 func.sum(ShiftCompletionReport.hours_on_shift).label("hours"),
                 func.sum(ShiftCompletionReport.calls_responded).label("calls"),
@@ -2019,13 +2021,14 @@ class ShiftCompletionService:
                 ShiftCompletionReport.trainee_id,
                 User.first_name,
                 User.last_name,
+                User.preferred_name,
             )
             .order_by(func.sum(ShiftCompletionReport.hours_on_shift).desc())
         )
         trainees = [
             {
                 "trainee_id": r.trainee_id,
-                "name": (f"{r.first_name or ''}" f" {r.last_name or ''}").strip()
+                "name": format_display_name(r.first_name, r.last_name, r.preferred_name)
                 or "Unknown",
                 "reports": r.reports or 0,
                 "hours": float(r.hours or 0),

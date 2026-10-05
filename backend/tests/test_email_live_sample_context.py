@@ -171,6 +171,24 @@ class TestTheRecipientIsTheAdmin:
             "jreyes",
         )
 
+    def test_an_everyday_greeting_uses_the_preferred_name(self):
+        """An admin who goes by "Jo" is greeted as Jo, as the real notice
+        would greet them; election notices keep the legal name of record."""
+        jo = SimpleNamespace(
+            first_name="Josephine",
+            last_name="Reyes",
+            preferred_name="Jo",
+            username="jreyes",
+        )
+        reminder = live_sample_context("event_reminder", _org(), recipient=jo)
+        assert reminder["recipient_name"] == "Jo Reyes"
+        welcome = live_sample_context("welcome", _org(), recipient=jo)
+        assert (welcome["first_name"], welcome["full_name"]) == ("Jo", "Jo Reyes")
+        ballot = live_sample_context("ballot_notification", _org(), recipient=jo)
+        assert ballot["recipient_name"] == "Josephine Reyes"
+        rollback = live_sample_context("election_rollback", _org(), recipient=jo)
+        assert rollback["recipient_name"] == "Josephine"
+
     def test_a_name_belonging_to_someone_else_stays_sample(self):
         """The officer told of a decline is not the member who declined."""
         context = live_sample_context("shift_decline", _org(), recipient=_ADMIN)

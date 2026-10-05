@@ -15,6 +15,7 @@ from app.core.permissions import is_seeded_for, label_for
 from app.models.operational_rank import OperationalRank
 from app.models.user import Organization, User, UserStatus
 from app.schemas.operational_rank import RankCreate, RankUpdate
+from app.utils.member_names import format_display_name
 
 # Statuses considered non-active for rank validation purposes.
 # Members with these statuses are no longer interacting with the platform,
@@ -524,7 +525,9 @@ class OperationalRankService:
                 canonical_codes.setdefault(normalized, stored_code)
 
         # Find active-status members whose rank is set but unrecognised.
-        members_q = select(User.id, User.first_name, User.last_name, User.rank).where(
+        members_q = select(
+            User.id, User.first_name, User.last_name, User.preferred_name, User.rank
+        ).where(
             User.organization_id == organization_id,
             User.rank.isnot(None),
             User.rank != "",
@@ -543,7 +546,9 @@ class OperationalRankService:
                 issues.append(
                     {
                         "member_id": row.id,
-                        "member_name": f"{row.first_name or ''} {row.last_name or ''}".strip(),
+                        "member_name": format_display_name(
+                            row.first_name, row.last_name, row.preferred_name
+                        ),
                         "rank_code": row.rank,
                     }
                 )

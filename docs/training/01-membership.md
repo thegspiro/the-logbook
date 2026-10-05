@@ -172,6 +172,34 @@ behind a success message. Emergency contacts are trimmed, a blank email is left
 out, and a contact missing its name, relationship or phone is pointed out
 before saving instead of failing the whole edit.
 
+### Preferred Names _(2026-10-04)_
+
+A member can be known by a name other than their legal first name. John Terry
+Heather, who goes by his middle name, sets **Preferred Name** to "Terry", and
+everyone sees "Terry Heather" on the shift board instead of a "John Heather"
+they would not recognise.
+
+**Where to set it.** Members set their own under **My Account → Account**.
+Officers can set or clear it for anyone on the **Admin Edit** page or when
+**adding a member**. Clearing the box goes back to the first name. Each change
+is written to the audit log with the old and new value.
+
+**Where it shows.** The preferred name replaces the first name wherever the
+app is just referring to someone: shifts and scheduling, events and check-in,
+the member directory and profiles, dashboards and greetings, notifications and
+emails, inventory assignments, messages, pickers and search, the member ID
+card, the attendance list in meeting minutes, the photo-use consent roster,
+and medical screening records. Searching for either name finds the member.
+Minutes record the name when they are drafted, so changing a preferred name
+later does not rewrite minutes already on file.
+
+**Where the legal name stays.** Anything that may go to a government body or
+has to match an ID keeps the legal first name: reports and every CSV/PDF
+export, training records, certificates and compliance reports, skills testing
+records, elections and ballots, legal documents, signed forms, property
+custody and return records, and the audit log. The member's profile shows the
+legal name under the preferred one so officers can always see both.
+
 ---
 
 ## Adding Members
@@ -182,7 +210,7 @@ Navigate to **Administration > Members > Member Management**, then click the **A
 
 1. Fill in the required fields: first and last name, home address (street, city, state, ZIP), primary phone, email, **Membership Type** (Probationary, Regular, Life or Administrative — it starts on Probationary) and a primary emergency contact (name, relationship, phone). The **username** is created automatically from the part of the email before `@`.
 2. **Membership Number** — see [the next paragraph](#the-membership-number-on-add-member-2026-09-29). It is required only when your department does not number members automatically.
-3. Optionally set middle name, date of birth, secondary phone, join date, rank, position, station, platoon and a secondary emergency contact. **Rank** is greyed out for an Administrative member, who holds no operational rank.
+3. Optionally set middle name, [preferred name](#preferred-names-2026-10-04), date of birth, secondary phone, join date, rank, position, station, platoon and a secondary emergency contact. **Rank** is greyed out for an Administrative member, who holds no operational rank.
 4. Leave **Set initial password** unchecked to have a temporary password generated and emailed to the member, or check it to choose a password yourself — no email is sent in that case. The rules appear as a checklist under the field as you type (at least 12 characters, plus the same character rules the sign-in screens enforce).
 5. Click **Save Member**.
 

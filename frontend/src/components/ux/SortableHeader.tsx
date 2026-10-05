@@ -53,7 +53,7 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
         ) : isActive && currentDirection === 'desc' ? (
           <ArrowDown className="h-3.5 w-3.5" />
         ) : (
-          <ArrowUpDown className="h-3.5 w-3.5 opacity-50 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover:opacity-50" />
+          <ArrowUpDown className="h-3.5 w-3.5 opacity-50 transition-opacity pointer-fine:opacity-0 pointer-fine:group-focus-within:opacity-50 pointer-fine:group-hover:opacity-50" />
         )}
       </span>
     </button>

@@ -3,11 +3,13 @@ import { Modal } from '../Modal';
 import type { RSVP } from '../../types/event';
 import { getRSVPStatusLabel, getRSVPStatusColor } from '../../utils/eventHelpers';
 import { formatTime } from '../../utils/dateFormatting';
+import { formatLegalName, formatMemberName } from '../../utils/memberName';
 
 interface EligibleMember {
   id: string;
   first_name: string;
   last_name: string;
+  preferred_name?: string | null | undefined;
   // Hidden by the org's contact-visibility settings or the member's own
   // profile choice; not every eligible member has a searchable/displayable
   // email.
@@ -47,7 +49,8 @@ const EventCheckInModal: React.FC<EventCheckInModalProps> = ({
   const filteredMembers = eligibleMembers.filter(
     (member) =>
       memberSearch === '' ||
-      `${member.first_name} ${member.last_name}`.toLowerCase().includes(memberSearch.toLowerCase()) ||
+      // Either name finds the member: the one they go by, or the legal one.
+      `${formatMemberName(member)} ${formatLegalName(member)}`.toLowerCase().includes(memberSearch.toLowerCase()) ||
       (member.email ?? '').toLowerCase().includes(memberSearch.toLowerCase())
   );
 
@@ -144,9 +147,7 @@ const EventCheckInModal: React.FC<EventCheckInModalProps> = ({
               className="border-theme-surface-border hover:bg-theme-surface-hover flex items-center justify-between border-b p-3"
             >
               <div className="flex-1">
-                <p className="text-theme-text-primary text-sm font-medium">
-                  {member.first_name} {member.last_name}
-                </p>
+                <p className="text-theme-text-primary text-sm font-medium">{formatMemberName(member)}</p>
                 <p className="text-theme-text-muted text-xs">{member.email}</p>
                 {rsvp && (
                   <div className="mt-1 flex items-center space-x-2">
@@ -176,7 +177,7 @@ const EventCheckInModal: React.FC<EventCheckInModalProps> = ({
                       onCheckIn(member.id);
                     }}
                     // Every row's button reads "Check In"; the name says whose.
-                    aria-label={`Check in ${member.first_name} ${member.last_name}`}
+                    aria-label={`Check in ${formatMemberName(member)}`}
                     className="btn-primary inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium"
                   >
                     Check In

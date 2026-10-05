@@ -3,11 +3,12 @@ import { AlertTriangle, Loader2, ShieldAlert, UserX } from 'lucide-react';
 import { Modal } from './Modal';
 import { userService } from '../services/api';
 import type { DeletionImpact } from '../types/user';
+import { displayNameOf, type MemberNameFields } from '../utils/memberName';
 
 interface DeleteMemberModalProps {
   isOpen: boolean;
   onClose: () => void;
-  member: { id: string; full_name?: string | undefined; username: string; status: string } | null;
+  member: (MemberNameFields & { id: string; username: string; status: string }) | null;
   onSoftDelete: (userId: string) => Promise<void>;
   onHardDelete: (userId: string) => Promise<void>;
 }
@@ -28,7 +29,7 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
   const [confirmName, setConfirmName] = useState('');
   const [deleting, setDeleting] = useState(false);
 
-  const memberDisplayName = member?.full_name || member?.username || '';
+  const memberDisplayName = (member ? displayNameOf(member) : '') || member?.username || '';
 
   const fetchImpact = useCallback(async (userId: string) => {
     setLoadingImpact(true);

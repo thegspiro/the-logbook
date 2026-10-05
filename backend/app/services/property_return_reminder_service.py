@@ -211,7 +211,7 @@ class PropertyReturnReminderService:
             overdue_list.append(
                 {
                     "user_id": str(member.id),
-                    "member_name": member.full_name,
+                    "member_name": member.display_name,
                     "email": member.email,
                     "status": member.status.value,
                     "dropped_date": local_drop_date.strftime("%Y-%m-%d"),
@@ -335,7 +335,7 @@ class PropertyReturnReminderService:
         return_deadline_display = return_deadline.strftime("%B %d, %Y")
 
         context = {
-            "member_name": member.full_name,
+            "member_name": member.display_name,
             "organization_name": org_name,
             "item_count": str(items_info["count"]),
             "total_value": f"{total_val:,.2f}",
@@ -400,12 +400,12 @@ class PropertyReturnReminderService:
         # Send summary to admin/quartermaster
         admin_sent = False
         admin_subject = (
-            f"{reminder_label} Overdue Property: {member.full_name} — "
+            f"{reminder_label} Overdue Property: {member.display_name} — "
             f"{items_info['count']} items (${items_info['total_value']:,.2f})"
         )
         admin_html = (
             f"<p><strong>{reminder_label} property return reminder</strong> was sent to "
-            f"<strong>{escape(member.full_name)}</strong> ({escape(member.email or 'no email')}).</p>"
+            f"<strong>{escape(member.display_name)}</strong> ({escape(member.email or 'no email')}).</p>"
             f"<p>Separation: {escape(drop_date_display)} ({escape(drop_type_display)})<br/>"
             f"Days Since Drop: {days_since_drop}<br/>"
             f"Items Outstanding: {items_info['count']}<br/>"
@@ -443,7 +443,7 @@ class PropertyReturnReminderService:
                     to_emails=admin_emails,
                     subject=admin_subject,
                     html_body=admin_html,
-                    text_body=f"{reminder_label} overdue property: {member.full_name} - {items_info['count']} items (${items_info['total_value']:,.2f})",
+                    text_body=f"{reminder_label} overdue property: {member.display_name} - {items_info['count']} items (${items_info['total_value']:,.2f})",
                 )
                 admin_sent = success > 0
             except Exception as e:
@@ -467,7 +467,7 @@ class PropertyReturnReminderService:
 
         result = {
             "user_id": str(member.id),
-            "member_name": member.full_name,
+            "member_name": member.display_name,
             "reminder_type": reminder_type,
             "days_since_drop": days_since_drop,
             "items_outstanding": items_info["count"],

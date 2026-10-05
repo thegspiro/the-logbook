@@ -50,6 +50,7 @@ from app.schemas.training import SyncStatus as SyncStatusEnum
 from app.schemas.training import TestConnectionResponse
 from app.services.external_training_service import ExternalTrainingSyncService
 from app.utils.email_providers import REDACTED_SECRET
+from app.utils.member_names import format_legal_name
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import is_in_org
 from app.utils.url_validator import validate_integration_url
@@ -83,8 +84,8 @@ async def _mapped_member_details(
     selected: ``select(User.full_name, ...)`` raised ArgumentError, which made
     both user-mapping endpoints answer 500 the moment any mapping had a member
     — the whole Users list on the Mappings screen came back empty after the
-    first email auto-match. The name is composed here the way the property
-    composes it.
+    first email auto-match. The legal name is used, as on the rest of this
+    screen's training-record paths.
     """
     row = (
         await db.execute(
@@ -96,8 +97,7 @@ async def _mapped_member_details(
     ).one_or_none()
     if row is None:
         return None, None
-    name = f"{row.first_name or ''} {row.last_name or ''}".strip()
-    return name or None, row.email
+    return format_legal_name(row.first_name, row.last_name) or None, row.email
 
 
 async def _apply_user_mapping(

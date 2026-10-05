@@ -38,6 +38,7 @@ import type {
   TrainingCourse,
 } from '../../types/training';
 import type { User } from '../../types/user';
+import { formatMemberName } from '../../utils/memberName';
 
 interface CohortWizardProps {
   onComplete: (cohort: CourseCohortDetail) => void;
@@ -145,7 +146,9 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({ onComplete, onCancel
     const query = memberSearch.trim().toLowerCase();
     if (!query) return members;
     return members.filter((m) =>
-      `${m.first_name ?? ''} ${m.last_name ?? ''} ${m.email ?? ''}`.toLowerCase().includes(query)
+      `${m.first_name ?? ''} ${m.preferred_name ?? ''} ${m.last_name ?? ''} ${m.email ?? ''}`
+        .toLowerCase()
+        .includes(query)
     );
   }, [members, memberSearch]);
 
@@ -546,9 +549,7 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({ onComplete, onCancel
                   checked={selectedMembers.includes(member.id)}
                   onChange={() => toggleMember(member.id)}
                 />
-                <span className="text-theme-text-primary text-sm">
-                  {member.first_name} {member.last_name}
-                </span>
+                <span className="text-theme-text-primary text-sm">{formatMemberName(member)}</span>
                 <span className="text-theme-text-muted text-xs">{member.email}</span>
               </label>
             ))}

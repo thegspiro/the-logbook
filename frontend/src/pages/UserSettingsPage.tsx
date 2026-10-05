@@ -51,6 +51,7 @@ import { orgHidesField } from '../utils/profileVisibility';
 import { SaveStatusPill } from '../components/settings/SaveStatusPill';
 import { SettingsPanelHead } from '../components/settings/SettingsPanelHead';
 import { getErrorMessage } from '../utils/errorHandling';
+import { blankToNull } from '../utils/formValues';
 import { useRanks } from '../hooks/useRanks';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 import { SettingsLayout, type SettingsSection } from '../components/settings/SettingsLayout';
@@ -201,6 +202,7 @@ export const UserSettingsPage: React.FC = () => {
           first_name: data.first_name || '',
           middle_name: data.middle_name || '',
           last_name: data.last_name || '',
+          preferred_name: data.preferred_name || '',
           phone: data.phone || '',
           mobile: data.mobile || '',
           membership_number: data.membership_number || '',
@@ -257,9 +259,17 @@ export const UserSettingsPage: React.FC = () => {
     try {
       // Strip fields that are only editable by Membership Coordinators via Members admin
       const { membership_number: _mn, rank: _r, station: _s, ...editableFields } = profileForm;
-      const updated = await userService.updateUserProfile(user.id, editableFields);
+      const updated = await userService.updateUserProfile(user.id, {
+        ...editableFields,
+        // An emptied box must clear the stored name, not be omitted (CLAUDE.md #1).
+        preferred_name: blankToNull(profileForm.preferred_name),
+      });
       setProfile(updated);
       toast.success('Profile saved');
+      // The header and greeting read the signed-in user, not this form.
+      if (updated.display_name !== user.display_name) {
+        void useAuthStore.getState().loadUser();
+      }
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Could not save your profile. Try again.'));
     } finally {
@@ -678,6 +688,28 @@ export const UserSettingsPage: React.FC = () => {
                           disabled={savingProfile}
                         />
                       </div>
+                    </div>
+                    <div className="mt-4 sm:max-w-sm">
+                      <label
+                        htmlFor="preferredName"
+                        className="text-theme-text-secondary mb-1 block text-sm font-medium"
+                      >
+                        Preferred Name
+                      </label>
+                      <input
+                        id="preferredName"
+                        type="text"
+                        maxLength={100}
+                        value={profileForm.preferred_name || ''}
+                        onChange={(e) => handleProfileChange('preferred_name', e.target.value)}
+                        className="form-input sm:text-sm"
+                        disabled={savingProfile}
+                        aria-describedby="preferredNameHelp"
+                      />
+                      <p id="preferredNameHelp" className="text-theme-text-muted mt-1 text-xs">
+                        The name you go by. Shown in place of your first name on shifts, events and rosters. Reports,
+                        training records and other official documents keep your legal first name.
+                      </p>
                     </div>
                   </div>
 

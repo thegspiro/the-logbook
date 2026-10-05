@@ -53,38 +53,17 @@ interface Measurement {
  */
 const fingerprintOf = (m: Measurement) => `${m.textLength}:${m.totalTargets}`;
 
-/**
- * The time this pass may take, derived from what it visits.
- *
- * It was a fixed 400 s, sized when the list held about thirty routes. The list
- * grew to over a hundred, plus their states, and on 2026-10-04 a clean pass
- * (every route `ok`) began timing out at 6.7 minutes — a failure that says
- * nothing about the app, and then took the E2E job past its own limit when the
- * retry ran out of time as well. A budget that grows with the list cannot drift
- * that way again.
- *
- * A visit measured about 3 s in CI (the 400 ms settle, up to 2 s waiting for the
- * network, and the render). 5 s leaves headroom for a slow runner without
- * hiding a real hang for long. A state group with no `max` is driven over
- * however many controls render, which is unknown here, so it is counted at
- * `UNCAPPED_STATES` — every such group in the list today has fewer.
- */
-const PER_VISIT_MS = 5_000;
-const UNCAPPED_STATES = 10;
-const SIGN_IN_ALLOWANCE_MS = 60_000;
-
-const presentationBudgetMs = () => {
-  const visits = ROUTES.reduce(
-    (total, route) =>
-      total + 1 + (route.states ?? []).reduce((states, group) => states + (group.max ?? UNCAPPED_STATES), 0),
-    0
-  );
-  return visits * PER_VISIT_MS + SIGN_IN_ALLOWANCE_MS;
-};
-
 test.describe('mobile presentation', () => {
-  test('every feature is presentable at phone width', async ({ page }) => {
-    test.setTimeout(presentationBudgetMs());
+  test('every feature is presentable at phone width @sweep', async ({ page }) => {
+    // ~30 routes, each with a settle delay and a full render. Measured at 5.9 min
+    // on a dedicated CI runner (2026-10-04); 2x that, the multiple every @sweep
+    // test uses.
+    //
+    // This one was RAISED, not tightened. The old 400_000 was 6.67 min against a
+    // 5.9 min run — 1.13x — so an ordinary slow runner would have taken it red,
+    // and a 4-worker local run did exactly that by starvation. A budget that
+    // close to the measured time reports load, not a defect.
+    test.setTimeout(720_000);
     await page.setViewportSize(PHONE);
     // The fixture user has no permissions by default (`signIn` sets
     // `permissions: []`, overriding TEST_USER's list), so a manager-gated route

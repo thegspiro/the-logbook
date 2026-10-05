@@ -22,6 +22,7 @@ import type { UserProfileUpdate, EmergencyContact } from '../types/user';
 import { useRanks } from '../hooks/useRanks';
 import { ADMINISTRATIVE_RANK_HINT, isAdministrativeMember } from '../utils/membership';
 import { blankToNull } from '../utils/formValues';
+import { formatMemberName } from '../utils/memberName';
 import { getErrorMessage } from '../utils/errorHandling';
 import { Breadcrumbs } from '../components/ux';
 
@@ -39,6 +40,7 @@ interface FormData {
   first_name: string;
   middle_name: string;
   last_name: string;
+  preferred_name: string;
   date_of_birth: string;
   personal_email: string;
   membership_number: string;
@@ -66,6 +68,7 @@ function buildInitialForm(
     first_name: user.first_name || '',
     middle_name: user.middle_name || '',
     last_name: user.last_name || '',
+    preferred_name: user.preferred_name || '',
     date_of_birth: user.date_of_birth || '',
     personal_email: user.personal_email || '',
     membership_number: user.membership_number || '',
@@ -227,6 +230,10 @@ export const MemberAdminEditPage: React.FC = () => {
       }
       if (form.last_name !== initialForm.last_name) {
         profileUpdate.last_name = form.last_name;
+        hasProfileChanges = true;
+      }
+      if (form.preferred_name !== initialForm.preferred_name) {
+        profileUpdate.preferred_name = blankToNull(form.preferred_name);
         hasProfileChanges = true;
       }
       if (form.date_of_birth !== initialForm.date_of_birth) {
@@ -406,8 +413,7 @@ export const MemberAdminEditPage: React.FC = () => {
     );
   }
 
-  const memberDisplayName =
-    user.full_name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username;
+  const memberDisplayName = formatMemberName(user) || user.username;
 
   return (
     <div className="min-h-screen">
@@ -506,6 +512,29 @@ export const MemberAdminEditPage: React.FC = () => {
                   disabled={saving}
                 />
               </div>
+            </div>
+
+            <div className="mt-4 sm:max-w-sm">
+              <label
+                htmlFor="member-preferred-name"
+                className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
+              >
+                Preferred Name
+              </label>
+              <input
+                id="member-preferred-name"
+                type="text"
+                maxLength={100}
+                value={form.preferred_name}
+                onChange={(e) => handleFieldChange('preferred_name', e.target.value)}
+                className="form-input bg-theme-surface-secondary px-3 text-sm"
+                disabled={saving}
+                aria-describedby="member-preferred-name-help"
+              />
+              <p id="member-preferred-name-help" className="text-theme-text-muted mt-1 text-xs">
+                Shown in place of the first name on shifts, events and rosters. Reports and official records keep the
+                legal first name.
+              </p>
             </div>
 
             <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">

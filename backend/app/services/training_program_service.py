@@ -149,8 +149,8 @@ class TrainingProgramService:
                 log_data={
                     "recipient_id": str(enrollment.mentor_id),
                     "channel": NotificationChannel.IN_APP,
-                    "subject": f"New Trainee Enrolled: {user.full_name} - {program.name}",
-                    "message": f"{user.full_name} has been enrolled in {program.name}. You are assigned as their mentor.",
+                    "subject": f"New Trainee Enrolled: {user.display_name} - {program.name}",
+                    "message": f"{user.display_name} has been enrolled in {program.name}. You are assigned as their mentor.",
                     "category": NotificationCategory.TRAINING,
                     "action_url": f"/training/programs/{program.id}?tab=enrollments",
                     "delivered": True,
@@ -190,8 +190,8 @@ class TrainingProgramService:
                 log_data={
                     "recipient_id": str(enrollment.mentor_id),
                     "channel": NotificationChannel.IN_APP,
-                    "subject": f"Trainee Advanced: {user.full_name} - {program.name}",
-                    "message": f"{user.full_name} has advanced to {new_phase_name} in {program.name}.",
+                    "subject": f"Trainee Advanced: {user.display_name} - {program.name}",
+                    "message": f"{user.display_name} has advanced to {new_phase_name} in {program.name}.",
                     "category": NotificationCategory.TRAINING,
                     "action_url": f"/training/programs/{program.id}?tab=enrollments",
                     "delivered": True,
@@ -230,8 +230,8 @@ class TrainingProgramService:
                 log_data={
                     "recipient_id": str(enrollment.mentor_id),
                     "channel": NotificationChannel.IN_APP,
-                    "subject": f"Trainee Completed: {user.full_name} - {program.name}",
-                    "message": f"{user.full_name} has completed {program.name}!",
+                    "subject": f"Trainee Completed: {user.display_name} - {program.name}",
+                    "message": f"{user.display_name} has completed {program.name}!",
                     "category": NotificationCategory.TRAINING,
                     "action_url": f"/training/programs/{program.id}?tab=enrollments",
                     "delivered": True,
@@ -327,7 +327,7 @@ class TrainingProgramService:
                 },
             )
 
-        member_name = getattr(user, "full_name", None) or "A member"
+        member_name = getattr(user, "display_name", None) or "A member"
         officers = await StrugglingMemberService(self.db)._get_training_officers(
             str(organization_id)
         )
@@ -395,10 +395,10 @@ class TrainingProgramService:
                     "recipient_id": str(enrollment.mentor_id),
                     "channel": NotificationChannel.IN_APP,
                     "subject": (
-                        f"Recert cycle started: {user.full_name} - {program.name}"
+                        f"Recert cycle started: {user.display_name} - {program.name}"
                     ),
                     "message": (
-                        f"{user.full_name}'s recertification cycle for {program.name} "
+                        f"{user.display_name}'s recertification cycle for {program.name} "
                         f"has restarted; their progress was reset."
                     ),
                     "category": NotificationCategory.TRAINING,
@@ -2369,6 +2369,7 @@ class TrainingProgramService:
                     "user_id": user.id,
                     "first_name": user.first_name,
                     "last_name": user.last_name,
+                    "preferred_name": user.preferred_name,
                     "membership_number": user.membership_number,
                     "eligible": eligible,
                     "status": status,
@@ -2376,11 +2377,12 @@ class TrainingProgramService:
                 }
             )
 
-        # Eligible first, then alphabetical — the order the picker wants.
+        # Eligible first, then alphabetical by the name the picker shows —
+        # the preferred name when one is set — then last name.
         results.sort(
             key=lambda r: (
                 not r["eligible"],
-                (r["first_name"] or "").lower(),
+                (r["preferred_name"] or r["first_name"] or "").lower(),
                 (r["last_name"] or "").lower(),
             )
         )
@@ -5276,7 +5278,7 @@ class TrainingProgramService:
 
         def _user_name(uid: UUID) -> str:
             u = user_map.get(str(uid))
-            return f"{u.first_name} {u.last_name}" if u else str(uid)
+            return u.display_name if u else str(uid)
 
         # Track which users failed a gate keyed by UUID, so the enrollment loop
         # below can reliably skip them. (Error strings are name-based for the

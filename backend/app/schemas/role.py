@@ -95,7 +95,9 @@ class UserRoleResponse(BaseModel):
 
     user_id: UUID
     username: str
+    # Legal name of record; ``display_name`` is what everyday screens show.
     full_name: Optional[str] = None
+    display_name: Optional[str] = None
     roles: List[RoleResponse]
 
     model_config = ConfigDict(from_attributes=True)
@@ -131,7 +133,10 @@ class RoleUserItem(BaseModel):
     email: str
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    preferred_name: Optional[str] = None
+    # Legal name of record; ``display_name`` is what everyday screens show.
     full_name: Optional[str] = None
+    display_name: Optional[str] = None
     is_active: bool
 
     model_config = ConfigDict(from_attributes=True)
