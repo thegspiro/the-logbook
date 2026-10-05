@@ -108,10 +108,17 @@ since gained a column (58 → 59). The check is now
 shape `test_org_scoping_ratchet` uses: a new column fails the build until
 somebody classifies it, either by clearing it or by naming it with a reason.
 
-**Re-run correctly, no PII column is missed** — the 28 untouched attributes are
-row identity and tenancy, department-assigned keys, operational role and
-standing, sign-in metadata with no credential left behind it, interface
-preferences, and one pointer to a different member. Pass 2's conclusion holds.
+**Re-run correctly, no PII column was missed at the time** — the 28 untouched
+attributes are row identity and tenancy, department-assigned keys, operational
+role and standing, sign-in metadata with no credential left behind it, interface
+preferences, and one pointer to a different member. Pass 2's conclusion held.
+
+**It stopped holding three days later, and the check is what said so** — see
+LIFE-7 below. `users.preferred_name` landed on `main` on 2026-10-04, after this
+branch was cut, and the test went red on the merge: the exact event pass 2
+predicted and could not detect. Nothing about that is a defect in the check; it
+is the check working on its first real occasion, which is worth recording
+because a ratchet nobody has seen fire is only a claim.
 
 Worth recording **how the first attempt got it wrong**, because the trap is in
 the test now: `sa_inspect(User).columns` is keyed by _column_ name, and for an
@@ -122,6 +129,35 @@ untouched, and briefly suggested the service ignored MFA secrets — against a
 docstring that explicitly promises them — when it clears them on three adjacent
 lines. The third test now asserts the docstring's credential claim against the
 code directly, which is the ELEC-5/CI-5 check applied to this file.
+
+### LIFE-7 — MED — Anonymization left `preferred_name`, the name every screen prefers — ✅ FIXED
+
+`backend/app/services/member_anonymization_service.py:115-118` scrubbed
+`first_name`, `middle_name` and `last_name` and did not touch
+`preferred_name`, a column `main` added on 2026-10-04 holding the name the
+member actually goes by.
+
+The consequence is worse than one missed column, because of which column it is.
+`format_display_name` **prefers** `preferred_name` over `first_name`
+(`app/utils/member_names.py:30-35`), and `User.display_name` wraps it — so
+shift boards, event rosters, the dashboard, notifications, messages and the
+inventory custody search all name a member by it. A member who exercised the
+right to erasure would keep appearing as "Terry Member-1a2b3c4d" on every
+everyday surface, while the columns a privacy reviewer inspects first —
+`first_name`, `email`, `phone` — all read correctly scrubbed. The scrub would
+look complete in the database and be visibly incomplete in the product.
+
+Fixed by clearing it alongside the other name columns, with the reason stated
+at the assignment since the ordering dependency on `format_display_name` is
+not visible from the service. `Prospect` has no such column, so the applicant
+path needed nothing.
+
+Two tests, because they answer different questions:
+`test_anonymization_pii_coverage.py` is the structural guard that reported the
+drift, and `test_member_anonymization.py::test_clears_the_preferred_name_the_display_name_prefers`
+asserts the behaviour — that `display_name` stops naming the member — which no
+column diff can express. Mutation-tested: reverting the one assignment fails
+the behavioural test at the `display_name` assertion.
 
 ### Verified good this pass
 
