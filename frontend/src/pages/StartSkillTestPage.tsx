@@ -25,6 +25,7 @@ import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import { useAuthStore } from '../stores/authStore';
 import { trainingProgramService } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
+import { formatMemberName } from '../utils/memberName';
 import { useMemberSearch } from '../hooks/useMemberSearch';
 import { MEMBER_SEARCH_MAX_RESULTS, MEMBER_SEARCH_MIN_CHARS } from '../constants/config';
 import type { TrainingRequirementEnhanced } from '../types/training';
@@ -113,11 +114,15 @@ export const StartSkillTestPage: React.FC = () => {
   useEffect(() => {
     if (selfCandidateApplied.current || isOfficer) return;
     if (!isPractice || !user?.id || candidates.length > 0) return;
-    const ownName = `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim();
+    const ownName = formatMemberName({
+      first_name: user.first_name,
+      preferred_name: user.preferred_name,
+      last_name: user.last_name,
+    });
     if (!ownName) return;
     selfCandidateApplied.current = true;
     setCandidates([{ id: user.id, name: ownName }]);
-  }, [isOfficer, isPractice, user?.id, user?.first_name, user?.last_name, candidates.length]);
+  }, [isOfficer, isPractice, user?.id, user?.first_name, user?.preferred_name, user?.last_name, candidates.length]);
 
   // Server-side candidate search, debounced — shared with the viewers panel so
   // both pickers over this population behave identically. The endpoint requires

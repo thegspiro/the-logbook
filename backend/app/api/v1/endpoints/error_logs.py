@@ -22,6 +22,7 @@ from app.core.security_middleware import get_client_ip
 from app.core.utils import utc_isoformat
 from app.models.error_log import ErrorLog
 from app.models.user import User
+from app.utils.member_names import format_display_name
 
 router = APIRouter()
 
@@ -58,17 +59,24 @@ async def _affected_users(
         return {}
 
     result = await db.execute(
-        select(User.id, User.first_name, User.last_name, User.username).where(
+        select(
+            User.id,
+            User.first_name,
+            User.last_name,
+            User.preferred_name,
+            User.username,
+        ).where(
             User.id.in_(user_ids),
             User.organization_id == organization_id,
         )
     )
     return {
         str(user_id): {
-            "name": f"{first_name or ''} {last_name or ''}".strip() or username,
+            "name": format_display_name(first_name, last_name, preferred_name)
+            or username,
             "username": username,
         }
-        for user_id, first_name, last_name, username in result.all()
+        for user_id, first_name, last_name, preferred_name, username in result.all()
     }
 
 

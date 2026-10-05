@@ -1533,7 +1533,7 @@ const IntegrationsPage: React.FC = () => {
                 data-testid={`integration-card-${integration.integration_type}`}
                 className="stat-card transition-all hover:border-indigo-500/30"
               >
-                <div className="mb-3 flex items-start justify-between">
+                <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
                   <div className="flex items-center space-x-3">
                     <div className={`rounded-lg p-2 ${ui.bgColor} ${ui.color}`}>{ui.icon}</div>
                     <div>

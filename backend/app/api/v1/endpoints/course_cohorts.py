@@ -134,7 +134,7 @@ def _class_response(
 
 
 def _member_response(
-    row, full_name=None, email=None, progress_percentage=None
+    row, full_name=None, email=None, progress_percentage=None, display_name=None
 ) -> CourseCohortMemberResponse:
     """Map a roster row onto its response."""
     return CourseCohortMemberResponse(
@@ -148,6 +148,7 @@ def _member_response(
         withdrawn_at=row.withdrawn_at,
         added_at=row.added_at,
         full_name=full_name,
+        display_name=display_name,
         email=email,
         progress_percentage=progress_percentage,
     )
@@ -343,6 +344,7 @@ async def _build_detail(
             _member_response(
                 m["row"],
                 full_name=m.get("full_name"),
+                display_name=m.get("display_name"),
                 email=m.get("email"),
                 progress_percentage=m.get("progress_percentage"),
             )

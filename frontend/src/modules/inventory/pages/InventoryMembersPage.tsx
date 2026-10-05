@@ -32,6 +32,7 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { useDeepLinkedRecord } from '../../../hooks/useDeepLinkedRecord';
 import { formatDate } from '../../../utils/dateFormatting';
+import { displayNameOf } from '../../../utils/memberName';
 import { useInventoryWebSocket } from '../../../hooks/useInventoryWebSocket';
 import { InventoryScanModal } from '../../../components/InventoryScanModal';
 import { VariantCapsules } from '../components/VariantCapsules';
@@ -174,7 +175,7 @@ const InventoryMembersPage: React.FC = () => {
       isOpen: true,
       mode: 'distribute',
       userId: m.user_id,
-      memberName: m.full_name || m.username,
+      memberName: displayNameOf(m) || m.username,
     });
   };
 
@@ -192,7 +193,7 @@ const InventoryMembersPage: React.FC = () => {
     setReturnModal({
       isOpen: true,
       userId: m.user_id,
-      memberName: m.full_name || m.username,
+      memberName: displayNameOf(m) || m.username,
     });
   };
 
@@ -214,7 +215,7 @@ const InventoryMembersPage: React.FC = () => {
     const s = [...members];
     switch (sortBy) {
       case 'name':
-        s.sort((a, b) => (a.full_name || a.username).localeCompare(b.full_name || b.username));
+        s.sort((a, b) => (displayNameOf(a) || a.username).localeCompare(displayNameOf(b) || b.username));
         break;
       case 'total_items':
         s.sort((a, b) => b.total_items - a.total_items);
@@ -367,7 +368,7 @@ const InventoryMembersPage: React.FC = () => {
         <div className="space-y-3">
           {sortedMembers.map((member) => {
             const isExpanded = expandedUserId === member.user_id;
-            const name = member.full_name || member.username;
+            const name = displayNameOf(member) || member.username;
             return (
               <div key={member.user_id} className="card-secondary overflow-hidden">
                 {/* Row — a clickable region (not a <button>) so the nested
@@ -461,7 +462,10 @@ const InventoryMembersPage: React.FC = () => {
                         type="button"
                         className="btn-secondary btn-sm flex items-center justify-center gap-1 active:opacity-80"
                         onClick={() =>
-                          setSizesTarget({ userId: member.user_id, memberName: member.full_name || member.username })
+                          setSizesTarget({
+                            userId: member.user_id,
+                            memberName: displayNameOf(member) || member.username,
+                          })
                         }
                         title="Edit this member's sizes"
                         aria-label={`Edit sizes for ${name}`}

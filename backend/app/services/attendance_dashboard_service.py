@@ -162,7 +162,7 @@ class AttendanceDashboardService:
             rows.append(
                 {
                     "user_id": uid,
-                    "name": member.full_name,
+                    "name": member.display_name,
                     "membership_tier": member_tier_id,
                     "tier_name": (
                         tier_def.get("name", member_tier_id)
@@ -318,12 +318,12 @@ class AttendanceDashboardService:
                 {
                     "attendee_id": str(w.id),
                     "user_id": str(w.user_id),
-                    "member_name": user.full_name if user else "Unknown",
+                    "member_name": user.display_name if user else "Unknown",
                     "waiver_reason": w.waiver_reason,
                     "granted_by": (
                         str(w.waiver_granted_by) if w.waiver_granted_by else None
                     ),
-                    "granted_by_name": grantor.full_name if grantor else None,
+                    "granted_by_name": grantor.display_name if grantor else None,
                     "granted_at": (
                         w.waiver_granted_at.isoformat() if w.waiver_granted_at else None
                     ),

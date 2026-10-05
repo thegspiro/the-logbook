@@ -28,6 +28,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.utils.member_names import format_display_name
 from app.utils.positions import position_label
 from app.utils.print_document import DocumentRow, DocumentSection, PrintDocument
 from app.utils.scheduling_dates import DEFAULT_TIMEZONE
@@ -113,7 +114,9 @@ def _format_time(value: Optional[datetime], tz_name: str) -> str:
 def _person_name(user) -> str:
     if user is None:
         return "Unassigned"
-    name = " ".join(filter(None, [user.first_name, user.last_name])).strip()
+    name = format_display_name(
+        user.first_name, user.last_name, getattr(user, "preferred_name", None)
+    )
     return name or (user.username or "Member")
 
 

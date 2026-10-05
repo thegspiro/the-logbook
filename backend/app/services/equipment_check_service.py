@@ -4647,14 +4647,23 @@ class EquipmentCheckService:
         )
         return result.scalars().first()
 
-    async def _get_user_name_map(self, user_ids: List[str]) -> Dict[str, str]:
-        """Build a user_id → display name map."""
+    async def _get_user_name_map(
+        self, user_ids: List[str], legal: bool = False
+    ) -> Dict[str, str]:
+        """Build a user_id → name map.
+
+        Everyday screens get the name the member goes by (preferred name).
+        ``legal=True`` gives first + last instead, for the compliance report and
+        exports, which are records of note and must match the legal name.
+        """
         if not user_ids:
             return {}
 
         result = await self.db.execute(select(User).where(User.id.in_(user_ids)))
         users = result.scalars().all()
-        return {str(u.id): f"{u.first_name} {u.last_name}".strip() for u in users}
+        if legal:
+            return {str(u.id): f"{u.first_name} {u.last_name}".strip() for u in users}
+        return {str(u.id): u.display_name for u in users}
 
     # ============================================
     # Failure Notifications
@@ -4700,9 +4709,7 @@ class EquipmentCheckService:
             )
             checker = checker_result.scalar_one_or_none()
             if checker:
-                first = checker.first_name or ""
-                last = checker.last_name or ""
-                checker_name = f"{first} {last}".strip() or "Unknown"
+                checker_name = checker.display_name or "Unknown"
 
             template_name = "Unknown Template"
             if template_id:
@@ -5058,7 +5065,7 @@ class EquipmentCheckService:
                 user_ids.add(str(c.checked_by))
 
         # Resolve user names for last_checked_by
-        user_name_map = await self._get_user_name_map(list(user_ids))
+        user_name_map = await self._get_user_name_map(list(user_ids), legal=True)
         for stats in app_stats.values():
             uid = stats.get("last_checked_by")
             if uid and uid in user_name_map:
@@ -5111,8 +5118,13 @@ class EquipmentCheckService:
         item_name: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
+        legal_names: bool = False,
     ) -> Dict[str, Any]:
-        """Paginated failure log with filters."""
+        """Paginated failure log with filters.
+
+        ``legal_names=True`` names checkers by legal name, for the CSV/PDF
+        export; the on-screen log uses the name each member goes by.
+        """
         _, date_from_start, date_to_end = await self._report_window(
             organization_id, date_from, date_to, default_days=30
         )
@@ -5175,7 +5187,7 @@ class EquipmentCheckService:
             if c.apparatus_id:
                 apparatus_ids_set.add(str(c.apparatus_id))
 
-        user_map = await self._get_user_name_map(list(user_ids_set))
+        user_map = await self._get_user_name_map(list(user_ids_set), legal=legal_names)
         app_name_map: Dict[str, str] = {}
         if apparatus_ids_set:
             aq = await self.db.execute(
@@ -5226,8 +5238,13 @@ class EquipmentCheckService:
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
         interval: str = "weekly",
+        legal_names: bool = False,
     ) -> Dict[str, Any]:
-        """Per-item pass/fail trend over time."""
+        """Per-item pass/fail trend over time.
+
+        ``legal_names=True`` names checkers by legal name, for the CSV export;
+        the on-screen trend uses the name each member goes by.
+        """
         org_tz, date_from_start, date_to_end = await self._report_window(
             organization_id, date_from, date_to, default_days=90
         )
@@ -5269,7 +5286,7 @@ class EquipmentCheckService:
         for c in checks_map.values():
             if c.checked_by:
                 user_ids_set.add(str(c.checked_by))
-        user_map = await self._get_user_name_map(list(user_ids_set))
+        user_map = await self._get_user_name_map(list(user_ids_set), legal=legal_names)
 
         # Build trend buckets
         from collections import defaultdict

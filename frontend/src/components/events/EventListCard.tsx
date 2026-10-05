@@ -71,7 +71,7 @@ const CREDITED_HOURS_BASIS =
 const DETAIL_ROW_CLASS = 'text-theme-text-secondary flex items-center gap-2 text-sm';
 const DETAIL_ICON_CLASS = 'text-theme-text-muted h-3.5 w-3.5 shrink-0';
 const FOOTER_BUTTON_CLASS =
-  'inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 px-3 text-sm font-medium whitespace-nowrap @max-[18rem]:px-2';
+  'inline-flex min-h-9 touch:min-h-[44px] flex-1 items-center justify-center gap-1.5 px-3 text-sm font-medium whitespace-nowrap @max-[18rem]:px-2';
 /* A 320px phone leaves the card ~240px: "Going", "Not Going" and the 44px
    calendar button do not fit side by side with their icons and the full
    padding, and the calendar button was clipped off the card edge. Below 18rem
@@ -427,7 +427,7 @@ const EventListCardBase: React.FC<EventListCardProps> = ({
         <button
           type="button"
           onClick={() => downloadICSFile(event)}
-          className="btn-secondary text-theme-text-muted hover:text-theme-text-primary inline-flex h-11 w-11 shrink-0 items-center justify-center gap-1.5 p-0 @max-[18rem]:w-full @max-[18rem]:text-sm"
+          className="btn-secondary text-theme-text-muted hover:text-theme-text-primary touch:h-11 touch:w-11 inline-flex h-9 w-9 shrink-0 items-center justify-center gap-1.5 p-0 @max-[18rem]:w-full @max-[18rem]:text-sm"
           aria-label={`Add ${event.title} to calendar`}
           title="Add to calendar"
         >
