@@ -110,9 +110,9 @@ Specific role slugs (e.g. `chief`, `secretary`) can also be used as a fallback f
 
 Beyond membership type, a member may also be restricted by:
 
-- **Membership tier rules** — Organization settings can mark certain tiers as not voting-eligible or require minimum meeting attendance percentages
-- **Attendance requirement** — Individual ballot items can require the voter to be checked in as present at the meeting
-- **Secretary overrides** — The secretary can grant eligibility overrides for individual members, bypassing all other checks
+- **Membership tier rules** — Organization settings can mark certain tiers as not voting-eligible or require minimum meeting attendance percentages. _(2026-09-29)_ The attendance window runs from the later of `voting_attendance_period_months` ago (calendar months) and the start of the member's current stint (latest `MemberServicePeriod`, else `hire_date`) to the department's today — see [below](#voting-attendance-window-2026-09-29)
+- **Attendance requirement** — Individual ballot items can require the voter to be checked in as present at the meeting. The roll is frozen at open, so a member checked in after opening is recorded present but cannot vote without an override
+- **Secretary overrides** — The secretary can grant eligibility overrides for individual members (chosen by name on the **Overrides** tab since 2026-09-30), bypassing tier, attendance and role checks. **Not** a specific `eligible_voters` list: an override for someone off the list is stored and counted in the eligible denominator, yet their vote is still refused — open owner decision (W50-13)
 
 ---
 
@@ -725,3 +725,118 @@ those columns.
 
 Full per-finding write-up: `docs/security-review/ELEC-06-elections-ballots.md`
 (ELEC-13 … ELEC-39).
+
+## Voting attendance window _(2026-09-29)_
+
+Tier-based voting eligibility measured meeting attendance from a bare
+look-back cutoff with **no upper bound and no regard for when the member
+joined**. A member hired two months ago was charged with ten pre-hire
+meetings, a reinstated member with every meeting held while dropped, and
+everyone with meetings already scheduled for next week.
+
+`attendance_window()` in `membership_tier_service.py` now returns
+`(max(cutoff, current_stint_start), org_today)`, where the cutoff is
+`voting_attendance_period_months` calendar months back (`relativedelta`, not
+30-day months) and the stint start is the latest `MemberServicePeriod`, else
+`hire_date`. `tally_attendance()` classifies meetings by id sets, so a meeting
+that is both waived and inside a leave is excluded once rather than twice (the
+old subtraction could push a percentage over 100%), and attendance counts only
+inside the eligible set. The ballot check and the secretary's attendance
+dashboard (`GET /meetings/attendance/dashboard`) both call it, so they cannot
+disagree (CLAUDE.md pitfall 29).
+
+## W50 browser review _(2026-09-30 → merged 2026-10-03)_
+
+Two Playwright drivers ran the module end to end with a real SMTP sink, and
+41 findings were fixed across `3de83db`, `d6f828c` and `7aa3405`, with an
+earlier single-driver pass (W50 part 1) fixing eight UI defects. The full
+record is `docs/workflow-review/W50-elections.md`; the owner decisions left
+open are tabled in `docs/KNOWN_LIMITATIONS.md` under "Elections — Owner
+Decisions From the W50 Drive (2026-09-30)".
+
+> **⚠️ Upgrade: close any OPEN election first.** In-app votes on a
+> ballot-item election now carry the item id as their position and token votes
+> key the same vote by a hash of it; rows written before the change match
+> neither, so a member who voted in-app before the deploy could vote once more
+> after it and both would count. Closed tallies are not rewritten. See
+> `docs/UPGRADING.md`, "Close any election that is OPEN before you upgrade".
+
+### Integrity and anonymity
+
+| Finding                                                                                                                                                                   | Fix                                                                                                                                                                                                                                         |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| W50-1 (CRITICAL) `DELETE /elections/{id}` 500'd on any election with tokens — after leadership was mailed "permanently deleted"                                           | `voting_tokens` relationship gets `cascade="all, delete-orphan", passive_deletes=True`; the leadership mail and `election_deleted_critical` audit run only after the commit, and a mail failure cannot turn the committed delete into a 500 |
+| W50-2 Anonymous election de-anonymised in two reads                                                                                                                       | New `vote_cast` rows carry no `user_id` on anonymous elections; forensics `deleted_votes.records[].candidate_id` is `null` on anonymous elections. Pre-fix audit rows keep the voter (cannot be scrubbed from the hash chain)               |
+| W50-3 / -4 / -5 In-app and token votes on a named election both counted; an item id as `position` skipped the attendance rule; a missing `position` allowed a second vote | One shared vote-target resolver for `cast_vote`, the proxy route and the token route; `get_non_voters` and `total_voters` key on the voter hash too                                                                                         |
+| W50-6 A voided voter's next vote 500'd (`ix_votes_dedup_hash`)                                                                                                            | The dedup hash is nulled on soft-delete (migration `6394fbf42581` nulls it on rows already voided); an `IntegrityError` on either route is a 400                                                                                            |
+| W50-9 Certified results renamed after close                                                                                                                               | Name, position or acceptance of a candidate with (non-test) votes is refused; compared by value, so a statement edit saves. Merge / void / batch-void after close stay allowed — flagged                                                    |
+| W50-39 `DELETE …/votes/{id}` ignored the election in the path and took an empty reason                                                                                    | Scoped to the path's election; `reason` required (3–500 characters)                                                                                                                                                                         |
+| W50-41 `eligible_voters: []` meant "nobody" in-app and "everyone" for mail                                                                                                | `[]` normalised to `NULL` on create/update; existing `[]` rows need a one-off `UPDATE` (left to the owner)                                                                                                                                  |
+| W50-42 Punctuation write-in 500; write-ins double-escaped                                                                                                                 | Stored as typed; pre-fix rows stay escaped (backfill left to the owner)                                                                                                                                                                     |
+
+### Reporting
+
+| Finding                                                                                   | Fix                                                                                                                                                                                                                          |
+| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| W50-7 Ballot-item outcomes reported nowhere                                               | Per-item results with a `label` on the Results tab, the report mail and the certified PDF. The pooled `overall_results` list is unchanged — flagged                                                                          |
+| W50-8 Print Blank Ballots carried positions only                                          | Each approval item prints "☐ Approve ☐ Deny". Recording paper votes on items is still impossible — flagged                                                                                                                   |
+| W50-12 `send-report` mailed a mid-vote tally as "closed … official report"                | 400 "Election report is only available after the election closes"                                                                                                                                                            |
+| W50-14 Early close dated to the scheduled end, with no actor                              | `elections.closed_at` / `closed_by` (migration `ac06a2998013`), stamped on manual and lifecycle closes and printed on the PDF and report ("… by Sam Ortiz"); older rows fall back to the scheduled end and "Automatic close" |
+| W50-20 Pre-meeting package said everyone was eligible                                     | Per-item eligibility block from the roster's `item_eligibility`                                                                                                                                                              |
+| W50-32 / -48 Ties printed as two 50% rows; "Quorum Met" with no quorum                    | `is_tie` set under co-winners too, report prints "Tie — co-winners per policy" / "Tie — runoff round created"; `quorum_met: None` and "No quorum requirement" when `quorum_type == 'none'`                                   |
+| W50-33 Close report invented recipient facts                                              | One source: `email_recipients` plus `elections.email_skipped_details` (migration `c4e8a1f7d2b6`) from the last send or reminder                                                                                              |
+| W50-65 / -66 Forensics and results counters disagreed; voided batch cards showed no trail | Tokens reported as issued / used / superseded / expired / live; batches carry `voided_by` / `voided_at` / `void_reason` / `over_count_override` (migration `d9f3a6c2e8b1`, backfilled for already-voided batches)            |
+| W50-45 Audit Log page showed "system" for every row                                       | `username` resolved server-side; "system" only when `user_id` is null                                                                                                                                                        |
+| W50-71 `runoff_election_created` had no `election_id`                                     | Written on the parent with a mirror on the child                                                                                                                                                                             |
+
+### Mail, tokens and lifecycle
+
+| Finding                                                                                                                                               | Fix                                                                                                                                                                                                                                                                                                                                                                        |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| W50-18 Test ballot indistinguishable from a real one                                                                                                  | "[TEST]" subject and stamp, `is_test` on the lookup, receipt `counted: false` with a test message; `email_sent` is not set by a test send                                                                                                                                                                                                                                  |
+| W50-27 A reminder was a second "Ballot Available" mail and its superseded link read "expired"                                                         | Subject "Reminder: vote in …", `reminder_sent_at` stamped instead of `email_sent_at`, `voting_tokens.superseded_at` (migration `b7d2e41c9f03`) and "This link was replaced by a newer ballot email"                                                                                                                                                                        |
+| W50-35 A DRAFT could be mailed as "Ballot Available" (API)                                                                                            | `send-ballot` refuses DRAFT and NOMINATIONS unless `is_test`, as well as CLOSED and CANCELLED                                                                                                                                                                                                                                                                              |
+| W50-44 A dead token after close blamed the voter roll                                                                                                 | Status checked before the hash: "Voting has closed"; after a reopen, ask the secretary for a new link                                                                                                                                                                                                                                                                      |
+| W50-37 / -68 Rollback alert claimed later votes no longer count; ballot mail said it would "log you in", printed an empty "Meeting Date:" and no zone | Per-transition `rollback_effect` sentence with invalidated-link and resend counts; "opens your ballot"; the meeting line omitted when there is none; zone printed. Migration `c8266855a348` moves `ballot_notification`, `election_rollback` and `election_report` rows still byte-identical to the shipped bodies onto the new wording; an edited template keeps its text |
+| W50-34 A runoff reset its tie policy and could not be emailed                                                                                         | `tie_policy` copied; description names the tie; the parent's candidate-selection items copied                                                                                                                                                                                                                                                                              |
+| W50-49 Max Proxies Per Person was never enforced                                                                                                      | Enforced; schema `ge=1, le=10`                                                                                                                                                                                                                                                                                                                                             |
+| W50-54 A voided vote's receipt read "No matching vote found"                                                                                          | `verified: false, voided: true, "This vote was voided by an officer"`                                                                                                                                                                                                                                                                                                      |
+| W50-55 Roster said a member created after open "will receive ballot"                                                                                  | The roster reads the frozen roll                                                                                                                                                                                                                                                                                                                                           |
+| W50-67 Malformed `user_id` on attendee check-in → 500; unbounded statement                                                                            | 422; `statement` `max_length=5000`                                                                                                                                                                                                                                                                                                                                         |
+| W50-69 Clone copied a published parent's `results_visible_immediately`                                                                                | Reset on clone; lands on `?tab=ballot`                                                                                                                                                                                                                                                                                                                                     |
+
+### Frontend
+
+Fixed: the Positions **Add** click swallowed by a full-screen click-away layer
+(W50 part 1-1); the start/end time pickers' names (part 1-2); "Voting Method:
+Simple Majority" for a plurality election — the card now reads "One choice per
+voter" / "Ranked choice" / "Approval" with a **Winner** row from
+`getVictoryDescription` (part 1-3); keyboard reach of the workflow tabs
+(arrow keys, Home, End; `tabpanel` labelled by its tab) (part 1-4); the
+stepper as a named list with `aria-current="step"` (part 1-5); voter overrides
+by member picker instead of a raw user id, listed by `member_name` (part 1-6);
+labels on the candidate form, ballot builder and attendance list (part 1-7);
+the reason **Send Ballot Emails** is disabled shown in text, and
+`ballot_send_message` reporting whether the eligibility summary actually went
+(part 1-8); quick durations and **End of Day** computed in the org zone
+(W50-15); a cleared candidate statement sent as `null` (W50-16); `?tab=` writes
+use `replace` (W50-17); **Results & Publishing** shows **Publish Results** only
+when CLOSED and **Email Results Report** only after close (W50-21, -28); the
+meeting link cleared with `null` and no toast for a no-op (W50-60).
+
+**Not merged in this window:** the "frontend round 2" items the W50 record
+marks _FIX in progress_ — among them the delete and close dialog wording, the
+`ElectionCloseStamp` on cards, the ballot page's test banner and double lookup,
+Election Settings labels, the void and proxy forms' member pickers, and the
+Extend Time direction check. Treat their backend halves as live and their
+screens as unchanged.
+
+## Election Settings → Defaults removed _(2026-09-29)_
+
+The **Defaults** section (default voting method, victory condition,
+anonymity, write-ins, results visibility, runoffs) was stored in organization
+settings and read by nothing — the create form never consulted it (CLAUDE.md
+pitfall 19). It was briefly relabelled "Saved defaults (not yet applied)" and then
+removed, both on 2026-09-29. Election Settings now has **Proxy Voting**, **Features**, **Test
+Ballot** and **Security**; every election's options are chosen on its own
+create form. Values already stored are left in place and unused.

@@ -208,7 +208,7 @@ async def get_training_dashboard_summary(
             intervention.append(
                 {
                     "member_id": str(member.id),
-                    "member_name": member.full_name or member.username,
+                    "member_name": member.display_name or member.username,
                     "unmet_count": len(unmet),
                     "requirement_id": unmet[0],
                 }
@@ -356,7 +356,7 @@ async def get_training_dashboard_summary(
             {
                 "id": str(r.id),
                 "member_id": str(r.user_id),
-                "member_name": user_map[str(r.user_id)].full_name
+                "member_name": user_map[str(r.user_id)].display_name
                 or user_map[str(r.user_id)].username,
                 "course_name": r.course_name,
                 "expiration_date": r.expiration_date.isoformat(),
@@ -368,7 +368,7 @@ async def get_training_dashboard_summary(
             {
                 "id": str(r.id),
                 "member_id": str(r.user_id),
-                "member_name": user_map[str(r.user_id)].full_name
+                "member_name": user_map[str(r.user_id)].display_name
                 or user_map[str(r.user_id)].username,
                 "course_name": r.course_name,
                 "completion_date": r.completion_date.isoformat(),
@@ -750,7 +750,7 @@ async def create_record(
     # Notify the org's chat integrations about the recorded training (background).
     notify_member = await db.get(User, str(new_record.user_id))
     member_name = (
-        getattr(notify_member, "full_name", None) if notify_member else None
+        getattr(notify_member, "display_name", None) if notify_member else None
     ) or "A member"
     background_tasks.add_task(
         notify_entity_created,
@@ -2076,11 +2076,13 @@ async def enroll_member_in_program(
     if existing.scalar_one_or_none():
         raise HTTPException(
             status_code=400,
-            detail=f"{member.full_name} is already enrolled in '{program.name}'",
+            detail=f"{member.display_name} is already enrolled in '{program.name}'",
         )
 
-    # Capture scalar values before commit expires ORM objects
+    # Capture scalar values before commit expires ORM objects. The audit trail
+    # records the legal name of record; the response is what the screen shows.
     member_name = member.full_name
+    member_display_name = member.display_name
     program_name = program.name
 
     enrollment = ProgramEnrollment(
@@ -2112,7 +2114,7 @@ async def enroll_member_in_program(
     return {
         "enrollment_id": str(enrollment.id),
         "user_id": str(user_id),
-        "member_name": member_name,
+        "member_name": member_display_name,
         "program_id": str(program_id),
         "program_name": program_name,
         "status": "active",

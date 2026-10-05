@@ -1893,7 +1893,7 @@ async def get_prospect_activity(
                 action=log.action,
                 details=log.details,
                 performed_by=log.performed_by,
-                performer_name=log.performer.full_name if log.performer else None,
+                performer_name=log.performer.display_name if log.performer else None,
                 created_at=log.created_at,
             )
         )
@@ -2372,9 +2372,7 @@ def _interview_to_response(interview) -> InterviewResponse:
     """Convert a ProspectInterview model to an InterviewResponse schema."""
     interviewer_name = None
     if interview.interviewer:
-        first = interview.interviewer.first_name or ""
-        last = interview.interviewer.last_name or ""
-        interviewer_name = f"{first} {last}".strip() or None
+        interviewer_name = interview.interviewer.display_name or None
 
     return InterviewResponse(
         id=interview.id,

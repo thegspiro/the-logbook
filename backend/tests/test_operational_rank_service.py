@@ -383,10 +383,18 @@ class TestValidateRanks:
         members = _rows(
             [
                 SimpleNamespace(
-                    id="u1", first_name="Jane", last_name="Doe", rank="captain"
+                    id="u1",
+                    first_name="Jane",
+                    last_name="Doe",
+                    preferred_name=None,
+                    rank="captain",
                 ),
                 SimpleNamespace(
-                    id="u2", first_name="John", last_name="Roe", rank="ghost_rank"
+                    id="u2",
+                    first_name="John",
+                    last_name="Roe",
+                    preferred_name=None,
+                    rank="ghost_rank",
                 ),
             ]
         )
@@ -403,7 +411,11 @@ class TestValidateRanks:
                 _rows(
                     [
                         SimpleNamespace(
-                            id="u1", first_name="Jane", last_name="Doe", rank="captain"
+                            id="u1",
+                            first_name="Jane",
+                            last_name="Doe",
+                            preferred_name=None,
+                            rank="captain",
                         )
                     ]
                 ),
@@ -418,7 +430,11 @@ class TestValidateRanks:
                 _rows(
                     [
                         SimpleNamespace(
-                            id="u1", first_name="Ed", last_name="Medic", rank="emt"
+                            id="u1",
+                            first_name="Ed",
+                            last_name="Medic",
+                            preferred_name=None,
+                            rank="emt",
                         )
                     ]
                 ),
@@ -438,6 +454,7 @@ class TestValidateRanks:
                             id="u1",
                             first_name="Sam",
                             last_name="Custom",
+                            preferred_name=None,
                             rank="station_captain",
                         )
                     ]
@@ -458,6 +475,7 @@ class TestValidateRanks:
                             id="u1",
                             first_name="Casey",
                             last_name="Legacy",
+                            preferred_name=None,
                             rank=legacy_rank,
                         )
                     ]
@@ -483,6 +501,7 @@ class TestValidateRanks:
                             id="u1",
                             first_name="Una",
                             last_name="Known",
+                            preferred_name=None,
                             rank="ghost_rank",
                         )
                     ]

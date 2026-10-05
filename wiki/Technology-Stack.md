@@ -56,10 +56,10 @@ Complete technology reference for The Logbook.
 | **Pydantic**     | 2.x     | Data validation and serialization |
 | **Argon2-cffi**  | 25.1    | Password hashing                  |
 | **PyJWT**        | —       | JWT token management              |
-| **ReportLab**    | 4.3     | PDF and label generation          |
-| **Pillow**       | 11.3    | Image processing and optimization |
+| **ReportLab**    | 5.0     | PDF and label generation          |
+| **Pillow**       | 12.3    | Image processing and optimization |
 | **python-magic** | 0.4.27  | File type detection               |
-| **cryptography** | 44.0    | Cryptographic operations          |
+| **cryptography** | 50.0    | Cryptographic operations          |
 | **slowapi**      | —       | Application-level rate limiting   |
 
 ### Backend Capabilities

@@ -115,6 +115,10 @@ class MemberAnonymizationService:
         user.first_name = "Former"
         user.middle_name = None
         user.last_name = f"Member-{token[:8]}"
+        # `format_display_name` prefers this over first_name, so leaving it set
+        # would keep naming the member on every everyday screen — a shift board
+        # reading "Terry Member-1a2b3c4d" beside an anonymized record.
+        user.preferred_name = None
         # Org-scoped unique indexes (username, email) forbid constant
         # placeholders — derive per-user tokens instead.
         user.username = f"anon-{token}"

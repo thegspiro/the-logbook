@@ -74,6 +74,9 @@ server {
     ssl_protocols TLSv1.3;
     ssl_ciphers HIGH:!aNULL:!MD5;
 
+    # The backend's own ceiling (MAX_REQUEST_BODY_SIZE); nginx defaults to 1M
+    client_max_body_size 60M;
+
     # Frontend
     location / {
         proxy_pass http://localhost:3000;

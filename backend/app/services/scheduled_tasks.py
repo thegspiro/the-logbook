@@ -1247,7 +1247,7 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                 for hours in due_intervals:
                     for user in recipients:
                         prefs = user.notification_preferences or {}
-                        user_name = f"{user.first_name} {user.last_name}"
+                        user_name = user.display_name
 
                         # In-app notification — always created regardless of
                         # email preference so users who opt out of email still
@@ -1474,7 +1474,9 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
                         from app.services.email_service import wrap_email_body
 
                         full_event_url = f"{settings.FRONTEND_URL}/events/{event.id}"
-                        e_first = _html.escape(creator.first_name or "")
+                        e_first = _html.escape(
+                            creator.preferred_name or creator.first_name or ""
+                        )
                         e_title = _html.escape(event.title or "")
                         email_service = EmailService(organization=org)
                         sent_count, _ = await email_service.send_email(
@@ -1493,7 +1495,7 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
                                 f"Review Event</a></p>",
                             ),
                             text_body=(
-                                f"Hi {creator.first_name},\n\n"
+                                f"Hi {creator.preferred_name or creator.first_name},\n\n"
                                 f'Your event "{event.title}" has ended. '
                                 f"{checked_in_count} of {rsvp_count} attendees checked in.\n\n"
                                 f"Please review and confirm the attendance records and "
@@ -1843,7 +1845,9 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                         full_url = (
                             f"{settings.FRONTEND_URL}/scheduling?shift={shift.id}"
                         )
-                        e_first = _html.escape(officer.first_name or "")
+                        e_first = _html.escape(
+                            officer.preferred_name or officer.first_name or ""
+                        )
                         e_shift_date = _html.escape(shift_date_str)
                         email_service = EmailService(organization=org)
 
@@ -1897,7 +1901,7 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                                 "Review Shift</a></p>",
                             ),
                             text_body=(
-                                f"Hi {officer.first_name},\n\n"
+                                f"Hi {officer.preferred_name or officer.first_name},\n\n"
                                 f"Your shift on {shift_date_str} "
                                 "has ended. "
                                 f"{att_count} member"
@@ -2104,8 +2108,9 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                     roster.append(
                         {
                             "user_id": str(assignment.user_id),
-                            "name": user.full_name or user.email or "Member",
-                            "first_name": user.first_name,
+                            "name": user.display_name or user.email or "Member",
+                            # The greeting uses the name the member goes by.
+                            "first_name": user.preferred_name or user.first_name,
                             "email": user.email,
                             "position": pos_value,
                             "position_label": position_label(pos_value),
@@ -3019,7 +3024,9 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                                 else "End-of-Shift Summary"
                             )
 
-                            e_first = _html.escape(user.first_name or "")
+                            e_first = _html.escape(
+                                user.preferred_name or user.first_name or ""
+                            )
                             sent, _ = await email_svc.send_email(
                                 to_emails=[user.email],
                                 subject=subject,
@@ -3039,7 +3046,7 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                                     "View Shift Details</a></p>",
                                 ),
                                 text_body=(
-                                    f"Hi {user.first_name or ''},\n\n"
+                                    f"Hi {user.preferred_name or user.first_name or ''},\n\n"
                                     f"End-of-Shift Summary\n"
                                     f"Date: {shift_date_str}\n"
                                     f"Time: {time_range}\n"
@@ -3267,7 +3274,9 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
                     department_required_kinds(org),
                 ):
                     try:
-                        e_first = _html.escape(trainee.first_name or "")
+                        e_first = _html.escape(
+                            trainee.preferred_name or trainee.first_name or ""
+                        )
                         e_date = _html.escape(shift_date_str)
                         sent, _ = await email_svc.send_email(
                             to_emails=[trainee.email],
@@ -3287,7 +3296,7 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
                                 "Review Report</a></p>",
                             ),
                             text_body=(
-                                f"Hi {trainee.first_name or ''},\n\n"
+                                f"Hi {trainee.preferred_name or trainee.first_name or ''},\n\n"
                                 f"{trainee_message}\n\n"
                                 f"Review Report: {full_url}"
                             ),
@@ -3307,7 +3316,7 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
                 # spamming them with one email per overdue report)
                 officer_subject = f"Trainee report unacknowledged — {shift_date_str}"
                 officer_message = (
-                    f"{trainee.full_name or trainee.email or 'Trainee'} "
+                    f"{trainee.display_name or trainee.email or 'Trainee'} "
                     f"has not acknowledged the shift report you filed for "
                     f"{shift_date_str} ({ack_days}+ days overdue)."
                 )
@@ -4534,7 +4543,7 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
             html_body = wrap_email_body(
                 org,
                 "Overdue Equipment",
-                f"<p>Hello {_html.escape(user_obj.first_name or 'Member')},</p>"
+                f"<p>Hello {_html.escape(user_obj.preferred_name or user_obj.first_name or 'Member')},</p>"
                 f"<p>The following items are overdue for return:</p>"
                 f'<ul style="margin:16px 0;">{items_list}</ul>'
                 f"<p>Please return these items as soon as possible.</p>",
@@ -5107,7 +5116,7 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
 
                 for recipient in recipients:
                     prefs = recipient.notification_preferences or {}
-                    user_name = f"{recipient.first_name} {recipient.last_name}"
+                    user_name = recipient.display_name
 
                     # In-app notification
                     try:

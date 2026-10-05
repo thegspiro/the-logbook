@@ -159,10 +159,17 @@ vi.mock('../modules/admin-hours/services/api', () => ({
 // every caller the whole state object, so a consumer selecting one primitive
 // (`state.user?.id`) gets a fresh object each render and spins any effect keyed
 // on it — which is exactly what DashboardOrientation does.
+const authUser = vi.hoisted(() => ({ preferredName: null as string | null }));
 vi.mock('../stores/authStore', () => {
   const state = () => ({
     checkPermission: mockCheckPermission,
-    user: { id: 'user-1', first_name: 'Test', last_name: 'User', organization_id: 'org-1' },
+    user: {
+      id: 'user-1',
+      first_name: 'Test',
+      last_name: 'User',
+      preferred_name: authUser.preferredName,
+      organization_id: 'org-1',
+    },
   });
   // The real store is callable *and* carries getState. A hook-only double
   // breaks every consumer that reads the store outside React — the scheduling
@@ -249,6 +256,7 @@ const ALL_SERVICE_MOCKS = [
 describe('Dashboard', () => {
   beforeEach(() => {
     registeredPullToRefresh = undefined;
+    authUser.preferredName = null;
     // mockReset, not just clearAllMocks: clearAllMocks wipes recorded calls but
     // leaves implementations AND any unconsumed mockRejectedValueOnce still
     // queued, so a test that arms a one-shot rejection and then returns early
@@ -299,6 +307,21 @@ describe('Dashboard', () => {
       active_checkouts: 0,
       overdue_checkouts: 0,
       maintenance_due_count: 0,
+    });
+  });
+
+  describe('greeting', () => {
+    it('greets the member by first name', async () => {
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByRole('heading', { level: 1, name: 'Hi, Test' })).toBeInTheDocument();
+    });
+
+    it('greets the member by the name they go by', async () => {
+      authUser.preferredName = 'Terry';
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByRole('heading', { level: 1, name: 'Hi, Terry' })).toBeInTheDocument();
     });
   });
 

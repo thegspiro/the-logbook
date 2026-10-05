@@ -86,7 +86,7 @@ const StepShell: React.FC<StepShellProps> = ({ title, intro, manageTo, manageLab
       {manageTo && (
         <Link
           to={manageTo}
-          className="text-theme-text-muted hover:text-theme-text-primary flex shrink-0 items-center gap-1 text-sm"
+          className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 flex shrink-0 items-center gap-1 text-sm"
         >
           {manageLabel ?? 'Open full page'}
           <ExternalLink className="h-3.5 w-3.5" />
@@ -357,7 +357,7 @@ const InventorySetupPage: React.FC = () => {
 
       <Link
         to="/inventory/admin"
-        className="text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1 text-sm"
+        className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 flex items-center gap-1 text-sm"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Admin
@@ -856,7 +856,7 @@ const InventorySetupPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => goToStep(step + 1)}
-                className="text-theme-text-muted hover:text-theme-text-primary order-3 self-center text-sm whitespace-nowrap underline sm:order-2 sm:ml-auto sm:self-auto"
+                className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 order-3 self-center text-sm whitespace-nowrap underline sm:order-2 sm:ml-auto sm:self-auto"
               >
                 Skip this step
               </button>

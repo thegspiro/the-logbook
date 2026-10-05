@@ -30,7 +30,7 @@ const MetricCard: React.FC<{ metric: AdminMetric }> = ({ metric }) => (
   // it stays an ordinary card — nothing is wrong, and a red box saying so is
   // its own kind of noise.
   <div className={`card p-3 sm:p-4 ${metric.fixed && metric.value !== '0' ? 'border-theme-alert-danger-border' : ''}`}>
-    <p className="text-theme-text-muted truncate text-[11px] font-semibold tracking-[0.12em] uppercase">
+    <p className="text-theme-text-muted text-[11px] leading-snug font-semibold tracking-[0.12em] uppercase">
       {metric.label}
     </p>
     <p className="text-theme-text-primary mt-1 text-2xl leading-none font-bold tabular-nums sm:text-3xl">

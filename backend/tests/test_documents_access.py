@@ -654,7 +654,9 @@ class TestAttachDocumentNames:
         doc = self._doc(uploaded_by="u1", folder_id="f1")
         # One execute per non-empty id set: users, then folders.
         db.execute.side_effect = [
-            self._rows([("u1", "Dana", "Reyes")]),
+            # (id, first_name, last_name, preferred_name): the uploader is
+            # named by the name she goes by.
+            self._rows([("u1", "Danielle", "Reyes", "Dana")]),
             self._rows([("f1", "Engine Bay")]),
         ]
         await svc.attach_document_names("org-1", [doc])

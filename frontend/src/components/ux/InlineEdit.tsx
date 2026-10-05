@@ -126,7 +126,7 @@ export const InlineEdit: React.FC<InlineEditProps> = ({
           {value || placeholder}
         </span>
       )}
-      <Pencil className="text-theme-text-muted h-3 w-3 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100" />
+      <Pencil className="text-theme-text-muted h-3 w-3 transition-opacity pointer-fine:opacity-0 pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100" />
     </button>
   );
 };

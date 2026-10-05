@@ -153,6 +153,20 @@ for, rather than re-timing twice.
 
 **[CALLOUT: "QR Check-In = no more paper sign-in sheets"]**
 
+**[SCREEN: The Organizer and "Alternate (optional)" pickers on the create form;
+then, on a saved event, the "Organized by" card with "Transfer event"]**
+
+> "Last on the form: the **Organizer** — you, unless you pick somebody else —
+> and an optional **Alternate**. They matter after the event. A member who
+> missed the check-in can press 'I was there', and that request goes to the
+> organizer, then the alternate. If the person running it changes, **Transfer
+> event** on the event page hands it over."
+
+**[PRODUCTION NOTE — 2026-10-04. New beat (2026-10-02), about 15 seconds; fold
+it into Chapter 3's pending re-timing. Requests that neither organizer
+answers fall back to a position set per event type in Event settings, then
+the Secretary, then anyone with events.manage.]**
+
 ### GUEST CHECK-IN FOR AN OPEN HOUSE (added 2026-08-09)
 
 **[SCREEN: The Check-In Settings section of the event form, ticking "Allow guest
@@ -290,10 +304,21 @@ RSVP list and check-in status]**
 **[SCREEN: Navigate to Member ID Card page (MemberIdCardPage)]**
 
 > "The platform can generate member ID cards. These are printable cards with the
-> member's photo, name, position, department, and a QR code that can be scanned
-> for check-in."
+> member's photo, name, rank, station, membership number, and a QR code and
+> barcode an officer can scan to pull that member up — issuing gear, say."
 
 **[SCREEN: Show a generated ID card]**
+
+> "Tapping in at a door is a different card: if your department issues NFC ID
+> cards, a check-in station or a room's kiosk reads those. And a member can
+> open their own card any time, but another member's needs **members.manage**
+> or **members.manage_id_cards** — it's a scannable badge, so it isn't handed
+> to everyone."
+
+**[PRODUCTION NOTE — 2026-10-04. The previous take said the card's QR code was
+"scanned for check-in"; nothing checks a member in from it (pre-existing). The
+gate on viewing someone else's card is new (2026-09-30). The card shows rank,
+not position.]**
 
 ### PROSPECTIVE MEMBERS PIPELINE (12:30 – 14:00)
 
@@ -367,9 +392,23 @@ attendance must be finalized…". Press Advance; the refusal names the event.]**
 > applicant's stage history rather than trusting the audit line alone."
 
 > "When an applicant completes the pipeline, you can convert them directly to a
-> full member — their data carries over automatically."
+> full member — their data carries over. Two things to expect. Convert waits
+> until every **Required** stage is done, sign-offs included — it tells you
+> who still has to sign. And the officer converting chooses how the new member
+> gets a password: emailed, set by hand, or left for later."
 
 **[CALLOUT: "Pipeline → Convert to Member = seamless onboarding"]**
+
+**[SCREEN: Prospective Members → Sign-offs: "Applicants waiting on your
+approval before they can become members."; then the dashboard's Needs you row
+for the same sign-off]**
+
+> "If you're one of the officers a sign-off stage names, you'll find it on your
+> dashboard under **Needs you**, and on the **Sign-offs** page — sign there."
+
+**[PRODUCTION NOTE — 2026-10-04. New material (2026-09-27 and 09-28), about 20
+seconds; re-time Chapter 4. "Their data carries over automatically" was
+incomplete: conversion is refused while a Required stage is unfinished.]**
 
 **[SCREEN: An applicant on the Membership Vote stage whose election package
 reads Not Elected — the red pill and banner — with **Advance** refusing.
@@ -435,7 +474,7 @@ stage. Both buttons carry the same gate, so the refusal is the same.]**
 
 **[SCREEN: Navigate to the election detail page (ElectionDetailPage)]**
 
-> "Now add the offices being contested — Fire Chief, Captain, President,
+> "Now add the offices being contested — Chief, Captain, President,
 > Treasurer — whatever positions are up for election."
 
 **[SCREEN: Add offices/positions to the election]**
@@ -477,8 +516,8 @@ stage. Both buttons carry the same gate, so the refusal is the same.]**
 
 > "Review the results, then use the Publish Results panel to make them visible
 > to the membership and email the results report. One tip: if you closed voting
-> early, flip 'results visible immediately' so members don't have to wait for
-> the originally scheduled end time."
+> early, press **Publish Results** so members don't have to wait for the
+> originally scheduled end time."
 
 > "Results are recorded permanently, every vote carries a cryptographic
 > signature, and a full forensic audit trail is available if an election is
@@ -568,6 +607,20 @@ who's swapping, which shifts, and the impact on coverage.]**
 > reason."
 
 **[SCREEN: Show approving a swap request]**
+
+**[SCREEN: Scheduling → Requests. Point to one row reading "→ Open swap" and
+one reading "→ Offered to <name>"]**
+
+> "Know what your Approve actually does, because it depends on the row. A
+> trade, or a row that says **Offered to** somebody, moves the seat when you
+> approve it. A row that says **Open swap** does not — the member asked you to
+> find cover, and approving it records your decision but leaves them on the
+> roster. Find the cover first, then put that member on it."
+
+**[PRODUCTION NOTE — 2026-10-04. New beat, about 20 seconds; re-time Chapter 6.
+Approving an open swap moving nothing is an open limitation (W33-4,
+`docs/KNOWN_LIMITATIONS.md`), not a bug in the take — if it is fixed, revise
+this beat.]**
 
 ### SETTING SHIFT CLOSE-OUT RULES (19:45 – 20:15)
 
@@ -810,10 +863,18 @@ and tables.]**
 
 ### SHIFT REPORTS (23:45 – 24:15)
 
-**[SCREEN: Navigate to Shift Reports (ShiftReportPage)]**
+**[SCREEN: Scheduling → Shift Reports tab. Show the view strip — About me,
+Written by me, Review Queue, Flagged, Drafts — and the New report button]**
 
 > "Shift reports give you a detailed breakdown of each shift — who was on duty,
-> what happened, any incidents or notes."
+> what happened, any incidents or notes. They live on the **Shift Reports** tab
+> in Scheduling: **Written by me** for the ones you filed, **Review Queue** and
+> **Flagged** when your department reviews reports before trainees see them."
+
+**[PRODUCTION NOTE — 2026-10-04. Re-record. The previous cue pointed at
+"ShiftReportPage", the Training Admin view that now only forwards to
+Scheduling. Review Queue and Flagged appear only when report review is switched
+on.]**
 
 ### USING DATA FOR DECISIONS (24:15 – 25:15)
 

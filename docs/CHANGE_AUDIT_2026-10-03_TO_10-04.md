@@ -7,7 +7,9 @@ date columns).
 
 > **Gap:** the previous audit stops at 2026-09-23. Commits from 2026-09-24 to
 > 2026-10-02 have no audit page, wiki handoff or currency note. This page does
-> not cover them.
+> not cover them. _(Closed 2026-10-04: the
+> [September 24 – October 4 audit](./CHANGE_AUDIT_2026-09-24_TO_10-04.md),
+> written in parallel, covers the whole window including these two days.)_
 
 Roughly half the commits are security-review and app-review passes (forms,
 messaging, integrations, reports, onboarding, security-audit IP, scheduled

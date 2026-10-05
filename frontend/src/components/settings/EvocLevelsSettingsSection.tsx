@@ -397,7 +397,7 @@ const EvocLevelsSettingsSection: React.FC = () => {
                     )}
                   </p>
                 </div>
-                <div className="flex shrink-0 items-center gap-1 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100">
+                <div className="flex shrink-0 items-center gap-1 transition-opacity pointer-fine:opacity-0 pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100">
                   <button
                     type="button"
                     onClick={() => {

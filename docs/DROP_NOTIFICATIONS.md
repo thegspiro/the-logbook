@@ -21,7 +21,7 @@ All configuration is stored in **Organization Settings** and can be changed at a
 ## Quick Start
 
 1. Go to **Settings > Organization Settings** and configure the `member_drop_notifications` section
-2. Go to **Settings > Email Templates** and customize the **Member Dropped** template
+2. Go to **Communications → Email Templates** and customize the **Member Dropped** template
 3. When dropping a member via `PATCH /api/v1/users/{user_id}/status`, check **Send property return email**
 
 ---
@@ -122,14 +122,34 @@ When `include_personal_email` is `false` or no personal email is on file:
 
 A default **Member Dropped** email template is automatically created for every organization. It includes:
 
-- A formal property return notice with department header
-- Item count, total value, and return deadline
+- A formal property return notice in the standard email shell: a red **Property
+  return** tab with "Due {{return_deadline}}", and the return deadline and total
+  assessed value in the summary card
+- Item count and the list of outstanding items
 - Reason for separation and effective date
-- Officer name and title
+- Officer name and title, and the closing line that a copy has been placed in
+  the member file
+
+> **Reset to the new design on upgrade** _(2026-09-27)_. Migration
+> `15c5bc7700aa` reset every stored template of a shipped type, **including a
+> Member Dropped template your department edited**, to the solid-tab design.
+> The previous subject, bodies, stylesheet, footer and colour were copied to
+> `email_template_backups` first; open the template on **Email Templates** and
+> use **Previous version (before the redesign)** → **Load this wording** to
+> bring your wording back into the new design, then **Save**. Per-template CSS
+> is no longer honoured. When no stored template exists, the code fallback now
+> renders through the same default (`EmailTemplateService.render_default`) and
+> escapes member-controlled text it previously left raw. See
+> [UPGRADING.md](./UPGRADING.md#every-email-template-is-reset-to-the-new-design-2026-09-27).
+
+> **Always sent** _(2026-09-28)_. In the member email policy this notice and
+> the property-return reminders are the required kind **Leaving the
+> department** (`EmailKind.DEPARTURE_NOTICES`), so a member's **Email
+> Notifications** switch does not stop them.
 
 ### Editing the Template
 
-Use the Email Templates settings page or the API:
+Use **Communications → Email Templates** (`settings.manage`) or the API:
 
 ```
 GET  /api/v1/email-templates              — List all templates
@@ -140,20 +160,22 @@ POST /api/v1/email-templates/{id}/preview — Preview with sample data
 
 ### Template Variables
 
-The `MEMBER_DROPPED` template type supports 10 variables, all using `{{variable_name}}` syntax:
+The `MEMBER_DROPPED` template type declares these variables, all using `{{variable_name}}` syntax. Every `{{organization_*}}` variable and the officer signature variables are available as well, as in any template:
 
-| Variable                 | Description                                | Example Value               |
-| ------------------------ | ------------------------------------------ | --------------------------- |
-| `{{member_name}}`        | Full name of the dropped member            | Jane Doe                    |
-| `{{organization_name}}`  | Organization/department name               | Springfield Fire Department |
-| `{{drop_type_display}}`  | Type of separation                         | Dropped - Voluntary         |
-| `{{reason}}`             | Reason provided by leadership              | Relocated out of district   |
-| `{{effective_date}}`     | Date the drop takes effect                 | February 14, 2026           |
-| `{{return_deadline}}`    | Deadline to return all property            | March 16, 2026              |
-| `{{item_count}}`         | Number of outstanding items                | 5                           |
-| `{{total_value}}`        | Total dollar value of outstanding items    | 2,340.00                    |
-| `{{performed_by_name}}`  | Name of the officer who performed the drop | Chief John Smith            |
-| `{{performed_by_title}}` | Title/rank of the officer                  | Fire Chief                  |
+| Variable                 | Description                                | Example Value                                 |
+| ------------------------ | ------------------------------------------ | --------------------------------------------- |
+| `{{member_name}}`        | Full name of the dropped member            | Jane Doe                                      |
+| `{{organization_name}}`  | Organization/department name               | Springfield Fire Department                   |
+| `{{drop_type_display}}`  | Type of separation                         | Dropped - Voluntary                           |
+| `{{reason}}`             | Reason provided by leadership              | Relocated out of district                     |
+| `{{effective_date}}`     | Date the drop takes effect                 | February 14, 2026                             |
+| `{{return_deadline}}`    | Deadline to return all property            | March 16, 2026                                |
+| `{{item_count}}`         | Number of outstanding items                | 5                                             |
+| `{{total_value}}`        | Total dollar value of outstanding items    | 2,340.00                                      |
+| `{{items_list_html}}`    | HTML table of the outstanding items        | (name, serial #, asset tag, condition, value) |
+| `{{items_list_text}}`    | Plain-text list of the outstanding items   | (same, for the text body)                     |
+| `{{performed_by_name}}`  | Name of the officer who performed the drop | Chief John Smith                              |
+| `{{performed_by_title}}` | Title/rank of the officer                  | Fire Chief                                    |
 
 ### Attachments
 
@@ -225,11 +247,11 @@ When `PATCH /api/v1/users/{user_id}/status` is called with `send_property_return
 
 ### Template Not Rendering Variables
 
-| Check                | How                                                         |
-| -------------------- | ----------------------------------------------------------- |
-| Correct syntax?      | Variables must use double curly braces: `{{variable_name}}` |
-| Valid variable name? | Only the 10 variables listed above are supported            |
-| Template active?     | Check `is_active` field on the template                     |
+| Check                | How                                                                                                 |
+| -------------------- | --------------------------------------------------------------------------------------------------- |
+| Correct syntax?      | Variables must use double curly braces: `{{variable_name}}`                                         |
+| Valid variable name? | Only the variables listed above, plus the `{{organization_*}}` and officer variables, are supported |
+| Template active?     | Check `is_active` field on the template                                                             |
 
 ### Email Not Sending At All
 
@@ -246,6 +268,7 @@ When `PATCH /api/v1/users/{user_id}/status` is called with `send_property_return
 
 - [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) — Drop notification troubleshooting entries
 - [CHANGELOG.md](../CHANGELOG.md) — Feature changelog
+- [COMMUNICATIONS_MODULE.md](./COMMUNICATIONS_MODULE.md#member-email-policy-2026-09-28) — Member email policy (which emails members can turn off)
 - [TRAINING_PROGRAMS.md](./TRAINING_PROGRAMS.md) — Training module (separate notification system)
 
 ---

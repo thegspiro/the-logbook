@@ -127,6 +127,7 @@ export const userService = {
     first_name: string;
     middle_name?: string | undefined;
     last_name: string;
+    preferred_name?: string | undefined;
     membership_number?: string | undefined;
     phone?: string | undefined;
     mobile?: string | undefined;

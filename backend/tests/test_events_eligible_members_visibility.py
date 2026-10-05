@@ -28,11 +28,12 @@ def _caller(*permissions: str) -> SimpleNamespace:
     )
 
 
-def _member(profile_visibility=None) -> SimpleNamespace:
+def _member(profile_visibility=None, preferred_name=None) -> SimpleNamespace:
     return SimpleNamespace(
         id=str(uuid.uuid4()),
         first_name="Jordan",
         last_name="Smith",
+        preferred_name=preferred_name,
         email="jsmith@example.com",
         profile_visibility=profile_visibility,
     )
@@ -111,6 +112,28 @@ class TestEligibleMembersEmail:
 
         validated = EligibleMemberResponse(**rows[0])
         assert validated.email is None
+
+    async def test_each_member_carries_their_preferred_name(self):
+        """The check-in picker shows and searches the name a member goes by,
+        so the payload has to carry it alongside the legal first name."""
+        known_as = _member(None, preferred_name="Jo")
+        plain = _member(None)
+        with patch(
+            "app.api.v1.endpoints.events.load_contact_policy",
+            new=AsyncMock(return_value=ALL_ON),
+        ):
+            rows = await get_eligible_members(
+                event_id=uuid.uuid4(),
+                db=_db(SimpleNamespace(id="e1"), [known_as, plain]),
+                current_user=_caller("events.manage"),
+            )
+
+        assert rows[0]["preferred_name"] == "Jo"
+        assert rows[0]["first_name"] == "Jordan"
+        assert rows[1]["preferred_name"] is None
+        # Through the response_model too — a field the schema lacks is
+        # silently dropped from the wire, whatever the handler returns.
+        assert EligibleMemberResponse(**rows[0]).preferred_name == "Jo"
 
     async def test_members_manager_is_marked_as_such(self):
         with patch(
