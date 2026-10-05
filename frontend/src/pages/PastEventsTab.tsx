@@ -143,7 +143,7 @@ const PastEventsTab: React.FC = () => {
           </p>
         </div>
       ) : (
-        <div className="card-grid gap-4">
+        <div className="card-grid gap-4 [--card-grid-min:22rem]">
           {filteredEvents.map((event) => (
             <Link
               key={event.id}

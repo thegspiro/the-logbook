@@ -185,7 +185,7 @@ const ItemsPanel: React.FC<ItemsPanelProps> = ({ areaId, indent }) => {
             {item.tracking_type === 'pool' && (
               <span className="text-theme-text-muted shrink-0 text-xs">qty: {item.quantity}</span>
             )}
-            <ExternalLink className="text-theme-text-muted h-3 w-3 shrink-0 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover/item:opacity-100" />
+            <ExternalLink className="text-theme-text-muted h-3 w-3 shrink-0 transition-opacity pointer-fine:opacity-0 pointer-fine:group-focus-within/item:opacity-100 pointer-fine:group-hover/item:opacity-100" />
           </Link>
         );
       })}
@@ -340,7 +340,7 @@ const TreeRow: React.FC<TreeRowProps> = ({
         {node.barcode && (
           <span className="text-theme-text-muted hidden shrink-0 font-mono text-xs sm:inline">{node.barcode}</span>
         )}
-        <div className="flex shrink-0 items-center gap-1 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100">
+        <div className="flex shrink-0 items-center gap-1 transition-opacity pointer-fine:opacity-0 pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100">
           <button
             onClick={() => onPrint(node)}
             aria-label={`Print label for ${node.name}`}

@@ -1497,7 +1497,7 @@ const IntegrationsPage: React.FC = () => {
         </div>
 
         {/* Integration Cards */}
-        <div className="card-grid gap-4">
+        <div className="card-grid gap-4 [--card-grid-min:22rem]">
           {showDelegatedMcpCard && (
             <div className="card p-6" data-testid="integration-card-claude-mcp-delegated">
               <div className="mb-4 flex items-start space-x-3">

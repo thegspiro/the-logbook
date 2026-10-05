@@ -256,7 +256,7 @@ export default function ApparatusBasicPage() {
   const canManage = useAuthStore((state) => state.checkPermission('scheduling.manage'));
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -326,9 +326,9 @@ export default function ApparatusBasicPage() {
           {filtered.map((apparatus) => {
             const typeInfo = getTypeInfo(apparatus.apparatus_type);
             return (
-              <div key={apparatus.id} className="card group hover:border-theme-text-muted/30 p-5">
+              <div key={apparatus.id} className="card group hover:border-theme-text-muted/30 relative p-5">
                 <div className="mb-3 flex items-start justify-between">
-                  <div className="flex items-center gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-lg">
                       {typeInfo?.icon}
                     </div>
@@ -337,8 +337,11 @@ export default function ApparatusBasicPage() {
                       <p className="text-theme-text-secondary text-sm">{apparatus.unit_number}</p>
                     </div>
                   </div>
+                  {/* With a mouse the actions are hidden until hover, so they float
+                      over the corner instead of keeping their width beside a long
+                      name that would otherwise wrap a line early. */}
                   {canManage && (
-                    <div className="flex items-center gap-1 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100">
+                    <div className="pointer-fine:bg-theme-surface flex items-center gap-1 transition-opacity pointer-fine:absolute pointer-fine:top-3 pointer-fine:right-3 pointer-fine:rounded-lg pointer-fine:opacity-0 pointer-fine:shadow-sm pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100">
                       <button
                         onClick={() => openEdit(apparatus)}
                         title="Edit"

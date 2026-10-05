@@ -110,7 +110,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
             type="date"
             value={startDate}
             onChange={(e) => onChange(e.target.value, endDate)}
-            className="text-theme-text-primary focus:ring-theme-focus-ring min-h-11 min-w-0 flex-1 rounded-sm bg-transparent px-2 py-1.5 text-sm focus:ring-2 focus:outline-hidden max-sm:w-full sm:flex-none"
+            className="text-theme-text-primary focus:ring-theme-focus-ring touch:min-h-11 min-w-0 flex-1 rounded-sm bg-transparent px-2 py-1.5 text-sm focus:ring-2 focus:outline-hidden max-sm:w-full sm:flex-none"
             aria-label="Start date"
           />
           <span className="text-theme-text-muted text-sm max-sm:hidden">&ndash;</span>
@@ -118,7 +118,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
             type="date"
             value={endDate}
             onChange={(e) => onChange(startDate, e.target.value)}
-            className="text-theme-text-primary focus:ring-theme-focus-ring min-h-11 min-w-0 flex-1 rounded-sm bg-transparent px-2 py-1.5 text-sm focus:ring-2 focus:outline-hidden max-sm:w-full sm:flex-none"
+            className="text-theme-text-primary focus:ring-theme-focus-ring touch:min-h-11 min-w-0 flex-1 rounded-sm bg-transparent px-2 py-1.5 text-sm focus:ring-2 focus:outline-hidden max-sm:w-full sm:flex-none"
             aria-label="End date"
           />
           {hasValue && (
@@ -137,7 +137,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
           <button
             type="button"
             onClick={() => setShowPresets(!showPresets)}
-            className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover min-h-11 rounded-lg border px-2.5 py-1.5 text-sm transition-colors"
+            className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover touch:min-h-11 rounded-lg border px-2.5 py-1.5 text-sm transition-colors"
             aria-expanded={showPresets}
             aria-haspopup="true"
           >
