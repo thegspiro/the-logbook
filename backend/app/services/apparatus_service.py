@@ -2061,7 +2061,7 @@ class ApparatusService:
 
     async def list_nfpa_compliance(
         self,
-        organization_id: UUID,
+        organization_id: str,
         apparatus_id: Optional[str] = None,
         compliance_status: Optional[str] = None,
     ) -> List[ApparatusNFPACompliance]:

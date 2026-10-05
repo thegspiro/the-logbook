@@ -331,7 +331,12 @@ def sso_provider_is_live(provider: str) -> bool:
         MicrosoftOAuthService,
     )
 
-    services = {
+    services: dict[
+        str,
+        type[GoogleOAuthService]
+        | type[MicrosoftOAuthService]
+        | type[AuthentikOAuthService],
+    ] = {
         "google": GoogleOAuthService,
         "microsoft": MicrosoftOAuthService,
         "authentik": AuthentikOAuthService,

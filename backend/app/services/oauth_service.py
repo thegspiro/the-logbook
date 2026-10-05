@@ -490,7 +490,7 @@ class AuthentikOAuthService:
 
         try:
             signing_key = PyJWKClient(jwks_uri).get_signing_key_from_jwt(id_token_str)
-            return jwt.decode(
+            claims: dict = jwt.decode(
                 id_token_str,
                 signing_key.key,
                 algorithms=_AUTHENTIK_ALGORITHMS,
@@ -501,6 +501,7 @@ class AuthentikOAuthService:
             # Bad signature, HS256, wrong audience/issuer, expired, etc.
             logger.warning(f"Authentik ID token verification failed: {exc}")
             raise AuthentikOAuthError("invalid_id_token")
+        return claims
 
     async def resolve_user(self, claims: dict) -> Tuple[Optional[User], Optional[str]]:
         """Map verified Authentik claims to an existing local user."""
