@@ -1899,3 +1899,78 @@ describe('InventoryItemsPage needs-a-label count', () => {
     expect(screen.queryByText(/need a label/)).not.toBeInTheDocument();
   });
 });
+
+describe('InventoryItemsPage — the header and filter bar on a phone', () => {
+  const resetMocks = (summary: unknown) => {
+    for (const m of [
+      mockGetItems,
+      mockGetSummary,
+      mockGetSummaryByLocation,
+      mockGetCategories,
+      mockGetStorageAreas,
+      mockGetItemColors,
+      mockGetLocations,
+      mockCheckPermission,
+    ]) {
+      m.mockReset();
+    }
+    mockGetItems.mockResolvedValue({ items: [], total: 0 });
+    mockGetSummary.mockResolvedValue(summary);
+    mockGetSummaryByLocation.mockResolvedValue([]);
+    mockGetCategories.mockResolvedValue([]);
+    mockGetStorageAreas.mockResolvedValue([]);
+    mockGetItemColors.mockResolvedValue([]);
+    mockGetLocations.mockResolvedValue([]);
+    mockCheckPermission.mockReturnValue(true);
+  };
+
+  beforeEach(() => {
+    resetMocks({
+      total_items: 3,
+      non_medical_items: 3,
+      overdue_checkouts: 1,
+      maintenance_due_count: 2,
+      total_value: 0,
+    });
+  });
+
+  afterEach(() => {
+    window.history.pushState({}, '', '/');
+  });
+
+  it('shows the header counts from a well-formed summary', async () => {
+    renderWithRouter(<InventoryItemsPage />);
+    expect(await screen.findByText(/3 items/)).toBeInTheDocument();
+    expect(screen.getByText(/1 overdue/)).toBeInTheDocument();
+  });
+
+  // A captive portal's 200 rendered "items · overdue · maint. due" with every
+  // figure blank; a line of labels with no numbers says nothing true.
+  it.each([
+    ['an HTML page', '<html>Sign in to Wi-Fi</html>'],
+    ['an object without the counts', {}],
+  ])('leaves the header counts out for %s', async (_label, body) => {
+    resetMocks(body);
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findByText('Your department has no inventory items yet');
+    expect(screen.queryByText(/maint\. due/)).not.toBeInTheDocument();
+  });
+
+  // jsdom applies no stylesheet, so the `max-sm:hidden` that collapses the
+  // dropdowns is asserted as the class it is; the e2e ratchet measures the
+  // rendered result at phone width.
+  it('collapses the dropdowns behind a toggle that reports active filters', async () => {
+    const user = userEvent.setup();
+    window.history.pushState({}, '', '/inventory/admin/items?item_type=uniform');
+    renderWithRouter(<InventoryItemsPage />);
+
+    const toggle = await screen.findByRole('button', { name: 'Filters (1 active)' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByLabelText('Filter by category')).toHaveClass('max-sm:hidden');
+    expect(screen.getByLabelText('Search items...')).toBeInTheDocument();
+
+    await user.click(toggle);
+    expect(screen.getByRole('button', { name: 'Hide filters (1 active)' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByLabelText('Filter by category')).not.toHaveClass('max-sm:hidden');
+  });
+});
