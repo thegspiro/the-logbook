@@ -54,6 +54,7 @@ import {
 } from '../services/api';
 import type { AdminSummary, OperationsDashboard, InboxMessage, MyComplianceSummary } from '../services/api';
 import { schedulingService } from '../modules/scheduling/services/api';
+import { MAX_BULK_ELIGIBILITY_SHIFTS } from '../constants/config';
 import { memberSignupClosedReason } from '../modules/scheduling/utils/shiftBoard';
 import { useSignupWindow } from '../modules/scheduling/hooks/useSignupWindow';
 import { adminHoursEntryService } from '../modules/admin-hours/services/api';
@@ -311,6 +312,12 @@ const Dashboard: React.FC = () => {
   const [dashboardSignupPosition, setDashboardSignupPosition] = useState('firefighter');
   const [dashboardEligiblePositions, setDashboardEligiblePositions] = useState<string[]>([]);
   const [loadingEligibility, setLoadingEligibility] = useState(false);
+  // Eligible positions per open shift, keyed by shift id. A shift absent from
+  // the map has not been answered (or the lookup failed) and keeps its Sign Up
+  // button, which re-checks on tap; an empty list means the member holds no
+  // position the shift accepts.
+  const [eligibleByShift, setEligibleByShift] = useState<Record<string, string[]>>({});
+  const eligibilityAskedRef = useRef<Set<string>>(new Set());
 
   // Hours
   const [hours, setHours] = useState<{
@@ -1172,6 +1179,39 @@ const Dashboard: React.FC = () => {
     [availableOpenShifts, windowEnd]
   );
 
+  // One request for every open shift the card can show, so a shift the
+  // member cannot take reads "Not eligible" up front instead of offering a
+  // Sign Up that refuses one tap later. The window is a handful of days, so
+  // the bulk endpoint's cap is a backstop rather than a page size.
+  useEffect(() => {
+    const missing = openShiftsInWindow
+      .map((shift) => shift.id)
+      .filter((id) => !eligibilityAskedRef.current.has(id))
+      .slice(0, MAX_BULK_ELIGIBILITY_SHIFTS);
+    if (missing.length === 0) return;
+    missing.forEach((id) => eligibilityAskedRef.current.add(id));
+    // Not cancelled when the list changes: answers are keyed by shift id, so a
+    // late one is still right for its shift, and dropping it would only ask
+    // again.
+    void schedulingService
+      .getEligiblePositionsBulk(missing)
+      .then((answers) => {
+        setEligibleByShift((prev) => {
+          const next = { ...prev };
+          for (const id of missing) {
+            const answer = answers[id];
+            if (answer) next[id] = answer;
+          }
+          return next;
+        });
+      })
+      .catch(() => {
+        // Leave these unanswered so their buttons stay, and let a later load
+        // ask again: the tap-time check still refuses an ineligible member.
+        missing.forEach((id) => eligibilityAskedRef.current.delete(id));
+      });
+  }, [openShiftsInWindow]);
+
   const timeline = useMemo<TimelineEntry[]>(() => {
     const entries: TimelineEntry[] = [];
 
@@ -1561,7 +1601,10 @@ const Dashboard: React.FC = () => {
     const shift = entry.shift;
     const evt = entry.event;
     const expanded = shift != null && signupExpandedId === shift.id;
-    const signupClosedReason = shift ? memberSignupClosedReason(shift, signupWindow) : null;
+    const signupClosedReason = shift
+      ? (memberSignupClosedReason(shift, signupWindow) ??
+        (eligibleByShift[shift.id]?.length === 0 ? 'Not eligible' : null))
+      : null;
     // Held back on phones only, and by CSS: the row stays in the markup, so a
     // rotation to landscape reveals it without the summary line below going
     // stale about what is hidden.

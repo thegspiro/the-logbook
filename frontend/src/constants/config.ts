@@ -59,6 +59,10 @@ export const MEMBER_SEARCH_MAX_RESULTS = 15;
 /** Long enough that typing a name is one request, not one per keystroke. */
 export const MEMBER_SEARCH_DEBOUNCE_MS = 300;
 
+/** Mirrors MAX_BULK_ELIGIBILITY_SHIFTS in the scheduling endpoints; a longer
+ *  list is refused outright, not truncated. */
+export const MAX_BULK_ELIGIBILITY_SHIFTS = 50;
+
 // ============================================
 // Events list urgency
 // ============================================

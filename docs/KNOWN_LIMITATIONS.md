@@ -2563,27 +2563,6 @@ placeholder is retired until a screen exists to photograph.
 Needs an owner decision: whether to build the settings section or drop the
 feature. This loop does not make that call.
 
-## Scheduling — Sign Up Appears On Shifts A Member Cannot Take (2026-08-13)
-
-The Dashboard's Open Shifts panel renders a **Sign Up** button on every open
-shift. Rank eligibility is resolved only when the button is pressed:
-`handleExpandSignup` fetches the member's eligible positions for that shift and
-the expanded card then shows either a position dropdown or the flat message
-"Not eligible for this shift."
-
-So a member with no qualifying position gets an inviting green button and a
-refusal one tap later. Nothing on the card distinguishes the two cases in
-advance, and `openShifts` is not filtered by eligibility before rendering.
-
-`docs/training/03-scheduling.md` had described the opposite — that the button
-"only shows for shifts where the member's rank qualifies". It now describes what
-the screen does, and `03-62-dashboard-signup-positions` pictures the expanded
-dropdown.
-
-Needs an owner decision: pre-fetching eligibility for every visible shift costs
-a request per card, so hiding or disabling the button up front is a real
-trade-off rather than an obvious fix.
-
 ## Storefront — The Payments Tab Cannot Be Screenshotted, By Design (2026-08-13)
 
 `store_payment_events` rows are written from one place: the public PayPal
