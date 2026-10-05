@@ -5808,6 +5808,77 @@ assert_different_person(
 )
 ```
 
+## LOC-37 — A Room Tag Tapped With An Expired Session Loses The Room (2026-10-04)
+
+`/locations/:locationId/check-in` is where a room's NFC sticker lands a member's
+phone. It is the **only route in the app entered cold from a physical object**
+rather than from inside a live session, which makes it both the likeliest to be
+hit with no valid session and the worst at handling it.
+
+The route carries no `ProtectedRoute`
+(`frontend/src/modules/facilities/routes.tsx`). So a member whose session has
+expired renders the page, which calls `GET /locations/{id}/display`, receives a
+401, and is hard-redirected by `handleExpiredSession`
+(`frontend/src/services/apiClient.ts:207`) via
+`window.location.href = '/login'`. That is a full page load carrying **no
+`state.from`**, so `postLoginRedirect` falls through to its default and the
+member arrives at the dashboard. To check in they must walk back to the door and
+tap the sticker again.
+
+The machinery to do this correctly already exists and is used everywhere else:
+`ProtectedRoute` redirects with `<Navigate to="/login" state={{ from: location }} replace />`,
+and `postLoginRedirect` reads that, validates it against open-redirect, and
+returns `pathname + search + hash`. This route simply never reaches it.
+
+**Why it is here rather than fixed.** The obvious fix is to wrap the route in a
+bare `<ProtectedRoute>`, which gates on authentication alone and so preserves
+the route's documented intent exactly — no module gate, no permission gate,
+because a room tag must work in Locations mode as well as Facilities mode and
+any member may check in. But `/events/:id/check-in`, which this page forwards to,
+is ungated in precisely the same way. So this is a convention shared by both
+check-in landing pages rather than a one-route slip, and the fix belongs to both
+at once. It is also a change to the session/redirect flow, which this
+repository's standing instructions put behind an explicit confirmation.
+
+**Bounded.** Nothing is exposed and nothing errors — the endpoint's own auth
+dependency is what actually protects the data, and it holds. The cost is a
+member standing at a door, sent to a dashboard, with no indication that tapping
+again after signing in is what they need to do.
+
+## LOC-40 / LOC-41 — Two Locations Decisions Left Open (2026-10-04)
+
+- **LOC-40 — the display capability exists twice, and both copies are now
+  live.** Pass 2 of the application review said to delete the dead
+  authenticated `GET /locations/{id}/display` or give it a caller; it got a
+  caller (`RoomCheckInPage`). `LocationDisplayInfo` has six fields and its two
+  producers fill different subsets: `public/display.py` computes `is_valid` via
+  `_validate_check_in_window` and populates `timezone`,
+  `badge_check_in_enabled` and `allow_guest_check_in`, while `locations.py`
+  hardcodes `is_valid`/`can_check_in` to `True` and leaves the rest at their
+  defaults. Nothing is broken — every omission defaults to the safe value and
+  the one caller reads none of them — but the ~20 lines of `QRCheckInData`
+  construction are near-identical between the two, which is exactly how LOC-1
+  (a drifted check-in window) happened the first time. Consolidating onto one
+  builder is the right answer and is not a safe drive-by: the two differ
+  _deliberately_ in `is_valid`, because the authenticated endpoint's selection
+  query has already applied the stricter window while the public one computes
+  the permissive check, so a shared builder needs that as a parameter and the
+  blast radius includes a public kiosk endpoint.
+- **LOC-41 — (name, building) uniqueness for locations has no database
+  constraint behind it.** `Location.__table_args__` declares four plain
+  indexes and no `UniqueConstraint`, so the rule lives only in
+  `LocationService.create_location` / `update_location` as a read-then-write
+  with no lock — two concurrent creates can both pass it. Pass 3 capped both
+  checks with `.limit(1)` so a duplicate pair can no longer turn every later
+  write of that name into a 500, but the duplicates themselves remain possible.
+  Adding the constraint is a decision rather than a chore for two reasons:
+  MySQL permits repeated NULLs in a unique index, so `UNIQUE (organization_id,
+name, building)` would not stop duplicates where `building IS NULL` — which
+  is precisely the case the application check handles with an explicit `IS NULL`
+  branch — and existing installations may already hold duplicate pairs that a
+  migration would have to surface and resolve before the constraint could be
+  created.
+
 ## MS2-7 — A Lapsing Waiver Is Counted As Expiring Soon But Never Listed (2026-10-05)
 
 Medical screening defines "expiring soon" in two places, and they disagree about

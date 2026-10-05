@@ -1081,6 +1081,46 @@ rows.
 - **Radio buttons stay round and checkboxes square** _(2026-10-03)_ beside a
   label that wraps — they were squeezed into ovals.
 
+## Layout, contrast and button colour: second pass _(2026-10-04 → 10-05)_
+
+- **Administration hubs sit on the normal page margin.** The Members, Events,
+  Training, Scheduling, Inventory and Store hubs, and the tabs that only appear
+  inside them, added their own side padding on top of the app's, so a hub's
+  heading started 32px from the edge on a phone (64px on a desktop) while every
+  other page started at 16px (32px). They now line up with the rest of the app.
+  Nothing changed in how wide a hub can grow.
+- **Date and time pickers fit at 320px.** The date no longer cuts off as
+  "mm/c", and the hour, minute and AM/PM boxes show their values.
+- **Stat tiles wrap their labels** on a phone instead of cutting them off
+  ("Total B…", "NEEDS ATTENT…") — Finance, Grants and the hub metric tiles.
+- **Training Administration tabs fit a phone**: the compliance matrix, expiring
+  certifications, past events, review submissions, waivers and the officer
+  dashboard no longer run past the screen edge.
+- **Alert text is darker in the light theme** (info, success, warning, purple and
+  danger notices now meet the AAA contrast level). The success notice was the
+  weakest, at barely above the AA minimum.
+- **Primary actions that were blue are the app's red.** About forty buttons
+  (message history, scheduled email, finance request actions, the equipment
+  checklist builder and others), the Suggestion Board vote and filter pills and
+  the IP Security tabs now match every other primary action. Blue stays where it
+  means something different: the info variant of a confirm dialog, **Start Skill
+  Test** in practice mode, and two chart colours.
+- **The weekly expiring-supplies email fits a phone.** Three columns — Item,
+  Expires, Ready stock / Qty — with the apparatus and compartment (or lot) under
+  the item and the days left under the date. It used to run past the edge, and
+  an empty cell printed the text "&mdash;" instead of a dash.
+- **A bad response no longer blanks the screen.** If the server returns
+  something unexpected (a captive portal or proxy error page), four Inventory
+  administration pages and sixteen hub tabs show a "could not load" message with
+  a retry instead of the generic error page.
+- **Card lists on a desktop with a mouse** keep a sensible maximum width; edit and
+  delete buttons stay clear of long names (Apparatus) and badges wrap under the
+  title (Integrations).
+
+**[SCREENSHOT — REPLACE]** Any Administration hub frame in this guide taken
+before 2026-10-05 shows the doubled margin. See
+[`SCREENSHOT_CURRENCY.md`](./SCREENSHOT_CURRENCY.md) for the list.
+
 ## Settings screens are usable on a phone _(2026-08-31)_
 
 - The section row across the top of every settings screen — Organization,

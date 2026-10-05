@@ -319,13 +319,74 @@ rule applies with more force than usual.
 - **No downgrade at all:** `b795d1b3401b` (untouched email templates moved to
   the then-current default) and `6394fbf42581` (clears the duplicate-vote hash
   on voided ballots so the member can vote again — irreversible by design).
-- **Downgrade loses data:** the inventory NFC revisions `b713c2e8ee26`
+- **Downgrade loses data:** `34d3d56d1479` (every preferred name entered), the inventory NFC revisions `b713c2e8ee26`
   (storage-area tags and every recorded scan), `7ad83f52735c` (shelf audits)
   and `45b36bae9098` (compartment tags), and the suggestion-box revisions
   `0010291816fd` (status history and responses to submitters) and
   `e79309de6735` (idea-board publishing and votes).
 - **Downgrade restores from a backup table:** `15c5bc7700aa` (the email
   template reset) puts each template back from `email_template_backups`.
+
+### Preferred names, department-only shift-report totals and one call-type list (2026-10-04)
+
+Three migrations run on the next `alembic upgrade head`; all are safe on a
+populated database and none needs a maintenance window.
+
+- **`34d3d56d1479` adds `users.preferred_name`** (nullable, idempotent). NULL
+  means the member goes by their first name, so every member renders as before
+  until someone sets one. Everyday screens show the preferred name; reports,
+  exports, training records, certificates, ballots, legal documents, signed
+  forms, property custody and the audit log keep the legal first name. If your
+  own scripts or integrations read `full_name` from the API it is unchanged and
+  still the legal name; `display_name` and `preferred_name` are new fields beside
+  it. Anonymizing a member now clears the preferred name.
+- **`84819ea78a79` grants the new `training.view_analytics`** to seeded
+  leadership positions (Chief, Deputy Chief, Assistant Chief, President,
+  Training Officer) **that still hold `training.manage`**. The _Written by me_
+  shift-report panel used to total every officer's reports for anyone with
+  `training.manage`; it now shows the caller's own by default and the
+  **Department** view needs the new permission. A position a department created
+  itself, or one that had `training.manage` taken away, is not given it — grant
+  it by hand if a captain-level role should see department totals. A script
+  calling `GET /training/shift-reports/officer-analytics` with no `scope` now gets
+  the caller's own figures, not the department's.
+- **`edf608b5a8ea` folds each department's free-text shift-report call types**
+  into its one call-type list (Scheduling → Settings → General). Entries already
+  named by slug or label are skipped; new ones become active types, up to the
+  list's cap of 50 (the old column is left intact). Training requirements that
+  held call-type text now match through the department list, so a requirement
+  naming `mva` will start crediting reports that list _Motor Vehicle Accident_.
+  Percentages for call-type requirements can rise once.
+
+Rollback: `84819ea78a79` and `edf608b5a8ea` reverse cleanly (the second removes
+only the entries it added, and only while the department has not re-saved its
+call types); **`34d3d56d1479` drops the column and discards any preferred names
+entered since.**
+
+### Requirements tagged with two or more categories were never credited — repair is manual (2026-10-04)
+
+A training requirement linked to more than one **training category** did not
+advance from a finalized training session or an imported external completion:
+the match was a text search against the stored list, which only found a
+requirement whose sole category was the one completed. The record was written and
+general hours counted, but the pipeline requirement stayed where it was, with no
+error. The query is fixed, so **new** completions credit correctly after the
+upgrade. Credit already missed is **not** repaired automatically.
+
+To see what would be repaired, then repair it (run once per deployment, after
+upgrading):
+
+```bash
+docker exec -it intranet-backend python scripts/backfill_category_requirement_credit.py
+docker exec -it intranet-backend python scripts/backfill_category_requirement_credit.py --apply
+```
+
+The first command is a dry run and writes nothing. `--apply` writes a rollback
+file; `--restore FILE` reverses exactly what that run credited. It is idempotent,
+org-scoped, audit-logged and sends no email, SMS or push, so a department will
+not receive months of notifications. Member percentages and pipeline phases
+move once, upward. `GET /training/requirements?position=` also treated `%` and
+`_` in the filter as wildcards; it no longer does.
 
 ### Scheduled reminders no longer duplicate across workers (2026-10-04)
 

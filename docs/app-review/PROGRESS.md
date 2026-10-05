@@ -25,7 +25,7 @@ been through a review pass.
 | A5  | Course cohorts & syllabus      | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx`                                                                                    | CC     | ✅     |
 | A6  | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L)                             | LIFE   | ✅     |
 | A7  | Dashboard & action items       | `endpoints/dashboard.py` (456 L), `services/attendance_dashboard_service.py` (329 L); `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items`                                                                                                                | DASH   | ⬜     |
-| A8  | Locations & kiosk              | `endpoints/locations.py` (294 L), `services/location_service.py` (279 L); `pages/LocationKioskPage.tsx`                                                                                                                                                                   | LOC    | ⬜     |
+| A8  | Locations & kiosk              | `endpoints/locations.py` (434 L, 8 routes), `services/location_service.py` (394 L), `api/public/display.py` (550 L, 4 routes); `pages/LocationKioskPage.tsx`, `RoomCheckInPage.tsx`, `RoomQRCodesPage.tsx`                                                                | LOC    | ✅     |
 | A9  | Platform ops & data lifecycle  | `services/admin_continuity_service.py` (216 L), `audit_ship_service.py` (165 L), `data_export_service.py` (192 L), `separation_of_duties.py` (70 L, 20 call sites in 8 modules)                                                                                           | OPS    | ✅     |
 
 ## Tier B — second pass over the audited 27
@@ -2564,6 +2564,89 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   Both code fixes and the coverage guard mutation-verified. See platform-ops.md
   → Pass 3. **Tier A is complete again (A1–A9, pass 3); the rotation moves to
   Tier B.**
+- **A8 locations & kiosk ✅ (pass 3).** The feature has roughly doubled since
+  pass 2 — `locations.py` 294 → 434 lines and 6 → 8 routes,
+  `location_service.py` 279 → 394, `public/display.py` to 550 and 4 routes, plus
+  `RoomCheckInPage`, `RoomQRCodesPage` and the `locations.manage_nfc_tags`
+  permission pair. **6 fixes, 3 flagged.** **Dimension 2 was deliberately not
+  re-derived:** the security rotation reached this same feature _today_
+  (`LOC5-32-locations-kiosk.md`, its fifth pass) and enumerated all 15 routes'
+  auth, permissions, org scoping, rate limits and the badge-tap response's data
+  minimisation. Re-running that lens would have produced a worse copy of a
+  better document, so this pass re-read its open items and spent its effort on
+  the five dimensions it does not cover. **LOC-3 is resolved by the branch
+  nobody picked** — pass 2 said delete the dead authenticated
+  `GET /locations/{id}/display` or give it a caller, and it got a caller
+  (`RoomCheckInPage`, where a room's NFC tag lands a phone).
+  **LOC-33** — rotating a leaked display code, which is the documented
+  revocation ("kiosk tablets pointing at the old URL stop working"), did not
+  take the kiosk down: on a 404 the poll set an error and returned **without
+  clearing `data`**, and the permanent-error screen is guarded on `!data`, so a
+  wall-mounted tablet kept rendering the room's last-known events indefinitely
+  behind a green "connected" icon. The URL stopped working; the one screen
+  revocation exists to clear never learned. Same path covers deactivating the
+  room or the department. Fixed by clearing `data` on a 404 — categorically
+  different from the transient failure in the `catch` below, which must keep
+  showing the last payload so a blip does not blank a working display — and the
+  copy changed from "Display not found. Check the URL." which asks something of
+  a reader standing at a tablet with no URL bar. **LOC-34** — the
+  (name, building) uniqueness rule has **no constraint behind it** (four plain
+  indexes, no `UniqueConstraint`) and is a read-then-write, so a duplicate pair
+  is reachable; after that `scalar_one_or_none()` raises `MultipleResultsFound`
+  on every later write of that name, which is not a `ValueError`, so
+  `handle_service_errors` renders it as a **500 with a generic message** and one
+  name becomes permanently unsaveable with no clue why. Capped both queries with
+  `.limit(1)`, which makes multiplicity unrepresentable; the durable fix is a
+  migration (LOC-41). This is the shape pass 1 checked and cleared for
+  `display_code`, where a global unique constraint does back the assumption —
+  two call sites away it did not. **LOC-35** — `selectinload(Event.rsvps)` on
+  the kiosk's check-in-window query, read by **no** caller (both display
+  endpoints project scalars; `_only_event_checked_into` runs its own narrowed
+  query), so a drill with 150 RSVPs loaded 150 unread rows per 30-second poll
+  per open event behind a public endpoint. Verified safe _before_ removing,
+  since a caller that did read it would have begun raising `MissingGreenlet` in
+  production. **LOC-36** — two comments documented `check_in_minutes_before` as
+  defaulting to 30; it is **60** in the column, both schemas and the helper
+  fallback — and **this file's own prior reasoning is corrected with it**, since
+  pass 1 claimed the old `start - 1h` opened the window "twice as early as the
+  default" (true only at 30; at 60 it was identical) and pass 2 cited "the
+  30-min canonical default". Their _fixes_ were right for the half of the
+  reasoning that held; only the magnitude was wrong, and it was wrong in two
+  code comments. **LOC-38** — three `# noqa: E712` replaced with `.is_()`, the
+  idiom the same file already used eleven lines away; pass 2 swept one and left
+  three. **LOC-39** — `wiki/API-Reference.md` listed three of the four public
+  `/display/` endpoints, omitting `POST …/badge-tap`, a public unauthenticated
+  endpoint that writes attendance, and had no `/api/v1/locations` row at all
+  while listing every sibling module. **Flagged:** LOC-37 (MED) — the room-tag
+  landing page is the only route in the app entered cold from a physical object
+  and carries no `ProtectedRoute`, so an expired session gets a hard
+  `window.location.href = '/login'` with no `state.from`, and the member lands
+  on the dashboard having to walk back and re-tap; every `ProtectedRoute` passes
+  `state={{ from: location }}` which `postLoginRedirect` honours, so the
+  machinery exists and this route never reaches it — not fixed because
+  `/events/:id/check-in` is ungated identically, making it a shared convention
+  whose fix belongs to both pages at once and to a session flow this repo puts
+  behind confirmation. LOC-40 (LOW) — both display implementations are live now
+  and fill the same six-field schema differently (`is_valid`, `timezone`,
+  `badge_check_in_enabled`, `allow_guest_check_in`), which is how LOC-1 happened
+  the first time; consolidating needs `is_valid` as a parameter and touches a
+  public kiosk endpoint. LOC-41 (LOW) — the missing unique constraint, blocked
+  on MySQL permitting repeated NULLs for a nullable `building` and on existing
+  duplicates a migration would have to resolve. **Also assessed rather than
+  assumed:** pass 2's precondition that the newly-live endpoint "must compute
+  `is_valid` like the public path and populate `timezone`" — neither holds as
+  stated, since the selection query already applied the _stricter_ window
+  (`_validate_check_in_window` is the permissive one) and `timezone` exists for
+  an _unauthenticated_ tablet, while this endpoint's only caller is reached
+  signed in, where `useTimezone()` already resolves the department zone. Both
+  recorded in the code so the next reader does not mistake them for LOC-2
+  returning. Gate: tsc 0 · flake8 0 · black 1351 unchanged · isort clean ·
+  eslint 0 (full run) · docs links 428 files 0 broken · route permissions 244
+  routes 0 errors · backend location/kiosk 267 passed 1 skipped (was 264) ·
+  `LocationKioskPage.test.tsx` 6 passed (was 4). New backend tests are DB-free,
+  marked `unit` per class, confirmed by collection rather than a local run.
+  Every fix mutation-verified. See locations-kiosk.md → Pass 3.
+  Next: A9 platform ops & data lifecycle.
 - **B1 medical-screening ✅ (pass 5).** Ten prior passes cover this surface —
   four here and **six** in `docs/security-review/MS-09-medical-screening.md`,
   the latest 2026-09-16 — so this pass reviewed the delta since the newest of

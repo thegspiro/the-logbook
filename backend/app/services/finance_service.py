@@ -2590,6 +2590,15 @@ class FinanceService:
         meeting — cannot be deduplicated and is always appended, which is why
         the reference is the thing worth capturing.
         """
+        # Locked: amount_paid/status are recomputed from dues.payments below
+        # (_apply_payment_totals), not accumulated. Two concurrent payments
+        # against the same dues row would otherwise both read the ledger
+        # before either commits, both append their own row, and the second to
+        # flush would overwrite amount_paid with a total that excludes the
+        # first payment -- the ledger row itself would still exist, but the
+        # cached total silently drops it (CLAUDE.md Pitfall #27, same shape
+        # FIN-31 fixed for Budget). The lock serializes this exactly like
+        # approve_step/_mutate_budget already do.
         result = await self.db.execute(
             select(MemberDues)
             .where(
@@ -2597,6 +2606,7 @@ class FinanceService:
                 MemberDues.organization_id == org_id,
             )
             .options(selectinload(MemberDues.payments))
+            .with_for_update()
         )
         dues = result.scalar_one_or_none()
         if not dues:
