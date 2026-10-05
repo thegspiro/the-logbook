@@ -105,6 +105,7 @@ from loguru import logger
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.error_reporting import persist_task_error_log
 from app.models.call_tracking import CallTrackingMode
 from app.models.event import (
     EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS,
@@ -621,6 +622,7 @@ async def _for_each_org(
             total += count
         except Exception as e:
             logger.error(f"{task_name} failed for org {org.id}: {e}")
+            await persist_task_error_log(str(org.id), task_name, e)
             results.append({"org_id": str(org.id), "error": str(e)})
             # The orgs share one session; roll back the failed unit of work so a
             # broken commit doesn't leave the session in a failed state that
@@ -1337,6 +1339,7 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
 
         except Exception as e:
             logger.error(f"Event reminders failed for org {org.id}: {e}")
+            await persist_task_error_log(str(org.id), "Event reminders", e)
             results.append({"org_id": str(org.id), "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
@@ -1539,6 +1542,7 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
 
         except Exception as e:
             logger.error(f"Post-event validation failed for org {org.id}: {e}")
+            await persist_task_error_log(str(org.id), "Post-event validation", e)
             results.append({"org_id": str(org.id), "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
@@ -1950,6 +1954,7 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
 
         except Exception as e:
             logger.error(f"Post-shift validation failed for org {org.id}: {e}")
+            await persist_task_error_log(str(org.id), "Post-shift validation", e)
             results.append({"org_id": str(org.id), "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
@@ -2417,6 +2422,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
 
         except Exception as e:
             logger.error(f"Shift reminders failed for org {org.id}: {e}")
+            await persist_task_error_log(str(org.id), "Shift reminders", e)
             results.append({"org_id": str(org.id), "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
@@ -3115,6 +3121,7 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
 
         except Exception as e:
             logger.error(f"End-of-shift summary failed for org {org.id}: {e}")
+            await persist_task_error_log(str(org.id), "End-of-shift summary", e)
             results.append({"org_id": str(org.id), "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
@@ -3390,6 +3397,7 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
 
         except Exception as e:
             logger.error(f"Trainee report escalation failed for org {org.id}: {e}")
+            await persist_task_error_log(str(org.id), "Trainee report escalation", e)
             results.append({"org_id": str(org.id), "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
@@ -4992,6 +5000,9 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
             logger.error(
                 f"Compliance auto-report failed for org {config.organization_id}: {e}"
             )
+            await persist_task_error_log(
+                str(config.organization_id), "Compliance auto-report", e
+            )
             try:
                 await db.rollback()
             except Exception:
@@ -5224,6 +5235,7 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
 
         except Exception as e:
             logger.error(f"Series end reminders failed for org {org.id}: {e}")
+            await persist_task_error_log(str(org.id), "Series end reminders", e)
             results.append({"org_id": str(org.id), "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
@@ -6068,6 +6080,7 @@ async def run_event_request_reminders(db: AsyncSession) -> Dict[str, Any]:
                 results.append({"organization": str(org.id), "reminders": org_sent})
         except Exception as e:
             logger.warning("Event request reminders failed for org {}: {}", org.id, e)
+            await persist_task_error_log(str(org.id), "Event request reminders", e)
             try:
                 await db.rollback()
             except Exception:
@@ -6113,6 +6126,7 @@ async def run_officer_directory_sync(db: AsyncSession) -> Dict[str, Any]:
             synced += 1
         except Exception as e:
             logger.warning("Officer directory sync failed for org {}: {}", org_id, e)
+            await persist_task_error_log(str(org_id), "Officer directory sync", e)
             try:
                 await db.rollback()
             except Exception:
@@ -6213,6 +6227,7 @@ async def run_prospect_attendance_advance(db: AsyncSession) -> Dict[str, Any]:
             logger.warning(
                 "Prospect attendance advance failed for org {}: {}", org_id, e
             )
+            await persist_task_error_log(str(org_id), "Prospect attendance advance", e)
             try:
                 await db.rollback()
             except Exception:
@@ -6448,11 +6463,12 @@ async def run_salesforce_auto_sync(db: AsyncSession) -> Dict[str, Any]:
             integration.last_sync_at = datetime.now(dt_timezone.utc)
             await db.commit()
             synced += 1
-        except Exception:
+        except Exception as e:
             await db.rollback()
             logger.opt(exception=True).warning(
                 "Salesforce auto-sync failed for org {}", org_id
             )
+            await persist_task_error_log(str(org_id), "Salesforce auto-sync", e)
             failed += 1
 
     return {

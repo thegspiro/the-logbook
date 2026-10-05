@@ -15,6 +15,9 @@ import { useConfirm } from '../contexts/ConfirmContext';
  * existed carry neither marker, so they fall back to "Client".
  */
 function sourceLabel(error: ErrorLog): string {
+  // A scheduled task's failure has no request and no member behind it; it is
+  // written by persist_task_error_log on the server's own schedule.
+  if (error.context.source === 'scheduled_task') return 'Scheduled task';
   if (error.context.source === 'backend' || error.errorType?.startsWith('BACKEND_')) {
     return 'Server';
   }
