@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 import type { InventoryItem, MaintenanceRecord } from '../types';
@@ -305,6 +305,22 @@ describe('InventoryMaintenancePage — opened for one named item', () => {
     renderWithRouter(<InventoryMaintenancePage />);
 
     await waitFor(() => expect(mockToastError).toHaveBeenCalled());
+  });
+
+  it('does not offer Retired as the condition after work', async () => {
+    // Retiring is the item's own retire action; the API refuses a maintenance
+    // record that would write RETIRED onto the item (MSUP-25).
+    window.history.pushState({}, '', '/inventory/admin/maintenance?item=far-off');
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryMaintenancePage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Complete work' }));
+    const picker = screen.getByLabelText(/Condition After Work/);
+    const values = within(picker)
+      .getAllByRole('option')
+      .map((option) => option.getAttribute('value'));
+    expect(values).not.toContain('retired');
+    expect(values).toContain('good');
   });
 
   it('asks for nothing when no item is named', async () => {
