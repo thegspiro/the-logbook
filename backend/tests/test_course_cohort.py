@@ -944,6 +944,28 @@ class TestShiftRemaining:
 
         assert row.scheduled_start.date() == date(2026, 10, 6)
 
+    @pytest.mark.parametrize("from_sequence", [None, 1, 3])
+    async def test_a_class_whose_date_has_passed_never_moves(self, from_sequence):
+        """CC-7. ``from_sequence`` narrows the future-only bound; it used to
+        replace it, so ``from_sequence=1`` moved classes members had attended.
+        Owner decision: both bounds apply."""
+        cohort = _cohort(str(uuid4()))
+        db = _shift_queue(cohort, [])
+        svc = CourseCohortService(db)
+
+        with patch("app.services.course_cohort_service.EventService"):
+            await svc.shift_remaining(
+                cohort.id,
+                CohortShiftRequest(days=7, from_sequence=from_sequence),
+                ORG,
+                ACTOR,
+            )
+
+        class_query = str(db.statements[1])
+        assert "course_cohort_classes.scheduled_start >" in class_query
+        if from_sequence:
+            assert "course_cohort_classes.sequence >=" in class_query
+
     async def test_zero_days_is_rejected_by_the_schema(self):
         with pytest.raises(ValueError, match="must not be zero"):
             CohortShiftRequest(days=0)

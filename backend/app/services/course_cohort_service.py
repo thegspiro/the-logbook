@@ -957,14 +957,10 @@ class CourseCohortService:
     ) -> int:
         """Shift classes by N days of local time — weather, instructor illness.
 
-        Which classes move depends on the request, and the two cases differ in
-        a way worth stating plainly, because only one of them is "upcoming":
-
-        * no ``from_sequence`` — every non-cancelled class still in the future.
-        * ``from_sequence = n`` — every non-cancelled class from position *n*,
-          **including ones that have already happened**. The sequence bound
-          replaces the future-only bound rather than narrowing it, so this is
-          the case that can move a class members already attended.
+        Only classes still in the future move. ``from_sequence = n`` narrows
+        that to the future classes from position *n* on; it never reaches back
+        to a class whose date has passed, finalized or not, because members
+        may already have attended it (owner decision CC-7: both bounds apply).
 
         A class whose event has finalized attendance is refused either way, and
         refused for the whole batch before anything moves: finalize derived the
@@ -984,11 +980,10 @@ class CourseCohortService:
             CourseCohortClass.cohort_id == str(cohort_id),
             CourseCohortClass.organization_id == str(organization_id),
             CourseCohortClass.status != CohortClassStatus.CANCELLED,
+            CourseCohortClass.scheduled_start > now,
         )
         if data.from_sequence:
             query = query.where(CourseCohortClass.sequence >= data.from_sequence)
-        else:
-            query = query.where(CourseCohortClass.scheduled_start > now)
 
         result = await self.db.execute(query.order_by(CourseCohortClass.sequence))
         rows = list(result.scalars().all())

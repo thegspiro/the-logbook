@@ -481,7 +481,12 @@ class CohortShiftRequest(BaseModel):
 
     days: int = Field(..., description="Positive to delay, negative to pull forward")
     from_sequence: Optional[int] = Field(
-        None, ge=1, description="Only shift classes at or after this position"
+        None,
+        ge=1,
+        description=(
+            "Only shift future classes at or after this position; a class whose "
+            "date has passed never moves"
+        ),
     )
 
     @field_validator("days")
