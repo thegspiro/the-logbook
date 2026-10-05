@@ -55,8 +55,12 @@ const fingerprintOf = (m: Measurement) => `${m.textLength}:${m.totalTargets}`;
 
 test.describe('mobile presentation', () => {
   test('every feature is presentable at phone width', async ({ page }) => {
-    // ~30 routes, each with a settle delay and a full render.
-    test.setTimeout(400_000);
+    // Every route in ROUTES (100+), each with a settle delay and a full render.
+    // ~1.5x measured, the rule the E2E job's own timeout follows: the pass
+    // takes ~6.6 min on a CI runner, and the 400s this used to allow was set
+    // when the list held ~30 routes. A slow runner overran it with nothing
+    // failing, twice, and the retry then cost the job its time budget.
+    test.setTimeout(600_000);
     await page.setViewportSize(PHONE);
     // The fixture user has no permissions by default (`signIn` sets
     // `permissions: []`, overriding TEST_USER's list), so a manager-gated route
