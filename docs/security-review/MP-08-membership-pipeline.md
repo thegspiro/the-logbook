@@ -1,6 +1,6 @@
 # Security Review — Membership Pipeline
 
-**Prefix:** `MP` · **Iteration:** 8 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4), 2026-09-02 (pass 4 round 2), 2026-09-02 (pass 4 round 3), 2026-09-02 (pass 4 round 4), 2026-09-08 (pass 5), 2026-09-14 (pass 6), 2026-09-16 (pass 7) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4, pass 4 round 2, pass 4 round 3, and pass 4 round 4), [#2405](https://github.com/thegspiro/the-logbook/pull/2405) (pass 5, plus #2406/#2408/#2413 follow-ups), [#2555](https://github.com/thegspiro/the-logbook/pull/2555) (pass 6), [#2605](https://github.com/thegspiro/the-logbook/pull/2605) (pass 7)
+**Prefix:** `MP` · **Iteration:** 8 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4), 2026-09-02 (pass 4 round 2), 2026-09-02 (pass 4 round 3), 2026-09-02 (pass 4 round 4), 2026-09-08 (pass 5), 2026-09-14 (pass 6), 2026-09-16 (pass 7), 2026-10-05 (pass 8) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4, pass 4 round 2, pass 4 round 3, and pass 4 round 4), [#2405](https://github.com/thegspiro/the-logbook/pull/2405) (pass 5, plus #2406/#2408/#2413 follow-ups), [#2555](https://github.com/thegspiro/the-logbook/pull/2555) (pass 6), [#2605](https://github.com/thegspiro/the-logbook/pull/2605) (pass 7), pass 8 PR number added on merge
 
 ---
 
@@ -63,6 +63,172 @@ it. The endpoint half fails against the unfixed endpoints, reproducing the
 exploit. `test_prospect_target_role_and_lifecycle.py` now records the chooser.
 
 **No schema change.** The chooser lives in the existing `metadata` JSON.
+
+---
+
+## Pass 8 (2026-10-05) — 0 fixed, 0 new flagged, all 4 standing FLAGGED items re-verified unchanged (watchdog pickup)
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session had
+gone quiet — PR #2952 (Feature 07, Users & organizations, pass 7) sat green
+and `mergeable_state: clean` for over four hours with no merge and no new
+`claude/security-review-*` branch pushed. Independently confirmed via
+`list_pull_requests` (state=open) that no security-review PR was open before
+merging #2952 and starting this pass. Rotation row 07 → ✅ (already landed by
+this merge); row 08 was the first `⬜`.
+
+**Scope confirmation.** Rotation table row 08
+(`membership_pipeline.py`, `membership_pipeline_service.py`) plus this
+feature's established additional scope: `models/membership_pipeline.py`,
+`schemas/membership_pipeline.py`, `api/prospect_privacy.py`,
+`utils/prospect_fields.py`.
+
+**Last reviewed at:** `9ea6c53a` (MP-31 fix, the 2026-09-30 out-of-rotation
+review above — pass 7 itself, PR #2605, made no application-code change).
+`git log 9ea6c53a..HEAD -- <scope files>` found a real delta: 543
+insertions / 82 deletions across `membership_pipeline.py` (+57/-18),
+`models/membership_pipeline.py` (+4), `schemas/membership_pipeline.py`
+(+123/-3) and `membership_pipeline_service.py` (+438/-61,
+`prospect_privacy.py` and `utils/prospect_fields.py` unchanged), landed in
+nine real commits plus two merges. This session's shallow clone does not
+reach further back than `109f553a` (2026-09-25), so the diff is bounded at
+`9ea6c53a` rather than pass 7's own baseline — the 2026-09-30 out-of-rotation
+write-up above already independently covers every commit between the two,
+including `9ea6c53a` itself.
+
+**What changed, read in full:**
+
+| Area                            | What                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Files                              |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| Conversion outcomes             | A pipeline can now configure, per applicant track (`operational`/`administrative`), the `(member_class, member_status)` a converted applicant becomes — `PipelineConversionConfig`/`resolve_conversion_outcome` in the schema, a new nullable `conversion_config` JSON column, `_conversion_outcome`/`_do_transfer` reading it, and `TransferProspectRequest.member_class`/`member_status`/`notes` letting the Convert dialog override it explicitly                                | endpoint, service, models, schemas |
+| Purge rewrite                   | `purge_inactive_prospects` now matches `INACTIVE` (was `WITHDRAWN` — the button deleted nothing), locks the candidate rows (`with_for_update`), removes each prospect's document files from disk before the row delete, and the endpoint now audit-logs the purge (count + requested ids, never applicant PII)                                                                                                                                                                      | endpoint, service                  |
+| Election package on stage entry | A new `ensure_election_package_on_entry`/`_stage_election_package` pair creates the election package the moment an applicant lands on an Election Vote stage — called from every path that moves `current_step_id` (single/bulk advance, skip, Back, stageless placement, a deleted-step fallback, pipeline creation) — instead of only the frontend's old separate post-Advance request. Idempotent via a locked existence check (prospect+step), so no path can double-create one | service                            |
+| Election advance gate           | `_assert_election_decided` now also refuses to advance off an Election Vote stage with **no** package at all (previously it only checked a package's _status_)                                                                                                                                                                                                                                                                                                                      | service                            |
+| Interview update                | `update_interview` moved from five individually-`is not None`-checked positional params to `InterviewUpdate.model_dump(exclude_unset=True)` through `apply_updates` with a new `_INTERVIEW_PROTECTED_FIELDS` skip list — closing the CLAUDE.md Pitfall #1 "omit vs. explicit null" gap (a cleared note previously didn't persist)                                                                                                                                                   | endpoint, service                  |
+| Deactivated-member uniqueness   | The username/email-generation loops and the new pre-insert email-collision check in `_do_transfer` no longer exclude `User.deleted_at.is_(None)` — a deactivated member's username/email now correctly collides rather than being silently reused and failing the insert as a bare 500                                                                                                                                                                                              | service                            |
+| Display name                    | `performer_name`/`interviewer_name`/`linker_name` now read `User.display_name` (preferred name) instead of hand-assembling `first_name last_name`; the applicant-match helper (`check_existing_members`) deliberately keeps `full_name` (legal name), with a comment explaining staff compare it against the applicant's legal name                                                                                                                                                 | endpoint, service                  |
+
+**Authorization re-derived, not assumed, for the two new write surfaces:**
+
+- **Conversion outcomes are classification, not a grant.** `member_class`/
+  `member_status` are closed `Literal` enums in both
+  `PipelineConversionConfig` and `TransferProspectRequest` — no open string
+  reaches the column. Tracing `_do_transfer`: choosing `member_class=
+"administrative"` does not grant anything by itself — it _refuses_ to
+  also apply an operational `rank` (`ADMINISTRATIVE_RANK_MESSAGE`), since
+  rank is what resolves to `DEFAULT_POSITIONS`-seeded permissions
+  (CLAUDE.md Pitfall #23). The actual permission grant on conversion is
+  still `role_ids`, unchanged by this diff and still run through
+  `_enforce_role_grant_ceiling` — confirmed the frontend's
+  `convertToMember` still sends `role_ids: [data.target_role_id]`
+  unconditionally. MP-31's ceiling fix is therefore untouched by this
+  surface: there is no path from "pick a conversion class" to "hold a
+  permission the caller doesn't already have the ceiling for."
+- **`transfer_prospect` and `purge_inactive_prospects` are unchanged on
+  authorization** — both still gate on `require_permission("members.manage",
+"prospective_members.manage")`, matching pass 7's enumerated set; neither
+  permission string widened.
+- **Tenant isolation on every new/changed by-id site:** `_conversion_outcome`
+  reads `MembershipPipeline.conversion_config` filtered on both
+  `pipeline_id` **and** `prospect.organization_id` (defense-in-depth beyond
+  the already-org-scoped `prospect`); the new email-collision check in
+  `_do_transfer` filters `User.organization_id == prospect.organization_id`;
+  `purge_inactive_prospects`'s row-lock select now filters
+  `ProspectiveMember.organization_id == organization_id` explicitly (an
+  addition — pass 7 had already confirmed the pre-existing `pipeline_id`
+  filter was sufficient on its own, since pipelines are exclusively
+  single-org, so this is defense-in-depth, not a fix) in addition to
+  `pipeline_id`; `ensure_election_package_on_entry`/
+  `_stage_election_package` key everything off the already-org-scoped
+  `prospect.id`. No new by-id query reachable from client input skips an
+  org filter.
+- **Race safety on the two new locking reads:** `purge_inactive_prospects`'s
+  row-select uses `.with_for_update()` before the file/row deletes
+  (Pitfall #27 — a reactivation racing a purge is serialized rather than
+  silently losing one side); `ensure_election_package_on_entry`'s
+  existence check is itself `.with_for_update()`, so two concurrent moves
+  onto the same vote stage for the same prospect cannot both decide "no
+  package yet" and double-create one.
+
+**Migration:** `20260930_0111_601fdb28ab8c_add_pipeline_conversion_outcomes.py`
+adds the nullable `conversion_config` column, correctly guarded on
+`_has_table(...) and not _has_column(...)` for the `create_all`-built-table
+case (Pitfall #26); downgrade is symmetric. No seeded-grant change, no
+nested-JSON-mutation site (the column is written whole via
+`model_dump()`/`copy.deepcopy()`, never mutated in place).
+
+**No new `.ilike()`/`.like()` without `escape=`, no raw `csv.writer`, no
+`window.confirm`/`alert`/`prompt`** in any changed backend or frontend file
+(grepped fresh over `membership_pipeline*.py` and
+`frontend/src/modules/prospective-members/`).
+
+### Flagged items re-verified, unchanged (no new fix, no regression)
+
+- **MP-10** (unbounded `list_election_packages`/`create_election_package`) —
+  `list_election_packages` (`membership_pipeline_service.py:6909`) still has
+  no `LIMIT`/`OFFSET`. Unaffected by this pass's diff. Still open;
+  `docs/KNOWN_LIMITATIONS.md`'s entry matches current code.
+- **MP-19's `/widget-summary` half** — `pipeline_widget_summary`
+  (`membership_pipeline.py:122-178`, shifted from pass 7's `:119` by
+  unrelated earlier growth, not this pass's diff) still runs an unbounded
+  full-row `ProspectiveMember` scan. Citation refreshed in
+  `KNOWN_LIMITATIONS.md`; no content change.
+- **MP-22** (a document delete can lose the file if the commit fails after a
+  successful `os.remove`) — `delete_prospect_document` untouched by this
+  pass's diff; ordering unchanged.
+- **MP-26** (the narrowed multi-`election_vote`-stage ambiguity) —
+  `_election_block_reason` was refactored this pass (split into
+  `_latest_election_package_status` for reuse by the new no-package advance
+  gate) but its return value and callers are unchanged; traced the new
+  helper line by line to confirm the extraction is behavior-preserving. The
+  new "no package at all" advance refusal added this pass does not touch
+  which _stage's_ package counts — a strictly separate question MP-26 already
+  isolated — so this finding's own scope is unaffected either way.
+
+No new flags. All four re-derived from current code this pass, not copied
+from the prior write-up.
+
+### Verified good ✅ (pass 8)
+
+- **Both new write surfaces (conversion outcomes, purge rewrite) hold up
+  under independent re-reading**: the conversion-outcome addition cannot be
+  used to acquire a permission beyond the caller's own ceiling (traced
+  through `is_administrative`/rank resolution/`role_ids`, not asserted);
+  the purge rewrite closes a real correctness bug (`INACTIVE` vs.
+  `WITHDRAWN`) while adding a row lock, a file-then-row delete order
+  consistent with `delete_prospect_document`'s own established pattern, and
+  audit logging it previously lacked.
+- **The server-side election-package-on-entry feature removes a real,
+  previously-unflagged gap**: every non-single-Advance path onto an
+  Election Vote stage (bulk advance, skip, Back, stageless placement, a
+  deleted-step fallback, pipeline creation landing directly on a vote
+  stage) used to leave the applicant with no package at all unless the
+  frontend's old separate request happened to run; it is now created in
+  the same transaction as the move, idempotently, under a row lock.
+- **The interview-update migration to `apply_updates` and the two
+  deactivated-member uniqueness fixes are both correctness fixes matching
+  CLAUDE.md's own documented patterns** (Pitfall #1's omit-vs-null
+  distinction; a deactivated member's identifiers still occupying the
+  unique index), not new findings.
+
+### Completion gate (pass 8)
+
+| Check                                                                                                                                             | Result                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `python3 -m flake8 app/ tests/ alembic/`                                                                                                          | pass, 0 violations                                                        |
+| `python3 -m black --check app/ tests/ alembic/`                                                                                                   | pass, 1882 files unchanged                                                |
+| `python3 -m isort --check-only app/ tests/ alembic/`                                                                                              | pass, 0 violations                                                        |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                 | pass — 512 revisions, single head `34d3d56d1479` (no migration this pass) |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                 | pass — 245 routes checked, 0 errors, 0 warnings                           |
+| cross-cutting guard tests (org-scoping ratchet, LIKE escaping, CSV sweep, capacity locking, endpoint-auth coverage, permission-gate branch sweep) | 72 passed                                                                 |
+| scoped pytest (`-k "membership or prospect or pipeline or election"`)                                                                             | 1516 passed / 1 skipped (`py_vapid`) / 0 failed                           |
+| full backend unit suite (`pytest tests/ -m "not integration and not slow and not docker"`)                                                        | pass — 12,660 passed, 1 pre-existing skip (`py_vapid`), 0 failed          |
+| `cd frontend && npm run typecheck`                                                                                                                | pass, 0 errors                                                            |
+| `cd frontend && npm run lint`                                                                                                                     | pass, 0 errors, 0 warnings                                                |
+| scoped frontend suite (`npx vitest run src/modules/prospective-members`)                                                                          | 259 passed (32 files)                                                     |
+
+No source files in this feature's declared scope changed _during_ this
+pass — every check above verifies the real delta that landed since pass 7/
+MP-31, not a fix made in this PR.
 
 ---
 

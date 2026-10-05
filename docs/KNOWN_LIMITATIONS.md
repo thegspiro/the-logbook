@@ -2994,7 +2994,7 @@ MP-10, `docs/security-review/MP-08-membership-pipeline.md`.)
 ## Membership Pipeline — `/widget-summary` Loads Every Prospect Row to Count Them (2026-09-02)
 
 `GET /prospective-members/widget-summary` (`pipeline_widget_summary`,
-`membership_pipeline.py:118-168`) loads every full `ProspectiveMember` row in
+`membership_pipeline.py:121-178`) loads every full `ProspectiveMember` row in
 the organization — every column, unbounded — into Python just to compute
 `by_status` counts, three aging buckets, and (for a caller holding
 `prospective_members.manage`) a `details` list of every applicant's id/name/
