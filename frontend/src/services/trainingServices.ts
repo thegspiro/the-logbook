@@ -6,6 +6,7 @@ import api from './apiClient';
 import { enqueueGeneric } from '../utils/genericOfflineQueue';
 import { usePendingSyncStore } from '../stores/pendingSyncStore';
 import { toAppError } from '../utils/errorHandling';
+import { TRAINING_RECORDS_PAGE_SIZE } from '../constants/config';
 import type {
   SkillTemplate,
   SkillTemplateCreate,
@@ -224,7 +225,12 @@ export const trainingService = {
   },
 
   /**
-   * Get training records
+   * Get every training record matching the filters.
+   *
+   * The endpoint serves at most TRAINING_RECORDS_PAGE_SIZE records a request
+   * (TR2-2), so this walks the pages until a short one. Every caller lists one
+   * member's history and builds stats and tables from the whole of it; a
+   * single capped request would truncate those silently for a long career.
    */
   async getRecords(params?: {
     user_id?: string;
@@ -232,8 +238,15 @@ export const trainingService = {
     start_date?: string;
     end_date?: string;
   }): Promise<TrainingRecord[]> {
-    const response = await api.get<TrainingRecord[]>('/training/records', { params });
-    return asArray(response.data);
+    const records: TrainingRecord[] = [];
+    for (let skip = 0; ; skip += TRAINING_RECORDS_PAGE_SIZE) {
+      const response = await api.get<TrainingRecord[]>('/training/records', {
+        params: { ...params, skip, limit: TRAINING_RECORDS_PAGE_SIZE },
+      });
+      const page = asArray(response.data);
+      records.push(...page);
+      if (page.length < TRAINING_RECORDS_PAGE_SIZE) return records;
+    }
   },
 
   /**

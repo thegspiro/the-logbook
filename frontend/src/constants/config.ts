@@ -63,6 +63,10 @@ export const MEMBER_SEARCH_DEBOUNCE_MS = 300;
  *  list is refused outright, not truncated. */
 export const MAX_BULK_ELIGIBILITY_SHIFTS = 50;
 
+/** Mirrors MAX_TRAINING_RECORDS_PAGE in the training endpoints: the most
+ *  records GET /training/records returns in one request. */
+export const TRAINING_RECORDS_PAGE_SIZE = 500;
+
 // ============================================
 // Events list urgency
 // ============================================

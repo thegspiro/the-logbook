@@ -17,6 +17,7 @@ from fastapi import (
     File,
     HTTPException,
     Query,
+    Response,
     UploadFile,
     status,
 )
@@ -105,6 +106,8 @@ from app.utils.upload_limits import read_upload_limited
 router = APIRouter()
 
 MAX_TRAINING_CSV_BYTES = 10 * 1024 * 1024
+# The largest page GET /training/records serves; see list_records.
+MAX_TRAINING_RECORDS_PAGE = 500
 
 
 @router.get("/dashboard-summary")
@@ -613,19 +616,28 @@ async def _sync_qualifications(db: AsyncSession, records) -> None:
 
 @router.get("/records", response_model=list[TrainingRecordResponse])
 async def list_records(
+    response: Response,
     user_id: UUID | None = None,
     status: str | None = None,
     start_date: date | None = None,
     end_date: date | None = None,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(MAX_TRAINING_RECORDS_PAGE, ge=1, le=MAX_TRAINING_RECORDS_PAGE),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    List training records.
+    List training records, a page at a time.
 
     Officers (training.manage) may list any member's records; other members
     may only see their own — training records can include certifications and
     scores that aren't roster-public.
+
+    Paged with ``skip``/``limit`` (at most ``MAX_TRAINING_RECORDS_PAGE`` a
+    request) because an officer listing the whole organization read its
+    entire training history in one response (TR2-2). ``X-Total-Count``
+    carries the number of matching records, so a caller can tell a full
+    page from the last one.
 
     **Authentication required**
     """
@@ -651,7 +663,17 @@ async def list_records(
     if end_date:
         query = query.where(TrainingRecord.completion_date <= end_date)
 
-    query = query.order_by(TrainingRecord.completion_date.desc())
+    total = await db.scalar(select(func.count()).select_from(query.subquery()))
+    response.headers["X-Total-Count"] = str(total or 0)
+
+    # The id tiebreak keeps pages disjoint: completion dates repeat, and an
+    # order MySQL may break differently per query can show a record twice
+    # and skip another across consecutive pages.
+    query = (
+        query.order_by(TrainingRecord.completion_date.desc(), TrainingRecord.id)
+        .offset(skip)
+        .limit(limit)
+    )
 
     result = await db.execute(query)
     return result.scalars().all()

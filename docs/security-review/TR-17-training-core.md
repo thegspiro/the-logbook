@@ -1061,7 +1061,7 @@ training heat maps and dashboard'`) asserting `isCacheable(...)` is `false`
 for `/training/competency-matrix`, `/training/compliance-matrix` (existing
 behavior, pinned), and `/training/dashboard-summary`.
 
-#### TR2-2 — LOW (abuse resistance) — `GET /training/records` has no pagination — 🚩 FLAGGED
+#### TR2-2 — LOW (abuse resistance) — `GET /training/records` has no pagination — ✅ FIXED 2026-10-05 (`skip`/`limit` capped at 500 with `X-Total-Count`; `trainingService.getRecords` walks the pages, so per-member screens still see the whole history)
 
 See `docs/KNOWN_LIMITATIONS.md` → "Training — `GET /training/records` Has No
 Pagination". `list_records` (`training.py`) returns every matching
