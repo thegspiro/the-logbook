@@ -99,6 +99,17 @@ describe('LegalDocumentsPage', () => {
     expect(screen.getByRole('link', { name: /Open \/terms/ })).toHaveAttribute('href', '/terms');
   });
 
+  // W54-2: the tabs controlled nothing a screen reader could find.
+  it('names the document on show as the tab panel the selected tab controls', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<LegalDocumentsPage />);
+    await screen.findByRole('heading', { name: 'Legal Documents' });
+    await user.click(screen.getByRole('tab', { name: 'Terms of Service' }));
+
+    const panel = screen.getByRole('tabpanel', { name: 'Terms of Service' });
+    expect(screen.getByRole('tab', { name: 'Terms of Service' })).toHaveAttribute('aria-controls', panel.id);
+  });
+
   it('seeds a new proposal from the built-in text so it can be edited rather than retyped', async () => {
     const user = userEvent.setup();
     renderWithRouter(<LegalDocumentsPage />);

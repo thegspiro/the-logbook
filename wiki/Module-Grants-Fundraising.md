@@ -123,3 +123,25 @@ rows it actually displays.
 **No response shape or ordering changed** for any request within the documented
 row limits. Nothing needs re-checking after the upgrade — the lists simply stop
 getting slower as history accumulates.
+
+## Dates on the department's calendar _(2026-09-26)_
+
+The grants and fundraising dashboards (`GrantService.get_dashboard_data`,
+`FundraisingService.get_dashboard_data`), the due date of the auto-created
+equipment-inventory compliance task when the grant has no end date, and the
+`completed_date` stamped on a compliance task now take "today" from
+`resolve_org_today` — the organization's timezone, `America/New_York` when
+unset — instead of the server's UTC `date.today()`, which is already tomorrow
+for a US department every evening. A donor's `first_donation_date` and
+`last_donation_date` are the department's calendar day of the donation
+timestamp (`local_date`) rather than its UTC day. Report date-range bounds are
+unchanged and still UTC (GF-24a in `docs/KNOWN_LIMITATIONS.md`).
+
+## Copy pass _(2026-09-29)_
+
+Labels changed on screen: the opportunities list's **Apply** is **Start
+Application**; the application form's _Opportunity ID_ is **Grant
+Opportunity** and its edit button **Save Changes**; **Add Item** on the budget
+tab is **Add Budget Item**; the reports page's tabs are **Grants** and
+**Fundraising** (were Grant Reports / Fundraising Reports) and its first
+fundraising KPI **Total Raised**.

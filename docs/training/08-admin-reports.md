@@ -194,7 +194,10 @@ Navigate to **Administration > Organization Settings > Organization** to manage 
 
 - **Department Name** and **Slug** (URL identifier)
 - **Department Type** and **Identifiers** (FDID, State ID)
-- **Timezone** setting
+- **Timezone** setting — the department's clock. Since late September 2026 it
+  decides far more than how a page is displayed: "today" for every alert,
+  report and compliance check, and the times printed in emails, PDFs and CSV
+  exports. See [The Department's Timezone Is the Clock](#the-departments-timezone-is-the-clock-2026-09-25-to-09-27).
 - **Contact Information** (phone, fax, email, website)
 - **Mailing and Physical Addresses**
 - **Logo** upload
@@ -205,6 +208,19 @@ Navigate to **Administration > Organization Settings > Organization** to manage 
   on a member's screen move under **More**.
 
 ![Organization Settings page with department name, timezone and contact details](./images/08-02-organization-settings.png)
+
+**[SCREENSHOT — CHECK `08-02-organization-settings.png`.** Since 2026-09-28 a logo can be removed (**Remove logo**, shown only while one is set), and on a phone the settings body now runs to the 16px page gutter instead of sitting inside three layers of padding; replace if the frame shows the logo row or was taken at phone width.**]**
+
+**Profile fields stop at their limit** _(2026-09-28)_. Every name, contact
+and address field on **Profile** saves as you type, and the server refuses a
+value longer than its column. The fields used to let the typing continue, so
+the only sign was a failed autosave that did not say which field. Each now
+stops at its length. Two values are held back as an **unsaved draft with a
+message** rather than saved: an empty department name (which used to fail
+every later save until it was retyped), and a malformed email address — that
+address prints in every email footer, so a typo would go out on every notice.
+A blank email is allowed; it clears the field. The **Footers** screen's
+department contact card uses the same limits.
 
 ![The Navigation Layout control in Settings → General → Profile, noting that it applies to everyone in the department](./images/20-04-org-profile-navigation-layout.png)
 
@@ -477,21 +493,55 @@ Navigate to **Reports** in the Administration section to generate department rep
 
 ### Available Report Types
 
-| Report                | Description                                      |
-| --------------------- | ------------------------------------------------ |
-| **Member Roster**     | Full member listing with contact info and status |
-| **Training Summary**  | Training hours and completions by member         |
-| **Event Attendance**  | Attendance records across events                 |
-| **Training Progress** | Member progress toward requirements              |
-| **Annual Training**   | Year-end training compliance summary             |
+**Required Permission:** `reports.view`, with the Reports module enabled.
+
+Each card says what the report contains _(descriptions rewritten 2026-09-29 to
+match what each report actually returns)_. Cards marked **Date Range** cover the
+reporting period set at the top of the page; the others are a snapshot of now.
+
+| Report                       | Category   | Date Range | What it contains                                                                               |
+| ---------------------------- | ---------- | ---------- | ---------------------------------------------------------------------------------------------- |
+| **Member Roster**            | Member     |            | Every member, active and inactive, with email, rank, station, and roles                        |
+| **Training Summary**         | Training   | ✓          | Training hours and completion rates by member, course, and requirement                         |
+| **Event Attendance**         | Events     | ✓          | RSVPs and attendance for each event in the reporting period                                    |
+| **Training Progress**        | Training   |            | Each member's progress through their training programs and requirements                        |
+| **Annual Training Report**   | Training   | ✓          | Training hours, shift experience, calls, and performance ratings for each active member        |
+| **Admin Hours Report**       | Admin      | ✓          | Administrative hours logged by members, broken down by category                                |
+| **Department Overview**      | Compliance | ✓          | Department totals for members, training, events, and open action items                         |
+| **Certification Expiration** | Compliance |            | Every member's certifications and expiration dates, flagging expired and expiring ones         |
+| **Compliance Status**        | Compliance |            | Each member's compliance with training requirements, with overdue items and upcoming deadlines |
+| **Fleet / Apparatus Status** | Operations |            | Vehicle status, inspection due dates, mileage, and open work orders                            |
+| **Inventory Status**         | Operations |            | Stock levels, assigned equipment, and low-stock alerts                                         |
+| **Incident / Call Volume**   | Operations | ✓          | Call volume trends, incident type breakdown, and peak activity                                 |
+| **Pipeline Overview**        | Member     | ✓          | Applicants in the prospective member pipeline, by stage, year, and referral source             |
+
+> **Corrected 2026-09-29.** Three of the old descriptions were wrong, not just
+> loose: the roster includes inactive members (it said "all active members"),
+> Training Summary breaks down by course and requirement, and **Training
+> Progress is training programs**, not the prospective-member pipeline — its
+> empty state now reads _"No training program enrollments found."_ Two column
+> headings were renamed: **Days Left** (was Days Until) on the certification
+> and apparatus reports, and **Open Work Orders** (was Open WOs).
 
 ### Generating a Report
 
-1. Select a **report category**: All, Member, Training, Event, Compliance, or **Pipeline** _(added 2026-03-15)_.
-2. Choose a **date range** using presets (This Year, Last Year, Last 90 Days) or a custom range.
-3. Click **Generate**.
-4. View the report on screen.
-5. Click **Export CSV** to download for spreadsheets or external analysis.
+1. Filter the cards by category: **All Reports**, **Member**, **Training**,
+   **Events**, **Admin**, **Compliance** or **Operations**.
+2. For a **Date Range** report, set the reporting period with a preset (**This
+   Year**, **Last Year**, **This Quarter**, **Last Quarter**, **Last 90 Days**,
+   **Last 30 Days**) or **Custom**. _(2026-10-04)_ On a tablet the two date
+   fields no longer stretch past the screen and scroll the page sideways.
+3. Click **Generate Report** on a card. Selecting the card itself does nothing
+   — the page's help tooltip used to say it did.
+4. The report opens on screen. **CSV** downloads it for a spreadsheet,
+   **Print / PDF** prints it, and **Compare** shows the previous period of the
+   same length beside it.
+
+**"Today" in a report is the department's date** _(2026-09-26)_ — the
+certification report's expiring/expired flags, apparatus inspection due dates
+and the call-volume year-to-date default no longer run a day ahead in the
+evening. A custom range's end date is still read as a UTC day boundary
+(see [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md), GF-24a).
 
 ### Pipeline Overview Report (2026-03-15)
 
@@ -518,6 +568,8 @@ Stage groups with zero prospects are still shown in the report for completeness.
 
 ![Reports page with category filters and date range presets](./images/08-06-reports.png)
 
+**[SCREENSHOT — REPLACE `08-06-reports.png`.** The header subtitle now reads "Run department reports and export them to CSV or PDF", the info panel is titled **How Reports Work**, every card's description is rewritten (see the table above), and on a tablet the grid sizes to its own width — two columns at 1024px with the sidebar open. Capture at laptop width with the **All Reports** filter.**]**
+
 > **Hint:** Reports can be saved as bookmarks for quick access. Common reports like the annual training summary should be generated at the end of each year for compliance records.
 
 ---
@@ -543,23 +595,43 @@ The dashboard provides:
 
 **Required Permission:** `settings.manage`
 
-Navigate to **Settings > Public Portal** to configure your department's public-facing content.
-
-The public portal allows external access to:
-
-- Public event calendar
-- Public forms (applications, feedback)
-- Department information
+Navigate to **Settings > Public Portal** (`/admin/public-portal`) to control what your department's own website can read from The Logbook through the public API — public education events, organization information and statistics.
 
 ### Configuration Options
 
-- **Enable/Disable** the public portal
-- **Custom domain** or subdomain
-- **Branding** (logo, colors)
-- **API keys** for external integrations
-- **Access logging** for security
+**Enable Portal** / **Disable Portal** sits in the page header. Below it are five tabs:
+
+- **Configuration** — **Rate Limiting**: the
+  default hourly limit for every API key that does not set its own. _(2026-09-29)_
+  The **Allowed Origins** and **Caching** controls are gone: nothing read
+  them. Which websites may call the API from a browser is the server's
+  `ALLOWED_ORIGINS` setting, and the API does not cache.
+- **API Keys** — _"Websites and apps use these keys to read your public
+  data."_ A new key is shown once (**API Key Created**); revoking cuts off
+  whatever uses it immediately.
+- **Access Logs** — every request to the public API, rejected ones included,
+  newest first.
+- **Statistics** — traffic over the last 24 hours and 7 days, error rate,
+  rate-limit hits and suspicious requests, with an **Attention Required**
+  banner when one crosses its threshold. _(2026-09-24)_ Before this the tab
+  showed zeros and `undefinedms` and the banner could never appear; with no
+  traffic the error rate now reads "—", _"No requests in 24h"_.
+- **Data Control** — which fields the API returns. Every field is listed,
+  disabled until you enable it, and fields holding personal information carry
+  a **PII** badge.
+
+Nothing is published until all three are done: the portal enabled, a key
+created, and the fields turned on under Data Control.
+
+**Only `settings.manage` can change any of it** _(2026-09-29)_. The screen
+was already restricted, but the API behind it was not: any signed-in member of
+a department with the module on could create or revoke keys and change which
+member fields were published. Review **Access Logs** and the key list if your
+department ran the module before this date.
 
 ![Public Portal configuration page with the enable toggle and domain settings](./images/08-08-public-portal.png)
+
+**[SCREENSHOT — REPLACE `08-08-public-portal.png`.** The Configuration tab now shows only **Rate Limiting** and the **Security Best Practices** notice (now at AAA contrast, and themed in dark mode) — the Allowed Origins and Caching sections are gone. The disabled banner reads "The portal is disabled. External websites can't read any of your data until you enable it, create an API key, and turn on the fields to share under Data Control." There was never a domain or branding setting; the caption should not promise one.**]**
 
 ---
 
@@ -945,6 +1017,14 @@ The system applies rate limiting to sensitive endpoints with specific thresholds
 
 When rate-limited, the system returns HTTP 429 with a `Retry-After` header indicating the lockout duration in seconds. Failed login attempts are also tracked per-user via the `failed_login_attempts` counter on the user record.
 
+> **The sign-in screen counts down the server's wait** _(2026-09-27)_. It used
+> to show its own short backoff ("wait 4 seconds") while the server's
+> `Retry-After` said 60, so a member who obeyed the screen was refused again —
+> each refused attempt keeps them inside the sliding window. The countdown now
+> reads _"Too many failed attempts. Try again in N seconds."_ with the
+> server's number. A reset-password link hit by the limit says **Too Many
+> Attempts** with the wait in minutes, instead of calling a good link invalid.
+
 > **Hint:** If a member reports being locked out, check if they exceeded the login attempt limit. The rate-limit lockout expires automatically after the duration above, and the `Retry-After` header tells the client exactly how long to wait. The per-account lockout under [Password Policies](#password-policies) is separate: it runs for `ACCOUNT_LOCKOUT_DURATION_MINUTES`, and resetting the member's password clears it at once.
 
 Three more sign-in controls sit alongside the rate limits. Like them, each is a
@@ -1178,8 +1258,14 @@ David,Carter,dcarter@email.com,dcarter,(555)111-0003,Firefighter,Station 1,VCF-0
 5. One row fails — a member's email was mistyped and rejected as a duplicate.
    The results panel names the row number; Steve corrects that row and
    re-uploads just it
-6. **Send Welcome Email** is on by default — all 45 members receive login
-   credentials
+6. Ticks **Send welcome emails now**, which is **off** by default for an
+   import — all 45 members are emailed a temporary password the moment their
+   record is created. Left off, the roster loads quietly and he would set
+   passwords afterwards with **Reset Password** in Member Management. _(2026-09-27)_
+   If email is not set up for the department, the box is unavailable and says
+   so: a welcome email that cannot be sent would leave 45 accounts with
+   passwords nobody knows. **Add Member** likewise requires **Set initial
+   password** when email is off.
 
 > **Hint:** Steve leaves `membershipNumber` blank for three new recruits who
 > have not been assigned one; the system generates theirs. He also drops the
@@ -1540,7 +1626,11 @@ a notification's own screen, or the message's own page.
 The feed holds unread items only, in this order: **pinned** department
 messages first, then **persistent** ones, then everything else newest first.
 Five rows show; **Older Items** at the foot opens the full notification inbox,
-which is where bulk actions such as marking everything read live. Pinning and
+which is where bulk actions such as marking everything read live. Two or more
+notifications of the same category — a weekend's attendance validations, say —
+show as one row ("5 attendance validations", with the newest as **Latest:**)
+that opens the inbox, where the stack expands _(2026-09-28)_; see
+[Notification Rules & Logs → Four tabs](./07-documents-forms.md#four-tabs). Pinning and
 persistence do different jobs:
 
 - **Pinning** sorts a message to the top, so a pinned notice sits above newer
@@ -1574,9 +1664,12 @@ who-has-not-acknowledged report, **scheduled send**, and in-place **editing**.
 
 1. Navigate to **Communications → Messages** and click **New message**.
 2. Enter the title and body, set priority and audience, and optionally toggle
-   **Persistent** / **Require acknowledgment** or set a schedule.
-3. Members see it in the app; urgent and acknowledgment-required messages are
-   also emailed (urgent adds SMS when configured).
+   **Keep in inbox after it is read** (persistent; labelled **Persistent** until
+   2026-09-29) / **Require acknowledgment** or set a schedule.
+3. Members see it in the app and every message is also emailed — a member
+   cannot turn that email off; urgent adds SMS when configured. _(Corrected
+   2026-10-04: this said only urgent and acknowledgment-required messages were
+   emailed.)_
 
 For the full workflow — acknowledgment reports, scheduling, targeting, and
 member notification controls — see
@@ -1805,6 +1898,8 @@ A **Discard** button appears when you have unsaved changes. Clicking it reverts 
 
 ![The template editor with unsaved changes, showing Discard beside Save](./images/08-56-template-discard.png)
 
+**[SCREENSHOT — REPLACE `08-56-template-discard.png`.** The preview pane shows the retired centred-masthead shell (re-shot 2026-09-25); since 2026-09-27 every template renders in the solid-tab shell — accent tab naming the category, title on a tinted card, white message card, centred footer _(#2754)_. The editor also has no **CSS Styles** box any more. Same state: unsaved edits, **Discard** beside **Save****]**
+
 ### Reset to Default
 
 Each template can be reset to its built-in default content:
@@ -1813,35 +1908,78 @@ Each template can be reset to its built-in default content:
 2. Click **Reset** in the template's header — the dialog it opens is titled
    "Reset to Default"
 3. Confirm the action in the dialog
-4. The template's subject, HTML body, text body, CSS styles, closing footer, layout, header accent and status chip are restored to the application's defaults
+4. The template's subject, HTML body, text body, closing footer, layout, header accent and status chip are restored to the application's defaults
 5. Custom CC/BCC recipients are **preserved** — only content is reset
+
+> **There is no per-template stylesheet to reset** _(2026-09-27)_. The editor's
+> **CSS Styles** box was removed with the solid-tab redesign; every email uses
+> the built-in stylesheet. A stylesheet a template carried before the upgrade
+> survives only in its backup (see **Previous version** below).
 
 This is useful when a template has been heavily customized and you want to start fresh from the standard design.
 
 ![The Reset to Default confirmation, naming what it restores and what it keeps](./images/08-57-template-reset-dialog.png)
 
+**[SCREENSHOT — REPLACE `08-57-template-reset-dialog.png`.** The dialog's message now reads "Restores the subject, HTML body, plain-text body, styles and footer choice to the defaults. Your CC/BCC settings are kept. You cannot undo this." _(#2790)_, and the preview behind it is the solid-tab shell _(#2754)_. Same state, never confirmed**]**
+
 ### The email design and the Email Templates screen
 
-Every email renders into one shell: a centred masthead (the department's logo
-above its name) on a light grey page, then a white card holding a small
-**status line** — a square in the notice's accent colour beside the status
-chip's wording, such as "Action required" — above the title and body, with the
-footer under the card. Spacing, not rules, separates the blocks. Three
-settings on each template shape it:
+Every email renders into one shell _(redesigned 2026-09-27)_: the
+department's logo and name centred at the top on a light grey page; a **solid
+tab** in the notice's accent colour naming its category on the left and, on
+the right, the one piece of urgency it carries — a deadline or time limit such
+as "Due March 16"; the title on a card tinted with the accent, sometimes with
+the key facts in it; the white message card; any callout cards under it; and a
+centred footer. Buttons span the card. Spacing, not rules, separates the
+blocks. Apple Mail and Outlook.com show a dark version when the reader's
+device is in dark mode. Three settings on each template shape it:
 
 - **Layout** — **Notice** (prose, a details panel and a button), **Receipt**
   (a wide items table) or **Digest** (a run of section headings and lists).
-- **Header accent** — one of a fixed set of colours, used for the status
-  line, the optional subtitle and the button. Changing only the colour does
-  not count as editing the template.
-- **Status chip** — the status line's wording, shown uppercased as the editor
-  previews it. Leave it empty and the email carries no status line.
+- **Header accent** — one of a fixed set of colours, used for the tab, the
+  tinted title card and the button. Changing only the colour does not count as
+  editing the template.
+- **Status chip** — the category the tab names, shown uppercased as the editor
+  previews it. Leave it empty and the tab is a plain band of the accent colour.
 
-**A template your department has edited keeps its own look until somebody
-presses Reset on it.** Templates you have never edited already use the current
-design; an edited one keeps its stored markup, which still renders inside the
-current card and footer. The banner at the top of the Templates tab says so.
-Reset keeps your CC/BCC settings.
+**Every template was moved onto this design at the upgrade, including ones
+your department had edited** (migration `15c5bc7700aa`). Nothing you wrote was
+deleted: each template's earlier subject, bodies, stylesheet, footer and colour
+were saved first. To bring your wording back:
+
+1. Select the template on the **Templates** tab. A template with a saved copy
+   shows a **Previous version (before the redesign)** panel above the editor.
+2. **Show the old wording** to read it, or **Load this wording** to put the old
+   subject, message and plain-text body into the editor inside the new design.
+   If you have unsaved edits it asks first (**Load previous version** / **Keep
+   editing**).
+3. Check the preview, then **Save** to keep it or **Discard** to drop it.
+   Nothing is saved until you press **Save**.
+
+The old header, colours and stylesheet are not brought back. A template created
+after the redesign has no panel. See
+[UPGRADING](../UPGRADING.md#every-email-template-is-reset-to-the-new-design-2026-09-27).
+
+> **Screenshot needed:**
+> _[Communications → Email Templates → **Templates**, a template with a
+> backup selected: the **Previous version (before the redesign)** panel above
+> the editor with **Load this wording** and **Show the old wording**, and the
+> solid-tab preview beside it.]_
+
+> **The blue banner on the Templates tab** _(corrected 2026-10-04)_ reads
+> "Every email uses the current design, including templates your department had
+> edited — there is nothing to adopt." It points to **Previous version** for
+> wording the redesign replaced, and says that **Reset** replaces a template's
+> wording with the default without changing the design. Until 2026-10-04 it
+> told admins to press Reset "to adopt it", which after the 2026-09-27 reset
+> only discarded their wording; if anyone followed that advice, the wording is
+> still in the template's Previous version panel.
+
+**If the department's link address only works at the station**, a warning at
+the top of Email Templates says that links and the logo in these emails will
+not open for members reading elsewhere, with a link to **Change the email link
+address** on Settings → Email _(2026-09-28)_. See
+[Email Deliverability → Links inside emails](../EMAIL_DELIVERABILITY.md#links-inside-emails-2026-09-24).
 
 On a wide screen the Templates tab is three columns: the template list, the
 editor, and the rendered preview beside it, so you see a change as you type.
@@ -1865,16 +2003,43 @@ You can now send a test email to verify your template changes before they go liv
    different recipient
 4. Check your inbox to verify the rendering, links, and footer content
 
+**What a test send fills in** _(2026-09-28)_, so it reads like the real email
+rather than a sample:
+
+- **Links** point at your own installation, on the path the real notice uses —
+  not `example.com`.
+- **The footer** carries your department's phone, address and other contact
+  details (or leaves them out where you have none), not "Sample Fire
+  Department".
+- **The greeting names you**, the admin it is sent to. Names that belong to
+  someone else — the member a notice is about, a submitter — stay sample names.
+- **Dates** are placed around today on your department's calendar and written
+  the way the real notice writes them.
+- **Your department's next real record** fills the event reminder (the next
+  event that is not cancelled or a draft), the series-end reminder, and the
+  shift reminder, assignment and decline notices (the next shift, with its
+  apparatus). With none, sample values stay.
+- **Attachments** on the template are attached, as they would be on a real
+  send.
+
+The preview uses the same values; anything you type into the preview's sample
+fields still wins. The event reminder also opens with a **date tile** — month
+over day — beside its title.
+
 Sending needs a working mail transport. On a department that has not configured
 one, the button reports the failure rather than a delivery.
 
 ![Send Test to Me, under the rendered preview it sends](./images/08-58-template-send-test.png)
+
+**[SCREENSHOT — REPLACE `08-58-template-send-test.png`.** The preview pane shows the retired centred-masthead shell (re-shot 2026-09-25); since 2026-09-27 every template renders in the solid-tab shell — accent tab naming the category, title on a tinted card, white message card, centred footer _(#2754)_. Same state: **Send Test to Me** under the preview**]**
 
 ### Template Search
 
 The template list now includes a **search field** that filters templates as you type. Search matches against template name and template type, making it faster to find specific templates in departments with many customized templates.
 
 ![Email template sidebar filtered to templates matching welcome](./images/08-36-template-search.png)
+
+**[SCREENSHOT — REPLACE `08-36-template-search.png`.** The preview pane shows the retired centred-masthead shell (re-shot 2026-09-25); since 2026-09-27 every template renders in the solid-tab shell — accent tab naming the category, title on a tinted card, white message card, centred footer _(#2754)_. Same state: the list filtered to "welcome"**]**
 
 ### Standardized Email Footers
 
@@ -1934,6 +2099,8 @@ Two behaviours worth knowing:
 
 ![Email template categories in the editor sidebar](./images/08-34-email-templates.png)
 
+**[SCREENSHOT — REPLACE `08-34-email-templates.png`.** The preview pane shows the retired centred-masthead shell (re-shot 2026-09-25); since 2026-09-27 every template renders in the solid-tab shell — accent tab naming the category, title on a tinted card, white message card, centred footer _(#2754)_. Same state: the categories with **Templates** active. The blue banner above the list also changed _(2026-10-04)_: it now reads "Every email uses the current design, including templates your department had edited — there is nothing to adopt" and points to **Previous version**; the frame shows the old "press Reset … to adopt it" text**]**
+
 ---
 
 ## Email Footers: One Library Instead of 35 Copies (2026-08-10)
@@ -1958,12 +2125,29 @@ thing to everybody:
 
 | Footer              | Who it is for                                                                                                                                                                                                                                                                          |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Internal**        | Members. The routine "do not reply" close. **This is the default**                                                                                                                                                                                                                     |
+| **Internal**        | Members. The routine "This is an automated message from …" close. **This is the default.** It no longer tells members not to reply: replies go to the department's own contact email                                                                                                   |
 | **Public**          | People outside the department. **Invites a reply** and carries the mailing address — telling somebody who asked the station to visit their school not to reply was wrong, and mail to the public is expected to carry a physical address. Event requesters and applicants get this one |
 | **Official notice** | On the record: separations, property return, election results                                                                                                                                                                                                                          |
 
 You can rename, reword, add and delete these. Each footer names its own lines and
-has switches for the contact block and the address block.
+has switches for **Phone**, **Email**, **Website** and **Mailing address**
+(phone, email and website were one switch until 2026-09-28). Beside each switch
+the editor shows the value it would print, or "Not set, so it will not
+appear".
+
+> **"Please do not reply to this email." was removed from saved footers**
+> _(2026-09-25)_. A department that had saved its footer library kept that
+> seeded line even after replies started going to the department's own
+> address. The upgrade (migration `3f3b315165ed`) deletes that exact line from
+> every stored footer; anything else you wrote, including your own wording of
+> the same idea, is untouched.
+
+**Department contact details** _(2026-09-28)_. A card above the footer list
+edits the phone, email, website and mailing address the footers print. They are
+your organization's own details — the same ones as on Organization settings —
+so a change here changes them everywhere, and clearing a field clears it.
+Changing them needs `settings.manage`; with only
+`organization.update_settings` the card is read-only.
 
 ### Editing them
 
@@ -1977,12 +2161,16 @@ has switches for the contact block and the address block.
 
 ![The Footers tab: the seeded library, the default marked, and a per-footer usage count](./images/08-64-email-footers-tab.png)
 
+**[SCREENSHOT — REPLACE `08-64-email-footers-tab.png`.** The tab now opens with the **Department contact details** card, and each footer has separate **Phone**, **Email** and **Website** switches showing the value each would print _(#2760)_. Re-take with the contact card and the first footer's switches in frame; never save**]**
+
 To point a specific template at a specific footer, open that template and choose
 its footer in the **Closes with** selector. The hint under the control is the
 chosen footer's own description, so the three can be told apart without opening
 the Footers tab.
 
 ![The template editor's Closes with selector, set to the Public footer, with that footer's own description under it](./images/08-65-template-footer-selector.png)
+
+**[SCREENSHOT — REPLACE `08-65-template-footer-selector.png`.** The preview pane shows the retired centred-masthead shell (re-shot 2026-09-25); since 2026-09-27 every template renders in the solid-tab shell — accent tab naming the category, title on a tinted card, white message card, centred footer _(#2754)_. Same state: **Closes with** set to Public**]**
 
 > **A template only shows a footer if its body asks for one.** The closing block
 > is delivered as the `{{footer_html}}` variable, so a body that does not contain
@@ -2033,6 +2221,8 @@ line**:
 
 ![The Available Variables palette expanded, the organization variables among the rest](./images/08-66-template-variable-palette.png)
 
+**[SCREENSHOT — REPLACE `08-66-template-variable-palette.png`.** The preview pane shows the retired centred-masthead shell (re-shot 2026-09-25); since 2026-09-27 every template renders in the solid-tab shell — accent tab naming the category, title on a tinted card, white message card, centred footer _(#2754)_. Same state: the palette expanded**]**
+
 The palette is **one flat list per template**, not a set of collapsible groups —
 the organization variables sit among the rest, in the order above. Officer
 signature variables are the exception, and have a panel of their own beneath it
@@ -2067,6 +2257,11 @@ decline** and **shift reminder** — were listed on the Email Templates screen b
 composed in code, so the mail you send most was the mail you could not reword.
 They now have real template rows with documented variables and sample data.
 
+> **Superseded 2026-09-27** — the design is now the solid-tab shell and no
+> template keeps its own stylesheet; see
+> [The email design and the Email Templates screen](#the-email-design-and-the-email-templates-screen).
+> The 2026-08-10 note follows as history.
+>
 > **Your emails will look different.** One stylesheet, one document shell and one
 > table style are now shared by templates, the storefront and the election
 > report. The design is a white card on a grey page — system font stack,
@@ -2079,6 +2274,8 @@ They now have real template rows with documented variables and sample data.
 > CSS you _did_ edit are left exactly as they are.
 
 ![The rendered preview: the white card on grey, its centred masthead and fact panel](./images/08-67-email-preview-design.png)
+
+**[SCREENSHOT — REPLACE `08-67-email-preview-design.png`.** Shows the retired centred-masthead shell. The frame must show the solid-tab shell _(#2754)_: the **Shift Assignment** preview's accent tab and its right-hand note, the title on the tinted card, the message card, and — once re-taken — the alt and caption should name those instead of "centred masthead and fact panel"**]**
 
 Pictured with **Shift Assignment**, whose body carries `{{footer_html}}` — the
 closing block sits below the fact panel, off the bottom of this frame. The
@@ -2105,7 +2302,11 @@ variables are available anywhere in a template:
 
 The catalogued offices are: **President, Vice President, Chief, Deputy Chief,
 Assistant Chief, Secretary, Assistant Secretary, Treasurer, Safety Officer,
-Training Officer, Quartermaster**.
+Training Officer, Quartermaster, Compliance Officer, EMS Supply Officer**.
+**Compliance Officer** was added 2026-09-24 (`{{compliance_officer_name}}` and
+the other three); with nobody assigned it is detected from the seeded
+Compliance Officer position, the one that reviews the default Compliance
+suggestion box.
 
 ### Who Holds an Office
 
@@ -2128,6 +2329,8 @@ is loaded, and **nightly** — that last one is what catches a change made to th
 _member_ behind an office rather than to the assignment itself.
 
 ![Officers tab listing each office and the member holding it](./images/08-37-email-officers.png)
+
+**[SCREENSHOT — CHECK `08-37-email-officers.png`.** The Officers tab now lists a **Compliance Officer** office _(#2682)_. The 2026-09-25 re-capture came back byte-identical, so either the row sits below the frame or the demo was captured before the catalog change; confirm the row is visible, and re-take if it is not**]**
 
 See [DEPARTMENT_OFFICERS.md](../DEPARTMENT_OFFICERS.md) for the full variable
 catalogue and the API.
@@ -2565,6 +2768,11 @@ the ceremony gives one person `settings.manage`.
 
 ![The secretary's own proposed revision to the Terms: Edit and Discard, and no Publish to members — beside the administrator's draft, which offers them nothing](./images/08-77-legal-proposal-as-proposer.png)
 
+_(2026-09-29: the publish button is now labelled **Publish**, where it read
+**Publish to members**, and its confirmation reads "Everyone who visits
+(page) sees this text immediately. The version published now is archived,
+not deleted.")_
+
 _The permission does not show in the editor: **Save draft** and **Cancel** are
 what everyone gets there, publisher included. It shows on the saved proposal —
 above, the secretary's own draft offers Edit and Discard and no **Publish to
@@ -2782,7 +2990,7 @@ Scheduling module enabled.
 
 ## Settings: Nine Screens, One Shell _(2026-08-23)_
 
-Organization, Events, Scheduling, Elections, User Settings, Email Templates and
+Organization, Events, Scheduling, Elections, My Account (titled User Settings until 2026-09-29), Email Templates and
 three more carried five different navigation idioms between them. They all use
 one now:
 
@@ -3097,3 +3305,140 @@ failed and no test could catch it: the markup was correct and only the browser's
 cascade disagreed.
 
 Any screenshot of a right-aligned table predates this and should be re-shot.
+
+## The Department's Timezone Is the Clock _(2026-09-25 to 09-27)_
+
+**Check one setting after this upgrade: Settings → Organization → Profile →
+Timezone.** Until late September the server's own clock — UTC in every
+container — decided a great deal more than it should have. For a US
+department, UTC is already tomorrow from about 7–8 PM Eastern (4–5 PM
+Pacific), so for those hours of every day:
+
+- an emailed time read "…at 11:00 PM UTC", or showed tomorrow's date;
+- a CSV export put an evening clock-in, payment or equipment check on the next
+  day;
+- a certification "expired" a few hours early, a compliance check graded
+  against tomorrow, and "last month" in the monthly report could be the wrong
+  month for the jobs that run early in the UTC morning.
+
+All of that now runs on the department's clock — the **Timezone** on the
+Profile section, or **America/New_York** when none is set (the default
+scheduling has always used, so no department's shift times move). An invalid
+timezone falls back the same way. The administration hub and operations
+dashboard, which used to fall back to UTC instead, now agree with everything
+else.
+
+| Area                  | What now uses the department's date and time                                                                                                                                                                                                                                                                                                                                                                                             |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Emails**            | Every time printed in an email (event requests, inventory and property-return notices, the membership pipeline, store windows, training reminders), and date-only fields such as a due date. An email has no browser to convert for the reader, so this is the only conversion it gets                                                                                                                                                   |
+| **PDFs**              | Equipment check PDFs print their dates and times locally; the impact-plan PDF's "generated" stamp names its zone                                                                                                                                                                                                                                                                                                                         |
+| **CSV exports**       | Admin hours (Date, Clock In, Clock Out), the Finance QuickBooks export's Date, the equipment-check compliance and failure CSVs (with the offset), the store orders CSV and the inventory last-seen CSV (labelled with the zone). Exports labelled UTC on purpose — skills testing, for its auditors — are unchanged                                                                                                                      |
+| **"Today"**           | Certification and NFPA retirement alerts, expiring-supplies emails, the whole training compliance engine (matrix, dashboard percentage, member status, My Training), program deadlines and recertification, qualifications and EVOC cards for shift signup, equipment checks and stock expiry, apparatus and facility maintenance due dates, scheduling, medical screening, grants, meetings, documents, forms and the dashboard widgets |
+| **Stored timestamps** | A timestamp cut to a date — the training record created from an evening event, monthly event counts, report dates, cohort end dates, donor first/last donation dates, a member's implied last day of service — is the department's day, not the UTC day                                                                                                                                                                                  |
+
+**Training records written before 2026-09-27 keep their UTC date** —
+deliberately. A record created from an evening session was filed under the next
+day; on the last day of a month that moves it into the next month's
+compliance. New records are dated correctly, and the lookups that find a
+record for an event accept the old date too, so nothing is duplicated. Existing
+rows were not rewritten because that would change historical compliance
+results; an officer can correct an individual record's date where it matters.
+
+**Still on UTC:** a custom report range's end bound (GF-24a), and the year in
+order and request numbers (`ORD-YYYY-`, `PR-YYYY-`), which differs only on the
+evening of December 31. Both are recorded in
+[KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#today-is-the-departments-date--what-still-reads-utc-2026-09-26).
+
+> **Screenshot needed:**
+> _[Settings → Organization → Profile at laptop width, with the **Timezone** select open on the department's zone, beside the department name — the one setting this section asks every administrator to check.]_
+
+## Other Administration Changes _(September 24 – October 4, 2026)_
+
+### Settings controls that changed nothing are gone _(2026-09-29)_
+
+A switch wired to nothing invites someone to believe a behaviour is on or off
+when it is not. Three were removed rather than relabelled:
+
+- **Public Portal → Configuration**: **Allowed Origins** and **Caching** (see
+  [Public Portal Configuration](#public-portal-configuration)).
+- **Elections → Settings**: the **Defaults** section. Voting method, victory
+  condition, quorum, anonymity and write-ins are chosen on each election's own
+  form; nothing ever read the defaults.
+- **Scheduling settings**: the **Require assignment confirmation** switch.
+
+Nothing a department configured stops working, because none of them did
+anything.
+
+### Department Setup and the dashboard _(2026-09-28)_
+
+- Two **Department Setup** cards opened a screen that could not do their step.
+  The shift-templates card now opens **Scheduling → Planning → Templates**
+  (`/scheduling/admin/planning/templates`) and the email card opens
+  **Settings → Email** (`/settings?tab=email`). When everything is done the
+  page reads **All done** — _"Every step is complete. Come back here any time
+  to review your setup."_
+- Turning a module off made the dashboard and two other pages fire background
+  requests that the server refused (403s in the log). They are no longer made.
+- The dashboard's department section reads _"Summaries for the areas you can
+  access, over the period you choose."_, and its period picker is the
+  **Reporting period**.
+
+### Roles and positions _(2026-09-28)_
+
+**Settings → Role Management** — _"Create custom roles and choose what each
+role can do"_ — now shows a refused save **inside** the dialog, in words, where
+it used to print a schema message on the page behind the overlay. **Manage
+Roles** reports the server's real reason when an assignment is refused (for
+example, that the position carries more than you hold) instead of claiming you
+cannot assign roles at all. The priority field's hint says what priority does —
+and that it grants no permissions — rather than "Higher priority roles have
+more authority". Permission chips show the full name (`members.view`) where
+every chip used to read just "view".
+
+### IP Security _(2026-09-29)_
+
+The IP Security pages failed in ways that looked like a server fault. The
+member's **New Request** form, and an administrator's **Reject**, **Revoke**
+and **Add Country**, were all refused with a 422; **Approve** succeeded but
+silently dropped the duration override and the notes. The page sent field names
+the server did not read. All of them work now. If you approved an exception
+with a shorter duration or notes before this date, check what was stored.
+
+The blocked-countries list now says what it does not show: _"Countries blocked
+in the server's BLOCKED_COUNTRIES setting are not listed."_ — those are set at
+deploy time and apply to the whole installation (see
+[Configuration → Security](../../wiki/Configuration-Security.md#geoip-country-blocking)).
+
+### Navigation and layout _(2026-09-25 to 10-04)_
+
+- **Top bar → More.** With **Navigation Layout** set to **Top bar**, the menu
+  groups that do not fit on a member's screen move under **More** at the right,
+  in order, separated by dividers.
+- **Phone drawer scroll cue.** On a phone, a navigation drawer with items below
+  the fold fades at the bottom edge and shows a **More** chevron that scrolls
+  it. Desktop sidebars, which show a permanent scrollbar, do not show it.
+- **Phone bottom bar.** Each member now chooses the two tabs beside **Add** on
+  **My Account → Appearance → Phone navigation bar**, saved to their account
+  (migration `8464e9962f76`; members who never choose keep the defaults). The
+  **Settings** tab opens the member's own **My Account**, not Organization
+  Settings, which most members cannot open. See
+  [Mobile & PWA](./10-mobile-pwa.md#choose-your-own-bottom-bar-tabs-2026-10-02).
+- **Settings screens on phones** _(2026-10-04)_ lose a layer of side padding,
+  so long setting labels no longer wrap one word per line.
+- **Selected toggle buttons are primary red** _(2026-10-04)_ on the eight
+  screens that still drew them blue — the Members admin view toggle, Admin
+  Hours tabs, eligibility roster filters, supply expiring window, My Checklists
+  timing, check log, Compliance Requirements tabs and chips, and the Elections
+  status filters.
+- **Radio buttons and checkboxes stay square** _(2026-10-03)_; beside a
+  wrapping label they were squeezed into ovals.
+- **Tablets** _(2026-10-04)_: card lists size their columns to their own width
+  (two roomy columns on a tablet with the sidebar open, not three cramped
+  ones); edit, delete and download buttons that appear on hover now show on
+  touch tablets, which cannot hover — on 26 screens they were invisible there;
+  and small buttons keep their icon beside the label instead of above it.
+
+**[SCREENSHOT — CHECK every administration capture taken at tablet width, or
+showing a blue selected toggle, a card grid, or a hover-revealed action.** The
+layout changes above are visible in those frames; captures at laptop width
+without them are unaffected.**]**

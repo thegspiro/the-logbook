@@ -1,9 +1,213 @@
 # Security Review — Permissions & Roles
 
-**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6) · **PR:** #1805 (pass 1), #2136 (pass 3), #2391 (pass 4), #2538 (pass 5), #2596 (pass 6)
+**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7) · **PR:** #1805 (pass 1), #2136 (pass 3), #2391 (pass 4), #2538 (pass 5), #2596 (pass 6), pass 7 TBD
 
 Passes are recorded in this one file rather than a new `PERM<n>-02-*.md` per
 lap, matching what passes 2 and 3 already did here. Newest pass first.
+
+---
+
+## Pass 7 (2026-10-05)
+
+**Backend:** the same eleven files passes 4-6 named, all read in full again:
+`app/api/dependencies.py`, `app/core/permissions.py`,
+`app/api/v1/endpoints/roles.py` + `app/services/role_service.py`,
+`app/api/v1/endpoints/operational_ranks.py` +
+`app/services/operational_rank_service.py`,
+`app/api/v1/endpoints/officers.py` + `app/services/officer_service.py`,
+`app/api/v1/endpoints/org_chart.py` + `app/services/org_chart_service.py`,
+`app/services/admin_continuity_service.py`, and the position/rank-assignment
+handlers in `app/api/v1/endpoints/users.py`.
+**Frontend:** none modified this pass (`ProtectedRoute.tsx`,
+`authStore.ts`'s `checkPermission`, `apiCache.ts`, `createApiClient.ts` read
+again — only `authStore.ts`'s `logout`/`endSessionLocally` split changed, and
+it is AUTH-01's territory, not this feature's).
+**Migrations:** none written by this pass; 512 revisions, single head
+`34d3d56d1479` (one new migration landed since pass 6 — `add_users_preferred_name`
+— unrelated to this feature, applied against the test database during this
+pass's gate run, see Completion gate).
+
+### Scope
+
+Baseline `ea2b1ef87` (pass 6's merge commit, PR #2596). Unlike every prior
+pass, this one is **not** a zero-delta re-verification: 113 commits touched
+something under `backend/alembic/versions/` since that merge, and six of the
+eleven feature files changed —
+
+| File                                   |  Δ   | Shape of the change                                                                                                                                                                                                                                                                                                             |
+| -------------------------------------- | :--: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `api/dependencies.py`                  | +15  | `get_request_enabled_modules` retyped `Request` → `HTTPConnection` so it stands aside for a WebSocket handshake instead of raising a 500 (`inventory_websocket` checks the module flag itself, post-`accept()`)                                                                                                                 |
+| `api/v1/endpoints/roles.py`            |  +6  | `get_role_users` now returns `preferred_name`/`display_name` alongside the existing `first_name`/`last_name`/`email` — a display-name feature, not a new PII category                                                                                                                                                           |
+| `core/permissions.py`                  | +176 | eight new seeded permissions (`inventory.kiosk`, `locations.manage_nfc_tags`, `apparatus.manage_nfc_tags`, `suggestions.manage`, `system.manage_link_domain`, `training.view_analytics`) and two new positions (`assistant_membership_coordinator`, `compliance_officer`), plus the `fire_chief` → "Chief" display-label rename |
+| `services/operational_rank_service.py` | +15  | display-name formatting only (`format_display_name`), and the "Fire Chief" → "Chief" prose edit in a docstring                                                                                                                                                                                                                  |
+| `services/org_chart_service.py`        | +17  | `_member_name` now prefers `preferred_name`, same display-name feature                                                                                                                                                                                                                                                          |
+| `api/v1/endpoints/users.py`            | +427 | welcome-email availability gating, membership-number collision handling via `OrganizationService`, profile-redaction-on-write symmetry, display-name plumbing — **none of it touches the ceiling helpers or their call sites** (see below)                                                                                      |
+| the other five                         |  0   | byte-identical to pass 6                                                                                                                                                                                                                                                                                                        |
+
+All eleven files were read in full regardless, not diffed — this pass's
+question (does anything newly reach the ceiling/continuity guards, or
+newly seed a wildcard-adjacent grant without its migration) is answered by
+how files interact, the same reasoning pass 4 gave for not trusting a narrow
+diff.
+
+**Also checked, outside the eleven-file list, because this pass's one open
+finding lives in the file it calls into:**
+`app/services/admin_continuity_service.py` — read in full; zero diff against
+pass 6 (confirmed: `git log ea2b1ef87..HEAD -- backend/app/services/admin_continuity_service.py`
+returns no commits on `main`).
+
+**A second branch, not part of this PR, already carries a fix for this
+pass's one finding.** `git branch --all --contains <sha>` on the commit
+message found a commit titled "fix(permissions): lock the last-administrator
+count; guard the last '*' holder" on `origin/claude/gracious-goodall-z1bv9g`
+— **not merged to `main`**, open as PR #2918 (confirmed via the REST pulls
+API; that branch does not start with `claude/security-review-`, so it is a
+different track's work, not this rotation's, and Step 0 correctly did not
+treat it as an open security-review PR). Its commit message states it
+implements this finding's **option 2** ("protect the wildcard only") plus an
+unrelated locking fix for the separate W11-8 concurrency finding already in
+`docs/KNOWN_LIMITATIONS.md`. Verified directly against `main`, not trusted
+from the message: `admin_continuity_service.py` on `main` is unchanged from
+pass 6 and `assert_positions_retain_administrator` still has no "last `*`
+holder" guard (see Findings). This pass leaves the finding OPEN rather than
+re-implementing the same fix in parallel, which would only produce a merge
+conflict against #2918 when it lands; the writeup below names the option
+that branch already chose so a reviewer merging either PR can reconcile them
+rather than rediscovering the choice.
+
+### Route inventory
+
+Unchanged count and unchanged gates — 28 routes, same four routers
+(`grep -c '^@router\.' *.py` re-run: 13 `roles.py` + 7 `operational_ranks.py`
+
+- 3 `officers.py` + 5 `org_chart.py`). Every route's `Depends()` was
+  re-enumerated directly against pass 6's table rather than trusted from the
+  zero-diff on those four files:
+
+* **`roles.py` (13 routes)** — identical to pass 6's table; only
+  `get_role_users`'s response shape grew two display-name fields, not its
+  permission gate (`require_permission("positions.view", "roles.view",
+"users.view")`, `roles.py:497`).
+* **`operational_ranks.py` (7 routes)** — identical to pass 6's corrected
+  table: `create_rank`/`update_rank`/`delete_rank`/`reorder_ranks`/
+  `validate_ranks` all `require_permission("settings.manage",
+"members.manage")`; `reorder_ranks`'s independent `_refuse_ordering` gate
+  (`ORDERING_PERMISSION = "settings.manage"`) confirmed still present at
+  `operational_ranks.py:52`.
+* **`officers.py` (3 routes)** — all three still
+  `require_permission("settings.manage", "organization.update_settings")`
+  (`officers.py:36,61,114`).
+* **`org_chart.py` (5 routes)** — `GET ""` still auth-only by design; the
+  four mutations still `require_permission("orgchart.manage",
+"settings.manage")`.
+
+### Verified good ✅
+
+- **All eight prior fixes (PERM-1, -2, -3, -4, -6, -7, -8, and pass 5/6's
+  ceiling/ordering/case-folding verifications) are intact**, re-checked by
+  direct grep at current line numbers: `is_read_only_permission`'s
+  word-boundary match plus `_READ_ONLY_PERMISSION_EXCEPTIONS`
+  (`core/permissions.py:1101,1094`); `MAX_RANKS_PER_REORDER = 500`
+  (`schemas/operational_rank.py:105`); `assign_role_to_user`/
+  `remove_role_from_user`/`set_user_roles` still take `organization_id` as a
+  required keyword-only parameter; `_enforce_rank_grant_ceiling` /
+  `_enforce_role_grant_ceiling` / `_enforce_account_reset_ceiling` all still
+  present and still wired at every call site pass 6 named
+  (`users.py:323,367,1127,1143,1261,1367,1843,2032,2174,2283` — re-grepped,
+  not re-derived).
+- **`get_all_permissions()` still contains no wildcard** despite eight new
+  permissions landing this pass: `"*" not in get_all_permissions()`,
+  confirmed by direct interpreter check against the current registry
+  (118 permissions total, up from 110 at pass 6). `create_role`/`update_role`
+  still validate against this list, so none of the new grants are reachable
+  through role CRUD at a scope wider than seeded.
+- **Every new seeded permission/position this pass's diff added has its own
+  Pitfall #23 migration**, checked by name rather than assumed from the
+  registry comment: `inventory.kiosk` →
+  `20260925_0234_2000f4561f52_inventory_self_checkout_kiosk.py`;
+  `locations.manage_nfc_tags`/`apparatus.manage_nfc_tags` →
+  `20261002_2303_5bed4c485d2f_grant_nfc_tag_writers.py`;
+  `suggestions.manage` →
+  `20260923_2219_394600cbfae2_grant_suggestions_manage.py` (read in full —
+  correctly gated on the grant's own absence rather than a whole-row
+  snapshot, scoped to `is_system = True`, idempotent, frozen `_SLUGS` tuple
+  rather than an import of the live registry); `assistant_membership_coordinator`
+  → `20260924_1710_43e9df281412_seed_assistant_membership_coordinator_*.py`;
+  `compliance_officer` → `20260924_1906_3c918c06466d_seed_compliance_officer_position_and_box.py`;
+  `training.view_analytics` →
+  `20261004_1459_84819ea78a79_grant_training_view_analytics_to_*.py`.
+  `system.manage_link_domain` needs no backfill migration: it is "granted to
+  no default role" by its own comment and only the wildcard `it_manager`
+  position matches it, which needs no stored-row change. `inventory.check_manage`
+  on the Quartermaster position is likewise backed by the
+  `20260930`-dated `add_quartermaster_check_manage` migration its own code
+  comment names (`core/permissions.py:2139`).
+- **PERM-5's failure scenario still reproduces against the current registry,
+  driven directly rather than reasoned from the diff**: `permission_matches("*",
+DEFAULT_POSITIONS["secretary"]["permissions"])` and the same for
+  `membership_coordinator` both evaluate `False`, while both still hold
+  `members.manage` — the exact gap the finding describes is unchanged by
+  everything else this pass's six changed files did.
+- **No injection surface, no unbounded in-memory tracker, no new migration
+  authored by this feature** — re-confirmed by the same greps prior passes
+  ran (zero raw SQL, zero `.like(`/`.ilike(`, zero `csv.writer`, no new
+  module-level dict/set) across the six changed files.
+
+### Findings
+
+**PERM-5 remains the rotation's one open item for this feature — re-verified,
+not newly found.** Unchanged since pass 4's original writeup below, and still
+reproduces against the current seeded `DEFAULT_POSITIONS` (see "Verified
+good" above). **New to this pass:** an unmerged PR (#2918, branch
+`claude/gracious-goodall-z1bv9g`, a different track's work) already proposes
+the narrow fix this writeup's option 2 describes ("protect the wildcard
+only") — refusing to strip `*` from its last active holder specifically,
+rather than a general demotion ceiling. That PR has not merged as of this
+pass; this pass does not duplicate it. **Recommendation for whoever merges
+first:** land #2918's narrow guard (or the owner's preferred option from the
+three below) rather than having this feature's next pass re-derive the same
+choice a third time.
+
+Zero other new findings this pass, despite the real (non-zero-delta) diff —
+every changed line in the six files above is either a display-name feature,
+a WebSocket-handshake carve-out already scoped to a non-auth dependency, or
+a new seeded grant each individually backed by its own migration.
+
+### Schema & migration notes
+
+No model or migration authored by this feature this pass. `operational_ranks`,
+`organization_officers`, `org_chart_nodes` FK nullability unchanged since
+pass 4 (re-confirmed: `tests/test_database_schema.py::test_set_null_fks_are_nullable`
+re-run clean). `validate_migrations.py --strict`: 512 revisions, single head
+`34d3d56d1479` — one migration ahead of pass 6's `6ab7d903fae5`, from
+`add_users_preferred_name` (an unrelated display-name feature). The test
+database in this session's sandbox was one migration behind at the start of
+this pass (`alembic upgrade head` applied exactly that one migration before
+the gate's scoped test run; see Completion gate) — an environment-setup gap,
+not an application defect, and not something a security review fixes in
+code.
+
+### Guard tests added
+
+None — no new fix in this pass (the open finding's fix is in flight on a
+different branch, not duplicated here). All standing guard tests from
+passes 1-6 re-run clean (see Completion gate).
+
+### Completion gate
+
+| Check                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Result                                                                             |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `python3 -m flake8 app/ tests/ alembic/` (7.3.0, CI's pin)                                                                                                                                                                                                                                                                                                                                                                                                | ✅ 0 violations                                                                    |
+| `python3 -m black --check app/ tests/ alembic/` (26.5.1, CI's pin)                                                                                                                                                                                                                                                                                                                                                                                        | ✅ 1869 files unchanged                                                            |
+| `python3 -m isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)                                                                                                                                                                                                                                                                                                                                                                                    | ✅ clean                                                                           |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                                                                                                                                                                                         | ✅ 512 revisions, single head `34d3d56d1479`                                       |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                                                                                                                                                                                                                                                                                                                         | ✅ 244 routes checked, 0 errors, 0 warnings                                        |
+| `python3 scripts/check_docs_links.py`                                                                                                                                                                                                                                                                                                                                                                                                                     | ✅ 428 Markdown files, 0 broken links                                              |
+| backend tests, scoped (`-k "permission or role or rank or officer or org_chart or org_scoping or scoping or admin_continuity"`) — **first run failed 136/1584 on `Unknown column 'users.preferred_name'`** (test DB one migration behind sandbox's `alembic upgrade head`); fixed by running the pending migration, then re-run clean                                                                                                                     | ✅ 1448 passed, 1 skipped (`py_vapid` — environment), after `alembic upgrade head` |
+| standing guard suite (`test_org_scoping_ratchet.py` + `test_require_permission_registry.py` + `test_endpoint_auth_coverage.py` + `test_permission_gate_composition.py` + `test_read_permission_gates.py` + `test_privilege_ceiling_wiring.py` + `test_permission_read_write_tiers.py` + `test_role_service.py` + `test_operational_rank_service.py` + `test_operational_rank_permissions.py` + `test_rank_grant_ceiling.py` + `test_admin_continuity.py`) | ✅ 212 passed                                                                      |
+| backend full unit suite (`pytest tests/ -m "not integration and not slow and not docker"`)                                                                                                                                                                                                                                                                                                                                                                | ✅ 12574 passed, 1 skipped (environment), 0 failed                                 |
+| `npm run typecheck` (frontend)                                                                                                                                                                                                                                                                                                                                                                                                                            | ✅ 0 errors                                                                        |
+| `npm run lint` (frontend)                                                                                                                                                                                                                                                                                                                                                                                                                                 | ✅ 0 errors, 0 warnings                                                            |
 
 ---
 

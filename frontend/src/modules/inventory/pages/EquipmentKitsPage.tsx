@@ -456,7 +456,7 @@ const EquipmentKitsPage: React.FC = () => {
               <button
                 type="button"
                 onClick={addLineItem}
-                className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                className="touch:min-h-11 flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
               >
                 <Plus className="h-3.5 w-3.5" /> Add Item
               </button>
@@ -528,23 +528,23 @@ const EquipmentKitsPage: React.FC = () => {
                     />
                   </div>
                   <div className="flex items-end pb-1 sm:col-span-2">
-                    <div className="space-y-1">
-                      <label className="text-theme-text-secondary flex cursor-pointer items-center gap-1.5 text-xs">
+                    <div>
+                      <label className="text-theme-text-secondary mobile-touch-target flex cursor-pointer items-center justify-start gap-1.5 text-xs">
                         <input
                           type="checkbox"
                           checked={li.size_selectable}
                           onChange={(e) => updateLineItem(idx, 'size_selectable', e.target.checked)}
-                          className="border-theme-surface-border rounded"
+                          className="form-checkbox"
                         />
                         <Ruler className="h-3.5 w-3.5" />
                         Size
                       </label>
-                      <label className="text-theme-text-secondary flex cursor-pointer items-center gap-1.5 text-xs">
+                      <label className="text-theme-text-secondary mobile-touch-target flex cursor-pointer items-center justify-start gap-1.5 text-xs">
                         <input
                           type="checkbox"
                           checked={li.optional}
                           onChange={(e) => updateLineItem(idx, 'optional', e.target.checked)}
-                          className="border-theme-surface-border rounded"
+                          className="form-checkbox"
                         />
                         Optional
                       </label>

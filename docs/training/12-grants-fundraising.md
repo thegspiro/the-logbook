@@ -91,6 +91,7 @@ The opportunities library is a catalog of available grant programs. Pre-loaded w
 2. Filter by category: Equipment, Staffing, Training, Prevention, Facilities, Vehicles, Wellness, Community, Other
 3. Search by name or agency
 4. **Deadline urgency** color-coded: Red (< 14 days), Yellow (< 30 days), Green (> 30 days)
+5. **Start Application** on an opportunity opens a new application already linked to it
 
 ### Adding an Opportunity
 
@@ -105,6 +106,8 @@ The opportunities library is a catalog of available grant programs. Pre-loaded w
 
 ![Grant opportunities library showing available grant programs](./images/12-03-opportunities.png)
 
+**[SCREENSHOT — REPLACE `12-03-opportunities.png`.** Each opportunity's button now reads **Start Application** (was Apply), and the subtitle reads "Browse grant programs and start an application".**]**
+
 ---
 
 ## Grant Applications
@@ -113,9 +116,9 @@ The opportunities library is a catalog of available grant programs. Pre-loaded w
 
 **Required Permission:** `fundraising.manage`
 
-1. Navigate to **Grants > Applications** and click **New Application**
+1. Navigate to **Grants > Applications** and click **New Application**. As the form says: _"Only the program name and agency are required. You can add the rest later."_
 2. Fill in:
-   - **Grant Program Name** — or select from the opportunities library
+   - **Grant Program Name** — or choose one under **Grant Opportunity** (the field was labelled Opportunity ID)
    - **Grant Agency** — funding organization
    - **Amount Requested** — what you're asking for
    - **Match Amount** / **Match Source** — local match requirements
@@ -123,9 +126,11 @@ The opportunities library is a catalog of available grant programs. Pre-loaded w
    - **Project Description** — what the grant will fund
    - **Priority** — Low, Medium, High, or Critical
    - **Assigned To** — team member managing the application
-3. Save — application starts in **Researching** status
+3. Click **Create Application** (editing later saves with **Save Changes**) — the application starts in **Researching** status
 
 ![Create grant application form with program, agency, and amount fields](./images/12-04-create-application.png)
+
+**[SCREENSHOT — REPLACE `12-04-create-application.png`.** The subtitle now reads "Only the program name and agency are required. You can add the rest later.", the opportunity field is labelled **Grant Opportunity**, the budget-summary placeholder reads "How the grant money will be spent..." and the contacts placeholder "Names, roles, and phone or email...".**]**
 
 ---
 
@@ -163,7 +168,7 @@ Each grant application has a **budget** broken down into line items and tracked 
 
 ### Budget Items
 
-Navigate to the **Budget** tab on an application detail page.
+Navigate to the **Budget** tab on an application detail page and use **Add Budget Item** (the button read Add Item).
 
 | Field            | Description                                                                                  |
 | ---------------- | -------------------------------------------------------------------------------------------- |
@@ -180,12 +185,14 @@ Navigate to the **Budget** tab on an application detail page.
 Navigate to the **Expenditures** tab to record spending against the budget:
 
 1. Click **Record Expenditure**
-2. Enter: description, amount, date, vendor, invoice number
-3. Optionally link to a budget item
+2. Enter the amount and date; **Description**, **Vendor**, and **Invoice / PO Number** are marked _(optional)_
+3. Optionally link it under **Budget Item (optional)** — **None** leaves it unlinked
 4. Add receipt URL and approval info
 5. Save
 
 ![Grant application budget tab with budgeted, spent, and remaining columns](./images/12-06-application-budget-tab.png)
+
+**[SCREENSHOT — CHECK `12-06-application-budget-tab.png`.** If the frame shows the add button, it now reads **Add Budget Item**, and the summary's "Match Required" figure is labelled **Match Amount**.**]**
 
 ### Edge Cases
 
@@ -281,7 +288,7 @@ Campaigns organize fundraising efforts around a specific goal.
 
 **Required Permission:** `fundraising.manage`
 
-1. Navigate to **Grants > Campaigns** and click **Create Campaign**
+1. Navigate to **Grants > Campaigns** and click **New Campaign**
 2. Fill in:
    - **Name** — e.g., "2026 Annual Fund Drive"
    - **Description** — campaign purpose and story
@@ -289,7 +296,7 @@ Campaigns organize fundraising efforts around a specific goal.
    - **Goal Amount** — target fundraising amount
    - **Start/End Dates** — campaign period
    - **Status** — Draft, Active, Paused, Completed, Cancelled
-3. Save
+3. Click **Create Campaign**
 
 ### Campaign Features
 
@@ -334,6 +341,8 @@ Each donor profile shows:
 - **Communication preferences** — how and when to contact
 
 ![Donor list with contact details and giving summaries](./images/12-10-donors.png)
+
+**[SCREENSHOT — REPLACE `12-10-donors.png`.** The subtitle now reads "Look up donors and what each has given".**]**
 
 ### Edge Cases
 
@@ -461,7 +470,7 @@ After the event, update:
 
 ## Reports & Analytics
 
-Navigate to **Grants > Reports** for two report types:
+Navigate to **Grants > Reports** — _"Grant results and fundraising totals for the dates you choose"_ — which has two tabs, **Grants** and **Fundraising** (named Grant Reports and Fundraising Reports before 2026-09-29). The Fundraising tab's headline figure is **Total Raised**.
 
 ### Grant Report
 
@@ -479,6 +488,8 @@ Navigate to **Grants > Reports** for two report types:
 - Average donation size
 
 ![Fundraising report with donation trends and top campaigns](./images/12-14-fundraising-reports.png)
+
+**[SCREENSHOT — REPLACE `12-14-fundraising-reports.png`.** The tabs read **Grants** / **Fundraising**, the subtitle "Grant results and fundraising totals for the dates you choose", and the first KPI **Total Raised** (was Total Donations).**]**
 
 ---
 
@@ -643,3 +654,33 @@ displays.
 **Nothing about what you see changed** — same rows, same order, same totals — so
 there is nothing to re-check after upgrading. The lists are simply no longer
 affected by how much history sits behind them.
+
+## Changes September 24 – October 4, 2026
+
+### Dates are the department's, not the server's _(2026-09-26)_
+
+The server runs on UTC, which for a US department is already tomorrow every
+evening. The grants and fundraising dashboards' upcoming-deadline, tasks-due
+and campaign figures, and the completed date stamped on a compliance task when
+you mark it complete, now use the department's date — the timezone under
+**Settings → Organization → Profile → Timezone**, America/New_York when none is
+set — so an evening look at the dashboard no longer counts from tomorrow. A donor's first
+and last donation dates, read from the donation's timestamp, are the
+department's day too; an evening gift used to be dated the next day. Report
+date ranges themselves are still UTC — see
+[KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md) (GF-24a).
+
+### Wording _(2026-09-29)_
+
+Buttons and messages say what they do: **Start Application** (was Apply),
+**Add Budget Item** (was Add Item), **Save Changes** (was Update Application),
+**Clear filters** (was Clear), and the grant detail's summary reads **Match
+Amount** (was Match Required). Compliance task statuses show as words (**In
+Progress**) instead of `in progress`. Empty lists say whether a filter is the
+reason (_"No donations match your search or filter."_) or there is nothing yet,
+and point a member who can add one at the button that does.
+
+### Dark mode _(2026-10-03)_
+
+The dashboard's load-error panel was a light-only block in dark mode; it uses
+the themed alert colours now.

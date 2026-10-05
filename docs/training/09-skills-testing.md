@@ -818,6 +818,19 @@ Testing > Templates** _(revised 2026-10-05 — there is no separate Summary tab)
 | **Pass Rate**        | Percentage of **validated** completed tests that resulted in a pass — officers only; members see —                                  |
 | **Avg Score**        | Mean percentage score across **validated** completed tests — officers only; members see —                                            |
 
+The summary endpoint also reports published templates and all-time test totals,
+which no card shows. _(Corrected 2026-10-04: this table used to list seven
+metrics, including **Total Templates**, **Published Templates** and **Total
+Tests**, and send you to a **Summary** tab. There is no Summary tab, and the
+cards are the ones above.)_
+
+> **"—" means there is nothing to measure yet** _(2026-09-29)_. **Pass Rate**
+> and **Avg Score** show "—" when the department has no figure — no validated
+> test yet, or (for the score) nothing tested carried points. They used to show
+> **0%**, so a department whose only test passed read "Pass Rate 100%" beside
+> "Avg Score 0%", and a department that had run no tests read as failing every
+> one.
+
 > **Pass rate and average score count only validated results** _(2026-08-08)_.
 > A member-run result nobody has signed off is a submission, not yet the
 > department's finding — folding it in would let the headline number move on

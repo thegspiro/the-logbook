@@ -493,6 +493,129 @@ export const ALL_ROUTES: RouteCheck[] = [
   // inventory.check_manage is a distinct grant from inventory.manage, and
   // checkPermission compares literally — without it this hub renders Access
   // Denied, which passes both budgets while measuring an error page.
+  // Inventory Administration and the pages its hub links to. Four of them
+  // (Pool, Members, Charges, Impact Planner) crashed to the error screen on a
+  // malformed response while this list did not name them; `expectText` is the
+  // page's own heading, so a redirect or a substituted screen cannot pass.
+  {
+    path: '/inventory/admin',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Inventory Administration',
+  },
+  {
+    path: '/inventory/admin/setup',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Inventory Setup',
+  },
+  {
+    path: '/inventory/admin/items',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Inventory Items',
+  },
+  {
+    path: '/inventory/admin/pool',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Pool Items',
+  },
+  {
+    path: '/inventory/admin/categories',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Categories',
+  },
+  {
+    path: '/inventory/admin/maintenance',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Maintenance & Inspections',
+  },
+  {
+    path: '/inventory/admin/members',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Member Equipment',
+  },
+  {
+    path: '/inventory/admin/charges',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Charge Management',
+  },
+  {
+    path: '/inventory/admin/returns',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Return Requests',
+  },
+  {
+    path: '/inventory/admin/requests',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Gear Requests',
+  },
+  {
+    path: '/inventory/admin/write-offs',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Write-Off Requests',
+  },
+  {
+    path: '/inventory/admin/reorder',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Reorder Requests',
+  },
+  {
+    path: '/inventory/admin/kits',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Gear Kits',
+  },
+  {
+    path: '/inventory/admin/variant-groups',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Variant Groups',
+  },
+  {
+    path: '/inventory/admin/allowances',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Issuance Allowances',
+  },
+  {
+    path: '/inventory/admin/vendors',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Vendors',
+  },
+  {
+    path: '/inventory/admin/impact-planner',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Impact Planner',
+  },
   {
     path: '/inventory/admin/checklists',
     maxSmallTargets: 0,

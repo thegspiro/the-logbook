@@ -52,7 +52,7 @@ curl -sSL .../universal-install.sh | bash -s -- --public-url https://logbook.exa
 which every emailed link (password resets, ballots, reminders) is built from.
 Without it the installer exits before installing anything, unless an existing
 `.env` already has a public `FRONTEND_URL`; a `localhost` or `127.0.0.1` URL is
-refused. A production backend will not start with a loopback `FRONTEND_URL` —
+refused. A production backend will not start with a loopback `FRONTEND_URL` — unless `ALLOWED_ORIGINS` names a public address, in which case the first such origin is used for links instead (logged at startup; 2026-09-25) —
 see [UPGRADING.md](../docs/UPGRADING.md#frontend_url-must-be-a-public-address-2026-09-25).
 
 ---

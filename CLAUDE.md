@@ -167,7 +167,7 @@ The Logbook is an open-source modular intranet platform for fire departments and
 
 - **Framework:** FastAPI 0.141 (starlette 1.x) + Uvicorn
 - **Language:** Python 3.13
-- **ORM:** SQLAlchemy 2.0 (async via aiomysql)
+- **ORM:** SQLAlchemy 2.1 (async via aiomysql)
 - **Database:** MySQL 8.0
 - **Migrations:** Alembic
 - **Cache / sessions:** Redis 7
@@ -269,7 +269,7 @@ did.
 
 **typescript-eslint cannot run on TypeScript 7.** It throws
 `typescript-eslint does not support TS 7.0` from a hard version guard, and
-every published version — including the `^8.67.0` this repo uses — caps its
+every published version — including the `^8.70.1` this repo uses — caps its
 peer range at `>=4.8.4 <6.1.0` (typescript-eslint#10940 tracks TS >=7.1
 support). A workspace can only declare one package named `typescript`, so the
 plain name is the version the linter needs and the compiler the project builds
@@ -405,8 +405,8 @@ beforeEach(() => {
 
 ### Frontend
 
-- ESLint 9 with @typescript-eslint (max-warnings 10)
-- Prettier 3.4 with prettier-plugin-tailwindcss
+- ESLint 10 with @typescript-eslint (max-warnings 10)
+- Prettier 3.9 with prettier-plugin-tailwindcss
 
 ### Backend
 

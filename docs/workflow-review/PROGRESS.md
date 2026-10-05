@@ -107,7 +107,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W51 | Meeting minutes: draft, approve, publish                              | secretary          | `/minutes`                                         | ✅     |
 | W52 | Action items: assign, work, close                                     | secretary → member | `/action-items`                                    | ✅     |
 | W53 | Documents: folders, upload, who can see what                          | secretary, member  | `/documents`                                       | ✅     |
-| W54 | Org chart and legal documents                                         | admin, member      | `/governance/org-chart`, `/governance/legal`       | ⬜     |
+| W54 | Org chart and legal documents                                         | admin, member      | `/governance/org-chart`, `/governance/legal`       | ✅     |
 | W55 | Messages: send to a group, the member's inbox, message administration | admin → member     | `/communications/messages`, `/messages`            | ⬜     |
 | W56 | Notification rules and logs, the in-app bell                          | admin, member      | `/notifications`                                   | ⬜     |
 | W57 | Email templates: edit, preview, restore                               | admin              | `/communications/email-templates`                  | ⬜     |
@@ -176,6 +176,8 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   Positions and Apparatus steps at 390px wide (W01-13), and the sign-in
   screen's "Forgot your password?", Privacy and Terms links (W02-5), and
   "Back to Login" on the forgot-password page (36px, W03).
+- **W79** — on the Legal Documents page at 390px, "Open /privacy" and each
+  "Read this version" summary are 20px tall (W54-6).
 - **W79** — the checklist builder's header and chip controls are 30–40px tall
   at 390×844, and its drag handles 20px (W46-18).
 - **W33 / W34** — the shift-assignment notice names the equipment checklists
@@ -205,6 +207,51 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   forever (W51-9).
 
 ## Log
+
+### W54 — Org chart and legal documents — 2026-10-04
+
+Driven as:
+
+- `admin` building a chart on an empty install: linked and unlinked seats, a
+  typed person with no account, a hidden seat, a re-parent, a removal with
+  reports, and a nudge;
+- `member` reading and searching the chart, and trying to change it;
+- `secretary` proposing and editing a privacy-policy draft, and trying to
+  publish, revert, and touch the admin's draft;
+- `admin` publishing and reverting, with `/privacy` read signed out after
+  each;
+- both pages repeated at 390×844.
+
+Database continued from W53.
+
+Held:
+
+- every permission line, on the screen and the API;
+- double-clicks acted once;
+- cleared fields stayed cleared;
+- hidden seats stayed hidden from members;
+- publish and revert reached the public page;
+- the audit log recorded every change with its actor.
+
+Fixed:
+
+- W54-1 (MED — a malformed contact email was saved and published as a
+  `mailto:` link; refused now by the editor and the server);
+- W54-2 (LOW — the legal tabs controlled no tab panel).
+
+Flagged (in KNOWN_LIMITATIONS):
+
+- W54-3 (MED — a revert leaves no trace in the published history);
+- W54-4 (LOW — a publisher's edit to a proposal is not attributed);
+- W54-5 (LOW — department text loses the built-in text's headings and lists).
+
+Lead: W54-6 (two 20px tap targets) → W79.
+
+Gate: typecheck and lint are clean; flake8 and black are clean on the changed
+Python files. 60 governance frontend tests and 123 org-chart and legal backend
+tests pass.
+
+Next: W55.
 
 ### W53 — Documents: folders, upload, who can see what — 2026-10-04
 

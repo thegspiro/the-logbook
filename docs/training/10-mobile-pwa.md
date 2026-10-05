@@ -97,9 +97,10 @@ Once installed, The Logbook runs in **standalone** mode:
 - **Persistent login** — your session persists between app launches (subject to your department's session timeout policy)
 - **App icon** — your **department's own logo** _(2026-09-17)_, if one is uploaded under Settings → Organization → Profile; otherwise the Logbook icon. See [Your department's logo as the app icon](#your-departments-logo-as-the-app-icon-2026-09-17)
 - **PWA shortcuts** — long-press the app icon to see quick shortcuts to Dashboard, Events, and Scheduling (supported on Android and some desktop platforms)
-- **Bottom tab bar** _(2026-08-07)_ — on phones, four destinations plus **More**
-  sit within thumb reach at the bottom of the screen. See
-  [Getting Around on a Phone](#getting-around-on-a-phone-2026-08-07).
+- **Bottom tab bar** _(2026-08-07)_ — on phones, **Home**, two tabs you choose,
+  the round **Add** button and **More** sit within thumb reach at the bottom of
+  the screen. See [Getting Around on a Phone](#getting-around-on-a-phone-2026-08-07)
+  and [Choose your own bottom-bar tabs](#choose-your-own-bottom-bar-tabs-2026-10-02).
 - **Launches straight to your dashboard** _(2026-08-07)_ — the app used to open
   on the onboarding welcome splash and then redirect, which cost an extra hop
   every launch and, offline while signed out, showed a "Get Started" screen that
@@ -145,13 +146,19 @@ Every destination used to sit behind the hamburger drawer in the **top-left**
 corner — two taps to reach anything, from the corner of the screen hardest to
 reach one-handed, across 59 navigation entries.
 
-On phones there is now a **bottom tab bar**: four destinations plus a **More**
-button, within thumb reach. Tap **More** to open the full navigation drawer.
+On phones there is now a **bottom tab bar** within thumb reach. Tap **More** to
+open the full navigation drawer.
 
-- The four tabs are chosen for your department, filtered by the modules it has
-  enabled. If your department has scheduling switched off, you get a different
-  fourth tab rather than a gap.
-- Four plus More is the ceiling — labels stop fitting on a 320px phone beyond
+> **Since 2026-09-01 the bar is Home, two tabs, the round Add button, and More**
+> (see [Quick Add](#quick-add-two-taps-from-anywhere-2026-09-01)), and **since
+> 2026-10-02 you choose the two tabs** yourself (see
+> [Choose your own bottom-bar tabs](#choose-your-own-bottom-bar-tabs-2026-10-02)).
+> The paragraph below describes the August 2026 bar.
+
+- The tabs are filtered by the modules your department has enabled. If your
+  department has scheduling switched off, you get a different tab rather than a
+  gap.
+- Five items is the ceiling — labels stop fitting on a 320px phone beyond
   that.
 - The bar **hides while the on-screen keyboard is up**, so it never covers the
   field you are typing into.
@@ -1009,8 +1016,70 @@ and a route's module gate must be repeated on the row.
 Six items on a 390px phone is 65px each, and it puts the action at an edge
 rather than under the thumb.
 
-**A bar layout saved before this keeps its first two destinations** and is left
-intact — the third is still one tap away under **More**.
+~~A bar layout saved before this keeps its first two destinations.~~
+**Corrected 2026-10-02:** nothing in the app could ever save a bar layout — the
+bar read a browser setting no screen wrote — so every member had their role's
+defaults. The bar no longer reads that setting at all; choosing tabs is now an
+account setting, below.
+
+## Choose your own bottom-bar tabs _(2026-10-02)_
+
+**My Account → Appearance → Phone navigation bar** sets the two tabs either side
+of **Add**: **Left of Add** and **Right of Add**. _"Saved to your account, so
+they follow you to every device."_ Each list offers the destinations you can
+actually open — Events, Store, Schedule, Training, Members, Documents,
+Learning, Settings — filtered by your department's modules and your
+permissions; **Home** is always first and is not offered. A choice saves the
+moment you make it, and **Use the default tabs** puts the role defaults back.
+
+- **Never chosen?** You keep the defaults: Events and Schedule for a member;
+  Events and Settings for an administrator (anyone with `settings.manage`).
+  Upgrading changes nobody's bar.
+- **A chosen tab you can no longer open** — its module switched off, a
+  permission removed — falls back to the next default rather than leaving a
+  dead button. Your choice is kept, and returns when the tab is usable again.
+- **The Settings tab opens your own account** (`/account`), not Organization
+  Settings. It used to open `/settings`, which needs `settings.manage`, so for
+  most members the tab could only show Access Denied — and was therefore only
+  ever offered to administrators. An officer who manages the department's
+  settings reaches them from **More**.
+
+> **Screenshot needed:**
+> _[My Account → Appearance on a 390px phone, scrolled to **Phone navigation bar**: the **Left of Add** and **Right of Add** selects (one set to Training), the **Use the default tabs** link, and the bottom bar beneath showing the chosen tab.]_
+
+**[SCREENSHOT — CHECK `10-12-mobile-bottom-nav.png`.** If the frame shows an administrator's bar with a **Settings** tab, that tab now opens My Account; the frame itself is unchanged unless it predates the 2026-09-01 Add button.**]**
+
+## The navigation drawer shows when there is more below _(2026-09-29)_
+
+Phones draw scrollbars only once you start scrolling, so a long navigation
+drawer cut off on a whole item looked complete. The drawer now fades at the
+edge that hides items and shows a small **More** chevron at the bottom;
+tapping it scrolls the list down. On desktop the sidebar keeps its permanent
+scrollbar and shows no chevron _(2026-09-30)_ — there it only covered the last
+rows.
+
+> **Screenshot needed:**
+> _[The navigation drawer open on a 390px phone as an officer, with items below the fold: the fade at the bottom edge and the floating **More** chevron.]_
+
+## Tablets and phones: layout fixes _(2026-10-03 → 10-04)_
+
+- **Hover-only buttons show on touch tablets.** Edit, delete and download
+  controls that appear when a mouse hovers a card were hidden by screen width,
+  so on an iPad — which cannot hover — they were invisible on 26 screens. They
+  are now hidden only on devices with a mouse.
+- **Card lists size to their own width.** On a tablet with the sidebar open, a
+  card list shows two roomy columns instead of three cramped ones.
+- **Small buttons keep their icon beside the label** from 768px up; the icon
+  used to stack above it (the store catalog's Edit / Archive / New item, and 25
+  other places).
+- **Reports' date fields** no longer push the page sideways on a tablet.
+- **Settings screens get their width back on phones** _(2026-10-04)_. Four
+  layers of side padding left a setting's label about 185px wide at 320px, so
+  "Require end-of-shift equipment checks" wrapped one word per line. Settings
+  screens now sit on the same 16px gutter as the member pages, and a
+  **RECOMMENDED** badge wraps under its label.
+- **Radio buttons stay round and checkboxes square** _(2026-10-03)_ beside a
+  label that wraps — they were squeezed into ovals.
 
 ## Settings screens are usable on a phone _(2026-08-31)_
 

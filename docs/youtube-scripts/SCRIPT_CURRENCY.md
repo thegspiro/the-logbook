@@ -1,5 +1,207 @@
 # Script currency
 
+## Flagged by the 2026-10-04 currency pass (September 24 – October 4)
+
+Full context for every change below is in
+[`../CHANGE_AUDIT_2026-09-24_TO_10-04.md`](../CHANGE_AUDIT_2026-09-24_TO_10-04.md).
+Area reviewers flagged candidate discrepancies across scripts 01–16; **every
+row was checked against the current source before anything was written**, and
+the labels below are quoted from `frontend/src` as they stand on 2026-10-04.
+Rows that did not survive that check are listed under "Dropped". Everything
+in the table is fixed in-script, each with a dated **PRODUCTION NOTE**,
+**EDITOR** or **B-ROLL** cue at the beat.
+
+**One earlier entry is superseded, and was never applied.** The 2026-09-25
+email redesign section below records three rows for script 07 as if they had
+been written, but the script still carried the August accent-rule beat. It is
+moot now: since 2026-09-27 (migration `15c5bc7700aa`, PR #2754) **every**
+stored template, edited ones included, was reset onto the solid-tab design,
+with the previous wording kept in `email_template_backups`. Script 07's beat
+is rewritten for that, and the 2026-09-25 rows should be read as history.
+
+The seeded top rank is now **Chief**, not "Fire Chief" (migration
+`d4e1a7c93b58`, 2026-09-25, label only). References to the seeded position or
+to an election office built from it were changed; uses that mean a person's
+title — the series title, "As Fire Chief or President" — were left alone.
+
+| Script | Beat                                          | Was                                                                                                   | Now                                                                                                                                                                                               | Class          |
+| ------ | --------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| **01** | One-line install, `--public-url`              | "a production server won't start with that"                                                           | A loopback `FRONTEND_URL` falls back to the first public `ALLOWED_ORIGINS` entry; production refuses to start only when neither is public                                                         | **Incomplete** |
+| **01** | Cloud, production profile                     | Certificates via Certbot, no location                                                                 | `fullchain.pem` / `privkey.pem` in `infrastructure/nginx/ssl/` before start; `docker-compose.proxy.yml` closes port 3000; 60 MB uploads                                                           | **Incomplete** |
+| **02** | Organization setup, Timezone                  | "stored in UTC and displayed in whatever timezone you set here"                                       | Also the department's "today" for alerts and compliance, and the times printed in emails, PDFs and exports                                                                                        | **Incomplete** |
+| **02** | Administrator account, 2FA                    | "enable it later from User Settings"                                                                  | **My Account → Security**                                                                                                                                                                         | **Stale**      |
+| **02** | Module overview `[SCREEN]` and continue       | "toggle switches"; "Next"                                                                             | Each card has **Enable**, **Later**, **Skip**; the button is **Continue to Ranks & Positions**                                                                                                    | **Stale**      |
+| **02** | Positions list and default positions          | "Fire Chief"; specialist list ends at Membership Coordinator                                          | **Chief**; adds Assistant Membership Coordinator, EMS Supply Officer, Compliance Officer                                                                                                          | **Stale**      |
+| **02** | Chapter 7 title and `[SCREEN]`                | "IT Team & Backup Access"                                                                             | **IT & Backup Contacts**, with **Skip for now**                                                                                                                                                   | **Stale**      |
+| **03** | Bulk import tips                              | "Leave membership number blank to have the system assign one"                                         | Only when membership ID numbers are enabled with **Auto-Generate IDs** on                                                                                                                         | **Incomplete** |
+| **03** | Custom position example                       | —                                                                                                     | Public-portal admin screens need `settings.manage` (2026-09-29); Configuration tab is **Rate Limiting** only                                                                                      | **Addition**   |
+| **03** | Events settings                               | Default RSVP deadlines, a QR check-in switch, event types                                             | **Event settings** sections; **Attendance** carries who sees who's going and the per-type fallback for attendance requests; QR check-in is per event                                              | **Wrong**      |
+| **03** | Scheduling settings                           | Swap rules, advance notice, swap blackout dates                                                       | None exists. Seven sections, incl. **Outside Apparatus**; **Notifications** switches read "Not in effect yet"                                                                                     | **Wrong**      |
+| **03** | Email configuration                           | —                                                                                                     | **Email link address** card; changing it needs `system.manage_link_domain`                                                                                                                        | **Addition**   |
+| **03** | Network label printers                        | Register the printer, then test                                                                       | Nothing prints until the operator lists the printers in `LABEL_PRINTER_ALLOWED_NETWORKS`; empty means off                                                                                         | **Incomplete** |
+| **03** | Post-upgrade, ID cards                        | Grant `members.manage_id_cards` yourself                                                              | Seeded **Assistant Membership Coordinator** already holds it                                                                                                                                      | **Addition**   |
+| **03** | Post-upgrade, `inventory.*`                   | "No seeded position grants `inventory.*` … Usually a quartermaster"                                   | Seeded **Quartermaster** now holds `inventory.check_manage` where its grants were as shipped                                                                                                      | **Addition**   |
+| **03** | Treasurer finance grants                      | "With no approval chain … requests skip approval entirely"                                            | They wait in **Pending Approval**; **Finance → Approvals** (2026-09-29) and Approve / Deny on the request page, chain or not (2026-09-30)                                                         | **Wrong**      |
+| **04** | Creating an event                             | —                                                                                                     | **Organizer** and **Alternate (optional)**; attendance requests go to them; **Transfer event**                                                                                                    | **Addition**   |
+| **04** | Member ID cards                               | "position … and a QR code that can be scanned for check-in"                                           | Rank; the QR and barcode are for officer lookups; door check-in is the NFC card; another member's card needs `members.manage` or `members.manage_id_cards`                                        | **Wrong**      |
+| **04** | Convert to Member                             | "their data carries over automatically"                                                               | Refused while a **Required** stage is unfinished; the officer chooses how the password is delivered                                                                                               | **Incomplete** |
+| **04** | Prospective pipeline                          | —                                                                                                     | **Sign-offs** page and the dashboard **Needs you** row                                                                                                                                            | **Addition**   |
+| **04** | Managing candidates and offices               | "Fire Chief, Captain, President"                                                                      | "Chief, Captain, President"                                                                                                                                                                       | **Stale**      |
+| **04** | Closing & publishing results                  | "flip 'results visible immediately'"                                                                  | **Publish Results** on the **Results & Publishing** panel                                                                                                                                         | **Wrong**      |
+| **04** | Approving shift swaps                         | Approving moves the shift                                                                             | A trade or an **Offered to** row moves the seat; an **Open swap** approval moves nothing                                                                                                          | **Incomplete** |
+| **04** | Shift reports `[SCREEN]`                      | "ShiftReportPage"                                                                                     | Scheduling → **Shift Reports**: About me, Written by me, Review Queue, Flagged, Drafts, **New report**                                                                                            | **Stale**      |
+| **05** | Dashboard overview                            | "The goal is 100%"                                                                                    | With no requirements the card reads **Not set up**; **Set up training for your department** guide                                                                                                 | **Addition**   |
+| **05** | Adding requirements                           | "**Recurrence:** 'Every 2 years'"                                                                     | **Frequency**, **Every 2 Years**; **Existing Members** (apply to everyone / exempt existing / catch-up deadline)                                                                                  | **Incomplete** |
+| **05** | Finalizing a training session                 | "finalizing immediately completes … confirms it from the emailed notification"                        | **Finalize Attendance** on the ended event writes the records; with confirmation on, a `training.manage` holder approves from the email or **Review and approve**, minutes per member             | **Stale**      |
+| **05** | Member self-submission                        | "pending submissions in your dashboard … approve or reject with notes"                                | Training Officer position notified; **Review Submissions**: **Approve**, **Request Revision**, **Reject**                                                                                         | **Incomplete** |
+| **06** | My Updates                                    | One feed, five rows                                                                                   | Same-category notifications fold into one row                                                                                                                                                     | **Addition**   |
+| **06** | QR code check-in                              | "scan the QR code, and you're checked in"                                                             | **Check In to This Event** → **You're Checked In**; **I was there** (30 days); room tags ask **Which event are you here for?**                                                                    | **Incomplete** |
+| **06** | ID cards, lost card                           | "a revoked card is dead for good"                                                                     | The revoked registration stays revoked; the card can be registered again                                                                                                                          | **Stale**      |
+| **06** | My Training page                              | —                                                                                                     | **Required Training** card (**None assigned**); empty-record explanation                                                                                                                          | **Addition**   |
+| **06** | Submitting external training                  | "You'll get a notification when it's approved"                                                        | A plain approval sends nothing; a notice comes on reject, changed values, revision request, or reversal                                                                                           | **Wrong**      |
+| **06** | Requesting a shift swap                       | "Click 'Request Swap'"; "post it open, and any eligible member can claim it"                          | One-way: **Offer trade** / **Give up this shift** → **Offer it to someone specific**. Trade: My Shifts → **Swap** → **Request Shift Swap** → **Specific Shift**. **Open Swap**: no member sees it | **Wrong**      |
+| **06** | Requesting a shift swap                       | —                                                                                                     | Officers may approve an offer; swaps are cancelled with their seat; **Log outside shift** under **Shifts with other departments**                                                                 | **Addition**   |
+| **06** | My Equipment                                  | "shows any gear assigned to you"                                                                      | **Pending requests**; **My Requests** with Awaiting review / Approved / Declined / Issued and the quartermaster's note; outcome notices                                                           | **Incomplete** |
+| **06** | Meeting minutes                               | "Search by date or keyword"                                                                           | Meetings listed with their minutes beneath; "Search by title, agenda, or notes"                                                                                                                   | **Stale**      |
+| **06** | Notifications preferences                     | "email alerts, and … a text message for urgent announcements"                                         | **Email Notifications**, **Emails you can turn off**, **Always emailed to you**, **Urgent Text Messages**                                                                                         | **Incomplete** |
+| **06** | User settings → My Account                    | "User Settings"; Profile / Security / Preferences                                                     | **My Account**: Account, Password, Security, Privacy, Emergency Contacts, Appearance (incl. phone bar), Notifications, App                                                                        | **Stale**      |
+| **06** | Privacy choices `[SCREEN]`                    | "Still on the Security tab"                                                                           | The **Privacy** section                                                                                                                                                                           | **Wrong**      |
+| **07** | Creating minutes                              | "Click 'New Minutes' … Executive Session"                                                             | **Record Minutes** records the meeting (Business, Special, Committee, Board, Other); the card's book icon creates or opens its minutes                                                            | **Wrong**      |
+| **07** | Publishing & archiving                        | "save them as a draft for review or publish them immediately"                                         | **Submit for Approval** → another officer's **Approve Minutes** → **Publish to Documents**                                                                                                        | **Wrong**      |
+| **07** | Minutes detail view                           | "Export as PDF"                                                                                       | No PDF export exists; **View in Documents** opens the published copy                                                                                                                              | **Wrong**      |
+| **07** | Managing the roster                           | Admin Hub filtered "by membership type — Active, Probationary, Retired, Honorary"; search by position | The **Members** page: **Filter by status** (All Statuses, Active, Inactive, On Leave, Retired, Archived); search by name, number, email                                                           | **Wrong**      |
+| **07** | Adding a new member                           | Position "Probationary Member"; "If email is configured … invitation"                                 | **Membership Type** Probationary; **Set initial password** required when email is off, else a temporary password is emailed                                                                       | **Wrong**      |
+| **07** | Editing member records                        | Change position and status, add notes, on the admin edit page                                         | Membership Type, rank, station, contact there; status is **Change status** on the profile; positions are **Manage Roles**                                                                         | **Wrong**      |
+| **07** | Admin hours                                   | "category, hours, and notes"                                                                          | **Log Hours Manually**: Category, Start Time, End Time, Description → **Submit for review**; manual entries always reviewed                                                                       | **Stale**      |
+| **07** | Admin hours                                   | —                                                                                                     | **Edit**, **Edit & resubmit**, **Withdraw** on the member's own pending / rejected entries                                                                                                        | **Addition**   |
+| **07** | Forms module                                  | —                                                                                                     | A public link still needs sign-in until **Allow submissions without signing in**; the visitor is told up front                                                                                    | **Incomplete** |
+| **07** | Forms module `[SCREEN]`                       | "Review Submissions page (ReviewSubmissionsPage)"                                                     | The Forms page's **Submissions** tab (ReviewSubmissionsPage is training's queue)                                                                                                                  | **Wrong**      |
+| **07** | Election administration                       | "flip 'results visible immediately'"                                                                  | **Publish Results**                                                                                                                                                                               | **Wrong**      |
+| **07** | Officer variables                             | List ends at Quartermaster                                                                            | Adds EMS Supply Officer and Compliance Officer                                                                                                                                                    | **Incomplete** |
+| **07** | Footers, Internal                             | "The routine 'do not reply' close"                                                                    | "This is an automated message from …"; replies go to the department's address                                                                                                                     | **Wrong**      |
+| **07** | Footers, switches                             | "switches for the contact block and the address"                                                      | **Phone**, **Email**, **Website**, **Mailing address**; values from **Department contact details**                                                                                                | **Stale**      |
+| **07** | "Your emails look different now" (whole beat) | Opt-in through Reset; "none of your existing templates changed"; accent rule, chip, details table     | Every template reset to the solid tab, tinted title card, message card, centred footer; old wording via **Previous version** → **Load this wording** → **Save**; don't film the banner            | **Wrong**      |
+| **07** | Suggestion boxes, who sets them up            | "on the Fire Chief, Deputy Chief …"                                                                   | "on the Chief, Deputy Chief …"                                                                                                                                                                    | **Stale**      |
+| **07** | Suggestion boxes, creating a box              | —                                                                                                     | Seeded **Compliance** box is live, reviewed by the **Compliance Officer** position; reports wait until one is appointed                                                                           | **Incomplete** |
+| **07** | Suggestion boxes, reviewing                   | "You'll get an email when something new arrives"                                                      | On by default; a reviewer may turn it off unless the department makes it required                                                                                                                 | **Incomplete** |
+| **07** | Suggestion boxes, caveat                      | "the server itself — its raw logs"                                                                    | The Logbook's request and error logs skip these routes; only infrastructure in front of it could log them                                                                                         | **Stale**      |
+| **08** | 8C swap request                               | "Click 'Request Swap'"; "Option three: post it open for anyone eligible"                              | As script 06                                                                                                                                                                                      | **Wrong**      |
+| **08** | 8F adding a member                            | "name and email. That's the minimum"; position Probationary; "invitation"                             | Address, phone, emergency contact required, number unless auto; **Membership Type**; **Set initial password**                                                                                     | **Wrong**      |
+| **08** | 8G two-factor                                 | "Go to User Settings. Click Security."                                                                | **My Account** → Security → **Enable two-factor authentication**                                                                                                                                  | **Stale**      |
+| **08** | 8S bottom bar                                 | "Four destinations plus More … picked from what your department has switched on"                      | **Home**, two member-chosen tabs, **Add**, **More**; chosen in My Account → Appearance → **Phone navigation bar**                                                                                 | **Wrong**      |
+| **08** | 8AA footers                                   | "Internal for members — the 'do not reply' close"                                                     | No footer says do not reply; replies reach the department                                                                                                                                         | **Wrong**      |
+| **08** | 8AG tap instead of scan                       | "Officers write them"; "The button only appears on apparatus cards"                                   | Needs `apparatus.manage_nfc_tags`; room cards write `/locations/<room>/check-in` for `locations.manage_nfc_tags` holders                                                                          | **Wrong**      |
+| **08** | 8AL label printers                            | "Register the printer once … things just print"                                                       | Also needs `LABEL_PRINTER_ALLOWED_NETWORKS`                                                                                                                                                       | **Incomplete** |
+| **08** | 8AP check template                            | —                                                                                                     | Editing a live checklist takes it off every shift until **Publish now**; **Used on** line                                                                                                         | **Addition**   |
+| **08** | 8AS storeroom labels                          | PDF path only                                                                                         | **Print to** _printer_ and **Start at label**                                                                                                                                                     | **Addition**   |
+| **09** | The six feeds, one                            | "When you approve a session that's linked to a program"                                               | Credit from finalizing the Training event's attendance; approval only where confirmation is required                                                                                              | **Stale**      |
+| **11** | Required vs optional                          | —                                                                                                     | **Members already enrolled** choice when adding a requirement                                                                                                                                     | **Addition**   |
+| **12** | Closing early, Short 12c                      | "flip **results visible immediately** … one toggle on the Publish Results panel"                      | **Publish Results** (then **Hide Results**) on **Results & Publishing**                                                                                                                           | **Wrong**      |
+| **12** | Publish & report                              | "Send Report emails a formatted results report"                                                       | Under **Email Results Report**, to the election's secretary, once the election is closed                                                                                                          | **Incomplete** |
+| **12** | Short 12a, override                           | "Grant Override with a reason"                                                                        | **Overrides** tab → **+ Add Override** → member picker → Reason (min 10 characters)                                                                                                               | **Wrong**      |
+| **12** | Short 12j                                     | "**Simple majority**: one member, one mark"                                                           | **One choice per voter**, with who wins on its own **Winner** row                                                                                                                                 | **Stale**      |
+| **12** | Building the ballot, Candidates `[SCREEN]`s   | "'Fire Chief' item"; "the Fire Chief position"                                                        | "Chief"                                                                                                                                                                                           | **Stale**      |
+| **14** | Shift and add                                 | "Shift remaining, seven days, done."                                                                  | Keeps local time across a clock change; moves nothing if a class in range is finalized                                                                                                            | **Addition**   |
+| **16** | External training                             | "The External Training page … Members submit these for your approval"                                 | That page is **External Training Integrations** (provider sync, **Import Queue**); member submissions are **Submit Training** / **Review Submissions**                                            | **Wrong**      |
+| **16** | Shift completion reports `[SCREEN]`           | "Training Admin > Shift Reports > Create"                                                             | Scheduling → **Shift Reports** → **New report** → pick the shift                                                                                                                                  | **Stale**      |
+
+**Pre-existing — found, not caused, by this window.** These were wrong before
+September 24:
+
+- **03:** swap rules in Scheduling settings; RSVP defaults and a QR switch in
+  Event settings; requests "skip approval" with no chain; the label-printer
+  allowlist never mentioned.
+- **04:** the ID card's QR "scanned for check-in"; "results visible
+  immediately".
+- **05:** "Recurrence" (the field has always been **Frequency**).
+- **06:** "Request Swap" and an open swap any member can claim (the dialog made
+  the same false promise until W33-4); scanning alone checking a member in;
+  Privacy Choices on the Security tab; minutes searchable by date.
+- **07:** the whole minutes workflow (New Minutes, draft-or-publish, PDF
+  export); the roster filter; "Probationary Member" as a position; editing
+  positions and status on the admin edit page; the forms cue pointing at
+  training's Review Submissions; "results visible immediately"; EMS Supply
+  Officer missing from the officer list; and the 2026-09-25 email rows,
+  recorded here but never applied to the script.
+- **08:** 8F's "name and email" minimum and Probationary position.
+- **12:** "results visible immediately" (the API field, never a label); "Grant
+  Override".
+- **16:** the External Training page described as the submission queue;
+  "Training Admin > Shift Reports > Create".
+
+**Corrections to what reviewers proposed.** Four rows were right about the
+problem and wrong about the fix:
+
+- **07 roster:** the filter's first option is **All Statuses**, and it lives on
+  the **Members** page; the Admin Hub's **Member Management** tab is roles.
+- **16 shift reports:** Training Admin → **Shift Reports** does exist; its **New
+  Report** tab only forwards to Scheduling (or to **Log Shift Report** without
+  the Scheduling module).
+- **05 self-submission:** there is no notification titled "Review
+  Submission"; officers holding the Training Officer position are notified
+  that a submission is awaiting approval.
+- **08 8AP:** editing a published checklist does not leave crews on the old
+  version — "Crews can't see this checklist right now" until **Publish now**.
+
+**Dropped as unverified or not a discrepancy:**
+
+- **06 recording what you used — "field labelled Note".** The narration says
+  "you can add a note" and quotes no label; nothing to fix.
+- **12 addition — close OPEN elections before upgrading; [TEST] ballots; close
+  records who and when.** The upgrade instruction is operator material and is
+  already in `docs/UPGRADING.md`; [TEST] subjects are already in Short 12b; no
+  screen shows who closed an election, so that part could not be filmed.
+- **06 addition — "empty board message".** No label could be tied to it.
+- **8AR reviewer email.** 8AR makes no claim about email; the fix is in script
+  07 only.
+- **09 "adding requirements to an existing program", 16 "shift remaining", 07
+  "organizer / alternate".** Each beat has one natural home and was written
+  there — 11, 14 and 04 respectively. 09, 16 and 07 never walk that control.
+
+### Re-record / re-time
+
+**New footage needed:**
+
+- **01** Ch.5 — the `docker-compose.proxy.yml` command.
+- **02** Ch.4 — module overview pan (Enable / Later / Skip) and **Continue to
+  Ranks & Positions**; Ch.5 — positions scroll (Chief, new positions); Ch.7 —
+  the **IT & Backup Contacts** opening frame.
+- **03** Ch.6 — Event settings sections and Attendance; Scheduling settings
+  section list and the Notifications notice; Ch.7 — **Email link address**
+  card; Ch.9 — **Finance → Approvals**.
+- **04** Ch.3 — Organizer / Alternate and **Transfer event**; Ch.4 — ID card
+  narration, **Sign-offs**; Ch.6 — Requests tab (Open swap vs Offered to);
+  Ch.7 — Scheduling **Shift Reports** tab.
+- **05** Ch.2 — "Not set up" and the setup guide (B-roll); Ch.3 — requirement
+  form (**Frequency**, **Existing Members**); Ch.4 — **Finalize Attendance** →
+  **Review and approve**, and the three review buttons.
+- **06** Ch.3 — **Check In to This Event**, **I was there**; Ch.4 — **Required
+  Training** (B-roll), a revision-requested notice; Ch.5 — both swap flows,
+  **Pending requests** / **My Requests**; Ch.6 — minutes list and search,
+  My Account → Notifications; Ch.7 — the **My Account** walkthrough and the
+  **Privacy** cue.
+- **07** Ch.2 — **Record Minutes**, the book icon, **Submit for Approval** →
+  **Approve Minutes** → **Publish to Documents**, **View in Documents**; Ch.4 —
+  Members status filter, Add Member password, Membership Type edit, **Log Hours
+  Manually**, Edit / Withdraw; Ch.5 — forms Share dialog and the sign-in
+  notice, the **Submissions** tab; Ch.6 — every email preview (solid tab, one
+  state), the **Previous version** panel, footer switches and **Department
+  contact details**; Ch.7 — the seeded **Compliance** box.
+- **08** 8C, 8F, 8G, 8S, 8AG (0:10), 8AP (new 0:45 cue), 8AS (Print to / Start
+  at label).
+- **11** Ch.4 — **Members already enrolled**.
+- **12** Short 12a — the Overrides tab.
+- **16** Ch.4 — **Review Submissions** and **External Training
+  Integrations**; Scheduling → **Shift Reports** → **New report**.
+
+**Re-time** (added narration, approximate): **01** Ch.3 (+12 s), Ch.5 (+25 s);
+**02** Ch.2 (+10 s); **03** Ch.4 (+15 s), Ch.6, Ch.7 (+35 s), Ch.9 (+10 s);
+**04** Ch.3 (+15 s, fold into its pending re-time), Ch.4 (+20 s), Ch.6
+(+20 s); **05** Ch.2 (+12 s), Ch.3 (+15 s), Ch.4; **06** Ch.2 (+8 s), Ch.3
+(+15 s), Ch.4 (+10 s), Ch.5 (+40 s), Ch.6 (+10 s); **07** Ch.4 (+15 s), Ch.5
+(+15 s), Ch.7 (+15 s); **08** 8F (~70 s), 8S (~35 s), 8AP (~55 s), 8AS
+(~47 s); **11** Ch.4 (+12 s); **14** Ch.4 (+10 s); **16** Ch.4 (+15 s).
+
 ## Flagged by the 2026-10-03/04 changes
 
 Nothing a script says became false, but four beats are now **incomplete** and
@@ -808,7 +1010,9 @@ omitted:
   you have never edited already use it", which is true of a body byte-identical
   to the _current_ shipped default — not of a department arriving from the
   previous release, whose untouched bodies are the _older_ default. Reading the
-  banner aloud as the rule contradicts the script.
+  banner aloud as the rule contradicts the script. _(Superseded 2026-10-04: the
+  banner was rewritten and now matches the script; see the presenter note in
+  script 07.)_
 
 **Every email preview in this script needs re-shooting, and every shot needs a
 caption saying which shell it shows** — the pre-08-10 band, the 08-10 rounded

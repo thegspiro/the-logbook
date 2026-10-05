@@ -206,8 +206,11 @@ Access) per module:
 - Unit number, type, minimum staffing and riding positions
 - Creates the lightweight apparatus records shift staffing needs
 
-#### Step 7: IT Team & Backup Access
+#### Step 7: IT & Backup Contacts
 
+- **Optional** _(2026-09-27)_ — **Skip for now** saves an empty step; until then
+  there was no Skip and Continue demanded five fields. Titled IT Team & Backup
+  Access before 2026-09-29
 - Add IT team contact information, and optionally each contact's operational rank
 - Configure backup access email and phone
 - Set secondary admin email for emergencies
@@ -225,8 +228,9 @@ Access) per module:
 - The following screen (`/onboarding/email-config`, not a step of its own)
   takes the platform's settings — SMTP host/port and an app password, or
   Cloudflare's Account ID and API Token
-- Send a test message to verify the connection; credentials are encrypted
-  server-side
+- **Test** checks that The Logbook can connect and sign in to the mail
+  server — _"No email is sent."_ (the screen used to promise a test email it
+  never sent); credentials are encrypted server-side
 
 #### Step 9: File Storage
 
@@ -296,6 +300,12 @@ A "Reset Progress" button is available on every onboarding page (top right corne
 3. Start fresh from the beginning
 
 **Warning:** This action cannot be undone and will delete all onboarding progress including any organizations or users created during the process.
+
+The dialog asks **Start setup over?** and names what it deletes; its buttons are
+**Keep my progress** and **Yes, start over** _(2026-09-29)_. Since 2026-09-27 a
+reset also clears the browser's sign-in cookies — before, they named the
+deleted System Owner, and the organization step retried against the server in
+a tight loop until it hit the rate limit (W01-10).
 
 ### 4. Post-Onboarding Checklist
 

@@ -124,7 +124,9 @@ export const ApparatusListPage: React.FC = () => {
                 <Truck className="h-6 w-6 text-white" />
               </div>
               <div className="min-w-0">
-                <h1 className="text-theme-text-primary truncate text-lg font-bold sm:text-xl">Apparatus Management</h1>
+                <h1 className="text-theme-text-primary text-lg leading-tight font-bold sm:text-xl">
+                  Apparatus Management
+                </h1>
                 <p className="text-theme-text-muted hidden text-sm sm:block">
                   Manage your fleet vehicles and equipment
                 </p>

@@ -1,6 +1,6 @@
 # The Logbook - Training Documentation
 
-> **The August and September 2026 release lessons have been folded into the guides below.** Each module guide now describes how its screens work today. [August 12–31, 2026 workflow updates](./19-august-2026-release-changes.md) and [August 31 – September 23, 2026 workflow updates](./20-september-2026-release-changes.md) remain as indexes of where each of their topics went. **Upgrading an existing installation?** Every upgrade step either lesson carried — the permission removals, the migrations that do not reverse, the fourteen retired addresses and the Gmail and Microsoft 365 email repair — is in [`docs/UPGRADING.md`](../UPGRADING.md).
+> **The August and September 2026 release lessons have been folded into the guides below.** Each module guide now describes how its screens work today. [August 12–31, 2026 workflow updates](./19-august-2026-release-changes.md) and [August 31 – October 4, 2026 workflow updates](./20-september-2026-release-changes.md) remain as indexes of where each of their topics went. **Upgrading an existing installation?** Every upgrade step either lesson carried — the permission removals, the migrations that do not reverse, the fourteen retired addresses and the Gmail and Microsoft 365 email repair — is in [`docs/UPGRADING.md`](../UPGRADING.md).
 
 Welcome to the training documentation for The Logbook. These guides are designed to help new users learn the system and serve as a reference for experienced users.
 

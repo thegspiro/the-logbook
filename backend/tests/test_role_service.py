@@ -462,3 +462,72 @@ class TestSingleAssignmentOrgScoping:
             await RoleManagementService().set_user_roles(
                 _mutation_db(), "user-1", ["new-role"], "admin-1", "org-1"
             )
+
+
+class TestSystemRolePermissionEditKeepsStoredWildcards:
+    """The role editor sends a role's whole stored list back on save, so a
+    system role holding a wildcard must accept that list with a grant added.
+    Before this, ``*`` (IT Manager) and the wizard's ``<module>.*`` grants were
+    refused as "Invalid permissions" and no permission could be added at all.
+    """
+
+    def _system_role(self, slug, permissions):
+        return SimpleNamespace(
+            id=f"{slug}-role",
+            organization_id="org-1",
+            name=slug.title(),
+            slug=slug,
+            description="",
+            permissions=list(permissions),
+            is_system=True,
+            priority=90,
+        )
+
+    @pytest.mark.parametrize(
+        ("slug", "stored"),
+        [
+            ("it_manager", ["*"]),
+            ("chief", ["users.view", "inventory.*", "training.*"]),
+            ("chief", ["users.view", "equipment_check.manage"]),
+        ],
+    )
+    async def test_adding_a_grant_to_a_role_with_wildcards_saves(self, slug, stored):
+        db = _mutation_db()
+        service = RoleManagementService()
+        role = self._system_role(slug, stored)
+        service.get_role = AsyncMock(return_value=role)
+        new_list = stored + ["members.manage_id_cards"]
+
+        with (
+            patch(
+                "app.services.role_service.log_audit_event",
+                new=AsyncMock(return_value=object()),
+            ),
+            patch(
+                "app.services.role_service.assert_role_change_retains_administrator",
+                new=AsyncMock(),
+            ),
+        ):
+            updated = await service.update_role(
+                db, role.id, "org-1", "admin-1", permissions=new_list
+            )
+
+        assert updated.permissions == new_list
+
+    async def test_an_unknown_grant_is_still_refused_by_name(self):
+        db = _mutation_db()
+        service = RoleManagementService()
+        service.get_role = AsyncMock(
+            return_value=self._system_role("chief", ["inventory.*"])
+        )
+
+        with pytest.raises(ValueError, match=r"Invalid permissions: bogus\.\*"):
+            await service.update_role(
+                db,
+                "chief-role",
+                "org-1",
+                "admin-1",
+                permissions=["inventory.*", "bogus.*"],
+            )
+
+        db.flush.assert_not_awaited()

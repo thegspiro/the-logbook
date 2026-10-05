@@ -403,6 +403,13 @@ header.
 - **When left empty**, the effective allowlist is derived from the
   `ALLOWED_ORIGINS` hostnames plus `localhost`/`127.0.0.1` (so health checks keep
   working).
+- **A malformed or missing `Host` is a 400 too** _(2026-09-24, starlette
+  1.7.0)_, wherever the allowlist is active. The middleware now parses the header properly, so `host:garbage-port`
+  no longer passes as `host`. A health check or proxy that sends no `Host`, or a
+  hand-built one with a bad port, is refused where it used to get through —
+  send the real hostname. In the same upgrade CORS responses always carry
+  `Vary: Origin`, and a preflight's `Vary` lists the request headers; a cache in
+  front of the API that ignored `Vary` should be checked.
 
 ---
 

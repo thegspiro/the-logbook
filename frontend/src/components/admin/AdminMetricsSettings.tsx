@@ -210,7 +210,7 @@ export const AdminMetricsSettings: React.FC<AdminMetricsSettingsProps> = ({
                       <X className="h-3.5 w-3.5" aria-hidden="true" />
                     </button>
                   </div>
-                  <p className="text-theme-text-muted truncate text-[11px] font-semibold tracking-[0.12em] uppercase">
+                  <p className="text-theme-text-muted text-[11px] leading-snug font-semibold tracking-[0.12em] uppercase">
                     {option.label}
                   </p>
                   <p className="text-theme-text-primary mt-0.5 text-2xl leading-none font-bold tabular-nums">
@@ -247,7 +247,7 @@ export const AdminMetricsSettings: React.FC<AdminMetricsSettingsProps> = ({
             {fixedOption && (
               <li className="card-secondary border-theme-alert-danger-border relative p-3">
                 <Lock className="text-theme-text-muted h-4 w-4" aria-hidden="true" />
-                <p className="text-theme-text-muted mt-2 truncate text-[11px] font-semibold tracking-[0.12em] uppercase">
+                <p className="text-theme-text-muted mt-2 text-[11px] leading-snug font-semibold tracking-[0.12em] uppercase">
                   {fixedOption.label}
                 </p>
                 <p className="text-theme-text-primary mt-0.5 text-2xl leading-none font-bold tabular-nums">
@@ -329,7 +329,9 @@ export const AdminMetricsSettings: React.FC<AdminMetricsSettingsProps> = ({
               if (!option) return null;
               return (
                 <div key={key} className="card-secondary p-2">
-                  <p className="text-theme-text-muted truncate text-[10px] font-semibold uppercase">{option.label}</p>
+                  <p className="text-theme-text-muted text-[10px] leading-snug font-semibold uppercase">
+                    {option.label}
+                  </p>
                   <p className="text-theme-text-primary text-lg leading-tight font-bold tabular-nums">
                     {option.value ?? '—'}
                   </p>

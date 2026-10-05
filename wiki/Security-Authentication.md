@@ -421,3 +421,38 @@ GET    /api/v1/auth/oauth/microsoft/callback # Microsoft OAuth callback
 ---
 
 **See also:** [Security Overview](Security-Overview) | [Security Configuration](Configuration-Security) | [Encryption](Security-Encryption)
+
+## Sign-in, reset and MFA fixes _(2026-09-27 → 09-29)_
+
+Found by driving the flows in a browser (workflow review W02–W04,
+`docs/workflow-review/`):
+
+- **The MFA lockout now trips.** For an account with MFA, a correct password
+  used to reset the failed-attempt counter, so wrong authenticator codes never
+  accumulated to a lockout. The password step now leaves the counter and lock
+  alone; `mfa_login` clears both once the second factor succeeds. Password-only
+  accounts are unchanged (`tests/test_auth_mfa_lockout_reset.py`).
+- **Recovery codes are shown.** Enabling MFA closed the card before the ten
+  recovery codes could be read; they stay up until **Done**.
+- **The sign-in countdown is the server's.** A 429's `Retry-After` reaches the
+  page, so _"Too many failed attempts. Try again in N seconds."_ shows the real
+  wait (60s for the per-address limit) instead of a 4-second client backoff.
+- **Deep links survive sign-in** with their query and anchor, through one
+  `postLoginRedirect` helper that keeps the open-redirect guard (a single
+  leading `/`, never `//host` or a full URL).
+- **Forgot password** reports the link lifetime the server returns
+  (`expires_in_minutes`, 30 — the page said an hour), and shows **No Reset Link
+  Was Sent** with the server's message when the organization uses an SSO
+  provider, instead of "Check Your Email". A rate-limited reset link reads
+  **Too Many Attempts** with the wait, rather than "invalid".
+- **Both password checklists list every server rule** — length, the four
+  classes, no runs (123, abc), no character three times in a row — from the
+  moment the form opens.
+- **A password change signs you out everywhere** and the sign-in page now says
+  so.
+
+Still flagged (see `docs/KNOWN_LIMITATIONS.md`): password sign-in, failure,
+lockout and sign-out are not written to the audit log (W02-3); a locked
+account is indistinguishable from a wrong password to the member and to
+administrators (W02-4); Authentik is offered at setup with no sign-in flow
+behind it, and choosing it turns off self-service password reset (W01-11).
