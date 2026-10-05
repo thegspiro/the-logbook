@@ -16,17 +16,38 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#2947](https://github.com/thegspiro/the-logbook/pull/2947)**: branch
-`claude/security-review-elections-ballots`, Feature 06 (Elections &
-ballots), pass 7. Watchdog pickup — the dedicated `/loop 30m
-/security-review` session had gone quiet after PR #2941 merged. 0 fixes, 4
-findings cross-referenced from the 2026-09-30 workflow review into this
-feature's own numbered ledger (ELEC-43 HIGH, ELEC-44 LOW, ELEC-45 MED,
-ELEC-46 MED — all already owner-decision items in `KNOWN_LIMITATIONS.md`);
-the 5 standing findings (ELEC-12, 14, 16, 28, 40) re-verified unchanged.
-Gate green (flake8/black/isort, migrations, route-permission check, 1,092
-scoped backend tests, frontend typecheck/lint, 148 elections-module
-frontend tests). Subscribed for CI/review events.
+**PR [#2952](https://github.com/thegspiro/the-logbook/pull/2952)**: branch
+`claude/security-review-users-organizations`, Feature 07
+(Users & organizations), pass 7. Watchdog pickup — no open
+`claude/security-review-*` PR existed when this iteration started; PR #2947
+(Feature 06, Elections & ballots, pass 7) had already merged, docs-only (only
+`KNOWN_LIMITATIONS.md`, `ELEC-06-elections-ballots.md`, `PROGRESS.md`), so per
+this file's own rule it is not a separately recorded event — cleared below. 0
+fixes, 0 new findings: ~29 real commits since pass 6 (preferred names,
+per-kind email choices, phone bottom-navigation preference, an
+administrator-configurable email link domain, pattern-based membership-ID
+generation, length-of-service tracking across a break in membership, logo
+upload validation) all reviewed against the checklist and found already
+correctly guarded, including one security hardening already landed in this
+window (`email_link_domain` isolated from the generic settings-update path)
+now independently re-verified. The three standing findings (USR-5, USR-8,
+USR-10a) re-verified unchanged, line numbers refreshed for file growth. Gate
+green (flake8/black/isort, migrations, route-permission check, 1,179 scoped +
+12,625 full-suite backend tests, frontend typecheck/lint, 191 frontend
+tests).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 06, Elections &amp; ballots, pass 7, PR #2947, merged docs-only — not independently recorded), preserved for history</summary>
+
+**None.** PR [#2947](https://github.com/thegspiro/the-logbook/pull/2947)
+(Feature 06, Elections & ballots, pass 7) merged — docs-only (0
+application-code changes: only `KNOWN_LIMITATIONS.md`,
+`ELEC-06-elections-ballots.md`, `PROGRESS.md`), so per this file's own rule
+it is not a recordable event on its own; rotation row 06 already stood ✅.
+This iteration picks up Feature 07 (Users & organizations), the state this
+PR opened from.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 7, PR #2941, merged — 1 fix (FIN-33, MED), 0 flagged; rotation row 05 stays ✅), preserved for history</summary>
@@ -17715,7 +17736,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
@@ -17750,6 +17771,86 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-05 — Feature 07 (Users & organizations, pass 7) — 0 fixed, 0 new findings, a real delta reviewed (watchdog pickup)
+
+Watchdog pickup — the dedicated `/loop 30m /security-review` session had
+gone quiet after PR #2947 merged. Step 0: confirmed via GitHub (no `search`
+restricted to `is:open head:claude/security-review` matched) that no
+security-review PR was open, and no `claude/security-review-*` branch
+existed either. PR #2947 (Feature 06, Elections & ballots, pass 7) had
+merged docs-only (only `KNOWN_LIMITATIONS.md`,
+`ELEC-06-elections-ballots.md`, `PROGRESS.md` — 0 application-code changes),
+so per this file's own rule it is not independently recorded; the stale
+"Open PR" row (still naming #2947) is cleared in this same commit. Rotation
+row 07 was the first `⬜`.
+
+Loaded `CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`, and all six prior
+passes of `USR-07-users-organizations.md` before reading any code.
+
+**Not a zero-delta pass.** `git diff 5ee64545d..origin/main --stat` across
+all ten declared files (pass 6's merge, PR #2602): 1,259 insertions / 215
+deletions, none byte-identical — roughly 29 non-merge commits of real
+feature work over three weeks (preferred names, per-kind optional email
+choices, a phone bottom-navigation preference, an administrator-
+configurable email link domain, pattern-based membership-ID generation with
+fiscal-year support, length-of-service tracking across a break in
+membership via a new `member_service_periods` table, logo upload validation,
+and several correctness fixes). Every file's diff read in full against the
+checklist, plus this feature's MCP surface (`members.py`; `organization.py`
+unchanged).
+
+**0 application-code defects.** Every new surface was already correctly
+guarded by its own authors, including one security hardening landed in this
+window and independently re-verified here: `OrganizationService.
+update_organization_settings` now strips the `email_link_domain` key out of
+any generic settings-update payload before the deep merge, so a
+`settings.manage` holder cannot plant a deployment-wide email link override
+through the eight other call sites that reach the same service method and
+skip both the narrower `system.manage_link_domain` permission and the
+allowed-host check the dedicated route enforces — confirmed
+`system.manage_link_domain` is seeded to no default position (wildcard
+System Owner only), and that the service's own `_writable_primary` fails
+closed independently of the permission check. Also verified: the new
+`assign_user_roles` escalation-ceiling narrowing (excluding roles the target
+already holds) cannot be used to add an unentitled grant, only to stop a
+false-positive block on roles already present; profile-write responses now
+redact exactly as the profile read does (previously a `users.edit` holder
+without `members.manage` got the unredacted row back from a write); the new
+`member_service_periods` FK (`created_by`, `ondelete="SET NULL"`) is
+correctly `nullable=True`; and `change_member_status` now locks the target
+row before deciding whether to open/close a service-history stint (Pitfall
+#27). Full write-up: [`USR-07-users-organizations.md`](./USR-07-users-organizations.md)'s
+**Pass 7** section.
+
+**Re-verified, not re-derived — all three open findings unchanged, line
+numbers refreshed for file growth (not regressions):** USR-5 (unbounded
+lists), USR-8 (`GET /users` over-broad field set relative to
+`members.view`), USR-10a (`_tier_member_counts` not a locking read against
+`MembershipTierService.advance_all`). `docs/KNOWN_LIMITATIONS.md`'s three
+matching entries updated with current line numbers only — no content
+change.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean over
+`app/ tests/ alembic/`; `validate_migrations.py --strict` passed (512
+revisions, single head `34d3d56d1479`); `check_route_permissions.py
+--strict` passed (244 routes, 0 errors/warnings); scoped backend tests
+(`-k "member_status or member_leave or property_return or user_list or
+platoon or users or organization or rank_grant or role_edit or
+audit_history or ceiling or administrative or membership_tier or
+capacity_locking or navigation_layout or setup_checklist or mcp or
+preferred_name or display_name or membership_number or membership_id or
+bottom_nav or email_choices or email_link_domain or service_period or
+rejoin"`) 1,179 passed, 1 pre-existing skip (`py_vapid`); full backend unit
+suite (`pytest tests/ -m "not integration and not slow and not docker"`)
+12,625 passed, 1 pre-existing skip, 0 failed — run broadly since this pass
+touched the shared `email_policy`/`NotificationPreferences` surface and the
+MCP roster tool; frontend `npm run typecheck` 0 errors; `npm run lint` 0
+errors/0 warnings; scoped frontend suite (9 files covering Members,
+MemberAdminEditPage, AddMember, UserSettingsPage, MemberProfilePage,
+BottomNavigationSettings, BottomNavigation, AppLayout.navigationLayout,
+memberName) 191 passed. Rotation row 07 → ✅ (pending PR merge). Next:
+**Feature 08 (Membership pipeline).**
 
 ### 2026-10-05 — Feature 06 (Elections & ballots, pass 7) — 0 fixed, 0 newly discovered, 4 cross-referenced, a real delta reviewed (watchdog pickup)
 

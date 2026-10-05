@@ -88,6 +88,7 @@ class ErrorCode(str, Enum):
 
     # --- Scheduling ------------------------------------------------------
     SCHED_DRIVER_NOT_QUALIFIED = "LB-SCHED-001"
+    SCHED_EXCHANGE_NOT_QUALIFIED = "LB-SCHED-002"
 
 
 @dataclass(frozen=True)
@@ -511,6 +512,24 @@ ERROR_CODE_CATALOG: dict[ErrorCode, ErrorCodeInfo] = {
             "To make the check advisory rather than blocking for the whole "
             "department, turn off 'Enforce EVOC for drivers' in Scheduling "
             "→ Settings → General.",
+        ),
+    ),
+    ErrorCode.SCHED_EXCHANGE_NOT_QUALIFIED: ErrorCodeInfo(
+        title="Shift exchange partner not qualified for the seat",
+        description=(
+            "In a two-way shift exchange each member takes the other's seat, "
+            "so each must be cleared for that seat's position — the same rule "
+            "as signing up for it. One of the two is not, so the exchange "
+            "would put an unqualified member in the seat."
+        ),
+        resolution=(
+            "Exchange with a member who is cleared for the seat: the exchange "
+            "picker on My Shifts lists only qualifying pairs.",
+            "If the member should be cleared, record the rank, qualification "
+            "or completed training that grants the position.",
+            "For a deliberate one-off, a duty officer can approve the request "
+            "with the qualification override; the override is recorded on the "
+            "request and in the audit log.",
         ),
     ),
 }
