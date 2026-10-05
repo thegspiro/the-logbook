@@ -4191,10 +4191,28 @@ ones skipped.
   course.** They count toward total hours; category-scoped HOURS requirements
   and COURSES requirements ignore them until details are attached and the event
   is re-finalized.
-- **A CERTIFICATION requirement can be met by name.**
-  `certification_record_matches` accepts the requirement's name as a substring
-  of the record's course name, so an event titled "CPR Refresher" can satisfy a
-  "CPR" certification requirement.
+- **A CERTIFICATION requirement could be met by name — ✅ narrowed
+  2026-10-05, owner decision: name matching kept for legacy records only.**
+  `certification_record_matches` still accepts the requirement's name as a
+  substring of the record's course name, but only for a record completed on or
+  before the requirement's `name_match_until` (an undated record is dated by
+  when it was entered). Migration `60aaf273de27` sets that to the day the
+  migration runs, for every requirement that exists then — the day this
+  installation's rule changed, so a record graded under the old rule before
+  the upgrade keeps its credit, whenever the upgrade happens. A requirement
+  created afterwards has no cut-off and never matches by name; nor does any
+  requirement on a fresh install. A later record needs a linked course, the
+  requirement's training type, or its registry code in the certification
+  number (the registry-code substring match was not part of the decision and
+  is unchanged). **Reported numbers change**: a member whose only match for a
+  certification is a course-name substring on a record completed after the
+  upgrade (an event titled "CPR Refresher", say) now reads not started on that
+  requirement, on every screen at once — link the course on the requirement
+  to credit it. Records completed before the upgrade are unaffected. Still
+  open: a record backdated after the upgrade to a completion date before the
+  cut-off is legacy by that date; and the non-certification fallback types
+  (skills evaluation, checklist, knowledge test) still match by name with no
+  cut-off — the decision covered certifications only.
 - **Duplicates of a self-reported or hand-entered record are not detected.** A
   member who submitted the same class, or an officer who entered it by hand as a
   workaround, gets a second record from finalize; void the manual one.

@@ -273,9 +273,13 @@ async def _build_department(db) -> _Dept:
         annual,
         required_courses=[dept.courses[1]],
     )
-    await _req(db, dept, "CPR", cert, annual)
+    # Name matching on either side of a legacy cut-off (name_match_until),
+    # and not at all on a requirement with none.
+    await _req(
+        db, dept, "CPR", cert, annual, name_match_until=today - timedelta(days=365)
+    )
     await _req(db, dept, "CPR Fresh", cert, one_time, recency_days=400)
-    await _req(db, dept, "Hazmat Ops", cert, annual)
+    await _req(db, dept, "Hazmat Ops", cert, annual, name_match_until=today)
     await _req(db, dept, "Basic Life Support", cert, annual, registry_code="BLS")
     await _req(
         db,

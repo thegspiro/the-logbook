@@ -263,8 +263,16 @@ is_complete = has_valid_cert
 
 Certification matching considers:
 
+- a course linked on the requirement (`required_courses`)
 - `training_type` match (if the requirement specifies one)
-- Requirement name as substring of `course_name` (case-insensitive)
+- Requirement name as substring of `course_name` (case-insensitive) — **legacy
+  records only**: a record completed on or before the requirement's
+  `name_match_until` (an undated record by when it was entered). That date is
+  the day the installation upgraded past migration `60aaf273de27`, set on the
+  requirements that existed then; requirements created since never match by
+  name. Since 2026-10-05 a newer record whose course merely contains the
+  requirement's name — a "CPR Refresher" event against a "CPR" certification —
+  no longer satisfies it, so members relying on that alone change standing.
 - `registry_code` as substring of `certification_number` (case-insensitive)
 
 #### Example: Carla vs. Tom on EMT Certification

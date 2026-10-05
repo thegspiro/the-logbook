@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**288 tables · 4733 columns · 940 foreign keys**
+**288 tables · 4734 columns · 940 foreign keys**
 
 ---
 
@@ -638,7 +638,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`training_module_configs`](#training_module_configs) | `TrainingModuleConfig` | 45 | Training Module Configuration model |
 | [`training_programs`](#training_programs) | `TrainingProgram` | 23 | Training Program model |
 | [`training_records`](#training_records) | `TrainingRecord` | 39 | Training Record model |
-| [`training_requirements`](#training_requirements) | `TrainingRequirement` | 46 | Training Requirement model |
+| [`training_requirements`](#training_requirements) | `TrainingRequirement` | 47 | Training Requirement model |
 | [`training_sessions`](#training_sessions) | `TrainingSession` | 30 | Training Session model |
 | [`training_submissions`](#training_submissions) | `TrainingSubmission` | 25 | Training Submission model |
 | [`training_waivers`](#training_waivers) | `TrainingWaiver` | 13 | Training Waiver / Leave of Absence |
@@ -9493,6 +9493,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `source` | ENUM(`department`, `state`, `national`) | no |  | `department` |  |
 | `registry_name` | VARCHAR(100) | yes |  |  |  |
 | `registry_code` | VARCHAR(50) | yes |  |  |  |
+| `name_match_until` | DATE | yes |  |  |  |
 | `is_editable` | BOOL | yes |  | `True` |  |
 | `allows_external_credit` | BOOL | no |  | `0` |  |
 | `shift_credited` | BOOL | no |  | `0` |  |

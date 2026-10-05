@@ -14,6 +14,30 @@
 
 ---
 
+## Owner decision applied (2026-10-05) — certification name matching
+
+`docs/KNOWN_LIMITATIONS.md` → "Training — Credit From Event Attendance"
+flagged that `certification_record_matches` credited a CERTIFICATION
+requirement from any record whose course name contained the requirement's
+name. The owner chose to keep that match for legacy records only. The
+matcher now applies it to a record completed on or before the requirement's
+new `name_match_until` column (undated records by `created_at`); migration
+`60aaf273de27` sets it to the day it runs on every existing requirement, and
+requirements created since carry none. Because every grader calls the one
+matcher, the matrix, `compute_org_compliance_pct`, the annual report, the
+profile card, My Training and the competency matrix change together.
+**Reported figures move** for members whose only credit for a certification
+was a course-name substring on a record completed after the upgrade.
+
+The bounded record load (`graded_records_clause`, TR4-2 below) needs no
+change and stays exact: a certification still selects the member's whole
+completed history (or everything since a freshness cutoff), because the
+registry-code, course and type matches carry no date bound; the cut-off only
+narrows what the grader accepts from that superset.
+`tests/test_certification_name_match_cutoff.py` covers the matcher and every
+grader; `tests/test_graded_records_bounded_load.py` still compares bounded and
+unbounded grading figure for figure.
+
 ## Pass 3 (2026-09-04) — Codex follow-up: 1 fix, 1 flagged, 1 corrected claim
 
 **PR:** [#2217](https://github.com/thegspiro/the-logbook/pull/2217) merged

@@ -56,6 +56,8 @@ def _req(**overrides):
         name="Live Fire",
         description=None,
         requirement_type=RequirementType.CERTIFICATION,
+        # Credited by course name: a legacy requirement, records to this date.
+        name_match_until=date(2026, 10, 5),
         frequency=RequirementFrequency.ONE_TIME,
         training_type=None,
         required_hours=None,

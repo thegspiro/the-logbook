@@ -278,7 +278,8 @@ def certification_record_matches(req, record) -> bool:
        the course out of the library, so a record for that course is
        unambiguously the certification in question.
     2. The requirement's ``training_type``.
-    3. The requirement name appearing in the record's course name.
+    3. The requirement name appearing in the record's course name — for
+       legacy records only (see below).
     4. The requirement's registry code appearing in the certification number.
 
     Matches 2–4 are heuristics kept for requirements created before the library
@@ -286,6 +287,14 @@ def certification_record_matches(req, record) -> bool:
     why linking a course *widens* the match rather than replacing it: an
     existing "CPR" requirement must keep crediting the records it already
     credited when an officer links the CPR course to it.
+
+    The name match let any course containing the requirement's name satisfy
+    it — a "CPR Refresher" event credited a "CPR" certification. The owner
+    chose to keep it for legacy records only rather than drop it (which would
+    have changed published compliance overnight): it applies to a record
+    completed on or before the requirement's ``name_match_until``, the day
+    this installation's rule changed (see :func:`_name_match_is_legacy`).
+    Requirements created since carry no cut-off and never match by name.
 
     Shared by the compliance matrix, the member compliance summary, and the
     competency matrix so all three agree on what counts.
@@ -305,6 +314,7 @@ def certification_record_matches(req, record) -> bool:
         record.course_name
         and req_name
         and req_name.lower() in record.course_name.lower()
+        and _name_match_is_legacy(req, record)
     ):
         return True
 
@@ -317,6 +327,23 @@ def certification_record_matches(req, record) -> bool:
         return True
 
     return False
+
+
+def _name_match_is_legacy(req, record) -> bool:
+    """Whether ``record`` predates ``req``'s name-match cut-off.
+
+    Dated by its completion date. A completed record with none is dated by
+    when it was entered, so an undated record written after the cut-off
+    cannot borrow the legacy rule; one with neither date is not legacy.
+    """
+    until = getattr(req, "name_match_until", None)
+    if until is None:
+        return False
+    when = getattr(record, "completion_date", None)
+    if when is None:
+        created_at = getattr(record, "created_at", None)
+        when = created_at.date() if created_at is not None else None
+    return when is not None and when <= until
 
 
 @dataclass(frozen=True)
@@ -408,7 +435,7 @@ def _grade_member_requirement(
     Matching strategy depends on requirement_type:
     - HOURS:          Sum hours of completed records matching training_type within date window
     - COURSES:        Check if required course IDs are all completed
-    - CERTIFICATION:  Check for matching certification records (by name or training_type)
+    - CERTIFICATION:  Check for matching records (see certification_record_matches)
     - SHIFTS/CALLS:   Count matching records within date window
     - Others:         Match by training_type or name
     """
@@ -811,7 +838,11 @@ def graded_records_clause(
       case-insensitive substring test (requirement name in course name,
       registry code in certification number), and SQL's ``LIKE`` folds case
       by the column collation, not by Python's ``str.lower``, so pushing it
-      into the query could drop a record the grader would have counted.
+      into the query could drop a record the grader would have counted. The
+      name test applies only to records up to ``name_match_until``, but the
+      registry-code test and the course and type matches have no date bound,
+      so a certification still selects every completed record; the cut-off
+      narrows what the grader accepts, never what it needs loaded.
     - **Fallback types** (skills evaluation, checklist, knowledge test) also
       read IN_PROGRESS records of any date when nothing completed matches,
       so every IN_PROGRESS record is selected while one is active.

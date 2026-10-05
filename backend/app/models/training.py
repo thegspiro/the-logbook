@@ -512,6 +512,13 @@ class TrainingRequirement(Base):
         String(100)
     )  # e.g., "NFPA", "NREMT", "Pro Board", state name
     registry_code = Column(String(50))  # e.g., "NFPA 1001", "EMR"
+    # CERTIFICATION only: a record completed on or before this date may still
+    # satisfy the requirement because its course name contains the
+    # requirement's name; a later one needs a linked course, the training type
+    # or the registry code. Set by migration 60aaf273de27 to the day it ran,
+    # for the requirements that existed then; NULL (every requirement created
+    # since) means no name matching. See certification_record_matches.
+    name_match_until = Column(Date, nullable=True)
     is_editable = Column(
         Boolean, default=True
     )  # Department can override registry requirements

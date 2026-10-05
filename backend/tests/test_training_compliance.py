@@ -9,7 +9,7 @@ Tests cover the pure calculation logic in:
 All tests run without a database by using mock requirement/record objects.
 """
 
-from datetime import date
+from datetime import date, datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -65,6 +65,10 @@ def _make_requirement(**kwargs):
         "period_start_day": None,
         "period_end_month": None,
         "period_end_day": None,
+        # A requirement that existed when the name-match cut-off migration
+        # ran, so a record's course name can still credit a certification
+        # for records completed by then.
+        "name_match_until": date(2026, 10, 5),
     }
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
@@ -89,6 +93,7 @@ def _make_record(**kwargs):
         "credit_hours": 8.0,
         "certification_number": None,
         "issuing_agency": None,
+        "created_at": None,
     }
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
@@ -1387,6 +1392,8 @@ class TestEvaluateRequirementDetailFields:
         record = _make_record(
             course_name="EMT Certification",
             completion_date=None,
+            # An undated record is dated by entry for the name match.
+            created_at=datetime(2025, 3, 1, tzinfo=timezone.utc),
             expiration_date=date(2027, 3, 1),
         )
         result = TrainingService.evaluate_requirement_detail(
