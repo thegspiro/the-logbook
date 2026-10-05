@@ -40,6 +40,7 @@ from app.models.user import User, UserStatus
 from app.services.training_compliance import (
     STANDING_NOT_APPLICABLE,
     classify_standing,
+    compute_org_compliance_pct,
     evaluate_member_requirement,
     get_org_include_current_month,
     member_join_date,
@@ -365,6 +366,20 @@ class ISOReadinessService:
         return round(_FSRS_TRAINING_POINTS * (readiness_pct / 100.0), 2)
 
 
+def _attestation_period_bounds(
+    period_type: str, year: int, quarter: Optional[int]
+) -> tuple[date, date]:
+    """First and last day of the year or quarter an attestation covers."""
+    if period_type == "quarterly" and quarter:
+        first_month = (quarter - 1) * 3 + 1
+        last_month = first_month + 2
+        return (
+            date(year, first_month, 1),
+            date(year, last_month, calendar.monthrange(year, last_month)[1]),
+        )
+    return date(year, 1, 1), date(year, 12, 31)
+
+
 class ComplianceAttestationService:
     """Manages formal compliance sign-off workflow via the audit log."""
 
@@ -384,8 +399,9 @@ class ComplianceAttestationService:
         organization_id : str
             The organization being attested.
         attestation_data : dict
-            Must contain: period_type (annual|quarterly), period_year,
-            compliance_percentage.
+            Must contain: period_type (annual|quarterly), period_year.
+            Any compliance_percentage in it is ignored — the service
+            computes the figure being attested.
             Optional: period_quarter, notes, areas_reviewed (list[str]),
             exceptions (list[dict] with requirement_name, reason, mitigation).
         attested_by : str
@@ -411,15 +427,21 @@ class ComplianceAttestationService:
                     "period_quarter must be 1, 2, 3, or 4 for quarterly attestations"
                 )
 
-        compliance_pct = attestation_data.get("compliance_percentage")
-        if compliance_pct is None:
-            raise ValueError("compliance_percentage is required")
-        # The one current caller already bounds this via
-        # AttestationCreate's Field(ge=0, le=100); re-checked here so this
-        # service method stays safe to call directly, not only through that
-        # one schema.
-        if not 0 <= compliance_pct <= 100:
-            raise ValueError("compliance_percentage must be between 0 and 100")
+        # The percentage is the server's, never the officer's (CS-8): an
+        # attestation certifies a figure, and one the attester typed in
+        # certifies nothing. It is the department compliance percentage every
+        # other screen reports, evaluated as of the period's last day — or
+        # today, for a period still running. None when no member is graded.
+        today = await resolve_org_today(self.db, organization_id)
+        period_start, period_end = _attestation_period_bounds(
+            period_type, int(period_year), attestation_data.get("period_quarter")
+        )
+        if period_start > today:
+            raise ValueError("Cannot attest a period that has not started")
+        as_of = min(period_end, today)
+        compliance_pct = await compute_org_compliance_pct(
+            self.db, organization_id, today=as_of
+        )
 
         attestation_id = generate_uuid()
         now = datetime.now(timezone.utc)
@@ -431,6 +453,7 @@ class ComplianceAttestationService:
             "period_year": period_year,
             "period_quarter": attestation_data.get("period_quarter"),
             "compliance_percentage": compliance_pct,
+            "compliance_as_of": as_of.isoformat(),
             "notes": attestation_data.get("notes", ""),
             "areas_reviewed": attestation_data.get("areas_reviewed", []),
             "exceptions": attestation_data.get("exceptions", []),

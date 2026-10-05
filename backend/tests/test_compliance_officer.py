@@ -201,6 +201,26 @@ class TestGetISOReadiness:
 # ============================================
 
 
+COMPUTED_PCT = 81.3
+ORG_TODAY = date(2026, 10, 5)
+
+
+@pytest.fixture(autouse=True)
+def computed_compliance():
+    """The attested figure is the server's; pin it and the department's day."""
+    with (
+        patch(
+            "app.services.compliance_officer_service.resolve_org_today",
+            new=AsyncMock(return_value=ORG_TODAY),
+        ),
+        patch(
+            "app.services.compliance_officer_service.compute_org_compliance_pct",
+            new=AsyncMock(return_value=COMPUTED_PCT),
+        ) as computed,
+    ):
+        yield computed
+
+
 class TestComplianceAttestationValidation:
     """Test validation logic in create_attestation."""
 
@@ -294,61 +314,90 @@ class TestComplianceAttestationValidation:
                 attested_by="user-1",
             )
 
-    async def test_missing_compliance_percentage_raises(self):
-        mock_db = AsyncMock()
-        service = ComplianceAttestationService(mock_db)
-
-        with pytest.raises(ValueError, match="compliance_percentage is required"):
-            await service.create_attestation(
-                organization_id="org-1",
-                attestation_data={
-                    "period_type": "annual",
-                    "period_year": 2025,
-                },
-                attested_by="user-1",
-            )
-
-    @pytest.mark.parametrize("bad_pct", [-1, 100.1, 250])
-    async def test_out_of_range_compliance_percentage_raises(self, bad_pct):
-        """The one current caller already bounds this via
-        AttestationCreate's Field(ge=0, le=100) — this re-checks it here so
-        the service stays safe to call directly, not only through that one
-        schema."""
-        mock_db = AsyncMock()
-        service = ComplianceAttestationService(mock_db)
-
-        with pytest.raises(ValueError, match="must be between 0 and 100"):
-            await service.create_attestation(
-                organization_id="org-1",
-                attestation_data={
-                    "period_type": "annual",
-                    "period_year": 2025,
-                    "compliance_percentage": bad_pct,
-                },
-                attested_by="user-1",
-            )
-
-    @pytest.mark.parametrize("edge_pct", [0, 100])
     @patch(
         "app.services.compliance_officer_service.log_audit_event",
         new_callable=AsyncMock,
     )
-    async def test_boundary_compliance_percentage_is_accepted(
-        self, mock_audit, edge_pct
+    async def test_a_client_percentage_is_ignored(
+        self, mock_audit, computed_compliance
     ):
-        mock_db = AsyncMock()
-        service = ComplianceAttestationService(mock_db)
+        """CS-8: an attestation certifies the server's figure, not a typed one."""
+        service = ComplianceAttestationService(AsyncMock())
 
         result = await service.create_attestation(
             organization_id="org-1",
             attestation_data={
                 "period_type": "annual",
                 "period_year": 2025,
-                "compliance_percentage": edge_pct,
+                "compliance_percentage": 100.0,
             },
             attested_by="user-1",
         )
-        assert result["compliance_percentage"] == edge_pct
+
+        assert result["compliance_percentage"] == COMPUTED_PCT
+        recorded = mock_audit.await_args.kwargs["event_data"]
+        assert recorded["compliance_percentage"] == COMPUTED_PCT
+
+    @pytest.mark.parametrize(
+        ("period", "as_of"),
+        [
+            ({"period_type": "annual", "period_year": 2025}, date(2025, 12, 31)),
+            (
+                {"period_type": "quarterly", "period_year": 2026, "period_quarter": 1},
+                date(2026, 3, 31),
+            ),
+            (
+                {"period_type": "quarterly", "period_year": 2024, "period_quarter": 4},
+                date(2024, 12, 31),
+            ),
+            # A period still running is graded as of the department's today.
+            ({"period_type": "annual", "period_year": 2026}, ORG_TODAY),
+            (
+                {"period_type": "quarterly", "period_year": 2026, "period_quarter": 4},
+                ORG_TODAY,
+            ),
+        ],
+    )
+    @patch(
+        "app.services.compliance_officer_service.log_audit_event",
+        new_callable=AsyncMock,
+    )
+    async def test_graded_as_of_the_period_end(
+        self, mock_audit, period, as_of, computed_compliance
+    ):
+        db = AsyncMock()
+        result = await ComplianceAttestationService(db).create_attestation(
+            organization_id="org-1", attestation_data=period, attested_by="user-1"
+        )
+
+        computed_compliance.assert_awaited_once_with(db, "org-1", today=as_of)
+        assert result["compliance_as_of"] == as_of.isoformat()
+
+    async def test_a_period_not_yet_started_is_refused(self, computed_compliance):
+        service = ComplianceAttestationService(AsyncMock())
+
+        with pytest.raises(ValueError, match="has not started"):
+            await service.create_attestation(
+                organization_id="org-1",
+                attestation_data={"period_type": "annual", "period_year": 2027},
+                attested_by="user-1",
+            )
+        computed_compliance.assert_not_awaited()
+
+    @patch(
+        "app.services.compliance_officer_service.log_audit_event",
+        new_callable=AsyncMock,
+    )
+    async def test_nobody_graded_is_attested_as_no_figure(
+        self, mock_audit, computed_compliance
+    ):
+        computed_compliance.return_value = None
+        result = await ComplianceAttestationService(AsyncMock()).create_attestation(
+            organization_id="org-1",
+            attestation_data={"period_type": "annual", "period_year": 2025},
+            attested_by="user-1",
+        )
+        assert result["compliance_percentage"] is None
 
     @patch(
         "app.services.compliance_officer_service.log_audit_event",
@@ -377,7 +426,7 @@ class TestComplianceAttestationValidation:
         assert result["attestation_id"] == "test-uuid"
         assert result["period_type"] == "annual"
         assert result["period_year"] == 2025
-        assert result["compliance_percentage"] == 92.5
+        assert result["compliance_percentage"] == COMPUTED_PCT
         assert result["notes"] == "All requirements met"
         assert result["areas_reviewed"] == ["training", "certifications"]
         assert result["attested_by"] == "user-1"
@@ -410,7 +459,7 @@ class TestComplianceAttestationValidation:
         assert result["attestation_id"] == "test-uuid-2"
         assert result["period_type"] == "quarterly"
         assert result["period_quarter"] == 3
-        assert result["compliance_percentage"] == 88.0
+        assert result["compliance_percentage"] == COMPUTED_PCT
 
     @patch(
         "app.services.compliance_officer_service.log_audit_event",
@@ -510,12 +559,15 @@ class TestComplianceAttestationValidation:
             mock_db = AsyncMock()
             service = ComplianceAttestationService(mock_db)
 
-            with patch(
-                "app.services.compliance_officer_service.log_audit_event",
-                new_callable=AsyncMock,
-            ), patch(
-                "app.services.compliance_officer_service.generate_uuid",
-                return_value=f"uuid-q{quarter}",
+            with (
+                patch(
+                    "app.services.compliance_officer_service.log_audit_event",
+                    new_callable=AsyncMock,
+                ),
+                patch(
+                    "app.services.compliance_officer_service.generate_uuid",
+                    return_value=f"uuid-q{quarter}",
+                ),
             ):
                 result = await service.create_attestation(
                     organization_id="org-1",

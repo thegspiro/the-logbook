@@ -36,21 +36,21 @@ router = APIRouter()
 
 
 class AttestationCreate(BaseModel):
-    """Request body for creating a compliance attestation."""
+    """Request body for creating a compliance attestation.
+
+    Carries no percentage: the server computes the figure being attested
+    (CS-8). A ``compliance_percentage`` sent by an older client is ignored.
+    """
 
     period_type: str = Field(
         ..., description="Period type, e.g. 'annual' or 'quarterly'"
     )
-    period_year: int = Field(..., description="Year of the attestation period")
+    period_year: int = Field(
+        ..., ge=2000, le=2100, description="Year of the attestation period"
+    )
     period_quarter: Optional[int] = Field(
         None,
         description="Quarter number (1-4) if period_type is quarterly",
-    )
-    compliance_percentage: float = Field(
-        ...,
-        ge=0,
-        le=100,
-        description="Overall compliance percentage",
     )
     notes: str = Field("", description="Additional notes or observations")
     areas_reviewed: List[str] = Field(

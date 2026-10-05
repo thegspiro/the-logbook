@@ -103,7 +103,7 @@ incoherent status bucketing.
 **Fix:** a `model_validator` on the create + update schemas rejects
 `at_risk_threshold > compliant_threshold`.
 
-### CS-8 — MED/LOW — Separation-of-duties on skills tests + attestations — ⚠️ PARTIALLY FIXED
+### CS-8 — MED/LOW — Separation-of-duties on skills tests + attestations — ✅ FIXED (attestation half 2026-10-05)
 
 - Skills: an examiner (`training.manage`) could create a test where they were
   also the candidate, then score + pass it, auto-completing their own linked
@@ -146,9 +146,14 @@ incoherent status bucketing.
   normalizes `str(record.user_id)` for both the member-membership test and the
   `member_hours` dict key, so a UUID-typed `user_id` can't silently drop a
   member's hours from the readiness computation. 1 regression test added.
-  **Note (CS-8 attestation):** `compliance_percentage` is already range-bounded at
-  the schema (`Field(ge=0, le=100)`); the open half is the missing server-side
-  recompute / dual-control (behavior change, still deferred).
+  **CS-8 attestation — ✅ FIXED 2026-10-05 (server-computed, the owner's
+  choice over dual control):** `create_attestation` no longer takes a
+  percentage. It records `compute_org_compliance_pct` as of the period's last
+  day (or today, for a period still running) plus that date as
+  `compliance_as_of`, refuses a period that has not started, and ignores any
+  `compliance_percentage` an older client sends. The form also gained the
+  quarter picker it never had, without which every quarterly attestation was
+  refused by the API.
   **Status:** injection + input-validation fixed; monthly windowing (feature) and
   recipient allow-list (policy) deferred.
 

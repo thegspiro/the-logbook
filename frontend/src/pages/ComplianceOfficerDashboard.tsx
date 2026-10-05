@@ -30,7 +30,7 @@ import {
   Settings,
 } from 'lucide-react';
 import { complianceOfficerService, reportExportService } from '../services/trainingServices';
-import { formatDate } from '../utils/dateFormatting';
+import { formatCalendarDate, formatDate } from '../utils/dateFormatting';
 import { formatHours, formatHoursExact, sumHoursToQuarter } from '../utils/hoursFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
 import { expectArray } from '../utils/asArray';
@@ -789,6 +789,7 @@ const AttestationsSection: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [periodType, setPeriodType] = useState<'annual' | 'quarterly'>('annual');
 
   useEffect(() => {
     const load = async () => {
@@ -811,9 +812,9 @@ const AttestationsSection: React.FC = () => {
     try {
       setSubmitting(true);
       const result = await complianceOfficerService.createAttestation({
-        period_type: formData.get('period_type') as string,
+        period_type: periodType,
         period_year: Number(formData.get('period_year')),
-        compliance_percentage: Number(formData.get('compliance_percentage')),
+        ...(periodType === 'quarterly' ? { period_quarter: Number(formData.get('period_quarter')) } : {}),
         notes: (formData.get('notes') as string) || '',
         areas_reviewed: ((formData.get('areas_reviewed') as string) || '')
           .split(',')
@@ -871,6 +872,8 @@ const AttestationsSection: React.FC = () => {
               <select
                 id="attestation-period-type"
                 name="period_type"
+                value={periodType}
+                onChange={(e) => setPeriodType(e.target.value === 'quarterly' ? 'quarterly' : 'annual')}
                 className={inputClass}
                 required
                 aria-required="true"
@@ -893,23 +896,31 @@ const AttestationsSection: React.FC = () => {
                 aria-required="true"
               />
             </div>
-            <div>
-              <label htmlFor="attestation-compliance-pct" className={labelClass}>
-                Compliance %
-              </label>
-              <input
-                id="attestation-compliance-pct"
-                type="number"
-                name="compliance_percentage"
-                min="0"
-                max="100"
-                step="0.1"
-                className={inputClass}
-                required
-                aria-required="true"
-              />
-            </div>
+            {periodType === 'quarterly' && (
+              <div>
+                <label htmlFor="attestation-quarter" className={labelClass}>
+                  Quarter
+                </label>
+                <select
+                  id="attestation-quarter"
+                  name="period_quarter"
+                  defaultValue="1"
+                  className={inputClass}
+                  required
+                  aria-required="true"
+                >
+                  <option value="1">Q1 (Jan–Mar)</option>
+                  <option value="2">Q2 (Apr–Jun)</option>
+                  <option value="3">Q3 (Jul–Sep)</option>
+                  <option value="4">Q4 (Oct–Dec)</option>
+                </select>
+              </div>
+            )}
           </div>
+          <p className="text-theme-text-muted text-sm">
+            The compliance percentage is calculated when you submit: the department figure as of the period&apos;s last
+            day, or today for a period still running. It is the same figure the compliance dashboard reports.
+          </p>
           <div>
             <label htmlFor="attestation-areas" className={labelClass}>
               Areas Reviewed (comma-separated)
@@ -973,11 +984,20 @@ const AttestationsSection: React.FC = () => {
                     </p>
                   </div>
                 </div>
-                <span
-                  className={`text-lg font-bold ${att.compliance_percentage >= 80 ? 'text-green-500' : att.compliance_percentage >= 50 ? 'text-yellow-500' : 'text-red-500'}`}
-                >
-                  {att.compliance_percentage}%
-                </span>
+                <div className="text-right">
+                  {att.compliance_percentage == null ? (
+                    <span className="text-theme-text-muted text-lg font-bold">N/A</span>
+                  ) : (
+                    <span
+                      className={`text-lg font-bold ${att.compliance_percentage >= 80 ? 'text-green-500' : att.compliance_percentage >= 50 ? 'text-yellow-500' : 'text-red-500'}`}
+                    >
+                      {att.compliance_percentage}%
+                    </span>
+                  )}
+                  {att.compliance_as_of && (
+                    <p className="text-theme-text-muted text-xs">as of {formatCalendarDate(att.compliance_as_of)}</p>
+                  )}
+                </div>
               </div>
               {att.notes && <p className="text-theme-text-muted mt-2 text-sm">{att.notes}</p>}
               {att.areas_reviewed && att.areas_reviewed.length > 0 && (

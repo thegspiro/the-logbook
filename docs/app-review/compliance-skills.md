@@ -78,6 +78,10 @@ now E712-free.
   (a workflow change). **CS-9 monthly windowing** — monthly reports still return the
   annual dataset relabeled (data-layer feature).
 
+> **Update 2026-10-05:** both are now closed — CS-9 with the monthly window, and
+> CS-8's attestation with a server-computed percentage (see
+> `docs/module-audit/compliance-skills.md` → CS-8).
+
 **Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
 n/a (no frontend change) · `test_skill_test_update_guard.py` **2 passed** (DB-free).
 

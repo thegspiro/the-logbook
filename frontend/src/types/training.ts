@@ -2607,7 +2607,10 @@ export interface ComplianceAttestation {
   period_type: string;
   period_year: number;
   period_quarter?: number | undefined;
-  compliance_percentage: number;
+  /** Computed by the server when attested; null when no member was graded. */
+  compliance_percentage: number | null;
+  /** The day the figure was graded as of (the period's end, or the day attested). Absent on attestations recorded before CS-8. */
+  compliance_as_of?: string | undefined;
   notes: string;
   areas_reviewed: string[];
   exceptions: Array<Record<string, unknown>>;
@@ -2621,7 +2624,6 @@ export interface AttestationCreate {
   period_type: string;
   period_year: number;
   period_quarter?: number | undefined;
-  compliance_percentage: number;
   notes: string;
   areas_reviewed: string[];
   exceptions: Array<{ requirement_name: string; reason: string; mitigation: string }>;
