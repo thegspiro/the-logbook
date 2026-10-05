@@ -815,6 +815,29 @@ Still open: order and request numbers (`ORD-YYYY-`, `PR-YYYY-`) take their year
 from UTC, which differs only on the evening of December 31 and changes nothing
 but the prefix.
 
+## Sign-in From a Shared Station Address (2026-10-05)
+
+**Open decision.** A station's members usually share one public address, and
+two sign-in limits are counted per address rather than per member:
+
+- nginx's `login_limit` in both bundled proxies (`infrastructure/nginx/nginx.conf`,
+  `infrastructure/nginx/docker.conf`): 5 a minute, burst 3.
+- The backend's `rate_limit_login` (`app/core/security_middleware.py`): 5
+  attempts in 60 seconds, counting successful ones. With Redis — the bundled
+  stack — the next sign-in is refused with a 429 for the rest of the minute;
+  on the in-memory fallback it locks the address out for 30 minutes.
+
+So at shift change, the sixth member to sign in at the station within a minute
+is turned away, and on the in-memory fallback everyone behind that address is
+locked out for half an hour. Both are brute-force controls, so neither was
+loosened when the general per-address limits were sized for a department
+(`limit_conn 400`, API 50/s with a burst of 600 — see
+`test_nginx_config_consistency.py`). The options are to raise the per-address
+count, or to key the backend limiter on the account as well as the address;
+account lockout and the suspicious-IP throttle already cover the cross-account
+case. Until then, with Redis running, the cost is a member asked to wait a
+minute.
+
 ## Suggestion Boxes — What Anonymity Does and Does Not Cover (2026-09-23)
 
 **Accepted.** An anonymous suggestion is stored with no record of its author:
@@ -2839,9 +2862,9 @@ or warns against it today. (Security review ELEC-38,
 
 ## Users: Roster/Archive/Leave Lists Are Unbounded, Not Just Un-Paginated (2026-08-25)
 
-`list_users_with_roles` (`users.py:601`) and `get_archived_members`
-(`member_status.py:723`) return every matching row in the org with no
-pagination; `leave_widget_summary` (`member_leaves.py:50`) materializes every
+`list_users_with_roles` (`users.py:824`) and `get_archived_members`
+(`member_status.py:771`) return every matching row in the org with no
+pagination; `leave_widget_summary` (`member_leaves.py:53`) materializes every
 `active` leave to compute its counts, and `MemberLeaveService.list_leaves`
 (`member_leave_service.py`) runs an unbounded query before its two callers in
 `member_leaves.py` apply an in-memory slice. All four are `members.manage`-gated
@@ -2867,7 +2890,7 @@ a frontend-affecting decision, not a drop-in. (Security review USR-5,
 docstring — is enough to receive the same `UserListResponse` shape
 `members.manage` gets: `username`, `hire_date`, `membership_number`, `rank`,
 and `station` for every member in the org
-(`app/services/user_service.py:24-91`, `app/schemas/user.py:271-298`). A
+(`app/services/user_service.py:24-93`, `app/schemas/user.py:462-493`). A
 2026-09-01/02 frontend change (`frontend/src/pages/Members.tsx`) now presents
 a visibly reduced "Member Directory" for callers without `members.manage` —
 no username, no Hire Date column, no export/bulk actions — framed as "a
@@ -6018,6 +6041,77 @@ shape is CLAUDE.md Pitfall #29's: extract the window-and-status predicate so
 there is a single definition and the other call site is a projection of it,
 rather than editing whichever of the two is being looked at — which is how the
 pair drifted apart twice.
+
+## DASH-37 — Dashboard Tiles Promise A Filter They Do Not Apply (2026-10-04)
+
+Every asset-widget tile renders `aria-label="{title}: {count}. Open filtered
+results"` and, when its count is non-zero, a body line reading "View filtered
+results" (`frontend/src/components/dashboard/AssetWidgetRegistry.tsx:36,53`).
+The `href` carries the filter as a query string. **Of the 16 parameterised
+navigation targets `backend/app/api/v1/endpoints/dashboard.py` serves, 13 land
+on a page that ignores the parameter**, so the user arrives at an unfiltered
+list and has to re-find the rows the tile just counted.
+
+The three that work:
+
+| Target                                           | Honoured by                             |
+| ------------------------------------------------ | --------------------------------------- |
+| `/facilities/maintenance?status=overdue`         | `MaintenanceListPage` reads `status`    |
+| `/inventory/checklists/log?status=…&submitted=1` | `CheckLogPage` reads both               |
+| `/training/admin?page=…&tab=…`                   | the canonical administration-hub target |
+
+The thirteen that do not: `ApparatusListPage`, `InspectionsListPage`,
+`FacilitiesDashboard`, `InventoryCheckoutsPage`, `ActionItemsPage`,
+`EventsPage`, `Members` and `AdminHoursManagePage` never call
+`useSearchParams`; `InventoryItemsPage` reads `vendor_id` and `item_type` but
+not `stock`; `NotificationsPage` reads `tab` but not `status`.
+
+Telling: the two honoured targets are exactly the two whose hrefs carry an
+explanatory comment in `dashboard.py`. The rest were written as if the
+destination pages already filtered.
+
+**Why it is here rather than fixed.** It is page work across eight components,
+and each one needs a product decision about which of its filters are
+addressable by URL — which is also the decision Scheduling's settings sections
+turned on (CLAUDE.md, "How a section is addressed differs, deliberately"). The
+announcement is separately wrong on an informational tile such as
+`inventory-summary`, where a department's total item count has nothing to
+filter and the alert-triangle affordance should not appear at all.
+
+**Bounded, not harmless.** Nothing is disclosed and nothing errors; the cost is
+that a chief who taps "Unresolved defects: 4" gets the whole fleet and must
+find the four. The dead _paths_ in the same family were fixed (DASH-30, pass 3)
+and are now held by `frontend/src/routeIntegrity.test.ts`, which walks the
+backend modules that build navigation targets as response data. That check
+proves a path resolves; proving a _parameter is read_ needs route-to-component
+resolution and is not attempted.
+
+**Related, and the same shape one layer up:** the `DASH-1` entry above records
+seven of eight `widgetRegistry.ts` `aggregatePath` values that resolve to no
+mounted route. Server-supplied and registry-declared navigation targets have
+both drifted from the routes they name, for the same reason — nothing in the
+type system connects either to a `path=` string.
+
+## DASH-38 / DASH-39 / DASH-40 — Three Smaller Dashboard Decisions (2026-10-04)
+
+- **DASH-38 — no apparatus maintenance page.** `/apparatus/maintenance` is an
+  API path with a full CRUD surface (`apparatus/maintenance`,
+  `apparatus/maintenance/due`, `apparatus/maintenance-types`) and no route
+  behind it. The `apparatus-maintenance` tile counted `maintenance_due_soon`
+  and pointed there, so it bounced off the catch-all; pass 3 retargeted it to
+  the fleet board, which surfaces the same tallies in its summary strip. Either
+  build the page or fold the figure in explicitly.
+- **DASH-39 — no genuine upcoming-facility-maintenance figure.** Pass 3 removed
+  a `facilities-maintenance` tile that re-rendered its neighbour's overdue count
+  (DASH-31). Restoring the concept needs a `due_date > today AND <= today + 30`
+  query **and** a `due` value accepted by `MaintenanceListPage`'s
+  `all | pending | completed | overdue` filter. The apparatus block is the model.
+- **DASH-40 — `/dashboard/action-items` is unpaginated.** It returns every
+  matching action item in the organization from both sources, merged and sorted
+  in Python, with no `limit`/`offset` and no cap. `ActionItemSummary` carries
+  free-text `description`, so the payload grows with the content rather than
+  just the row count; a department with years of minutes sends the lot on every
+  dashboard load.
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area
 per tick and appends findings. New "needs owner decision" items should be
