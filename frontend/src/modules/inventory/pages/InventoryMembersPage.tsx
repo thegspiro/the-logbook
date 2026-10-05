@@ -241,7 +241,7 @@ const InventoryMembersPage: React.FC = () => {
 
       <Link
         to="/inventory/admin"
-        className="text-theme-text-muted hover:text-theme-text-secondary mb-4 flex items-center gap-1 text-sm"
+        className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 mb-4 flex items-center gap-1 text-sm"
         title="Back to Inventory Administration"
       >
         <ArrowLeft className="h-4 w-4" /> Back to Admin
@@ -343,7 +343,7 @@ const InventoryMembersPage: React.FC = () => {
             onClick={() => {
               void loadMembers();
             }}
-            className="flex items-center gap-1 text-sm text-red-700 hover:text-red-500 dark:text-red-400"
+            className="touch:min-h-11 flex items-center gap-1 text-sm text-red-700 hover:text-red-500 dark:text-red-400"
           >
             <RefreshCw className="h-4 w-4" /> Retry
           </button>
@@ -356,10 +356,12 @@ const InventoryMembersPage: React.FC = () => {
           <Loader2 className="text-theme-text-muted mx-auto mb-3 h-8 w-8 animate-spin" />
           <p className="text-theme-text-secondary text-sm">Loading members...</p>
         </div>
-      ) : members.length === 0 ? (
+      ) : error ? null : members.length === 0 ? (
+        // Not after a failed load: "no members with inventory assignments"
+        // beneath the error would state as fact what the page could not read.
         <div className="card-secondary p-12 text-center">
           <Users className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
-          <h3 className="text-theme-text-primary mb-1 text-lg font-semibold">No Members Found</h3>
+          <h2 className="text-theme-text-primary mb-1 text-lg font-semibold">No Members Found</h2>
           <p className="text-theme-text-secondary text-sm">
             {searchQuery ? 'Try adjusting your search.' : 'No members with inventory assignments.'}
           </p>

@@ -382,7 +382,7 @@ const EquipmentRequestsPage: React.FC = () => {
 
         <Link
           to="/inventory/admin"
-          className="text-theme-text-muted hover:text-theme-text-secondary mb-6 flex items-center gap-1 text-sm"
+          className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 mb-6 flex items-center gap-1 text-sm"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Admin
@@ -439,7 +439,7 @@ const EquipmentRequestsPage: React.FC = () => {
         ) : requests.length === 0 ? (
           <div className="card-secondary p-8 text-center">
             <ClipboardList className="text-theme-text-muted mx-auto mb-4 h-12 w-12" />
-            <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">No Requests</h3>
+            <h2 className="text-theme-text-primary mb-2 text-lg font-semibold">No Requests</h2>
             <p className="text-theme-text-muted text-sm">{emptyListMessage(statusFilter)}</p>
           </div>
         ) : (
@@ -449,7 +449,7 @@ const EquipmentRequestsPage: React.FC = () => {
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
                     <div className="mb-1 flex flex-wrap items-center gap-2">
-                      <h3 className="text-theme-text-primary text-sm font-semibold">{req.item_name}</h3>
+                      <h2 className="text-theme-text-primary text-sm font-semibold">{req.item_name}</h2>
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-medium ${REQUEST_STATUS_BADGES[req.status] ?? 'bg-theme-surface-secondary text-theme-text-muted'}`}
                       >
