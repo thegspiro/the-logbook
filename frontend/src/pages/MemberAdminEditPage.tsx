@@ -11,6 +11,7 @@
  * - Address
  * - Emergency Contacts (dynamic list)
  * - Actions (view history, save, cancel)
+ * - ID Cards (NFC credentials), for holders of `members.manage_id_cards`
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
@@ -25,6 +26,8 @@ import { blankToNull } from '../utils/formValues';
 import { formatMemberName } from '../utils/memberName';
 import { getErrorMessage } from '../utils/errorHandling';
 import { Breadcrumbs } from '../components/ux';
+import { useAuthStore } from '../stores/authStore';
+import { MemberIdCardsPanel } from '../modules/membership/components/MemberIdCardsPanel';
 
 const MEMBERSHIP_TYPE_OPTIONS = [
   { value: 'prospective', label: 'Prospective' },
@@ -104,6 +107,10 @@ export const MemberAdminEditPage: React.FC = () => {
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
   const { rankOptions } = useRanks();
+  // This route is gated on members.manage, but issuing a card is its own grant:
+  // a profile editor without it would see a panel whose every call is refused.
+  const checkPermission = useAuthStore((state) => state.checkPermission);
+  const canManageIdCards = checkPermission('members.manage_id_cards');
 
   const [user, setUser] = useState<
     (UserWithRoles & { personal_email?: string; membership_type?: string; compliance_exempt?: boolean }) | null
@@ -1028,6 +1035,11 @@ export const MemberAdminEditPage: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {/* Below the Save row on purpose: every card action takes effect the
+            moment it is confirmed, and above it the panel would read as part
+            of the form that Save Changes submits. */}
+          {canManageIdCards && userId && <MemberIdCardsPanel userId={userId} memberName={memberDisplayName} />}
         </div>
       </div>
     </div>

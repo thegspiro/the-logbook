@@ -177,8 +177,11 @@ async function mockCardApi(page: Page, { rejectWith }: { rejectWith?: string } =
   return api;
 }
 
-async function openIssueDialog(page: Page) {
-  await page.goto(`/members/${MEMBER_ID}`);
+const PROFILE_PATH = `/members/${MEMBER_ID}`;
+const ADMIN_EDIT_PATH = `/members/admin/edit/${MEMBER_ID}`;
+
+async function openIssueDialog(page: Page, path = PROFILE_PATH) {
+  await page.goto(path);
   const panel = page.locator('.card', { has: page.getByRole('heading', { name: 'ID Cards' }) });
   await expect(panel).toBeVisible({ timeout: 15_000 });
   await expect(panel.getByText('No ID cards issued')).toBeVisible();
@@ -312,6 +315,42 @@ test.describe('issuing an NFC ID card on a phone with Web NFC', () => {
     await expect(dialog.locator('#nfc-card-credential')).toHaveValue('04A2245B7C1180');
     expect(api.registrations).toHaveLength(1);
     await expect(panel.getByText('No ID cards issued')).toBeVisible();
+  });
+});
+
+test.describe('issuing an NFC ID card from members administration', () => {
+  test.beforeEach(async ({ page }) => {
+    await installFakeNfc(page);
+    await signIn(page, { permissions: OFFICER_PERMISSIONS });
+  });
+
+  test('writes and registers a card from the admin edit page', async ({ page }) => {
+    const api = await mockCardApi(page);
+    const { panel, dialog } = await openIssueDialog(page, ADMIN_EDIT_PATH);
+    await expect(page.getByRole('heading', { name: `Edit Member: ${MEMBER_NAME}` })).toBeVisible();
+
+    await dialog.getByRole('button', { name: 'Write a code to a blank card' }).click();
+    await expect.poll(async () => (await nfc(page)).writeArmed).toBe(true);
+    await page.evaluate(() => window.__nfc?.completeWrite());
+    const code = await dialog.locator('#nfc-card-credential').inputValue();
+    expect(code).toMatch(ISSUED_CODE);
+
+    const posted = page.waitForRequest(isRegistration);
+    await dialog.getByRole('button', { name: 'Register card' }).click();
+    await posted;
+
+    expect(api.registrations).toEqual([{ user_id: MEMBER_ID, tag_uid: code, credential_type: 'written' }]);
+    await expect(dialog).toBeHidden();
+    await expect(panel.getByText(`…${code.slice(-4)}`)).toBeVisible();
+  });
+
+  test('a profile editor without the card permission gets no ID Cards section', async ({ page }) => {
+    await signIn(page, { permissions: ['members.view', 'members.manage'] });
+    await mockCardApi(page);
+    await page.goto(ADMIN_EDIT_PATH);
+
+    await expect(page.getByRole('heading', { name: `Edit Member: ${MEMBER_NAME}` })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('heading', { name: 'ID Cards' })).toHaveCount(0);
   });
 });
 

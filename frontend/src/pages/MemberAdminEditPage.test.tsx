@@ -11,7 +11,7 @@
  * cleared server-side, in the same transaction as the class change.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -37,6 +37,28 @@ vi.mock('react-router', async () => {
   const actual = await vi.importActual('react-router');
   return { ...actual, useParams: () => ({ userId: 'u1' }) };
 });
+
+// Empty by default, so every suite that predates the ID Cards section renders
+// the page exactly as it did before the section existed.
+let grantedPermissions: string[] = [];
+
+vi.mock('../stores/authStore', () => {
+  const state = {
+    checkPermission: (permission: string) => grantedPermissions.includes(permission),
+  };
+  // The page and Breadcrumbs both read the store through a selector.
+  return {
+    useAuthStore: (selector?: (s: typeof state) => unknown) => (selector ? selector(state) : state),
+  };
+});
+
+vi.mock('../modules/membership/components/MemberIdCardsPanel', () => ({
+  MemberIdCardsPanel: ({ userId, memberName }: { userId: string; memberName?: string }) => (
+    <section aria-label="ID cards panel">
+      {userId}|{memberName}
+    </section>
+  ),
+}));
 
 vi.mock('../hooks/useRanks', () => ({
   useRanks: () => ({
@@ -327,5 +349,47 @@ describe('MemberAdminEditPage — preferred name', () => {
 
     await waitFor(() => expect(mockUpdateUserProfile).toHaveBeenCalled());
     expect(JSON.parse(JSON.stringify(payload()))).toHaveProperty('preferred_name', null);
+  });
+});
+
+describe('MemberAdminEditPage — ID cards', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetLocations.mockReset();
+    mockGetLocations.mockResolvedValue([]);
+    mockGetUserWithRoles.mockReset();
+    mockGetUserWithRoles.mockResolvedValue(member());
+    grantedPermissions = [];
+  });
+
+  afterEach(() => {
+    grantedPermissions = [];
+  });
+
+  const panel = () => screen.queryByRole('region', { name: 'ID cards panel' });
+
+  it('offers the ID cards section to an officer who can issue cards', async () => {
+    grantedPermissions = ['members.manage_id_cards'];
+    await renderPage();
+
+    expect(panel()).toHaveTextContent('u1|Dana Reyes');
+  });
+
+  it('hides the section from a profile editor who cannot issue cards', async () => {
+    // The route admits members.manage; that alone must not surface a panel
+    // whose every request the server would refuse.
+    grantedPermissions = ['members.manage'];
+    await renderPage();
+
+    expect(panel()).not.toBeInTheDocument();
+  });
+
+  it('sits after the Save row, outside the form that Save Changes submits', async () => {
+    grantedPermissions = ['members.manage_id_cards'];
+    await renderPage();
+
+    const save = screen.getByRole('button', { name: 'Save Changes' });
+    const section = screen.getByRole('region', { name: 'ID cards panel' });
+    expect(save.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
