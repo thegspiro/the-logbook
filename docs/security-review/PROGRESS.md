@@ -16,6 +16,15 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2941](https://github.com/thegspiro/the-logbook/pull/2941)
+(Feature 05, Finance & approvals, pass 7) merged — 1 fix (FIN-33, MED), 0
+flagged; log entry already recorded below and rotation row 05 stays ✅. This
+iteration picks up Feature 06 (Elections & ballots), the state this PR opened
+from.
+
+<details>
+<summary>Superseded — prior Open PR note (PR #2941, Feature 05, Finance & approvals, pass 7, before it merged), preserved for history</summary>
+
 **PR [#2941](https://github.com/thegspiro/the-logbook/pull/2941)**: branch
 `claude/security-review-finance-approvals`, Feature 05 (Finance &
 approvals), pass 7.
@@ -51,6 +60,8 @@ approvals.py` is byte-identical to pass 6's reviewed state — re-read in
 
 Full write-up:
 [`FIN-05-finance-approvals.md`](./FIN-05-finance-approvals.md) → Pass 7.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #2940's merge, Feature 04, Storefront & payments, pass 7 — the state this pass's PR opened from), preserved for history</summary>
@@ -17686,7 +17697,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (28 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
@@ -17722,6 +17733,77 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-05 — Feature 06 (Elections & ballots, pass 7) — 0 fixed, 0 newly discovered, 4 cross-referenced, a real delta reviewed (watchdog pickup)
+
+PR #2941 (Feature 05, Finance & approvals, pass 7) had already merged;
+confirmed via `list_pull_requests` (open) that no `claude/security-review-*`
+branch was in flight. This iteration was a watchdog pickup — the dedicated
+`/loop 30m /security-review` session driving this rotation had gone quiet
+after #2941 merged — so Step 0/1's tracker edits (clearing the Open PR row,
+marking row 06 🔄) were made uncommitted in the working tree and ride into
+this same commit per the skill's own instruction.
+
+**Not a near-zero-delta pass, unlike pass 6.** `git diff --stat` against the
+oldest commit in this session's (shallow-clone-limited) reachable history
+that already contains pass 6's own reviewed state (`0b52e56aa`,
+2026-09-23 — the exact pass-6 baseline, PR #2600's base at 2026-09-15, is
+outside the fetched window; a deepen attempt timed out) shows 2,090
+insertions / 792 deletions across the feature's full backend domain — the
+largest single-feature diff this file has swept in one pass. The cause is
+a dedicated 1,207-line workflow review of this exact feature run twice on
+2026-09-30 (`docs/workflow-review/W50-elections.md`), covering vote
+integrity, tenant and permission boundaries end to end through the browser
+and the API, with 82 numbered findings and six independently-tested
+CRITICAL/HIGH voting-integrity fixes already landed on `main`
+(tokened-election delete, de-anonymization of new audit rows, cross-channel
+double voting, an attendance-rule bypass via item-id-as-position, and a
+voided voter being permanently locked out by the dedup hash's UNIQUE
+constraint).
+
+This pass's own job was therefore independent re-verification from the
+security checklist's seven dimensions (not W50's workflow-correctness
+lens) rather than re-finding what that review already found: a fresh,
+scripted enumeration of all 65 routes (unchanged from pass 6 — the huge
+diff added no new endpoint), re-reading every by-id query the diff touched
+for tenant-isolation drift (none found — `soft_delete_vote`,
+`delete_election`, `closed_by_name` and the new recipient-list builder all
+resolve through an org-scoped election first), reading all 4 new
+election-table migrations for schema integrity (all `SET NULL`/nullable
+and `create_all`-guard compliant), and re-verifying the 5 standing ELEC
+findings (ELEC-12, 14, 16, 28, 40 — all unchanged, current citations
+updated for the diff's line shifts).
+
+**4 items folded into this file's own numbered ledger as ELEC-43…46**,
+each a cross-reference to a W50 finding that lands inside this checklist's
+dimensions and was independently re-verified against current code rather
+than trusted from the workflow review's write-up, so a future ELEC-06 pass
+does not need to read a different file to know this feature's open
+security-relevant items: ELEC-43 (HIGH, a proxy ballot on an anonymous
+election is attributable — the audit-row de-anonymization fix did not
+reach `cast_proxy_vote`), ELEC-44 (LOW, the election body and the public
+ballot lookup over-expose the recipient list, live vote counts, and
+candidate account ids), ELEC-45 (MED, a sanctioned void both falsely
+certifies CHAIN_BROKEN and, on the chain's tail, evades detection
+entirely), and ELEC-46 (MED, a manager can accept a nomination on the
+nominee's behalf with no identity check). All four already carry an owner
+decision in `docs/KNOWN_LIMITATIONS.md` (added by the 2026-09-30 workflow
+review itself); this pass added the ELEC-06 cross-reference to each of
+those four rows rather than duplicating the write-up.
+
+**0 new defects found by this pass directly; 0 code fixed** — every
+finding above is either an already-landed fix re-verified sound, or a
+flagged item needing a product/schema decision this feature's own
+checklist correctly declines to guess at.
+
+**Gate:** backend flake8/black/isort clean, `validate_migrations.py
+--strict` (512 revisions, single head `34d3d56d1479`),
+`check_route_permissions.py --strict` (244 routes, 0 errors, 0 warnings),
+scoped pytest unit-only (622 passed) and full run with DB available this
+session (1,092 passed, 1 pre-existing skip, 0 failed), frontend typecheck
+and lint both clean, 38 elections-module frontend test files (148 tests)
+passed. Findings doc: `docs/security-review/ELEC-06-elections-ballots.md`
+→ **Pass 7**. Rotation row 06 marked ✅ (pending this PR's merge).
 
 ### 2026-10-05 — Feature 05 (Finance & approvals, pass 7) — 1 fixed, 0 flagged, a real delta reviewed
 
