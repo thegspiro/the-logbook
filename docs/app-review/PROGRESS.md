@@ -39,7 +39,7 @@ from its open list.
 
 | #   | Feature                    | Prefix | Status |
 | --- | -------------------------- | ------ | ------ |
-| B1  | medical-screening          | MS2    | ⬜     |
+| B1  | medical-screening          | MS2    | ✅     |
 | B2  | apparatus                  | AP2    | ⬜     |
 | B3  | inventory                  | INV2   | ⬜     |
 | B4  | facilities                 | FAC2   | ⬜     |
@@ -2417,3 +2417,76 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   1.6.0 installed against the repo's pinned 1.7.0 (2 failures). Neither fix
   touched the repository. See course-cohorts.md → Pass 3.
   Next: A6 member lifecycle & offboarding.
+- **B1 medical-screening ✅ (pass 5).** Ten prior passes cover this surface —
+  four here and **six** in `docs/security-review/MS-09-medical-screening.md`,
+  the latest 2026-09-16 — so this pass reviewed the delta since the newest of
+  them and spent the rest on the dimensions the security track does not carry.
+  **2 fixes, 1 flagged.** **The delta is two commits, both clean, and both
+  verified rather than skimmed:** `78f52e4a` swapped
+  `cascade="all, delete-orphan"` for `passive_deletes=True` so deleting a
+  requirement unlinks records instead of destroying members' medical history —
+  its claim that the FK "has been SET NULL and nullable since the table was
+  created" is exactly CLAUDE.md Pitfall #2's pairing and checks out, and the
+  design is consistent with compliance matching records by `screening_type`
+  rather than `requirement_id`, so unlinking costs nobody their compliance; and
+  `25cf5c01` replaced `date.today()` with `resolve_org_today`, **checked for
+  completeness** rather than trusted, since a sweep that fixes what it searched
+  for and misses the rest is the failure CLAUDE.md records for the contrast
+  palette — grep for `date.today()|datetime.now()|utcnow()` across the service
+  and endpoint returns nothing. **MS2-6** — `get_compliance_status` counted
+  expiring-soon as `0 < days <= 30` while `get_expiring_soon` selects
+  `expiration_date >= today`, so the two differed by exactly one day: **today**,
+  the day a member's physical actually lapses. The compliance summary said
+  nothing was due while the expiring list it links to named them — Pitfall #29's
+  failure mode, and quiet, since both numbers look plausible alone. Fixed to
+  `0 <=` with a comment naming the other site; the lower bound stays because an
+  already-lapsed screening is reported by `non_compliant_count` and must not
+  read as though there is still time. Two tests, one per bound, both
+  mutation-verified — the existing coverage used `days=15`, so neither edge had
+  one. **MS2-8** — reached by the ordinary route of checking this module's
+  frontend types against its schema for drift (there is none): **CLAUDE.md
+  asserted in two places that response schemas use `alias_generator=to_camel`,
+  unconditionally, and 37 of the 54 schema modules declaring a `Response` class
+  carry no alias generator at all** (17 do). The split is real on the wire,
+  since FastAPI dumps response models `by_alias=True` — `schemas/apparatus.py`
+  uses it and its frontend type is `organizationId`/`unitNumber`, while
+  `schemas/medical_screening.py` does not and its type is
+  `organization_id`/`screening_type`. Both conventions are internally consistent
+  and every module's types match their own module, which is why nothing is
+  broken today and why nothing would catch a new mistake either: a hand-written
+  interface in the wrong casing type-checks, passes lint, satisfies
+  `tsc --noEmit`, and reads every field as `undefined` at runtime — and somebody
+  following the documented rule gets it wrong two times in three, against a
+  checklist in the same file that says "Schema fields match". Corrected with the
+  measurement and an actionable rule in place of a wrong one (check the module
+  with a named grep; a new schema in an existing module follows that module's
+  choice, because switching one is a breaking change for its frontend). No
+  machine check, deliberately: the rule stays in CLAUDE.md in full so none is
+  required, and a test asserting 17/37 would fail on every new schema module —
+  noise, where the corrected guidance is self-verifying. **Flagged:** MS2-7
+  (LOW) — the _same_ two surfaces also disagree about a **waived** screening,
+  which compliance counts toward expiring-soon and the list (filtered to
+  PASSED/COMPLETED) never shows; left open because either reading is defensible
+  — a lapsing waiver is work coming, or a waiver is an exemption rather than a
+  screening — and they are opposite one-line changes on a PHI-adjacent surface.
+  **Re-verified, all still open:** the exactly-one-of `user_id`/`prospect_id`
+  validator and MS-13 (the Add Record form has no subject control) are **two
+  halves of one defect** — the validator would reject every create the UI makes,
+  which is why neither half can land alone; MS-6's unbounded lists; and the
+  compliance-by-id 404, now stated more precisely — an unknown id reads as
+  **non-compliant against every active requirement**, and in an org with no
+  active requirements comes back `is_fully_compliant: true` for a member who
+  does not exist. MS-9's `grace_period_days` is still read by nothing, and the
+  gap is concrete: documented "days past due before flagging non-compliant",
+  default 30, while `is_compliant` applies no grace at all. **Clean, each
+  checked:** no org-level N+1 (all four compliance callers resolve one subject);
+  the module avoids Pitfall #11 without re-fetching, because all four
+  record-returning routes — including create and update — call
+  `attach_record_names`, which is also why the two unused by-id service methods
+  are mild dead code rather than a skipped re-fetch; Pitfall #7 satisfied via
+  the shared `createApiClient()`; `_resolve_names` org-scoped on all three
+  lookups; `/compliance/me` declared before `/compliance/{user_id}`. Gate:
+  flake8 0 · black 1350 unchanged · isort clean · docs links 428 files 0 broken
+  · 162 backend medical tests passed, 1 skipped. No frontend source changed, so
+  per CLAUDE.md's own "Match the Verification to the Change" the frontend suites
+  were not run. See medical-screening.md → Pass 5. Next: B2 apparatus.

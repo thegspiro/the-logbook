@@ -1,7 +1,211 @@
 # Application Review — Medical Screening (Tier B)
 
 **Prefix:** `MS2` · **Iteration:** B1 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
+2026-10-05 (pass 5)
+
+---
+
+## Pass 5 (2026-10-05) — the delta, and one finding that is not about this feature
+
+Ten prior passes cover this surface: four here and **six** in
+`docs/security-review/MS-09-medical-screening.md`, the latest 2026-09-16. So
+this pass did not re-derive tenancy, permissions or PHI handling; it reviewed
+the delta since the newest of those and spent the rest of its effort on the
+dimensions the security track does not carry. **2 fixes, 1 flagged.**
+
+**The delta is two commits, both post-dating every prior pass, and both are
+clean.** They are small enough to verify precisely rather than skim:
+
+- `78f52e4a` (2026-09-29) dropped `cascade="all, delete-orphan"` from
+  `ScreeningRequirement.records` for `passive_deletes=True`, so deleting a
+  requirement unlinks its records instead of destroying members' medical
+  history. Its commit message claims "the FK has been SET NULL and nullable
+  since the table was created" — checked, because CLAUDE.md Pitfall #2 is
+  exactly this pairing: `requirement_id` is
+  `ForeignKey(..., ondelete="SET NULL")` with `nullable=True`
+  (`models/medical_screening.py:147-151`), so the claim holds and no migration
+  was needed. The design is also consistent with how compliance actually
+  matches: `get_compliance_status` pairs records to requirements by
+  `screening_type`, not by `requirement_id`, so unlinking does not cost a
+  member their compliance.
+- `25cf5c01` (2026-09-26) replaced `date.today()` with
+  `resolve_org_today(...)` in `get_compliance_status` and `get_expiring_soon`.
+  **Checked for completeness rather than taken on trust** — the failure mode
+  CLAUDE.md records for the contrast palette is a sweep that fixed the sites
+  it searched for and missed the rest. `grep` for
+  `date.today()|datetime.now()|utcnow()` across both the service and the
+  endpoint returns nothing, so the sweep was complete.
+
+### MS2-6 — LOW/MED — A screening expiring _today_ was missing from the count that links to the list naming it — ✅ FIXED
+
+`get_compliance_status` counted a requirement as expiring soon when
+`0 < days_until_exp <= 30`. `get_expiring_soon` selects
+`expiration_date >= today`. The two differ by exactly one day — today — and it
+is the day the warning is most useful:
+
+| Expires    | `is_compliant` | `expiring_soon_count` | In `/expiring` list |
+| ---------- | -------------- | --------------------- | ------------------- |
+| in 15 days | ✅ yes         | ✅ counted            | ✅ listed           |
+| **today**  | ✅ yes         | ❌ **not counted**    | ✅ **listed**       |
+| yesterday  | ❌ no          | ❌ not counted        | ❌ not listed       |
+
+So on the one day a member's physical lapses, the compliance summary said
+nothing was due while the expiring-soon list it links to named them. That is
+Pitfall #29's failure mode exactly — two surfaces computing one concept
+independently — and it is quiet: both numbers look plausible alone, and you
+only see it by opening the summary and the list together.
+
+**Fix:** `0 <= days_until_exp <= 30`, with a comment naming `get_expiring_soon`
+as the other half of the same definition, per Pitfall #29's instruction to say
+so at both sites. The lower bound stays, because an already-lapsed screening is
+reported by `non_compliant_count` and must not also read as though there is
+still time to act.
+
+Two tests, both mutation-verified — one for each bound, since widening a
+boundary is only safe if something pins the other side. The existing coverage
+used `days=15`, comfortably inside the window, so neither edge had a test.
+
+## Pass 5 flagged
+
+### MS2-7 — LOW — The same two surfaces also disagree about a waived screening — 🚩 FLAGGED
+
+The second divergence between `get_compliance_status` and `get_expiring_soon`,
+found while fixing the first. The compliance path treats
+`PASSED`/`COMPLETED`/`WAIVED` as satisfying a requirement, so a **waived**
+screening with an expiration date inside the window increments
+`expiring_soon_count`. The expiring list filters status to
+`PASSED`/`COMPLETED` only, so it never shows it. A lapsing waiver is therefore
+counted and not listed — the mirror image of MS2-6.
+
+**Not fixed because the direction is a product decision, not a correction.**
+Either reading is defensible: a waiver that is about to lapse is real work
+coming (list it), or a waiver is an administrative exemption rather than a
+screening and does not belong on a list of screenings coming due (stop counting
+it). Those lead to opposite one-line changes on a PHI-adjacent compliance
+surface, and only the owner can pick. The right shape once picked is Pitfall
+#29's: extract the window-and-status predicate so there is one definition and
+the other site is a projection of it, rather than fixing whichever site is
+being looked at.
+
+## Pass 5 — one finding outside this feature
+
+### MS2-8 — MED — CLAUDE.md asserts a response-casing convention that two thirds of the codebase does not follow — ✅ DOC FIXED
+
+Reached by the ordinary route: checking this module's frontend types against its
+backend schema for drift (checklist dimension 3). There is none — but only
+because the module is snake_case on both sides, while CLAUDE.md said in two
+places that response schemas use `alias_generator=to_camel` "for camelCase
+serialization", unconditionally.
+
+Measured across `backend/app/schemas/`: of the **54** modules declaring a
+`Response` class, **17** carry `alias_generator=to_camel` and **37** carry no
+alias generator at all. So the documented rule describes under a third of the
+codebase, and the split is real on the wire — FastAPI dumps response models
+`by_alias=True`, so the first group serializes camelCase and the second serves
+the Python attribute names.
+
+Both conventions are internally consistent and each module's frontend types
+match their own module, which is why nothing is broken today and why nothing
+would catch a new mistake either. The contrast is one grep apart:
+
+| Schema module                  | `to_camel` | Frontend type                                    |
+| ------------------------------ | ---------- | ------------------------------------------------ |
+| `schemas/apparatus.py`         | yes        | `organizationId`, `unitNumber` (camelCase)       |
+| `schemas/medical_screening.py` | no         | `organization_id`, `screening_type` (snake_case) |
+
+**Why this is MED rather than a nit:** the failure it invites is silent. A
+hand-written interface in the wrong casing type-checks, passes lint, satisfies
+`tsc --noEmit`, and reads every field as `undefined` at runtime — and a
+developer or agent following the documented rule gets it wrong two times in
+three. CLAUDE.md's own pre-commit checklist carries "Schema fields match" as an
+item, which this line actively undermines.
+
+**Fix:** both statements corrected with the measurement, the demonstrated pair,
+and — the part that matters — an actionable rule in place of a wrong one:
+check the module (`grep alias_generator=to_camel backend/app/schemas/<module>.py`)
+before writing or destructuring a response type; a new schema in an existing
+module follows that module's choice, because switching one is a breaking change
+for its frontend.
+
+**Deliberately no machine check.** The repo's convention is that only a rule
+with a check behind it may move out of CLAUDE.md, and this one stays in full, so
+none is required. A test asserting the 17/37 counts was considered and rejected:
+it would fail on every new schema module, which is noise rather than signal, and
+the corrected guidance is self-verifying — it tells the reader the grep that
+answers the question rather than a number they have to trust.
+
+## Pass 5 re-verified
+
+Four items remain open across the two tracks; each was re-checked against
+current code rather than carried forward on the strength of its last write-up.
+
+- **Exactly-one-of `user_id`/`prospect_id` — still open.** No `model_validator`
+  on `ScreeningRecordCreate` (`schemas/medical_screening.py:127-128`); both ids
+  are plain `Optional[str] = None`, so `create_record` still accepts both or
+  neither.
+- **MS-13 (orphaned UI records) — still open, and it is the same gap as the
+  item above.** `ScreeningRecordForm` has controls for requirement, type,
+  status, three dates, provider and result, and **no subject control**, so every
+  record the UI creates sets neither id. The two tracks found two halves of one
+  defect and both flagged it, correctly: the validator the app-review proposed
+  would reject every create the UI makes, which is why neither half can land
+  alone. The interim honesty notice is present and accurate
+  (`ScreeningRecordForm.tsx:97-102`), and its wording was left alone — the
+  consequence it omits (such a record still appears on the org-wide dashboard
+  as an `?? 'Unknown'` row, `ComplianceDashboard.tsx:43`) is already recorded in
+  that notice's own guard test and in `KNOWN_LIMITATIONS.md`, so rewording
+  another track's deliberate copy would add nothing.
+- **MS-6 (unbounded lists) — still open.** `list_requirements` and
+  `list_records` still `.all()` the org's full set with no SQL `LIMIT`/`OFFSET`.
+- **Compliance-by-id does not 404 an unknown subject — still open, and worth
+  stating more precisely than before.** `GET /compliance/{user_id}` returns 200
+  for any id. The summary is not merely "empty-ish": the subject reads as
+  **non-compliant against every active requirement**, with `subject_name` blank
+  and `subject_type` reported as `"user"` — and for an organization with no
+  active requirements, `is_fully_compliant` comes back **true** for a member who
+  does not exist. Still LOW (it is `medical_screening.view`-gated, org-scoped
+  and discloses nothing), still a contract change to fix, and now cheap:
+  `assert_in_org` is already imported in this service for MS-3's fix.
+- **MS-9's `grace_period_days` — still read by nothing**, and the gap is now
+  concrete: the column is documented "Days past due before flagging
+  non-compliant" and defaults to 30, while `is_compliant` is
+  `expiration_date >= today` with no grace at all. A screening ten days past
+  expiry is non-compliant today and would be compliant if the field were wired.
+
+Clean this pass, each checked rather than assumed:
+
+- **No N+1 at the organization level.** `get_compliance_status` issues several
+  queries per subject, so an org-wide caller would multiply them; there is none
+  — all four callers resolve a single subject.
+- **The module avoids Pitfall #11 without re-fetching.** All four
+  record-returning routes call `attach_record_names` — list, get-by-id,
+  **create** and **update** — so a create response already carries
+  `user_name`/`prospect_name`/`reviewer_name`/`requirement_name`, and the
+  store's add-the-response-to-state pattern cannot show a freshly created row as
+  "Unknown". That is also why `getRequirement`/`getRecord` in the module's
+  service have no callers: mild dead code, left in place as the obvious surface
+  for a detail view, and not a symptom of the re-fetch rule being skipped.
+- **Pitfall #7 satisfied** — `services/api.ts` uses the shared
+  `createApiClient()` factory rather than a hand-rolled axios instance.
+- **`_resolve_names` is org-scoped on all three lookups**, so a name cannot
+  cross organizations; and `/compliance/me` is declared **before**
+  `/compliance/{user_id}`, so the literal `me` is not captured as an id.
+
+## Pass 5 completion gate
+
+| Check                       | Result                                                 |
+| --------------------------- | ------------------------------------------------------ |
+| `flake8 app/ tests/`        | ✅ 0 violations                                        |
+| `black --check app/ tests/` | ✅ 1350 files unchanged                                |
+| `isort --check-only`        | ✅ clean                                               |
+| docs link check             | ✅ 428 files, 0 broken links                           |
+| backend medical tests       | ✅ 162 passed, 1 skipped (`-k "medical or screening"`) |
+| `tsc` / `eslint`            | n/a — no frontend source changed (CLAUDE.md is prose)  |
+
+The one code change is backend Python, so the frontend suites cannot observe it;
+per CLAUDE.md's own "Match the Verification to the Change" they were not run.
+Both MS2-6 bounds are mutation-verified.
 
 ---
 

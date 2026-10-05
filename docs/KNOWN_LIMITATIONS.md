@@ -5634,6 +5634,40 @@ Found driving W53 (`docs/workflow-review/W53-documents.md`, W53-4).
 
 ## Process
 
+## MS2-7 — A Lapsing Waiver Is Counted As Expiring Soon But Never Listed (2026-10-05)
+
+Medical screening defines "expiring soon" in two places, and they disagree about
+a **waived** screening.
+
+`MedicalScreeningService.get_compliance_status` treats `PASSED`, `COMPLETED` and
+`WAIVED` as satisfying a requirement, so a waived screening whose expiration
+date falls inside the 30-day window increments `expiring_soon_count`.
+`get_expiring_soon` — the list that count links to — filters status to `PASSED`
+and `COMPLETED` only, so it never returns one. A waiver about to lapse is
+therefore counted on the summary and absent from the list, with nothing on
+either screen to explain the difference.
+
+(The other divergence between the same two methods — a screening expiring
+_today_ was listed but not counted — was fixed as MS2-6 in the same pass, with
+a comment at both sites naming the other.)
+
+**Why it is here rather than fixed.** Either reading is defensible and they lead
+to opposite one-line changes:
+
+- **List it.** A waiver that is about to lapse is real work coming: somebody has
+  to either renew the waiver or get the member screened, and the expiring list
+  is where that work is surfaced.
+- **Stop counting it.** A waiver is an administrative exemption rather than a
+  screening, so it arguably does not belong on a list of _screenings_ coming
+  due, and the count should match the list by excluding it.
+
+Only the owner can pick, and this is a PHI-adjacent compliance surface where
+guessing changes what a chief is told about a member. Once picked, the right
+shape is CLAUDE.md Pitfall #29's: extract the window-and-status predicate so
+there is a single definition and the other call site is a projection of it,
+rather than editing whichever of the two is being looked at — which is how the
+pair drifted apart twice.
+
 The review loop (see [review-log.md](./review-log.md)) advances through one area
 per tick and appends findings. New "needs owner decision" items should be
 mirrored here so they're visible outside the log. The parallel module-by-module
