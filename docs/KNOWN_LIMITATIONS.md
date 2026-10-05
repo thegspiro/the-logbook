@@ -2991,30 +2991,6 @@ own organization's integration.
 (Security review INT-27 pass 4, 2026-09-13:
 `docs/security-review/INT-27-integrations.md`.)
 
-## Training — Bulk/Historical-Import Enum Fields Have No Request-Level Validators (2026-08-26)
-
-`BulkTrainingRecordEntry.training_type`/`.status`,
-`HistoricalImportConfirmRequest.default_status`/`.default_training_type`,
-and `CourseMappingEntry.new_training_type` have no `@field_validator`,
-unlike the single-record `TrainingRecordCreate`/`TrainingRecordUpdate`
-schemas, which do. All three are DB-level `Enum` columns on
-`TrainingRecord`, so a bad value still reaches the database layer instead
-of 422ing at the Pydantic boundary.
-
-Not currently a crash risk: both bulk paths wrap each row's insert in its
-own error boundary (`create_records_bulk` flushes per row inside a
-try/except; `confirm_historical_import` runs each row in its own
-`db.begin_nested()`), so an invalid enum value fails only that one row with
-a sanitized message — the rest of the batch still imports.
-
-Not fixed: adding a `@field_validator` to a `List[...]`-carried field
-changes the failure mode from per-row partial success to whole-request
-rejection, since Pydantic validates the full payload before the endpoint
-runs at all. Whether that's the right trade-off for a bulk-import UX (fail
-the whole file on one bad row vs. import what's valid and report the rest)
-is a product decision, not a drive-by fix. (Security review TR-17 residual,
-`docs/security-review/TR-17-training-core.md`.)
-
 ## Training — `GET /training/records` Has No Pagination (2026-08-29)
 
 Unlike the rest of the codebase's per-record list endpoints (e.g.

@@ -1775,3 +1775,29 @@ flag was re-confirmed unchanged at its existing citation.
 
 No files changed by this pass other than this findings doc and
 `docs/security-review/PROGRESS.md`.
+
+## Resolved after pass 6 (2026-10-05)
+
+- **Enum-validation gap (bulk/historical-import).** Owner decision: keep
+  per-row failure, validated in the endpoint with a clear per-row message.
+  - `create_records_bulk` checks each row's `training_type` and `status`
+    with `validate_enum_value` before building the record. A bad value
+    fails that row as `Row N: Invalid training_type 'x'. Valid values: …`,
+    and a valid value is stored in its canonical lowercase form.
+  - Each row's insert now runs in its own `begin_nested()` savepoint, so a
+    rejected flush fails that row only. Previously a rejected flush left the
+    session needing a rollback, and every later row and the final commit
+    failed with it.
+  - In `confirm_historical_import`, a `create_new` mapping whose
+    `new_training_type` is not a training type creates no course, and its
+    rows fail with that message instead of the whole confirm failing on the
+    course flush.
+  - The request-level `default_training_type` and `default_status` get
+    `@field_validator`s, because every row falls back to them and a bad one
+    could only fail the whole import.
+  - A row's CSV type column still falls back to the default when it is not a
+    training type (the parser also reads a free-text `category` column), but
+    case and spacing are forgiven first. "Certification" is now kept rather
+    than becoming the default. The hardcoded type set is replaced by the
+    `TrainingType` enum.
+  - Tests: `tests/test_training_import_enum_rows.py`.

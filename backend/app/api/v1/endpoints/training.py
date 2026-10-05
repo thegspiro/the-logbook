@@ -49,8 +49,10 @@ from app.models.training import (
     TrainingSession,
     TrainingStatus,
     TrainingSubmission,
+    TrainingType,
 )
 from app.models.user import User, UserStatus
+from app.schemas.enum_validation import validate_enum_value
 from app.schemas.training import (
     BulkTrainingRecordCreate,
     BulkTrainingRecordResult,
@@ -893,6 +895,22 @@ async def create_records_bulk(
 
         record_data = entry.model_dump()
 
+        # TR-17: the enum fields are checked here, per row, rather than by a
+        # schema validator. A validator on a list-carried field rejects the
+        # whole request before any row is looked at, and the import's contract
+        # is to record the good rows and report the bad ones.
+        try:
+            record_data["training_type"] = validate_enum_value(
+                record_data.get("training_type"), TrainingType, "training_type"
+            )
+            record_data["status"] = validate_enum_value(
+                record_data.get("status"), TrainingStatus, "status"
+            )
+        except ValueError as e:
+            errors.append(f"Row {idx + 1}: {e}")
+            failed += 1
+            continue
+
         # Auto-populate rank/station from member
         record_data.setdefault("rank_at_completion", member.rank)
         record_data.setdefault("station_at_completion", member.station)
@@ -928,13 +946,16 @@ async def create_records_bulk(
             record_data["expiration_date"] = date(year, month, day)
 
         try:
-            new_record = TrainingRecord(
-                organization_id=org_id,
-                created_by=current_user.id,
-                **record_data,
-            )
-            db.add(new_record)
-            await db.flush()
+            # A savepoint per row: a failed flush otherwise leaves the session
+            # needing a rollback, and every later row — and the final commit —
+            # fails with it instead of only this one.
+            async with db.begin_nested():
+                new_record = TrainingRecord(
+                    organization_id=org_id,
+                    created_by=current_user.id,
+                    **record_data,
+                )
+                db.add(new_record)
             created_ids.append(str(new_record.id))
             created_records.append(new_record)
             created += 1
@@ -2507,11 +2528,23 @@ async def confirm_historical_import(
     for mapping in request.course_mappings:
         course_map[mapping.csv_course_name.lower()] = mapping
 
-    # Auto-create courses where action == create_new
+    # Auto-create courses where action == create_new. A mapping with a type
+    # that is not a training type creates nothing, and the rows that use it
+    # fail with that reason (TR-17) instead of the whole confirm failing on
+    # the course's flush.
     created_courses = {}
+    invalid_mappings: dict[str, str] = {}
     for mapping in request.course_mappings:
         if mapping.action == "create_new":
-            t_type = mapping.new_training_type or request.default_training_type
+            try:
+                t_type = validate_enum_value(
+                    mapping.new_training_type or request.default_training_type,
+                    TrainingType,
+                    "training_type",
+                )
+            except ValueError as e:
+                invalid_mappings[mapping.csv_course_name.lower()] = str(e)
+                continue
             new_course = TrainingCourse(
                 organization_id=current_user.organization_id,
                 name=mapping.csv_course_name,
@@ -2583,6 +2616,11 @@ async def confirm_historical_import(
 
         if not row.course_matched:
             mapping = course_map.get(row.course_name.lower())
+            mapping_error = invalid_mappings.get(row.course_name.lower())
+            if mapping_error:
+                failed += 1
+                errors.append(f"Row {row.row_number}: {mapping_error}")
+                continue
             if mapping:
                 if mapping.action == "skip":
                     skipped += 1
@@ -2608,17 +2646,17 @@ async def confirm_historical_import(
                 )
                 continue
 
-        # Validate training type
-        valid_types = {
-            "certification",
-            "continuing_education",
-            "skills_practice",
-            "orientation",
-            "refresher",
-            "specialty",
-        }
-        if training_type not in valid_types:
-            training_type = request.default_training_type
+        # The CSV's type column may be a free-text "category" column (the
+        # parser accepts either name), so a value that is not a training type
+        # falls back to the import's default rather than failing the row.
+        # Case and spacing are forgiven first, so "Certification" is kept as
+        # certification rather than quietly becoming the default.
+        normalized_type = (training_type or "").strip().lower()
+        training_type = (
+            normalized_type
+            if normalized_type in {t.value for t in TrainingType}
+            else request.default_training_type
+        )
 
         try:
             async with db.begin_nested():

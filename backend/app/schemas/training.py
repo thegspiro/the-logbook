@@ -1168,6 +1168,19 @@ class HistoricalImportConfirmRequest(BaseModel):
     default_training_type: str = "continuing_education"
     default_status: str = "completed"
 
+    # The two defaults belong to the request, not to a row, and every row
+    # falls back to them; a bad one can only fail the whole import, so it is
+    # refused up front. Row-level values are checked per row (TR-17).
+    @field_validator("default_training_type")
+    @classmethod
+    def _validate_default_training_type(cls, v: str) -> str:
+        return validate_enum_value(v, ModelTrainingType, "default_training_type") or v
+
+    @field_validator("default_status")
+    @classmethod
+    def _validate_default_status(cls, v: str) -> str:
+        return validate_enum_value(v, ModelTrainingStatus, "default_status") or v
+
 
 class HistoricalImportResult(BaseModel):
     """Result of a confirmed historical import"""
