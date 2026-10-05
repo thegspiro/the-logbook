@@ -56,12 +56,14 @@ medical screening permission, and it is counts only. See
 > **HIPAA Note:** Medical screening records contain protected health information (PHI). Access to this module should be restricted to authorized personnel only. Assign the `medical_screening.view` and `medical_screening.manage` permissions exclusively to roles that have a legitimate need to access medical compliance data (e.g., Chief Officers, Health & Safety Officers, HR administrators).
 >
 > **Audit trail — what is and is not recorded.** Creating, updating and deleting
-> requirements and records are written to the audit trail. **Reads are not.**
-> That includes one officer reading another member's records or compliance
-> (`GET /medical-screening/records`, `/records/{id}`, `/compliance/{user_id}`),
-> which is the access an audit trail most exists to detect. If your department
-> needs read access to PHI logged for its HIPAA obligations, treat that as an
-> open gap rather than an implemented control.
+> requirements and records are written to the audit trail, and so is every
+> screen or request that shows somebody's screening data: the Records list, a
+> single record, a member's or prospect's compliance, and the expiring-soon
+> list. Each of those writes **one** entry per page load — naming the members
+> and prospects it showed, or the filter used — rather than one per row, so the
+> trail answers "who looked at this member's results, and when" without
+> filling up every time the Records tab opens. A member's own compliance counts
+> on their dashboard are not logged: they show nothing about anyone else.
 
 ### Screening Types
 
@@ -215,7 +217,7 @@ Navigate to **Medical Screening > Records** tab to view all records.
 | **Reviewed At**     | Datetime (optional)        | When the result was reviewed                                                                             |
 | **Notes**           | Text (optional)            | Additional notes or comments                                                                             |
 
-> **HIPAA Note:** The `result_summary`, `result_data`, and `notes` fields may contain PHI. The system does not cache API responses for medical screening endpoints (they are included in `UNCACHEABLE_PREFIXES`). All record access is logged in the audit trail. Limit the specificity of data entered — record compliance outcomes (passed/failed/waived) rather than detailed medical findings when possible.
+> **HIPAA Note:** The `result_summary`, `result_data`, and `notes` fields may contain PHI. The system does not cache API responses for medical screening endpoints (they are included in `UNCACHEABLE_PREFIXES`). Every view of screening records, compliance and the expiring list is logged in the audit trail, one entry per page load. Limit the specificity of data entered — record compliance outcomes (passed/failed/waived) rather than detailed medical findings when possible.
 
 ---
 

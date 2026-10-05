@@ -321,6 +321,29 @@ that subject; `get_expiring_soon` is bounded by its date window. Guarded by
 asserts the page returned and that the SQL MySQL receives carries the
 `LIMIT`).
 
+### MS-12 — ✅ FIXED — PHI reads write one audit event per request
+
+Owner choice: log once per request, naming the subject(s) or the filter.
+The five PHI-bearing reads now call `_audit_phi_read` in
+`endpoints/medical_screening.py`, which writes one `medical_screening`-category
+event and commits it before the response is returned:
+
+| Route                           | Event type                            | `event_data`                                                   |
+| ------------------------------- | ------------------------------------- | -------------------------------------------------------------- |
+| `GET /records`                  | `medical_screening.records_viewed`    | `filters` (incl. skip/limit), `record_count`, subject id lists |
+| `GET /records/{id}`             | `medical_screening.record_viewed`     | `record_id`, `record_user_id`, `record_prospect_id`            |
+| `GET /compliance/{user_id}`     | `medical_screening.compliance_viewed` | `subject_type: "user"`, `subject_id`                           |
+| `GET /compliance/prospect/{id}` | `medical_screening.compliance_viewed` | `subject_type: "prospect"`, `subject_id`                       |
+| `GET /expiring`                 | `medical_screening.expiring_viewed`   | `filters.days`, `record_count`, subject id lists               |
+
+The list events carry the distinct member and prospect ids on the returned
+page, so "who saw member X's results" is answerable without one row per
+record. A 404 is not logged as a view. `GET /compliance/me` stays unlogged —
+it is the caller's own counts, loaded on every dashboard visit — and the two
+MCP tools were already audited by the MCP registry. Guarded by
+`backend/tests/test_medical_screening_read_audit.py` (integration, 8 tests
+against real `audit_logs` rows).
+
 ---
 
 ## Pass 6 (2026-09-16)
@@ -620,7 +643,7 @@ warranted today since no live leak exists to justify the added complexity.
 Left for a future pass if a second PHI-adjacent tool needs the same
 guarantee redaction doesn't currently provide.
 
-### MS-12 — LOW (audit completeness, HIPAA §164.312(b)) — PHI reads are not audit-logged, only writes are — 🚩 FLAGGED
+### MS-12 — LOW (audit completeness, HIPAA §164.312(b)) — PHI reads are not audit-logged, only writes are — 🚩 FLAGGED (✅ fixed 2026-10-05, see "Owner decisions" at the top)
 
 The assignment brief for this pass calls out that "an access log for PHI
 views is itself often a compliance requirement" under HIPAA §164.312(b).
