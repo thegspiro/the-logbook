@@ -39,13 +39,13 @@ from app.models.training import (
 from app.models.user import User, UserStatus
 from app.services.training_compliance import (
     STANDING_NOT_APPLICABLE,
-    classify_standing,
+    ComplianceGrading,
+    MemberGrading,
+    _load_compliance_config,
     compute_org_compliance_pct,
     evaluate_member_requirement,
-    get_org_include_current_month,
     load_graded_records,
     member_join_date,
-    requirement_applies_to_user,
     tally_standing,
 )
 from app.services.training_waiver_service import fetch_org_waivers
@@ -886,16 +886,22 @@ class AnnualComplianceReportService:
         today = await resolve_org_today(self.db, organization_id)
         if as_of_cap is not None:
             today = min(today, as_of_cap)
-        org_include_current = await get_org_include_current_month(
-            self.db, organization_id
+        # The same resolution of profiles and thresholds the dashboard
+        # percentage and the compliance matrix use (CMP4-3): a department
+        # using compliance profiles used to read one figure here and another
+        # on those screens for the same members on the same day.
+        grading = ComplianceGrading.from_config(
+            await _load_compliance_config(self.db, organization_id)
         )
+        org_include_current = grading.include_current_month
 
-        # Get active members (exclude compliance-exempt). `roles` (a synonym
-        # for `positions`) is eager-loaded so the applicability filter below
-        # can pass each member's role ids without an N+1 lazy-load per member.
+        # Get active members (exclude compliance-exempt). `positions` is
+        # eager-loaded because profile matching and the applicability filter
+        # read it for every member, and touching the lazy relationship on an
+        # AsyncSession raises MissingGreenlet.
         members_result = await self.db.execute(
             select(User)
-            .options(selectinload(User.roles))
+            .options(selectinload(User.positions))
             .where(
                 User.organization_id == organization_id,
                 User.status == UserStatus.ACTIVE,
@@ -977,6 +983,9 @@ class AnnualComplianceReportService:
         total_hours = 0.0
         total_certs_active = 0
         total_certs_expired = 0
+        # Each member's requirements and thresholds, kept for the
+        # requirement analysis below so both sections grade the same set.
+        gradings: Dict[str, MemberGrading] = {}
 
         for member in members:
             user_records = records_by_user.get(member.id, [])
@@ -986,19 +995,14 @@ class AnnualComplianceReportService:
             hours = sum(r.hours_completed or 0 for r in user_year_records)
             total_hours += hours
 
-            # A requirement that doesn't apply to this member (by
-            # applies_to_all/required_membership_types/required_roles) is not
-            # in their denominator here either -- mirrors the identical fix
-            # applied to compute_org_compliance_pct and get_compliance_matrix
-            # (see requirement_applies_to_member's docstring). Without this,
-            # a member holding a requirement never meant to apply to them
-            # (e.g. an "officers only" cert) was graded against it anyway,
-            # almost always as unmet, understating both this member's and
-            # the org-wide compliance percentage this report exists to state
-            # authoritatively.
-            applicable_reqs = [
-                req for req in requirements if requirement_applies_to_user(req, member)
-            ]
+            # A matching compliance profile narrows the requirements and may
+            # override the thresholds, and a requirement that does not apply
+            # to the member is dropped -- exactly as compute_org_compliance_pct
+            # and get_compliance_matrix resolve it, through the one shared
+            # definition rather than a copy of it (CLAUDE.md pitfall 29).
+            member_grading = grading.for_member(member, list(requirements))
+            gradings[str(member.id)] = member_grading
+            applicable_reqs = member_grading.requirements
 
             join_date = member_join_date(member)
             met_count, req_total = tally_standing(
@@ -1013,11 +1017,11 @@ class AnnualComplianceReportService:
                 for req in applicable_reqs
             )
 
-            # Default thresholds (100% compliant, 75% at risk): this report is
-            # not compliance-profile-aware (CMP4-3), but the standing itself
-            # comes from the one definition every screen shares. A member
-            # nothing grades is "not_applicable" with no percentage.
-            member_status, compliance_pct = classify_standing(met_count, req_total)
+            # The member's own thresholds, profile overrides included. A
+            # member nothing grades is "not_applicable" with no percentage.
+            member_status, compliance_pct = grading.classify(
+                member_grading, met_count, req_total
+            )
 
             # Count certifications (active vs expired)
             certs = [
@@ -1079,13 +1083,15 @@ class AnnualComplianceReportService:
         # Requirement analysis
         requirement_analysis: List[Dict[str, Any]] = []
         for req in requirements:
-            # Same applicability filter as the member loop above: a
-            # requirement's own "members_total" must be the members it
-            # actually applies to, not the org's whole active roster, or an
-            # "officers only" requirement's percentage is diluted by every
-            # member it was never meant to grade.
+            # The members whose grading above includes this requirement: its
+            # "members_total" is the members it actually grades -- by scope and
+            # by profile -- not the org's whole active roster, or an "officers
+            # only" requirement's percentage is diluted by every member it was
+            # never meant to grade.
             applicable_members = [
-                member for member in members if requirement_applies_to_user(req, member)
+                member
+                for member in members
+                if any(r.id == req.id for r in gradings[str(member.id)].requirements)
             ]
             # Members still inside their catch-up period drop out of both
             # counts, as they do from their own standing above.

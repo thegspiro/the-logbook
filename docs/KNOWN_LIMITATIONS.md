@@ -3065,24 +3065,24 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   the model/schema's own stated intent) or `required_roles` should migrate
   to position ids — a decision affecting the member-facing `/my-training`
   endpoint and five other callers, well outside this feature's scope.
-- **The annual report has never been compliance-profile-aware (CMP4-3,
-  MED, pre-existing).** `generate_annual_report` has never called
-  `_find_matching_profile` or consulted `ComplianceProfile.required_requirement_ids`/
-  threshold overrides — confirmed absent before and after CMP4-1.
+- **The annual report was not compliance-profile-aware (CMP4-3, MED) — ✅
+  fixed 2026-10-05, owner decision.** `generate_annual_report` (and the
+  monthly report built on it) now resolves every member through the shared
+  `ComplianceGrading.for_member` / `ComplianceGrading.classify`, as
   `compute_org_compliance_pct`, the compliance matrix and the dashboard's
-  "Department Compliance" card do, through the shared
-  `ComplianceGrading.for_member` (`training_compliance.py`). An org using a
-  compliance profile (e.g. a
-  "recruit" profile requiring only CPR) gets a different percentage from the
-  annual report than from the compliance dashboard/matrix for the same
-  members — the cross-surface disagreement CLAUDE.md's "A screen reports
-  what the backend decided" pitfall names. This gap predates CMP4-1 entirely
-  (the report had no applicability awareness of any kind before this pass);
-  CMP4-1 does not claim to close it. Fixing it means deriving each member's
-  requirement set through `ComplianceGrading.for_member` (which applies
-  `requirement_applies_to_user` itself) — a change that moves the report's
-  numbers for every org currently using profiles — a dedicated fix, not a
-  drive-by.
+  "Department Compliance" card already did. A matching profile narrows the
+  member's requirements to its `required_requirement_ids` and applies its
+  threshold overrides; the report's requirement analysis counts a member
+  under a requirement only when their grading includes it.
+  **Reported numbers change for departments that use compliance profiles**:
+  the report's overall percentage, its compliant / at-risk / non-compliant
+  counts, each member's met/total and status, and a requirement's
+  `members_total` now match the dashboard and matrix rather than the old
+  every-requirement, fixed-100%/75% grading. A department with no compliance
+  configuration, or one whose profiles match nobody, sees no change; nor
+  does a previously filed report, which stores what it said when generated.
+  `tests/test_annual_report_compliance_profiles.py` holds the three surfaces
+  to the same figures for a profile org.
 - **A requirement with zero currently-applicable members renders as a
   failing 0% (CMP4-4, LOW) — ✅ fixed 2026-09-29, workflow review W29-4.**
   `ComplianceOfficerDashboard.tsx` colored `requirement_analysis.compliance_pct`

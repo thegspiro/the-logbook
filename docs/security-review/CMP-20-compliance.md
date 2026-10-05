@@ -8,6 +8,26 @@
 (pass 4, merged), [#2583](https://github.com/thegspiro/the-logbook/pull/2583)
 (pass 5, merged), pass 6 (this PR)
 
+## Owner decisions applied (2026-10-05)
+
+Standing flags the owner decided, each implemented in its own commit:
+
+- **CMP4-3 — ✅ FIXED.** The owner chose to apply compliance profiles in the
+  annual report. `_generate_period_report` (behind both the annual and the
+  monthly report) now loads the configuration once into
+  `ComplianceGrading.from_config` and grades each member through
+  `ComplianceGrading.for_member` and `ComplianceGrading.classify` — the same
+  calls `compute_org_compliance_tally` and `get_compliance_matrix` make — so
+  profile narrowing (`required_requirement_ids`) and threshold overrides
+  reach the report. The requirement analysis counts a member under a
+  requirement only when that member's grading includes it. **This moves the
+  report's figures for every department using compliance profiles** (overall
+  percentage, standing counts, member rows, per-requirement
+  `members_total`); departments without profiles see no change, and stored
+  reports keep the figures they were generated with.
+  `tests/test_annual_report_compliance_profiles.py` asserts the report, the
+  matrix and `compute_org_compliance_pct` agree for a profile org.
+
 ## Pass 6 (2026-10-03)
 
 **Not a zero-delta pass** — real commits landed in this feature's declared
@@ -436,7 +456,9 @@ rule against a wrong fix in an ambiguous area.
 (`requirement_applies_to_member`, needs a fourth branch); every caller listed
 above inherits the gap unchanged.
 
-### CMP4-3 — MED — OPEN — `generate_annual_report` never considers compliance profiles (pre-existing, not this pass's regression)
+### CMP4-3 — MED — ✅ FIXED 2026-10-05 — `generate_annual_report` never considers compliance profiles (pre-existing, not this pass's regression)
+
+_Fixed by owner decision; see "Owner decisions applied (2026-10-05)" at the top of this file. The text below is the original finding._
 
 **What:** `AnnualComplianceReportService.generate_annual_report` has never
 looked up `ComplianceProfile` rows or called `_find_matching_profile` —
