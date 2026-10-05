@@ -113,13 +113,14 @@ export const MembersAdminHub: React.FC = () => {
       onTabChange={handleTabChange}
       refreshToken={frameToken}
     >
-      {/* Tab Content - each child handles its own layout */}
+      {/* Tab content. The frame supplies the side gutter, so each tab sets
+          only its own width and vertical spacing. */}
       <Suspense fallback={<TabLoading />}>
         {activeTab === 'manage' && <MembersAdminPage />}
         {activeTab === 'add' && <AddMember />}
         {activeTab === 'import' && <ImportMembers />}
         {activeTab === 'settings' && (
-          <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-7xl space-y-6 py-6">
             {/* The roster settings, which moved here from the global settings
                 page. Links rather than an embedded panel: each section is its
                 own route so it can be bookmarked and linked to, and this tab

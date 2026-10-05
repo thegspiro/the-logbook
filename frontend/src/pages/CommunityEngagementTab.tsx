@@ -41,7 +41,7 @@ const CommunityEngagementTab: React.FC = () => {
 
   if (error || !data) {
     return (
-      <div className="mx-auto max-w-7xl px-4 py-8">
+      <div className="mx-auto max-w-7xl py-8">
         <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-4 text-red-700 dark:text-red-400">
           {error || 'No data available'}
         </div>
@@ -52,7 +52,7 @@ const CommunityEngagementTab: React.FC = () => {
   const totalAttendees = data.total_member_attendees + data.total_external_attendees;
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-7xl py-8">
       <div className="mb-6">
         <h2 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
           <Globe className="h-5 w-5 text-blue-700 dark:text-blue-400" />
