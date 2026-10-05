@@ -3767,35 +3767,6 @@ defects — which is, in practice, what currently happens.
 Recorded because the _rate_ is new. Seven in seven days is a signal about how
 many branches are open at once, not about anybody's care with Alembic.
 
-## FE3-34-2 — A Failed Client-Side Logout Presents an Unauthenticated UI While the Session Cookies Stay Live (2026-08-31)
-
-`authStore.logout()`'s `try { await authService.logout() } catch { /* Logout
-errors are non-critical; cookies are cleared by the backend */ }` proceeds
-unconditionally to clear local state and show the login screen. The
-comment's premise only holds on the success path: `POST /auth/logout`
-(`backend/app/api/v1/endpoints/auth.py:1334-1372`, moved from `:1197-1235`
-since this was first found but otherwise unchanged) calls
-`_clear_auth_cookies()` only after `AuthService.logout_user()` has deleted
-the session row, and on any failure — a network drop, a 5xx, or the
-endpoint's own pre-cookie-clear 400 when `logout_user()` returns `False`
-(e.g. its `except Exception: return False` on a transient DB error) — the
-httpOnly access/refresh cookies are left exactly as they were.
-
-On a shared station computer, this means: Sign Out fails silently, the
-screen shows Login, and the previous member's session remains fully valid
-and reusable until the tokens naturally expire — the opposite of what the
-UI communicates, on the exact threat model this same `logout()` function's
-`purgeLocalMemberData()` call two lines below exists to defend.
-
-Not fixed because the safe remediation is a product decision, not a
-drive-by patch: retry the server call automatically (how many times, what
-backoff, before giving up?), block the UI with an explicit "couldn't
-confirm sign-out — please close your browser" message matching the
-backend's own 400 copy, or something else. Found in
-`docs/security-review/FE3-34-frontend-shared.md` (feature 34, pass 3,
-FE3-34-2); re-verified still open, unchanged, in
-`docs/security-review/FE4-34-frontend-shared.md` (pass 4).
-
 <!--
 FE3-34-4 (filed 2026-08-31) is resolved and removed per this page's own
 convention. Its fix was already present in the commit that merged the

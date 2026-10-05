@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from '@testing-library/react';
 
 // ---- Mocks (must be declared before importing the store) ----
@@ -76,6 +76,7 @@ describe('authStore', () => {
       error: null,
       loginAttempts: 0,
       lockedUntil: null,
+      signOutUnconfirmed: false,
     });
 
     // Clear all mocks
@@ -395,17 +396,95 @@ describe('authStore', () => {
     });
 
     it('clears session even when authService.logout throws', async () => {
+      vi.useFakeTimers();
+      try {
+        localStorage.setItem('has_session', '1');
+        useAuthStore.setState({ user: fakeUser, isAuthenticated: true });
+
+        mockLogout.mockRejectedValue(new Error('Network error'));
+
+        await act(async () => {
+          const done = getState().logout();
+          await vi.runAllTimersAsync();
+          await done;
+        });
+
+        expect(localStorage.getItem('has_session')).toBeNull();
+        expect(getState().isAuthenticated).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  // FE3-34-2: the server clears the httpOnly auth cookies only on a successful
+  // logout, so a failure left the previous member's session live behind a
+  // login screen. Retry, then block the screen instead of pretending.
+  describe('logout that the server does not confirm', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      mockLogout.mockReset();
       localStorage.setItem('has_session', '1');
-      useAuthStore.setState({ user: fakeUser, isAuthenticated: true });
+      useAuthStore.setState({ user: fakeUser, isAuthenticated: true, signOutUnconfirmed: false });
+    });
 
-      mockLogout.mockRejectedValue(new Error('Network error'));
+    afterEach(() => {
+      vi.useRealTimers();
+    });
 
+    async function runLogout() {
       await act(async () => {
-        await getState().logout();
+        const done = getState().logout();
+        await vi.runAllTimersAsync();
+        await done;
+      });
+    }
+
+    it('retries and succeeds without blocking anything', async () => {
+      mockLogout.mockRejectedValueOnce(new Error('Network error')).mockResolvedValueOnce(undefined);
+
+      await runLogout();
+
+      expect(mockLogout).toHaveBeenCalledTimes(2);
+      expect(getState().signOutUnconfirmed).toBe(false);
+      expect(localStorage.getItem('sign_out_unconfirmed')).toBeNull();
+    });
+
+    it('gives up after three attempts and says sign-out is unconfirmed', async () => {
+      mockLogout.mockRejectedValue({ response: { status: 503, data: {} } });
+
+      await runLogout();
+
+      expect(mockLogout).toHaveBeenCalledTimes(3);
+      expect(getState().isAuthenticated).toBe(false);
+      expect(getState().signOutUnconfirmed).toBe(true);
+      // Survives a reload, so a refreshed tab cannot show a login screen over
+      // a session that is still live.
+      expect(localStorage.getItem('sign_out_unconfirmed')).toBe('1');
+    });
+
+    it('treats a 401 as confirmed: there is no live session to end', async () => {
+      mockLogout.mockRejectedValue({ response: { status: 401, data: {} } });
+
+      await runLogout();
+
+      expect(mockLogout).toHaveBeenCalledTimes(1);
+      expect(getState().signOutUnconfirmed).toBe(false);
+    });
+
+    it('clears the block once a retry is confirmed', async () => {
+      mockLogout.mockRejectedValue(new Error('Network error'));
+      await runLogout();
+      expect(getState().signOutUnconfirmed).toBe(true);
+
+      mockLogout.mockReset();
+      mockLogout.mockResolvedValue(undefined);
+      await act(async () => {
+        await getState().retrySignOut();
       });
 
-      expect(localStorage.getItem('has_session')).toBeNull();
-      expect(getState().isAuthenticated).toBe(false);
+      expect(getState().signOutUnconfirmed).toBe(false);
+      expect(localStorage.getItem('sign_out_unconfirmed')).toBeNull();
     });
   });
 
