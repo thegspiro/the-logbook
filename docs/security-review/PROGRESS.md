@@ -16,13 +16,43 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None currently open.** PR [#2917](https://github.com/thegspiro/the-logbook/pull/2917)
-(Feature 00, Cross-cutting baseline, pass 7) merged — docs-only (only
-`PROGRESS.md` and `SEC-00-cross-cutting-baseline.md` changed), 0 fixes, 0 new
-findings, so per the docs-only-PR rule there is nothing else to record about
-it beyond clearing this row. Independently re-confirmed via `list_pull_requests`
-(state=open) that no `claude/security-review-*` PR exists. Rotation row 00
-stays ✅. This iteration picked up Feature 01 (Auth & session lifecycle, pass 7) — recorded below once its own PR is opened.
+**PR [#2924](https://github.com/thegspiro/the-logbook/pull/2924)**: branch
+`claude/security-review-auth-session`, Feature 01 (Auth & session
+lifecycle), pass 7.
+
+- **Result:** 0 fixes, 0 new findings, 0 flagged. Docs-only diff.
+- **Method:** six of twelve scoped files had changed since pass 6's baseline
+  (`6da437f21`, PR #2593) — all other tracks' already-landed work, each
+  re-verified under the seven-dimension checklist. All 26 routes in
+  `auth.py` individually re-enumerated; unchanged.
+- **Still open:** AUTH-15 (HIPAA max password age, browser-only), AUTH-17
+  (no session reaper), both re-confirmed unchanged. AUTH-21 (app-review
+  track, refresh-replay race) also re-confirmed unchanged.
+- **Also in this PR:** the #2917 closure (docs-only, nothing else to
+  record).
+- **Gate:** backend flake8/black/isort clean, `validate_migrations.py
+--strict` (511 revisions, single head), 777 scoped + 67 standing-guard
+  backend tests, full backend unit suite (12534 passed, 1 pre-existing
+  skip), frontend typecheck and lint clean.
+- **Watching:** subscribed for CI/review events.
+
+Full write-up:
+[`AUTH-01-auth-session.md`](./AUTH-01-auth-session.md) → Pass 7.
+
+<details>
+<summary>Superseded — prior Open PR note (PR #2917 merged, docs-only; rotation picked up Feature 01 — the state this PR opened from), preserved for history</summary>
+
+**None open from the prior pass.** PR
+[#2917](https://github.com/thegspiro/the-logbook/pull/2917) (Feature 00,
+Cross-cutting baseline, pass 7) merged — docs-only (only `PROGRESS.md` and
+`SEC-00-cross-cutting-baseline.md` changed), 0 fixes, 0 new findings, so per
+the docs-only-PR rule there is nothing else to record about it beyond
+clearing this row. Independently re-confirmed via `list_pull_requests`
+(state=open) that no `claude/security-review-*` PR existed. Rotation row 00
+stayed ✅. This iteration picked up Feature 01 (Auth & session lifecycle,
+pass 7), recorded above once its own PR was opened.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 00, Cross-cutting baseline, pass 7, PR #2917, before it merged), preserved for history</summary>
