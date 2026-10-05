@@ -15,7 +15,7 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from types import SimpleNamespace
-from typing import Dict, List, NamedTuple, Optional, Set, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Set, Tuple
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
@@ -381,6 +381,30 @@ def round_percentage(value: float) -> float:
     frontend renders as-is; a caller that wants fewer must not re-round.
     """
     return round(float(value), 2)
+
+
+def _tier_benefits(user: Any, org: Any) -> dict:
+    """The benefits of ``user``'s membership tier in ``org``'s settings.
+
+    Empty when the department stores no tiers or the member's tier is not
+    among them, so each caller's own default (eligible) applies.
+    """
+    tier_config = (org.settings or {}).get("membership_tiers", {}) if org else {}
+    tiers = tier_config.get("tiers", []) if isinstance(tier_config, dict) else []
+    member_tier_id = getattr(user, "membership_type", None) or "active"
+    tier_def = next(
+        (t for t in tiers if isinstance(t, dict) and t.get("id") == member_tier_id),
+        None,
+    )
+    benefits = tier_def.get("benefits", {}) if tier_def else {}
+    return benefits if isinstance(benefits, dict) else {}
+
+
+def office_ineligible_message(name: Optional[str]) -> str:
+    return (
+        f"{name or 'This member'}'s membership tier cannot hold elected office. "
+        "An administrator can change that under Membership Tiers."
+    )
 
 
 class ElectionService:
@@ -767,15 +791,7 @@ class ElectionService:
                 select(Organization).where(Organization.id == organization_id)
             )
             org = org_result.scalar_one_or_none()
-        tier_config = (org.settings or {}).get("membership_tiers", {}) if org else {}
-        tiers = tier_config.get("tiers", [])
-        member_tier_id = getattr(user, "membership_type", None) or "active"
-        tier_def = next((t for t in tiers if t.get("id") == member_tier_id), None)
-        tier_voting_eligible = True
-        if tier_def:
-            tier_voting_eligible = tier_def.get("benefits", {}).get(
-                "voting_eligible", True
-            )
+        tier_voting_eligible = _tier_benefits(user, org).get("voting_eligible", True)
 
         has_override = bool(
             election.voter_overrides
@@ -3830,6 +3846,21 @@ class ElectionService:
         )
         return election, None
 
+    async def member_can_hold_office(self, user: "User", organization_id: Any) -> bool:
+        """Whether ``user``'s membership tier may hold elected office.
+
+        The reader for ``MembershipTierBenefits.can_hold_office`` (owner
+        decision TIER-OFFICE; pitfall 19). A department with no stored tiers,
+        or a member whose tier is not in them, keeps today's behaviour: anyone
+        may stand.
+        """
+        org = (
+            await self.db.execute(
+                select(Organization).where(Organization.id == str(organization_id))
+            )
+        ).scalar_one_or_none()
+        return _tier_benefits(user, org).get("can_hold_office", True) is not False
+
     async def create_nomination(
         self,
         election_id: UUID,
@@ -3874,6 +3905,8 @@ class ElectionService:
         nominee = user_result.scalar_one_or_none()
         if not nominee or not nominee.is_active:
             return None, "Nominee must be an active member of this organization"
+        if not await self.member_can_hold_office(nominee, organization_id):
+            return None, office_ineligible_message(nominee.full_name)
 
         dup_result = await self.db.execute(
             select(func.count(Candidate.id))
@@ -3991,6 +4024,14 @@ class ElectionService:
             return False, "Write-in candidates cannot respond to nominations"
 
         if accept:
+            # The tier may have changed since the nomination was made.
+            nominee = (
+                await self.db.execute(select(User).where(User.id == str(user_id)))
+            ).scalar_one_or_none()
+            if nominee is not None and not await self.member_can_hold_office(
+                nominee, organization_id
+            ):
+                return False, office_ineligible_message(nominee.full_name)
             candidate.accepted = True
             event = "nomination_accepted"
         else:

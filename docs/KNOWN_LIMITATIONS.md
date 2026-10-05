@@ -4429,29 +4429,6 @@ not rendered. `rankEligibleSeatOptions` in
 checked against the shift's configured seats, migrate the ENUM columns to
 `VARCHAR`, and then restore custom seats to the rank picker in the same change.
 
-## TIER-OFFICE — `can_hold_office` Is Stored, Editable, and Read by Nothing (2026-09-09)
-
-`MembershipTierBenefits.can_hold_office` has shipped in the schema and in the
-default ladder (Probationary is `False`) since membership tiers existed. No
-nomination or candidate path reads it: `election_service.py` consumes the tier's
-voting and attendance settings only, and a repository-wide search finds the
-field in the schema, the defaults, and a docstring — nowhere else.
-
-Until this branch nothing surfaced it, so it was inert but invisible. The tier
-editor now exposes it as a control, which makes the gap reachable: an
-administrator can clear "Can hold elected office" for Probationary, save it
-successfully, and have a probationary member nominated and elected anyway.
-
-**What was done.** CLAUDE.md pitfall #19 allows exactly two responses to a
-setting whose only effect is being stored — wire a reader in the same change, or
-mark it in the UI as not yet in effect. Wiring office eligibility into candidate
-validation is a change to elections, so the control carries a warning naming what
-it does not do and telling officers to screen candidates by hand.
-
-**What would fix it.** Consult the nominee's tier in the candidate-creation and
-nomination paths, refuse a member whose tier clears the flag, and delete the
-warning in the same change.
-
 ## EV-26 — Room Booking Serializes Per Department; Two Departments Can Still Collide (2026-10-04)
 
 **Accepted residual.** The double-booking race is fixed: every booking path
