@@ -16,6 +16,39 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2940](https://github.com/thegspiro/the-logbook/pull/2940)**: branch
+`claude/security-review-storefront-payments`, Feature 04 (Storefront &
+payments), pass 7.
+
+- **Result:** 0 fixes, 0 new findings, 0 flagged.
+- **Method:** not a zero-delta pass (unlike pass 6) — 3 backend files and 22
+  frontend files had changed since pass 6's baseline (`a16635e60`, PR
+  #2598): a cosmetic `full_name`→`display_name` rename, a timezone-correctness
+  fix on the order-export CSV and two notice emails, a new member-email
+  opt-out filter (part of an app-wide feature already reviewed under `MSG-25`/
+  `CRON5-31`, checked here only at this feature's call site), 22 frontend
+  files of copy/UX polish and defensive response-shape hardening, and new
+  seeded positions carrying the same baseline storefront grants every other
+  baseline position already has. Six shared-collaborator files also changed;
+  each checked and found to have zero storefront-reachable effect.
+- **Still open:** SF-9 (`record_payment` has no row lock — MED), SF-11 (cart
+  has no max line count — LOW), order-export CSV unbounded pagination
+  (LOW/MED) — all three re-confirmed unchanged against current code, all
+  three already mirrored in `KNOWN_LIMITATIONS.md`.
+- **Gate:** backend flake8/black/isort clean, `validate_migrations.py
+--strict` (512 revisions, single head), `check_route_permissions.py
+--strict` (244 routes, 0 errors), scoped pytest (787 passed), 72
+  cross-cutting guard tests, full backend unit suite (12,600 passed, 1
+  pre-existing skip, 0 failed), frontend typecheck and lint clean, storefront
+  vitest suite (213 passed).
+- **Watching:** subscribed for CI/review events.
+
+Full write-up:
+[`SF-04-storefront-payments.md`](./SF-04-storefront-payments.md) → Pass 7.
+
+<details>
+<summary>Superseded — prior Open PR note (PR #2937 merged, docs-only; rotation picked up Feature 04 — the state this PR opened from), preserved for history</summary>
+
 **PR [#2937](https://github.com/thegspiro/the-logbook/pull/2937)**: branch
 `claude/security-review-public-webhooks`, Feature 03 (Public surface &
 webhooks), pass 7.
@@ -43,6 +76,8 @@ webhooks), pass 7.
 Full write-up:
 [`PUB-03-public-surface-webhooks.md`](./PUB-03-public-surface-webhooks.md) →
 Pass 7.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #2933 merged, docs-only; rotation picked up Feature 03 — the state this PR opened from), preserved for history</summary>
@@ -17596,7 +17631,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (28 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
-| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
+| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
@@ -17634,6 +17669,59 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-05 — Feature 04 (Storefront & payments, pass 7) — 0 fixed, 0 new findings, 6 real changes reviewed
+
+PR #2937 (Feature 03, pass 7) had already merged to `main` with
+`PROGRESS.md`'s Open PR row already current before this iteration started, so
+there was nothing to carry forward from Step 0 — confirmed via
+`list_pull_requests` (state=open) that no `claude/security-review-*` PR
+exists. Picked up Feature 04 (Storefront & payments) per the rotation table.
+
+**Not a zero-delta pass, unlike pass 6.** Diffed pass 6's closing merge
+(`a16635e60`, PR #2598) against current `HEAD` across the feature's full
+domain and its established shared collaborators. Found and read in full six
+real changes: a cosmetic `full_name` → `display_name` rename (two call
+sites), a timezone-correctness fix on the order-export CSV and two
+window-notice emails (UTC literal → org timezone), a new member-email
+opt-out filter wired into the notification service (part of an app-wide
+"required vs. optional email" feature already reviewed under `MSG-25` and
+`CRON5-31`, checked here only for what this feature's call site does with
+it — org-scoped lookup, required-kinds bypass checked first, documented
+fail-open on a lookup error), 22 frontend files of copy/UX polish and
+response-shape defensive hardening (no change to what the server trusts from
+the client), and new seeded positions carrying the same baseline
+`storefront.view`/`storefront.order` grants every other baseline position
+already carries (confirmed not a widening of `storefront.manage`). Six
+shared-collaborator files also changed; each checked and found to have zero
+storefront-reachable effect (a WebSocket-handshake typing fix, a
+load-handler correctness fix, an unrelated anonymous-route logging carve-out,
+an unrelated `admin_hub_service.py` empty-denominator fix with zero hits on
+any `_store_*` resolver, and two unrelated notification-trigger additions).
+
+**Three prior findings re-confirmed OPEN, re-read against current code, not
+assumed from the diff:** SF-9 (`record_payment` has no `for_update` lock —
+MED, needs an owner call on transaction boundaries shared with
+`bulk_mark_paid` and the PayPal webhook), SF-11 (`StoreOrderCreate.items` has
+no max length — LOW, needs a product decision on a legitimate cart-size
+ceiling), and the order-export CSV's unbounded pagination (LOW/MED, grouped
+with `AH-21`'s and `reportExportService`'s siblings pending a shared
+page-size/streaming decision). All three already mirrored in
+`KNOWN_LIMITATIONS.md`; re-verified unchanged there too, so no edit was
+needed.
+
+**Gate:** backend flake8/black/isort clean, `validate_migrations.py
+--strict` (512 revisions, single head), `check_route_permissions.py
+--strict` (244 routes, 0 errors), scoped pytest (`-k "storefront or
+payment"`, 787 passed), 72 cross-cutting guard tests, full backend unit
+suite (12,600 passed, 1 pre-existing skip, 0 failed), frontend typecheck and
+lint clean, `vitest run src/modules/storefront/ src/components/admin/` (213
+passed).
+
+Rotation row 04 → ✅ (pending PR merge). Next: Feature 05 (Finance &
+approvals).
+
+Full write-up: [`SF-04-storefront-payments.md`](./SF-04-storefront-payments.md) → Pass 7.
 
 ### 2026-10-05 — PR #2933 merge recorded; Feature 03 (Public surface & webhooks, pass 7) — 0 fixed, 0 new findings, 2 new unauthenticated surfaces reviewed
 
