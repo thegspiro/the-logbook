@@ -11,6 +11,7 @@ DB is mocked; no MySQL.
 """
 
 from datetime import date, datetime, timedelta, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
@@ -833,6 +834,7 @@ class TestRescheduleAndCancel:
             "app.services.course_cohort_service.EventService"
         ) as event_service_cls:
             event_service_cls.return_value.update_event = AsyncMock()
+            event_service_cls.return_value.complete_deferred_writes = AsyncMock()
             updated = await svc.reschedule_class(
                 row.id,
                 CohortClassReschedule(
@@ -916,6 +918,7 @@ class TestShiftRemaining:
             "app.services.course_cohort_service.EventService"
         ) as event_service_cls:
             event_service_cls.return_value.update_event = AsyncMock()
+            event_service_cls.return_value.complete_deferred_writes = AsyncMock()
             moved = await svc.shift_remaining(
                 cohort.id, CohortShiftRequest(days=7), ORG, ACTOR
             )
@@ -938,6 +941,7 @@ class TestShiftRemaining:
             "app.services.course_cohort_service.EventService"
         ) as event_service_cls:
             event_service_cls.return_value.update_event = AsyncMock()
+            event_service_cls.return_value.complete_deferred_writes = AsyncMock()
             await svc.shift_remaining(
                 cohort.id, CohortShiftRequest(days=-2), ORG, ACTOR
             )
@@ -953,7 +957,10 @@ class TestShiftRemaining:
         db = _shift_queue(cohort, [])
         svc = CourseCohortService(db)
 
-        with patch("app.services.course_cohort_service.EventService"):
+        with patch(
+            "app.services.course_cohort_service.EventService"
+        ) as event_service_cls:
+            event_service_cls.return_value.complete_deferred_writes = AsyncMock()
             await svc.shift_remaining(
                 cohort.id,
                 CohortShiftRequest(days=7, from_sequence=from_sequence),
@@ -1001,6 +1008,7 @@ class TestShiftRemaining:
             "app.services.course_cohort_service.EventService"
         ) as event_service_cls:
             event_service_cls.return_value.update_event = AsyncMock()
+            event_service_cls.return_value.complete_deferred_writes = AsyncMock()
             await svc.shift_remaining(cohort.id, CohortShiftRequest(days=7), ORG, ACTOR)
 
         moved_local = row.scheduled_start.astimezone(_NY)
@@ -1040,6 +1048,7 @@ class TestShiftRemaining:
             "app.services.course_cohort_service.EventService"
         ) as event_service_cls:
             event_service_cls.return_value.update_event = AsyncMock()
+            event_service_cls.return_value.complete_deferred_writes = AsyncMock()
             with pytest.raises(ValueError, match="ATTENDANCE_LOCKED"):
                 await svc.shift_remaining(
                     cohort.id, CohortShiftRequest(days=7), ORG, ACTOR
@@ -1238,22 +1247,135 @@ class TestRosterManagement:
         assert any("not in this organization" in w for w in warnings)
 
 
-class TestCancelCohort:
-    async def test_cancels_the_cohort_and_its_remaining_classes(self):
+class TestShiftIsOneTransaction:
+    async def test_a_refusal_partway_moves_nothing(self):
+        """A room taken on the new date for the second class used to leave
+        the first already moved and committed behind the error."""
         cohort = _cohort(str(uuid4()))
-        first, second = _cohort_class(cohort, 1), _cohort_class(cohort, 2)
-        db = RecordingSession([_one(cohort), _scalars([first, second])])
+        first = _cohort_class(
+            cohort, 1, start=datetime(2026, 10, 1, 23, 0, tzinfo=timezone.utc)
+        )
+        second = _cohort_class(
+            cohort, 2, start=datetime(2026, 10, 3, 23, 0, tzinfo=timezone.utc)
+        )
+        db = _shift_queue(cohort, [first, second])
+        svc = CourseCohortService(db)
+
+        with patch(
+            "app.services.course_cohort_service.EventService"
+        ) as event_service_cls:
+            event_service_cls.return_value.update_event = AsyncMock(
+                side_effect=[None, ValueError("Location is already booked")]
+            )
+            event_service_cls.return_value.complete_deferred_writes = AsyncMock()
+            with pytest.raises(ValueError, match="already booked"):
+                await svc.shift_remaining(
+                    cohort.id, CohortShiftRequest(days=7), ORG, ACTOR
+                )
+            update_event = event_service_cls.return_value.update_event
+            assert all(c.kwargs["defer_commit"] for c in update_event.await_args_list)
+
+        db.commit.assert_not_awaited()
+        db.rollback.assert_awaited_once()
+
+
+def _class_event(event_id, finalized=False, cancelled=False):
+    return SimpleNamespace(
+        id=event_id,
+        is_cancelled=cancelled,
+        attendance_finalized_at=(
+            datetime(2026, 9, 1, tzinfo=timezone.utc) if finalized else None
+        ),
+        custom_fields={},
+    )
+
+
+class TestCancelCohort:
+    def _cancel_setup(self, events):
+        cohort = _cohort(str(uuid4()))
+        first = _cohort_class(cohort, 1, event_id="evt-1")
+        second = _cohort_class(cohort, 2, event_id="evt-2")
+        db = RecordingSession(
+            [_one(cohort), _scalars([first, second]), _scalars(events)]
+        )
+        return cohort, first, second, db
+
+    async def test_cancels_the_cohort_and_its_remaining_classes(self):
+        cohort, first, second, db = self._cancel_setup(
+            [_class_event("evt-1"), _class_event("evt-2")]
+        )
         svc = CourseCohortService(db)
 
         with patch(
             "app.services.course_cohort_service.EventService"
         ) as event_service_cls:
             event_service_cls.return_value.cancel_event = AsyncMock()
+            event_service_cls.return_value.complete_deferred_writes = AsyncMock()
             result = await svc.cancel_cohort(cohort.id, "Class cancelled", ORG, ACTOR)
-            assert event_service_cls.return_value.cancel_event.await_count == 2
+            cancel_event = event_service_cls.return_value.cancel_event
+            assert cancel_event.await_count == 2
+            # One transaction: each cancellation is deferred, then one commit.
+            assert all(c.kwargs["defer_commit"] for c in cancel_event.await_args_list)
+            event_service_cls.return_value.complete_deferred_writes.assert_awaited_once()
 
+        db.commit.assert_awaited_once()
         assert result.status == CohortStatus.CANCELLED
         assert all(c.status == CohortClassStatus.CANCELLED for c in (first, second))
+
+    async def test_a_finalized_class_refuses_the_whole_cancellation_first(self):
+        cohort, first, second, db = self._cancel_setup(
+            [_class_event("evt-1"), _class_event("evt-2", finalized=True)]
+        )
+        svc = CourseCohortService(db)
+
+        with patch(
+            "app.services.course_cohort_service.EventService"
+        ) as event_service_cls:
+            event_service_cls.return_value.cancel_event = AsyncMock()
+            with pytest.raises(ValueError, match="1 class"):
+                await svc.cancel_cohort(cohort.id, "Class cancelled", ORG, ACTOR)
+            event_service_cls.return_value.cancel_event.assert_not_awaited()
+
+        db.commit.assert_not_awaited()
+        assert cohort.status != CohortStatus.CANCELLED
+        assert first.status == CohortClassStatus.SCHEDULED
+
+    async def test_an_event_already_cancelled_is_left_as_it_is(self):
+        cohort, _first, _second, db = self._cancel_setup(
+            [_class_event("evt-1", cancelled=True), _class_event("evt-2")]
+        )
+        svc = CourseCohortService(db)
+
+        with patch(
+            "app.services.course_cohort_service.EventService"
+        ) as event_service_cls:
+            event_service_cls.return_value.cancel_event = AsyncMock()
+            event_service_cls.return_value.complete_deferred_writes = AsyncMock()
+            await svc.cancel_cohort(cohort.id, "Class cancelled", ORG, ACTOR)
+            cancel_event = event_service_cls.return_value.cancel_event
+            assert [c.kwargs["event_id"] for c in cancel_event.await_args_list] == [
+                "evt-2"
+            ]
+
+    async def test_a_failure_partway_rolls_every_cancellation_back(self):
+        cohort, _first, _second, db = self._cancel_setup(
+            [_class_event("evt-1"), _class_event("evt-2")]
+        )
+        svc = CourseCohortService(db)
+
+        with patch(
+            "app.services.course_cohort_service.EventService"
+        ) as event_service_cls:
+            event_service_cls.return_value.cancel_event = AsyncMock(
+                side_effect=[None, ValueError("boom")]
+            )
+            event_service_cls.return_value.complete_deferred_writes = AsyncMock()
+            with pytest.raises(ValueError, match="boom"):
+                await svc.cancel_cohort(cohort.id, "Class cancelled", ORG, ACTOR)
+            event_service_cls.return_value.complete_deferred_writes.assert_not_awaited()
+
+        db.commit.assert_not_awaited()
+        db.rollback.assert_awaited_once()
 
 
 class TestUpdateCohort:

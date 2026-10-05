@@ -368,6 +368,65 @@ class TestTheLockComparesValuesNotPresence:
         assert occurrence.description == "old"
 
 
+class TestDeferredCommit:
+    """A caller moving several events as one change commits once itself."""
+
+    async def test_update_flushes_and_holds_the_reversal_for_after_commit(self):
+        event = _event(
+            finalized=False,
+            title="Drill",
+            description=None,
+            location_id=None,
+            location=None,
+            location_obj=None,
+            is_draft=False,
+            updated_by=None,
+        )
+        db = _mock_db(_one(event))
+        svc = EventService(db)
+        svc._follow_training_changes = AsyncMock(return_value=("training", "ref"))
+        svc._reverse_pipeline_after_commit = AsyncMock()
+        payload = SimpleNamespace(model_dump=lambda **_: {"title": "Drill 2"})
+
+        await svc.update_event("event-1", "org-1", payload, defer_commit=True)
+
+        db.commit.assert_not_awaited()
+        db.flush.assert_awaited()
+        svc._reverse_pipeline_after_commit.assert_not_awaited()
+
+        await svc.complete_deferred_writes("org-1")
+        svc._reverse_pipeline_after_commit.assert_awaited_once_with(
+            [("training", "ref")], "org-1"
+        )
+
+    async def test_cancel_flushes_and_holds_the_reversals(self):
+        event = _event(finalized=False, rsvps=[], cancellation_reason=None)
+        db = _mock_db(_one(event))
+        svc = EventService(db)
+        svc._revoke_event_attendance_credit = AsyncMock(return_value=["reversal"])
+        svc._reverse_pipeline_after_commit = AsyncMock()
+
+        await svc.cancel_event("event-1", "org-1", "weather", defer_commit=True)
+
+        assert event.is_cancelled is True
+        db.commit.assert_not_awaited()
+        await svc.complete_deferred_writes("org-1")
+        svc._reverse_pipeline_after_commit.assert_awaited_once_with(
+            ["reversal"], "org-1"
+        )
+
+    async def test_a_deferred_cancel_cannot_promise_notifications(self):
+        svc = EventService(_mock_db())
+        with pytest.raises(ValueError, match="notifications"):
+            await svc.cancel_event(
+                "event-1",
+                "org-1",
+                "weather",
+                send_notifications=True,
+                defer_commit=True,
+            )
+
+
 class TestReopen:
     async def test_reopen_undoes_end_event_s_bulk_check_out(self):
         """End Event stamps its own instant as every open attendee's check-out

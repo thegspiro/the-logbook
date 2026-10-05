@@ -781,11 +781,18 @@ class CourseCohortService:
         cohort_class: CourseCohortClass,
         organization_id: UUID,
         actor_id: UUID,
+        event_service: Optional[EventService] = None,
     ) -> None:
-        """Push a cohort class's schedule onto its linked event."""
+        """Push a cohort class's schedule onto its linked event.
+
+        With ``event_service`` the write is deferred into that service's batch
+        (see ``EventService.update_event``'s ``defer_commit``); without one it
+        commits on its own, as a single-class move always has.
+        """
         if not cohort_class.event_id:
             return
-        event_service = EventService(self.db)
+        defer = event_service is not None
+        event_service = event_service or EventService(self.db)
         await event_service.update_event(
             event_id=cohort_class.event_id,
             organization_id=organization_id,
@@ -799,6 +806,7 @@ class CourseCohortService:
                 ),
             ),
             updated_by=actor_id,
+            defer_commit=defer,
         )
 
     async def cancel_class(
@@ -965,7 +973,9 @@ class CourseCohortService:
         A class whose event has finalized attendance is refused either way, and
         refused for the whole batch before anything moves: finalize derived the
         credited durations from the event's clock and those minutes are already
-        in the hours ledger.
+        in the hours ledger. The moves themselves are one transaction, so any
+        other refusal partway down the list (a room taken on the new date)
+        leaves every class where it was too.
 
         Days are local days. A delay moves the date and leaves the wall clock
         alone, so a 19:00 class is still 19:00 after a shift that crosses a
@@ -1001,17 +1011,39 @@ class CourseCohortService:
         # `ZoneInfoNotFoundError` that the endpoint would surface as a 500.
         tz = await resolve_scheduling_timezone(self.db, organization_id)
         delta = timedelta(days=data.days)
-        for cohort_class in rows:
-            cohort_class.scheduled_start = _shift_local_days(
-                cohort_class.scheduled_start, delta, tz
-            )
-            cohort_class.scheduled_end = _shift_local_days(
-                cohort_class.scheduled_end, delta, tz
-            )
-            await self._sync_event(cohort_class, organization_id, actor_id)
-
-        await self.db.commit()
+        event_service = EventService(self.db)
+        try:
+            for cohort_class in rows:
+                cohort_class.scheduled_start = _shift_local_days(
+                    cohort_class.scheduled_start, delta, tz
+                )
+                cohort_class.scheduled_end = _shift_local_days(
+                    cohort_class.scheduled_end, delta, tz
+                )
+                await self._sync_event(
+                    cohort_class, organization_id, actor_id, event_service
+                )
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+        await event_service.complete_deferred_writes(organization_id)
         return len(rows)
+
+    async def _class_events(
+        self, rows: Sequence[CourseCohortClass], organization_id: UUID
+    ) -> Dict[str, Event]:
+        """The org-scoped events behind these classes, keyed by event id."""
+        event_ids = [str(row.event_id) for row in rows if row.event_id]
+        if not event_ids:
+            return {}
+        result = await self.db.execute(
+            select(Event).where(
+                Event.id.in_(event_ids),
+                Event.organization_id == str(organization_id),
+            )
+        )
+        return {str(event.id): event for event in result.scalars().all()}
 
     async def _assert_shiftable(
         self, rows: Sequence[CourseCohortClass], organization_id: UUID
@@ -1023,19 +1055,8 @@ class CourseCohortService:
         reached an event can be locked; one never generated has no credited
         durations to contradict.
         """
-        event_ids = [str(row.event_id) for row in rows if row.event_id]
-        if not event_ids:
-            return
-
-        result = await self.db.execute(
-            select(Event).where(
-                Event.id.in_(event_ids),
-                Event.organization_id == str(organization_id),
-            )
-        )
-        locked = sum(
-            1 for event in result.scalars().all() if attendance_is_finalized(event)
-        )
+        events = await self._class_events(rows, organization_id)
+        locked = sum(1 for event in events.values() if attendance_is_finalized(event))
         if locked:
             # Built from a count and fixed text only: this sentence reaches the
             # client verbatim, bypassing `safe_error_detail`.
@@ -1083,7 +1104,14 @@ class CourseCohortService:
     async def cancel_cohort(
         self, cohort_id: UUID, reason: str, organization_id: UUID, actor_id: UUID
     ) -> CourseCohort:
-        """Cancel a cohort and every one of its remaining classes."""
+        """Cancel a cohort and every one of its remaining classes.
+
+        All or nothing. A class whose attendance is finalized refuses the whole
+        cancellation before anything changes — it happened and credited hours,
+        so cancelling it would contradict its own record — and the
+        cancellations are one transaction, so nothing is left half-cancelled
+        behind a refusal.
+        """
         cohort = await self.get_cohort(cohort_id, organization_id)
         if not cohort:
             raise ValueError("Cohort not found")
@@ -1095,20 +1123,42 @@ class CourseCohortService:
                 CourseCohortClass.status != CohortClassStatus.CANCELLED,
             )
         )
-        event_service = EventService(self.db)
-        for cohort_class in result.scalars().all():
-            cohort_class.status = CohortClassStatus.CANCELLED
-            cohort_class.cancellation_reason = reason
-            if cohort_class.event_id:
-                await event_service.cancel_event(
-                    event_id=cohort_class.event_id,
-                    organization_id=organization_id,
-                    reason=reason,
-                    send_notifications=False,
+        rows = list(result.scalars().all())
+        events = await self._class_events(rows, organization_id)
+        locked = sum(1 for event in events.values() if attendance_is_finalized(event))
+        if locked:
+            # Built from a count and fixed text only: this sentence reaches the
+            # client verbatim, bypassing `safe_error_detail`.
+            raise ValueError(
+                attendance_locked_error(
+                    f"cancelling {locked} class(es) whose attendance is already "
+                    "finalized"
                 )
+            )
 
-        cohort.status = CohortStatus.CANCELLED
-        await self.db.commit()
+        event_service = EventService(self.db)
+        try:
+            for cohort_class in rows:
+                cohort_class.status = CohortClassStatus.CANCELLED
+                cohort_class.cancellation_reason = reason
+                event = events.get(str(cohort_class.event_id))
+                # An event somebody already cancelled from the calendar is in
+                # the state this asks for; cancel_event would refuse it.
+                if event is not None and not event.is_cancelled:
+                    await event_service.cancel_event(
+                        event_id=cohort_class.event_id,
+                        organization_id=organization_id,
+                        reason=reason,
+                        send_notifications=False,
+                        defer_commit=True,
+                    )
+
+            cohort.status = CohortStatus.CANCELLED
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+        await event_service.complete_deferred_writes(organization_id)
         await self.db.refresh(cohort)
         return cohort
 

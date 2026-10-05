@@ -331,6 +331,10 @@ class EventService:
         # caller that reached it through end_event or record_actual_times,
         # whose return shapes predate the training report.
         self.last_finalize_outcome: Optional[FinalizeOutcome] = None
+        # Pipeline reversals owed by writes made with ``defer_commit=True``;
+        # the caller commits its whole batch once and then runs
+        # ``complete_deferred_writes``.
+        self._deferred_reversals: List[Tuple[Any, Tuple[str, Optional[str]]]] = []
 
     async def _organizer_columns(
         self,
@@ -902,8 +906,16 @@ class EventService:
         organization_id: UUID,
         event_data: EventUpdate,
         updated_by: Optional[UUID] = None,
+        *,
+        defer_commit: bool = False,
     ) -> Optional[Event]:
-        """Update an event"""
+        """Update an event.
+
+        ``defer_commit`` flushes instead of committing, for a caller that moves
+        several events as one change (a cohort shift): a refusal partway down
+        its list then rolls back the events before it too. That caller commits
+        and then calls :meth:`complete_deferred_writes`.
+        """
         # The room booking lock comes before this event's row lock, on every
         # update: the overlap check below takes it whenever the event has a
         # room, and taking it there, after the event lock, would invert the
@@ -1012,6 +1024,12 @@ class EventService:
             event.updated_by = str(updated_by)
         event.updated_at = datetime.now(dt_timezone.utc)
 
+        if defer_commit:
+            await self.db.flush()
+            if training_follow_up:
+                self._deferred_reversals.append(training_follow_up)
+            return event
+
         await self.db.commit()
         await self.db.refresh(event)
         if training_follow_up:
@@ -1020,6 +1038,16 @@ class EventService:
             )
 
         return event
+
+    async def complete_deferred_writes(self, organization_id: UUID) -> None:
+        """Run what ``defer_commit`` writes owe once their batch has committed.
+
+        The pipeline reversals read committed state, so they cannot run inside
+        the batch; and they must run, or a training class moved or cancelled
+        as part of one keeps the credit it no longer earns.
+        """
+        pending, self._deferred_reversals = self._deferred_reversals, []
+        await self._reverse_pipeline_after_commit(pending, organization_id)
 
     async def publish_event(
         self, event_id: UUID, organization_id: UUID
@@ -1219,8 +1247,17 @@ class EventService:
         organization_id: UUID,
         reason: str,
         send_notifications: bool = False,
+        *,
+        defer_commit: bool = False,
     ) -> Optional[Event]:
-        """Cancel an event and optionally notify RSVPs"""
+        """Cancel an event and optionally notify RSVPs.
+
+        ``defer_commit`` works as on :meth:`update_event`. It does not combine
+        with ``send_notifications``: the notices describe a cancellation that
+        has happened, which a deferred one has not yet.
+        """
+        if defer_commit and send_notifications:
+            raise ValueError("A deferred cancellation cannot send notifications")
         result = await self.db.execute(
             select(Event)
             .where(Event.id == str(event_id))
@@ -1255,6 +1292,11 @@ class EventService:
 
         # Capture rsvps before commit expires the relationship
         rsvps_to_notify = list(event.rsvps)
+
+        if defer_commit:
+            await self.db.flush()
+            self._deferred_reversals.extend(pending_reversals)
+            return event
 
         await self.db.commit()
         await self.db.refresh(event)
