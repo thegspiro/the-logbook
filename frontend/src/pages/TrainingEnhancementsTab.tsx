@@ -27,6 +27,8 @@ import {
   Loader2,
 } from 'lucide-react';
 import { Modal } from '../components/Modal';
+import { MemberPickerModal } from '../components/MemberPickerModal';
+import { EffectivenessEvaluationModal } from '../components/training/EffectivenessEvaluationModal';
 import { EmptyState } from '../components/ux/EmptyState';
 import useLoadData from '../hooks/useLoadData';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -1061,7 +1063,15 @@ const KIRKPATRICK_LEVELS: {
 const EffectivenessSection: React.FC = () => {
   const tz = useTimezone();
   const loadEvalData = useCallback(() => effectivenessService.getEvaluations(), []);
-  const { data: evaluations, loading } = useLoadData(loadEvalData, [] as TrainingEffectivenessEvaluation[]);
+  const {
+    data: evaluations,
+    loading,
+    reload: reloadEvaluations,
+  } = useLoadData(loadEvalData, [] as TrainingEffectivenessEvaluation[]);
+  // Pick the member first, then record the evaluation for them, so the form
+  // never asks for a raw member id and no modal opens on top of another.
+  const [pickingMember, setPickingMember] = useState(false);
+  const [evaluatedMember, setEvaluatedMember] = useState<{ userId: string; memberName: string } | null>(null);
 
   const countByLevel = (level: EvaluationLevel) => evaluations.filter((ev) => ev.evaluation_level === level).length;
 
@@ -1082,12 +1092,38 @@ const EffectivenessSection: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-theme-text-primary text-lg font-semibold">Training Effectiveness</h2>
-        <p className="text-theme-text-muted text-sm">
-          Kirkpatrick Model evaluation: Reaction, Learning, Behavior, Results
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-theme-text-primary text-lg font-semibold">Training Effectiveness</h2>
+          <p className="text-theme-text-muted text-sm">
+            Kirkpatrick Model evaluation: Reaction, Learning, Behavior, Results
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setPickingMember(true)}
+          className="btn-primary flex items-center space-x-1 rounded-lg px-3 py-2 text-sm"
+        >
+          <Plus className="h-4 w-4" />
+          <span>Submit Evaluation</span>
+        </button>
       </div>
+
+      <MemberPickerModal
+        isOpen={pickingMember}
+        onClose={() => setPickingMember(false)}
+        onSelect={(member) => {
+          setPickingMember(false);
+          setEvaluatedMember(member);
+        }}
+        title="Whose training are you evaluating?"
+      />
+      <EffectivenessEvaluationModal
+        isOpen={evaluatedMember !== null}
+        onClose={() => setEvaluatedMember(null)}
+        onSaved={() => void reloadEvaluations()}
+        member={evaluatedMember}
+      />
 
       <div className="grid gap-4 md:grid-cols-4">
         {KIRKPATRICK_LEVELS.map((item) => {

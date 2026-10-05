@@ -1234,20 +1234,6 @@ with score history and a next-evaluation date — so the heat-map is a screen
 away, not a schema away. It simply has no screen. The placeholder is left open
 and the prose now describes the definitions list that shipped.
 
-## Training — Two Advanced Tabs Are Read-Only (2026-08-09)
-
-The guide told officers to click **Submit Evaluation** on the Effectiveness tab.
-There is no such button: `EffectivenessSection` renders the four Kirkpatrick
-summary cards and a recent-evaluations table, and nothing else. Evaluations
-reach the system only through `POST /training/effectiveness/evaluations`.
-
-The Instructors roster's gaps (no course column; a lapsed qualification
-reading "Pending") were fixed on 2026-10-05: it shows what each qualification
-covers and reads Expired once the expiry date passes.
-
-The Effectiveness gap is documented in place rather than left to surprise
-someone.
-
 ## Admin — No Scheduled Tasks Page (2026-08-09)
 
 `docs/training/08-admin-reports.md` told administrators to "Navigate to

@@ -1865,7 +1865,7 @@ After a training session, evaluations capture participant feedback and learning 
 
 ![Training effectiveness evaluations across the four Kirkpatrick levels](./images/02-70-effectiveness-evaluations.png)
 
-**Not yet built:** there is no evaluation form on this tab — it is read-only. Evaluations are submitted through the API (`POST /training/effectiveness/evaluations`), typically by an integration or a script, not by an officer in the browser.
+To record one, click **Submit Evaluation**, choose the member whose training you are evaluating, then the level. The form asks only for that level's measure: an overall rating (1–5) for Reaction, pre- and post-assessment scores (0–100) for Learning, a behavior rating and observations for Behavior, or a description of the outcome for Results. Tie it to a course if it concerns one. Integrations can still submit through `POST /training/effectiveness/evaluations`.
 
 ### Viewing Summaries
 
