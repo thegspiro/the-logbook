@@ -25,6 +25,7 @@ from app.schemas.medical_screening import (
     ScreeningRequirementCreate,
     ScreeningRequirementResponse,
     ScreeningRequirementUpdate,
+    ScreeningSubjects,
 )
 from app.services.medical_screening_service import MedicalScreeningService
 
@@ -265,6 +266,26 @@ async def list_records(
         },
     )
     return records
+
+
+@router.get(
+    "/subjects",
+    response_model=ScreeningSubjects,
+)
+async def list_subjects(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("medical_screening.manage")),
+):
+    """Members and prospects a new screening record can be filed against.
+
+    Backs the member/prospect picker on the Add Record dialog. Names and ids
+    only, nothing about anyone's screenings, so it is not audit-logged the way
+    the PHI reads are.
+
+    **Requires permission: medical_screening.manage**
+    """
+    service = MedicalScreeningService(db)
+    return await service.list_subjects(current_user.organization_id)
 
 
 @router.get(

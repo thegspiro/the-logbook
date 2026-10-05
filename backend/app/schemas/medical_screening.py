@@ -7,7 +7,7 @@ Request and response schemas for the medical screening endpoints.
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.medical_screening import ScreeningStatus, ScreeningType
 from app.schemas.base import UTCResponseBase
@@ -137,6 +137,24 @@ class ScreeningRecordCreate(ScreeningRecordBase):
     def _valid_status(cls, v: str) -> str:
         return _validate_enum(v, _SCREENING_STATUSES, "status")
 
+    @model_validator(mode="after")
+    def _exactly_one_subject(self) -> "ScreeningRecordCreate":
+        """A record belongs to one member or one prospect — never neither, never
+        both (MS-13, owner decision 2026-10-05).
+
+        Compliance resolves records by ``user_id`` or ``prospect_id``, so a
+        record with neither counts toward nobody: a physical that was really
+        performed and recorded still left the member reading as uncleared. A
+        record with both would count twice, under two identities. The update
+        schema accepts neither field, so this is the only place it can be set.
+        """
+        if bool(self.user_id) == bool(self.prospect_id):
+            raise ValueError(
+                "A screening record must be for exactly one member (user_id) "
+                "or one prospect (prospect_id)."
+            )
+        return self
+
 
 class ScreeningRecordUpdate(BaseModel):
     """Schema for updating a screening record."""
@@ -239,6 +257,23 @@ class MyComplianceSummary(BaseModel):
             "lapsed screening is counted in non_compliant_count instead."
         ),
     )
+
+
+class ScreeningSubject(BaseModel):
+    """Someone a screening record can be filed against."""
+
+    id: str
+    name: str
+
+
+class ScreeningSubjects(BaseModel):
+    """The members and prospects the Add Record dialog offers.
+
+    Names and ids only — nothing about anyone's screenings.
+    """
+
+    members: List[ScreeningSubject]
+    prospects: List[ScreeningSubject]
 
 
 class ExpiringScreening(BaseModel):

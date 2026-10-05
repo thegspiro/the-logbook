@@ -144,13 +144,14 @@ frontend/src/modules/medical-screening/
 
 ### Records
 
-| Method   | Path                                     | Permission                 | Description                                                                 |
-| -------- | ---------------------------------------- | -------------------------- | --------------------------------------------------------------------------- |
-| `GET`    | `/api/v1/medical-screening/records`      | `medical_screening.view`   | List records (filter: `user_id`, `prospect_id`, `screening_type`, `status`) |
-| `GET`    | `/api/v1/medical-screening/records/{id}` | `medical_screening.view`   | Get single record                                                           |
-| `POST`   | `/api/v1/medical-screening/records`      | `medical_screening.manage` | Create record                                                               |
-| `PUT`    | `/api/v1/medical-screening/records/{id}` | `medical_screening.manage` | Update record (sets `reviewed_by`, `reviewed_at`)                           |
-| `DELETE` | `/api/v1/medical-screening/records/{id}` | `medical_screening.manage` | Delete record                                                               |
+| Method   | Path                                     | Permission                 | Description                                                                  |
+| -------- | ---------------------------------------- | -------------------------- | ---------------------------------------------------------------------------- |
+| `GET`    | `/api/v1/medical-screening/records`      | `medical_screening.view`   | List records (filter: `user_id`, `prospect_id`, `screening_type`, `status`)  |
+| `GET`    | `/api/v1/medical-screening/records/{id}` | `medical_screening.view`   | Get single record                                                            |
+| `POST`   | `/api/v1/medical-screening/records`      | `medical_screening.manage` | Create record — exactly one of `user_id` / `prospect_id` (422 otherwise)     |
+| `GET`    | `/api/v1/medical-screening/subjects`     | `medical_screening.manage` | Members and open prospects a record can be filed against (Add Record picker) |
+| `PUT`    | `/api/v1/medical-screening/records/{id}` | `medical_screening.manage` | Update record (sets `reviewed_by`, `reviewed_at`)                            |
+| `DELETE` | `/api/v1/medical-screening/records/{id}` | `medical_screening.manage` | Delete record                                                                |
 
 ### Compliance
 
@@ -255,7 +256,8 @@ Module availability is controlled per organization at runtime via the organizati
 
 | Scenario                                      | Behavior                                                                                            |
 | --------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| Record linked to both user_id and prospect_id | Rejected by service validation — must be one or the other                                           |
+| Record linked to both user_id and prospect_id | Rejected with a 422 on create — a record names exactly one member or one prospect                   |
+| Record linked to neither                      | Rejected with a 422 on create; rows created before 2026-10-05 may still carry neither               |
 | `frequency_months = NULL`                     | One-time screening that does not recur and has no automatic expiration                              |
 | Grace period after expiration                 | Member remains compliant during grace period; becomes non-compliant only after grace period expires |
 | Expiring query with days=0 or >365            | Clamped to valid range (1-365)                                                                      |

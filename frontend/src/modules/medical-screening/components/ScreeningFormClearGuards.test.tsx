@@ -17,6 +17,14 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+
+// The create dialog loads its member/prospect picker on mount (MS-13).
+vi.mock('../services/api', () => ({
+  medicalScreeningService: {
+    listSubjects: () => Promise.resolve({ members: [{ id: 'u-1', name: 'Jake Thompson' }], prospects: [] }),
+  },
+}));
+
 import { ScreeningRecordForm } from './ScreeningRecordForm';
 import { ScreeningRequirementForm } from './ScreeningRequirementForm';
 import type { ScreeningRecord, ScreeningRequirement } from '../types';
@@ -90,6 +98,9 @@ describe('ScreeningRecordForm — edit clears as null, not omitted', () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     render(<ScreeningRecordForm record={null} requirements={[]} onSave={onSave} onClose={vi.fn()} />);
 
+    // A subject is required before the dialog will submit (MS-13).
+    await screen.findByRole('option', { name: 'Jake Thompson' }, { timeout: 5000 });
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Member' }), 'u-1');
     await user.click(screen.getByRole('button', { name: 'Add Record' }));
 
     const payload = onSave.mock.calls[0]?.[0] as Record<string, unknown>;

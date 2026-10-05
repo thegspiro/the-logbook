@@ -232,7 +232,7 @@ Navigate to **Medical Screening > Records** tab to view all records.
 | Field               | Example Value                                              |
 | ------------------- | ---------------------------------------------------------- |
 | **Requirement**     | Annual NFPA 1582 Physical                                  |
-| **Member**          | FF Jake Thompson                                           |
+| **Record is for**   | Member — FF Jake Thompson                                  |
 | **Screening Type**  | Physical Exam                                              |
 | **Status**          | Passed                                                     |
 | **Scheduled Date**  | 2026-05-15                                                 |
@@ -244,28 +244,22 @@ Navigate to **Medical Screening > Records** tab to view all records.
 
 4. Click **Add Record** (editing saves with **Save Changes**).
 
-> **Corrected 2026-08-12.** **There is no member dropdown.**
-> `ScreeningRecordForm` builds its payload from nine fields — requirement,
-> type, status, three dates, provider, result, notes — and sets neither
-> `user_id` nor `prospect_id`. Both are accepted by the API; the form has no
-> control for either, so a record entered here belongs to nobody and counts
-> toward nobody's compliance. Recorded in [Medical Screening — The Add Record Form Attaches to Nobody](../KNOWN_LIMITATIONS.md#medical-screening--the-add-record-form-attaches-to-nobody-2026-08-08), which is worth reading before
-> using this form.
+> **The Record is for picker** _(2026-10-05)_. Every record belongs to exactly
+> one member or one prospect. Choose **Member** or **Prospect**, then pick the
+> person from the list — current members (including those on leave or
+> suspended) or prospects still open in the pipeline. **Add Record** stays
+> disabled until someone is chosen, and the API refuses a record naming nobody
+> or both. Editing a record never changes who it belongs to.
 >
-> **The dialog now says so itself** _(2026-09-16; reworded 2026-09-29)_. Opening **Add Record** shows
-> an amber notice at the top: _"Not linked to a member or prospect. You can't
-> choose who a screening is for here, so this record won't count toward
-> anyone's compliance or appear in their screening history."_ In the records
-> list such a record's name column reads **Not linked to a member or prospect**
-> (it read "Unknown"). The success message after saving used to
-> imply the record was usable. **Nothing else about the dialog changed** — the
-> member picker is still missing, and a record created here still counts toward
-> nobody. The **Edit** dialog does not show the notice, because editing never
-> changes who a record belongs to.
+> Records entered before this change could not be attached to anyone. They
+> read **Not linked to a member or prospect** on the Records tab and count
+> toward nobody's compliance — re-enter them with the right person and delete
+> the unattached copy. See
+> [Medical Screening — No Per-Member Compliance Screen](../KNOWN_LIMITATIONS.md#medical-screening--no-per-member-compliance-screen-2026-08-08).
 
-![The Add Screening Record dialog with the amber notice at the top: not linked to a member or prospect, so the record will not count toward anyone's compliance](./images/13-07-add-record-linkage-notice.png)
+![The Add Screening Record dialog](./images/13-07-add-record-linkage-notice.png)
 
-**[SCREENSHOT — REPLACE `13-07-add-record-linkage-notice.png`.** The amber notice is reworded ("Not linked to a member or prospect. You can't choose who a screening is for here, …") and the submit button reads **Add Record** (was Create).**]**
+**[SCREENSHOT — REPLACE `13-07-add-record-linkage-notice.png`.** The frame still shows the retired amber "Not linked" notice. The dialog now opens with a **Record is for** choice (Member / Prospect) and a name list above Linked Requirement; retake it with a member selected.**]**
 
 ### Status Workflow
 
@@ -390,7 +384,7 @@ This returns a `ComplianceSummary` for the specified member:
 > **Corrected 2026-08-12.** There is no per-member compliance view.
 > `fetchUserCompliance` and `fetchProspectCompliance` are defined in
 > `medicalScreeningStore` and called by no component; `ComplianceDashboard`
-> lists expiring screenings and nothing else. Recorded in [Medical Screening — The Add Record Form Attaches to Nobody](../KNOWN_LIMITATIONS.md#medical-screening--the-add-record-form-attaches-to-nobody-2026-08-08).
+> lists expiring screenings and nothing else. Recorded in [Medical Screening — No Per-Member Compliance Screen](../KNOWN_LIMITATIONS.md#medical-screening--no-per-member-compliance-screen-2026-08-08).
 
 ---
 
@@ -450,14 +444,12 @@ The process is identical to recording a member screening, except you select a **
 
 1. Navigate to **Medical Screening > Records** tab.
 2. Click **Add Record**.
-3. In the **Prospect** field, search for and select the prospective member.
-4. Leave the **Member** field blank.
-5. Complete the remaining fields as usual.
-6. Click **Save**.
+3. Under **Record is for**, choose **Prospect**, then select the prospective member from the list.
+4. Complete the remaining fields as usual.
+5. Click **Add Record**.
 
-> **Corrected 2026-08-12.** Same gap as the Add Record form above: the form
-> has neither a Member nor a Prospect control, so a screening cannot be
-> attached to a prospect through the UI at all. Recorded in [Medical Screening — The Add Record Form Attaches to Nobody](../KNOWN_LIMITATIONS.md#medical-screening--the-add-record-form-attaches-to-nobody-2026-08-08).
+Only prospects still open in the pipeline (Active or On Hold) are listed. Once
+a prospect becomes a member, record new screenings against the member.
 
 ### Prospect Compliance
 
@@ -579,7 +571,7 @@ Captain Alvarez takes action:
 
 > **Corrected 2026-08-12.** The Compliance tab has **no filter controls of any
 > kind**, and no per-member breakdown to filter — it lists expiring screenings.
-> Recorded in [Medical Screening — The Add Record Form Attaches to Nobody](../KNOWN_LIMITATIONS.md#medical-screening--the-add-record-form-attaches-to-nobody-2026-08-08).
+> Recorded in [Medical Screening — No Per-Member Compliance Screen](../KNOWN_LIMITATIONS.md#medical-screening--no-per-member-compliance-screen-2026-08-08).
 
 ---
 
@@ -589,7 +581,7 @@ A new candidate, **Alex Rivera**, is moving through the membership pipeline. Cap
 
 1. Navigates to **Medical Screening > Records** tab.
 2. Clicks **Add Record**.
-3. Selects **Alex Rivera** in the Prospect field.
+3. Under **Record is for**, chooses **Prospect** and selects **Alex Rivera**.
 4. Sets Screening Type to **Drug Screening**.
 5. Sets Status to **Pending Review** (lab results expected in 3 days).
 6. Enters Scheduled Date: 2026-06-25, Provider: "QuickScreen Labs".

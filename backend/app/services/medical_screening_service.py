@@ -17,8 +17,8 @@ from app.models.medical_screening import (
     ScreeningRequirement,
     ScreeningStatus,
 )
-from app.models.membership_pipeline import ProspectiveMember
-from app.models.user import User
+from app.models.membership_pipeline import ProspectiveMember, ProspectStatus
+from app.models.user import User, UserStatus
 from app.schemas.medical_screening import (
     ComplianceItem,
     ComplianceSummary,
@@ -28,6 +28,8 @@ from app.schemas.medical_screening import (
     ScreeningRecordUpdate,
     ScreeningRequirementCreate,
     ScreeningRequirementUpdate,
+    ScreeningSubject,
+    ScreeningSubjects,
 )
 from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
@@ -42,6 +44,20 @@ def _page(query: Select, skip: int, limit: Optional[int]) -> Select:
     if limit is not None:
         query = query.limit(limit)
     return query
+
+
+# Members a screening can be recorded for: everyone still on the roster,
+# including a member on leave or suspended — a return-to-duty physical is
+# exactly the record those two statuses need. Former members are left out.
+_SCREENABLE_MEMBER_STATUSES = (
+    UserStatus.ACTIVE,
+    UserStatus.PROBATIONARY,
+    UserStatus.LEAVE,
+    UserStatus.SUSPENDED,
+)
+# Prospects still in the pipeline. An approved prospect becomes a member and
+# is screened as one from then on.
+_SCREENABLE_PROSPECT_STATUSES = (ProspectStatus.ACTIVE, ProspectStatus.ON_HOLD)
 
 
 class MedicalScreeningService:
@@ -198,6 +214,51 @@ class MedicalScreeningService:
             )
         )
         return result.scalar_one_or_none()
+
+    async def list_subjects(self, organization_id: str) -> ScreeningSubjects:
+        """Members and prospects a new screening record can be filed against.
+
+        Backs the Add Record picker (MS-13). Org-scoped; names only. Bounded by
+        the roster and the open pipeline rather than paged, because a picker
+        that silently omits someone is worse than a long list.
+        """
+        member_rows = await self.db.execute(
+            select(User.id, User.first_name, User.last_name, User.preferred_name)
+            .where(
+                User.organization_id == organization_id,
+                User.deleted_at.is_(None),
+                User.status.in_(_SCREENABLE_MEMBER_STATUSES),
+            )
+            .order_by(User.last_name, User.first_name, User.id)
+        )
+        prospect_rows = await self.db.execute(
+            select(
+                ProspectiveMember.id,
+                ProspectiveMember.first_name,
+                ProspectiveMember.last_name,
+            )
+            .where(
+                ProspectiveMember.organization_id == organization_id,
+                ProspectiveMember.status.in_(_SCREENABLE_PROSPECT_STATUSES),
+            )
+            .order_by(
+                ProspectiveMember.last_name,
+                ProspectiveMember.first_name,
+                ProspectiveMember.id,
+            )
+        )
+        return ScreeningSubjects(
+            members=[
+                ScreeningSubject(
+                    id=uid, name=format_display_name(first, last, preferred)
+                )
+                for uid, first, last, preferred in member_rows.all()
+            ],
+            prospects=[
+                ScreeningSubject(id=pid, name=f"{first or ''} {last or ''}".strip())
+                for pid, first, last in prospect_rows.all()
+            ],
+        )
 
     async def create_record(
         self,

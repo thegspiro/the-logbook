@@ -148,6 +148,19 @@ export interface ScreeningRecordUpdate {
   notes?: string | null | undefined;
 }
 
+// --- Subjects (Add Record picker) ---
+
+export interface ScreeningSubject {
+  id: string;
+  name: string;
+}
+
+/** Who a new record can be filed against: current members and open prospects. */
+export interface ScreeningSubjects {
+  members: ScreeningSubject[];
+  prospects: ScreeningSubject[];
+}
+
 // --- Compliance ---
 
 export interface ComplianceItem {

@@ -1060,48 +1060,24 @@ there is no screen.
 | **Leave of absence is created from Waiver Management** | Open (LOW — discoverability) | It works, but it is not where a membership coordinator would look for it.                                                                                                                                                                      |
 | **No UI for overdue property returns (members)**       | Open (LOW)                   | Three endpoints, no consumer. The Inventory members page shows an "Overdue Returns" figure, which is a different feature and may be the reason this was assumed to exist.                                                                      |
 
-## Medical Screening — The Add Record Form Attaches to Nobody (2026-08-08)
+## Medical Screening — No Per-Member Compliance Screen (2026-08-08)
 
-**Re-verified still open by security review (MS-13,
-`docs/security-review/MS-09-medical-screening.md`, pass 6, 2026-09-16).** Not
-fixed there either — wiring a picker is a real feature (a new data source for
-members and prospects, plus a decision on whether both, either, or neither may
-be set, which is the same open question as the sibling gap below this one).
-That pass added the one honest, low-risk mitigation available without one: the
-create dialog now carries an amber notice stating the record cannot be
-attached to anyone, matching the "not enforced yet" idiom
-`ScreeningRequirementForm` already used for its own unwired fields — so the
-"Record created" success toast can no longer imply otherwise. Guarded by
-`ScreeningRecordForm.linkageNotice.test.tsx`.
+**The Add Record half of this entry is resolved (2026-10-05, owner decision,
+MS-13).** It was filed as "The Add Record Form Attaches to Nobody": the dialog
+had no member or prospect control, so every record it created counted toward
+nobody's compliance. The dialog now has a member/prospect picker fed by
+`GET /medical-screening/subjects`, and `POST /medical-screening/records`
+rejects a record naming neither or both (422). See
+`docs/security-review/MS-09-medical-screening.md`, "Owner decisions".
 
-**A screening record created through the UI is attached to no member and no
-prospect.** `ScreeningRecordForm` builds its create payload from nine fields —
-requirement, type, status, three dates, provider, result, notes — and sets
-neither `user_id` nor `prospect_id`. Both are on the frontend
-`ScreeningRecordCreate` type and both are accepted by
-`POST /medical-screening/records`; the form simply has no control for either,
-so the value can never be supplied. `MedicalScreeningPage` is the only caller,
-and it passes the payload straight through.
+**Residual: records created before the fix stay unattached.** Nothing can say
+who they were about, and the edit dialog cannot set a subject (the update
+schema accepts neither id, deliberately). They show as **Not linked to a
+member or prospect** on the Records tab; re-enter them through Add Record and
+delete the unattached copy.
 
-This is worse than a missing field. Every compliance view keys off `user_id`:
-`getUserCompliance`, `getProspectCompliance` and the expiring-screenings list
-all resolve records by the member they belong to. A record entered by hand
-therefore counts toward nobody's compliance and shows as "Unknown" wherever
-records are listed — a physical exam that was really performed, recorded in the
-system, and invisible to the report that decides whether the member is cleared
-for duty.
-
-The demo data does not exhibit this because the seeder posts `user_id` to the
-API directly, bypassing the form. That is worth knowing before anyone concludes
-from a screenshot that the linkage works.
-
-`docs/training/13-medical-screening.md` describes the missing controls in two
-places — "the member dropdown" (Add Record, completed physical) and "the
-Prospect field populated with a prospective member name, the Member field
-blank". Both placeholders are left open.
-
-Two further placeholders in that guide picture per-member compliance screens
-that do not exist:
+`docs/training/13-medical-screening.md` pictures two per-member compliance
+screens that do not exist:
 
 | Guide section                      | What exists                                                                                                                                                                    | State                |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------- |

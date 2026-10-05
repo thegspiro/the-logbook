@@ -344,6 +344,34 @@ MCP tools were already audited by the MCP registry. Guarded by
 `backend/tests/test_medical_screening_read_audit.py` (integration, 8 tests
 against real `audit_logs` rows).
 
+### MS-13 — ✅ FIXED — Add Record files the record against exactly one member or prospect
+
+Owner choice: a picker with exactly one of member or prospect, so records
+count toward compliance. Three parts:
+
+- `ScreeningRecordCreate` gained a `model_validator` rejecting a payload
+  naming neither or both (`user_id` / `prospect_id`; a blank string counts as
+  absent) — a 422. This also closes the long-tracked "`create_record` doesn't
+  enforce exactly-one-of" gap listed under every pass since pass 1.
+- New `GET /medical-screening/subjects` (`medical_screening.manage`,
+  org-scoped) returns `{members, prospects}` as `{id, name}` — current
+  members (active, probationary, leave, suspended; not deleted) and prospects
+  still open (active, on hold). Names only, so not audit-logged. It exists
+  because the `.manage` holder need not hold `users.view` or the pipeline
+  permissions, and `MemberPickerModal`'s inventory-scoped source covers
+  neither that nor prospects.
+- `ScreeningRecordForm` replaces the amber "not linked" notice with a
+  **Record is for** Member/Prospect choice and a name list; submit is disabled
+  until a subject is chosen, a load failure is shown as an alert, and the
+  payload carries only the chosen id.
+
+Records created before the fix remain unattached — nothing records whom they
+were about — and are left to the residual note in `KNOWN_LIMITATIONS.md`.
+Guarded by `backend/tests/test_medical_screening_record_subject.py` (unit
+schema tests + integration tests of the subject list and a prospect create)
+and `ScreeningRecordForm.subjectPicker.test.tsx` (replaces
+`ScreeningRecordForm.linkageNotice.test.tsx`).
+
 ---
 
 ## Pass 6 (2026-09-16)
@@ -437,7 +465,7 @@ pulled it in because it carries no `MS-*` id and wasn't in
 
 ### New this pass
 
-### MS-13 — MED (data integrity / availability, PHI-adjacent) — The "Add Record" dialog has no control for `user_id` or `prospect_id`, so every UI-created screening record is orphaned — 🚩 FLAGGED (interim honesty notice ✅ FIXED)
+### MS-13 — MED (data integrity / availability, PHI-adjacent) — The "Add Record" dialog has no control for `user_id` or `prospect_id`, so every UI-created screening record is orphaned — 🚩 FLAGGED (interim honesty notice ✅ FIXED; ✅ fully fixed 2026-10-05, see "Owner decisions" at the top)
 
 **What:** `ScreeningRecordForm.tsx`'s create-mode payload
 (`handleSubmit`, the `else` branch) builds a `ScreeningRecordCreate` from nine
