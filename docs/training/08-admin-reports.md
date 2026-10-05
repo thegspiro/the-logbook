@@ -453,6 +453,29 @@ The Logbook uses a **position-based** permission system:
 >   can never lock itself out of member administration. If you see this error,
 >   grant another position the member-management permission first, then retry.
 
+> **A role that holds a wildcard now saves** _(2026-10-04)_. Until this date,
+> changing any permission on a position that carried `*` (the IT Manager) or a
+> module grant such as `inventory.*` — the kind the setup wizard's **Manage**
+> checkbox writes — failed with "Failed to update role", because the editor
+> sent the stored list back and the check only recognised individual permission
+> names. The editor now accepts exactly the grants the app already honours. A
+> rejection, when there still is one, names up to five of the offending
+> permissions instead of a generic message. Accepting a wildcard is not
+> granting one: you still cannot hand out, or edit a position holding, a
+> permission you do not hold yourself.
+
+> **`training.view_analytics`** _(2026-10-04)_ controls the **Department** view
+> of shift-report totals (Scheduling → **Shift Reports**). It is seeded on the
+> Chief, Deputy Chief and Assistant Chief ranks and the President and Training
+> Officer positions; captains and lieutenants see only their own reports under
+> **Written by me**. `training.manage` no longer shows department totals by
+> itself. Tick it on any position you build yourself that should.
+
+> **Screenshot needed:**
+> _[Role Management → edit a position that holds `inventory.*`, change one
+> permission and save, showing the success toast. Save as
+> `08-04b-role-save-wildcard.png`.]_
+
 > **A permission matches literally.** Holding `X.manage` does not grant
 > `X.view`: a position is granted exactly the names ticked on it, a module
 > wildcard (`X.*`) grants everything in that module, and `*` grants everything.
