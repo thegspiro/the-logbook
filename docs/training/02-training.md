@@ -1280,6 +1280,22 @@ Departments that hold drills late in the month often saw members flagged non-com
 
 ![Compliance thresholds configuration including the evaluation-period setting](./images/02-66-compliance-thresholds.png)
 
+### Requirements with several categories _(2026-10-04)_
+
+A requirement can be linked to more than one training category, and a finalized
+session or an imported outside course in **any** of them counts toward it. Until
+2026-10-04 that only worked when the requirement had exactly one category: with
+two or more, the member's record and general hours were written but the
+requirement's percentage never moved, and nothing said so.
+
+New completions now credit correctly. **Credit that was missed earlier is not
+added automatically** — a system administrator runs
+`scripts/backfill_category_requirement_credit.py` once after upgrading (a dry run
+first; see [Upgrading](../UPGRADING.md)). Expect some members' percentages, and
+the phase of a pipeline they are in, to move up when it runs. If a member says a
+class they attended was never counted toward a requirement tagged with several
+categories, this is the first thing to check.
+
 ### Per-Requirement Override
 
 Each training requirement can override the department default. When adding or editing a requirement (**Training Admin > Requirements**), use the **Evaluation Period** selector:

@@ -1,5 +1,57 @@
 # Screenshot currency
 
+## Queued by the October 4 – 5 documentation pass, 2026-10-05
+
+Audit: [`CHANGE_AUDIT_2026-10-04_TO_10-05.md`](../CHANGE_AUDIT_2026-10-04_TO_10-05.md).
+**Nothing has been captured.** This list is the work order; the one new inline
+placeholder is `08-04b` in guide 08 (a `> **Screenshot needed:**` paragraph, so
+`status_report.py` counts it — regenerate `SCREENSHOT_STATUS.md` when you next
+capture).
+
+**NEW**
+
+| Shot                                    | Guide | Show                                                                                                                                                         |
+| --------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `08-04b-role-save-wildcard`             | 08    | Role Management: edit a position holding `inventory.*`, change one permission, save — success toast (it used to fail with "Failed to update role")           |
+| `02-xx-requirement-call-types-picker`   | 02    | Requirement form (and Create Pipeline): **Call types that count** picker over the department list, two types selected                                        |
+| `03-xx-closeout-hours-column`           | 03    | Close-out wizard step 1: **Start / End / Hours** columns, one row with typed hours, one with **Until shift end** offered, the no-check-in flag               |
+| `02-xx-shift-reports-department-view`   | 02    | Shift Reports as a Chief: the **Department** view beside **Written by me**, its own heading and no report list                                              |
+| `02-xx-shift-report-calls-responded`    | 02    | Shift report crew list with the per-member **Calls Responded** figure                                                                                        |
+| `03-xx-settings-shift-officer-files`    | 03    | Shift Reports settings → **Filing & Validation**: **Reports are filed by the officer on the rig**                                                            |
+| `01-xx-expiring-supplies-email-phone`   | 03/10 | The weekly expiring-supplies email at 390px: three columns, apparatus and compartment under the item, days left under the date                               |
+
+The preferred-name screens (My Account → Account, Admin Edit, Add Member, the ID
+card) already carry placeholders in guide 01 from the commits that added them;
+capture those in the same run.
+
+**REPLACE**
+
+| Image                                                                              | Why                                                                                                                                                                   |
+| ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `00-09` / `00-17-account-settings`                                                 | Account tab gained **Preferred Name**                                                                                                                                 |
+| `01-05-add-member-form`, `01-07-admin-member-edit`                                 | Preferred Name field                                                                                                                                                  |
+| `19-37-member-id-cards`                                                            | Card names the member by preferred name                                                                                                                               |
+| `02-30` … `02-36`, `02-38`, `02-102`, `02-103` (Shift Reports screens)            | **Written by me** is the viewer's own reports; the Department view is separate; the report form lists only shifts the viewer led; crew list gains Calls Responded     |
+| `02-34-shift-report-analytics`                                                     | Heading and scope: own figures by default, **Department** for holders of `training.view_analytics`                                                                    |
+| `03-75`, `03-76`, `03-77`, `03-81` (close-out wizard)                              | Hours box and **Until shift end / Full shift** on step 1; no-hours flag on the confirm step                                                                           |
+| `03-101-call-types-editor`, `03-74`, `03-08`, `03-09` (call log)                   | Incident type is a picker over the one department list                                                                                                                |
+| `02-16-requirements`, `13-05-add-requirement`, `09-12-template-linked-requirement` | Requirement form has the **Call types that count** picker                                                                                                             |
+| `05-25-admin-hub`, `05-54`, `05-60`, `18-02`, `19-06`, `19-08`, `20-16`, `10-06`, `03-51`, `02-41` | Administration hubs now start at the page margin (16px phone / 32px desktop), not double-indented. Phone-width frames show it most; desktop frames shift by 32px     |
+| `07-14` … `07-24`, `20-15` (Suggestion Board)                                      | Vote button and filter pills are primary red, not blue                                                                                                                |
+| `08-08-public-portal`                                                              | Configuration tab's default rate limit field validates 1–100,000 with an inline message                                                                              |
+| `11-12`, `11-16` and the other finance request-detail frames                       | Action buttons that were blue are red                                                                                                                                 |
+| Any frame showing an info, success, purple or danger alert in the light theme      | Alert body text is darker (AAA). Re-shoot with the next sweep rather than piecemeal                                                                                   |
+
+**CHECK**
+
+- **Tablet-width captures** with a mouse-driven desktop: card lists keep the
+  `max-w-7xl` cap and Events, Past Events and Course Library use a wider card
+  floor, so column counts at 1440px may differ from older frames.
+- Any date-and-time picker frame at phone width (it used to cut the date to
+  "mm/c").
+- Finance and Grants stat tiles and the hub metric row at phone width (labels
+  wrap now).
+
 ## Queued by the September 24 – October 4 documentation pass, 2026-10-04
 
 The 250 pull requests merged between 2026-09-24 and 2026-10-04 (#2651 –
