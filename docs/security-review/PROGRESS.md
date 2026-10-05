@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (number recorded in this branch's second commit once opened)**: branch
+**PR [#2952](https://github.com/thegspiro/the-logbook/pull/2952)**: branch
 `claude/security-review-users-organizations`, Feature 07
 (Users & organizations), pass 7. Watchdog pickup — no open
 `claude/security-review-*` PR existed when this iteration started; PR #2947
