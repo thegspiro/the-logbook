@@ -16,11 +16,28 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2947](https://github.com/thegspiro/the-logbook/pull/2947)**: branch
+`claude/security-review-elections-ballots`, Feature 06 (Elections &
+ballots), pass 7. Watchdog pickup — the dedicated `/loop 30m
+/security-review` session had gone quiet after PR #2941 merged. 0 fixes, 4
+findings cross-referenced from the 2026-09-30 workflow review into this
+feature's own numbered ledger (ELEC-43 HIGH, ELEC-44 LOW, ELEC-45 MED,
+ELEC-46 MED — all already owner-decision items in `KNOWN_LIMITATIONS.md`);
+the 5 standing findings (ELEC-12, 14, 16, 28, 40) re-verified unchanged.
+Gate green (flake8/black/isort, migrations, route-permission check, 1,092
+scoped backend tests, frontend typecheck/lint, 148 elections-module
+frontend tests). Subscribed for CI/review events.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 7, PR #2941, merged — 1 fix (FIN-33, MED), 0 flagged; rotation row 05 stays ✅), preserved for history</summary>
+
 **None.** PR [#2941](https://github.com/thegspiro/the-logbook/pull/2941)
 (Feature 05, Finance & approvals, pass 7) merged — 1 fix (FIN-33, MED), 0
 flagged; log entry already recorded below and rotation row 05 stays ✅. This
 iteration picks up Feature 06 (Elections & ballots), the state this PR opened
 from.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #2941, Feature 05, Finance & approvals, pass 7, before it merged), preserved for history</summary>
