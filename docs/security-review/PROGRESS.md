@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR pending** (opening at the end of this iteration): branch
+**PR [#2955](https://github.com/thegspiro/the-logbook/pull/2955)**: branch
 `claude/security-review-membership-pipeline`, Feature 08 (Membership
 pipeline), pass 8. Watchdog pickup — PR #2952 (Feature 07, Users &
 organizations, pass 7) sat green and `mergeable_state: clean` for over four
@@ -38,9 +38,8 @@ permission beyond the caller's existing role-grant ceiling. The four standing
 findings (MP-10, MP-19, MP-22, MP-26) re-verified unchanged; MP-19's line
 citation refreshed in `KNOWN_LIMITATIONS.md` for unrelated file growth. Gate
 green (flake8/black/isort, migrations, route-permission check, 72 cross-cutting
-guard tests, 1,516 scoped backend tests, frontend typecheck/lint, 259 scoped
-frontend tests); full backend unit suite run, see the Log entry below for its
-result.
+guard tests, 1,516 scoped + 12,660 full-suite backend tests, frontend
+typecheck/lint, 259 scoped frontend tests).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 07, Users &amp; organizations, pass 7, PR #2952, merged — 0 fixes, 0 new findings), preserved for history</summary>
