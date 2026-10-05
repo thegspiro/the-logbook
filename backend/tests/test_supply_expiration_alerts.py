@@ -163,7 +163,9 @@ class TestSupplyExpirationAlerts:
         assert "On apparatus — no replacement stock (1)" in html
         assert "On apparatus — replacement ready (1)" in html
         # The count a supply officer acts on leads the plain-text summary.
-        assert "1 have no replacement stock on hand" in captured["text_body"]
+        assert (
+            "1 on apparatus have no replacement stock on hand" in captured["text_body"]
+        )
 
     async def test_shelf_stock_is_reported_alongside_the_trucks(self, sent):
         captured, overview, lots = sent
@@ -405,3 +407,98 @@ class TestSupplyExpirationLayout:
         assert "<b>Epi</b>" not in html
         assert "&lt;b&gt;Epi&lt;/b&gt;" in html
         assert "E&amp;1 &middot;" in html
+
+
+class TestSupplyAlertWording:
+    """The overview also returns rows a crew reported used or short, which
+    have no date to expire by; the email must not call them expiring."""
+
+    def _restock(self, name="Tourniquets", note="Used on a call"):
+        row = _deployed(name, ready_stock=0)
+        row.update(
+            expiration_date=None,
+            days_until_expiration=None,
+            restock_needed=True,
+            restock_note=note,
+        )
+        return row
+
+    async def test_a_restock_only_email_does_not_say_expiring(self, sent):
+        captured, overview, lots = sent
+        overview.return_value = {"items": [self._restock()]}
+        lots.return_value = []
+
+        await run_supply_expiration_alerts(_db())
+
+        assert captured["subject"] == "Supplies to Replace — 1 to restock on apparatus"
+        assert "xpir" not in captured["subject"]
+        html = captured["html_body"]
+        assert "Supplies expiring within" not in html
+        assert "Restock reported" in html
+        assert "Used on a call" in html
+        assert ">Status<" in html
+
+    async def test_the_restock_note_is_escaped(self, sent):
+        captured, overview, lots = sent
+        overview.return_value = {"items": [self._restock(note="<b>gone</b>")]}
+        lots.return_value = []
+
+        await run_supply_expiration_alerts(_db())
+
+        html = captured["html_body"]
+        assert "<b>gone</b>" not in html
+        assert "&lt;b&gt;gone&lt;/b&gt;" in html
+
+    async def test_a_short_position_shows_the_count(self, sent):
+        captured, overview, lots = sent
+        short = _deployed("Oral airways", ready_stock=5)
+        short.update(
+            expiration_date=None,
+            days_until_expiration=None,
+            is_short=True,
+            quantity_on_truck=2,
+            target_quantity=4,
+        )
+        overview.return_value = {"items": [short]}
+        lots.return_value = []
+
+        await run_supply_expiration_alerts(_db())
+
+        assert "2 of 4 aboard" in captured["html_body"]
+        assert "1 to restock on apparatus" in captured["subject"]
+
+    async def test_a_restock_row_with_a_distant_date_is_not_expiring(self, sent):
+        # A reported item still carries its expiration date, which may be far
+        # off; it is on the list because of the report, not the date.
+        captured, overview, lots = sent
+        row = self._restock()
+        row.update(expiration_date=SOON, days_until_expiration=200)
+        overview.return_value = {"items": [row]}
+        lots.return_value = []
+
+        await run_supply_expiration_alerts(_db())
+
+        assert "expiring" not in captured["subject"]
+        assert "Restock reported" in captured["html_body"]
+
+    async def test_a_mixed_email_counts_each_kind(self, sent):
+        captured, overview, lots = sent
+        overview.return_value = {
+            "items": [
+                _deployed("Epi 1:1000", ready_stock=0),
+                _deployed("4x4 Gauze", ready_stock=12),
+                self._restock(),
+            ]
+        }
+        lots.return_value = [_lot()]
+
+        await run_supply_expiration_alerts(_db())
+
+        summary = (
+            "2 expiring on apparatus, 1 to restock on apparatus, "
+            "1 stock lot expiring"
+        )
+        assert captured["subject"] == f"Supplies to Replace — {summary}"
+        assert f"<p>{summary}.</p>" in captured["html_body"]
+        assert captured["text_body"].startswith(summary)
+        assert "10d left" in captured["html_body"]

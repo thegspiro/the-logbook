@@ -305,7 +305,7 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "Low stock",
             "Shelf audit digest",
             "Gear due for retirement",
-            "Supplies expiring",
+            "Supplies expiring or to restock",
             "Failed equipment checks",
         ),
         rationale="Inventory shows the same alerts.",
