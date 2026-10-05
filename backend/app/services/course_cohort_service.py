@@ -1577,6 +1577,7 @@ class CourseCohortService:
                     "full_name": (
                         f"{user.first_name} {user.last_name}".strip() if user else None
                     ),
+                    "display_name": user.display_name if user else None,
                     "email": user.email if user else None,
                     "progress_percentage": (
                         enrollment.progress_percentage if enrollment else None

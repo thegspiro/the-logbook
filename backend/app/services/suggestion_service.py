@@ -141,8 +141,7 @@ def process_screenshot(content: bytes) -> bytes:
 def _display_name(user: Optional[User]) -> Optional[str]:
     if user is None:
         return None
-    name = f"{user.first_name or ''} {user.last_name or ''}".strip()
-    return name or user.username or None
+    return user.display_name or user.username or None
 
 
 def _remove_quietly(path: str) -> None:

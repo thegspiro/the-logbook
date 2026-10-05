@@ -1598,6 +1598,8 @@ class MembershipPipelineService:
         return [
             {
                 "user_id": str(m.id),
+                # Legal name: the match was made on legal first/last name, and
+                # staff compare it against the applicant's legal name.
                 "name": m.full_name,
                 "email": m.email,
                 "status": (
@@ -8082,7 +8084,7 @@ class MembershipPipelineService:
             if link.linked_by:
                 linker = linkers_by_id.get(link.linked_by)
                 if linker:
-                    linker_name = f"{linker.first_name} {linker.last_name}".strip()
+                    linker_name = linker.display_name
 
             enriched.append(
                 {
@@ -8174,9 +8176,7 @@ class MembershipPipelineService:
         # Return enriched response
         linker_result = await self.db.execute(select(User).where(User.id == linked_by))
         linker = linker_result.scalar_one_or_none()
-        linker_name = (
-            f"{linker.first_name} {linker.last_name}".strip() if linker else None
-        )
+        linker_name = linker.display_name if linker else None
 
         return {
             "id": link.id,

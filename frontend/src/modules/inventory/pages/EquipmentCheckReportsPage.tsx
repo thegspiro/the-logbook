@@ -224,7 +224,7 @@ const ComplianceTab: React.FC<{ startDate: string; endDate: string; tz: string }
                     </span>
                   )}
                 </div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
                   <span className="text-theme-text-muted">Checks:</span>
                   <span className="text-theme-text-secondary">{a.checksCompleted}</span>
                   <span className="text-theme-text-muted">Pass / Fail:</span>

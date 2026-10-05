@@ -14,6 +14,7 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { UserStatus } from '../../../constants/enums';
 import { DEFAULT_SIGNUP_WINDOW } from '../utils/shiftBoard';
 import type { CallTypeOption } from '../types';
+import { displayNameOf } from '../../../utils/memberName';
 
 interface MemberOption {
   id: string;
@@ -272,7 +273,7 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
         .filter((m) => m.status === UserStatus.ACTIVE)
         .map((m) => ({
           id: String(m.id),
-          label: `${m.first_name || ''} ${m.last_name || ''}`.trim() || String(m.email || m.id),
+          label: displayNameOf(m) || String(m.email || m.id),
           platoon: m.platoon || undefined,
         }));
       set({ members, membersLoaded: true });

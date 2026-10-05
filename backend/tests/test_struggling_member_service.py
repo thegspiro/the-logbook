@@ -74,7 +74,7 @@ def _quiet_notifications(monkeypatch):
 
 class TestDetectAndNotify:
     def _db_for(self, enrollment, in_progress=None):
-        user = SimpleNamespace(full_name="Jane Smith")
+        user = SimpleNamespace(full_name="Jane Smith", display_name="Jane Smith")
         program = SimpleNamespace(name="FF1 Program")
         db = MagicMock()
         db.execute = AsyncMock(

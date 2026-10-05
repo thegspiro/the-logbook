@@ -241,19 +241,31 @@ def get_variables_for_type(
 # Variable definitions per template type
 TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
     "welcome": [
-        {"name": "first_name", "description": "Recipient's first name"},
+        {
+            "name": "first_name",
+            "description": "Recipient's first name (preferred name if set)",
+        },
         {"name": "last_name", "description": "Recipient's last name"},
-        {"name": "full_name", "description": "Recipient's full name"},
+        {
+            "name": "full_name",
+            "description": "Recipient's full name (preferred name if set)",
+        },
         {"name": "username", "description": "Login username"},
         {"name": "temp_password", "description": "Temporary password"},
     ],
     "password_reset": [
-        {"name": "first_name", "description": "Recipient's first name"},
+        {
+            "name": "first_name",
+            "description": "Recipient's first name (preferred name if set)",
+        },
         {"name": "reset_url", "description": "Password reset link"},
         {"name": "expiry_minutes", "description": "Minutes until link expires"},
     ],
     "inventory_change": [
-        {"name": "first_name", "description": "Member's first name"},
+        {
+            "name": "first_name",
+            "description": "Member's first name (preferred name if set)",
+        },
         {"name": "change_date", "description": "Date the changes occurred"},
         {
             "name": "items_issued_html",
@@ -1334,6 +1346,9 @@ _SAMPLE_LINK_HOST = re.compile(r"^https://example\.(?:com|org)(?=/|$)")
 # cannot exist. Each entry follows the variable the default template greets,
 # and the form (first / last / full / username) follows what the real sender
 # passes: shift reminders and election alerts greet by first name.
+# "first" and "full" use the name the member goes by (preferred name), as the
+# everyday senders do; election notices and the storefront's billing name
+# carry the legal name, so they map to "legal_first" / "legal_full".
 # test_email_live_sample_context asserts every greeting variable is listed.
 TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
     "welcome": {
@@ -1346,9 +1361,9 @@ TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
     "event_cancellation": {"recipient_name": "full"},
     "event_reminder": {"recipient_name": "full"},
     "series_end_reminder": {"recipient_name": "full"},
-    "ballot_notification": {"recipient_name": "full"},
-    "election_report": {"recipient_name": "full"},
-    "ballot_eligibility_summary": {"recipient_name": "full"},
+    "ballot_notification": {"recipient_name": "legal_full"},
+    "election_report": {"recipient_name": "legal_full"},
+    "ballot_eligibility_summary": {"recipient_name": "legal_full"},
     "member_dropped": {"member_name": "full"},
     "inventory_change": {"first_name": "first"},
     "cert_expiration": {"recipient_name": "full"},
@@ -1356,8 +1371,8 @@ TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
     "post_shift_validation": {"recipient_name": "full"},
     "property_return_reminder": {"member_name": "full"},
     "inactivity_warning": {"coordinator_name": "full"},
-    "election_rollback": {"recipient_name": "first"},
-    "election_deleted": {"recipient_name": "first"},
+    "election_rollback": {"recipient_name": "legal_first"},
+    "election_deleted": {"recipient_name": "legal_first"},
     "event_request_status": {"contact_name": "full"},
     "duplicate_application": {"applicant_name": "full"},
     "application_withdrawn": {"applicant_name": "full"},
@@ -1365,7 +1380,10 @@ TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
     "equipment_request_update": {"member_name": "full"},
     "shift_assignment": {"recipient_name": "full"},
     "shift_reminder": {"recipient_name": "first"},
-    "storefront_order_confirmation": {"first_name": "first", "customer_name": "full"},
+    "storefront_order_confirmation": {
+        "first_name": "legal_first",
+        "customer_name": "legal_full",
+    },
 }
 
 _DATE_TIME = "%B %d, %Y at %I:%M %p"
@@ -1474,12 +1492,16 @@ _PROSE_DATE = re.compile(
 def _recipient_forms(recipient: Any) -> Dict[str, str]:
     first = str(getattr(recipient, "first_name", None) or "").strip()
     last = str(getattr(recipient, "last_name", None) or "").strip()
+    preferred = str(getattr(recipient, "preferred_name", None) or "").strip()
+    given = preferred or first
     return {
-        "first": first,
+        "first": given,
         "last": last,
-        # Built here rather than from User.full_name, which renders a missing
-        # half as the word "None".
-        "full": " ".join(part for part in (first, last) if part),
+        # Built here rather than from User.full_name / display_name, which
+        # render a missing half as the word "None".
+        "full": " ".join(part for part in (given, last) if part),
+        "legal_first": first,
+        "legal_full": " ".join(part for part in (first, last) if part),
         "username": str(getattr(recipient, "username", None) or "").strip(),
     }
 

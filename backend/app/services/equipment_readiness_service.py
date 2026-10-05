@@ -1184,10 +1184,7 @@ class EquipmentReadinessService:
             return payload
 
         result = await self.db.execute(select(User).where(User.id.in_(list(user_ids))))
-        names = {
-            str(u.id): f"{u.first_name or ''} {u.last_name or ''}".strip()
-            for u in result.scalars().all()
-        }
+        names = {str(u.id): u.display_name for u in result.scalars().all()}
         for record in payload.get("apparatus", []) or []:
             record["last_check_by_name"] = names.get(record.get("last_check_by") or "")
         for entry in payload.get("entries", []) or []:

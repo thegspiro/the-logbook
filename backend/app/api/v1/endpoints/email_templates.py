@@ -56,12 +56,14 @@ from app.services.email_policy import (
 )
 from app.services.email_template_service import (
     GLOBAL_VARIABLES,
+    TEST_RECIPIENT_FIELDS,
     EmailTemplateService,
     live_sample_context,
 )
 from app.services.email_test_records import real_record_context
 from app.services.notification_channels import SMS_ALERT_DETAILS, SMS_CONDITIONS
 from app.services.officer_service import OfficerService
+from app.utils.member_names import format_display_name, format_legal_name
 from app.utils.mime_validation import detect_mime_type
 from app.utils.org_scoping import assert_in_org
 
@@ -613,9 +615,20 @@ async def preview_email_template(
         )
         member = member_result.scalar_one_or_none()
         if member:
-            first = getattr(member, "first_name", "") or ""
+            # Name the member the way the real sender would: by the name they
+            # go by, except on the notices email_template_service marks as
+            # carrying the legal name (election notices, storefront billing).
+            recipient_fields = TEST_RECIPIENT_FIELDS.get(template_type_key, {})
+            legal = any(form.startswith("legal_") for form in recipient_fields.values())
+            legal_first = getattr(member, "first_name", "") or ""
             last = getattr(member, "last_name", "") or ""
-            full = getattr(member, "full_name", None) or f"{first} {last}".strip()
+            preferred = getattr(member, "preferred_name", None) or ""
+            first = legal_first if legal else (preferred.strip() or legal_first)
+            full = (
+                format_legal_name(legal_first, last)
+                if legal
+                else format_display_name(legal_first, last, preferred)
+            )
             # Populate all common name/email variables used across templates
             context["first_name"] = first
             context["last_name"] = last
@@ -628,6 +641,14 @@ async def preview_email_template(
             context["username"] = getattr(member, "username", "") or ""
             if getattr(member, "email", None):
                 context["user_email"] = member.email
+            # The greeting variables take exactly the form a test send uses,
+            # so the preview and the test email in the inbox agree.
+            member_sample = live_sample_context(
+                template_type_key, organization, recipient=member
+            )
+            for key in recipient_fields:
+                if key in member_sample:
+                    context[key] = member_sample[key]
 
     # Apply overrides for preview if provided
     # `is not None`, not `or`: an admin who clears the plain-text body or the

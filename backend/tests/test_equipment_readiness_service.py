@@ -23,6 +23,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from app.models.user import User
 from app.services.equipment_readiness_service import (
     READY_ATTENTION,
     READY_IN_SERVICE,
@@ -847,7 +848,11 @@ class TestSummary:
 
 class TestUserNameResolution:
     async def test_names_filled_for_apparatus_and_entries(self, service, mock_db):
-        user = SimpleNamespace(id="u1", first_name="Kelly", last_name="Moreno")
+        # The readiness board is an everyday screen: the checker appears under
+        # the name they go by, not their legal first name.
+        user = User(
+            id="u1", first_name="Katherine", last_name="Moreno", preferred_name="Kelly"
+        )
         mock_db.execute.return_value = SimpleNamespace(
             scalars=lambda: SimpleNamespace(all=lambda: [user])
         )

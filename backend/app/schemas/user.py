@@ -157,6 +157,15 @@ class BottomNavigationPreference(BaseModel):
         return v
 
 
+def _clean_preferred_name(value: Optional[str]) -> Optional[str]:
+    """Trim, and treat a blank as "no preferred name" so clearing the box
+    stores NULL rather than an empty string that would render as no name."""
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
+
+
 class EmergencyContact(BaseModel):
     """Emergency contact schema"""
 
@@ -178,6 +187,19 @@ class UserBase(BaseModel):
     membership_number: Optional[str] = Field(None, max_length=50)
     date_of_birth: Optional[date] = None
     hire_date: Optional[date] = None
+    preferred_name: Optional[str] = Field(
+        None,
+        max_length=100,
+        description=(
+            "Name the member goes by on everyday screens, in place of "
+            "first_name. Reports and legal records keep first_name."
+        ),
+    )
+
+    @field_validator("preferred_name")
+    @classmethod
+    def _clean_preferred_name(cls, v: Optional[str]) -> Optional[str]:
+        return _clean_preferred_name(v)
 
 
 class UserCreate(UserBase):
@@ -255,6 +277,19 @@ class AdminUserCreate(MembershipClassificationFields):
     first_name: str = Field(..., min_length=1, max_length=100)
     middle_name: Optional[str] = Field(None, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
+    preferred_name: Optional[str] = Field(
+        None,
+        max_length=100,
+        description=(
+            "Name the member goes by on everyday screens, in place of "
+            "first_name. Reports and legal records keep first_name."
+        ),
+    )
+
+    @field_validator("preferred_name")
+    @classmethod
+    def _clean_preferred_name(cls, v: Optional[str]) -> Optional[str]:
+        return _clean_preferred_name(v)
 
     membership_number: Optional[str] = Field(
         None,
@@ -326,6 +361,14 @@ class UserUpdate(MembershipClassificationFields):
     first_name: Optional[str] = Field(None, max_length=100)
     middle_name: Optional[str] = Field(None, max_length=100)
     last_name: Optional[str] = Field(None, max_length=100)
+    preferred_name: Optional[str] = Field(
+        None,
+        max_length=100,
+        description=(
+            "Name the member goes by on everyday screens, in place of "
+            "first_name. Reports and legal records keep first_name."
+        ),
+    )
     phone: Optional[str] = Field(None, max_length=20)
     mobile: Optional[str] = Field(None, max_length=20)
     personal_email: Optional[str] = Field(None, max_length=255)
@@ -347,6 +390,11 @@ class UserUpdate(MembershipClassificationFields):
 
     # Emergency contacts
     emergency_contacts: Optional[List[EmergencyContact]] = None
+
+    @field_validator("preferred_name")
+    @classmethod
+    def _clean_preferred_name(cls, v: Optional[str]) -> Optional[str]:
+        return _clean_preferred_name(v)
 
 
 class UserResponse(UserBase, UTCResponseBase):
@@ -397,8 +445,10 @@ class UserResponse(UserBase, UTCResponseBase):
     # Emergency contacts
     emergency_contacts: List[EmergencyContact] = Field(default_factory=list)
 
-    # Computed field
+    # Computed fields. full_name is the legal name (first + last);
+    # display_name substitutes the preferred name for everyday screens.
     full_name: Optional[str] = None
+    display_name: Optional[str] = None
 
     @field_validator("emergency_contacts", mode="before")
     @classmethod
@@ -419,7 +469,9 @@ class UserListResponse(BaseModel):
     first_name: Optional[str] = None
     middle_name: Optional[str] = None
     last_name: Optional[str] = None
+    preferred_name: Optional[str] = None
     full_name: Optional[str] = None
+    display_name: Optional[str] = None
     membership_number: Optional[str] = None
     phone: Optional[str] = None  # Conditionally included
     mobile: Optional[str] = None  # Conditionally included
@@ -597,6 +649,7 @@ class DeletionImpactResponse(BaseModel):
 
     user_id: str
     full_name: Optional[str] = None
+    display_name: Optional[str] = None
     status: str
     training_records: int = 0
     inventory_items: int = 0

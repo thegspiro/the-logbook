@@ -2235,7 +2235,7 @@ export const ActiveSkillTestPage: React.FC = () => {
                 <button
                   onClick={() => void handleEmailResults()}
                   disabled={emailing}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 font-bold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-800 py-3 font-bold text-white transition-colors hover:bg-red-900 disabled:opacity-50"
                 >
                   <Mail className="h-5 w-5" />
                   {emailing ? 'Sending...' : 'Email Results to Candidate'}
@@ -2430,7 +2430,7 @@ export const ActiveSkillTestPage: React.FC = () => {
                 onClick={() => void handlePracticeViewResults()}
                 disabled={submitting || unscoredSteps > 0}
                 title={unscoredSteps > 0 ? 'Every step needs a result first' : undefined}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 font-bold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-800 py-3 font-bold text-white transition-colors hover:bg-red-900 disabled:opacity-50"
               >
                 <ClipboardCheck className="h-5 w-5" />
                 {submitting ? 'Calculating...' : 'View Results'}

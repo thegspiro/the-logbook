@@ -12,14 +12,17 @@ import toast from 'react-hot-toast';
 import { SkeletonPage } from '../../../components/ux';
 import { useOfficersStore } from '../store/officersStore';
 import type { DepartmentOfficer } from '../types';
+import { displayNameOf } from '../../../utils/memberName';
 
 interface OfficersPanelProps {
   /** Org members, used to populate the "who holds this office" picker. */
   members: {
     id: string;
     full_name?: string | undefined;
+    display_name?: string | undefined;
     first_name?: string | undefined;
     last_name?: string | undefined;
+    preferred_name?: string | null | undefined;
     email?: string | undefined;
   }[];
   isLoadingMembers: boolean;
@@ -49,8 +52,7 @@ const SOURCE_BADGES: Record<DepartmentOfficer['source'], { label: string; classN
 };
 
 function memberLabel(member: OfficersPanelProps['members'][number]): string {
-  const composed = [member.first_name, member.last_name].filter(Boolean).join(' ').trim();
-  return member.full_name || composed || member.email || member.id;
+  return displayNameOf(member) || member.email || member.id;
 }
 
 interface OfficerRowProps {

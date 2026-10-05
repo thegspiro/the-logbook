@@ -433,7 +433,7 @@ export const MyChecklistsPage: React.FC = () => {
             <div className="border-theme-surface-border mt-4 border-t pt-4">
               <button
                 onClick={() => void handleResumeCheck(selectedCheck)}
-                className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-red-800 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-red-900"
               >
                 <Play className="h-4 w-4" />
                 Resume Check
@@ -453,7 +453,7 @@ export const MyChecklistsPage: React.FC = () => {
   // ------------------------------------------------------------------
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
@@ -463,7 +463,7 @@ export const MyChecklistsPage: React.FC = () => {
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => void handleOpenTemplatePicker()}
-            className="touch:min-h-[44px] touch:min-w-[44px] inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
+            className="touch:min-h-[44px] touch:min-w-[44px] inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-900"
           >
             <Play className="h-3.5 w-3.5" aria-hidden="true" />
             Unscheduled checklist
@@ -667,7 +667,7 @@ export const MyChecklistsPage: React.FC = () => {
                           onClick={() => void handleStartCheck(checklist)}
                           className={`touch:min-h-11 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                             isDueNow || isStarted
-                              ? 'bg-blue-600 text-white hover:bg-blue-700'
+                              ? 'bg-red-800 text-white hover:bg-red-900'
                               : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover border'
                           }`}
                         >
@@ -865,7 +865,7 @@ export const MyChecklistsPage: React.FC = () => {
                             </span>
                           </div>
                         </div>
-                        <Play className="text-theme-text-muted h-4 w-4 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100" />
+                        <Play className="text-theme-text-muted h-4 w-4 transition-opacity pointer-fine:opacity-0 pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100" />
                       </button>
                     ))}
                   </div>

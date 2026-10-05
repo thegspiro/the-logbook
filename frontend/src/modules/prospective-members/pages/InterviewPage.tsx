@@ -378,7 +378,7 @@ const InterviewForm: React.FC<InterviewFormProps> = ({ applicantId, existingInte
         <button
           type="submit"
           disabled={isSaving}
-          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900 disabled:opacity-50"
         >
           {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           {isEditing ? 'Update Interview' : 'Submit Interview'}
@@ -607,7 +607,7 @@ export const InterviewPage: React.FC = () => {
         <button
           type="button"
           onClick={() => setShowForm(!showForm)}
-          className="inline-flex shrink-0 items-center gap-2 self-start rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 sm:self-auto"
+          className="inline-flex shrink-0 items-center gap-2 self-start rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900 sm:self-auto"
         >
           <MessageSquare className="h-4 w-4" />
           {showForm ? 'Hide Form' : 'New Interview'}

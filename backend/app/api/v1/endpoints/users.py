@@ -262,11 +262,11 @@ async def create_member(
                 detail={
                     "message": (
                         f"An archived member with this email already exists: "
-                        f"{existing_user.full_name}. Use the reactivation endpoint "
+                        f"{existing_user.display_name}. Use the reactivation endpoint "
                         f"to restore their account instead of creating a duplicate."
                     ),
                     "existing_user_id": str(existing_user.id),
-                    "existing_member_name": existing_user.full_name,
+                    "existing_member_name": existing_user.display_name,
                     "existing_status": existing_user.status.value,
                     "reactivate_url": f"/api/v1/users/{existing_user.id}/reactivate",
                 },
@@ -378,6 +378,7 @@ async def create_member(
         first_name=user_data.first_name,
         middle_name=user_data.middle_name,
         last_name=user_data.last_name,
+        preferred_name=user_data.preferred_name,
         membership_number=membership_number,
         phone=user_data.phone,
         mobile=user_data.mobile,
@@ -516,7 +517,8 @@ async def create_member(
         # it must open its own session and reload the org rather than reuse the
         # request `db` or the detached `organization` ORM object.
         welcome_email = new_user.email
-        welcome_first = new_user.first_name
+        # Greet the member by the name they go by.
+        welcome_first = new_user.preferred_name or new_user.first_name
         welcome_last = new_user.last_name
         welcome_username = new_user.username
         welcome_org_id = str(current_user.organization_id)
@@ -897,6 +899,7 @@ async def get_user_roles(
         "user_id": user.id,
         "username": user.username,
         "full_name": user.full_name,
+        "display_name": user.display_name,
         "roles": user.roles,
     }
 
@@ -1198,6 +1201,7 @@ async def assign_user_roles(
         "user_id": user.id,
         "username": user.username,
         "full_name": user.full_name,
+        "display_name": user.display_name,
         "roles": user.roles,
     }
 
@@ -1306,6 +1310,7 @@ async def add_role_to_user(
         "user_id": user.id,
         "username": user.username,
         "full_name": user.full_name,
+        "display_name": user.display_name,
         "roles": user.roles,
     }
 
@@ -1416,6 +1421,7 @@ async def remove_role_from_user(
         "user_id": user.id,
         "username": user.username,
         "full_name": user.full_name,
+        "display_name": user.display_name,
         "roles": user.roles,
     }
 
@@ -1893,6 +1899,15 @@ async def update_user_profile(
     # named the field, and a permission-bearing change nobody requested is
     # exactly the kind the trail has to show.
     audited_fields = list(update_data.keys())
+    # The preferred name is what colleagues see on shift boards, so a change
+    # records both values: "who renamed this member, and to what" has to be
+    # answerable from the trail alone.
+    preferred_name_change = (
+        {"from": user.preferred_name, "to": update_data["preferred_name"]}
+        if "preferred_name" in update_data
+        and update_data["preferred_name"] != user.preferred_name
+        else None
+    )
 
     # Handle emergency_contacts separately (needs serialization)
     if "emergency_contacts" in update_data:
@@ -1908,6 +1923,7 @@ async def update_user_profile(
         "first_name",
         "middle_name",
         "last_name",
+        "preferred_name",
         "membership_number",
         "phone",
         "mobile",
@@ -1964,6 +1980,11 @@ async def update_user_profile(
             "updated_by": str(current_user.id),
             "is_self_update": is_self,
             "fields_updated": audited_fields,
+            **(
+                {"preferred_name_change": preferred_name_change}
+                if preferred_name_change
+                else {}
+            ),
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -2461,6 +2482,7 @@ async def get_deletion_impact(
     return DeletionImpactResponse(
         user_id=str(user_id),
         full_name=user.full_name,
+        display_name=user.display_name,
         status=user.status.value if hasattr(user.status, "value") else str(user.status),
         training_records=training_count,
         inventory_items=inventory_count,

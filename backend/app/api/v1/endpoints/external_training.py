@@ -50,6 +50,7 @@ from app.schemas.training import SyncStatus as SyncStatusEnum
 from app.schemas.training import TestConnectionResponse
 from app.services.external_training_service import ExternalTrainingSyncService
 from app.utils.email_providers import REDACTED_SECRET
+from app.utils.member_names import format_legal_name
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import is_in_org
 from app.utils.url_validator import validate_integration_url
@@ -886,14 +887,16 @@ async def list_user_mappings(
 
         if mapping.internal_user_id:
             user_result = await db.execute(
-                select(User.full_name, User.email).where(
+                select(User.first_name, User.last_name, User.email).where(
                     User.id == mapping.internal_user_id,
                     User.organization_id == str(current_user.organization_id),
                 )
             )
             user_data = user_result.one_or_none()
             if user_data:
-                mapping_dict["internal_user_name"] = user_data.full_name
+                mapping_dict["internal_user_name"] = format_legal_name(
+                    user_data.first_name, user_data.last_name
+                )
                 mapping_dict["internal_user_email"] = user_data.email
 
         response.append(ExternalUserMappingResponse(**mapping_dict))
@@ -967,14 +970,16 @@ async def update_user_mapping(
     internal_user_email = None
     if mapping.internal_user_id:
         user_result = await db.execute(
-            select(User.full_name, User.email).where(
+            select(User.first_name, User.last_name, User.email).where(
                 User.id == mapping.internal_user_id,
                 User.organization_id == str(current_user.organization_id),
             )
         )
         user_data = user_result.one_or_none()
         if user_data:
-            internal_user_name = user_data.full_name
+            internal_user_name = format_legal_name(
+                user_data.first_name, user_data.last_name
+            )
             internal_user_email = user_data.email
 
     return ExternalUserMappingResponse(

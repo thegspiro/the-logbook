@@ -1006,7 +1006,7 @@ const IntegrationsPage: React.FC = () => {
                   void handleSalesforceOAuth(integration.id);
                 }}
                 disabled={connecting}
-                className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-red-800 px-4 py-2.5 text-sm text-white transition-colors hover:bg-red-900 disabled:opacity-50"
               >
                 <ExternalLink className="h-4 w-4" />
                 <span>{connecting ? 'Redirecting…' : 'Connect with Salesforce'}</span>
@@ -1533,7 +1533,7 @@ const IntegrationsPage: React.FC = () => {
                 data-testid={`integration-card-${integration.integration_type}`}
                 className="stat-card transition-all hover:border-indigo-500/30"
               >
-                <div className="mb-3 flex items-start justify-between">
+                <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
                   <div className="flex items-center space-x-3">
                     <div className={`rounded-lg p-2 ${ui.bgColor} ${ui.color}`}>{ui.icon}</div>
                     <div>

@@ -1907,8 +1907,7 @@ class EventService:
                 select(User).where(User.id.in_(list(user_ids)))
             )
             for u in users_result.scalars().all():
-                name = f"{u.first_name} {u.last_name}".strip()
-                user_names[u.id] = name or u.email
+                user_names[u.id] = u.display_name or u.email
 
         # Build response
         items = []
@@ -4136,11 +4135,7 @@ class EventService:
         creator_row = row[1]
         created_by_name = None
         if creator_row:
-            created_by_name = (
-                f"{creator_row.first_name or ''} "
-                f"{creator_row.last_name or ''}".strip()
-                or creator_row.username
-            )
+            created_by_name = creator_row.display_name or creator_row.username
 
         # Use the same check-in window logic as the QR self-check-in page
         now = datetime.now(dt_timezone.utc)
@@ -4187,7 +4182,7 @@ class EventService:
                 continue
             entry = {
                 "user_id": str(user.id),
-                "user_name": f"{user.first_name} {user.last_name}",
+                "user_name": user.display_name,
                 "user_email": user.email,
                 "checked_in_at": rsvp.checked_in_at,
                 "rsvp_status": rsvp.status.value,

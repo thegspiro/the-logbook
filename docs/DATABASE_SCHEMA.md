@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**287 tables · 4720 columns · 932 foreign keys**
+**287 tables · 4721 columns · 932 foreign keys**
 
 ---
 
@@ -657,7 +657,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`prospects`](#prospects) | `Prospect` | 17 | Prospective member – someone who has expressed interest in joining |
 | [`sessions`](#sessions) | `Session` | 10 | User session model for tracking active sessions |
 | [`user_positions`](#user_positions) | _(association table)_ | 4 |  |
-| [`users`](#users) | `User` | 60 | User model with comprehensive authentication and profile support. |
+| [`users`](#users) | `User` | 61 | User model with comprehensive authentication and profile support. |
 
 ---
 
@@ -9914,6 +9914,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `first_name` | VARCHAR(100) | yes |  |  |  |
 | `middle_name` | VARCHAR(100) | yes |  |  |  |
 | `last_name` | VARCHAR(100) | yes |  |  |  |
+| `preferred_name` | VARCHAR(100) | yes |  |  |  |
 | `membership_number` | VARCHAR(50) | yes |  |  |  |
 | `previous_membership_number` | VARCHAR(50) | yes |  |  |  |
 | `phone` | VARCHAR(20) | yes |  |  |  |

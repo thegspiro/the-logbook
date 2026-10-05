@@ -22,6 +22,7 @@ from app.models.notification import (
     NotificationLog,
 )
 from app.models.user import Role, User, UserStatus
+from app.utils.member_names import format_display_name
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 
@@ -518,14 +519,15 @@ class MessagingService:
         if not author_ids:
             return
         authors_result = await self.db.execute(
-            select(User.id, User.first_name, User.last_name).where(
+            select(User.id, User.first_name, User.last_name, User.preferred_name).where(
                 User.id.in_(author_ids),
                 User.organization_id == organization_id,
             )
         )
         author_map = {
             row.id: (
-                f"{row.first_name or ''} {row.last_name or ''}".strip() or "Unknown"
+                format_display_name(row.first_name, row.last_name, row.preferred_name)
+                or "Unknown"
             )
             for row in authors_result.all()
         }
@@ -1064,8 +1066,7 @@ class MessagingService:
                 {
                     "removed_from_audience": removed,
                     "user_id": str(u.id),
-                    "name": f"{u.first_name or ''} {u.last_name or ''}".strip()
-                    or (u.username or "Unknown"),
+                    "name": u.display_name or (u.username or "Unknown"),
                     "status": (
                         u.status.value if hasattr(u.status, "value") else str(u.status)
                     ),

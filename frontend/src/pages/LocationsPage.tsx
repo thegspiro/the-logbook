@@ -877,7 +877,7 @@ function RoomCard({
               )}
               <span className="truncate font-mono">/display/{room.display_code}</span>
               {!copied && (
-                <Copy className="h-3 w-3 shrink-0 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100" />
+                <Copy className="h-3 w-3 shrink-0 pointer-fine:opacity-0 pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100" />
               )}
             </button>
           )}
@@ -895,7 +895,7 @@ function RoomCard({
               </button>
             )}
             {(onEdit || onDelete) && (
-              <div className="flex items-center gap-0.5 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100">
+              <div className="flex items-center gap-0.5 transition-opacity pointer-fine:opacity-0 pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100">
                 {onEdit && (
                   <button
                     onClick={() => onEdit(room)}
@@ -1212,7 +1212,7 @@ export default function LocationsPage() {
 
   // For single-station mode, show a simplified header
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6">
       {/* Setup Wizard */}
       {showWizard && (
         <LocationSetupWizard

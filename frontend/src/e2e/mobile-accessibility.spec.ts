@@ -226,11 +226,24 @@ test.describe('mobile accessibility', () => {
   // result and replace the assertion's report with a job timeout.
   test.describe.configure({ retries: 0 });
 
-  test('every feature meets WCAG AA in every theme and reflows to 320px', async ({ page }) => {
-    // ~50 routes, each rendered in three themes with an axe run apiece. A clean
-    // run is around ten minutes; the headroom is for CI, where this shares a
-    // runner and a tighter cap was once reached by load alone.
-    test.setTimeout(2_400_000);
+  test('every feature meets WCAG AA in every theme and reflows to 320px @sweep', async ({ page }) => {
+    // ~50 routes, each rendered in three themes with an axe run apiece. Measured
+    // at 16.1 and 19.4 min on dedicated CI runners (2026-10-04, two consecutive
+    // runs of identical code), so 32 min is 1.65x the slower draw rather than
+    // the 2x the other two sweeps get. That 20% run-to-run spread is the reason
+    // the margin is quoted against the slower sample: a budget set at 1.2x a
+    // lucky 16-minute run would go red on an ordinary bad one, which reports
+    // the runner rather than the code.
+    //
+    // It is deliberately not 2x of 19.4 (38.8 min). The job cap in ci.yml is
+    // derived from this number and would have to clear 40, which is where it
+    // started. 12.6 min of headroom catches a hang; a runner slow enough to
+    // exceed 32 has made the whole run pathological anyway.
+    //
+    // It no longer shares a runner — the frontend-e2e matrix gives each sweep
+    // its own — so the old 40 min, set when it did and when a clean run was
+    // believed to be ten minutes, was headroom for a condition that has gone.
+    test.setTimeout(1_920_000);
 
     // Contrast is measured on the settled page, not mid-animation. `EmptyState`
     // fades in over one second (`animate-fade-in`, opacity 0 -> 1) and the audit
