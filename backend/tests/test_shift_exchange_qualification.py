@@ -51,7 +51,9 @@ async def _add_member(db_session, org_id: str, rank: str | None) -> str:
     await db_session.execute(
         text(
             "INSERT INTO users (id, organization_id, username, first_name, "
-            "last_name, email, password_hash, status, rank) VALUES "
+            # `rank` is a reserved word in MySQL 8 (the window function), so
+            # it is quoted; MariaDB accepts it bare, which hid this locally.
+            "last_name, email, password_hash, status, `rank`) VALUES "
             "(:id, :org, :un, 'Test', :ln, :em, 'hashed', 'active', :rank)"
         ),
         {
