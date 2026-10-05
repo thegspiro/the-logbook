@@ -934,11 +934,12 @@ jobs:
     # invalidates. Re-derive this if a @sweep budget changes — the spec files
     # are the source, this is the consequence.
     #
-    # The legs themselves run far below it. Over the two runs of 2026-10-04:
-    # 2.3-2.8 min for each `rest` shard, and 5.6-6.0 / 7.6-7.7 / 16.1-19.4 for
-    # presentation / dialogs / accessibility. The cap is a hang guard, not a
-    # target — but note accessibility's 20% spread across consecutive runs of
-    # identical code, which is what the headroom is for.
+    # The legs themselves run far below it. Whole-job times over the three runs
+    # of 2026-10-04/05: 2.7-3.3 min for each `rest` shard, 6.0-6.4 presentation,
+    # 8.1-8.3 dialogs, 16.4-19.8 accessibility. The cap is a hang guard, not a
+    # target — but note accessibility's spread across runs of identical code
+    # (its test alone reported 16.0, 19.3 and 18.6), which is what the headroom
+    # is for.
     timeout-minutes: 35
     # No `needs:` — see the note on backend-test-integration.
     defaults:
