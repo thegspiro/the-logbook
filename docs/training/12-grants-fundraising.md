@@ -49,12 +49,10 @@ Navigate to **Grants & Fundraising** in the sidebar. The module must be enabled 
 | `fundraising.view`   | View dashboard, opportunities, applications, campaigns, donors, donations, reports                 |
 | `fundraising.manage` | Create/update/delete applications, budget items, expenditures, tasks, campaigns, donors, donations |
 
-> **Corrected 2026-08-12.** **The module has no navigation entry at all.**
-> Neither the sidebar nor the top navigation mentions grants, and nothing
-> outside the module links to `/grants`. Enabling the module makes its pages
-> routable and reachable by typing the URL, and by nothing else — so the
-> navigation this placeholder pictures is precisely what is missing. Recorded
-> in [Grants & Fundraising — Pledges and Fundraising Events](../KNOWN_LIMITATIONS.md#grants--fundraising--pledges-and-fundraising-events-2026-08-08).
+**Finding it.** With the module on, members holding `fundraising.view` see
+**Grants & Fundraising** in the sidebar (or the top bar), with Dashboard,
+Opportunities, Applications, Campaigns, Donors, Donations and Reports beneath
+it.
 
 ---
 

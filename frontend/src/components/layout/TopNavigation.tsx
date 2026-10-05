@@ -29,6 +29,7 @@ import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { usePendingSyncStore } from '../../stores/pendingSyncStore';
 import { triggerOfflineDrain } from '../../hooks/useOfflineSyncEngine';
 import { fitNavItems } from './topNavigationOverflow';
+import { GRANTS_NAV_ITEMS } from './grantsNavigation';
 
 interface TopNavigationProps {
   departmentName: string;
@@ -239,6 +240,16 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
         ...(canReviewLegalDocuments ? [{ label: 'Legal Documents', path: '/governance/legal' }] : []),
       ],
     },
+    ...(isModuleOn('grants')
+      ? [
+          {
+            label: 'Grants & Fundraising',
+            path: '/grants',
+            permission: 'fundraising.view',
+            subItems: GRANTS_NAV_ITEMS.map((item) => ({ ...item, permission: 'fundraising.view' })),
+          } as NavItem,
+        ]
+      : []),
 
     // ── Administration (only for admins) ──
     ...(hasAnyAdminPermission

@@ -1048,16 +1048,11 @@ Same shape, found while capturing `docs/training/12-grants-fundraising.md`.
   no screen. This is the more serious of the two dead links: the pledges one was
   a KPI tile, this was the page's only call to action.
 
-**The module has no navigation entry at all.** Neither `SideNavigation.tsx` nor
-`TopNavigation.tsx` mentions grants, and nothing outside the module links to
-`/grants` — the only references anywhere in `frontend/src` are the module
-catalogue in `types/modules.ts`, the route registration in `App.tsx`, and a
-cache prefix in `utils/apiCache.ts`. Enabling the module makes its pages
-routable and reachable by typing the URL, and by nothing else. That is why
-`docs/training/12-grants-fundraising.md` opens by picturing "the Grants &
-Fundraising sidebar navigation showing Dashboard, Opportunities, Applications,
-Campaigns, Donors, Donations, and Reports": the guide describes the navigation
-the module is missing. That placeholder is left open too.
+**Navigation (resolved 2026-10-05, owner decision).** The module had no
+navigation entry: its pages were reachable only by typing the URL. Both
+navigations now list Grants & Fundraising and its seven pages
+(`components/layout/grantsNavigation.ts`), behind the module switch and
+`fundraising.view`, the routes' own gate.
 
 Verified 2026-08-08 by counting non-test call sites under `frontend/src` for
 each service method and each store action, and by searching both navigation
