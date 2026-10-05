@@ -792,6 +792,11 @@ reports saw a discrepancy with nothing to explain it.
 
 The compliance report evaluates each member's shift attendance and hours against active training requirements of type SHIFTS or HOURS.
 
+The summary cards above the list count **requirement checks** — one per member
+per requirement that applies to them — so a member under three requirements is
+three checks. **Checks Met** and **Checks Not Met** split that total; they are
+not head counts of members.
+
 For each requirement, the report shows:
 
 - Required value (shifts or hours)

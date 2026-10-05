@@ -1592,21 +1592,6 @@ summary rather than committing — worth doing, and not something to bolt onto a
 documentation pass. The guide now says plainly that there is no confirmation
 step.
 
-## Scheduling — The Compliance Report Counts Member-Requirement Pairs (2026-08-10)
-
-`SchedulingReportsPage.tsx` computes the **Total Members** card as
-`complianceData.reduce((sum, r) => sum + r.total_members, 0)` — a sum of
-**per-requirement cohorts**. A member counted under three requirements counts
-three times, so the demo department's 22 members render as "Total Members 66".
-The Compliant and Non-Compliant cards sum the same way: the values are
-member-requirement pairs and the labels claim members.
-
-**Not fixed.** The payload carries no distinct-member count, so correcting it
-means either relabelling the three cards or adding a field to the API — a
-product decision rather than a display one. The captured screenshot
-(`03-14`) accurately shows current behaviour; this row exists so the guide does
-not silently endorse the number.
-
 ## Equipment Checks — Two Legacy Columns Still Written, No Longer Authoritative (2026-08-10)
 
 `check_template_items.lot_number` and `.expiration_date` predate
