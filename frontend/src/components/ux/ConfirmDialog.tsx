@@ -55,7 +55,8 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       icon: AlertTriangle,
       iconBg: 'bg-blue-500/10',
       iconColor: 'text-blue-600 dark:text-blue-400',
-      buttonClass: 'bg-blue-600 hover:bg-blue-700 text-white',
+      buttonClass:
+        'bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover border border-theme-surface-border',
     },
   };
 

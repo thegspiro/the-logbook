@@ -1097,7 +1097,7 @@ export const ElectionDetailPage: React.FC = () => {
                       <div
                         aria-hidden="true"
                         className={`mx-2 h-0.5 flex-1 ${
-                          status === 'upcoming' ? 'bg-theme-surface-border' : 'bg-blue-500'
+                          status === 'upcoming' ? 'bg-theme-surface-border' : 'bg-red-800'
                         }`}
                       />
                     )}
@@ -1110,9 +1110,9 @@ export const ElectionDetailPage: React.FC = () => {
                         aria-hidden="true"
                         className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold ${
                           status === 'completed'
-                            ? 'bg-blue-600 text-white'
+                            ? 'bg-red-800 text-white'
                             : status === 'current'
-                              ? 'bg-blue-600 text-white ring-4 ring-blue-600/20'
+                              ? 'bg-red-800 text-white ring-4 ring-red-800/20'
                               : 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border border'
                         }`}
                       >

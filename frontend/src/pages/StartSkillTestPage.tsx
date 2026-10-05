@@ -558,8 +558,10 @@ export const StartSkillTestPage: React.FC = () => {
         <button
           onClick={() => void handleStart()}
           disabled={!selectedTemplateId || candidates.length === 0 || selfOfficialBlocked || isStarting}
-          className={`flex w-full items-center justify-center gap-3 rounded-xl py-4 text-lg font-bold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-            isPractice ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-800 hover:bg-red-900'
+          className={`flex w-full items-center justify-center gap-3 rounded-xl py-4 text-lg font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+            isPractice
+              ? 'bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover border-theme-surface-border border-2'
+              : 'bg-red-800 text-white hover:bg-red-900'
           }`}
         >
           <Play className="h-6 w-6" />

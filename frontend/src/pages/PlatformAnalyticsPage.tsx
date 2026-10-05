@@ -170,7 +170,7 @@ const PlatformAnalyticsPage: React.FC = () => {
       {(data.loginTrend?.length ?? 0) > 0 && (
         <div className="bg-theme-surface mb-6 rounded-lg p-6 shadow-md backdrop-blur-xs">
           <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Daily Login Activity (30 Days)</h3>
-          <BarChart data={data.loginTrend} color="blue" />
+          <BarChart data={data.loginTrend} color="red" />
         </div>
       )}
 
@@ -337,11 +337,10 @@ const ModuleCard: React.FC<ModuleCardProps> = ({ module }) => {
 
 interface BarChartProps {
   data: DailyCount[];
-  color: 'blue' | 'red' | 'green';
+  color: 'red' | 'green';
 }
 
 const barColors = {
-  blue: { bar: 'bg-blue-600', hover: 'hover:bg-blue-700' },
   red: { bar: 'bg-red-800', hover: 'hover:bg-red-900' },
   green: { bar: 'bg-green-600', hover: 'hover:bg-green-700' },
 } as const;

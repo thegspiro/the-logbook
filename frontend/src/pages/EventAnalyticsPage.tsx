@@ -351,7 +351,7 @@ export const EventAnalyticsPage: React.FC = () => {
                       <div key={m.month} className="flex h-full min-w-[36px] flex-1 flex-col items-center justify-end">
                         <span className="text-theme-text-primary mb-1 text-xs font-medium">{m.count}</span>
                         <div
-                          className="w-full rounded-t bg-blue-500 transition-all"
+                          className="w-full rounded-t bg-red-800 transition-all"
                           style={{ height: `${heightPct}%` }}
                           title={`${monthLabel(m.month)}: ${m.count} events`}
                         />

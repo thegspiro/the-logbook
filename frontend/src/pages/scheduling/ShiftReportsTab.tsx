@@ -1604,7 +1604,7 @@ export const ShiftReportsTab: React.FC = () => {
             >
               {label}
               {mode === 'drafts' && draftBadgeCount > 0 && viewMode !== 'drafts' && (
-                <span className="ml-1 rounded-full bg-blue-600 px-1.5 py-0.5 text-xs leading-none font-bold text-white">
+                <span className="ml-1 rounded-full bg-red-800 px-1.5 py-0.5 text-xs leading-none font-bold text-white">
                   {draftBadgeCount}
                 </span>
               )}
@@ -1689,7 +1689,7 @@ export const ShiftReportsTab: React.FC = () => {
             >
               <FileText className="h-3.5 w-3.5" /> Drafts
               {draftBadgeCount > 0 && viewMode !== 'drafts' && (
-                <span className="ml-1 rounded-full bg-blue-600 px-1.5 py-0.5 text-xs leading-none font-bold text-white">
+                <span className="ml-1 rounded-full bg-red-800 px-1.5 py-0.5 text-xs leading-none font-bold text-white">
                   {draftBadgeCount}
                 </span>
               )}

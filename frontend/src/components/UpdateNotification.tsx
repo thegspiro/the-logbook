@@ -36,7 +36,7 @@ export const UpdateNotification: React.FC = () => {
          put it under the bar: both are z-50 and the bar renders later, so the
          bar won and swallowed "Reload now". Include the safe-area inset as well
          because the navigation extends into it on notched devices. */
-      className="relative z-50 flex items-center justify-center gap-3 bg-blue-600 px-4 py-2 text-sm text-white max-md:fixed max-md:inset-x-0 max-md:bottom-[calc(var(--bottom-nav-height,0px)+env(safe-area-inset-bottom))]"
+      className="relative z-50 flex items-center justify-center gap-3 bg-red-800 px-4 py-2 text-sm text-white max-md:fixed max-md:inset-x-0 max-md:bottom-[calc(var(--bottom-nav-height,0px)+env(safe-area-inset-bottom))]"
     >
       <RefreshCw className="h-4 w-4 shrink-0" aria-hidden="true" />
       {updateBlocked ? (
@@ -44,7 +44,7 @@ export const UpdateNotification: React.FC = () => {
           <span>A new version is available, but this device could not install it automatically.</span>
           <Link
             to="/account?tab=app"
-            className="rounded-sm font-semibold underline underline-offset-2 transition-colors hover:text-blue-100 focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-blue-600 focus:outline-hidden"
+            className="rounded-sm font-semibold underline underline-offset-2 transition-colors hover:text-red-100 focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-red-800 focus:outline-hidden"
           >
             Force refresh
           </Link>
@@ -54,7 +54,7 @@ export const UpdateNotification: React.FC = () => {
           <span>A new version of The Logbook is available.</span>
           <button
             onClick={applyUpdate}
-            className="rounded-sm font-semibold underline underline-offset-2 transition-colors hover:text-blue-100 focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-blue-600 focus:outline-hidden"
+            className="rounded-sm font-semibold underline underline-offset-2 transition-colors hover:text-red-100 focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-red-800 focus:outline-hidden"
           >
             Reload now
           </button>
@@ -62,7 +62,7 @@ export const UpdateNotification: React.FC = () => {
       )}
       <button
         onClick={dismiss}
-        className="absolute top-1/2 right-1 -translate-y-1/2 rounded-sm p-2.5 transition-colors hover:bg-blue-700 focus:ring-2 focus:ring-white focus:outline-hidden"
+        className="absolute top-1/2 right-1 -translate-y-1/2 rounded-sm p-2.5 transition-colors hover:bg-red-900 focus:ring-2 focus:ring-white focus:outline-hidden"
         aria-label="Remind me about this update later"
       >
         <X className="h-4 w-4" aria-hidden="true" />

@@ -51,7 +51,7 @@ const NotificationStack: React.FC<NotificationStackProps> = ({
   return (
     <div data-testid={`notification-stack-${category}`}>
       <div
-        className={`card overflow-hidden rounded-lg transition-all duration-300 ease-in-out ${hasUnread ? 'border-l-4 border-l-blue-500 opacity-100' : 'border-l-4 border-l-transparent opacity-60'}`}
+        className={`card overflow-hidden rounded-lg transition-all duration-300 ease-in-out ${hasUnread ? 'border-l-4 border-l-red-800 opacity-100' : 'border-l-4 border-l-transparent opacity-60'}`}
       >
         <div className="flex items-stretch">
           <button
@@ -80,7 +80,7 @@ const NotificationStack: React.FC<NotificationStackProps> = ({
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 {hasUnread && (
-                  <span className="rounded-full bg-blue-800 px-2 py-0.5 text-xs font-semibold text-white">
+                  <span className="rounded-full bg-red-800 px-2 py-0.5 text-xs font-semibold text-white">
                     {unreadCount} unread
                   </span>
                 )}

@@ -164,7 +164,7 @@ const AnalyticsDashboardPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
                   </div>
                   <div className="bg-theme-surface-secondary h-2 w-full rounded-full">
                     <div
-                      className="h-2 rounded-full bg-blue-600 transition-all duration-300"
+                      className="h-2 rounded-full bg-red-800 transition-all duration-300"
                       style={{ width: `${percentage}%` }}
                     ></div>
                   </div>
@@ -231,7 +231,7 @@ const AnalyticsDashboardPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
               return (
                 <div key={hour} className="flex min-w-[18px] flex-1 flex-col items-center">
                   <div
-                    className="w-full cursor-pointer rounded-t bg-blue-600 transition-all hover:bg-blue-700"
+                    className="w-full cursor-pointer rounded-t bg-red-800 transition-all hover:bg-red-900"
                     style={{ height: `${heightPercent}%` }}
                     title={`${hour}:00 - ${count} events`}
                   ></div>
