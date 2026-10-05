@@ -202,6 +202,11 @@ and "9:00 to 1:00" saved 233 minutes. A time that is not on a quarter hour now
 shows as it is — pick the quarter you mean and the duration beneath the
 pickers will read what gets credited.
 
+For a member who tapped in early, Edit Times opens on the **scheduled start**,
+which is what they are credited from, rather than on the tap. Saving it
+unchanged therefore changes nothing; to credit time before the start, set the
+earlier time yourself.
+
 ---
 
 ## Guest Check-In for Non-Members (2026-08-09)

@@ -4533,10 +4533,6 @@ ones skipped.
   credited, as their titles.
 - **Pending-approval records are hidden by My Training's default date range**
   (it filters on completion date, which a pending record does not have yet).
-- **Edit Times pre-fills an early tap verbatim.** Saving the dialog unchanged
-  turns an early check-in into an override, which is not clamped to the
-  scheduled start. Fixing it needs the backend to report the credited check-in
-  on the RSVP (pitfall #29) rather than the dialog re-deriving it.
 
 ## Events — Attendance-Lock Refusals (2026-09-30)
 

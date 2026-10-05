@@ -20,6 +20,7 @@ from loguru import logger
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
+from sqlalchemy.orm.attributes import set_committed_value
 
 from app.core.config import settings
 from app.models.admin_hours import EVENT_TYPES_WITHOUT_ADMIN_HOURS
@@ -2169,7 +2170,13 @@ class EventService:
         query = query.order_by(EventRSVP.responded_at.desc()).offset(skip).limit(limit)
 
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        rsvps = list(result.scalars().all())
+        # The org-scoped event above is the one these rows belong to; attaching
+        # it lets the endpoint report each member's credited check-in without
+        # a lazy load, which an async session cannot perform.
+        for rsvp in rsvps:
+            set_committed_value(rsvp, "event", event)
+        return rsvps
 
     async def list_event_attendees_for_member(
         self,
@@ -3697,6 +3704,19 @@ class EventService:
         if override is not None and override > check_in_time:
             return override
         return cls._as_utc(rsvp.checked_out_at) or effective_end
+
+    @classmethod
+    def credited_check_in_time(
+        cls, event: Event, rsvp: EventRSVP
+    ) -> Optional[datetime]:
+        """The check-in this member is credited from, for display.
+
+        Reported on the RSVP so the Edit Times dialog can pre-fill it. Left to
+        re-derive it, the dialog pre-filled the raw tap, and saving it unchanged
+        turned an early check-in into an override, which is never clamped
+        (pitfall #29: the screen reports what the backend decided).
+        """
+        return cls._credited_check_in_time(event, rsvp)
 
     @classmethod
     def _credited_check_in_time(

@@ -676,6 +676,13 @@ class RSVPResponse(RSVPBase, UTCResponseBase):
     # way; this is what an organizer looks at to decide whether it should.
     early_check_in_minutes: Optional[int] = None
 
+    # When this member's attendance is credited from: the override if a
+    # manager set one, otherwise the tap clamped forward to the scheduled
+    # start. The Edit Times dialog pre-fills it, so saving that dialog
+    # unchanged cannot turn an early tap into an unclamped override. Only the
+    # roster listing reports it; None elsewhere.
+    credited_check_in_at: Optional[datetime] = None
+
     # Override fields (for manager adjustments)
     override_check_in_at: Optional[datetime] = None
     override_check_out_at: Optional[datetime] = None
