@@ -53,6 +53,7 @@ def _member(status, **kw):
         id=kw.get("id", str(uuid4())),
         status=status,
         full_name=kw.get("full_name", "Jane Smith"),
+        display_name=kw.get("display_name", kw.get("full_name", "Jane Smith")),
         username=kw.get("username", "jsmith"),
         membership_number=kw.get("membership_number"),
         previous_membership_number=kw.get("previous_membership_number"),

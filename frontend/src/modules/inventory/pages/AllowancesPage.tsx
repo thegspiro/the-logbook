@@ -138,7 +138,7 @@ const AllowancesPage: React.FC = () => {
 
         <Link
           to="/inventory/admin"
-          className="text-theme-text-muted hover:text-theme-text-secondary mb-6 flex items-center gap-1 text-sm"
+          className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 mb-6 flex items-center gap-1 text-sm"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Admin
@@ -179,7 +179,7 @@ const AllowancesPage: React.FC = () => {
         ) : allowances.length === 0 ? (
           <div className="card-secondary p-8 text-center">
             <SlidersHorizontal className="text-theme-text-muted mx-auto mb-4 h-12 w-12" />
-            <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">No Allowances Configured</h3>
+            <h2 className="text-theme-text-primary mb-2 text-lg font-semibold">No Allowances Configured</h2>
             <p className="text-theme-text-muted mb-4 text-sm">
               Without allowances, members can be issued unlimited quantities of any category.
             </p>

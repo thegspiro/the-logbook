@@ -380,8 +380,8 @@ class TestBulkEnrollGate:
                 # batch user-name fetch
                 _scalars(
                     [
-                        SimpleNamespace(id=str(u1), first_name="Al", last_name="A"),
-                        SimpleNamespace(id=str(u2), first_name="Bo", last_name="B"),
+                        SimpleNamespace(id=str(u1), display_name="Al A"),
+                        SimpleNamespace(id=str(u2), display_name="Bo B"),
                     ]
                 ),
                 # completed-prerequisite fetch — nobody has completed it
@@ -413,7 +413,7 @@ class TestBulkEnrollGate:
         )
         u1 = uuid4()
         db = RecordingSession(
-            [_scalars([SimpleNamespace(id=str(u1), first_name="Al", last_name="A")])]
+            [_scalars([SimpleNamespace(id=str(u1), display_name="Al A")])]
         )
         svc = TrainingProgramService(db)
         svc.get_program_by_id = AsyncMock(return_value=program)

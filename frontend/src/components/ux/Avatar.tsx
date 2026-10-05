@@ -19,6 +19,8 @@ type Size = keyof typeof SIZE_CLASSES;
 
 interface AvatarProps {
   firstName?: string | null | undefined;
+  /** The name the member goes by; when set it replaces the first name everywhere here. */
+  preferredName?: string | null | undefined;
   lastName?: string | null | undefined;
   photoUrl?: string | null | undefined;
   size?: Size | undefined;
@@ -52,9 +54,18 @@ function getInitials(firstName?: string | null, lastName?: string | null): strin
   return (first + last).toUpperCase() || '?';
 }
 
-export const Avatar: React.FC<AvatarProps> = ({ firstName, lastName, photoUrl, size = 'md', className = '', alt }) => {
+export const Avatar: React.FC<AvatarProps> = ({
+  firstName,
+  preferredName,
+  lastName,
+  photoUrl,
+  size = 'md',
+  className = '',
+  alt,
+}) => {
   const sizeClass = SIZE_CLASSES[size];
-  const fullName = `${firstName || ''} ${lastName || ''}`.trim();
+  const givenName = preferredName?.trim() || firstName;
+  const fullName = `${givenName || ''} ${lastName || ''}`.trim();
   const altText = alt ?? (fullName || 'Member avatar');
 
   if (photoUrl) {
@@ -79,7 +90,7 @@ export const Avatar: React.FC<AvatarProps> = ({ firstName, lastName, photoUrl, s
       aria-label={altText}
       className={`${sizeClass} ${bgClass} flex shrink-0 items-center justify-center rounded-full font-semibold ${className}`}
     >
-      {getInitials(firstName, lastName)}
+      {getInitials(givenName, lastName)}
     </div>
   );
 };

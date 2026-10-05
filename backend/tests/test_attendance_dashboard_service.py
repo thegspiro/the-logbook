@@ -46,6 +46,7 @@ def _member(uid="u1", membership_type="active"):
     return SimpleNamespace(
         id=uid,
         full_name="Jane Smith",
+        display_name="Jane Smith",
         membership_type=membership_type,
         hire_date=None,
         last_name="Smith",
@@ -280,14 +281,16 @@ class TestWaivers:
             waiver_granted_by="admin",
             waiver_granted_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
         )
-        member = SimpleNamespace(full_name="Jane Smith")
-        grantor = SimpleNamespace(full_name="Bob Admin")
+        # The waiver list is an everyday screen: members appear under the
+        # name they go by, not their legal first name.
+        member = SimpleNamespace(full_name="Jane Smith", display_name="Janie Smith")
+        grantor = SimpleNamespace(full_name="Robert Admin", display_name="Bob Admin")
         db = MagicMock()
         db.execute = AsyncMock(
             side_effect=[_scalars([waiver]), _one(member), _one(grantor)]
         )
         out = await AttendanceDashboardService(db).list_waivers("m1", "org-1")
-        assert out[0]["member_name"] == "Jane Smith"
+        assert out[0]["member_name"] == "Janie Smith"
         assert out[0]["granted_by_name"] == "Bob Admin"
 
     async def test_list_waivers_scopes_member_and_grantor_lookup_to_org(self):
@@ -302,8 +305,8 @@ class TestWaivers:
             waiver_granted_by="admin",
             waiver_granted_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
         )
-        member = SimpleNamespace(full_name="Jane Smith")
-        grantor = SimpleNamespace(full_name="Bob Admin")
+        member = SimpleNamespace(full_name="Jane Smith", display_name="Jane Smith")
+        grantor = SimpleNamespace(full_name="Bob Admin", display_name="Bob Admin")
         captured = []
 
         async def _execute(stmt):

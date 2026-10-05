@@ -16,6 +16,47 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2924](https://github.com/thegspiro/the-logbook/pull/2924)**: branch
+`claude/security-review-auth-session`, Feature 01 (Auth & session
+lifecycle), pass 7.
+
+- **Result:** 0 fixes, 0 new findings, 0 flagged. Docs-only diff.
+- **Method:** six of twelve scoped files had changed since pass 6's baseline
+  (`6da437f21`, PR #2593) — all other tracks' already-landed work, each
+  re-verified under the seven-dimension checklist. All 26 routes in
+  `auth.py` individually re-enumerated; unchanged.
+- **Still open:** AUTH-15 (HIPAA max password age, browser-only), AUTH-17
+  (no session reaper), both re-confirmed unchanged. AUTH-21 (app-review
+  track, refresh-replay race) also re-confirmed unchanged.
+- **Also in this PR:** the #2917 closure (docs-only, nothing else to
+  record).
+- **Gate:** backend flake8/black/isort clean, `validate_migrations.py
+--strict` (511 revisions, single head), 777 scoped + 67 standing-guard
+  backend tests, full backend unit suite (12534 passed, 1 pre-existing
+  skip), frontend typecheck and lint clean.
+- **Watching:** subscribed for CI/review events.
+
+Full write-up:
+[`AUTH-01-auth-session.md`](./AUTH-01-auth-session.md) → Pass 7.
+
+<details>
+<summary>Superseded — prior Open PR note (PR #2917 merged, docs-only; rotation picked up Feature 01 — the state this PR opened from), preserved for history</summary>
+
+**None open from the prior pass.** PR
+[#2917](https://github.com/thegspiro/the-logbook/pull/2917) (Feature 00,
+Cross-cutting baseline, pass 7) merged — docs-only (only `PROGRESS.md` and
+`SEC-00-cross-cutting-baseline.md` changed), 0 fixes, 0 new findings, so per
+the docs-only-PR rule there is nothing else to record about it beyond
+clearing this row. Independently re-confirmed via `list_pull_requests`
+(state=open) that no `claude/security-review-*` PR existed. Rotation row 00
+stayed ✅. This iteration picked up Feature 01 (Auth & session lifecycle,
+pass 7), recorded above once its own PR was opened.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 00, Cross-cutting baseline, pass 7, PR #2917, before it merged), preserved for history</summary>
+
 **PR [#2917](https://github.com/thegspiro/the-logbook/pull/2917)**: branch
 `claude/security-review-cross-cutting-pass7`, Feature 00 (Cross-cutting
 baseline), pass 7, which is also rotation pass 7's first row.
@@ -35,6 +76,8 @@ baseline), pass 7, which is also rotation pass 7's first row.
 Full write-up:
 [`SEC-00-cross-cutting-baseline.md`](./SEC-00-cross-cutting-baseline.md) →
 Pass 7.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #2915 merged; rotation pass 6 complete and reset — the state this PR opened from), preserved for history</summary>
@@ -17474,7 +17517,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | #   | Feature                   | Prefix | Principal code                                                                                                                                  | Status |
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
-| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ⬜     |
+| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
@@ -17515,6 +17558,55 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-05 — PR #2917 merge recorded; Feature 01 (Auth & session lifecycle, pass 7) — 0 fixed, 0 new findings, 0 flagged
+
+**Closure.** PR [#2917](https://github.com/thegspiro/the-logbook/pull/2917)
+(Feature 00, Cross-cutting baseline, pass 7) merged, docs-only (only
+`PROGRESS.md` and `SEC-00-cross-cutting-baseline.md` changed) — per the
+docs-only-PR rule there is nothing to record beyond clearing the **Open PR**
+row, which still named it. Independently re-confirmed via `list_pull_requests`
+(state=open) that no `claude/security-review-*` PR exists. Proceeded to
+Feature 01.
+
+**Feature 01, pass 7.** Six of this feature's twelve scoped files changed
+since pass 6's baseline (`6da437f21`, PR #2593 — fetched via the GitHub REST
+API since the shallow clone's commit messages don't carry a PR-number grep
+trail for passes 5–6; the clone needed deepening to reach it). All six
+changes are other tracks' work, landed before this pass started: a
+WebSocket-safe retyping of `get_request_enabled_modules` (module-gating
+infrastructure, not this feature's own auth-resolution functions), a
+branding-lookup deduplication, three `== True` → `.is_(True)` lint
+corrections, a new validated `bottom_nav_slots` field on `/auth/me`, an
+`expires_in_minutes` field added to both `forgot-password` response
+branches (identical on each, so no enumeration signal), and a real
+hardening fix (workflow-review W04) closing an MFA-lockout-counter-reset
+bypass — verified both halves: the password step no longer zeroes
+`failed_login_attempts` for an MFA-enabled account, and `mfa_login` still
+zeroes it only after the second factor verifies. All read in full and
+reviewed under the seven-dimension checklist; none raised a new finding.
+
+All 26 routes in `auth.py` were individually re-enumerated against their
+current handler signatures (not grepped from memory) — still 14 public / 12
+private, still exactly `ALLOWLISTED_PUBLIC`'s 14 entries, no route added,
+removed, or re-gated. AUTH-15 (HIPAA max password age, browser-only) and
+AUTH-17 (no session reaper) re-checked at current line numbers — both still
+accurate, still 🚩 FLAGGED, still correctly mirrored in
+`KNOWN_LIMITATIONS.md`. AUTH-21 (app-review track, refresh-replay race)
+re-confirmed unchanged. One "considered and not raised" note added: a
+request to `/mfa/login` carrying neither `code` nor `recovery_code` reaches
+the failed-attempt counter without the row lock the password path and every
+actual code-guess take — but a contentless request guesses nothing, so
+racing it has no attacker value.
+
+**0 fixed, 0 new findings, 0 flagged.** Gate: backend flake8 (7.3.0)/black
+(26.5.1)/isort (9.0.1) all clean on `app/`, `tests/`, `alembic/`;
+`validate_migrations.py --strict` (511 revisions, single head
+`edf608b5a8ea`); 777 scoped backend tests + 67 standing guard tests passed;
+full backend unit suite passed (12534 passed, 1 pre-existing skip, 0 failed);
+frontend `npm run typecheck` and `npm run lint` both clean. Rotation row 01 is
+✅. Findings doc: `AUTH-01-auth-session.md` → **Pass 7**. Next: Feature 02
+(Permissions & roles).
 
 ### 2026-10-04 — Pass 6 complete; rotation reset to ⬜ for pass 7; PR #2915 merge recorded; Feature 00 (Cross-cutting baseline, pass 7) — 0 fixed, 0 new findings — PR #2917 opened
 

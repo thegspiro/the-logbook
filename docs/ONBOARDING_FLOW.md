@@ -34,14 +34,17 @@ cannot fall out of step with this.
 └─ v
 ┌─ 2. System Owner ────────────────────── /onboarding/system-owner   REQUIRED
 │  POST /onboarding/system-owner
-│  Username, email, password (12+ chars), name, membership number.
+│  Username, email, password (12+ chars, no runs, no triple repeats),
+│  name, membership number. Arriving with the account already made
+│  moves straight on (no dead-end Back).
 │  Sets the auth cookies — the admin is signed in from here on, so
 │  every step below runs against a real account rather than an
 │  anonymous session, and a lapsed session is recoverable.
 └─ v
 ┌─ 3. Module Overview ─────────────────── /onboarding/modules
 │  POST /onboarding/session/modules
-│  Per module: "Enable" (in place), "Configure Later", or "Ignore".
+│  Per module: "Enable" (in place), "Later", or "Skip".
+│  Continue reads "Continue to Ranks & Positions".
 │  Asked before positions so permissions are set against a known set.
 └─ v
 ┌─ 4. Ranks & Positions ───────────────── /onboarding/positions
@@ -63,9 +66,10 @@ cannot fall out of step with this.
 │  Unit number, type, minimum staffing, riding positions. Skippable.
 │  CREATES BasicApparatus per unit.
 └─ v
-┌─ 7. IT Team & Backup Access ─────────── /onboarding/it-team
+┌─ 7. IT & Backup Contacts ────────────── /onboarding/it-team      optional
 │  POST /onboarding/session/it-team
 │  IT contacts and backup access, each with an optional operational rank.
+│  "Skip for now" saves an empty step (2026-09-27).
 │  Contacts become user accounts at completion, with must_change_password
 │  set and the rank applied if it still resolves.
 └─ v
@@ -85,12 +89,13 @@ cannot fall out of step with this.
 │  Per-platform credential form. Skipping stores the platform choice
 │  without credentials rather than discarding the step.
 └─ v
-┌─ 10. Authentication Choice ──────────── /onboarding/authentication
-│  Local password / Google / Microsoft / Authentik
+┌─ 10. Sign-In Method ─────────────────── /onboarding/authentication
+│  Local password / Google / Microsoft / Authentik (Authentik has no
+│  sign-in behind it — W01-11, KNOWN_LIMITATIONS)
 └─ v
 ┌─ 11. Navigation Choice ──────────────── /onboarding/navigation-choice
-│  Top bar or left sidebar. Stored per-browser in localStorage
-│  (see KNOWN_LIMITATIONS ONBOARD-5).
+│  Top bar or left sidebar, saved to the organization as
+│  navigation_layout (Settings → Profile → Navigation Layout later).
 │  Last step, so this is where POST /onboarding/complete is called.
 └─ v
 ┌─ Setup Complete ─────────────────────── /onboarding/complete
@@ -109,6 +114,47 @@ cannot fall out of step with this.
 > from elsewhere (email, file storage, sign-in) sit at the end, because those
 > are the ones that send an operator away mid-flow. Only steps 1 and 2 are
 > required; `complete_onboarding` enforces exactly those two.
+
+## Changes from the September 2026 workflow review and copy pass
+
+The wizard was driven in a browser on three fresh installs (workflow review
+W01, 2026-09-27; `docs/workflow-review/W01-onboarding.md`) and its copy was
+rewritten in plain language (2026-09-29). What a reader of the sections below
+needs to know:
+
+- **Headings renamed:** Authentication → **Sign-In Method** (_"How should
+  members sign in?"_); IT Team & Backup Access → **IT & Backup Contacts**; the
+  System Owner step's subtitle is _"This is your administrator account"_.
+  "Smart Recommendation" panels read **Recommended for you**.
+- **Optional steps say so plainly** — _"This step is optional. You can skip
+  it."_ — instead of "Skip is a complete answer".
+- **The administrator password checklist lists every server rule**, including
+  no runs (123, abc) and no character three times in a row. Before, a password
+  that ticked every listed rule could still be refused with "Password cannot
+  contain sequential characters" and both fields cleared (W01-2).
+- **Apparatus can ride the same position twice** — an engine with two
+  firefighters — and seats are removed one at a time (W01-6).
+- **No sideways scroll on a phone.** The progress strip's hidden labels
+  widened every step by ~1,450px at 390px (W01-8).
+- **Organization Setup** shows the ZIP error beside the field and ties every
+  error to its field for screen readers (W01-1).
+- **The completion page** reports a skipped email step as **Not set up yet** and
+  a deferred storage step as **Local storage (set up later)**, where both read
+  "Other" (W01-9).
+- **Reset Progress** clears the session cookies and no longer leaves the
+  organization step hammering the server — see [Reset Onboarding](#reset-onboarding).
+- **The email test** _(copy)_ says what it does: _"Checks that The Logbook can
+  connect and sign in. No email is sent."_
+- **Local file storage's configuration page** describes itself — _"Choose
+  where on the server documents, photos, and attachments are kept."_ — and its
+  skip button reads **Use the default folder** (was "I'll add these later"),
+  confirmed by _"Using the server's default storage folder"_ rather than a
+  warning about missing credentials.
+
+Still open from the review: Authentik is offered with no sign-in behind it
+(W01-11, `docs/KNOWN_LIMITATIONS.md`), a backup recovery email identical to the
+administrator's is accepted (W01-12), and the Modules step's card buttons and
+the Ranks & Positions row controls are under 44px on a phone (W01-13).
 
 ## Page-by-Page Navigation Details
 
@@ -382,9 +428,12 @@ history and inventory on top of these.
 
 - Button: "Continue" → `/onboarding/complete` (finalizes setup first)
 
-**Data Storage**: Zustand store (persisted to localStorage)
-
-- `navigationLayout` = "top" | "left"
+**Data Storage**: saved to the organization through `saveDepartmentInfo` as
+`navigation_layout` ("top" | "left") before setup is finalized, and applied to
+every member from their first sign-in; the wizard's own store and
+`sessionStorage` only carry it between steps. The page asks _"Where should the
+main menu go?"_ and says _"You can change this later in Settings."_ — under
+**Settings → Organization → Profile → Navigation Layout**.
 
 ---
 
@@ -710,9 +759,14 @@ tells the frontend to set `has_session`.
 
 ---
 
-### IT Team & Backup Access (`/onboarding/it-team`)
+### IT & Backup Contacts (`/onboarding/it-team`)
 
-**Purpose**: Configure IT team contact and backup access
+**Purpose**: Configure IT team contact and backup access. Titled **IT &
+Backup Contacts** since 2026-09-29 (was IT Team & Backup Access), and
+**optional**: _"Optional. Choose Skip for now if your department has no IT
+contact."_ Until 2026-09-27 there was no Skip, and Continue demanded five
+fields; **Skip for now** now saves an empty step. Every field has a visible,
+programmatic label (W01-7).
 
 **Form Fields**:
 
@@ -927,6 +981,14 @@ positions are protected by the handler rather than by an empty request.
 ### Module Overview (`/onboarding/modules`)
 
 **Purpose**: Select and configure optional modules
+
+Each module card offers **Enable**, **Later** (set it up after onboarding) and
+**Skip** _(labels from 2026-09-29; they read Later / Skip For Now / Ignore)_.
+The heading is **Choose Your Modules** — _"Turn on the features your department
+will use"_ — and the button reads **Continue to Ranks & Positions** (it said
+"Complete Setup & Go to Dashboard" and went to step 4 of 11; W01-3). Back is
+replaced by a note that the organization and account are already saved,
+because those steps cannot be revisited (W01-5).
 
 **Module Categories**:
 
@@ -1665,6 +1727,18 @@ Use the admin panel to manage settings.` So it is a bootstrap-only escape
   missing entirely the reset is refused rather than allowed —
   `System-owner role is missing; onboarding cannot be reset safely.` — failing
   closed on the one operation where failing open would be unrecoverable.
+
+**The reset clears the caller's auth cookies** _(2026-09-27, W01-10)_. It
+deletes every user, so the System Owner's cookies named a deleted user, and
+`/onboarding/start` refuses invalid credentials rather than treating them as
+anonymous. Organization Setup then retried in a tight loop (~75 requests a
+second, into its rate limit) with nothing on screen. The response now clears
+the cookies (`_clear_auth_cookies`), and the page tries once on arrival, says
+so if that fails, and retries on **Continue**.
+
+The wizard's dialog asks **Start setup over?** — listing _"Discard every step
+you have completed"_ and _"Delete the records setup has saved"_ — with **Keep
+my progress** and **Yes, start over** _(wording from 2026-09-29)_.
 
 Returns `{ success, message, next_step }`, where `next_step` is
 `"Navigate to /onboarding/start to begin again"` — the only pointer a caller

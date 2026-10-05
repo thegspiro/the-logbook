@@ -1708,6 +1708,37 @@ class TestOfficerAnalyticsScope:
         assert department["total_reports"] == 2
         assert department["total_hours"] == 18.0
 
+    async def test_trainees_are_named_by_preferred_name(
+        self, db_session, setup_shift_with_crew
+    ):
+        """The per-trainee summary groups by the name columns it selects, so
+        ``preferred_name`` must be in the GROUP BY or MySQL's
+        ONLY_FULL_GROUP_BY rejects the query."""
+        d = setup_shift_with_crew
+        await db_session.execute(
+            text(
+                "UPDATE users SET first_name = 'John', last_name = 'Heather', "
+                "preferred_name = 'Terry' WHERE id = :id"
+            ),
+            {"id": d["crew_1"]},
+        )
+        svc = ShiftCompletionService(db_session)
+        today = date.today()
+        await self._file(svc, d, d["officer_id"], d["crew_1"], today, 12.0)
+        await self._file(svc, d, d["officer_id"], d["crew_1"], today, 6.0)
+        await self._file(svc, d, d["officer_id"], d["crew_2"], today, 4.0)
+
+        analytics = await svc.get_officer_analytics(uuid.UUID(d["org_id"]))
+
+        by_id = {t["trainee_id"]: t for t in analytics["trainees"]}
+        assert by_id[d["crew_1"]]["name"] == "Terry Heather"
+        assert by_id[d["crew_1"]]["reports"] == 2
+        assert by_id[d["crew_2"]]["name"] != "Terry Heather"
+
+        crew = await svc.get_shift_crew_status(uuid.UUID(d["org_id"]), d["shift_id"])
+        names = {m["user_id"]: m["user_name"] for m in crew}
+        assert names[d["crew_1"]] == "Terry Heather"
+
     async def test_monthly_trend_keeps_the_latest_six_months(
         self, db_session, setup_shift_with_crew
     ):

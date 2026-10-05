@@ -1228,7 +1228,7 @@ class ApparatusOperatorResponse(ApparatusOperatorBase):
             if not data.get("user_name"):
                 user = data.get("user")
                 if user is not None:
-                    data["user_name"] = getattr(user, "full_name", None)
+                    data["user_name"] = getattr(user, "display_name", None)
             return data
         if getattr(data, "user_name", None):
             return data
@@ -1240,7 +1240,7 @@ class ApparatusOperatorResponse(ApparatusOperatorBase):
                     for field in cls.model_fields
                     if field != "user_name"
                 },
-                "user_name": getattr(user, "full_name", None),
+                "user_name": getattr(user, "display_name", None),
             }
         return data
 

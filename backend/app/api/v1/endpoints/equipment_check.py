@@ -1484,6 +1484,8 @@ async def export_csv(
             date_to=date_to,
             apparatus_id=apparatus_id,
             limit=10000,
+            # Exports are records of note: checkers by legal name.
+            legal_names=True,
         )
         writer.writerow(
             [
@@ -1517,6 +1519,7 @@ async def export_csv(
             template_item_id=template_item_id,
             date_from=date_from,
             date_to=date_to,
+            legal_names=True,
         )
         writer.writerow(
             [
@@ -1600,6 +1603,8 @@ async def export_pdf(
             date_to=date_to,
             apparatus_id=apparatus_id,
             limit=10000,
+            # Exports are records of note: checkers by legal name.
+            legal_names=True,
         )
         pdf_bytes = generate_failure_log_pdf(
             data,

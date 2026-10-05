@@ -207,8 +207,7 @@ class EventAttendancePetitionService:
         )
         names: Dict[str, str] = {}
         for user in result.scalars().all():
-            full = f"{user.first_name or ''} {user.last_name or ''}".strip()
-            names[str(user.id)] = full or user.username
+            names[str(user.id)] = user.display_name or user.username
         return names
 
     # ------------------------------------------------------------------

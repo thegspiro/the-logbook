@@ -198,6 +198,31 @@ the audit log as `email_link_domain_changed`. If the saved host is later removed
 from the server's configuration, the saved address is ignored and links use
 `FRONTEND_URL` again.
 
+**Station-only addresses are reported, not refused** _(2026-09-28)_. An address
+that works only inside the station's network — a private or link-local IP
+(`192.168.x.x`, `10.x.x.x`), a name ending `.local`, `.lan`, `.internal`,
+`.intranet`, `.home.arpa` or `.localdomain`, or a single-label name such as
+`http://tower` — looks fine to everyone setting the system up at the station,
+while every link **and the logo** in outgoing email fails for a member reading
+at home. Because it can be a deliberate choice, it is a warning rather than a
+block:
+
+- at startup, in any environment, when email is enabled:
+  `WARNING: FRONTEND_URL is '…', which only resolves inside a local network.`;
+- on the _Email link address_ card ("This address only works inside your
+  station's network…");
+- at the top of **Communications → Email Templates**, linking to that card,
+  whenever the address is loopback or station-only — the preview there looks
+  right precisely because the admin is on the station network.
+
+Loopback is still its own, blocking case in production (above). To clear the
+warning, set the address members use from outside.
+
+**Test sends use this address too** _(2026-09-28)_. "Send Test to Me" and the
+template preview build each sample link on `FRONTEND_URL` with the path the
+real sender uses, and fill the footer with the department's own contact
+details, so a test is a fair check of where the real links will go.
+
 ### Which configuration wins _(2026-09-15)_
 
 Both options above are **deployment-wide**. A department can also configure its
@@ -232,7 +257,13 @@ These headers are set by the application code and require no configuration:
   because the SMTP path sets them on the MIME message and the Cloudflare API
   takes structured fields instead
 - **`List-Unsubscribe-Post`** — One-click unsubscribe support (RFC 8058)
-- **`Reply-To`** — Set to the election admin's email on ballot notifications
+- **`Reply-To`** _(2026-09-25)_ — Set to the department's own contact email (the address
+  templates show as `{{organization_email}}`) on every message, so replies to
+  an unattended `noreply@` sender reach somebody; a sender can name a different
+  one (ballot notifications name the election administrator). With no usable
+  department address the header is left off and replies go to the From address.
+  The footer library no longer tells members not to reply (migration
+  `3f3b315165ed`, 2026-09-25, removed the seeded line from saved footers)
 - **EHLO hostname** — Uses `SMTP_EHLO_HOSTNAME` or the `SMTP_FROM_EMAIL`
   domain instead of the container's local hostname
 
@@ -301,23 +332,24 @@ than Gmail in several areas:
 The following changes were made in the application code to improve email
 deliverability without requiring DNS or SMTP configuration changes:
 
-| Improvement               | Description                                                                                                                                                             |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Message-ID header**     | All outgoing emails include a proper RFC 5322 `Message-ID` header, satisfying Gmail and Microsoft authentication checks                                                 |
-| **Batch rate limiting**   | Large recipient lists are rate-limited per batch to avoid triggering bulk-send throttles (Gmail: ~100/min, Microsoft: ~30/connection)                                   |
-| **Inline CSS**            | All email template styles are inlined directly on HTML elements. Gmail strips `<style>` tags from email bodies, so inline styles ensure consistent rendering            |
-| **SMTP connection reuse** | SMTP connections are reused within a batch send operation, reducing connection overhead and improving throughput for large batches                                      |
-| **Hosted logo images**    | Organization logos use hosted image URLs instead of base64 data URIs. Gmail clips emails exceeding ~102 KB, and base64-encoded logos easily push emails past this limit |
-| **Admin email templates** | Administrators can send emails using saved templates directly from the admin interface                                                                                  |
+| Improvement               | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Message-ID header**     | All outgoing emails include a proper RFC 5322 `Message-ID` header, satisfying Gmail and Microsoft authentication checks                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| **Batch rate limiting**   | Large recipient lists are rate-limited per batch to avoid triggering bulk-send throttles (Gmail: ~100/min, Microsoft: ~30/connection)                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| **Inline CSS**            | All email template styles are inlined directly on HTML elements. Gmail strips `<style>` tags from email bodies, so inline styles ensure consistent rendering                                                                                                                                                                                                                                                                                                                                                                                               |
+| **SMTP connection reuse** | SMTP connections are reused within a batch send operation, reducing connection overhead and improving throughput for large batches                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| **Hosted logo images**    | Organization logos use hosted image URLs instead of base64 data URIs. Gmail clips emails exceeding ~102 KB, and base64-encoded logos easily push emails past this limit. _(2026-09-25)_ An **uploaded** logo (stored as a data URI) is now linked as `/api/public/v1/branding/email-logo?v=<digest>` — a 96px transparent rendering, cached a year, rate limited 600/min per IP; a replaced logo gets a new digest and the old URL answers 404. No logo is linked while `FRONTEND_URL` is loopback. Before this, an uploaded crest never appeared in email |
+| **Admin email templates** | Administrators can send emails using saved templates directly from the admin interface                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 ### Edge Cases
 
-| Scenario                          | Behavior                                                  |
-| --------------------------------- | --------------------------------------------------------- |
-| Logo image URL not accessible     | Falls back to text-only header with organization name     |
-| Batch > 50 recipients (Gmail)     | Rate-limited with 1-second delays between sub-batches     |
-| Email client without CSS support  | Inline styles ensure basic formatting is preserved        |
-| SMTP connection timeout mid-batch | Automatic reconnection and retry for remaining recipients |
+| Scenario                          | Behavior                                                                                                                                                                                                                                              |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Logo image URL not accessible     | Falls back to text-only header with organization name                                                                                                                                                                                                 |
+| Logo set as a link, not a file    | Refused on save since 2026-09-28: "Upload the logo as a PNG or JPEG file rather than a link." A changed logo is validated and re-encoded like onboarding's (PNG/JPEG, ≤5 MB, ≤4096 px); an external URL cannot be served through the email logo route |
+| Batch > 50 recipients (Gmail)     | Rate-limited with 1-second delays between sub-batches                                                                                                                                                                                                 |
+| Email client without CSS support  | Inline styles ensure basic formatting is preserved                                                                                                                                                                                                    |
+| SMTP connection timeout mid-batch | Automatic reconnection and retry for remaining recipients                                                                                                                                                                                             |
 
 ## 9. Inventory Notification Circuit Breaker (2026-05-02)
 

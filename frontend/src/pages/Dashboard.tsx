@@ -70,6 +70,7 @@ import {
 } from '../utils/eventHelpers';
 import { requirementTarget } from '../utils/pipelineProgress';
 import { formatHours } from '../utils/hoursFormatting';
+import { givenName } from '../utils/memberName';
 import { useTimezone } from '../hooks/useTimezone';
 import { useEnabledModules } from '../hooks/useEnabledModules';
 import {
@@ -1553,7 +1554,7 @@ const Dashboard: React.FC = () => {
 
   useRegisterPullToRefresh(refreshDashboard);
 
-  const firstName = currentUser?.first_name?.trim();
+  const firstName = currentUser ? givenName(currentUser) : '';
   const greeting = firstName ? `Hi, ${firstName}` : `Welcome to ${departmentName}`;
 
   const renderTimelineRow = (entry: TimelineEntry, index: number) => {

@@ -209,7 +209,7 @@ const SortableFieldRow = ({
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-1 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100">
+      <div className="flex items-center gap-1 transition-opacity pointer-fine:opacity-0 pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100">
         <button
           type="button"
           onClick={() => {

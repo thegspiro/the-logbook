@@ -55,6 +55,8 @@ organization in Organization/Admin Settings > Modules (`enabled_modules`).
 
 ![Member storefront with the order window banner and product grid](./images/18-01-member-storefront.png)
 
+**[SCREENSHOT — CHECK `18-01-member-storefront.png`.** A window with no description now reads "Open for orders.", and the cart button **Review order** (was Review); replace if either is in frame.**]**
+
 ---
 
 ## Turning the Store On
@@ -177,13 +179,13 @@ stops sending it; all nine start switched on.
 
 **Order notices**
 
-| Switch             | Who gets it, and when                                                                   |
-| ------------------ | --------------------------------------------------------------------------------------- |
-| Order confirmation | The member, the moment they order — their receipt and how to pay                        |
-| Status changes     | The member, when their order becomes ordered, ready for pickup, picked up, or cancelled |
-| Payment receipts   | The member, when you record a payment, waive one, or record a refund                    |
-| Payment reminders  | Members still carrying a balance, after N days                                          |
-| New order alert    | You and the addresses in **Extra notification recipients**, each time an order lands    |
+| Switch             | Who gets it, and when                                                                                                    |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| Order confirmation | The member, the moment they order — their receipt and how to pay                                                         |
+| Status changes     | The member, when their order becomes ordered, ready for pickup, picked up, or cancelled                                  |
+| Payment receipts   | The member, when you record a payment, waive one, or record a refund                                                     |
+| Payment reminders  | Members still carrying a balance, after N days                                                                           |
+| New order alert    | You and the addresses in **Extra recipients for new order alerts (comma-separated)**, each time a member places an order |
 
 **Order window notices**
 
@@ -321,6 +323,8 @@ with an answer.
 
 ![Store administration settings with the payment method options](./images/18-02-store-admin.png)
 
+**[SCREENSHOT — CHECK `18-02-store-admin.png`.** If the frame reaches the notification settings, the fields now read **Last call reminder (hours before close)** and **Extra recipients for new order alerts (comma-separated)**.**]**
+
 ---
 
 ## Building the Catalog
@@ -420,11 +424,24 @@ When creating a window, choose either **all active products** or a specific
 list. The specific list is how you run a "Class B uniforms only" window without
 archiving the rest of the catalog.
 
-Opening a window can **email the membership**; closing it can **email everyone
-who ordered**. The window-closing reminder goes out automatically based on your
-notification settings.
+Each window row carries **Open ordering** and **Close ordering** (they read
+Open and Close before 2026-09-29), and its confirmation button repeats the
+same words. Opening a window can **email the membership**; closing it can
+**email everyone who ordered about what happens next**, with an optional
+**Extra message for the email**. The "last call" reminder goes out
+automatically, **Last call reminder (hours before close)** hours ahead, per
+your notification settings. A window's closing date is entered as **Ordering
+closes**.
+
+**Times in store emails are the department's** _(2026-09-25)_. The
+window-open and last-call emails printed the closing time in UTC ("…at 11:00
+PM UTC"); they now print it in the timezone under **Settings → Organization →
+Profile → Timezone**. The orders CSV's submitted time is local too, with the
+zone's abbreviation, where it said UTC (2026-09-27).
 
 ![Store order windows tab with the open window and its order totals](./images/18-03-order-windows.png)
+
+**[SCREENSHOT — REPLACE `18-03-order-windows.png`.** The window row's buttons now read **Open ordering** / **Close ordering** and **Record vendor order** (or **Update vendor order** once recorded); counts read "1 order" / "3 orders" rather than "order(s)".**]**
 
 ---
 
@@ -435,8 +452,8 @@ At `/store`:
 1. Browse the products in the open window.
 2. Pick a size or colour if the item has options.
 3. Type the personalization if offered.
-4. Set quantity and **Add to cart**.
-5. Review the cart — subtotal, tax, shipping, total.
+4. Set quantity and tap **Add to cart · $(line total)** (the button read "Add $…").
+5. Tap **Review order** and check the cart — subtotal, tax, shipping, total.
 6. Choose **pickup** or **shipping** (shipping asks for an address).
 7. Choose a payment method.
 8. Add notes if you need to, then **Place order**.
@@ -500,6 +517,8 @@ transfer happens in the app.
 
 ![My Orders showing an unpaid order with its balance and payment options](./images/18-04-my-orders-unpaid.png)
 
+**[SCREENSHOT — REPLACE `18-04-my-orders-unpaid.png`.** The payment line now reads "Include **ORD-…** as the reference on your payment." (was "Reference ORD-… on your payment"), and item counts read "1 item" / "3 items".**]**
+
 ---
 
 ## Working the Orders
@@ -515,28 +534,32 @@ payments reported and recorded, refunds and messages.
 
 ![Store Admin's Overview: the activity counts across the top and the order-workflow breakdown counting each order status the Orders list can be filtered by](./images/19-08-store-admin-activity.png)
 
+**[SCREENSHOT — CHECK `19-08-store-admin-activity.png`.** The recent-updates panel now reads "Newest first" and its empty state "No order updates in the last 7 days."; replace if visible.**]**
+
 **Department Store > Orders tab.** Filter by window, status, or payment status.
 
 ![Store Admin's Orders tab narrowed to paid orders, the list showing only the two the status filter matches](./images/19-06-store-admin-orders.png)
+
+**[SCREENSHOT — REPLACE `19-06-store-admin-orders.png`.** The export button reads **Export CSV** (was Export), the bulk control **New status for selected orders** (was Bulk status), and rows read "1 item" / "2 items".**]**
 
 Filters: window, order status, payment status, and **payment method**. That
 last one is how you reconcile — each app pays out separately, so "show me
 everyone who paid by Zelle" is the question you actually have in front of a
 bank statement.
 
-| Action         | What it does                                                    |
-| -------------- | --------------------------------------------------------------- |
-| Set status     | Move through submitted → ordered → ready for pickup → fulfilled |
-| Mark paid      | Settle the whole remaining balance in one click                 |
-| Record payment | Enter a specific amount (partial payments)                      |
-| Waive          | Clear the balance without money changing hands                  |
-| Refund         | Record money going back                                         |
-| Message        | Post an update to the member (optionally emailing them)         |
-| Internal notes | Notes only staff see                                            |
-| Cancel         | Cancel the order                                                |
+| Action                                | What it does                                                                              |
+| ------------------------------------- | ----------------------------------------------------------------------------------------- |
+| **Change status** → **Update status** | Move through submitted → ordered → ready for pickup → fulfilled                           |
+| Mark paid                             | Settle the whole remaining balance in one click                                           |
+| **Record payment**                    | Enter a specific amount (partial payments)                                                |
+| **Waive payment**                     | Settle the balance without collecting money; the window's collected total does not change |
+| Refund                                | Record money going back                                                                   |
+| Message → **Send update**             | Post an update to the member (optionally emailing them)                                   |
+| Internal notes                        | Notes only staff see                                                                      |
+| Cancel                                | Cancel the order                                                                          |
 
-Select several orders and use **Mark selected paid** or the bulk status change
-to move a whole window at once — "everything's in, mark them all ready for
+Select several orders and use **Mark selected paid** or **New status for
+selected orders** to move a whole window at once — "everything's in, mark them all ready for
 pickup" is one action, not forty.
 
 ### Two statuses, not one
@@ -573,7 +596,7 @@ payment — a Venmo transaction, a check number, or just "handed over at drill".
 Use **Record payment** when somebody pays part of it, or when you need the
 amount on record to differ from the balance.
 
-**Waive** is for the cases where the balance goes away without money — a
+**Waive payment** is for the cases where the balance goes away without money — a
 replacement for a defective item, a departmental comp. It is recorded as a
 waiver, not as a payment, so your totals still tell the truth.
 
@@ -671,7 +694,7 @@ and how many were held, so you know who to chase.
 4. **Line detail** below it breaks the same shirts out by embroidery name. That
    is what the vendor stitches. On a personalized item the two always differ —
    ten shirts, ten names, five sizes.
-5. Export the CSV if the vendor wants it as a file rather than a screenshot.
+5. **Export CSV** — on the **Orders** tab, filtered to the window — if the vendor wants it as a file rather than a screenshot.
    It keeps **every** order, unpaid ones included, because it doubles as the
    treasurer's record — so under the _payment before the vendor order_ rule,
    check the **Held From Vendor Order** column and drop the `yes` rows before

@@ -977,6 +977,11 @@ async def search_candidates(
     full_name = func.concat(
         func.coalesce(User.first_name, ""), " ", func.coalesce(User.last_name, "")
     )
+    # A member known as "Terry" is looked up as "Terry"; the legal name still
+    # matches so an evaluator working from a roster finds them either way.
+    preferred_full_name = func.concat(
+        func.coalesce(User.preferred_name, ""), " ", func.coalesce(User.last_name, "")
+    )
 
     rows = await db.execute(
         select(User)
@@ -984,14 +989,21 @@ async def search_candidates(
             User.organization_id == current_user.organization_id,
             User.status == UserStatus.ACTIVE,
             User.deleted_at.is_(None),
-            full_name.like(pattern, escape=LIKE_ESCAPE_CHAR),
+            or_(
+                full_name.like(pattern, escape=LIKE_ESCAPE_CHAR),
+                preferred_full_name.like(pattern, escape=LIKE_ESCAPE_CHAR),
+            ),
         )
         .order_by(User.last_name, User.first_name)
         .limit(CANDIDATE_SEARCH_MAX_RESULTS)
     )
 
     return [
-        SkillTestCandidateResponse(id=u.id, name=_format_user_name(u))
+        # A picker, not a record: the test itself is still filed under the
+        # legal name by _format_user_name everywhere else in this module.
+        SkillTestCandidateResponse(
+            id=u.id, name=u.display_name or u.username or "Unknown"
+        )
         for u in rows.scalars().all()
     ]
 

@@ -408,14 +408,16 @@ class TestResolveNames:
     """
 
     async def test_composes_full_names_and_keys_by_id(self, service, mock_db, org_id):
-        user_row = (str(uuid4()), "Dana", "Reyes")
+        # Members carry a preferred name, which wins over the first name.
+        user_row = (str(uuid4()), "Dana", "Reyes", "Dee")
+        plain_row = (str(uuid4()), "Ana", "Ortiz", None)
         prospect_row = (str(uuid4()), "Sam", "Okafor")
         req_row = (str(uuid4()), "Annual Physical")
 
         # One execute() per non-empty id set, in call order: users, prospects,
         # requirements.
         results = []
-        for rows in ([user_row], [prospect_row], [req_row]):
+        for rows in ([user_row, plain_row], [prospect_row], [req_row]):
             r = MagicMock()
             r.all.return_value = rows
             results.append(r)
@@ -423,12 +425,13 @@ class TestResolveNames:
 
         out = await service._resolve_names(
             org_id,
-            user_ids={user_row[0]},
+            user_ids={user_row[0], plain_row[0]},
             prospect_ids={prospect_row[0]},
             requirement_ids={req_row[0]},
         )
 
-        assert out["users"][user_row[0]] == "Dana Reyes"
+        assert out["users"][user_row[0]] == "Dee Reyes"
+        assert out["users"][plain_row[0]] == "Ana Ortiz"
         assert out["prospects"][prospect_row[0]] == "Sam Okafor"
         assert out["requirements"][req_row[0]] == "Annual Physical"
 

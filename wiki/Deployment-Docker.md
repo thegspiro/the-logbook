@@ -113,6 +113,17 @@ VITE_API_URL=/api/v1
 
 Enable a profile: `docker compose --profile with-search up -d`
 
+> **The `production` profile's nginx** _(2026-09-30)_ reads
+> `infrastructure/nginx/docker.conf` and will not start without
+> `fullchain.pem` and `privkey.pem` in `infrastructure/nginx/ssl/`. On its own
+> the profile leaves the frontend's port 3000 published — a second, plain-HTTP
+> way in. To make nginx the only entrance, pin
+> `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml:docker-compose.proxy.yml`
+> in `.env`; `install.sh` and `universal-install.sh` respect that pin and stop
+> before building if the certificate is missing. Every proxy in the stack now
+> allows 60 MB uploads, matching the backend. Full steps, including Let's
+> Encrypt: [DEPLOYMENT.md](../docs/DEPLOYMENT.md#docker-compose-production-profile).
+
 > **Note:** Optional services use default values for credentials. Set `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD` in `.env` if you enable the `with-s3` profile in production.
 
 ---

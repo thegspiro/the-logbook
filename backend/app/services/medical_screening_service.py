@@ -29,6 +29,7 @@ from app.schemas.medical_screening import (
     ScreeningRequirementCreate,
     ScreeningRequirementUpdate,
 )
+from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
 from app.utils.org_timezone import resolve_org_today
@@ -537,14 +538,18 @@ class MedicalScreeningService:
         users: dict = {}
         if user_ids:
             rows = await self.db.execute(
-                select(User.id, User.first_name, User.last_name).where(
+                select(
+                    User.id, User.first_name, User.last_name, User.preferred_name
+                ).where(
                     User.id.in_(user_ids),
                     User.organization_id == organization_id,
                 )
             )
+            # Members are named as they go by; prospects (below) have no
+            # preferred name and keep first + last.
             users = {
-                uid: f"{first or ''} {last or ''}".strip()
-                for uid, first, last in rows.all()
+                uid: format_display_name(first, last, preferred)
+                for uid, first, last, preferred in rows.all()
             }
 
         prospects: dict = {}

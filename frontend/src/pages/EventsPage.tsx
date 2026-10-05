@@ -1182,7 +1182,9 @@ export const EventsPage: React.FC = () => {
           )
         ) : (
           <>
-            <div ref={gridRef} data-testid="events-grid" className="card-grid gap-4">
+            {/* The 22rem floor keeps the title clear of the manager chips: at
+                three ~330px columns they left it under 200px. */}
+            <div ref={gridRef} data-testid="events-grid" className="card-grid gap-4 [--card-grid-min:22rem]">
               {paginatedEvents.map((event) => (
                 <EventListCard
                   key={event.id}

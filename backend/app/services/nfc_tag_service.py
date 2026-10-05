@@ -39,6 +39,7 @@ from app.services.event_service import (
 )
 from app.services.location_service import LocationService
 from app.services.scheduling_service import SchedulingService
+from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
 
@@ -373,7 +374,7 @@ class NfcTagService:
             )
 
         result.setdefault("user_id", str(user.id))
-        result.setdefault("member_name", user.full_name)
+        result.setdefault("member_name", user.display_name)
         result.setdefault("membership_number", user.membership_number)
 
         # Only a tap that actually moved attendance counts as use. Stamping on
@@ -491,7 +492,11 @@ class NfcTagService:
 
     @staticmethod
     def _kiosk_result(result: Dict[str, Any]) -> Dict[str, Any]:
-        """Strip a check-in result to what a public screen may show."""
+        """Strip a check-in result to what a public screen may show.
+
+        ``member_name`` is the display name, so the kiosk greets a member by
+        the name they go by ("Terry H."), never their legal first name.
+        """
         full_name = (result.get("member_name") or "").split()
         display_name = None
         if full_name:
@@ -837,13 +842,15 @@ class NfcTagService:
         if not ids:
             return {}
         result = await self.db.execute(
-            select(User.id, User.first_name, User.last_name).where(
+            select(User.id, User.first_name, User.last_name, User.preferred_name).where(
                 User.id.in_(ids),
                 User.organization_id == str(organization_id),
             )
         )
         return {
-            row.id: f"{row.first_name or ''} {row.last_name or ''}".strip()
+            row.id: format_display_name(
+                row.first_name, row.last_name, row.preferred_name
+            )
             for row in result
         }
 

@@ -124,8 +124,15 @@ to the Roster step.]**
 
 **[CALLOUT: The six feeds appearing one at a time]**
 
-> "**One — approved training sessions.** When you approve a session that's linked
-> to a program, every attendee's linked requirement gets the hours."
+> "**One — training events.** When a Training event's attendance is finalized
+> and its session is linked to a program, every attendee's linked requirement
+> gets the hours they were actually there. If the session needs an officer's
+> confirmation, the credit lands when that approval goes through, not before."
+
+**[PRODUCTION NOTE — 2026-10-04. Rewritten. Credit used to be described as
+coming from "approving a session"; since 2026-09-29 it comes from **Finalize
+Attendance** on the event, and approval is a second step only for sessions
+that require confirmation. Narration only — the callout still works.]**
 
 > "**Two — shift completion reports.** File a shift report and the trainee's
 > shift, call, and hour requirements advance automatically."

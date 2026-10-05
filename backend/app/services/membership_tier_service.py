@@ -436,7 +436,7 @@ class MembershipTierService:
             advanced.append(
                 {
                     "user_id": str(member.id),
-                    "name": member.full_name,
+                    "name": member.display_name,
                     "previous_tier": previous_type,
                     "new_tier": target_tier["id"],
                     "years_of_service": yos,
@@ -445,9 +445,28 @@ class MembershipTierService:
             )
 
         if advanced:
-            await self.db.commit()
-
-            # Audit each advancement
+            # Audit inside the same transaction as the change, and commit both
+            # together. Written after the mutations and before the commit on
+            # purpose: `log_audit_event` opens a SAVEPOINT, so an audit failure
+            # rolls back only itself and still lets the advancement land, while
+            # a success is durable with the row it describes rather than
+            # separately from it.
+            #
+            # The previous order — commit, then audit — lost the audit trail
+            # outright on the scheduled path. `log_audit_event` releasing its
+            # savepoint does not commit the outer transaction, `_for_each_org`
+            # never commits, and the task loop's
+            # `async with async_session_factory()` only closes the session, so
+            # the rows were discarded. Demonstrated: a cron-path advance moved
+            # a member from `active` to `senior` and wrote **zero**
+            # `membership_tier_auto_advanced` rows. The endpoint path happened
+            # to survive it only because FastAPI's `get_session` dependency
+            # commits on teardown — which is not something a service should
+            # depend on for its own audit trail, least of all this one: it
+            # changes a member's membership class unattended and clears the
+            # operational rank of anyone moved into an administrative tier,
+            # so the audit row is the only record that those permissions went
+            # away.
             for entry in advanced:
                 await log_audit_event(
                     db=self.db,
@@ -457,6 +476,7 @@ class MembershipTierService:
                     event_data=entry,
                     user_id=performed_by,
                 )
+            await self.db.commit()
 
         logger.info(
             f"Membership tier advance: {len(advanced)} members advanced, "

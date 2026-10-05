@@ -22,13 +22,18 @@ from app.api.v1.endpoints.skills_testing import (
     CANDIDATE_SEARCH_MIN_CHARS,
     search_candidates,
 )
+from app.models.user import User
 
 ORG = "org-1"
 
 
-def _user(first, last):
-    return SimpleNamespace(
-        id=str(uuid4()), first_name=first, last_name=last, username=None
+def _user(first, last, preferred=None):
+    return User(
+        id=str(uuid4()),
+        first_name=first,
+        last_name=last,
+        username=None,
+        preferred_name=preferred,
     )
 
 
@@ -179,6 +184,23 @@ class TestMatchingBehavior:
         assert any(
             isinstance(v, str) and "john s" in v.lower() for v in db.params.values()
         )
+
+    async def test_the_preferred_name_is_searched_too(self):
+        """An evaluator looks up "Terry Heather" by the name they know him by;
+        the legal name still matches for anyone working from a roster."""
+        db = RecordingSession()
+
+        await _search(db, "terry h")
+
+        assert "preferred_name" in db.sql
+        assert "first_name" in db.sql
+
+    async def test_a_result_is_named_as_the_member_goes_by(self):
+        db = RecordingSession([_user("John", "Heather", preferred="Terry")])
+
+        results = await _search(db, "terry")
+
+        assert [r.name for r in results] == ["Terry Heather"]
 
     async def test_only_active_members_are_searchable(self):
         db = RecordingSession()
