@@ -2205,27 +2205,25 @@ or warns against it today. (Security review ELEC-38,
 
 ## Users: Roster/Archive/Leave Lists Are Unbounded, Not Just Un-Paginated (2026-08-25)
 
-`list_users_with_roles` (`users.py:824`) and `get_archived_members`
-(`member_status.py:771`) return every matching row in the org with no
-pagination; `leave_widget_summary` (`member_leaves.py:53`) materializes every
-`active` leave to compute its counts, and `MemberLeaveService.list_leaves`
-(`member_leave_service.py`) runs an unbounded query before its two callers in
-`member_leaves.py` apply an in-memory slice. All four are `members.manage`-gated
-and org-scoped — not a leak.
+**Narrowed, and the remainder accepted by the owner (2026-10-05).** The owner
+chose "compute leave widget counts with SQL COUNT — no contract change" over
+paginating these lists.
 
-The reason this isn't self-limiting the way it first looks: `archive_member`
-changes `User.status` without deleting the row, so archived accounts
-accumulate for the organization's entire lifetime rather than being bounded
-by current headcount, and leave records aren't deleted either (`end_date`
-passing doesn't clear the `active` flag on its own — the deactivate endpoint
-does, and only when called). A department open for years pays a growing cost
-on every roster and leave-widget load, with no ceiling.
+- **✅ Fixed:** `leave_widget_summary` (`member_leaves.py`) no longer
+  materializes every `active` leave to count three numbers; it runs one
+  aggregate query with the same definitions
+  (`tests/test_leave_widget_summary_counts.py`).
+- **Accepted, unchanged:** `list_users_with_roles` (`users.py`),
+  `get_archived_members` (`member_status.py`) and
+  `MemberLeaveService.list_leaves` (`member_leave_service.py`, whose two
+  callers in `member_leaves.py` still slice in memory) return every matching
+  row. All three are `members.manage`-gated and org-scoped — not a leak. The
+  cost grows with the department's all-time membership rather than its
+  headcount, because `archive_member` keeps the row and leave records are not
+  deleted; paginating them changes the response envelope the Members admin
+  page and the leave screens read, which the owner declined for now.
 
-Not fixed for the same reason as the saved-ballot-templates item above:
-pagination changes the response envelope for callers that currently expect
-the full list (the Members admin page, the leave dashboard widget), which is
-a frontend-affecting decision, not a drop-in. (Security review USR-5,
-`docs/security-review/USR-07-users-organizations.md`.)
+(Security review USR-5, `docs/security-review/USR-07-users-organizations.md`.)
 
 ## Users: `GET /users` Sends the Full Admin Roster Record to Every `members.view` Holder (2026-09-02)
 

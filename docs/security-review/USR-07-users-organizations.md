@@ -1471,6 +1471,15 @@ change needing a decision on default page size and whether existing callers
 frontend change, the same category of judgment call FIN-7's export cap and
 ELEC-12 were left flagged for. Mirrored into `KNOWN_LIMITATIONS.md`.
 
+**Owner decision (2026-10-05): compute the leave widget's counts in SQL, no
+contract change.** `leave_widget_summary` now issues one aggregate
+`COUNT`/`SUM(CASE …)` query instead of loading every active leave, with the
+same three definitions (`tests/test_leave_widget_summary_counts.py`). The other
+three lists — `list_users_with_roles`, `get_archived_members` and
+`MemberLeaveService.list_leaves` — stay unbounded: the owner chose this option
+over paginating them, which would have changed their response envelopes. That
+remainder is accepted, and recorded as such in `KNOWN_LIMITATIONS.md`.
+
 ### USR-6 — Doc correction — Route inventory omitted a third bare-auth category
 
 Covered under Route inventory above — not a code defect, a mischaracterization
