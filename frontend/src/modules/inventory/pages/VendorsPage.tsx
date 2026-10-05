@@ -1075,7 +1075,7 @@ export const VendorsPage: React.FC = () => {
 
         <Link
           to="/inventory/admin"
-          className="text-theme-text-muted hover:text-theme-text-secondary mb-6 flex items-center gap-1 text-sm"
+          className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 mb-6 flex items-center gap-1 text-sm"
         >
           <ArrowLeft className="h-4 w-4" /> Back to Admin
         </Link>
@@ -1156,7 +1156,7 @@ export const VendorsPage: React.FC = () => {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <label className="text-theme-text-muted flex shrink-0 items-center gap-3 text-sm max-md:ps-3.5">
+          <label className="text-theme-text-muted mobile-touch-target flex shrink-0 items-center justify-start gap-3 text-sm max-md:ps-3.5">
             <input
               type="checkbox"
               className="form-checkbox"
