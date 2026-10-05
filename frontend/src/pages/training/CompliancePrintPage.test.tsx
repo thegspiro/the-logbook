@@ -61,4 +61,37 @@ describe('CompliancePrintPage', () => {
     // Names print whole: paper has no tooltip for "ANNUAL HAZMA…".
     expect(screen.getByRole('columnheader', { name: 'Annual Hazmat Hours' })).toBeInTheDocument();
   });
+
+  it('prints a member nothing grades as N/A, last, and outside the compliant count', async () => {
+    getComplianceMatrix.mockReset();
+    getComplianceMatrix.mockResolvedValue({
+      generated_at: '2026-09-29T09:00:00Z',
+      requirements: [{ id: 'req-hazmat', name: 'Annual Hazmat Hours' }],
+      members: [
+        {
+          user_id: 'u3',
+          member_name: 'Carver, Lee',
+          requirements: [],
+          completion_pct: null,
+          standing: 'not_applicable',
+        },
+        {
+          user_id: 'u1',
+          member_name: 'Avery, Jordan',
+          requirements: [cell('completed')],
+          completion_pct: 100,
+          standing: 'compliant',
+        },
+      ],
+    });
+
+    render(<CompliancePrintPage />);
+
+    const carver = await screen.findByRole('row', { name: /Carver, Lee/ });
+    expect(within(carver).getByText('N/A')).toBeInTheDocument();
+    expect(screen.getByText('Not Applicable: 1')).toBeInTheDocument();
+    const rows = screen.getAllByRole('row').map((r) => r.textContent ?? '');
+    const avery = rows.findIndex((t) => t.includes('Avery, Jordan'));
+    expect(rows.findIndex((t) => t.includes('Carver, Lee'))).toBeGreaterThan(avery);
+  });
 });

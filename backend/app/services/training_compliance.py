@@ -959,26 +959,39 @@ def requirement_applies_to_user(req, member) -> bool:
     )
 
 
+# The standing of a member nothing grades: no requirement applies to them, or
+# every one that does is still inside its catch-up period. Not "compliant" —
+# a denominator of nothing is not a pass — and never counted in any
+# percentage's population, numerator or denominator.
+STANDING_NOT_APPLICABLE = "not_applicable"
+
+
 def classify_standing(
     completed_count: int,
     total_count: int,
     compliant_threshold: float = 100.0,
     at_risk_threshold: float = 75.0,
     threshold_type: str = "percentage",
-) -> Tuple[str, float]:
+) -> Tuple[str, Optional[float]]:
     """Turn a met/total tally into a standing plus its percentage.
 
     Returns (status, compliance_pct) where status is one of:
-    "compliant", "at_risk", "non_compliant".
+    "compliant", "at_risk", "non_compliant", or "not_applicable" — the last
+    with a ``None`` percentage, when ``total_count`` is zero.
 
     Split out of ``_evaluate_member_compliance`` so the compliance matrix can
     label a member without evaluating every requirement a second time. Both
     paths must agree — a member shown as "at risk" on the matrix and
     "non-compliant" on the dashboard is a support call — so the thresholds are
     applied here and nowhere else.
+
+    An empty tally used to read ``("compliant", 100.0)``, which counted a
+    member nothing measures toward every department percentage. The
+    department decided such a member is excluded from those percentages
+    entirely and shown as not applicable (TR4-4).
     """
     if total_count <= 0:
-        return "compliant", 100.0
+        return STANDING_NOT_APPLICABLE, None
 
     pct = round(completed_count / total_count * 100, 1)
 
@@ -1003,15 +1016,12 @@ def _evaluate_member_compliance(
     threshold_type: str,
     org_include_current_month: bool = True,
     join_date: Optional[date] = None,
-) -> Tuple[str, float]:
+) -> Tuple[str, Optional[float]]:
     """Evaluate a member's compliance status against a set of requirements.
 
-    Returns (status, compliance_pct) where status is one of:
-    "compliant", "at_risk", "non_compliant".
+    Returns :func:`classify_standing`'s (status, compliance_pct); an empty
+    ``member_reqs`` is "not_applicable" with no percentage.
     """
-    if not member_reqs:
-        return "compliant", 100.0
-
     statuses = []
     for req in member_reqs:
         req_status, _, _ = evaluate_member_requirement(
@@ -1076,10 +1086,59 @@ async def count_active_requirements(db: AsyncSession, org_id: str) -> int:
     return int(count or 0)
 
 
+@dataclass(frozen=True)
+class OrgComplianceTally:
+    """Who a department compliance percentage counts, and who passes.
+
+    ``graded`` is the percentage's denominator: members at least one
+    requirement grades. A member with nothing applicable is counted in
+    ``not_applicable`` and in neither side of the percentage (TR4-4).
+    """
+
+    compliant: int
+    graded: int
+    not_applicable: int
+    active_requirements: int
+
+    @property
+    def members(self) -> int:
+        return self.graded + self.not_applicable
+
+    @property
+    def pct(self) -> Optional[float]:
+        """Share of graded members who are compliant; None when nobody is."""
+        if self.graded == 0:
+            return None
+        return round(self.compliant / self.graded * 100, 1)
+
+
 async def compute_org_compliance_pct(
     db: AsyncSession, org_id: str, today: Optional[date] = None
-) -> float:
+) -> Optional[float]:
     """Compute organization-wide training compliance percentage.
+
+    The percentage of *graded* members — those at least one requirement
+    applies to — who are compliant; see :func:`compute_org_compliance_tally`.
+
+    If there are no active requirements, returns 100.0 (callers check
+    :func:`count_active_requirements` first and say "not set up").
+    If there are no active members, returns 0.0.
+    If requirements exist but none applies to any member, returns None: there
+    is nothing measured to report, and callers show it as not applicable
+    rather than as a vacuous 100%.
+    """
+    tally = await compute_org_compliance_tally(db, org_id, today)
+    if tally.members == 0:
+        return 0.0
+    if tally.active_requirements == 0:
+        return 100.0
+    return tally.pct
+
+
+async def compute_org_compliance_tally(
+    db: AsyncSession, org_id: str, today: Optional[date] = None
+) -> OrgComplianceTally:
+    """Grade every active, non-exempt member and count the standings.
 
     When a compliance configuration exists with profiles, each member is
     matched to a profile (by membership type / role). The profile's
@@ -1088,10 +1147,6 @@ async def compute_org_compliance_pct(
 
     Without a compliance config, falls back to the legacy behaviour:
     evaluate every active training requirement for every member.
-
-    Returns the percentage of members who are fully compliant.
-    If there are no active requirements, returns 100.0.
-    If there are no active members, returns 0.0.
     """
     # Get active members (exclude compliance-exempt members)
     # positions is eager-loaded because _find_matching_profile reads it for
@@ -1113,7 +1168,7 @@ async def compute_org_compliance_pct(
     members = members_result.scalars().all()
 
     if not members:
-        return 0.0
+        return OrgComplianceTally(0, 0, 0, 0)
 
     # Get active requirements
     reqs_result = await db.execute(
@@ -1125,7 +1180,7 @@ async def compute_org_compliance_pct(
     requirements = reqs_result.scalars().all()
 
     if not requirements:
-        return 100.0  # No requirements = fully compliant
+        return OrgComplianceTally(0, 0, len(members), 0)
 
     # Build requirements lookup by ID
     reqs_by_id: Dict[str, TrainingRequirement] = {str(r.id): r for r in requirements}
@@ -1175,6 +1230,7 @@ async def compute_org_compliance_pct(
     if today is None:
         today = await resolve_org_today(db, org_id)
     compliant_count = 0
+    not_applicable_count = 0
 
     for member in members:
         member_records = records_by_user.get(member.id, [])
@@ -1236,7 +1292,14 @@ async def compute_org_compliance_pct(
             org_include_current_month=org_include_current,
             join_date=member_join_date(member),
         )
-        if status == "compliant":
+        if status == STANDING_NOT_APPLICABLE:
+            not_applicable_count += 1
+        elif status == "compliant":
             compliant_count += 1
 
-    return round(compliant_count / len(members) * 100, 1)
+    return OrgComplianceTally(
+        compliant=compliant_count,
+        graded=len(members) - not_applicable_count,
+        not_applicable=not_applicable_count,
+        active_requirements=len(requirements),
+    )

@@ -188,10 +188,12 @@ async def export_annual_report(
 
         members = report.get("member_compliance", [])
         for member in members:
+            # None for a member nothing grades (status "not_applicable").
+            pct = member.get("compliance_pct")
             writer.writerow(
                 [
                     member.get("name", ""),
-                    member.get("compliance_pct", 0),
+                    "N/A" if pct is None else pct,
                     member.get("hours_completed", 0),
                     member.get("admin_hours_approved", 0),
                     member.get("total_contributed_hours", 0),

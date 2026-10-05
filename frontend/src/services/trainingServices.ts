@@ -120,8 +120,13 @@ export interface TrainingDashboardSummary {
     active_courses: number;
     training_sessions: number;
     active_programs: number;
+    /** Members at least one requirement grades — the percentage's denominator. */
+    graded_members?: number;
+    /** Members no requirement grades; outside the percentage entirely. */
+    not_applicable_members?: number;
     compliant_members: number;
-    compliance_percentage: number;
+    /** Null when no member is graded against anything. */
+    compliance_percentage: number | null;
     expiring_count: number;
     completions_last_30_days: number;
     total_hours_this_year: number;

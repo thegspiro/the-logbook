@@ -84,6 +84,7 @@ from app.services.integration_services.notification_dispatch import (
 from app.services.qualification_service import QualificationService
 from app.services.training_compliance import (
     CATCH_UP_STATUS,
+    STANDING_NOT_APPLICABLE,
     _find_matching_profile,
     _load_compliance_config,
     classify_standing,
@@ -180,6 +181,7 @@ async def get_training_dashboard_summary(
     include_current = await get_org_include_current_month(db, str(org_id))
 
     compliant = 0
+    not_applicable = 0
     intervention: list[dict] = []
     risk_counts: dict[str, int] = {str(req.id): 0 for req in requirements}
     applicable_counts: dict[str, int] = {str(req.id): 0 for req in requirements}
@@ -187,6 +189,7 @@ async def get_training_dashboard_summary(
         applicable = [r for r in requirements if requirement_applies_to_user(r, member)]
         join_date = member_join_date(member)
         unmet: list[str] = []
+        graded = 0
         for req in applicable:
             req_status, _, _ = _evaluate_member_requirement(
                 req,
@@ -200,11 +203,16 @@ async def get_training_dashboard_summary(
             # neither unmet nor part of the at-risk denominator.
             if req_status == CATCH_UP_STATUS:
                 continue
+            graded += 1
             applicable_counts[str(req.id)] += 1
             if req_status != TrainingStatus.COMPLETED.value:
                 unmet.append(str(req.id))
                 risk_counts[str(req.id)] += 1
-        if not unmet:
+        if graded == 0:
+            # Nothing grades this member: outside the percentage entirely,
+            # not a compliant member (TR4-4).
+            not_applicable += 1
+        elif not unmet:
             compliant += 1
         else:
             intervention.append(
@@ -321,6 +329,7 @@ async def get_training_dashboard_summary(
         )
 
     tracked = len(members)
+    graded_members = tracked - not_applicable
     return {
         "widget_metadata": {
             key: {"module": "training", "permission": "training.manage"}
@@ -343,9 +352,13 @@ async def get_training_dashboard_summary(
             "active_courses": active_courses,
             "training_sessions": training_sessions,
             "active_programs": active_programs,
+            "graded_members": graded_members,
+            "not_applicable_members": not_applicable,
             "compliant_members": compliant,
+            # None when no member is graded against anything: an empty
+            # population is not applicable, not 100%.
             "compliance_percentage": (
-                round(compliant / tracked * 100) if tracked else 100
+                round(compliant / graded_members * 100) if graded_members else None
             ),
             "expiring_count": len(expiring_records),
             "completions_last_30_days": len(recent),
@@ -1774,6 +1787,11 @@ async def get_compliance_summary(
     ):
         compliance_status = "yellow"
         compliance_label = "At Risk"
+    elif requirements_total == 0:
+        # Nothing grades this member, and no certificate is lapsing: there is
+        # no standing to report, which is not the same as passing (TR4-4).
+        compliance_status = STANDING_NOT_APPLICABLE
+        compliance_label = "Not Applicable"
     else:
         compliance_status = "green"
         compliance_label = "Compliant"
@@ -2772,14 +2790,16 @@ class MemberComplianceRow(BaseModel):
     user_id: str
     member_name: str
     requirements: list[RequirementStatusItem]
-    completion_pct: float
+    # None when nothing grades the member (standing "not_applicable").
+    completion_pct: float | None
     membership_type: str | None = None
     # Counts of *applicable* requirements — a requirement restricted to another
     # membership type is not in this member's denominator.
     requirements_met: int = 0
     requirements_total: int = 0
-    # "compliant" | "at_risk" | "non_compliant", using the org's configured
-    # thresholds so the matrix agrees with the dashboard.
+    # "compliant" | "at_risk" | "non_compliant" | "not_applicable", from
+    # classify_standing with the org's configured thresholds so the matrix
+    # agrees with the dashboard.
     standing: str = "compliant"
 
 
@@ -3171,9 +3191,21 @@ class MemberPeriodStatusRow(BaseModel):
     hours_completed: float
     last_activity: str | None = None  # ISO date of latest completion in window
     # Current overall compliance standing (not period-scoped)
-    compliance_status: str  # "green" | "yellow" | "red" | "exempt"
+    # "green" | "yellow" | "red" | "exempt" | "not_applicable"
+    compliance_status: str
     requirements_met: int
     requirements_total: int
+
+
+# The roster's traffic-light vocabulary for each classify_standing() value. A
+# member nothing grades is "not_applicable", not green: the roster must not
+# show a member as passing what nobody measured (TR4-4).
+_PERIOD_STATUS_COLOR = {
+    "compliant": "green",
+    "at_risk": "yellow",
+    "non_compliant": "red",
+    STANDING_NOT_APPLICABLE: STANDING_NOT_APPLICABLE,
+}
 
 
 @router.get("/records/member-status")
@@ -3238,11 +3270,12 @@ async def get_member_period_status(
     today = await resolve_org_today(db, org_id)
     org_include_current = await get_org_include_current_month(db, str(org_id))
 
-    # Compliance thresholds (fall back to sensible defaults)
+    # Compliance thresholds, read as the matrix reads them. `or` here turned a
+    # configured 0% threshold into the 100% default.
     config = await _load_compliance_config(db, str(org_id))
-    compliant_threshold = getattr(config, "compliant_threshold", None) or 100.0
-    at_risk_threshold = getattr(config, "at_risk_threshold", None) or 75.0
-    threshold_type = getattr(config, "threshold_type", None) or "percentage"
+    compliant_threshold = config.compliant_threshold if config else 100.0
+    at_risk_threshold = config.at_risk_threshold if config else 75.0
+    threshold_type = (config.threshold_type if config else None) or "percentage"
 
     rows: list[MemberPeriodStatusRow] = []
     for member in members:
@@ -3297,21 +3330,10 @@ async def get_member_period_status(
             )[0]
             for req in applicable
         )
-        pct = (met / total * 100) if total else 100.0
-        if total == 0:
-            status_color = "green"
-        elif threshold_type == "all_required":
-            status_color = (
-                "green"
-                if met >= total
-                else ("yellow" if pct >= at_risk_threshold else "red")
-            )
-        else:
-            status_color = (
-                "green"
-                if pct >= compliant_threshold
-                else ("yellow" if pct >= at_risk_threshold else "red")
-            )
+        standing, _ = classify_standing(
+            met, total, compliant_threshold, at_risk_threshold, threshold_type
+        )
+        status_color = _PERIOD_STATUS_COLOR[standing]
 
         rows.append(
             MemberPeriodStatusRow(

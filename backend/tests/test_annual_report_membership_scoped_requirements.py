@@ -161,8 +161,15 @@ class TestGenerateAnnualReportMembershipScoping:
 
         [row] = report["member_compliance"]
         assert row["requirements_total"] == 0
-        assert row["compliance_pct"] == 100.0
-        assert row["status"] == "compliant"
+        # Nothing grades them: not applicable, outside the org percentage
+        # (TR4-4), rather than a vacuous 100% / compliant.
+        assert row["compliance_pct"] is None
+        assert row["status"] == "not_applicable"
+        summary = report["executive_summary"]
+        assert summary["not_applicable_members"] == 1
+        assert summary["graded_members"] == 0
+        assert summary["fully_compliant_members"] == 0
+        assert summary["overall_compliance_pct"] is None
 
     async def test_member_in_scope_is_still_graded(self, db_session):
         """The other direction, so the test above can't pass by always
@@ -241,8 +248,15 @@ class TestGenerateAnnualReportRoleScopedRequirements:
 
         [row] = report["member_compliance"]
         assert row["requirements_total"] == 0
-        assert row["compliance_pct"] == 100.0
-        assert row["status"] == "compliant"
+        # Nothing grades them: not applicable, outside the org percentage
+        # (TR4-4), rather than a vacuous 100% / compliant.
+        assert row["compliance_pct"] is None
+        assert row["status"] == "not_applicable"
+        summary = report["executive_summary"]
+        assert summary["not_applicable_members"] == 1
+        assert summary["graded_members"] == 0
+        assert summary["fully_compliant_members"] == 0
+        assert summary["overall_compliance_pct"] is None
 
     async def test_requirement_analysis_counts_only_role_holders(self, db_session):
         org = await _org(db_session)

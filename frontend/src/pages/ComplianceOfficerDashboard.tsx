@@ -59,7 +59,8 @@ const isAnnualReport = (value: unknown): value is AnnualComplianceReport => {
   const adminHours = value.admin_hours_summary;
   return (
     isRecord(summary) &&
-    typeof summary.overall_compliance_pct === 'number' &&
+    // Null is a real answer: no member is graded against any requirement.
+    (typeof summary.overall_compliance_pct === 'number' || summary.overall_compliance_pct === null) &&
     Array.isArray(value.member_compliance) &&
     Array.isArray(value.requirement_analysis) &&
     isRecord(adminHours) &&
@@ -218,15 +219,15 @@ const AnnualReportSection: React.FC = () => {
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
         <SummaryCard
           label="Overall Compliance"
-          value={`${summary.overall_compliance_pct}%`}
-          color={
-            summary.overall_compliance_pct >= 80 ? 'green' : summary.overall_compliance_pct >= 50 ? 'yellow' : 'red'
-          }
+          value={summary.overall_compliance_pct === null ? 'N/A' : `${summary.overall_compliance_pct}%`}
+          color={pctColor(summary.overall_compliance_pct)}
           icon={Shield}
         />
         <SummaryCard
           label="Members Compliant"
-          value={`${summary.fully_compliant_members}/${summary.total_members}`}
+          // Out of the members something grades: a member no requirement
+          // applies to is outside the percentage, so not in this count either.
+          value={`${summary.fully_compliant_members}/${summary.graded_members ?? summary.total_members}`}
           color="blue"
           icon={Users}
         />
@@ -1035,11 +1036,13 @@ const ForecastSection: React.FC = () => {
     );
   }
 
-  // Calculate department-wide averages
-  const avgCurrent = forecasts.reduce((s, f) => s + f.current_compliance_percentage, 0) / forecasts.length;
-  const avg30 = forecasts.reduce((s, f) => s + f.forecast_30_days, 0) / forecasts.length;
-  const avg60 = forecasts.reduce((s, f) => s + f.forecast_60_days, 0) / forecasts.length;
-  const avg90 = forecasts.reduce((s, f) => s + f.forecast_90_days, 0) / forecasts.length;
+  // Department-wide averages over the members something grades. A member with
+  // no applicable requirement has no percentage, and averaging them in at 100%
+  // inflated every figure here.
+  const avgCurrent = averageOf(forecasts.map((f) => f.current_compliance_percentage));
+  const avg30 = averageOf(forecasts.map((f) => f.forecast_30_days));
+  const avg60 = averageOf(forecasts.map((f) => f.forecast_60_days));
+  const avg90 = averageOf(forecasts.map((f) => f.forecast_90_days));
   const atRiskMembers = forecasts.filter((f) => f.expiring_certifications.length > 0).length;
 
   return (
@@ -1058,28 +1061,13 @@ const ForecastSection: React.FC = () => {
       <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
         <SummaryCard
           label="Current"
-          value={`${avgCurrent.toFixed(1)}%`}
-          color={avgCurrent >= 80 ? 'green' : 'yellow'}
+          value={formatAverage(avgCurrent)}
+          color={avgCurrent === null ? 'muted' : avgCurrent >= 80 ? 'green' : 'yellow'}
           icon={Shield}
         />
-        <SummaryCard
-          label="30 Days"
-          value={`${avg30.toFixed(1)}%`}
-          color={avg30 >= 80 ? 'green' : avg30 >= 60 ? 'yellow' : 'red'}
-          icon={TrendingUp}
-        />
-        <SummaryCard
-          label="60 Days"
-          value={`${avg60.toFixed(1)}%`}
-          color={avg60 >= 80 ? 'green' : avg60 >= 60 ? 'yellow' : 'red'}
-          icon={TrendingUp}
-        />
-        <SummaryCard
-          label="90 Days"
-          value={`${avg90.toFixed(1)}%`}
-          color={avg90 >= 80 ? 'green' : avg90 >= 60 ? 'yellow' : 'red'}
-          icon={TrendingUp}
-        />
+        <SummaryCard label="30 Days" value={formatAverage(avg30)} color={forecastColor(avg30)} icon={TrendingUp} />
+        <SummaryCard label="60 Days" value={formatAverage(avg60)} color={forecastColor(avg60)} icon={TrendingUp} />
+        <SummaryCard label="90 Days" value={formatAverage(avg90)} color={forecastColor(avg90)} icon={TrendingUp} />
         <SummaryCard
           label="At Risk"
           value={String(atRiskMembers)}
@@ -1189,9 +1177,23 @@ const ErrorMessage: React.FC<{ message: string }> = ({ message }) => (
 interface SummaryCardProps {
   label: string;
   value: string;
-  color: 'green' | 'yellow' | 'red' | 'blue' | 'purple' | 'orange';
+  color: 'green' | 'yellow' | 'red' | 'blue' | 'purple' | 'orange' | 'muted';
   icon: React.ElementType;
 }
+
+/** Mean of the percentages that exist; null when none does. */
+const averageOf = (values: Array<number | null>): number | null => {
+  const graded = values.filter((v): v is number => v !== null);
+  return graded.length === 0 ? null : graded.reduce((s, v) => s + v, 0) / graded.length;
+};
+
+const formatAverage = (value: number | null): string => (value === null ? 'N/A' : `${value.toFixed(1)}%`);
+
+const pctColor = (pct: number | null): SummaryCardProps['color'] =>
+  pct === null ? 'muted' : pct >= 80 ? 'green' : pct >= 50 ? 'yellow' : 'red';
+
+const forecastColor = (pct: number | null): SummaryCardProps['color'] =>
+  pct === null ? 'muted' : pct >= 80 ? 'green' : pct >= 60 ? 'yellow' : 'red';
 
 const SummaryCard: React.FC<SummaryCardProps> = ({ label, value, color, icon: Icon }) => {
   const colorMap = {
@@ -1201,6 +1203,7 @@ const SummaryCard: React.FC<SummaryCardProps> = ({ label, value, color, icon: Ic
     blue: 'text-blue-500',
     purple: 'text-purple-500',
     orange: 'text-orange-500',
+    muted: 'text-theme-text-muted',
   };
 
   return (
@@ -1219,6 +1222,7 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
     compliant: { bg: 'bg-green-500/10', text: 'text-green-500', label: 'Compliant' },
     at_risk: { bg: 'bg-yellow-500/10', text: 'text-yellow-500', label: 'At Risk' },
     non_compliant: { bg: 'bg-red-500/10', text: 'text-red-500', label: 'Non-Compliant' },
+    not_applicable: { bg: 'bg-theme-surface-secondary', text: 'text-theme-text-muted', label: 'Not Applicable' },
   };
   const c = config[status] ?? { bg: 'bg-theme-surface-secondary', text: 'text-theme-text-muted', label: status };
   return (
@@ -1228,12 +1232,15 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   );
 };
 
-const PctBadge: React.FC<{ pct: number }> = ({ pct }) => (
-  <span
-    className={`text-sm font-semibold ${pct >= 80 ? 'text-green-500' : pct >= 50 ? 'text-yellow-500' : 'text-red-500'}`}
-  >
-    {pct.toFixed(1)}%
-  </span>
-);
+const PctBadge: React.FC<{ pct: number | null }> = ({ pct }) =>
+  pct === null ? (
+    <span className="text-theme-text-muted text-sm">N/A</span>
+  ) : (
+    <span
+      className={`text-sm font-semibold ${pct >= 80 ? 'text-green-500' : pct >= 50 ? 'text-yellow-500' : 'text-red-500'}`}
+    >
+      {pct.toFixed(1)}%
+    </span>
+  );
 
 export default ComplianceOfficerDashboard;

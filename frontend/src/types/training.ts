@@ -689,7 +689,8 @@ export interface ComplianceSummary {
   requirements_total: number;
   certs_expiring_soon: number;
   certs_expired: number;
-  compliance_status: 'green' | 'yellow' | 'red' | 'exempt';
+  /** `not_applicable`: no requirement grades the member and no certificate is lapsing. */
+  compliance_status: 'green' | 'yellow' | 'red' | 'exempt' | 'not_applicable';
   compliance_label: string;
   hours_this_year: number;
   active_certifications: number;
@@ -2550,10 +2551,11 @@ export interface ReportExportResponse {
 export interface ComplianceForecast {
   user_id: string;
   user_name?: string;
-  current_compliance_percentage: number;
-  forecast_30_days: number;
-  forecast_60_days: number;
-  forecast_90_days: number;
+  /** Each is null when no requirement grades the member (not applicable). */
+  current_compliance_percentage: number | null;
+  forecast_30_days: number | null;
+  forecast_60_days: number | null;
+  forecast_90_days: number | null;
   at_risk_requirements: Array<Record<string, unknown>>;
   expiring_certifications: Array<Record<string, unknown>>;
 }
@@ -2651,7 +2653,8 @@ export interface IncompleteRecord {
 export interface AnnualReportMember {
   user_id: string;
   name: string;
-  compliance_pct: number;
+  /** Null when no requirement grades the member (status `not_applicable`). */
+  compliance_pct: number | null;
   hours_completed: number;
   admin_hours_approved: number;
   admin_hours_pending: number;
@@ -2659,7 +2662,7 @@ export interface AnnualReportMember {
   requirements_met: number;
   requirements_total: number;
   expired_certifications: number;
-  status: 'compliant' | 'at_risk' | 'non_compliant';
+  status: 'compliant' | 'at_risk' | 'non_compliant' | 'not_applicable';
 }
 
 export interface AnnualReportRequirement {
@@ -2677,8 +2680,12 @@ export interface AnnualComplianceReport {
   year: number;
   generated_at: string;
   executive_summary: {
-    overall_compliance_pct: number;
+    /** Of graded members; null when no member is graded against anything. */
+    overall_compliance_pct: number | null;
     total_members: number;
+    /** Members at least one requirement grades — the percentage's denominator. */
+    graded_members?: number;
+    not_applicable_members?: number;
     fully_compliant_members: number;
     total_training_hours: number;
     total_admin_hours: number;
@@ -2871,9 +2878,12 @@ export interface ComplianceReportSummary {
   periodMonth?: number;
   status: string;
   summary?: {
-    overall_compliance_pct: number;
+    /** Null when no member is graded against anything. */
+    overall_compliance_pct: number | null;
     fully_compliant_members: number;
     total_members: number;
+    /** Absent on reports stored before not-applicable members were split out. */
+    graded_members?: number;
     at_risk_members: number;
     non_compliant_members: number;
     total_training_hours: number;
@@ -2926,7 +2936,7 @@ export interface SeedDefaultsResponse {
 }
 
 // Month-at-a-glance member training roster (records → Monthly Status tab)
-export type MemberComplianceStatusColor = 'green' | 'yellow' | 'red' | 'exempt';
+export type MemberComplianceStatusColor = 'green' | 'yellow' | 'red' | 'exempt' | 'not_applicable';
 
 export interface MemberPeriodStatusRow {
   user_id: string;

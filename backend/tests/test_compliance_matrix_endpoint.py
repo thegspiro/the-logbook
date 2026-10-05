@@ -493,7 +493,8 @@ class TestComplianceProfiles:
         member = payload["members"][0]
         assert member["requirements"] == []
         assert member["requirements_total"] == 0
-        assert member["standing"] == "compliant"
+        assert member["standing"] == "not_applicable"
+        assert member["completion_pct"] is None
 
     async def test_matrix_agrees_with_the_org_percentage(
         self, db_session: AsyncSession

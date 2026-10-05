@@ -398,7 +398,8 @@ export interface ComplianceMemberEntry {
   rank?: string;
   total_requirements: number;
   completed_requirements: number;
-  compliance_percentage: number;
+  /** Null when no requirement grades the member (not applicable). */
+  compliance_percentage: number | null;
   overdue_items: string[];
   upcoming_deadlines: Array<{ name: string; due_date: string }>;
 }
@@ -410,7 +411,10 @@ export interface ComplianceStatusReport {
   fully_compliant_count: number;
   partially_compliant_count: number;
   non_compliant_count: number;
-  overall_compliance_rate: number;
+  /** Members no requirement grades; in no bucket and not in the overall rate. */
+  not_applicable_count?: number;
+  /** Null when no member is graded against anything. */
+  overall_compliance_rate: number | null;
   entries: ComplianceMemberEntry[];
 }
 

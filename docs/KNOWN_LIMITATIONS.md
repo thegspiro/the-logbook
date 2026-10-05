@@ -3174,50 +3174,6 @@ safe drive-by alongside the membership-type fix above. First reported by a
 Codex review of TR-17 pass 4 (`docs/security-review/TR-17-training-core.md`,
 PR #2455). (Security review TR-17 pass 4, TR4-3.)
 
-## Training — A Member With No Applicable Requirements Counts As "Compliant" (2026-09-10)
-
-`classify_standing` (`training_compliance.py`) returns `("compliant",
-100.0)` whenever a member's requirement list is empty — a convention
-predating the compliance-matrix redesign, applied consistently by both
-`get_compliance_matrix` and `compute_org_compliance_pct`. The fix above
-(TR4-1) makes this reachable one more way than before: a member matching
-none of an org's membership-scoped requirements now also gets an empty
-list, not only the pre-existing profile `required_requirement_ids=[]` case.
-`compute_org_compliance_pct` counts such a member toward its compliant
-numerator without excluding them from the denominator (`len(members)`),
-inflating the org-wide percentage with members the calculation isn't
-actually measuring anything for — the "a denominator of nothing rendered as
-success" shape CLAUDE.md's Pitfall #29 corollary names.
-
-**Not fixed:** this is the same zero-denominator convention this file
-already deliberately tests as correct for the profile case
-(`TestEmptyRequiredRequirementIds::test_explicit_empty_list_means_nothing_required`).
-Changing it means deciding whether such a member should be excluded from
-the percentage's population entirely or reported as a separate "N/A" state
-— a product decision spanning every caller of `classify_standing`, not a
-drive-by alongside TR4-1. Notably, the frontend's own
-`complianceMatrixModel.ts` already treats this as a real distinction:
-`evaluateMember`'s member-level percentage uses this same "0 total is
-100%" convention, while `rollUpRequirements`'s per-requirement percentage
-deliberately returns `null` ("not applicable") instead — proof the two
-conventions already coexist by design in this codebase, and a precedent for
-how to fix this rather than evidence the member-level side is already
-right. First reported by a Codex review of TR-17 pass 4
-(`docs/security-review/TR-17-training-core.md`, PR #2455). (Security review
-TR-17 pass 4, TR4-4.)
-
-**A fourth caller now shares this convention (2026-09-11):** Feature 20
-(Compliance) pass 4's own applicability fix
-(`AnnualComplianceReportService.generate_annual_report`, CMP4-1,
-`docs/security-review/CMP-20-compliance.md`) filters its per-member loop
-through the same `requirement_applies_to_member` helper this entry
-describes, and — checked against this entry before merging, not
-independently rediscovered — intentionally left the zero-requirement case at
-`"compliant"`/`100%` to match `compute_org_compliance_pct` rather than
-diverge into a fifth definition. The per-_requirement_ side of the same
-report (its "Requirement Analysis" section) is the newer, distinct
-CMP4-4 finding below, not this one.
-
 ## Compliance — The Annual Report's New Applicability Filter Has Four More Gaps, Plus a Display Nit (2026-09-11)
 
 Feature 20 (Compliance) pass 4 (`docs/security-review/CMP-20-compliance.md`,
@@ -3274,7 +3230,9 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   `ComplianceOfficerDashboard.tsx` colored `requirement_analysis.compliance_pct`
   red below 50%, including the `0.0` CMP4-1 emits whenever a scoped
   requirement currently applies to no active member — the per-_requirement_
-  counterpart to TR4-4 above. Fixed without widening the backend contract or
+  counterpart to TR4-4 (the per-member case, itself fixed 2026-10-05 — see
+  `docs/security-review/TR-17-training-core.md`). Fixed without widening the
+  backend contract or
   `AnnualReportRequirement.compliance_pct`'s type: the dashboard now checks
   `req.members_total === 0` directly and renders a muted "Not applicable"
   instead of reading `compliance_pct` at all in that case
@@ -3283,8 +3241,9 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   pass 6).
 
 Full detail, line citations, and the "considered, not changed" rationale for
-why CMP4-1 deliberately left the per-member zero-denominator case alone (see
-TR4-4 above) are in `docs/security-review/CMP-20-compliance.md`'s CMP4-2
+why CMP4-1 deliberately left the per-member zero-denominator case alone (TR4-4,
+since fixed: such a member is now "not applicable" in the annual report too)
+are in `docs/security-review/CMP-20-compliance.md`'s CMP4-2
 through CMP4-5 entries. (Security review CMP-20 pass 4, PR #2476, Codex
 review rounds 2-4.)
 

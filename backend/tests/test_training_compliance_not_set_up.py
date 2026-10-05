@@ -146,6 +146,57 @@ class TestHubComplianceMetric:
         assert context.endswith("members current")
 
 
+class TestNothingApplicable:
+    """TR4-4: requirements exist, but none applies to any member. There is
+    nothing measured, so no figure is shown — not a vacuous 100%."""
+
+    async def test_hub_metric_says_nothing_applies(self, db_session):
+        org = await _org(db_session)
+        member = await _member(db_session, org)
+        req = await _requirement(db_session, org, active=True)
+        req.applies_to_all = False
+        req.required_membership_types = ["reserve"]  # member is "active"
+        await db_session.flush()
+
+        value, context = await _compliance_metric(db_session, member)
+
+        assert value == UNKNOWN_VALUE
+        assert context == "no requirement applies to any member"
+
+    async def test_hub_metric_counts_only_graded_members(self, db_session):
+        org = await _org(db_session)
+        member = await _member(db_session, org)
+        reservist = await _member(db_session, org)
+        reservist.membership_type = "reserve"
+        req = await _requirement(db_session, org, active=True)
+        req.applies_to_all = False
+        req.required_membership_types = ["reserve"]
+        await db_session.flush()
+
+        value, context = await _compliance_metric(db_session, member)
+
+        assert value == "0%"
+        assert context == "0 of 1 members current"
+
+    async def test_dashboard_card_has_no_percentage(self, db_session):
+        org = await _org(db_session)
+        member = await _member(db_session, org)
+        req = await _requirement(db_session, org, active=True)
+        req.applies_to_all = False
+        req.required_membership_types = ["reserve"]
+        await db_session.flush()
+
+        summary = await get_training_dashboard_summary(
+            expiration_days=90, db=db_session, current_user=member
+        )
+
+        stats = summary["stats"]
+        assert stats["compliance_percentage"] is None
+        assert stats["graded_members"] == 0
+        assert stats["not_applicable_members"] == 1
+        assert stats["compliant_members"] == 0
+
+
 class TestDashboardSummarySetupCounts:
     """The dashboard's setup guide ticks its steps off these counts."""
 

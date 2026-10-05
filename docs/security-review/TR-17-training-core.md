@@ -1458,7 +1458,7 @@ with one obviously-correct fix. Mirrored into `docs/KNOWN_LIMITATIONS.md`.
 trust gap (a chief-facing summary card that can read differently from the
 detail screen it links to) rather than a security boundary.
 
-### TR4-4 — LOW (Pitfall #29 corollary) — A member with zero applicable requirements counts as "compliant," inflating the org percentage — 🚩 FLAGGED
+### TR4-4 — LOW (Pitfall #29 corollary) — A member with zero applicable requirements counts as "compliant," inflating the org percentage — ✅ FIXED (2026-10-05)
 
 **Reported by Codex on PR #2455; confirmed, and pre-existing.**
 `classify_standing` returns `("compliant", 100.0)` whenever `total_count
@@ -1497,6 +1497,24 @@ instead — proving the two conventions coexist by design elsewhere in this
 codebase, which is precedent for _how_ to fix this, not evidence that the
 member-level side is already correct. Mirrored into
 `docs/KNOWN_LIMITATIONS.md`.
+
+**Fixed (2026-10-05), on the owner's decision:** a member nothing grades is
+excluded from the denominator of every compliance percentage and shown as
+not applicable. `classify_standing` returns `("not_applicable", None)` for an
+empty tally (`STANDING_NOT_APPLICABLE`), and every caller follows it:
+`compute_org_compliance_pct` now counts only graded members on both sides
+(via `compute_org_compliance_tally`, and returns `None` when requirements
+exist but none applies to anyone), the compliance matrix row carries
+`standing: "not_applicable"` with a null `completion_pct`, the dashboard
+summary card, the member-status roster, the profile-card summary, the annual
+report (members and executive summary), the compliance-status report and the
+compliance forecast all report the member as not applicable rather than
+100%. The frontend `Standing` gains `NOT_APPLICABLE`, rendered muted, and
+`complianceMatrixModel.evaluateMember` follows `rollUpRequirements`'s null
+precedent. `TestEmptyRequiredRequirementIds::test_explicit_empty_list_means_
+nothing_required` now asserts the new decision. Department percentages move
+for any org with such members: they were counted as compliant, so the
+figure falls (or, where every member is graded, is unchanged).
 
 **Impact:** LOW — same-org, `training.manage`-gated; inflates a reported
 percentage rather than exposing data or bypassing a control.

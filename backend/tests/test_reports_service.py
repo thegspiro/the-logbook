@@ -288,3 +288,59 @@ class TestComplianceStatusReport:
         assert result["report_type"] == "compliance_status"
         assert result["total_members"] == 0
         assert result["fully_compliant_count"] == 0
+
+    async def test_member_nothing_grades_is_not_applicable(self, service, org_id):
+        """TR4-4: a member no requirement grades has no percentage, sits in
+        no compliance bucket, and is left out of the overall rate — which
+        used to average them in at 100%."""
+        from types import SimpleNamespace
+
+        def user(uid, membership_type):
+            return SimpleNamespace(
+                id=uid,
+                first_name=uid,
+                last_name="",
+                username=uid,
+                rank=None,
+                membership_type=membership_type,
+                positions=[],
+                hire_date=None,
+                created_at=None,
+            )
+
+        reserve_only = SimpleNamespace(
+            id="r1",
+            name="Reserve Hours",
+            applies_to_all=False,
+            required_membership_types=["reserve"],
+            required_roles=None,
+            existing_member_deadline=None,
+            applies_to_joined_before=None,
+            new_member_cutoff_date=None,
+        )
+
+        rank_result = MagicMock()
+        rank_result.__iter__ = MagicMock(return_value=iter([]))
+        enrollments = MagicMock()
+        enrollments.scalars.return_value.unique.return_value.all.return_value = []
+        service.db.execute = AsyncMock(
+            side_effect=[
+                _scalars_all([reserve_only]),
+                _scalars_all([user("regular", "active"), user("reservist", "reserve")]),
+                rank_result,
+                enrollments,
+            ]
+        )
+
+        result = await service._generate_compliance_status(org_id)
+
+        by_id = {e["member_id"]: e for e in result["entries"]}
+        assert by_id["regular"]["compliance_percentage"] is None
+        assert by_id["reservist"]["compliance_percentage"] == 0.0
+        assert result["not_applicable_count"] == 1
+        assert result["fully_compliant_count"] == 0
+        assert result["non_compliant_count"] == 1
+        # The reservist alone, not (100 + 0) / 2.
+        assert result["overall_compliance_rate"] == 0.0
+        # Not-applicable members sort last.
+        assert result["entries"][-1]["member_id"] == "regular"

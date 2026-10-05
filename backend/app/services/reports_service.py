@@ -1207,6 +1207,7 @@ class ReportsService:
         fully_compliant = 0
         partially_compliant = 0
         non_compliant = 0
+        not_applicable = 0
         # The department's date is needed only to judge a catch-up period, so
         # an org that has configured none is spared the lookup.
         today = (
@@ -1240,15 +1241,19 @@ class ReportsService:
                 graded.append(rid)
             total_reqs = len(graded)
             completed_count = sum(1 for rid in graded if rid in completed_ids)
+            # None for a member nothing grades: they are not applicable, and
+            # sit outside every bucket and the overall rate (TR4-4).
             pct = (
-                round(completed_count / total_reqs * 100, 1) if total_reqs > 0 else 100
+                round(completed_count / total_reqs * 100, 1) if total_reqs > 0 else None
             )
 
             overdue_items = [
                 req_map[rid].name for rid in graded if rid not in completed_ids
             ]
 
-            if pct >= 100:
+            if pct is None:
+                not_applicable += 1
+            elif pct >= 100:
                 fully_compliant += 1
             elif pct > 0:
                 partially_compliant += 1
@@ -1269,16 +1274,21 @@ class ReportsService:
                 }
             )
 
-        report_entries.sort(key=lambda e: e["compliance_percentage"])
-
-        overall_rate = (
-            round(
-                sum(e["compliance_percentage"] for e in report_entries)
-                / len(report_entries),
-                1,
+        # Not-applicable members last: they have no percentage to rank by.
+        report_entries.sort(
+            key=lambda e: (
+                e["compliance_percentage"] is None,
+                e["compliance_percentage"] or 0,
             )
-            if report_entries
-            else 0
+        )
+
+        graded_pcts = [
+            e["compliance_percentage"]
+            for e in report_entries
+            if e["compliance_percentage"] is not None
+        ]
+        overall_rate = (
+            round(sum(graded_pcts) / len(graded_pcts), 1) if graded_pcts else None
         )
 
         return {
@@ -1288,6 +1298,7 @@ class ReportsService:
             "fully_compliant_count": fully_compliant,
             "partially_compliant_count": partially_compliant,
             "non_compliant_count": non_compliant,
+            "not_applicable_count": not_applicable,
             "overall_compliance_rate": overall_rate,
             "entries": report_entries,
         }

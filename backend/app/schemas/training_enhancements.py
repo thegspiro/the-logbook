@@ -540,10 +540,11 @@ class ComplianceForecast(BaseModel):
 
     user_id: UUID
     user_name: Optional[str] = None
-    current_compliance_percentage: float
-    forecast_30_days: float
-    forecast_60_days: float
-    forecast_90_days: float
+    # None for a member no requirement grades (not applicable).
+    current_compliance_percentage: Optional[float]
+    forecast_30_days: Optional[float]
+    forecast_60_days: Optional[float]
+    forecast_90_days: Optional[float]
     at_risk_requirements: List[Dict[str, Any]] = Field(default_factory=list)
     expiring_certifications: List[Dict[str, Any]] = Field(default_factory=list)
 

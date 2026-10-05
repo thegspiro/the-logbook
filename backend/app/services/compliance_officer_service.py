@@ -38,6 +38,8 @@ from app.models.training import (
 )
 from app.models.user import User, UserStatus
 from app.services.training_compliance import (
+    STANDING_NOT_APPLICABLE,
+    classify_standing,
     evaluate_member_requirement,
     get_org_include_current_month,
     member_join_date,
@@ -937,6 +939,7 @@ class AnnualComplianceReportService:
 
         # Evaluate member compliance
         fully_compliant = 0
+        not_applicable_members = 0
         member_compliance: List[Dict[str, Any]] = []
         total_hours = 0.0
         total_certs_active = 0
@@ -977,9 +980,11 @@ class AnnualComplianceReportService:
                 for req in applicable_reqs
             )
 
-            compliance_pct = (
-                round(met_count / req_total * 100, 1) if req_total > 0 else 100.0
-            )
+            # Default thresholds (100% compliant, 75% at risk): this report is
+            # not compliance-profile-aware (CMP4-3), but the standing itself
+            # comes from the one definition every screen shares. A member
+            # nothing grades is "not_applicable" with no percentage.
+            member_status, compliance_pct = classify_standing(met_count, req_total)
 
             # Count certifications (active vs expired)
             certs = [
@@ -994,18 +999,13 @@ class AnnualComplianceReportService:
             total_certs_active += active
             total_certs_expired += expired
 
-            # A member with no applicable requirements is 100% compliant
-            # (compliance_pct is set to 100.0 above), matching
-            # compute_org_compliance_pct. The prior `req_total > 0` guard here
-            # dropped them out of the compliant bucket and mislabeled them
-            # "at_risk", which also understated the org-wide percentage.
-            if req_total == 0 or met_count >= req_total:
+            # A member with no applicable requirements is outside the
+            # org-wide percentage altogether, matching
+            # compute_org_compliance_pct (TR4-4).
+            if member_status == STANDING_NOT_APPLICABLE:
+                not_applicable_members += 1
+            elif member_status == "compliant":
                 fully_compliant += 1
-                member_status = "compliant"
-            elif compliance_pct >= 75:
-                member_status = "at_risk"
-            else:
-                member_status = "non_compliant"
 
             name = (
                 f"{member.first_name or ''} {member.last_name or ''}".strip()
@@ -1025,10 +1025,14 @@ class AnnualComplianceReportService:
                 }
             )
 
+        # The denominator is the members something grades. None when nobody
+        # is graded: an empty population is reported as not applicable, not
+        # as 0% or 100%.
+        graded_members = total_members - not_applicable_members
         overall_compliance_pct = (
-            round(fully_compliant / total_members * 100, 1)
-            if total_members > 0
-            else 0.0
+            round(fully_compliant / graded_members * 100, 1)
+            if graded_members > 0
+            else None
         )
 
         # Aggregate the per-member status buckets. Without these the report's
@@ -1145,6 +1149,8 @@ class AnnualComplianceReportService:
             "executive_summary": {
                 "overall_compliance_pct": overall_compliance_pct,
                 "total_members": total_members,
+                "graded_members": graded_members,
+                "not_applicable_members": not_applicable_members,
                 "fully_compliant_members": fully_compliant,
                 "at_risk_members": at_risk_members,
                 "non_compliant_members": non_compliant_members,

@@ -887,6 +887,12 @@ export const Standing = {
   COMPLIANT: 'compliant',
   AT_RISK: 'at_risk',
   NON_COMPLIANT: 'non_compliant',
+  /**
+   * Nothing grades this member: no requirement applies, or every one that does
+   * is still in its catch-up period. Not a pass — the member is left out of
+   * every compliance percentage and shown muted, with no percentage of their own.
+   */
+  NOT_APPLICABLE: 'not_applicable',
 } as const;
 export type Standing = (typeof Standing)[keyof typeof Standing];
 

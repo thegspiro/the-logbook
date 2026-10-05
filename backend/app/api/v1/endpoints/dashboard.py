@@ -1023,8 +1023,9 @@ async def get_admin_summary(
     # Uses the same logic as the compliance-matrix endpoint: for each active
     # member, evaluate every active training requirement and compute the
     # percentage of members who are fully compliant.
-    # None (the tile is hidden) when nothing is required: a vacuous 100% would
-    # tell the administrator the department is fully current.
+    # None (the tile is hidden) when nothing is required, or when nothing that
+    # is required applies to any member: a vacuous 100% would tell the
+    # administrator the department is fully current.
     training_pct: float | None = None
     if "training" in enabled:
         try:

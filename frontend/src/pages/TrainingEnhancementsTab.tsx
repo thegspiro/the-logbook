@@ -1492,21 +1492,26 @@ const ReportsSection: React.FC = () => {
                   <tr key={f.user_id} className="border-theme-surface-border/50 border-b">
                     <td className="text-theme-text-primary py-2 pr-4">{f.user_name || f.user_id}</td>
                     <td className="py-2 pr-4">
-                      <span
-                        className={
-                          f.current_compliance_percentage >= 80
-                            ? 'text-green-600'
-                            : f.current_compliance_percentage >= 50
-                              ? 'text-yellow-600'
-                              : 'text-red-600'
-                        }
-                      >
-                        {f.current_compliance_percentage}%
-                      </span>
+                      {f.current_compliance_percentage === null ? (
+                        // No requirement grades this member.
+                        <span className="text-theme-text-muted">N/A</span>
+                      ) : (
+                        <span
+                          className={
+                            f.current_compliance_percentage >= 80
+                              ? 'text-green-600'
+                              : f.current_compliance_percentage >= 50
+                                ? 'text-yellow-600'
+                                : 'text-red-600'
+                          }
+                        >
+                          {f.current_compliance_percentage}%
+                        </span>
+                      )}
                     </td>
-                    <td className="py-2 pr-4">{f.forecast_30_days}%</td>
-                    <td className="py-2 pr-4">{f.forecast_60_days}%</td>
-                    <td className="py-2 pr-4">{f.forecast_90_days}%</td>
+                    <td className="py-2 pr-4">{f.forecast_30_days === null ? 'N/A' : `${f.forecast_30_days}%`}</td>
+                    <td className="py-2 pr-4">{f.forecast_60_days === null ? 'N/A' : `${f.forecast_60_days}%`}</td>
+                    <td className="py-2 pr-4">{f.forecast_90_days === null ? 'N/A' : `${f.forecast_90_days}%`}</td>
                     <td className="py-2">
                       {f.at_risk_requirements.length > 0 && (
                         <span className="text-xs text-red-500">

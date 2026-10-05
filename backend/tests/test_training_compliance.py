@@ -1487,3 +1487,22 @@ class TestCheckRequirementProgressZeroTarget:
 
         assert progress.is_complete is False
         assert progress.percentage_complete == 0.0
+
+
+class TestForecastPct:
+    """The compliance forecast's per-member percentages (TR4-4)."""
+
+    def test_member_nothing_grades_has_no_percentage(self):
+        from app.services.training_enhancement_service import _forecast_pct
+
+        # Was 100 for every horizon, which the compliance officer dashboard
+        # then averaged into the department's "current" figure.
+        assert _forecast_pct(0, 0, 0) is None
+        assert _forecast_pct(0, 0, 2) is None
+
+    def test_expiring_certifications_lower_the_forecast(self):
+        from app.services.training_enhancement_service import _forecast_pct
+
+        assert _forecast_pct(2, 4, 0) == 50.0
+        assert _forecast_pct(2, 4, 1) == 25.0
+        assert _forecast_pct(2, 4, 3) == 0

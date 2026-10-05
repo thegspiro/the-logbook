@@ -695,8 +695,10 @@ class ComplianceSummary(BaseModel):
     requirements_total: int
     certs_expiring_soon: int  # Within 90 days
     certs_expired: int
-    compliance_status: str  # "green", "yellow", "red", "exempt"
-    compliance_label: str  # "Compliant", "At Risk", "Non-Compliant", "Exempt"
+    # "green", "yellow", "red", "exempt", "not_applicable"
+    compliance_status: str
+    # "Compliant", "At Risk", "Non-Compliant", "Exempt", "Not Applicable"
+    compliance_label: str
     hours_this_year: float
     active_certifications: int
     is_exempt: bool = False
