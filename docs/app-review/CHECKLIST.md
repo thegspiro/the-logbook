@@ -112,7 +112,11 @@ reader can tell the difference between _checked and clean_ and _not checked_.
       an accurate default and description.
 - [ ] **Migrations** — new migrations registered in `ALEMBIC_MIGRATIONS.md`;
       seed data files registered in `SEED_DATA_FILES`.
-- [ ] **CHANGELOG** — user-visible changes from this iteration recorded.
+- [ ] **Iteration narrative recorded** — in `docs/app-review/PROGRESS.md`, not
+      `CHANGELOG.md`: that file was closed to new entries on 2026-09-08 (see
+      CLAUDE.md, "Changelog Entries Are No Longer Part of a Pull Request").
+      Anything that can stop an upgrade booting still goes in
+      `docs/UPGRADING.md`, which the freeze does not cover.
 - [ ] **Docstrings on non-obvious logic** — business rules and invariants, per
       the CLAUDE.md comment policy (explain _why_, never restate _what_).
 
@@ -161,12 +165,19 @@ fix it or escalate it, never leave it.
 Record these as limitations in the findings file rather than reporting a clean
 gate you did not achieve:
 
-- **DB-backed pytest cannot run here.** Any test using the `db_session` fixture
-  needs MySQL, and the review sandbox has no Docker daemon. Those tests error at
-  _fixture setup_ with a `pymysql` connection timeout. That signature is an
-  environment failure, not a regression — but confirm it looks like that before
-  dismissing it, and always report the pass count alongside the error count.
-  Tests that don't touch the DB do run and must pass.
+- **DB-backed pytest: check before assuming it cannot run.** _(Corrected
+  2026-10-05, pass B2-5.)_ This entry used to state flatly that `db_session`
+  tests cannot run here, and three apparatus passes deferred an integration test
+  on the strength of it. `.claude/hooks/session-start.sh` starts MariaDB and
+  builds the schema, so in a web session those tests **do** run — pass 5 wrote
+  and ran seven of them. Try the suite first.
+
+  Where there genuinely is no database, `db_session` tests error at _fixture
+  setup_ with a `pymysql` connection timeout. That signature is an environment
+  failure, not a regression — but confirm it looks like that before dismissing
+  it, and always report the pass count alongside the error count. Tests that
+  don't touch the DB run either way and must pass.
+
 - **`isort` may be absent.** `npm run lint:backend` runs
   `isort --check-only`; if it isn't installed, run the other three backend
   checks and say so.
