@@ -3102,8 +3102,10 @@ scope addition of this MCP file surfaced without previously being flagged:
   period), so this is not new behavior, just newly reachable through an
   MCP caller that never existed before.
 
-Not fixed: bounding a certification check's window without breaking its
-correctness is a service-level redesign of what "ignoring the window" means
+**Accepted by the owner (2026-10-05):** the ceiling is one member's history,
+and that is acceptable for this caller. Not redesigned: bounding a
+certification check's window without breaking its correctness is a
+service-level redesign of what "ignoring the window" means
 for this class of check (`training_compliance.py`'s date-window logic), not
 a safe drive-by change. Same abuse-resistance class as "Dashboard Summary Is
 an Unbounded Per-Request Scan" above (TR2-4) — a per-member, not org-wide,

@@ -588,7 +588,7 @@ UPDATE statement, including its expanding `IN`-list bindparam, clears
 standard mocked-bind unit test for the table-missing guard, in the manner
 of the `email_service` migration's own test.
 
-### TR3-2 — LOW (abuse resistance) — `get_member_requirements_progress`'s pagination bounds the response, not the scan behind it — 🚩 FLAGGED
+### TR3-2 — LOW (abuse resistance) — `get_member_requirements_progress`'s pagination bounds the response, not the scan behind it — ✅ ACCEPTED (owner, 2026-10-05: the ceiling is one member's history)
 
 **Reported by Codex on this PR; confirmed.** See the "Scope addition"
 correction above for the mechanism. `limit`/`offset` on the MCP tool
