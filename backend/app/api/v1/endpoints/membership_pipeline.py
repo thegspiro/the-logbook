@@ -1269,6 +1269,7 @@ async def complete_step(
 async def list_my_sign_offs(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
 ):
     """
     Multi-Signer Approval stages waiting on the caller's own signature.
@@ -1278,11 +1279,22 @@ async def list_my_sign_offs(
     holders, and the list only ever contains stages asking for a role the
     caller holds. Each entry carries the applicant's name and stage, not
     their record.
+
+    Carries no ``{prospect_id}`` path parameter, so the router-level
+    ``block_self_prospect_access`` guard never runs for it (same reason
+    ``/interviews/{interview_id}`` needed its own guard) — an officer who
+    also has an active application of their own, naming a role they hold as
+    a required signer, must not see their own name and stage in this list.
+    Filtered the same way every other list/aggregate route in this file
+    hides a caller's own record.
     """
     service = MembershipPipelineService(db)
-    return await service.list_pending_sign_offs(
+    sign_offs = await service.list_pending_sign_offs(
         str(current_user.organization_id), str(current_user.id)
     )
+    return [
+        entry for entry in sign_offs if entry["prospect_id"] not in hidden_prospect_ids
+    ]
 
 
 @router.post(

@@ -1,6 +1,6 @@
 # Security Review — Membership Pipeline
 
-**Prefix:** `MP` · **Iteration:** 8 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4), 2026-09-02 (pass 4 round 2), 2026-09-02 (pass 4 round 3), 2026-09-02 (pass 4 round 4), 2026-09-08 (pass 5), 2026-09-14 (pass 6), 2026-09-16 (pass 7), 2026-10-05 (pass 8) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4, pass 4 round 2, pass 4 round 3, and pass 4 round 4), [#2405](https://github.com/thegspiro/the-logbook/pull/2405) (pass 5, plus #2406/#2408/#2413 follow-ups), [#2555](https://github.com/thegspiro/the-logbook/pull/2555) (pass 6), [#2605](https://github.com/thegspiro/the-logbook/pull/2605) (pass 7), pass 8 PR number added on merge
+**Prefix:** `MP` · **Iteration:** 8 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4), 2026-09-02 (pass 4 round 2), 2026-09-02 (pass 4 round 3), 2026-09-02 (pass 4 round 4), 2026-09-08 (pass 5), 2026-09-14 (pass 6), 2026-09-16 (pass 7), 2026-10-05 (pass 8) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4, pass 4 round 2, pass 4 round 3, and pass 4 round 4), [#2405](https://github.com/thegspiro/the-logbook/pull/2405) (pass 5, plus #2406/#2408/#2413 follow-ups), [#2555](https://github.com/thegspiro/the-logbook/pull/2555) (pass 6), [#2605](https://github.com/thegspiro/the-logbook/pull/2605) (pass 7), [#2955](https://github.com/thegspiro/the-logbook/pull/2955) (pass 8)
 
 ---
 
@@ -66,7 +66,21 @@ exploit. `test_prospect_target_role_and_lifecycle.py` now records the chooser.
 
 ---
 
-## Pass 8 (2026-10-05) — 0 fixed, 0 new flagged, all 4 standing FLAGGED items re-verified unchanged (watchdog pickup)
+## Pass 8 (2026-10-05) — 1 fixed (MP-32, LOW/MEDIUM), 0 new flagged, all 4 standing FLAGGED items re-verified unchanged (watchdog pickup, continued by a second session)
+
+**This section was written in two parts.** The first watchdog session wrote
+everything below down to "What changed, read in full" plus the
+Authorization/Tenant-isolation/Migration analysis — real, independently
+verified work that holds up. It did not, however, re-enumerate this
+feature's routes (checklist §1's "every route carries an auth dependency —
+enumerate them"), which is how a second session, picking up the same
+rotation row under the same race (two sessions started Step 0 close enough
+together that each found no open PR yet), found a route-level gap the first
+pass's diff-bounded review did not surface. Rather than open a competing PR
+for the same feature, the second session's finding (MP-32) and its fix are
+appended here, in the PR the first session already opened
+(per this rotation's own "one PR at a time" / "tends that PR" rule), and the
+header count above reflects both sessions' combined result.
 
 **Watchdog pickup.** The dedicated `/loop 30m /security-review` session had
 gone quiet — PR #2952 (Feature 07, Users & organizations, pass 7) sat green
@@ -161,6 +175,70 @@ nested-JSON-mutation site (the column is written whole via
 (grepped fresh over `membership_pipeline*.py` and
 `frontend/src/modules/prospective-members/`).
 
+**Route enumeration (added by the second session, checklist §1):** an AST
+walk of every `@router.(get|post|put|patch|delete)` decorator through its
+`Depends` calls found **53 routes**, not the 52 pass 7 counted — one new
+route, `GET /my-sign-offs` (added 2026-09-28, inside this pass's own
+reviewed window but not called out by the diff-table above, which tracked
+file-level changes rather than route-level ones). That route is where
+MP-32, below, was found.
+
+### MP-32 — LOW/MEDIUM — `GET /my-sign-offs` did not hide the caller's own application — ✅ FIXED
+
+**What:** `list_my_sign_offs` (`membership_pipeline.py:1268`) returns, for
+each `ACTIVE` applicant on a Multi-Signer Approval stage, the applicant's
+name/pipeline/stage when the caller holds a role that stage still needs
+signed. The route carries no `{prospect_id}` path parameter, so the
+router-level `block_self_prospect_access` dependency
+(`membership_pipeline.py:108`) — which exists specifically to stop a member
+reading the record that describes _them_ — never runs for it, the same gap
+`block_self_interview_access` was added to close for
+`/interviews/{interview_id}` (documented in `prospect_privacy.py`'s own
+module docstring). Unlike every other list/aggregate route in this file
+(`/widget-summary`, the kanban board, `/stats`, `/source-events`,
+`/prospects`, both bulk routes, `/election-packages` — all eight depend on
+`get_hidden_prospect_ids`), `list_my_sign_offs` applied no such filter.
+
+**Failure scenario:** an officer who holds an approval role a stage asks
+for (Chief, President, …) and who also has an `ACTIVE` application of their
+own — matched via the same email, or the same first/last name plus date of
+birth, that `self_prospect_predicate` already uses for every other
+self-access check — on a Multi-Signer Approval stage naming their own role
+as a required signer, would see their own name and stage appear in their
+own `/my-sign-offs` list: exactly the fact (a pending application, which
+pipeline, which stage) `prospect_privacy.py`'s module docstring says a
+member "must never be able to read" about their own file.
+
+**Fix:** added the same `hidden_prospect_ids: set[str] =
+Depends(get_hidden_prospect_ids)` dependency every sibling list route
+already carries, filtering the service's (deliberately unfiltered — other
+internal callers may want the whole list) result at the endpoint, matching
+`pipeline_widget_summary`'s own in-Python filtering idiom rather than
+pushing the exclusion into the service's query (declined for this fix's
+size — the result set is already small, bounded by "stages waiting on one
+person's signature," unlike the paginated lists that filter in SQL).
+
+**Test:** `tests/test_prospect_conversion_gate.py::TestMySignOffsHidesTheCallersOwnApplication`
+— an applicant whose email matches a chief's own, on the Multi-Signer stage
+requiring "chief." Confirms the **service** layer (`list_pending_sign_offs`)
+still returns the match unfiltered — proving the fix is in the endpoint,
+not a service-level change other callers would silently inherit — then
+confirms the **endpoint**, called as that chief, returns `[]`. Independently
+confirmed to fail against the pre-fix endpoint (`git stash` on
+`membership_pipeline.py` only, test left in place — the endpoint returned
+the one entry) before the fix, and to pass after.
+
+### `member_class`/`member_status` on transfer — reviewed again for an MP-31-shaped escalation, same conclusion
+
+Re-confirmed the first session's own tracing: no permission grant anywhere
+in `app/core/permissions.py` or `app/models/user.py` is keyed on
+`member_class`/`member_status` — both are read only by scheduling
+eligibility, election voter eligibility, ID-card rendering and
+membership-tier accrual. Permission grants on the new account remain
+exclusively `role_ids`/`target_role_id`, both still under MP-31's ceiling
+check, independently re-confirmed present and unchanged at
+`membership_pipeline_service.py:3928-4325`. Not a finding.
+
 ### Flagged items re-verified, unchanged (no new fix, no regression)
 
 - **MP-10** (unbounded `list_election_packages`/`create_election_package`) —
@@ -174,7 +252,11 @@ nested-JSON-mutation site (the column is written whole via
   `KNOWN_LIMITATIONS.md`; no content change.
 - **MP-22** (a document delete can lose the file if the commit fails after a
   successful `os.remove`) — `delete_prospect_document` untouched by this
-  pass's diff; ordering unchanged.
+  pass's diff; ordering unchanged. **This pass's own `purge_inactive_prospects`
+  rewrite carries the same tradeoff** (files removed from disk before the
+  row delete/commit) for the same reason — not a second finding, recorded
+  in `docs/KNOWN_LIMITATIONS.md` alongside the original so the two sites
+  aren't independently rediscovered later.
 - **MP-26** (the narrowed multi-`election_vote`-stage ambiguity) —
   `_election_block_reason` was refactored this pass (split into
   `_latest_election_package_status` for reuse by the new no-package advance
@@ -184,8 +266,8 @@ nested-JSON-mutation site (the column is written whole via
   which _stage's_ package counts — a strictly separate question MP-26 already
   isolated — so this finding's own scope is unaffected either way.
 
-No new flags. All four re-derived from current code this pass, not copied
-from the prior write-up.
+No new flags beyond MP-32 above. All four re-derived from current code this
+pass, not copied from the prior write-up.
 
 ### Verified good ✅ (pass 8)
 
@@ -220,15 +302,19 @@ from the prior write-up.
 | `python3 scripts/validate_migrations.py --strict`                                                                                                 | pass — 512 revisions, single head `34d3d56d1479` (no migration this pass) |
 | `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                 | pass — 245 routes checked, 0 errors, 0 warnings                           |
 | cross-cutting guard tests (org-scoping ratchet, LIKE escaping, CSV sweep, capacity locking, endpoint-auth coverage, permission-gate branch sweep) | 72 passed                                                                 |
-| scoped pytest (`-k "membership or prospect or pipeline or election"`)                                                                             | 1516 passed / 1 skipped (`py_vapid`) / 0 failed                           |
+| scoped pytest (`-k "membership or prospect or pipeline or election"`)                                                                             | 1517 passed / 1 skipped (`py_vapid`) / 0 failed (+1 for MP-32's new test) |
 | full backend unit suite (`pytest tests/ -m "not integration and not slow and not docker"`)                                                        | pass — 12,660 passed, 1 pre-existing skip (`py_vapid`), 0 failed          |
 | `cd frontend && npm run typecheck`                                                                                                                | pass, 0 errors                                                            |
 | `cd frontend && npm run lint`                                                                                                                     | pass, 0 errors, 0 warnings                                                |
 | scoped frontend suite (`npx vitest run src/modules/prospective-members`)                                                                          | 259 passed (32 files)                                                     |
 
-No source files in this feature's declared scope changed _during_ this
-pass — every check above verifies the real delta that landed since pass 7/
-MP-31, not a fix made in this PR.
+Application source **did** change in this PR's final form: MP-32's one-line
+dependency addition plus the filter in `list_my_sign_offs`
+(`membership_pipeline.py`) and its guard test
+(`tests/test_prospect_conversion_gate.py`). Every other check above still
+verifies the real delta that landed since pass 7/MP-31; the counts in this
+table are the final, post-MP-32 numbers (re-run after that fix, not the
+first session's own pre-fix numbers).
 
 ---
 
