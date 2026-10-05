@@ -815,6 +815,29 @@ Still open: order and request numbers (`ORD-YYYY-`, `PR-YYYY-`) take their year
 from UTC, which differs only on the evening of December 31 and changes nothing
 but the prefix.
 
+## Sign-in From a Shared Station Address (2026-10-05)
+
+**Open decision.** A station's members usually share one public address, and
+two sign-in limits are counted per address rather than per member:
+
+- nginx's `login_limit` in both bundled proxies (`infrastructure/nginx/nginx.conf`,
+  `infrastructure/nginx/docker.conf`): 5 a minute, burst 3.
+- The backend's `rate_limit_login` (`app/core/security_middleware.py`): 5
+  attempts in 60 seconds, counting successful ones. With Redis — the bundled
+  stack — the next sign-in is refused with a 429 for the rest of the minute;
+  on the in-memory fallback it locks the address out for 30 minutes.
+
+So at shift change, the sixth member to sign in at the station within a minute
+is turned away, and on the in-memory fallback everyone behind that address is
+locked out for half an hour. Both are brute-force controls, so neither was
+loosened when the general per-address limits were sized for a department
+(`limit_conn 400`, API 50/s with a burst of 600 — see
+`test_nginx_config_consistency.py`). The options are to raise the per-address
+count, or to key the backend limiter on the account as well as the address;
+account lockout and the suspicious-IP throttle already cover the cross-account
+case. Until then, with Redis running, the cost is a member asked to wait a
+minute.
+
 ## Suggestion Boxes — What Anonymity Does and Does Not Cover (2026-09-23)
 
 **Accepted.** An anonymous suggestion is stored with no record of its author:
@@ -2839,9 +2862,9 @@ or warns against it today. (Security review ELEC-38,
 
 ## Users: Roster/Archive/Leave Lists Are Unbounded, Not Just Un-Paginated (2026-08-25)
 
-`list_users_with_roles` (`users.py:601`) and `get_archived_members`
-(`member_status.py:723`) return every matching row in the org with no
-pagination; `leave_widget_summary` (`member_leaves.py:50`) materializes every
+`list_users_with_roles` (`users.py:824`) and `get_archived_members`
+(`member_status.py:771`) return every matching row in the org with no
+pagination; `leave_widget_summary` (`member_leaves.py:53`) materializes every
 `active` leave to compute its counts, and `MemberLeaveService.list_leaves`
 (`member_leave_service.py`) runs an unbounded query before its two callers in
 `member_leaves.py` apply an in-memory slice. All four are `members.manage`-gated
@@ -2867,7 +2890,7 @@ a frontend-affecting decision, not a drop-in. (Security review USR-5,
 docstring — is enough to receive the same `UserListResponse` shape
 `members.manage` gets: `username`, `hire_date`, `membership_number`, `rank`,
 and `station` for every member in the org
-(`app/services/user_service.py:24-91`, `app/schemas/user.py:271-298`). A
+(`app/services/user_service.py:24-93`, `app/schemas/user.py:462-493`). A
 2026-09-01/02 frontend change (`frontend/src/pages/Members.tsx`) now presents
 a visibly reduced "Member Directory" for callers without `members.manage` —
 no username, no Hire Date column, no export/bulk actions — framed as "a

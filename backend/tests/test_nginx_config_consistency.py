@@ -123,3 +123,48 @@ def test_body_limit_matches_the_backend(config):
     ]
     assert limits, f"{config.relative_to(REPO_ROOT)} sets no client_max_body_size"
     assert all(limit == ceiling for limit in limits), limits
+
+
+# The two bundled proxies — the host install and the compose production
+# profile — front the same app for the same departments, so they apply the same
+# per-address limits. A station's members share one public address; a limit
+# sized for one person refuses a whole room loading pages together (at
+# `limit_conn 10` a single dashboard load lost 15 of its 25 API calls).
+_PROXIES = {
+    "host install": NGINX_CONFIGS["host install"],
+    "compose production profile": NGINX_CONFIGS["compose production profile"],
+}
+
+
+def _per_address_limits(path: Path) -> dict[str, str]:
+    text = _read(path)
+    found = {
+        "limit_conn": re.search(r"^\s*limit_conn conn_limit (\d+);", text, re.M),
+        "api rate": re.search(r"zone=api_limit:\S+ rate=(\S+);", text),
+        "api burst": re.search(
+            r"location /api/ \{.*?limit_req zone=api_limit (burst=\d+[^;]*);",
+            text,
+            re.S,
+        ),
+    }
+    missing = [name for name, match in found.items() if match is None]
+    assert not missing, f"{path.relative_to(REPO_ROOT)} lacks {missing}"
+    return {name: match.group(1) for name, match in found.items() if match}
+
+
+def test_both_proxies_apply_the_same_per_address_limits():
+    host, compose = (_per_address_limits(p) for p in _PROXIES.values())
+    assert host == compose
+
+
+@pytest.mark.parametrize("config", _PROXIES.values(), ids=_PROXIES.keys())
+def test_per_address_limits_fit_a_shared_station_address(config):
+    limits = _per_address_limits(config)
+    # Floors, not the tuned values: each is what one member's first page load
+    # already needs, measured against nginx itself.
+    assert int(limits["limit_conn"]) >= 100
+    assert (
+        "nodelay" not in limits["api burst"]
+    ), "a burst over the limit should queue, not be refused"
+    burst = int(re.search(r"burst=(\d+)", limits["api burst"]).group(1))
+    assert burst >= 100

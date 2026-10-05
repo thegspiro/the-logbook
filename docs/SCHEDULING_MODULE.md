@@ -429,6 +429,39 @@ as its own transaction after the removal commits — inside it, the locks would
 be taken in the opposite order to `review_swap_request` and could deadlock
 against a concurrent review, and review re-checks the seat under lock anyway.
 
+**Two-way exchanges need both members qualified** _(2026-10-05)_ — in an
+exchange (a requested shift _and_ a target member) seats stay with their shifts:
+each member works the other's seat afterwards, so each must be cleared for that
+seat's position by the signup rule (`get_eligible_positions` — rank grants,
+qualifications, completed training, open positions). A driver can exchange with
+anyone holding a driver seat — another engineer, or a lieutenant riding as
+driver — but not into an officer seat unless they are cleared as officer, and
+not with a firefighter who is not cleared to drive. One-way requests (handing a
+seat over, or moving to another shift) are not exchanges and are not gated by
+this.
+
+```
+GET    /api/v1/scheduling/shifts/{id}/exchange-candidates   # Member self-service
+```
+
+- **Refused when submitted.** `POST /swap-requests` rejects an exchange whose
+  target holds no seat on the requested shift, involves a training seat, or
+  fails the rule in either direction — the request never reaches the queue.
+- **The picker only offers qualifying pairs.** My Shifts → Request swap →
+  _Exchange With a Member_ lists upcoming seats (90 days, open and unfinalized
+  shifts) where both sides qualify, excluding shifts the caller already works
+  and members already on the caller's shift. Leave, overlap and capacity are
+  left to approval, which re-checks everything live.
+- **Re-checked at approval, with an override.** Qualifications can lapse while a
+  request waits. Review then refuses with **`LB-SCHED-002`**, and the Requests
+  tab offers _Approve anyway_; that sends `override_qualification: true`, which
+  waives the position check only (leave, overlap, capacity and the EVOC driver
+  block still apply), prefixes the reviewer notes with
+  "[Approved with qualification override]", and writes a
+  `shift_exchange_qualification_override` audit event. Because an unqualified
+  exchange cannot be submitted, the override only ever applies to one that
+  lapsed while pending; a deliberate one-off seating is made from the roster.
+
 **Expiry** _(2026-08-23)_ — a pending offer holds the seat with the member who
 made it, so left alone it survives the shift itself: the offerer believes they
 are covered, the duty officer sees a name that will not turn up, and nobody is
