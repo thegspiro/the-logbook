@@ -8,6 +8,7 @@ configure per-department.
 """
 
 import enum
+import hashlib
 
 from sqlalchemy import (
     JSON,
@@ -23,10 +24,11 @@ from sqlalchemy import (
     String,
     Text,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, validates
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+from app.core.encrypted_types import EncryptedText
 from app.core.utils import generate_uuid
 
 # --- Enums ---
@@ -323,8 +325,17 @@ class ProspectiveMember(Base):
         nullable=True,
     )
 
-    # Public status check token
-    status_token = Column(String(64), unique=True, index=True)
+    # Public status check token (PP-6). The token is a bearer credential, so
+    # neither column yields it from a database or backup read alone:
+    #   - status_token_hash is the SHA-256 of the token and is the ONLY column
+    #     a lookup may match on. A hash, not a password KDF, because the token
+    #     is 256 bits of randomness — there is nothing to brute-force.
+    #   - status_token is the token itself, AES-256-GCM encrypted, kept only
+    #     because later pipeline emails re-send the link. It is never queried.
+    # Writers assign status_token only: the validator below keeps the hash in
+    # step with every assignment, including a rotation or a clear.
+    status_token = Column(EncryptedText)
+    status_token_hash = Column(String(64), unique=True, index=True, nullable=True)
     status_token_created_at = Column(DateTime(timezone=True))
 
     # Transfer tracking
@@ -399,6 +410,16 @@ class ProspectiveMember(Base):
             unique=True,
         ),
     )
+
+    @staticmethod
+    def hash_status_token(token: str) -> str:
+        """The lookup key for a public status token: hex SHA-256."""
+        return hashlib.sha256(token.encode()).hexdigest()
+
+    @validates("status_token")
+    def _sync_status_token_hash(self, _key: str, token: str | None) -> str | None:
+        self.status_token_hash = self.hash_status_token(token) if token else None
+        return token
 
     @property
     def full_name(self) -> str:

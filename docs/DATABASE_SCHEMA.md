@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**288 tables · 4738 columns · 940 foreign keys**
+**288 tables · 4739 columns · 940 foreign keys**
 
 ---
 
@@ -432,7 +432,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`prospect_event_links`](#prospect_event_links) | `ProspectEventLink` | 6 | Links a prospective member to an upcoming event. |
 | [`prospect_interviews`](#prospect_interviews) | `ProspectInterview` | 12 | Interview record for a prospective member. |
 | [`prospect_step_progress`](#prospect_step_progress) | `ProspectStepProgress` | 10 | Tracks a prospect's progress on each pipeline step. |
-| [`prospective_members`](#prospective_members) | `ProspectiveMember` | 35 | Prospective member record, kept separate from the users table. |
+| [`prospective_members`](#prospective_members) | `ProspectiveMember` | 36 | Prospective member record, kept separate from the users table. |
 
 ### Nfc_Tag
 
@@ -6498,7 +6498,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `status` | ENUM(`active`, `on_hold`, `approved`, `rejected`, `withdrawn`, `inactive`, `transferred`) | no | IDX | `active` |  |
 | `metadata` | JSON | yes |  | `dict()` |  |
 | `form_submission_id` | VARCHAR(36) | yes | FK |  | → `form_submissions.id` ON DELETE SET NULL |
-| `status_token` | VARCHAR(64) | yes | UQ, UQ-IDX |  |  |
+| `status_token` | TEXT | yes |  |  |  |
+| `status_token_hash` | VARCHAR(64) | yes | UQ, UQ-IDX |  |  |
 | `status_token_created_at` | DATETIME | yes |  |  |  |
 | `transferred_user_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `transferred_at` | DATETIME | yes |  |  |  |
@@ -6519,7 +6520,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_prospect_org_status` (`organization_id`, `status`)
 - `ix_prospective_members_pipeline_id` (`pipeline_id`)
 - `ix_prospective_members_status` (`status`)
-- UNIQUE `ix_prospective_members_status_token` (`status_token`)
+- UNIQUE `ix_prospective_members_status_token_hash` (`status_token_hash`)
 - UNIQUE `uq_prospect_org_active_email` (`organization_id`, `active_email`)
 
 ## Nfc_Tag

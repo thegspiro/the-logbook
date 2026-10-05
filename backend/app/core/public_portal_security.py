@@ -23,7 +23,10 @@ from app.models.public_portal import PublicPortalAccessLog, PublicPortalAPIKey
 # API Key header scheme
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
-# In-memory rate limit tracking (for quick checks before DB)
+# In-memory rate limit tracking — the FALLBACK store, used only when Redis is
+# not connected or a Redis command fails (see _shared_window_hit). Per-process:
+# behind N workers its ceiling is N × the limit, which is why it is no longer
+# the primary store (PP-6).
 # Structure: {api_key_id: {hour_timestamp: request_count}}
 rate_limit_cache: dict[str, dict[int, int]] = defaultdict(lambda: defaultdict(int))
 
@@ -123,6 +126,69 @@ async def get_current_minute_timestamp() -> int:
     return int(minute_start.timestamp())
 
 
+# Redis keys outlive their bucket by a margin so a request arriving on the
+# boundary still finds the counter; the bucket timestamp in the key, not the
+# TTL, is what starts a new window.
+_HOUR_BUCKET_TTL_SECONDS = 3600 + 300
+_MINUTE_BUCKET_TTL_SECONDS = 60 + 60
+
+
+async def _shared_window_hit(key: str, ttl_seconds: int) -> int | None:
+    """Count one request against a fixed-window counter shared by every worker.
+
+    Returns the count *before* this request, or ``None`` when Redis is not
+    connected or the command fails, in which case the caller falls back to its
+    per-process cache — degraded (ceiling = workers × limit) but still
+    protective, the same policy ``public_rate_limit`` applies.
+
+    A fixed window keyed by the clock bucket, rather than the sliding window
+    ``app.core.security.is_rate_limited`` keeps, because both callers report a
+    count and the per-key limit advertises the clock-hour reset in
+    ``X-RateLimit-Reset``; INCR gives the exact shared count and keeps those
+    semantics identical to the in-memory fallback. The INCR/EXPIRE pair and
+    its TTL self-heal mirror ``daily_cap_exceeded``.
+
+    Refused requests are counted too. That only ever holds a caller over the
+    limit for the rest of its window; it never admits one.
+    """
+    from app.core.cache import cache_manager
+
+    client = cache_manager.redis_client
+    if not (cache_manager.is_connected and client):
+        return None
+    try:
+        count = int(await client.incr(key))
+        if count == 1:
+            await client.expire(key, ttl_seconds)
+        elif await client.ttl(key) < 0:
+            # A prior INCR whose EXPIRE failed would otherwise count forever.
+            await client.expire(key, ttl_seconds)
+        return count - 1
+    except Exception as exc:
+        logger.warning(
+            "Public portal shared rate limit unavailable, using per-process "
+            "fallback: {}",
+            exc,
+        )
+        return None
+
+
+async def _access_log_count(
+    api_key_id: str, hour_timestamp: int, db: AsyncSession
+) -> int:
+    """Committed access-log rows for ``api_key_id`` in this clock-hour bucket."""
+    hour_start = datetime.fromtimestamp(hour_timestamp, tz=timezone.utc)
+    result = await db.execute(
+        select(func.count(PublicPortalAccessLog.id)).where(
+            and_(
+                PublicPortalAccessLog.api_key_id == api_key_id,
+                PublicPortalAccessLog.timestamp >= hour_start.isoformat(),
+            )
+        )
+    )
+    return result.scalar() or 0
+
+
 async def check_rate_limit(
     api_key_id: str, rate_limit: int, db: AsyncSession
 ) -> tuple[bool, int, int]:
@@ -136,11 +202,31 @@ async def check_rate_limit(
 
     Returns:
         Tuple of (is_allowed, current_count, limit)
+
+    The count lives in Redis, shared by every worker, so the hourly quota is
+    the quota and not workers × quota (PP-6). Without Redis the per-process
+    cache below answers, reconciled against the access log near the ceiling.
     """
+    hour_timestamp = await get_current_hour_timestamp()
+
+    shared_count = await _shared_window_hit(
+        f"public:portal_key:{api_key_id}:{hour_timestamp}", _HOUR_BUCKET_TTL_SECONDS
+    )
+    if shared_count is not None:
+        current_count = shared_count
+        if current_count >= rate_limit * 0.9:
+            # Same never-lower reconciliation as the fallback below: it only
+            # matters if Redis lost the counter mid-hour (a restart or an
+            # eviction), and then it keeps the access log's tally binding.
+            current_count = max(
+                current_count,
+                await _access_log_count(api_key_id, hour_timestamp, db),
+            )
+        return current_count < rate_limit, min(current_count, rate_limit), rate_limit
+
     # Auto-cleanup when cache grows too large
     if len(rate_limit_cache) > _MAX_RATE_LIMIT_KEYS:
         cleanup_rate_limit_cache()
-    hour_timestamp = await get_current_hour_timestamp()
 
     # Prune stale hour-buckets for this key to prevent unbounded growth
     if api_key_id in rate_limit_cache:
@@ -163,16 +249,7 @@ async def check_rate_limit(
         # result below can only raise the in-memory tally and never lower
         # it, that inflated value would stick for the rest of the new hour
         # and 429 legitimate requests until the bucket rolls over again.
-        hour_start = datetime.fromtimestamp(hour_timestamp, tz=timezone.utc)
-        result = await db.execute(
-            select(func.count(PublicPortalAccessLog.id)).where(
-                and_(
-                    PublicPortalAccessLog.api_key_id == api_key_id,
-                    PublicPortalAccessLog.timestamp >= hour_start.isoformat(),
-                )
-            )
-        )
-        db_count = result.scalar() or 0
+        db_count = await _access_log_count(api_key_id, hour_timestamp, db)
 
         # Raise the per-process tally to the cross-process truth, but never
         # lower it. ``public_portal_access_log`` only ever carries requests
@@ -210,12 +287,24 @@ async def check_ip_rate_limit(
 
     Returns:
         Tuple of (is_allowed, current_count, limit)
+
+    Shared across workers through Redis (PP-6); the per-process cache below is
+    the fallback when Redis is unavailable. Every caller shares one bucket per
+    IP, as they did in the per-process cache, so moving the store changes the
+    ceiling only — never which requests count against it.
     """
+    minute_timestamp = await get_current_minute_timestamp()
+
+    shared_count = await _shared_window_hit(
+        f"public:portal_ip:{ip_address}:{minute_timestamp}",
+        _MINUTE_BUCKET_TTL_SECONDS,
+    )
+    if shared_count is not None:
+        return shared_count < limit, min(shared_count, limit), limit
+
     # Auto-cleanup when cache grows too large
     if len(ip_rate_limit_cache) > _MAX_IP_RATE_LIMIT_KEYS:
         cleanup_rate_limit_cache()
-
-    minute_timestamp = await get_current_minute_timestamp()
 
     # Prune stale minute-buckets for this IP to prevent unbounded growth
     if ip_address in ip_rate_limit_cache:

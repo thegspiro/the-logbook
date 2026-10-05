@@ -114,7 +114,7 @@ interpolation, which React auto-escapes, and does not use
 helpers). No stored-XSS path. **Status:** verified safe (storing raw values is
 fine given output-encoding at render).
 
-### PP-6 — MEDIUM (flagged) — Rate limiter is per-process + application-status token plaintext at rest
+### PP-6 — MEDIUM — ✅ FIXED (2026-10-05) — Rate limiter is per-process + application-status token plaintext at rest
 
 The in-memory `rate_limit_cache`/`ip_rate_limit_cache` are per-worker (true
 ceiling = workers × limit) and reset on restart — a shared Redis store is needed
@@ -128,6 +128,19 @@ a **two-column** design (`status_token_hash` indexed for lookup + the token stor
 **encrypted** via `EncryptedText` for re-display) plus a backfill; the naive "hash
 it" would break every status link. Confirms the schema-change deferral. See
 `docs/app-review/public-portal.md`.
+
+**✅ Fixed (2026-10-05, owner decision: do both).** The per-IP and per-API-key
+limits now count in Redis through `_shared_window_hit` (fixed clock-bucket INCR,
+TTL self-heal as in `daily_cap_exceeded`), so every worker draws on one counter;
+the per-process caches remain only as the fallback when Redis is unavailable or a
+command fails. The status token now has the two-column shape described above:
+`status_token_hash` (hex SHA-256, unique) is the only column a lookup matches, and
+`status_token` is `EncryptedText`. A model validator keeps the hash in step with
+every assignment, so a rotation (the anonymizer's) moves the lookup key too.
+Migration `f7c09cfec5b0` hashes and encrypts existing rows in place, keeping the
+token value — links already emailed keep working. Tests:
+`tests/test_public_portal_security.py::TestSharedRateLimit`,
+`tests/test_status_token_at_rest.py`.
 
 ### PP-7 — LOW — ✅ mostly FIXED — Per-request write + query amplification, nested-address whitelist
 

@@ -99,7 +99,13 @@ a safe cleanup, and flagged the rest precisely.
 
 ## Findings
 
-### PP-6 — MEDIUM — 🚩 FLAGGED (infra / schema, with added nuance)
+### PP-6 — MEDIUM — ✅ FIXED 2026-10-05 (was flagged: infra / schema, with added nuance)
+
+Resolved on the owner's decision to do both halves: a Redis-shared counter for
+the portal's per-IP and per-key limits, and the two-column token storage below
+(migration `f7c09cfec5b0`, existing tokens hashed and encrypted in place so sent
+links keep working). Details in `docs/module-audit/public-portal.md` PP-6. The
+finding as originally flagged:
 
 - **Per-process rate limiter.** `rate_limit_cache` / `ip_rate_limit_cache` are
   per-worker (true ceiling = workers × limit) and reset on restart; a real global

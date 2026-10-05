@@ -6,12 +6,14 @@ Covers:
   - Per-IP stale timestamp pruning in check_ip_rate_limit
   - cleanup_rate_limit_cache forced eviction when over max keys
   - PUB-5: check_rate_limit's DB reconciliation raises the tally, never lowers it
+  - PP-6: both limits count in Redis, shared by every worker, and fall back
+    to the per-process cache only when Redis is unavailable
 """
 
 import sys
 from datetime import datetime, timezone
-from types import ModuleType
-from unittest.mock import MagicMock
+from types import ModuleType, SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -115,12 +117,53 @@ class _CountingDB:
 
 @pytest.fixture(autouse=True)
 def _clear_caches():
-    """Clear global caches before and after each test."""
+    """Clear global caches before and after each test.
+
+    Redis is pinned disconnected so the per-process tests below exercise the
+    fallback whatever an earlier test left ``cache_manager`` connected to; the
+    shared-store tests install their own fake.
+    """
     rate_limit_cache.clear()
     ip_rate_limit_cache.clear()
-    yield
+    with patch(
+        "app.core.cache.cache_manager",
+        SimpleNamespace(is_connected=False, redis_client=None),
+    ):
+        yield
     rate_limit_cache.clear()
     ip_rate_limit_cache.clear()
+
+
+class _FakeRedis:
+    """Just the INCR/EXPIRE/TTL surface the shared window uses."""
+
+    def __init__(self, fail: bool = False):
+        self.counts: dict[str, int] = {}
+        self.ttls: dict[str, int] = {}
+        self.fail = fail
+
+    async def incr(self, key):
+        if self.fail:
+            raise ConnectionError("redis down")
+        self.counts[key] = self.counts.get(key, 0) + 1
+        return self.counts[key]
+
+    async def expire(self, key, seconds):
+        self.ttls[key] = seconds
+
+    async def ttl(self, key):
+        return self.ttls.get(key, -1)
+
+
+def _shared_redis(fake: _FakeRedis):
+    return patch(
+        "app.core.cache.cache_manager",
+        SimpleNamespace(is_connected=True, redis_client=fake),
+    )
+
+
+def _current_minute_ts() -> int:
+    return int(datetime.now(timezone.utc).replace(second=0, microsecond=0).timestamp())
 
 
 # ---------------------------------------------------------------------------
@@ -421,3 +464,90 @@ class TestGenerateApiKeyPrefix:
         assert prefix1 != "logbook_"
         # Selective: two distinct keys get distinct prefixes.
         assert prefix1 != prefix2
+
+
+# ---------------------------------------------------------------------------
+# PP-6: a global limit, not one per worker
+# ---------------------------------------------------------------------------
+
+
+class TestSharedRateLimit:
+    """Each worker process has its own in-memory cache; clearing it between
+    calls is what a request landing on a different worker looks like. With
+    Redis connected the count must survive that, because it lives in Redis."""
+
+    @pytest.mark.unit
+    async def test_ip_limit_holds_across_workers(self):
+        fake = _FakeRedis()
+        with _shared_redis(fake):
+            for _ in range(3):
+                ip_rate_limit_cache.clear()
+                allowed, _, _ = await check_ip_rate_limit("7.7.7.7", limit=3)
+                assert allowed is True
+            ip_rate_limit_cache.clear()
+            allowed, count, limit = await check_ip_rate_limit("7.7.7.7", limit=3)
+
+        assert allowed is False
+        assert (count, limit) == (3, 3)
+        # The fallback cache was never written: Redis answered every call.
+        assert not ip_rate_limit_cache
+
+    @pytest.mark.unit
+    async def test_ip_counter_expires(self):
+        fake = _FakeRedis()
+        with _shared_redis(fake):
+            await check_ip_rate_limit("7.7.7.8", limit=3)
+        assert list(fake.ttls.values()) == [120]
+
+    @pytest.mark.unit
+    async def test_a_counter_left_without_expiry_gets_one(self):
+        fake = _FakeRedis()
+        key = f"public:portal_ip:7.7.7.9:{_current_minute_ts()}"
+        fake.counts[key] = 1
+        with _shared_redis(fake):
+            await check_ip_rate_limit("7.7.7.9", limit=3)
+        assert fake.ttls == {key: 120}
+
+    @pytest.mark.unit
+    async def test_ip_limit_falls_back_when_redis_errors(self):
+        ip_rate_limit_cache["6.6.6.6"][_current_minute_ts()] = 3
+        with _shared_redis(_FakeRedis(fail=True)):
+            allowed, _, _ = await check_ip_rate_limit("6.6.6.6", limit=3)
+        # A Redis failure degrades to the per-process limit; it never
+        # waves the request through unchecked.
+        assert allowed is False
+
+    @pytest.mark.unit
+    async def test_api_key_quota_holds_across_workers(self):
+        fake = _FakeRedis()
+        db = _CountingDB(0)
+        with _shared_redis(fake):
+            for _ in range(10):
+                rate_limit_cache.clear()
+                allowed, _, _ = await check_rate_limit("key-shared", 10, db)
+                assert allowed is True
+            rate_limit_cache.clear()
+            allowed, count, limit = await check_rate_limit("key-shared", 10, db)
+
+        assert allowed is False
+        assert (count, limit) == (10, 10)
+        assert not rate_limit_cache
+        assert fake.ttls == {f"public:portal_key:key-shared:{_current_hour_ts()}": 3900}
+
+    @pytest.mark.unit
+    async def test_access_log_still_binds_if_redis_lost_the_count(self):
+        """Redis restarted mid-hour: its counter starts again lower, but the
+        access log's committed rows still hold the key at its ceiling."""
+        fake = _FakeRedis()
+        fake.counts[f"public:portal_key:key-reset:{_current_hour_ts()}"] = 9
+        with _shared_redis(fake):
+            allowed, count, _ = await check_rate_limit("key-reset", 10, _CountingDB(10))
+        assert allowed is False
+        assert count == 10
+
+    @pytest.mark.unit
+    async def test_api_key_quota_falls_back_when_redis_errors(self):
+        rate_limit_cache["key-down"][_current_hour_ts()] = 10
+        with _shared_redis(_FakeRedis(fail=True)):
+            allowed, _, _ = await check_rate_limit("key-down", 10, _CountingDB(0))
+        assert allowed is False
