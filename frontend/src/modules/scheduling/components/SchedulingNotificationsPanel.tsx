@@ -361,7 +361,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
   };
 
   return (
-    <div className="card-secondary p-5">
+    <div className="card-secondary p-4 sm:p-5">
       <div className="mb-1 flex items-center gap-2">
         <Bell className="h-4 w-4 text-violet-500" />
         <h3 className="text-theme-text-primary text-base font-semibold">Scheduling Notifications</h3>
@@ -621,7 +621,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                       />
                       <button
                         onClick={assignCc.add}
-                        className="rounded-lg bg-blue-600 px-3 py-1 text-xs text-white hover:bg-blue-700"
+                        className="rounded-lg bg-red-800 px-3 py-1 text-xs text-white hover:bg-red-900"
                       >
                         Add
                       </button>

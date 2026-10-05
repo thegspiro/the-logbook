@@ -1674,9 +1674,14 @@ class TrainingProgramService:
         self,
         program_requirement_data: ProgramRequirementCreate,
         organization_id: UUID,
+        acting_user_id: Optional[str] = None,
     ) -> Tuple[Optional[ProgramRequirement], Optional[str]]:
         """
         Link a requirement to a program or phase
+
+        ``program_requirement_data.apply_to_current_enrollments`` False waives
+        the new requirement for every member already enrolled, recorded as
+        verified by ``acting_user_id``.
 
         Returns: (program_requirement, error_message)
         """
@@ -1773,18 +1778,39 @@ class TrainingProgramService:
         )
         already_tracked = {str(eid) for eid in existing_rows.scalars().all()}
 
+        # When the officer keeps current enrollees on the standard they enrolled
+        # under, their row is a recorded waiver rather than an absent one:
+        # _is_phase_complete treats a missing row for a required requirement
+        # as unfinished, which would strand them in their current phase.
+        waive_existing = not program_requirement_data.apply_to_current_enrollments
+        now = datetime.now(timezone.utc)
         for eid in affected_ids:
             if str(eid) in already_tracked:
                 continue
-            self.db.add(
-                RequirementProgress(
+            if waive_existing:
+                progress = RequirementProgress(
+                    enrollment_id=eid,
+                    requirement_id=program_requirement_data.requirement_id,
+                    status=RequirementProgressStatus.WAIVED,
+                    progress_value=0.0,
+                    progress_percentage=100.0,
+                    completed_at=now,
+                    verified_by=acting_user_id,
+                    verified_at=now,
+                    verification_notes=(
+                        "Added to the program after this member enrolled; "
+                        "not required of members already enrolled."
+                    ),
+                )
+            else:
+                progress = RequirementProgress(
                     enrollment_id=eid,
                     requirement_id=program_requirement_data.requirement_id,
                     status=RequirementProgressStatus.NOT_STARTED,
                     progress_value=0.0,
                     progress_percentage=0.0,
                 )
-            )
+            self.db.add(progress)
         await self.db.flush()
         for eid in affected_ids:
             await self._recalculate_enrollment_progress(UUID(eid))

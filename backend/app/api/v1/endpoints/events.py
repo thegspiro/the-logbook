@@ -48,7 +48,7 @@ from app.models.event import (
     RSVPStatus,
 )
 from app.models.notification import NotificationChannel
-from app.models.user import Organization, User, UserStatus
+from app.models.user import Organization, Position, User, UserStatus
 from app.schemas.documents import DocumentFolderResponse
 from app.schemas.event import (
     AnalyticsSummary,
@@ -72,6 +72,8 @@ from app.schemas.event import (
     EventTemplateCreate,
     EventTemplateResponse,
     EventTemplateUpdate,
+    EventTransferRequest,
+    EventTransferResponse,
     EventUpdate,
     ExternalAttendeeCheckInResponse,
     FinalizeAttendanceResponse,
@@ -92,6 +94,11 @@ from app.schemas.event import (
 )
 from app.schemas.organization import MembershipTierSettings
 from app.services.documents_service import DocumentsService
+from app.services.event_organizer_service import (
+    FALLBACK_POSITIONS_SETTING,
+    EventOrganizerService,
+    can_manage_organizers,
+)
 from app.services.event_service import (
     BULK_ADD_MAX_SIZE,
     DEFAULT_ALLOWED_RSVP_STATUSES,
@@ -252,6 +259,8 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
         attendance_finalized_at=event.attendance_finalized_at,
         attendance_finalized_by=event.attendance_finalized_by,
         created_by=event.created_by,
+        organizer_id=event.organizer_id,
+        alternate_organizer_id=event.alternate_organizer_id,
         updated_by=event.updated_by,
         created_at=event.created_at,
         updated_at=event.updated_at,
@@ -330,6 +339,14 @@ def _names_to_resolve(event, current_user) -> Dict[str, str]:
         wanted["attendance_finalized_by_name"] = str(event.attendance_finalized_by)
     if event.created_by and user_has_permission(current_user, "events.manage"):
         wanted["created_by_name"] = str(event.created_by)
+    # The organizer pair is shown to whoever may hand the event over, which
+    # includes the organizer and alternate themselves without events.manage:
+    # the transfer dialog has to say who holds the roles now.
+    if can_manage_organizers(event, current_user):
+        if event.organizer_id:
+            wanted["organizer_name"] = str(event.organizer_id)
+        if event.alternate_organizer_id:
+            wanted["alternate_organizer_name"] = str(event.alternate_organizer_id)
     return wanted
 
 
@@ -773,6 +790,10 @@ EVENT_SETTINGS_DEFAULTS = {
         "require_reason": True,
         "notify_attendees": True,
     },
+    # Event type -> position id. Whose members are asked about an attendance
+    # request the event's organizer and alternate cannot take; an unset type
+    # goes to the Secretary (event_organizer_service).
+    FALLBACK_POSITIONS_SETTING: {},
 }
 
 
@@ -837,6 +858,30 @@ async def get_event_settings(
     return merged
 
 
+@router.get("/settings/position-options")
+async def list_fallback_position_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    The department's positions, by id and name, for choosing who takes
+    attendance requests an event's organizers cannot.
+
+    Served here rather than through ``/roles`` because that list is gated on
+    positions.view, which an events manager need not hold — and this needs
+    only the names, not the grants each position carries.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    result = await db.execute(
+        select(Position.id, Position.name, Position.slug)
+        .where(Position.organization_id == str(current_user.organization_id))
+        .order_by(Position.name)
+    )
+    return [{"id": r.id, "name": r.name, "slug": r.slug} for r in result.all()]
+
+
 @router.patch("/settings")
 async def update_event_settings(
     updates: EventSettingsUpdate,
@@ -863,6 +908,29 @@ async def update_event_settings(
 
     # Deep merge the validated updates into existing event settings
     updates_dict = updates.model_dump(exclude_unset=True)
+
+    # XC-1: a fallback position is a client-supplied id that later decides who
+    # is sent members' attendance requests, so it must be one of this org's.
+    fallback_ids = {
+        position_id
+        for position_id in (updates_dict.get(FALLBACK_POSITIONS_SETTING) or {}).values()
+        if position_id
+    }
+    if fallback_ids:
+        found = set(
+            (
+                await db.execute(
+                    select(Position.id).where(
+                        Position.id.in_(fallback_ids),
+                        Position.organization_id == str(current_user.organization_id),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if fallback_ids - {str(f) for f in found}:
+            raise HTTPException(status_code=400, detail="Position not found")
     for key, value in updates_dict.items():
         if key in EVENT_SETTINGS_DEFAULTS:
             if isinstance(value, dict) and isinstance(current_events.get(key), dict):
@@ -1141,6 +1209,9 @@ async def get_event(
         maybe_count=maybe_count,
         attendance_finalized_by_name=resolved_names.get("attendance_finalized_by_name"),
         created_by_name=resolved_names.get("created_by_name"),
+        organizer_name=resolved_names.get("organizer_name"),
+        alternate_organizer_name=resolved_names.get("alternate_organizer_name"),
+        can_manage_organizers=can_manage_organizers(event, current_user),
         user_rsvp_status=(
             (
                 user_rsvp.status.value
@@ -1546,6 +1617,85 @@ async def cancel_event(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=safe_error_detail(e),
         )
+
+
+@router.post("/{event_id}/transfer", response_model=EventTransferResponse)
+async def transfer_event(
+    event_id: UUID,
+    transfer: EventTransferRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Hand an event to a new organizer and alternate.
+
+    With ``scope`` "future" on a recurring event, every upcoming occurrence and
+    the series itself move too; past occurrences keep their organizer. Open
+    attendance requests on the moved events are re-addressed, and the members
+    given or relieved of a role are told.
+
+    **Authentication required**
+    **Allowed: the event's organizer, its alternate, or events.manage** — the
+    per-event part is checked in the service, against an org-scoped read.
+    """
+    # Read before the transfer: its notices can roll the session back, which
+    # expires current_user, and the audit row below needs these.
+    actor_id = str(current_user.id)
+    actor_username = current_user.username
+    service = EventOrganizerService(db)
+    try:
+        result = await service.transfer(
+            event_id=str(event_id),
+            actor=current_user,
+            organizer_id=str(transfer.organizer_id),
+            alternate_id=(
+                str(transfer.alternate_organizer_id)
+                if transfer.alternate_organizer_id
+                else None
+            ),
+            scope=transfer.scope,
+        )
+    except LookupError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
+        )
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail=safe_error_detail(e)
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="event.transferred",
+        event_category="events",
+        severity="info",
+        event_data={
+            "event_id": str(event_id),
+            "scope": transfer.scope,
+            "updated_count": result.updated_count,
+            "event_ids": result.affected_event_ids,
+            "previous_organizer_id": result.previous_organizer_id,
+            "previous_alternate_organizer_id": result.previous_alternate_id,
+            "organizer_id": str(transfer.organizer_id),
+            "alternate_organizer_id": (
+                str(transfer.alternate_organizer_id)
+                if transfer.alternate_organizer_id
+                else None
+            ),
+        },
+        user_id=actor_id,
+        username=actor_username,
+    )
+
+    return EventTransferResponse(
+        updated_count=result.updated_count,
+        organizer_id=transfer.organizer_id,
+        alternate_organizer_id=transfer.alternate_organizer_id,
+    )
 
 
 @router.post("/{event_id}/cancel-series", response_model=CancelSeriesResponse)

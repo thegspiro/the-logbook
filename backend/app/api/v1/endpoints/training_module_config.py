@@ -42,7 +42,13 @@ from app.schemas.training_module_config import (
     TrainingModuleConfigResponse,
     TrainingModuleConfigUpdate,
 )
-from app.services.training_compliance import get_org_include_current_month
+from app.services.training_compliance import (
+    CATCH_UP_STATUS,
+    get_org_include_current_month,
+    member_join_date,
+    requirement_applies_to_member,
+    tally_standing,
+)
 from app.services.training_module_config_service import TrainingModuleConfigService
 from app.services.training_service import TrainingService
 from app.services.training_waiver_service import fetch_user_waivers
@@ -276,19 +282,14 @@ async def get_my_training_summary(
         logger.warning(f"Failed to load user role IDs for user {current_user.id}: {e}")
 
     user_membership_type = getattr(current_user, "membership_type", None) or "active"
-    applicable: list[Any] = []
-    for req in all_requirements:
-        if req.applies_to_all:
-            applicable.append(req)
-        elif (
-            req.required_membership_types
-            and user_membership_type in req.required_membership_types
-        ):
-            applicable.append(req)
-        elif req.required_roles and any(
-            rid in user_role_ids for rid in req.required_roles
-        ):
-            applicable.append(req)
+    join_date = member_join_date(current_user)
+    applicable: list[Any] = [
+        req
+        for req in all_requirements
+        if requirement_applies_to_member(
+            req, user_membership_type, user_role_ids, join_date=join_date
+        )
+    ]
 
     # --- Fetch active waivers + leaves of absence for this user ---
     user_waivers = await fetch_user_waivers(db, org_id, user_id)
@@ -307,9 +308,9 @@ async def get_my_training_summary(
     # handles all requirement types (hours, courses, certification,
     # shifts, calls, fallback) and rolling period windows.
     org_include_current = await get_org_include_current_month(db, str(org_id))
-    met_count = 0
     total_progress_pct = 0.0
     requirements_detail: list[dict[str, Any]] = []
+    statuses: list[str] = []
 
     for req in applicable:
         detail = TrainingService.evaluate_requirement_detail(
@@ -318,14 +319,20 @@ async def get_my_training_summary(
             today,
             waivers=user_waivers,
             org_include_current_month=org_include_current,
+            join_date=join_date,
         )
-        pct = detail["progress_percentage"]
-        total_progress_pct += pct
-        if detail["is_met"]:
-            met_count += 1
         requirements_detail.append(detail)
+        # Listed with its deadline, but left out of the summary until the
+        # catch-up period ends — the same rule every compliance screen uses.
+        if detail["catch_up_deadline"]:
+            statuses.append(CATCH_UP_STATUS)
+            continue
+        total_progress_pct += detail["progress_percentage"]
+        statuses.append(
+            TrainingStatus.COMPLETED.value if detail["is_met"] else "not_met"
+        )
 
-    total_reqs = len(applicable)
+    met_count, total_reqs = tally_standing(statuses)
     avg_compliance = (
         round(total_progress_pct / total_reqs, 1) if total_reqs > 0 else None
     )

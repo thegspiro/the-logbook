@@ -5141,12 +5141,13 @@ class EquipmentCheckService:
                 )
             )
 
-        # Count
+        # Count rows of the subquery itself. Naming a table column here, as in
+        # count(ShiftEquipmentCheckItem.id), adds that table to the FROM list
+        # beside the subquery and cross-joins every item row on the server —
+        # every organization's — against the matching failures.
         from sqlalchemy import func as sa_func
 
-        count_q = select(sa_func.count(ShiftEquipmentCheckItem.id)).select_from(
-            base_q.subquery()
-        )
+        count_q = select(sa_func.count()).select_from(base_q.subquery())
         total_result = await self.db.execute(count_q)
         total = total_result.scalar() or 0
 

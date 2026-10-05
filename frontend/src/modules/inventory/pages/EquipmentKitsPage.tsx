@@ -291,7 +291,7 @@ const EquipmentKitsPage: React.FC = () => {
 
       <Link
         to="/inventory/admin"
-        className="text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1 text-sm"
+        className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 flex items-center gap-1 text-sm"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Admin
@@ -305,8 +305,8 @@ const EquipmentKitsPage: React.FC = () => {
             Create kit templates to issue multiple items to members at once.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <label className="text-theme-text-secondary flex cursor-pointer items-center gap-2 text-sm">
+        <div className="flex shrink-0 items-center gap-3 whitespace-nowrap">
+          <label className="text-theme-text-secondary touch:min-h-11 flex cursor-pointer items-center gap-2 text-sm">
             <input
               type="checkbox"
               checked={showInactive}
@@ -341,24 +341,38 @@ const EquipmentKitsPage: React.FC = () => {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="card-grid gap-4">
           {kits.map((kit) => (
             <div key={kit.id} className={`card-secondary flex flex-col p-5 ${!kit.active ? 'opacity-60' : ''}`}>
-              <div className="mb-3 flex items-start justify-between">
-                <div className="flex min-w-0 items-center gap-2.5">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-purple-500/10">
-                    <BoxSelect className="h-4 w-4 text-purple-500" />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="text-theme-text-primary line-clamp-2 font-semibold">{kit.name}</h3>
-                    {!kit.active && <span className="text-theme-text-muted text-xs">Inactive</span>}
-                  </div>
+              <div className="mb-3 flex min-w-0 items-center gap-2.5">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-purple-500/10">
+                  <BoxSelect className="h-4 w-4 text-purple-500" />
                 </div>
-                <div className="flex shrink-0 items-center gap-1">
+                <div className="min-w-0">
+                  <h3 className="text-theme-text-primary line-clamp-2 font-semibold">{kit.name}</h3>
+                  {!kit.active && <span className="text-theme-text-muted text-xs">Inactive</span>}
+                </div>
+              </div>
+              {kit.description && (
+                <p className="text-theme-text-secondary mb-3 line-clamp-2 text-sm">{kit.description}</p>
+              )}
+              {/* Actions share the footer with the item count. Four icons beside
+                  the title left it ~100px on a two-column tablet grid, which
+                  clamped "Structural Firefighting Turnout Gear Kit" to two words. */}
+              <div className="text-theme-text-muted border-theme-surface-border mt-auto flex flex-wrap items-center gap-2 border-t pt-2 text-xs">
+                <Package className="h-3.5 w-3.5 shrink-0" />
+                <span className="whitespace-nowrap">
+                  {/* The list response carries item_count, not the line items
+                      themselves — reading length off the absent array showed
+                      every kit as holding nothing. */}
+                  {kit.line_items?.length ?? kit.item_count ?? 0} item
+                  {(kit.line_items?.length ?? kit.item_count ?? 0) !== 1 ? 's' : ''}
+                </span>
+                <div className="ml-auto flex shrink-0 items-center gap-1">
                   <button
                     onClick={() => void openDetailModal(kit)}
                     aria-label={`View ${kit.name}`}
-                    className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-md p-1.5 transition-colors"
+                    className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover touch-target-phone rounded-md p-1.5 transition-colors"
                   >
                     <Eye className="h-4 w-4" />
                   </button>
@@ -368,7 +382,7 @@ const EquipmentKitsPage: React.FC = () => {
                         <button
                           onClick={() => setIssueKit(kit)}
                           aria-label={`Issue ${kit.name} to a member`}
-                          className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-md p-1.5 transition-colors"
+                          className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover touch-target-phone rounded-md p-1.5 transition-colors"
                         >
                           <UserPlus className="h-4 w-4" />
                         </button>
@@ -376,31 +390,20 @@ const EquipmentKitsPage: React.FC = () => {
                       <button
                         onClick={() => void openEditModal(kit)}
                         aria-label={`Edit ${kit.name}`}
-                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-md p-1.5 transition-colors"
+                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover touch-target-phone rounded-md p-1.5 transition-colors"
                       >
                         <Pencil className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => void toggleActive(kit)}
                         aria-label={kit.active ? `Deactivate ${kit.name}` : `Activate ${kit.name}`}
-                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-md p-1.5 transition-colors"
+                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover touch-target-phone rounded-md p-1.5 transition-colors"
                       >
                         {kit.active ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
                     </>
                   )}
                 </div>
-              </div>
-              {kit.description && (
-                <p className="text-theme-text-secondary mb-3 line-clamp-2 text-sm">{kit.description}</p>
-              )}
-              <div className="text-theme-text-muted border-theme-surface-border mt-auto flex items-center gap-2 border-t pt-2 text-xs">
-                <Package className="h-3.5 w-3.5" />
-                {/* The list response carries item_count, not the line items
-                    themselves — reading length off the absent array showed
-                    every kit as holding nothing. */}
-                {kit.line_items?.length ?? kit.item_count ?? 0} item
-                {(kit.line_items?.length ?? kit.item_count ?? 0) !== 1 ? 's' : ''}
               </div>
             </div>
           ))}

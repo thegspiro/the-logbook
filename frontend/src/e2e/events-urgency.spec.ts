@@ -206,6 +206,56 @@ test.describe('Events page urgency treatment', () => {
     }
   });
 
+  // Tablets are where the viewport breakpoints lied: at 1024px the sidebar is
+  // expanded and takes a quarter of the screen, so a `lg:grid-cols-3` grid
+  // squeezed three ~200px cards into what is left, and their footers clipped
+  // "Not Going" and the calendar button off the card edge. Columns now follow
+  // the width the grid actually has, so every card must hold its own content.
+  for (const viewport of [
+    { name: 'iPad portrait', width: 820, height: 1180 },
+    { name: 'iPad landscape', width: 1180, height: 820 },
+    { name: 'iPad Pro portrait', width: 1024, height: 1366 },
+    { name: 'iPad Pro landscape', width: 1366, height: 1024 },
+    { name: 'laptop', width: 1280, height: 800 },
+    // The narrowest phone in use: one column, and a 256px card once the page
+    // gutter and card padding are taken.
+    { name: 'small phone', width: 320, height: 568 },
+  ]) {
+    test(`no card content overflows its card — ${viewport.name}`, async ({ page }) => {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await gotoEvents(page, 'dark');
+
+      const cards = page.locator('[data-testid="events-grid"] > div');
+      const count = await cards.count();
+      expect(count).toBeGreaterThan(0);
+
+      for (let i = 0; i < count; i++) {
+        const card = cards.nth(i);
+        const cardBox = await card.boundingBox();
+        if (!cardBox) throw new Error(`Card ${i} has no bounding box`);
+
+        const controls = card.locator('button, a');
+        const controlCount = await controls.count();
+        for (let j = 0; j < controlCount; j++) {
+          const control = controls.nth(j);
+          if (!(await control.isVisible())) continue;
+          const box = await control.boundingBox();
+          if (!box) continue;
+          const label = (await control.getAttribute('aria-label')) ?? (await control.textContent())?.trim();
+          expect(
+            box.x + box.width,
+            `card ${i}: "${label}" ends at ${box.x + box.width}px, past the card edge at ${cardBox.x + cardBox.width}px`
+          ).toBeLessThanOrEqual(cardBox.x + cardBox.width + 0.5);
+        }
+      }
+
+      await page.screenshot({
+        path: `test-results/events-tablet-${viewport.width}x${viewport.height}.png`,
+        fullPage: true,
+      });
+    });
+  }
+
   test('the manager chips do not sit on top of the status strip', async ({ page }) => {
     // The chips are absolutely positioned in the card corner from md up; with a
     // status strip present they have to clear it, or they cover the strip's

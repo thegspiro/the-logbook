@@ -125,7 +125,8 @@ import {
   CHECK_TYPE_HELP,
   LEVEL_UNIT_PRESETS,
   POSITIONS,
-  APPARATUS_TYPES,
+  apparatusTypeLabel,
+  apparatusTypeOptions,
   VEHICLE_PRESETS,
   EQUIPMENT_PRESETS,
 } from './equipmentCheckPresets';
@@ -563,6 +564,14 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [saveOperationActive, setSaveOperationActive] = useState(false);
   const [cloning, setCloning] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
+  /**
+   * Whether this checklist has been live on crews' shifts during this visit —
+   * loaded as published, or published here. Any edit to its contents takes it
+   * back to draft on the server (the crew must not be handed a half-edited
+   * list), which also takes it off every shift. Autosave then clears
+   * `isDirty`, so without this nothing told the officer the crews had lost it.
+   */
+  const [wasLive, setWasLive] = useState(false);
   // Template metadata moved off the canvas into a right-side drawer: the
   // checklist is what the author came to build, and the metadata is answered
   // once. The blocker panel is what re-opens it when something is missing.
@@ -675,6 +684,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         apparatusId: data.apparatusId ?? '',
         isActive: data.isActive,
       });
+      setWasLive(Boolean(data.isActive));
 
       const expanded = new Set<string>();
       const mapped: CompartmentFormState[] = (data.compartments ?? []).map((c) => {
@@ -732,9 +742,13 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Unsaved changes warning (browser close + React Router navigation)
   // ---------------------------------------------------------------------------
 
+  const offCrewShifts = Boolean(templateId) && wasLive && !form.isActive;
+
   useUnsavedChanges({
-    hasChanges: isDirty,
-    message: 'You have unsaved template changes. Are you sure you want to leave?',
+    hasChanges: isDirty || offCrewShifts,
+    message: offCrewShifts
+      ? 'This checklist is unpublished, so crews cannot see it until it is published again. Leave anyway?'
+      : 'You have unsaved template changes. Are you sure you want to leave?',
   });
 
   const markDirty = useCallback(() => {
@@ -2253,6 +2267,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             await equipmentCheckService.updateEquipmentCheckTemplate(templateId, { is_active: true });
           }
           setForm((current) => ({ ...current, isActive: publish }));
+          if (publish) setWasLive(true);
           setIsDirty(false);
           toast.success(publish ? 'Template published' : 'Draft saved');
         } else {
@@ -2675,7 +2690,22 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
   /** Back out of the builder, checking first if there is unsaved work. */
   const handleLeave = async () => {
-    if (
+    if (offCrewShifts) {
+      // One question, not two in a row: an unpublished checklist is the
+      // bigger consequence, and unsaved edits only add to it.
+      const leave = await confirm({
+        title: 'Leave this checklist unpublished?',
+        message: `Your edits took “${form.name.trim() || 'this checklist'}” off every crew’s shift. Crews will not see it until it is published again.${
+          // isDirty survives autosave (items save as they change; details do
+          // not), so it cannot say whether anything is actually unsaved.
+          isDirty ? ' Any change that has not saved yet will also be lost.' : ''
+        }`,
+        confirmLabel: 'Leave unpublished',
+        cancelLabel: 'Stay here',
+        variant: 'warning',
+      });
+      if (!leave) return;
+    } else if (
       isDirty &&
       !(await confirm({
         title: 'Leave without saving?',
@@ -3483,7 +3513,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <div className="flex items-center gap-1">
               <button
                 type="button"
-                className="rounded px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 max-md:min-h-[44px] max-md:min-w-[44px] dark:text-blue-400 dark:hover:bg-blue-900/20"
+                className="touch:min-h-[44px] touch:min-w-[44px] rounded px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
                 onClick={() => {
                   const job = quickAddJobs.current[item.clientKey ?? ''];
                   if (job) runQuickAdd(job);
@@ -3493,7 +3523,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               </button>
               <button
                 type="button"
-                className="rounded px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 max-md:min-h-[44px] max-md:min-w-[44px] dark:text-red-400 dark:hover:bg-red-900/20"
+                className="touch:min-h-[44px] touch:min-w-[44px] rounded px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
                 onClick={() => {
                   delete quickAddJobs.current[item.clientKey ?? ''];
                   replaceQuickAddItem(compKey, item.clientKey ?? '', null);
@@ -4222,7 +4252,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => openAddSurface(key)}
-                  className="flex min-h-7.5 flex-shrink-0 items-center gap-1.5 rounded-md bg-blue-600 px-2.5 text-xs font-semibold text-white hover:bg-blue-700"
+                  className="flex min-h-7.5 flex-shrink-0 items-center gap-1.5 rounded-md bg-red-800 px-2.5 text-xs font-semibold text-white hover:bg-red-900"
                 >
                   <Plus className="h-3.5 w-3.5" aria-hidden="true" /> Add items
                 </button>
@@ -4549,7 +4579,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                       </button>
                       <button
                         type="button"
-                        className="min-h-[44px] rounded-md bg-blue-600 px-4 text-sm font-semibold text-white disabled:opacity-40"
+                        className="min-h-[44px] rounded-md bg-red-800 px-4 text-sm font-semibold text-white disabled:opacity-40"
                         disabled={!bulkPasteValues[key]?.trim() || bulkItemPending[key]}
                         onClick={() => void handleBulkPaste(idx)}
                       >
@@ -4659,7 +4689,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                             type="button"
                             disabled={bulkItemPending[key] ?? false}
                             onClick={() => void handleBulkPaste(idx, { source: 'compose', checkType: composeType })}
-                            className="flex min-h-7 items-center gap-1 rounded-md bg-blue-600 px-3 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
+                            className="flex min-h-7 items-center gap-1 rounded-md bg-red-800 px-3 text-xs font-semibold text-white hover:bg-red-900 disabled:opacity-40"
                           >
                             {(bulkItemPending[key] ?? false) && <Loader2 className="h-3 w-3 animate-spin" />}
                             {(bulkItemPending[key] ?? false) ? 'Adding…' : 'Add all'}
@@ -4772,6 +4802,29 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           )}
           Name, timing and crew set
         </span>
+        {tiedToVehicle ? (
+          <span className="text-theme-text-secondary flex items-center gap-2 text-[13px]">
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-700 dark:text-green-400" />
+            Used on {vehicleSummary}
+          </span>
+        ) : (
+          <span className="text-theme-text-secondary flex items-start gap-2 text-[13px]">
+            <AlertTriangle
+              className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700 dark:text-amber-400"
+              aria-hidden="true"
+            />
+            <span>
+              Not tied to a vehicle — crews will only see it on shifts whose shift template names it.{' '}
+              <button
+                type="button"
+                onClick={() => goToBlocker(DETAILS_ANCHOR)}
+                className="text-blue-700 underline dark:text-blue-400"
+              >
+                Choose a vehicle
+              </button>
+            </span>
+          </span>
+        )}
         <span className="text-theme-text-secondary flex items-center gap-2 text-[13px]">
           {locationsReady ? (
             <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-700 dark:text-green-400" />
@@ -4935,9 +4988,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   onChange={(e) => updateForm({ apparatusType: e.target.value })}
                 >
                   <option value="">-- Select Type --</option>
-                  {APPARATUS_TYPES.map((t) => (
-                    <option key={t} value={t}>
-                      {t.charAt(0).toUpperCase() + t.slice(1)}
+                  {apparatusTypeOptions(
+                    apparatusOptions.map((a) => a.apparatus_type),
+                    form.apparatusType
+                  ).map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
                     </option>
                   ))}
                 </select>
@@ -4960,7 +5016,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               </div>
               <p className="text-theme-text-muted mt-1 text-xs">
                 Leave as &quot;All of type&quot; to use this template as the default for all{' '}
-                {form.apparatusType || 'apparatus'} units
+                {form.apparatusType ? apparatusTypeLabel(form.apparatusType) : 'apparatus'} units
               </p>
             </div>
 
@@ -5021,6 +5077,20 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       comp.items.some((item) => item.checkType !== 'header' && item.checkType !== 'text')
     );
   const publishReady = setupReady && locationsReady && blockingItems === 0;
+  /**
+   * Whether the checklist names a vehicle. Not a blocker — a checklist a shift
+   * template names reaches its shifts without one — but without either, a
+   * published checklist is offered on no shift at all, and "Ready to publish"
+   * alone let an officer publish one and wonder why the crew never saw it.
+   */
+  const tiedToVehicle = Boolean(form.apparatusType || form.apparatusId);
+  const vehicleSummary = form.apparatusId
+    ? (apparatusOptions.find((a) => a.id === form.apparatusId)?.unit_number ??
+      apparatusOptions.find((a) => a.id === form.apparatusId)?.name ??
+      'one vehicle')
+    : form.apparatusType
+      ? `every ${apparatusTypeLabel(form.apparatusType)} unit`
+      : '';
 
   /**
    * The publish gate, restated as a to-do list.
@@ -5400,7 +5470,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               type="button"
               onClick={() => void handleSave(true)}
               disabled={saving || !publishReady}
-              className="flex min-h-10 items-center gap-2 rounded-lg bg-blue-600 px-3.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 max-md:min-h-11 max-md:min-w-11"
+              className="touch:min-h-11 touch:min-w-11 flex min-h-10 items-center gap-2 rounded-lg bg-red-800 px-3.5 text-sm font-semibold text-white transition-colors hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <CheckCircle2 className="h-4 w-4" /> Publish
             </button>
@@ -5492,6 +5562,28 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           ))}
         </div>
       </div>
+
+      {offCrewShifts && (
+        <div className="mx-auto max-w-[1440px] px-4 pt-4 sm:px-6">
+          <div role="status" className="alert-warning flex flex-wrap items-center justify-between gap-3">
+            <p className="text-theme-alert-warning-text flex min-w-0 items-start gap-2 text-sm">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>
+                <strong>Crews can&apos;t see this checklist right now.</strong> Editing it took it off every shift it
+                was on. Publish it to put it back.
+              </span>
+            </p>
+            <button
+              type="button"
+              onClick={() => void handleSave(true)}
+              disabled={saving || !publishReady}
+              className="btn-primary flex min-h-10 shrink-0 items-center gap-2 px-3.5 text-sm font-semibold"
+            >
+              <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Publish now
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="mx-auto flex max-w-[1440px] flex-wrap items-start gap-6 pt-5 pb-6">
         {/* Canvas */}
@@ -5812,7 +5904,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               {blockers.length === 0 ? (
                 <>
                   <CheckCircle2 className="h-4 w-4 shrink-0 text-green-700 dark:text-green-400" aria-hidden="true" />
-                  <span className="text-theme-text-secondary truncate font-medium">Ready to publish</span>
+                  <span className="text-theme-text-secondary truncate font-medium">
+                    {tiedToVehicle ? 'Ready to publish' : 'Ready to publish · not tied to a vehicle'}
+                  </span>
                 </>
               ) : (
                 <>
@@ -6211,7 +6305,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void applyCsvImport()}
-                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                className="rounded-md bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
               >
                 Import {csvPreview.length} Items
               </button>

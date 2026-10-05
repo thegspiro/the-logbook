@@ -97,6 +97,12 @@ const TONE_CLASSES: Record<CellTone, { pill: string; bar: string; pip: string }>
     bar: 'bg-red-800 dark:bg-red-400',
     pip: 'bg-red-800 dark:bg-red-400',
   },
+  // Neutral rather than amber or red: nothing is held against the member yet.
+  [CellTone.CATCH_UP]: {
+    pill: 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300',
+    bar: 'bg-blue-800 dark:bg-blue-400',
+    pip: 'bg-blue-800 dark:bg-blue-400',
+  },
 };
 
 const TONE_LABELS: Record<CellTone, string> = {
@@ -105,6 +111,7 @@ const TONE_LABELS: Record<CellTone, string> = {
   [CellTone.SOON]: 'Due soon',
   [CellTone.LAPSED]: 'Lapsed',
   [CellTone.MISSING]: 'Nothing on file',
+  [CellTone.CATCH_UP]: 'Catching up',
 };
 
 const STANDING_CLASSES: Record<Standing, { pill: string; dot: string; head: string }> = {
@@ -312,7 +319,7 @@ const ComplianceMatrixTab: React.FC = () => {
     // role="status" nests one status inside another, and a screen reader
     // announces only the inner one.
     return (
-      <div className="mx-auto max-w-full px-4 py-6 sm:px-6 lg:px-8">
+      <div className="py-6">
         <SkeletonPage rows={6} />
       </div>
     );
@@ -320,7 +327,7 @@ const ComplianceMatrixTab: React.FC = () => {
 
   if (error || !matrix) {
     return (
-      <div className="mx-auto max-w-7xl px-4 py-8">
+      <div className="py-8">
         <div className="alert-danger" role="alert">
           {error || 'No data available'}
         </div>
@@ -330,7 +337,7 @@ const ComplianceMatrixTab: React.FC = () => {
 
   if (requirements.length === 0) {
     return (
-      <div className="mx-auto max-w-7xl px-4 py-8">
+      <div className="py-8">
         <EmptyState
           icon={AlertTriangle}
           title="No active training requirements"
@@ -385,7 +392,7 @@ const ComplianceMatrixTab: React.FC = () => {
   const stepNoun = axis === 'members' ? 'Member' : 'Requirement';
 
   return (
-    <div className="mx-auto max-w-full px-4 py-6 sm:px-6 lg:px-8">
+    <div className="py-6">
       <div className="card overflow-hidden">
         {/* Header — what this is, and which way round it is being read */}
         <div className="border-theme-surface-border flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -765,7 +772,7 @@ const ComplianceMatrixTab: React.FC = () => {
 
         {/* Legend + provenance */}
         <div className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-muted flex flex-wrap items-center gap-x-4 gap-y-2 border-t px-4 py-2.5 text-xs">
-          {([CellTone.MET, CellTone.SHORT, CellTone.SOON, CellTone.LAPSED] as const).map((tone) => (
+          {([CellTone.MET, CellTone.SHORT, CellTone.SOON, CellTone.LAPSED, CellTone.CATCH_UP] as const).map((tone) => (
             <span key={tone} className="inline-flex items-center gap-1.5">
               <span className={`h-3 w-3 rounded-xs ${TONE_CLASSES[tone].pip}`} aria-hidden="true" />
               {TONE_LABELS[tone]}

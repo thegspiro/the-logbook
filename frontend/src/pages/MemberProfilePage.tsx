@@ -784,7 +784,7 @@ export const MemberProfilePage: React.FC = () => {
                     </div>
                   )}
                   {canEditPhoto && (
-                    <div className="absolute inset-0 flex cursor-pointer items-center justify-center rounded-full bg-black/50 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                    <div className="absolute inset-0 flex cursor-pointer items-center justify-center rounded-full bg-black/50 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100">
                       <input
                         ref={fileInputRef}
                         type="file"
@@ -812,7 +812,7 @@ export const MemberProfilePage: React.FC = () => {
                       onClick={() => {
                         void handlePhotoRemove();
                       }}
-                      className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-800 text-xs text-white transition-opacity hover:bg-red-900 sm:opacity-0 sm:group-hover:opacity-100"
+                      className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-800 text-xs text-white transition-opacity hover:bg-red-900 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100"
                       aria-label="Remove photo"
                       title="Remove photo"
                     >
@@ -1463,7 +1463,7 @@ export const MemberProfilePage: React.FC = () => {
                   type="button"
                   onClick={() => void handleStatusChange()}
                   disabled={statusChanging || newStatus === user?.status || (isRejoining && rejoin.loading)}
-                  className="flex-1 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex-1 rounded-md bg-red-800 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {statusChanging ? 'Saving...' : 'Update Status'}
                 </button>

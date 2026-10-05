@@ -92,6 +92,7 @@ const PastEventsTab: React.FC = () => {
         <nav
           className="-mb-px flex scrollbar-thin space-x-4 overflow-x-auto pb-px sm:space-x-8"
           aria-label="Filter past events by type"
+          data-mobile-scroll-region
         >
           {[
             'all',
@@ -110,7 +111,7 @@ const PastEventsTab: React.FC = () => {
                 typeFilter === filter
                   ? 'border-red-500 text-red-700 dark:text-red-400'
                   : 'text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border border-transparent'
-              } shrink-0 border-b-2 px-1 py-3 text-sm font-medium whitespace-nowrap sm:py-4`}
+              } touch:min-w-11 shrink-0 border-b-2 px-1 py-3 text-sm font-medium whitespace-nowrap sm:py-4`}
             >
               {filter === 'all' ? 'All Types' : getEventTypeLabel(filter as EventType)}
             </button>
@@ -135,7 +136,7 @@ const PastEventsTab: React.FC = () => {
               d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
             />
           </svg>
-          <h3 className="text-theme-text-primary mt-2 text-sm font-medium">No past events</h3>
+          <h2 className="text-theme-text-primary mt-2 text-sm font-medium">No past events</h2>
           <p className="text-theme-text-muted mt-1 text-sm">
             {typeFilter === 'all'
               ? 'Events appear here after they end.'
@@ -143,7 +144,7 @@ const PastEventsTab: React.FC = () => {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="card-grid gap-4">
           {filteredEvents.map((event) => (
             <Link
               key={event.id}
@@ -170,7 +171,7 @@ const PastEventsTab: React.FC = () => {
                           />
                         </svg>
                       )}
-                      <h3 className="text-theme-text-primary line-clamp-2 text-lg font-medium">{event.title}</h3>
+                      <h2 className="text-theme-text-primary line-clamp-2 text-lg font-medium">{event.title}</h2>
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2">
                       <span

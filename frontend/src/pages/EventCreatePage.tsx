@@ -152,7 +152,7 @@ export const EventCreatePage: React.FC = () => {
         <div className="mb-8">
           <Link
             to="/events"
-            className="text-theme-text-muted hover:text-theme-text-primary mb-4 flex items-center transition-colors"
+            className="text-theme-text-muted hover:text-theme-text-primary mb-4 flex min-h-11 items-center transition-colors"
           >
             <ArrowLeft className="mr-2 h-5 w-5" />
             Back to Events
@@ -211,6 +211,7 @@ export const EventCreatePage: React.FC = () => {
             initialData={templateInitialData}
             onSubmit={handleSubmit}
             onSubmitRecurring={handleSubmitRecurring}
+            showOrganizerPickers
             onCancel={handleCancel}
             submitLabel="Create Event"
             isSubmitting={isSubmitting}

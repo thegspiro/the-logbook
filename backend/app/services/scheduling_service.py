@@ -69,6 +69,11 @@ from app.services.shift_eligibility_service import (
     DEFAULT_LATE_SIGNUP_GRACE_MINUTES,
     DEFAULT_SIGNUP_CLOSES_MINUTES_BEFORE,
 )
+from app.services.training_compliance import (
+    catch_up_deadline,
+    member_join_date,
+    requirement_applies_by_join_date,
+)
 from app.utils.apparatus_ref import (
     apparatus_ref_exists,
     resolve_apparatus_display_map,
@@ -6788,7 +6793,7 @@ class SchedulingService:
             select(User.id, User.first_name, User.last_name, User.email).where(
                 User.organization_id == str(org_id),
                 User.platoon == shift.platoon,
-                User.status == "active",
+                User.is_active,
             )
         )
         members = member_result.all()
@@ -6905,7 +6910,7 @@ class SchedulingService:
         user_result = await self.db.execute(
             select(User.id, User.first_name, User.last_name, User.email).where(
                 User.organization_id == str(organization_id),
-                User.status == "active",
+                User.is_active,
             )
         )
         users = user_result.all()
@@ -8021,7 +8026,7 @@ class SchedulingService:
         user_result = await self.db.execute(
             select(User)
             .where(User.organization_id == str(organization_id))
-            .where(User.status == "active")
+            .where(User.is_active)
             .order_by(User.last_name, User.first_name)
         )
         all_users = user_result.scalars().all()
@@ -8053,6 +8058,10 @@ class SchedulingService:
             # Determine which users this requirement applies to
             applicable_users = []
             for user in all_users:
+                # Grandfathering first: a member the requirement's cutoff
+                # exempts is not graded here whatever their rank or position.
+                if not requirement_applies_by_join_date(req, member_join_date(user)):
+                    continue
                 if req.applies_to_all:
                     applicable_users.append(user)
                     continue
@@ -8147,6 +8156,7 @@ class SchedulingService:
             # Build member compliance list
             members = []
             compliant_count = 0
+            graded_count = 0
 
             for user in applicable_users:
                 att = attendance_map.get(
@@ -8187,8 +8197,17 @@ class SchedulingService:
                 )
                 is_compliant = compliance_value >= member_required
 
-                if is_compliant:
-                    compliant_count += 1
+                # An existing member short of the target inside the catch-up
+                # period is listed with the deadline but counted neither way.
+                deadline = (
+                    None
+                    if is_compliant
+                    else catch_up_deadline(req, member_join_date(user), reference_date)
+                )
+                if deadline is None:
+                    graded_count += 1
+                    if is_compliant:
+                        compliant_count += 1
 
                 members.append(
                     {
@@ -8206,10 +8225,11 @@ class SchedulingService:
                         "total_hours": total_hours,
                         "external_shift_count": ext["shift_count"],
                         "external_hours": hours_from_minutes(ext["minutes"]),
+                        "catch_up_deadline": deadline.isoformat() if deadline else None,
                     }
                 )
 
-            total_members = len(members)
+            total_members = graded_count
             non_compliant = total_members - compliant_count
             compliance_rate = round(
                 (compliant_count / total_members * 100) if total_members > 0 else 0, 1
@@ -8986,7 +9006,22 @@ class SchedulingService:
         and ratings to complete each report. Returns the number of drafts
         created.
         """
-        from app.services.shift_completion_service import ShiftCompletionService
+        from app.services.shift_completion_service import (
+            ShiftCompletionService,
+            reports_filed_by_shift_officer,
+        )
+
+        # Under officer-on-the-rig authorship every draft belongs to the
+        # shift's officer — not the finalizer, not a slot's evaluator — since
+        # only they may complete it. No officer assigned means nobody may.
+        officer_only = await reports_filed_by_shift_officer(self.db, organization_id)
+        if officer_only and not shift.shift_officer_id:
+            logger.info(
+                "No draft reports for shift {}: the department files reports by "
+                "Shift Officer and none is assigned",
+                shift.id,
+            )
+            return 0
 
         att_result = await self.db.execute(
             select(ShiftAttendance).where(ShiftAttendance.shift_id == str(shift.id))
@@ -9068,6 +9103,22 @@ class SchedulingService:
                 officer_id = finalized_by_user_id
                 if slot and slot.get("evaluator_id"):
                     officer_id = str(slot["evaluator_id"])
+                if officer_only:
+                    officer_id = str(shift.shift_officer_id)
+
+                # A trainee who closed out their own shift (and has no
+                # evaluator named on their slot) would be drafted a report
+                # about themselves, which create_report refuses. Skip it here
+                # rather than logging that refusal as a failure; another
+                # officer can still file one.
+                if str(officer_id) == str(user_id):
+                    logger.info(
+                        "No draft report for trainee {} on shift {}: they "
+                        "finalized it themselves",
+                        user_id,
+                        shift.id,
+                    )
+                    continue
 
                 att = attendee_by_user.get(user_id)
                 hours = 0.0

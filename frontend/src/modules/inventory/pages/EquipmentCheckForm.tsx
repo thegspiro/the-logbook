@@ -278,6 +278,25 @@ function getEffectiveStatus(item: CheckTemplateItem, result: ItemResult | undefi
   return getExpirationStatus(item, today) === 'expired' ? 'fail' : (result?.status ?? 'not_checked');
 }
 
+/**
+ * Whether this item's failure has to be explained in its note before submit.
+ *
+ * A failure the record already explains needs no note: a count or reading
+ * below its minimum carries the number, and an expired unit carries its date.
+ * What does not explain itself is a crew member's own "Fail" or "Out of
+ * service" — without a note the officer's failure report says only that a
+ * flashlight failed, not whether it is dead, cracked or missing a battery.
+ */
+function failureNeedsNote(item: CheckTemplateItem, result: ItemResult | undefined, today: string): boolean {
+  const status = getEffectiveStatus(item, result, today);
+  if (status !== 'fail' && status !== 'out_of_service') return false;
+  if (getExpirationStatus(item, today) === 'expired') return false;
+  return result?.quantityFound == null && result?.levelReading == null;
+}
+
+/** DOM id of an item's note field, so a Fail answer can move focus into it. */
+const itemNotesFieldId = (itemId: string) => `item-notes-${itemId}`;
+
 function getCompartmentStatus(
   compartment: CheckTemplateCompartment,
   results: Record<string, ItemResult>,
@@ -640,6 +659,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     (item) => item.isRequired && getEffectiveStatus(item, results[item.id], today) === 'not_checked'
   ).length;
   const allRequiredChecked = unansweredRequiredCount === 0;
+  const failuresMissingNoteCount = effectiveCheckableItems.filter(
+    (item) => failureNeedsNote(item, results[item.id], today) && !results[item.id]?.notes?.trim()
+  ).length;
+  const readyToSubmit = allRequiredChecked && failuresMissingNoteCount === 0;
 
   const openSwap = useCallback(
     async (item: CheckTemplateItem) => {
@@ -1218,8 +1241,12 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   const updateResultAndAdvance = useCallback(
     (itemId: string, patch: Partial<ItemResult>) => {
       updateResult(itemId, patch);
-      if (patch.status === 'pass' || patch.status === 'fail') {
+      if (patch.status === 'pass') {
         setTimeout(() => focusNextItem(itemId), 150);
+      } else if (patch.status === 'fail' || patch.status === 'out_of_service') {
+        // A failure needs its note before submit, so the crew member is taken
+        // to the note field rather than past it to the next item.
+        setTimeout(() => document.getElementById(itemNotesFieldId(itemId))?.focus(), 150);
       }
     },
     [updateResult, focusNextItem]
@@ -1780,6 +1807,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   }, [compartments, sealClearableIn, seals]);
 
   const handleSubmit = async () => {
+    if (failuresMissingNoteCount > 0) {
+      toast.error("Add a note to each failed item saying what's wrong.");
+      return;
+    }
     if (checkedItems < totalItems) {
       const uncheckedCount = totalItems - checkedItems;
       const confirmed = await confirm({
@@ -2329,7 +2360,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
     const result = results[item.id];
     const effectiveStatus = getEffectiveStatus(item, result, today);
-    const showNotesField = expandedNotes.has(item.id);
+    // Held open for as long as the item is failed, not only while the note is
+    // empty — otherwise the field would vanish under the first keystroke.
+    const noteRequired = failureNeedsNote(item, result, today);
+    const noteMissing = noteRequired && !result?.notes?.trim();
+    const showNotesField = expandedNotes.has(item.id) || noteRequired;
     // Below manage, a swap carrying no disposition is allowed only up to this
     // position's shortfall, and an expired one goes through the disposition
     // path instead. `submitterMaySwap` owns that rule for both experiences.
@@ -2420,10 +2455,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             type="button"
             onClick={() => toggleNotes(item.id)}
             aria-expanded={showNotesField}
-            className="text-theme-text-muted hover:text-theme-text-secondary flex min-h-[36px] items-center gap-1 text-xs transition-colors"
+            disabled={noteRequired}
+            className="text-theme-text-muted hover:text-theme-text-secondary disabled:hover:text-theme-text-muted flex min-h-[36px] items-center gap-1 text-xs transition-colors disabled:cursor-default"
           >
             <MessageSquare className="h-3 w-3" aria-hidden="true" />
-            {showNotesField ? 'Hide' : 'Note'}
+            {noteRequired ? 'Note required' : showNotesField ? 'Hide' : 'Note'}
             {(result?.photoFiles?.length ?? 0) > 0 && (
               <span className="text-theme-accent-blue inline-flex items-center gap-0.5 font-medium">
                 <Camera className="h-3 w-3" aria-hidden="true" />
@@ -2477,10 +2513,13 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         )}
         {showNotesField && (
           <textarea
+            id={itemNotesFieldId(item.id)}
             rows={2}
-            className="form-input focus:ring-theme-focus-ring px-3 text-sm"
-            placeholder="Notes for this item..."
-            aria-label={`Notes for ${item.name}`}
+            className={`form-input focus:ring-theme-focus-ring px-3 text-sm ${noteMissing ? 'border-theme-alert-danger-icon' : ''}`}
+            placeholder={noteRequired ? "What's wrong with it? (required)" : 'Notes for this item...'}
+            aria-label={noteRequired ? `What's wrong with ${item.name} (required)` : `Notes for ${item.name}`}
+            aria-required={noteRequired}
+            aria-invalid={noteMissing}
             value={result?.notes ?? ''}
             onChange={(e) => updateResult(item.id, { notes: e.target.value })}
           />
@@ -2505,7 +2544,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                     <button
                       type="button"
                       onClick={() => removePhoto(item.id, idx)}
-                      className="absolute -top-2 -right-2 flex h-7 w-7 items-center justify-center rounded-full bg-red-800 text-sm text-white opacity-100 transition-opacity focus:opacity-100 focus:ring-2 focus:ring-red-800 focus:ring-offset-1 focus:outline-none sm:h-6 sm:w-6 sm:opacity-0 sm:group-hover:opacity-100"
+                      className="absolute -top-2 -right-2 flex h-7 w-7 items-center justify-center rounded-full bg-red-800 text-sm text-white opacity-100 transition-opacity focus:opacity-100 focus:ring-2 focus:ring-red-800 focus:ring-offset-1 focus:outline-none sm:h-6 sm:w-6 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100"
                       aria-label={`Remove photo ${idx + 1}`}
                     >
                       &times;
@@ -2745,8 +2784,12 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             The token is defined now — see styles/index.css — and is the right
             answer. themeTokenIntegrity.test.ts guards the rest.) */}
         {!previewMode && (
-          <div className="bg-theme-bg border-theme-surface-border sticky bottom-0 z-20 space-y-3 border-t pt-3 pb-2">
-            <div>
+          <>
+            {/* Not sticky. Pinned with the submit bar, the three-row notes field
+                kept about a third of a phone screen covered for the whole walk
+                down the truck, for a field most checks never use. It sits after
+                the last item, where a crew finishing the list reaches it. */}
+            <div className="border-theme-surface-border border-t pt-3">
               <label htmlFor="overall-notes" className="text-theme-text-secondary mb-1 block text-sm font-medium">
                 Overall Notes
               </label>
@@ -2762,14 +2805,17 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
             {/* Sticky: on a real engine inventory Submit sat several screens
                 below the last item, and the count of what was still unanswered
-                was at the very top. Both travel with the crew now. */}
-            <div className="bg-theme-bg border-theme-surface-border action-bar-safe sticky bottom-0 z-20 -mx-3 space-y-2 border-t px-3">
+                was at the very top. Both travel with the crew now. It is a
+                direct child of the list's container, so it sticks for the
+                whole list — nested inside a non-sticky wrapper it would only
+                stick within that wrapper's own height. */}
+            <div className="bg-theme-bg border-theme-surface-border action-bar-safe sticky bottom-0 z-20 -mx-3 space-y-2 border-t px-3 pt-3">
               <button
                 type="button"
                 onClick={() => void handleSubmit()}
                 disabled={
                   submitting ||
-                  !allRequiredChecked ||
+                  !readyToSubmit ||
                   submissionOutcome?.status === 'evidence_pending' ||
                   submissionOutcome?.status === 'evidence_failed'
                 }
@@ -2794,8 +2840,16 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                   {unansweredRequiredCount} required item{unansweredRequiredCount === 1 ? '' : 's'} still to answer.
                 </p>
               )}
+              {failuresMissingNoteCount > 0 && (
+                <p className="text-theme-text-muted text-center text-xs">
+                  <AlertTriangle className="mr-1 inline h-3 w-3" aria-hidden="true" />
+                  {failuresMissingNoteCount === 1
+                    ? "1 failed item needs a note saying what's wrong."
+                    : `${failuresMissingNoteCount} failed items need a note saying what's wrong.`}
+                </p>
+              )}
             </div>
-          </div>
+          </>
         )}
       </div>
     );

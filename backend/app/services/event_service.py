@@ -269,6 +269,30 @@ class EventService:
         # whose return shapes predate the training report.
         self.last_finalize_outcome: Optional[FinalizeOutcome] = None
 
+    async def _organizer_columns(
+        self,
+        organizer_id: Optional[Any],
+        alternate_id: Optional[Any],
+        organization_id: UUID,
+        created_by: UUID,
+    ) -> Dict[str, Optional[str]]:
+        """The organizer pair to store on a new event: the creator when none
+        was chosen, and both checked to be active members of the org (XC-1)."""
+        # Local import: event_organizer_service is imported by the petition
+        # service, which imports this module.
+        from app.services.event_organizer_service import EventOrganizerService
+
+        # Only the ids the client chose are checked: the creator is the
+        # authenticated caller, already known to be in this org, and refusing
+        # their own event over their membership status would be a regression.
+        organizer, alternate = await EventOrganizerService(self.db).validate_pair(
+            str(organization_id),
+            str(organizer_id) if organizer_id else None,
+            str(alternate_id) if alternate_id else None,
+            default_organizer_id=str(created_by),
+        )
+        return {"organizer_id": organizer, "alternate_organizer_id": alternate}
+
     async def create_event(
         self, event_data: EventCreate, organization_id: UUID, created_by: UUID
     ) -> Event:
@@ -337,6 +361,15 @@ class EventService:
         # Set default allowed_rsvp_statuses if not provided and RSVP is required
         if event_data.requires_rsvp and not event_dict.get("allowed_rsvp_statuses"):
             event_dict["allowed_rsvp_statuses"] = DEFAULT_ALLOWED_RSVP_STATUSES
+
+        event_dict.update(
+            await self._organizer_columns(
+                event_dict.pop("organizer_id", None),
+                event_dict.pop("alternate_organizer_id", None),
+                organization_id,
+                created_by,
+            )
+        )
 
         # Create event
         event = Event(
@@ -4591,6 +4624,18 @@ class EventService:
         if event_data.get("template_id"):
             if not await self.get_template(event_data["template_id"], organization_id):
                 return [], "Template not found"
+
+        try:
+            event_data.update(
+                await self._organizer_columns(
+                    event_data.pop("organizer_id", None),
+                    event_data.pop("alternate_organizer_id", None),
+                    organization_id,
+                    created_by,
+                )
+            )
+        except ValueError as exc:
+            return [], str(exc)
 
         # Generate occurrence dates
         occurrences = self._generate_recurrence_dates(

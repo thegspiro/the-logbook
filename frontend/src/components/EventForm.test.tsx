@@ -46,6 +46,10 @@ vi.mock('../services/api', () => ({
   locationsService: {
     getLocations: vi.fn(),
   },
+  // Behind the organizer pickers, which only the create page turns on.
+  userService: {
+    getUsers: vi.fn(),
+  },
   // Behind the Training details section (TrainingDetailsFields).
   trainingService: {
     getCourses: vi.fn(),
@@ -995,6 +999,99 @@ describe('EventForm', () => {
       await waitFor(() => {
         expect(screen.getByRole('alert')).toBeInTheDocument();
       });
+    });
+  });
+
+  describe('Organizer pickers', () => {
+    const roster = [
+      { id: 'u-olive', first_name: 'Olive', last_name: 'Organizer', username: 'olive', status: 'active' },
+      { id: 'u-alex', first_name: 'Alex', last_name: 'Alternate', username: 'alex', status: 'probationary' },
+      { id: 'u-rita', first_name: 'Rita', last_name: 'Retired', username: 'rita', status: 'retired' },
+    ];
+
+    beforeEach(() => {
+      vi.mocked(apiModule.userService.getUsers).mockReset();
+      vi.mocked(apiModule.userService.getUsers).mockResolvedValue(
+        roster as unknown as Awaited<ReturnType<typeof apiModule.userService.getUsers>>
+      );
+      mockOnSubmit.mockReset();
+      mockOnSubmit.mockResolvedValue(undefined);
+    });
+
+    const fillRequired = async (user: ReturnType<typeof userEvent.setup>) => {
+      await user.type(screen.getByLabelText(/title/i), 'Drill Night');
+      fireEvent.change(screen.getByLabelText(/start date & time/i), { target: { value: '2026-04-01' } });
+      fireEvent.change(screen.getByLabelText(/end date & time/i), { target: { value: '2026-04-01' } });
+    };
+
+    it('is not offered unless asked for, and sends no organizer keys', async () => {
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+      const user = userEvent.setup();
+      await fillRequired(user);
+
+      expect(screen.queryByLabelText(/^organizer/i)).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /create event/i }));
+
+      await waitFor(() => expect(mockOnSubmit).toHaveBeenCalled());
+      const payload = mockOnSubmit.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(payload).not.toHaveProperty('organizer_id');
+      expect(apiModule.userService.getUsers).not.toHaveBeenCalled();
+    });
+
+    it('offers active and probationary members, and omits the organizer left on the default', async () => {
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} showOrganizerPickers />);
+      const user = userEvent.setup();
+
+      const organizer = await screen.findByLabelText(/^organizer/i);
+      await waitFor(() => expect(screen.getAllByRole('option', { name: 'Alex Alternate' }).length).toBeGreaterThan(0));
+      expect(screen.queryByRole('option', { name: 'Rita Retired' })).not.toBeInTheDocument();
+      expect(organizer).toHaveValue('');
+
+      await fillRequired(user);
+      await user.selectOptions(screen.getByLabelText(/^alternate/i), 'u-alex');
+      await user.click(screen.getByRole('button', { name: /create event/i }));
+
+      await waitFor(() =>
+        expect(mockOnSubmit).toHaveBeenCalledWith(
+          expect.objectContaining({ organizer_id: undefined, alternate_organizer_id: 'u-alex' })
+        )
+      );
+    });
+
+    it('sends a chosen organizer, and drops an alternate who becomes the organizer', async () => {
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} showOrganizerPickers />);
+      const user = userEvent.setup();
+      await waitFor(() => expect(screen.getAllByRole('option', { name: 'Olive Organizer' }).length).toBeGreaterThan(0));
+
+      await fillRequired(user);
+      await user.selectOptions(screen.getByLabelText(/^alternate/i), 'u-olive');
+      await user.selectOptions(screen.getByLabelText(/^organizer/i), 'u-olive');
+
+      expect(screen.getByLabelText(/^alternate/i)).toHaveValue('');
+      await user.click(screen.getByRole('button', { name: /create event/i }));
+
+      await waitFor(() =>
+        expect(mockOnSubmit).toHaveBeenCalledWith(
+          expect.objectContaining({ organizer_id: 'u-olive', alternate_organizer_id: undefined })
+        )
+      );
+    });
+  });
+
+  // Create Event crashed the whole Events hub when this lookup answered 200
+  // with a body that was not the settings shape (a captive portal's HTML page):
+  // `visibleTypes.includes` ran on undefined. It now gets the same fallback a
+  // failed request already had — every event type offered.
+  describe('a visible-types response that is not its declared shape', () => {
+    it('keeps every event type on offer instead of crashing', async () => {
+      const lookup = vi.mocked(apiModule.eventService.getVisibleEventTypesWithCategories);
+      // Once, and asserted consumed below, so it cannot leak into a later test.
+      lookup.mockResolvedValueOnce('<html>Sign in to Wi-Fi</html>' as never);
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+
+      await waitFor(() => expect(lookup).toHaveBeenCalled());
+      expect(await screen.findByRole('heading', { name: 'Event Details', level: 2 })).toBeInTheDocument();
+      expect(screen.getAllByText('Business Meeting').length).toBeGreaterThan(0);
     });
   });
 });

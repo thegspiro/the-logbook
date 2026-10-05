@@ -455,7 +455,7 @@ export const MemberAdminEditPage: React.FC = () => {
 
         <div className="space-y-6">
           {/* Personal Information */}
-          <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+          <div className="card p-6">
             <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Personal Information</h2>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div>
@@ -548,7 +548,7 @@ export const MemberAdminEditPage: React.FC = () => {
           </div>
 
           {/* Department Information */}
-          <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+          <div className="card p-6">
             <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Department Information</h2>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div>
@@ -703,7 +703,7 @@ export const MemberAdminEditPage: React.FC = () => {
           </div>
 
           {/* Contact Information */}
-          <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+          <div className="card p-6">
             <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Contact Information</h2>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div>
@@ -761,7 +761,7 @@ export const MemberAdminEditPage: React.FC = () => {
           </div>
 
           {/* Address */}
-          <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+          <div className="card p-6">
             <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Address</h2>
             <div className="space-y-4">
               <div>
@@ -850,7 +850,7 @@ export const MemberAdminEditPage: React.FC = () => {
           </div>
 
           {/* Emergency Contacts */}
-          <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+          <div className="card p-6">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-theme-text-primary text-lg font-semibold">Emergency Contacts</h2>
               <button
@@ -967,7 +967,7 @@ export const MemberAdminEditPage: React.FC = () => {
           </div>
 
           {/* Actions */}
-          <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+          <div className="card p-6">
             <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
               <div>
                 <Link

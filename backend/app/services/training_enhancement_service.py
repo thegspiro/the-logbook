@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.training import (
     CompetencyMatrix,
@@ -35,6 +36,12 @@ from app.models.training import (
     XAPIStatement,
 )
 from app.models.user import User, UserStatus
+from app.services.training_compliance import (
+    CATCH_UP_STATUS,
+    member_join_date,
+    requirement_applies_to_user,
+    tally_standing,
+)
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_all_in_org, assert_in_org
@@ -60,6 +67,40 @@ def _stringify_uuids(data: dict) -> dict:
         key: str(value) if isinstance(value, uuid.UUID) else value
         for key, value in data.items()
     }
+
+
+def _detail_status(detail: Dict[str, Any]) -> str:
+    """A ``TrainingService.evaluate_requirement_detail`` dict as a status
+    ``tally_standing`` understands."""
+    if detail.get("catch_up_deadline"):
+        return CATCH_UP_STATUS
+    return TrainingStatus.COMPLETED.value if detail["is_met"] else "not_met"
+
+
+def _requirement_cells(requirements, user, records, today: date) -> List[str]:
+    """One export cell per requirement column for ``user``.
+
+    "N/A" where the requirement does not grade this member — their membership
+    type, role, or a grandfathering cutoff exempts them — so an exempt member
+    is not printed as failing a standard that was never theirs. "Due <date>"
+    while an existing member's catch-up period runs.
+    """
+    from app.services.training_service import TrainingService
+
+    join_date = member_join_date(user)
+    cells: List[str] = []
+    for req in requirements:
+        if not requirement_applies_to_user(req, user):
+            cells.append("N/A")
+            continue
+        detail = TrainingService.evaluate_requirement_detail(
+            req, records, today, join_date=join_date
+        )
+        if detail.get("catch_up_deadline"):
+            cells.append(f"Due {detail['catch_up_deadline']}")
+        else:
+            cells.append("Met" if detail["is_met"] else "Not Met")
+    return cells
 
 
 class RecertificationService:
@@ -965,9 +1006,11 @@ class ReportExportService:
         if not start_date:
             start_date = date(end_date.year, 1, 1)
 
-        # Get all active, non-exempt members
+        # Get all active, non-exempt members. positions eager-loaded for the
+        # per-member applicability check below.
         users_result = await self.db.execute(
             select(User)
+            .options(selectinload(User.positions))
             .where(User.organization_id == organization_id)
             .where(User.status == UserStatus.ACTIVE)
             .where(User.compliance_exempt.is_(False))
@@ -1015,14 +1058,7 @@ class ReportExportService:
                 str(len(records)),
             ]
 
-            # Check each requirement (simplified)
-            for req in requirements:
-                from app.services.training_service import TrainingService
-
-                detail = TrainingService.evaluate_requirement_detail(
-                    req, records, today
-                )
-                row.append("Met" if detail["is_met"] else "Not Met")
+            row.extend(_requirement_cells(requirements, user, records, today))
 
             writer.writerow(row)
 
@@ -1116,7 +1152,9 @@ class ReportExportService:
         forecasts = []
 
         users_result = await self.db.execute(
-            select(User).where(
+            select(User)
+            .options(selectinload(User.positions))
+            .where(
                 User.organization_id == organization_id,
                 User.status == UserStatus.ACTIVE,
                 User.compliance_exempt.is_(False),
@@ -1131,9 +1169,16 @@ class ReportExportService:
                 TrainingRequirement.active.is_(True),
             )
         )
-        requirements = req_result.scalars().all()
+        all_requirements = req_result.scalars().all()
 
         for user in users:
+            # Only what grades this member — by type, role, and grandfathering.
+            requirements = [
+                req
+                for req in all_requirements
+                if requirement_applies_to_user(req, user)
+            ]
+            join_date = member_join_date(user)
             records_result = await self.db.execute(
                 select(TrainingRecord).where(
                     TrainingRecord.user_id == str(user.id),
@@ -1144,7 +1189,7 @@ class ReportExportService:
             records = records_result.scalars().all()
 
             # Current compliance
-            met = 0
+            statuses: List[str] = []
             at_risk = []
             expiring = []
 
@@ -1152,10 +1197,9 @@ class ReportExportService:
                 from app.services.training_service import TrainingService
 
                 detail = TrainingService.evaluate_requirement_detail(
-                    req, records, today
+                    req, records, today, join_date=join_date
                 )
-                if detail["is_met"]:
-                    met += 1
+                statuses.append(_detail_status(detail))
                 if (
                     detail.get("days_until_due") is not None
                     and 0 < detail["days_until_due"] <= 90
@@ -1178,7 +1222,10 @@ class ReportExportService:
                         }
                     )
 
-            total = len(requirements) if requirements else 1
+            # Catch-up requirements count neither way, and a member nothing
+            # grades is fully compliant — not 0%, which dividing by a
+            # substituted 1 used to report.
+            met, total = tally_standing(statuses)
             current_pct = (met / total * 100) if total > 0 else 100
 
             # Simple forecast: if certs are expiring, compliance drops
@@ -1235,6 +1282,7 @@ class ReportExportService:
 
         users_result = await self.db.execute(
             select(User)
+            .options(selectinload(User.positions))
             .where(User.organization_id == organization_id)
             .where(User.status == UserStatus.ACTIVE)
             .where(User.compliance_exempt.is_(False))
@@ -1312,17 +1360,12 @@ class ReportExportService:
             c.drawString(col_x[2], y, f"{total_hours:.1f}")
             c.drawString(col_x[3], y, str(len(records)))
 
-            for i, req in enumerate(requirements):
+            cells = _requirement_cells(requirements, user, records, generated_on)
+            for i, status_text in enumerate(cells):
                 x = req_col_start + i * 70
                 if x + 60 > page_w - margin:
                     break
-                from app.services.training_service import TrainingService
-
-                detail = TrainingService.evaluate_requirement_detail(
-                    req, records, generated_on
-                )
-                status_text = "Met" if detail["is_met"] else "Not Met"
-                if not detail["is_met"]:
+                if status_text == "Not Met":
                     c.setFillColorRGB(0.8, 0, 0)
                 c.drawString(x, y, status_text)
                 c.setFillColorRGB(0, 0, 0)

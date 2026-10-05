@@ -24,6 +24,7 @@ import type {
   ShiftEquipmentCheckRecord,
   EquipmentCheckTemplate,
 } from '../../../modules/inventory/types/equipmentCheck';
+import { isChecklistSubmitted } from '../../../modules/inventory/types/equipmentCheck';
 import type { ActiveChecklistRecord } from '../services/equipmentCheckApi';
 import { calendarDaysFromToday, formatCalendarDate, formatDate, formatTime } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -118,9 +119,6 @@ const dueLabel = (days: number): string => {
   if (days > 1) return `In ${days} days`;
   return `${Math.abs(days)} days ago`;
 };
-
-/** `/my-checklists` statuses meaning the shift's check has been filed. */
-const SUBMITTED_STATUSES: ReadonlySet<string> = new Set(['pass', 'passed', 'fail', 'failed', 'out_of_service']);
 
 const TIMING_LABELS: Record<string, string> = {
   start_of_shift: 'Start of shift',
@@ -249,12 +247,15 @@ export const MyChecklistsPage: React.FC = () => {
     }
   }, []);
 
+  // No toast here: the form has already said how the check ended — submitted,
+  // saved offline, or queued for sync — and only it knows which. A second
+  // "submitted" from the page doubled the online message and contradicted the
+  // offline one.
   const handleComplete = useCallback(() => {
     setActiveTemplate(null);
     setActiveShiftId(null);
     setActiveCheckId(null);
     setActiveShiftContext(undefined);
-    toast.success('Equipment check submitted');
     void fetchActiveChecklists();
     if (showHistory) {
       void fetchHistory();
@@ -432,7 +433,7 @@ export const MyChecklistsPage: React.FC = () => {
             <div className="border-theme-surface-border mt-4 border-t pt-4">
               <button
                 onClick={() => void handleResumeCheck(selectedCheck)}
-                className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-red-800 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-red-900"
               >
                 <Play className="h-4 w-4" />
                 Resume Check
@@ -462,7 +463,7 @@ export const MyChecklistsPage: React.FC = () => {
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => void handleOpenTemplatePicker()}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 max-md:min-h-[44px] max-md:min-w-[44px]"
+            className="touch:min-h-[44px] touch:min-w-[44px] inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-900"
           >
             <Play className="h-3.5 w-3.5" aria-hidden="true" />
             Unscheduled checklist
@@ -507,9 +508,9 @@ export const MyChecklistsPage: React.FC = () => {
                   key={value}
                   onClick={() => setTimingFilter(value)}
                   aria-pressed={timingFilter === value}
-                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors sm:px-2.5 sm:py-1 ${
+                  className={`touch:min-h-11 touch:min-w-11 rounded-md px-3 py-1.5 text-xs font-medium transition-colors sm:px-2.5 sm:py-1 ${
                     timingFilter === value
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-red-800 text-white'
                       : 'text-theme-text-muted hover:text-theme-text-primary'
                   }`}
                 >
@@ -528,13 +529,17 @@ export const MyChecklistsPage: React.FC = () => {
         ) : activeChecklists.length === 0 ? (
           <div className="card p-8 text-center">
             <ClipboardCheck className="text-theme-text-muted mx-auto h-10 w-10" />
+            {/* Written for the member reading it, who cannot configure
+                anything: it must not imply they are off the schedule, since
+                a member on a shift whose vehicle has no checklist sees this
+                too. */}
             <p className="text-theme-text-muted mt-3 text-sm">
-              No active checklists. Equipment checks will appear here when you&apos;re assigned to a shift with
-              configured templates.
+              Nothing to check right now. When one of your shifts has an equipment checklist, it will show up here. If
+              you expected one, ask your shift officer.
             </p>
           </div>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="card-grid gap-3">
             {activeChecklists
               .filter((c) => timingFilter === 'all' || c.checkTiming === timingFilter)
               .slice()
@@ -564,7 +569,7 @@ export const MyChecklistsPage: React.FC = () => {
                 // One check per shift and checklist, whoever on the crew files
                 // it. Offering to open a submitted one walked the member
                 // through every item and then refused at Submit with a 409.
-                const isSubmitted = SUBMITTED_STATUSES.has(checklist.status);
+                const isSubmitted = isChecklistSubmitted(checklist.status);
                 const isHighlighted = highlightShiftId === checklist.shiftId;
 
                 return (
@@ -576,13 +581,13 @@ export const MyChecklistsPage: React.FC = () => {
                         : 'border-theme-surface-border bg-theme-surface'
                     }`}
                   >
-                    <div className="mb-2 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Truck className="text-theme-text-muted h-4 w-4" />
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <Truck className="text-theme-text-muted h-4 w-4 shrink-0" />
                         <span className="text-theme-text-primary text-sm font-medium">{checklist.apparatusName}</span>
                       </div>
                       <span
-                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                        className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${
                           checklist.checkTiming === 'start_of_shift'
                             ? 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-400'
                             : 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-400'
@@ -660,9 +665,9 @@ export const MyChecklistsPage: React.FC = () => {
                       ) : (
                         <button
                           onClick={() => void handleStartCheck(checklist)}
-                          className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                          className={`touch:min-h-11 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                             isDueNow || isStarted
-                              ? 'bg-blue-600 text-white hover:bg-blue-700'
+                              ? 'bg-red-800 text-white hover:bg-red-900'
                               : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover border'
                           }`}
                         >
@@ -860,7 +865,7 @@ export const MyChecklistsPage: React.FC = () => {
                             </span>
                           </div>
                         </div>
-                        <Play className="text-theme-text-muted h-4 w-4 transition-opacity sm:opacity-0 sm:group-hover:opacity-100" />
+                        <Play className="text-theme-text-muted h-4 w-4 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100" />
                       </button>
                     ))}
                   </div>

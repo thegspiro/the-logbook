@@ -96,7 +96,7 @@ export const CohortsPage: React.FC<CohortsPageProps> = ({ embedded = false }) =>
             actions={[{ label: 'New cohort', onClick: () => setShowWizard(true) }]}
           />
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="card-grid gap-4">
             {cohorts.map((cohort) => (
               <button
                 key={cohort.id}

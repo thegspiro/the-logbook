@@ -84,7 +84,7 @@ const EquipmentCheckReportsPage: React.FC = () => {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 aria-current={activeTab === tab.id ? 'page' : undefined}
-                className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                className={`touch:min-h-11 flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                   activeTab === tab.id
                     ? 'bg-violet-600 text-white'
                     : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
@@ -206,7 +206,7 @@ const ComplianceTab: React.FC<{ startDate: string; endDate: string; tz: string }
         {data.apparatus.length === 0 ? (
           <p className="text-theme-text-muted py-4 text-sm">No apparatus data available.</p>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="card-grid gap-3 [--card-grid-min:18rem]">
             {data.apparatus.map((a) => (
               <div key={a.apparatusId} className="card p-4">
                 <div className="mb-2 flex items-center justify-between">

@@ -2,6 +2,17 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* A touch screen, or a viewport narrow enough to be a phone. The 44px touch
+   minimum used to be gated on width alone, so a phone turned sideways (844px)
+   or an iPad fell back to 28–36px desktop targets under a fingertip. The
+   pointer, not the width, is what decides whether a target must fit a finger;
+   the width clause stays so a narrow desktop window keeps its phone layout. */
+@custom-variant touch {
+  @media (max-width: 767px), (pointer: coarse) {
+    @slot;
+  }
+}
+
 @theme {
   --color-primary-50: #fef2f2;
   --color-primary-100: #fee2e2;
@@ -269,6 +280,16 @@
   ::file-selector-button {
     border-color: var(--color-gray-200, currentcolor);
   }
+
+  /* A native radio or checkbox is a flex item at almost every call site,
+     beside a label whose text wraps. Flex items default to `flex-shrink: 1`,
+     so long text squeezes the control's width while its height holds:
+     `h-4 w-4` measured 13x16px on a 390px viewport, which drew every radio
+     as an upright oval. In `base`, so a call site can still opt back in. */
+  input[type='radio'],
+  input[type='checkbox'] {
+    flex-shrink: 0;
+  }
 }
 
 /*
@@ -368,10 +389,10 @@
 @utility form-input {
   @apply bg-theme-input-bg border-theme-input-border text-theme-text-primary placeholder:text-theme-text-muted/60 focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-lg border px-4 py-2 transition-all duration-150 focus:ring-2 focus:outline-hidden;
   /* px-4 py-2 renders ~41px for an input and ~37px for a select — under the
-     44px touch minimum. Enforced below md only: a mouse pointer does not need
-     the target a fingertip does, and raising it everywhere would loosen
-     desktop form density. */
-  @media (max-width: 767px) {
+     44px touch minimum. Enforced on a phone-width or touch screen only: a mouse
+     pointer does not need the target a fingertip does, and raising it
+     everywhere would loosen desktop form density. */
+  @media (max-width: 767px), (pointer: coarse) {
     min-height: 44px;
   }
 }
@@ -379,7 +400,7 @@
 @utility form-input-sm {
   @apply bg-theme-input-bg border-theme-input-border text-theme-text-primary placeholder:text-theme-text-muted/60 focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-sm border px-3 py-1.5 text-sm transition-all duration-150 focus:ring-1 focus:outline-hidden;
   /* Compact on desktop, still thumb-sized on a phone — see form-input. */
-  @media (max-width: 767px) {
+  @media (max-width: 767px), (pointer: coarse) {
     min-height: 44px;
     /* iOS zooms the entire page when a focused field is below 16px. That is
        especially disruptive in create/edit dialogs, where it can hide the
@@ -439,6 +460,38 @@
   @apply bg-theme-surface-secondary border-theme-surface-border rounded-lg border shadow-sm transition-shadow duration-200;
 }
 
+@utility card-grid {
+  /* A list of record cards — one card per event, document, course, etc.
+
+     Columns follow the width the grid itself has, never the viewport. The
+     sidebar is expanded from lg up, so a viewport rule like
+     `sm:grid-cols-2 lg:grid-cols-3` packed three ~200px cards into a 1024px
+     tablet and pushed their footer buttons off the card edge.
+
+     - 20rem is the narrowest a card gets: it is what the events card needs
+       for "Going", "Not Going" and the calendar button to fit side by side.
+     - `min(100%, …)` lets a single column shrink below that on a small phone
+       rather than overflow the screen.
+     - `100% / 3 - 1rem` caps it at three columns on a wide screen. A fourth
+       would need each track to be 1rem wider than a third of the row minus
+       gaps, which cannot fit for any gap up to gap-6 (1.5rem).
+
+     The gap is a default; a `gap-*` at the call site overrides it.
+
+     A grid of compact cards, with no action footer to fit, may lower the
+     floor with `[--card-grid-min:18rem]`: at 18rem two columns fit a 1024px
+     tablet's content area, where 20rem left one 640px-wide card per row.
+     Only where every title still fits: on the past-events, course, shift
+     template and platoon cards it clamped titles that 20rem showed whole,
+     and a full title beats a second column. */
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(min(100%, max(var(--card-grid-min, 20rem), calc(100% / 3 - 1rem))), 1fr)
+  );
+}
+
 /* --- Buttons --- (#4 press effect, #5 shadow elevation, #6 smooth multi-property transitions) */
 @utility btn-primary {
   /* red-800, not red-600. White on red-600 measures 4.83:1 — AA for large
@@ -448,11 +501,11 @@
      everywhere else reads as two different actions. */
   @apply focus:ring-theme-focus-ring rounded-lg bg-red-800 px-4 py-2 text-white shadow-sm transition-all duration-150 ease-out hover:bg-red-900 hover:shadow-md focus:ring-2 focus:outline-hidden active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
 
-  /* Grow to the 44px touch minimum on phones. Applied inside the query so
-     desktop button density is untouched; inline-flex centres the label in the
-     taller box, which a plain min-height would leave sitting at the top for
-     anchors styled as buttons. */
-  @media (max-width: 767px) {
+  /* Grow to the 44px touch minimum on phones and touch screens. Applied
+     inside the query so mouse-driven desktop button density is untouched;
+     inline-flex centres the label in the taller box, which a plain min-height
+     would leave sitting at the top for anchors styled as buttons. */
+  @media (max-width: 767px), (pointer: coarse) {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -463,11 +516,11 @@
 @utility btn-secondary {
   @apply bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover border-theme-surface-border focus:ring-theme-focus-ring rounded-lg border px-4 py-2 shadow-sm transition-all duration-150 ease-out hover:shadow focus:ring-2 focus:outline-hidden active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
 
-  /* Grow to the 44px touch minimum on phones. Applied inside the query so
-     desktop button density is untouched; inline-flex centres the label in the
-     taller box, which a plain min-height would leave sitting at the top for
-     anchors styled as buttons. */
-  @media (max-width: 767px) {
+  /* Grow to the 44px touch minimum on phones and touch screens. Applied
+     inside the query so mouse-driven desktop button density is untouched;
+     inline-flex centres the label in the taller box, which a plain min-height
+     would leave sitting at the top for anchors styled as buttons. */
+  @media (max-width: 767px), (pointer: coarse) {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -478,11 +531,11 @@
 @utility btn-success {
   @apply focus:ring-theme-focus-ring rounded-lg bg-green-800 px-4 py-2 text-white shadow-sm transition-all duration-150 ease-out hover:bg-green-900 hover:shadow-md focus:ring-2 focus:outline-hidden active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
 
-  /* Grow to the 44px touch minimum on phones. Applied inside the query so
-     desktop button density is untouched; inline-flex centres the label in the
-     taller box, which a plain min-height would leave sitting at the top for
-     anchors styled as buttons. */
-  @media (max-width: 767px) {
+  /* Grow to the 44px touch minimum on phones and touch screens. Applied
+     inside the query so mouse-driven desktop button density is untouched;
+     inline-flex centres the label in the taller box, which a plain min-height
+     would leave sitting at the top for anchors styled as buttons. */
+  @media (max-width: 767px), (pointer: coarse) {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -493,11 +546,11 @@
 @utility btn-info {
   @apply focus:ring-theme-focus-ring rounded-lg bg-blue-800 px-4 py-2 text-white shadow-sm transition-all duration-150 ease-out hover:bg-blue-900 hover:shadow-md focus:ring-2 focus:outline-hidden active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
 
-  /* Grow to the 44px touch minimum on phones. Applied inside the query so
-     desktop button density is untouched; inline-flex centres the label in the
-     taller box, which a plain min-height would leave sitting at the top for
-     anchors styled as buttons. */
-  @media (max-width: 767px) {
+  /* Grow to the 44px touch minimum on phones and touch screens. Applied
+     inside the query so mouse-driven desktop button density is untouched;
+     inline-flex centres the label in the taller box, which a plain min-height
+     would leave sitting at the top for anchors styled as buttons. */
+  @media (max-width: 767px), (pointer: coarse) {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -508,11 +561,11 @@
 @utility btn-warning {
   @apply focus:ring-theme-focus-ring rounded-lg bg-amber-800 px-4 py-2 text-white shadow-sm transition-all duration-150 ease-out hover:bg-amber-900 hover:shadow-md focus:ring-2 focus:outline-hidden active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
 
-  /* Grow to the 44px touch minimum on phones. Applied inside the query so
-     desktop button density is untouched; inline-flex centres the label in the
-     taller box, which a plain min-height would leave sitting at the top for
-     anchors styled as buttons. */
-  @media (max-width: 767px) {
+  /* Grow to the 44px touch minimum on phones and touch screens. Applied
+     inside the query so mouse-driven desktop button density is untouched;
+     inline-flex centres the label in the taller box, which a plain min-height
+     would leave sitting at the top for anchors styled as buttons. */
+  @media (max-width: 767px), (pointer: coarse) {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -522,46 +575,40 @@
 
 /* --- Standardized Button Sizes (#79) --- */
 @utility btn-sm {
-  @apply rounded-md px-2.5 py-1.5 text-xs;
+  @apply inline-flex items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs;
 
-  /* Grow to the 44px touch minimum on phones. Applied inside the query so
-     desktop button density is untouched; inline-flex centres the label in the
-     taller box, which a plain min-height would leave sitting at the top for
-     anchors styled as buttons. */
-  @media (max-width: 767px) {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+  /* Flex at every width, not only on phones. Preflight makes an <svg> a
+     block, so in a block button an icon stacked above its label from 768px
+     up — the store catalog's Edit and Archive drew that way on every tablet.
+     Grow to the 44px touch minimum on phones and touch screens only, so
+     mouse-driven desktop button density is untouched. */
+  @media (max-width: 767px), (pointer: coarse) {
     min-height: 44px;
   }
 }
 
 @utility btn-md {
-  @apply rounded-lg px-4 py-2 text-sm;
+  @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm;
 
-  /* Grow to the 44px touch minimum on phones. Applied inside the query so
-     desktop button density is untouched; inline-flex centres the label in the
-     taller box, which a plain min-height would leave sitting at the top for
-     anchors styled as buttons. */
-  @media (max-width: 767px) {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+  /* Flex at every width, not only on phones. Preflight makes an <svg> a
+     block, so in a block button an icon stacked above its label from 768px
+     up — the store catalog's Edit and Archive drew that way on every tablet.
+     Grow to the 44px touch minimum on phones and touch screens only, so
+     mouse-driven desktop button density is untouched. */
+  @media (max-width: 767px), (pointer: coarse) {
     min-height: 44px;
   }
 }
 
 @utility btn-lg {
-  @apply rounded-lg px-6 py-3 text-base;
+  @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-6 py-3 text-base;
 
-  /* Grow to the 44px touch minimum on phones. Applied inside the query so
-     desktop button density is untouched; inline-flex centres the label in the
-     taller box, which a plain min-height would leave sitting at the top for
-     anchors styled as buttons. */
-  @media (max-width: 767px) {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+  /* Flex at every width, not only on phones. Preflight makes an <svg> a
+     block, so in a block button an icon stacked above its label from 768px
+     up — the store catalog's Edit and Archive drew that way on every tablet.
+     Grow to the 44px touch minimum on phones and touch screens only, so
+     mouse-driven desktop button density is untouched. */
+  @media (max-width: 767px), (pointer: coarse) {
     min-height: 44px;
   }
 }
@@ -592,9 +639,9 @@
 @utility btn-icon-sm {
   /* Compact 36px icon button for dense desktop toolbars. Its own guidance was
      "avoid as a primary control on touch UIs" — rather than leave that to be
-     remembered at each call site, it grows to the full 44px on phones. */
+     remembered at each call site, it grows to the full 44px on phones and touch screens. */
   @apply inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md p-1.5;
-  @media (max-width: 767px) {
+  @media (max-width: 767px), (pointer: coarse) {
     min-height: 44px;
     min-width: 44px;
   }
@@ -711,7 +758,7 @@
   /* Touch minimum, as on settings-subnav-item below. py-2 renders 36px, which
      is the size a finger misses — and every settings screen in the product
      navigates through this pill, so the shortfall was on all seven at once. */
-  @media (max-width: 767px) {
+  @media (max-width: 767px), (pointer: coarse) {
     min-height: 44px;
   }
 }
@@ -727,7 +774,7 @@
 
   /* Touch minimum. Padded rather than capped: on desktop the item carries a
      hint line under its label, so shrinking it would clip the hint instead. */
-  @media (max-width: 767px) {
+  @media (max-width: 767px), (pointer: coarse) {
     min-height: 44px;
   }
 }
@@ -1156,14 +1203,16 @@
 }
 
 @utility touch-target-phone {
-  /* #21a The 44px touch minimum, applied on phones only.
+  /* #21a The 44px touch minimum, applied on phones and touch screens only
+     (the same condition as the `touch:` variant). The name predates the
+     touch clause: a landscape phone or an iPad is coarse-pointer too.
      `mobile-touch-target` above enforces it at every width, which is right for
      a control that is cramped everywhere and wrong for one that is only
-     cramped on a phone: applying it to a wrapped row of status pills or a
+     cramped under a finger: applying it to a wrapped row of status pills or a
      dense filter strip grows the desktop layout to no purpose. This is the
-     same phone-scoped rule the `btn-*` utilities already carry internally,
+     same touch-scoped rule the `btn-*` utilities already carry internally,
      factored out so a non-button control can reach for it too. */
-  @media (max-width: 767px) {
+  @media (max-width: 767px), (pointer: coarse) {
     display: inline-flex;
     align-items: center;
     justify-content: center;

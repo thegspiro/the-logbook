@@ -29,10 +29,10 @@ from app.models.training import (
     TrainingProgram,
 )
 from app.models.user import (
+    ACTIVE_ACCOUNT_STATUSES,
     Organization,
     Position,
     User,
-    UserStatus,
     user_positions,
 )
 from app.services.driver_exception_service import DriverExceptionService
@@ -312,7 +312,9 @@ class ShiftEligibilityService:
         if status_value is None:
             return True
         raw = getattr(status_value, "value", status_value)
-        return str(raw) == UserStatus.ACTIVE.value
+        # The same statuses as ``User.is_active``, which the roster filters on:
+        # a probationary member works shifts.
+        return str(raw) in {status.value for status in ACTIVE_ACCOUNT_STATUSES}
 
     async def get_eligible_positions(
         self,

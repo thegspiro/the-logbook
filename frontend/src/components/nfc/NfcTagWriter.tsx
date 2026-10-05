@@ -1,5 +1,5 @@
-import React from 'react';
-import { Nfc, Loader2, Check, AlertTriangle } from 'lucide-react';
+import React, { useId, useState } from 'react';
+import { Nfc, Loader2, Check, AlertTriangle, ChevronDown } from 'lucide-react';
 import { useNfcWriter } from '../../hooks/useNfcWriter';
 
 interface NfcTagWriterProps {
@@ -15,16 +15,7 @@ interface NfcTagWriterProps {
   actionNoun?: string;
 }
 
-/**
- * Programs a reusable NFC tag with a check-in link, so a station can mount a
- * sticker beside the door — or on the truck — instead of reprinting a QR sheet.
- *
- * On a device without Web NFC this collapses to a single explanatory line
- * rather than disappearing. A chief planning tag rollout is usually at a
- * desktop, where the writer can never run — hiding it outright means the
- * capability is undiscoverable from the only screen that documents it.
- */
-export const NfcTagWriter: React.FC<NfcTagWriterProps> = ({ url, targetLabel, actionNoun = 'check-in' }) => {
+const NfcTagWriterBody: React.FC<NfcTagWriterProps> = ({ url, targetLabel, actionNoun = 'check-in' }) => {
   const { supported, unavailableReason, status, error, writeUrl, cancel, reset } = useNfcWriter();
 
   if (!supported) {
@@ -33,7 +24,7 @@ export const NfcTagWriter: React.FC<NfcTagWriterProps> = ({ url, targetLabel, ac
     // is appended.
     const insecureOrigin = typeof window !== 'undefined' && !window.isSecureContext;
     return (
-      <div className="text-theme-text-muted mt-6 flex items-start gap-2 text-sm">
+      <div className="text-theme-text-muted flex items-start gap-2 text-sm">
         <Nfc className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
         <p>
           <span className="font-medium">NFC tags:</span> to write this link to a tag, open this page in Chrome on an
@@ -44,12 +35,7 @@ export const NfcTagWriter: React.FC<NfcTagWriterProps> = ({ url, targetLabel, ac
   }
 
   return (
-    <div className="card mt-6 text-left">
-      <div className="mb-3 flex items-center gap-2">
-        <Nfc className="text-theme-text-secondary h-5 w-5" aria-hidden="true" />
-        <h3 className="text-theme-text-primary text-lg font-semibold">Write to an NFC tag</h3>
-      </div>
-
+    <div>
       <p className="text-theme-text-secondary mb-4 text-sm">
         Write this link to a blank NFC tag or sticker. Members tap the tag with their phone to open {targetLabel}{' '}
         {actionNoun} — no camera needed.
@@ -101,6 +87,47 @@ export const NfcTagWriter: React.FC<NfcTagWriterProps> = ({ url, targetLabel, ac
       {/* Writing overwrites whatever the tag already held, and a tag reused
           from another event is the likeliest mistake in the field. */}
       <p className="text-theme-text-muted mt-3 text-xs">Writing replaces any link already on the tag.</p>
+    </div>
+  );
+};
+/**
+ * Programs a reusable NFC tag with a check-in link, so a station can mount a
+ * sticker beside the door — or on the truck — instead of reprinting a QR sheet.
+ *
+ * Closed by default behind a "Set up an NFC tag" link: it is a setup tool for
+ * the officer who mounts the sticker, and open on a page members also read it
+ * was a full card of instructions and a large button for something none of
+ * them will ever do. Callers show it only to the officers who may write the
+ * tag; members get `NfcTapHint` instead.
+ *
+ * On a device without Web NFC the opened panel is a single explanatory line
+ * rather than nothing. A chief planning tag rollout is usually at a
+ * desktop, where the writer can never run — hiding it outright means the
+ * capability is undiscoverable from the only screen that documents it.
+ */
+export const NfcTagWriter: React.FC<NfcTagWriterProps> = (props) => {
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
+  return (
+    <div className="mt-6 text-left">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={panelId}
+        onClick={() => setOpen((prev) => !prev)}
+        className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 inline-flex items-center gap-1.5 text-sm transition-colors"
+      >
+        <Nfc className="h-4 w-4" aria-hidden="true" />
+        Set up an NFC tag
+        <ChevronDown className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
+      </button>
+      {/* Mounted only while open, so the closed state leaves no hidden
+          controls in the tab order and no writer armed behind a closed panel. */}
+      {open && (
+        <div id={panelId} className="card mt-3">
+          <NfcTagWriterBody {...props} />
+        </div>
+      )}
     </div>
   );
 };

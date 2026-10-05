@@ -209,7 +209,7 @@ export default function FacilitiesDashboard() {
                 </div>
                 <button
                   onClick={() => void navigate('/facilities/maintenance?status=overdue')}
-                  className="text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 text-xs transition-colors max-md:min-h-[44px]"
+                  className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-[44px] flex items-center gap-1 text-xs transition-colors"
                 >
                   View all <ArrowRight className="h-3 w-3" />
                 </button>
@@ -258,7 +258,7 @@ export default function FacilitiesDashboard() {
                 </div>
                 <button
                   onClick={() => void navigate('/facilities/inspections')}
-                  className="text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 text-xs transition-colors max-md:min-h-[44px]"
+                  className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-[44px] flex items-center gap-1 text-xs transition-colors"
                 >
                   View all <ArrowRight className="h-3 w-3" />
                 </button>
@@ -364,7 +364,7 @@ export default function FacilitiesDashboard() {
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <div className="card-grid gap-4">
                 {displayedFacilities.map((facility) => (
                   <FacilityCard key={facility.id} facility={facility} onClick={handleFacilityClick} />
                 ))}
@@ -479,9 +479,9 @@ function FacilityCard({ facility, onClick }: FacilityCardProps) {
       </div>
 
       {address && (
-        <div className="text-theme-text-secondary mb-3 flex items-center gap-1.5 text-sm">
-          <MapPin className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate">{address}</span>
+        <div className="text-theme-text-secondary mb-3 flex items-start gap-1.5 text-sm">
+          <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span className="line-clamp-2">{address}</span>
         </div>
       )}
 

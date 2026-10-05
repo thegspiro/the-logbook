@@ -42,6 +42,8 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { useAuthStore } from '../stores/authStore';
 import { formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
+import { useOrganizerOptions } from '../hooks/useOrganizerOptions';
+import { EventOrganizerPickers } from './EventOrganizerPickers';
 import { Collapsible } from './ux/Collapsible';
 import DateTimeQuarterHour from './ux/DateTimeQuarterHour';
 import { TrainingDetailsFields } from './training/TrainingDetailsFields';
@@ -51,6 +53,7 @@ import {
   toTrainingDetailsPayload,
   type TrainingDetailsValue,
 } from './training/trainingDetailsValue';
+import { asArray } from '../utils/asArray';
 
 export interface ConflictEvent {
   id: string;
@@ -86,6 +89,12 @@ interface EventFormProps {
   userEvents?: ConflictEvent[] | undefined;
   /** When editing, the ID of the current event (excluded from conflict checks) */
   editingEventId?: string | undefined;
+  /**
+   * Offer organizer and alternate pickers. Create only: once an event exists,
+   * changing who runs it is a transfer from the event page, which tells the
+   * members involved and can carry the change across a recurring series.
+   */
+  showOrganizerPickers?: boolean | undefined;
 }
 
 const EVENT_TYPES: EventType[] = [
@@ -135,7 +144,10 @@ const selectClass = 'form-input py-3';
 
 const labelClass = 'block text-sm font-semibold text-theme-text-primary mb-2';
 
-const checkboxClass = 'form-input w-4 h-4 text-blue-600';
+// The box only: the 44px tap target comes from the <label> wrapping each one
+// (see `form-checkbox` in index.css). `form-input` gave a 16px-wide box 44px of
+// height and no wider target.
+const checkboxClass = 'form-checkbox';
 
 const RECURRENCE_PATTERNS: { value: RecurrencePattern; label: string }[] = [
   { value: 'daily', label: 'Daily' },
@@ -200,8 +212,13 @@ export const EventForm: React.FC<EventFormProps> = ({
   initialRecurrence,
   userEvents,
   editingEventId,
+  showOrganizerPickers = false,
 }) => {
   const tz = useTimezone();
+  const currentUserId = useAuthStore((state) => state.user?.id);
+  const organizerOptions = useOrganizerOptions(showOrganizerPickers);
+  const [organizerId, setOrganizerId] = useState('');
+  const [alternateId, setAlternateId] = useState('');
   // Create Training Session lives in the Training admin hub, which only a
   // training.manage holder can open; anyone else is pointed at who can.
   const canCreateTrainingSession = useAuthStore((state) => state.checkPermission('training.manage'));
@@ -340,10 +357,15 @@ export const EventForm: React.FC<EventFormProps> = ({
     eventService
       .getVisibleEventTypesWithCategories()
       .then((data) => {
-        setVisibleTypes(data.visible_event_types);
-        setCustomCategories(data.custom_event_categories || []);
-        setVisibleCustomCategories(data.visible_custom_categories || []);
-        if (data.membership_types?.length) setMembershipTypes(data.membership_types);
+        // A body that is not this shape (a captive portal's HTML page) gets
+        // the same fallback as a failed request — every type shown — rather
+        // than replacing the default with undefined and crashing the form.
+        if (Array.isArray(data?.visible_event_types)) setVisibleTypes(data.visible_event_types);
+        setCustomCategories(asArray(data?.custom_event_categories ?? []));
+        setVisibleCustomCategories(asArray(data?.visible_custom_categories ?? []));
+        if (Array.isArray(data?.membership_types) && data.membership_types.length) {
+          setMembershipTypes(data.membership_types);
+        }
       })
       .catch(() => {
         /* fall back to showing all types */
@@ -568,6 +590,13 @@ export const EventForm: React.FC<EventFormProps> = ({
 
     // Clean up data before submit
     const submitData = { ...formData };
+
+    // Left on "Me (default)", the key is omitted and the API makes the
+    // creator the organizer.
+    if (showOrganizerPickers) {
+      submitData.organizer_id = organizerId || undefined;
+      submitData.alternate_organizer_id = alternateId || undefined;
+    }
 
     // Only an explicit pick attaches a training session; an untouched section
     // leaves the event to be credited under its title as Continuing Education.
@@ -881,6 +910,29 @@ export const EventForm: React.FC<EventFormProps> = ({
             </select>
           </div>
         )}
+        {showOrganizerPickers && (
+          <div>
+            {organizerOptions.error ? (
+              <p className="text-sm text-red-700 dark:text-red-400" role="alert">
+                {organizerOptions.error} You will be the organizer; you can transfer the event once it is created.
+              </p>
+            ) : (
+              <EventOrganizerPickers
+                idPrefix="event"
+                options={organizerOptions.options}
+                organizerId={organizerId}
+                alternateId={alternateId}
+                onOrganizerChange={setOrganizerId}
+                onAlternateChange={setAlternateId}
+                organizerPlaceholder="Me (default)"
+                defaultOrganizerId={currentUserId}
+                disabled={organizerOptions.loading}
+                selectClassName={selectClass}
+                labelClassName={labelClass}
+              />
+            )}
+          </div>
+        )}
       </section>
 
       <hr className="border-theme-surface-border" />
@@ -964,7 +1016,7 @@ export const EventForm: React.FC<EventFormProps> = ({
         {/* Recurrence */}
         {showRecurrence && (
           <>
-            <div className="flex items-center space-x-3 pt-2">
+            <label className="mobile-touch-target flex items-center justify-start space-x-3 pt-2">
               <input
                 type="checkbox"
                 id="is-recurring"
@@ -972,11 +1024,11 @@ export const EventForm: React.FC<EventFormProps> = ({
                 onChange={(e) => setIsRecurring(e.target.checked)}
                 className={checkboxClass}
               />
-              <label htmlFor="is-recurring" className="text-theme-text-secondary flex items-center gap-2 text-sm">
+              <span className="text-theme-text-secondary flex items-center gap-2 text-sm">
                 <Repeat className="h-4 w-4" />
                 Make this a recurring event
-              </label>
-            </div>
+              </span>
+            </label>
 
             {isRecurring && (
               <div className="space-y-4 border-l-2 border-red-500/30 pl-6">
@@ -1003,7 +1055,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                       Duration {!isRolling && <span className="text-red-700 dark:text-red-500">*</span>}
                     </label>
                     <div className="space-y-3">
-                      <label className="flex cursor-pointer items-center gap-2 text-sm">
+                      <label className="mobile-touch-target flex cursor-pointer items-center justify-start gap-2 text-sm">
                         <input
                           type="checkbox"
                           checked={isRolling}
@@ -1293,7 +1345,7 @@ export const EventForm: React.FC<EventFormProps> = ({
             <span>Attendance</span>
           </h2>
 
-          <div className="flex items-center space-x-3">
+          <label className="mobile-touch-target flex items-center justify-start space-x-3">
             <input
               type="checkbox"
               id="is-mandatory"
@@ -1310,17 +1362,18 @@ export const EventForm: React.FC<EventFormProps> = ({
               }}
               className={checkboxClass}
             />
-            <label htmlFor="is-mandatory" className="text-theme-text-secondary text-sm">
-              Mandatory attendance
-            </label>
-          </div>
+            <span className="text-theme-text-secondary text-sm">Mandatory attendance</span>
+          </label>
 
           {formData.is_mandatory && (
             <fieldset className="space-y-2 border-l-2 border-red-500/30 pl-4">
               <legend className={labelClass}>Mandatory for</legend>
               <p className="text-theme-text-muted text-xs">Select one or more member types required to attend.</p>
               {membershipTypes.map((membershipType) => (
-                <div key={membershipType.value} className="flex items-center space-x-3">
+                <label
+                  key={membershipType.value}
+                  className="mobile-touch-target flex items-center justify-start space-x-3"
+                >
                   <input
                     type="checkbox"
                     id={`mandatory-${membershipType.value}`}
@@ -1328,10 +1381,8 @@ export const EventForm: React.FC<EventFormProps> = ({
                     onChange={(e) => toggleMandatoryMembershipType(membershipType.value, e.target.checked)}
                     className={checkboxClass}
                   />
-                  <label htmlFor={`mandatory-${membershipType.value}`} className="text-theme-text-secondary text-sm">
-                    {membershipType.label}
-                  </label>
-                </div>
+                  <span className="text-theme-text-secondary text-sm">{membershipType.label}</span>
+                </label>
               ))}
             </fieldset>
           )}
@@ -1344,7 +1395,7 @@ export const EventForm: React.FC<EventFormProps> = ({
             <span>RSVP Settings</span>
           </h2>
 
-          <div className="flex items-center space-x-3">
+          <label className="mobile-touch-target flex items-center justify-start space-x-3">
             <input
               type="checkbox"
               id="requires-rsvp"
@@ -1352,10 +1403,8 @@ export const EventForm: React.FC<EventFormProps> = ({
               onChange={(e) => update({ requires_rsvp: e.target.checked })}
               className={checkboxClass}
             />
-            <label htmlFor="requires-rsvp" className="text-theme-text-secondary text-sm">
-              Require RSVP
-            </label>
-          </div>
+            <span className="text-theme-text-secondary text-sm">Require RSVP</span>
+          </label>
 
           {/* Only the deadline lives behind "Require RSVP". Capacity, guests,
               the allowed statuses and roster visibility all apply to an event
@@ -1393,7 +1442,7 @@ export const EventForm: React.FC<EventFormProps> = ({
               />
             </div>
 
-            <div className="flex items-center space-x-3">
+            <label className="mobile-touch-target flex items-center justify-start space-x-3">
               <input
                 type="checkbox"
                 id="allow-guests"
@@ -1401,17 +1450,18 @@ export const EventForm: React.FC<EventFormProps> = ({
                 onChange={(e) => update({ allow_guests: e.target.checked })}
                 className={checkboxClass}
               />
-              <label htmlFor="allow-guests" className="text-theme-text-secondary text-sm">
-                Allow guests
-              </label>
-            </div>
+              <span className="text-theme-text-secondary text-sm">Allow guests</span>
+            </label>
 
             <fieldset>
               <legend className={labelClass}>RSVP Status Options</legend>
               <div className="flex flex-wrap gap-3">
                 {([RSVPStatusEnum.GOING, RSVPStatusEnum.NOT_GOING, RSVPStatusEnum.MAYBE] as RSVPStatus[]).map(
                   (status) => (
-                    <label key={status} className="flex cursor-pointer items-center gap-2 text-sm">
+                    <label
+                      key={status}
+                      className="mobile-touch-target flex cursor-pointer items-center justify-start gap-2 text-sm"
+                    >
                       <input
                         type="checkbox"
                         checked={formData.allowed_rsvp_statuses?.includes(status) || false}
@@ -1531,7 +1581,7 @@ export const EventForm: React.FC<EventFormProps> = ({
             </div>
           )}
 
-          <div className="flex items-center space-x-3">
+          <label className="mobile-touch-target flex items-center justify-start space-x-3">
             <input
               type="checkbox"
               id="require-checkout"
@@ -1539,12 +1589,10 @@ export const EventForm: React.FC<EventFormProps> = ({
               onChange={(e) => update({ require_checkout: e.target.checked })}
               className={checkboxClass}
             />
-            <label htmlFor="require-checkout" className="text-theme-text-secondary text-sm">
-              Require manual check-out
-            </label>
-          </div>
+            <span className="text-theme-text-secondary text-sm">Require manual check-out</span>
+          </label>
 
-          <div className="flex items-center space-x-3">
+          <label className="mobile-touch-target flex items-center justify-start space-x-3">
             <input
               type="checkbox"
               id="allow-guest-check-in"
@@ -1560,10 +1608,8 @@ export const EventForm: React.FC<EventFormProps> = ({
               }
               className={checkboxClass}
             />
-            <label htmlFor="allow-guest-check-in" className="text-theme-text-secondary text-sm">
-              Allow guest (non-member) sign-in
-            </label>
-          </div>
+            <span className="text-theme-text-secondary text-sm">Allow guest (non-member) sign-in</span>
+          </label>
 
           {formData.allow_guest_check_in && (
             <div className="space-y-3 border-l-2 border-red-500/30 pl-4">
@@ -1571,7 +1617,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                 A second QR code appears on room displays for this event. Anyone who scans it can record their
                 attendance without an account — use this for interest nights and open houses, not internal meetings.
               </p>
-              <div className="flex items-center space-x-3">
+              <label className="mobile-touch-target flex items-center justify-start space-x-3">
                 <input
                   type="checkbox"
                   id="guest-creates-prospect"
@@ -1579,10 +1625,10 @@ export const EventForm: React.FC<EventFormProps> = ({
                   onChange={(e) => updateGuestSwitches({ guest_check_in_creates_prospect: e.target.checked })}
                   className={checkboxClass}
                 />
-                <label htmlFor="guest-creates-prospect" className="text-theme-text-secondary text-sm">
+                <span className="text-theme-text-secondary text-sm">
                   Add guests to the prospective members pipeline
-                </label>
-              </div>
+                </span>
+              </label>
             </div>
           )}
         </section>
@@ -1628,7 +1674,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                     .map((hours) => (
                       <span
                         key={hours}
-                        className="inline-flex items-center gap-1 rounded-full border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-xs font-medium text-red-700 dark:text-red-300"
+                        className="inline-flex items-center gap-1 rounded-full border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-xs font-medium text-red-800 dark:text-red-300"
                       >
                         {hours >= 168
                           ? `${Math.floor(hours / 168)} week${hours >= 336 ? 's' : ''}`
@@ -1742,28 +1788,28 @@ export const EventForm: React.FC<EventFormProps> = ({
       </Collapsible>
 
       {/* === Actions === */}
-      <div className="border-theme-surface-border flex items-center justify-between gap-3 border-t pt-6">
-        <label className="text-theme-text-secondary inline-flex cursor-pointer items-center gap-2 text-sm">
+      <div className="border-theme-surface-border flex flex-wrap items-center justify-between gap-3 border-t pt-6">
+        <label className="text-theme-text-secondary mobile-touch-target inline-flex cursor-pointer items-center justify-start gap-2 text-sm">
           <input
             type="checkbox"
             checked={formData.is_draft || false}
             onChange={(e) => setFormData({ ...formData, is_draft: e.target.checked })}
-            className="border-theme-input-border rounded text-red-600 focus:ring-red-500"
+            className="form-checkbox"
           />
           Save as Draft
         </label>
-        <div className="flex gap-3">
+        <div className="ml-auto flex gap-3">
           <button
             type="button"
             onClick={onCancel}
-            className="btn-secondary text-theme-text-secondary hover:bg-theme-surface-secondary px-6 py-3 text-sm font-medium focus:ring-offset-2"
+            className="btn-secondary text-theme-text-secondary hover:bg-theme-surface-secondary px-4 py-3 text-sm font-medium focus:ring-offset-2 sm:px-6"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={isSubmitting}
-            className="btn-primary border border-transparent px-8 py-3 text-sm font-medium disabled:cursor-not-allowed"
+            className="btn-primary border border-transparent px-5 py-3 text-sm font-medium disabled:cursor-not-allowed sm:px-8"
           >
             {isSubmitting ? 'Saving...' : submitLabel}
           </button>

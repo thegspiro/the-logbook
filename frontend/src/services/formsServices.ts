@@ -231,6 +231,8 @@ export interface DocumentFolder {
   icon: string;
   parent_id?: string;
   document_count: number;
+  /** Who may open it: every member, leadership only, or its owner (+ leadership). */
+  visibility?: 'organization' | 'leadership' | 'owner';
   created_at: string;
   updated_at: string;
   created_by?: string;

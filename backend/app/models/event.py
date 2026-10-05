@@ -294,6 +294,26 @@ class Event(Base):
     updated_by = Column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
+
+    # Who runs the event, as distinct from who typed it in. Attendance requests
+    # and the series-end reminder go to these two rather than to every holder of
+    # events.manage, and the pair moves with a transfer when somebody else takes
+    # over a recurring event. created_by stays the historical record.
+    #
+    # The organizer defaults to the creator on every insert path — the event
+    # form, a recurring series, duplicate, CSV import, a training session's
+    # event — so a path that never heard of the column still gets the
+    # behaviour attendance requests had before it existed. An explicit value
+    # (including the one a rolling series copies from its parent) wins.
+    organizer_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        default=lambda ctx: ctx.get_current_parameters().get("created_by"),
+    )
+    alternate_organizer_id = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -329,6 +349,8 @@ class Event(Base):
         Index("ix_events_custom_category", "custom_category"),
         Index("ix_events_location_id", "location_id"),
         Index("ix_events_recurrence_parent_id", "recurrence_parent_id"),
+        Index("ix_events_organizer_id", "organizer_id"),
+        Index("ix_events_alternate_organizer_id", "alternate_organizer_id"),
     )
 
 

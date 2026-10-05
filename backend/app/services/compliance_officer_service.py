@@ -39,7 +39,9 @@ from app.models.user import User, UserStatus
 from app.services.training_compliance import (
     evaluate_member_requirement,
     get_org_include_current_month,
-    requirement_applies_to_member,
+    member_join_date,
+    requirement_applies_to_user,
+    tally_standing,
 )
 from app.services.training_waiver_service import fetch_org_waivers
 from app.utils.hours import hours_from_minutes, round_hours_exact
@@ -906,28 +908,22 @@ class AnnualComplianceReportService:
             # almost always as unmet, understating both this member's and
             # the org-wide compliance percentage this report exists to state
             # authoritatively.
-            member_membership_type = member.membership_type or "active"
-            member_role_ids = [str(r.id) for r in member.roles] if member.roles else []
             applicable_reqs = [
-                req
-                for req in requirements
-                if requirement_applies_to_member(
-                    req, member_membership_type, member_role_ids
-                )
+                req for req in requirements if requirement_applies_to_user(req, member)
             ]
 
-            met_count = 0
-            req_total = len(applicable_reqs)
-            for req in applicable_reqs:
-                status, _, _ = evaluate_member_requirement(
+            join_date = member_join_date(member)
+            met_count, req_total = tally_standing(
+                evaluate_member_requirement(
                     req,
                     user_records,
                     today,
                     waivers=user_waivers,
                     org_include_current_month=org_include_current,
-                )
-                if status == "completed":
-                    met_count += 1
+                    join_date=join_date,
+                )[0]
+                for req in applicable_reqs
+            )
 
             compliance_pct = (
                 round(met_count / req_total * 100, 1) if req_total > 0 else 100.0
@@ -994,40 +990,33 @@ class AnnualComplianceReportService:
         # Requirement analysis
         requirement_analysis: List[Dict[str, Any]] = []
         for req in requirements:
-            req_compliant = 0
             # Same applicability filter as the member loop above: a
             # requirement's own "members_total" must be the members it
             # actually applies to, not the org's whole active roster, or an
             # "officers only" requirement's percentage is diluted by every
             # member it was never meant to grade.
             applicable_members = [
-                member
-                for member in members
-                if requirement_applies_to_member(
-                    req,
-                    member.membership_type or "active",
-                    [str(r.id) for r in member.roles] if member.roles else [],
-                )
+                member for member in members if requirement_applies_to_user(req, member)
             ]
-            for member in applicable_members:
-                user_records = records_by_user.get(member.id, [])
-                user_waivers = waivers_by_user.get(str(member.id), [])
-                status, _, _ = evaluate_member_requirement(
+            # Members still inside their catch-up period drop out of both
+            # counts, as they do from their own standing above.
+            req_compliant, req_members_total = tally_standing(
+                evaluate_member_requirement(
                     req,
-                    user_records,
+                    records_by_user.get(member.id, []),
                     today,
-                    waivers=user_waivers,
+                    waivers=waivers_by_user.get(str(member.id), []),
                     org_include_current_month=org_include_current,
-                )
-                if status == "completed":
-                    req_compliant += 1
+                    join_date=member_join_date(member),
+                )[0]
+                for member in applicable_members
+            )
 
             req_type = (
                 req.requirement_type.value
                 if hasattr(req.requirement_type, "value")
                 else str(req.requirement_type)
             )
-            req_members_total = len(applicable_members)
             requirement_analysis.append(
                 {
                     "requirement_id": str(req.id),

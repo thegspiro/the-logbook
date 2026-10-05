@@ -356,7 +356,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
                 type="button"
                 disabled={busy}
                 onClick={() => void handleSubmit()}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Send className="h-3.5 w-3.5" />
                 Submit for Approval
@@ -459,9 +459,9 @@ const PurchaseRequestDetailPage: React.FC = () => {
 
         {/* Denial reason */}
         {pr.denialReason && (
-          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3">
-            <p className="text-xs font-medium text-red-700">Denial Reason</p>
-            <p className="mt-0.5 text-sm text-red-600">{pr.denialReason}</p>
+          <div className="alert-danger mt-4">
+            <p className="text-theme-alert-danger-title text-xs font-medium">Denial Reason</p>
+            <p className="text-theme-alert-danger-text mt-0.5 text-sm">{pr.denialReason}</p>
           </div>
         )}
       </div>

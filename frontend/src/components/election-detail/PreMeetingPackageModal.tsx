@@ -311,7 +311,7 @@ const PreMeetingPackageModal: React.FC<PreMeetingPackageModalProps> = ({
               )
             }
             disabled={sending || recipients.length === 0}
-            className="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
+            className="rounded-md bg-red-800 px-4 py-2 text-white hover:bg-red-900 disabled:opacity-50"
           >
             {sending ? 'Sending…' : `Send to ${recipients.length} recipient${recipients.length === 1 ? '' : 's'}`}
           </button>

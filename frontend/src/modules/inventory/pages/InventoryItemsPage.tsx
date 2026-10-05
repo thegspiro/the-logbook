@@ -1696,7 +1696,7 @@ const InventoryItemsPage: React.FC = () => {
 
       <Link
         to="/inventory/admin"
-        className="text-theme-text-muted hover:text-theme-text-secondary mb-6 flex items-center gap-1 text-sm max-md:min-h-[44px]"
+        className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-[44px] mb-6 flex items-center gap-1 text-sm"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Admin
@@ -1834,7 +1834,10 @@ const InventoryItemsPage: React.FC = () => {
 
       {/* Filter bar */}
       <div className="card-secondary mb-4 p-4">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-7">
+        {/* Seven columns only from 2xl: below that a column is ~140px, and at
+            form-input's 16px "All Categories" no longer fits beside the native
+            arrow, so the label is cut off mid-word. */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7">
           <div className="relative lg:col-span-2">
             <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
             <input

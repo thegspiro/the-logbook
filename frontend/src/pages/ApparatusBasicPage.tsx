@@ -322,7 +322,7 @@ export default function ApparatusBasicPage() {
           <p className="text-theme-text-muted">No apparatus matching "{searchQuery}"</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="card-grid gap-4">
           {filtered.map((apparatus) => {
             const typeInfo = getTypeInfo(apparatus.apparatus_type);
             return (
@@ -338,12 +338,12 @@ export default function ApparatusBasicPage() {
                     </div>
                   </div>
                   {canManage && (
-                    <div className="flex items-center gap-1 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                    <div className="flex items-center gap-1 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100">
                       <button
                         onClick={() => openEdit(apparatus)}
                         title="Edit"
                         aria-label={`Edit ${apparatus.name}`}
-                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-2 transition-colors"
+                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover touch-target-phone rounded-lg p-2 transition-colors"
                       >
                         <Pencil className="h-4 w-4" aria-hidden="true" />
                       </button>
@@ -353,7 +353,7 @@ export default function ApparatusBasicPage() {
                         }}
                         title="Delete"
                         aria-label={`Delete ${apparatus.name}`}
-                        className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-red-500/10 hover:text-red-500"
+                        className="text-theme-text-muted touch-target-phone rounded-lg p-2 transition-colors hover:bg-red-500/10 hover:text-red-500"
                       >
                         <Trash2 className="h-4 w-4" aria-hidden="true" />
                       </button>
@@ -377,7 +377,7 @@ export default function ApparatusBasicPage() {
                         key={i}
                         className="rounded-full bg-violet-500/10 px-2 py-0.5 text-xs text-violet-700 capitalize dark:text-violet-400"
                       >
-                        {pos}
+                        {positionLabel(pos)}
                       </span>
                     ))}
                   </div>

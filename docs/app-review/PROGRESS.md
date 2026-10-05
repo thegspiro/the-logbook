@@ -22,7 +22,7 @@ been through a review pass.
 | A2  | Auth & session lifecycle       | `endpoints/auth.py` (1405 L), `services/auth_service.py` (970 L), `mfa_service.py`, `oauth_service.py`, `consent_service.py`                                                                                                                                              | AUTH   | ✅     |
 | A3  | Scheduled tasks & cron         | `endpoints/scheduled.py` (60 L), `services/scheduled_tasks.py` (4570 L), `cert_alert_service.py`, `property_return_reminder_service.py`                                                                                                                                   | CRON   | ✅     |
 | A4  | Email templates & delivery     | `endpoints/email_templates.py` (671 L), `services/email_template_service.py` (2739 L), `email_service.py` (1633 L)                                                                                                                                                        | MAIL   | ✅     |
-| A5  | Course cohorts & syllabus      | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx`                                                                                    | CC     | ⬜     |
+| A5  | Course cohorts & syllabus      | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx`                                                                                    | CC     | ✅     |
 | A6  | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L)                             | LIFE   | ⬜     |
 | A7  | Dashboard & action items       | `endpoints/dashboard.py` (456 L), `services/attendance_dashboard_service.py` (329 L); `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items`                                                                                                                | DASH   | ⬜     |
 | A8  | Locations & kiosk              | `endpoints/locations.py` (294 L), `services/location_service.py` (279 L); `pages/LocationKioskPage.tsx`                                                                                                                                                                   | LOC    | ⬜     |
@@ -2360,3 +2360,60 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   skipped, 0 failed** (run whole rather than the 1,490-test email slice, since
   the MAIL-20 fix lands in `scheduled_tasks.py`). See email-templates.md → Pass 5.
   Next: A5 course cohorts & syllabus.
+- **A5 course cohorts & syllabus ✅ (pass 3) — the shift endpoint, which did not
+  exist at pass 2. 2 fixes, 1 flagged.** `POST /cohorts/{id}/shift` and
+  `shift_remaining` are new since 2026-08-08 (endpoints 14 → 15, service
+  1442 → 1544 lines); the rest of the module was re-verified rather than
+  re-derived. Both fixes are in that new code and both are the CC-4 shape — a
+  later path diverging from the convention established beside it in the same
+  file. **CC-5 (MED, fixed):** the shift added `timedelta(days=N)` to the
+  stored **UTC instant**, so a shift across a daylight-saving transition held
+  the UTC clock still and moved the wall clock — a 19:00 class on 29 Oct became
+  **18:00** on 5 Nov for `America/New_York`, with `_sync_event` pushing the
+  wrong time onto the linked event so the RSVP and check-in window followed.
+  This is the exact failure pass 1 had singled out as _avoided_, naming the
+  naive alternative in as many words; the new endpoint reintroduced it 40 lines
+  from a timezone helper it did not call, and it is reachable from the ordinary
+  UI control (`CohortDetailPage.tsx:134`), not just the API. Fixed with
+  `_shift_local_days`, which converts to the org zone, adds the delta there and
+  converts back — the local-first order `resolve_class_datetimes` already uses
+  — and normalizes the input, since a value from the driver is naive-already-UTC
+  while one built in Python is aware. **CC-6 (MED, fixed):** `_sync_event` goes
+  through `EventService.update_event`, which **commits on the same session** and
+  raises the attendance lock for any clock change on a finalized event. Classes
+  were processed in sequence order, so the first locked class aborted the run
+  _after_ every earlier class had been moved and committed — the officer got a
+  409 saying the change was refused while the schedule was in fact half-moved,
+  with no indication how far it got. `_assert_shiftable` now resolves the
+  batch's events in one org-scoped query and refuses before anything is
+  mutated. Stated bound: that closes the refusal path, not general atomicity,
+  which would need `update_event` not to commit. **CC-7 (LOW, flagged):**
+  `from_sequence` **replaces** the future-only bound rather than narrowing it,
+  so it moves classes that already happened; the docstring claimed the stricter
+  rule, so the docstring was corrected (a doc fix) and the behaviour left alone
+  — whether an officer may move a delivered class is a product call, and it is
+  API-only today. Mirrored to KNOWN_LIMITATIONS. **Also corrected pass 2's own
+  count:** it flagged _three_ catalog-course joins as missing the CC-1 org
+  predicate; checked individually it is **two** — `:1499` gained the predicate
+  since, `:1415` and `:1601` have not. Ids start at CC-5; the `CC-` prefix is
+  shared across review tracks, like `CRON-`/`SF-`/`AUTH-`. Both fixes are
+  mutation-verified: restoring `value + delta` fails the DST test with
+  `'2026-11-05 18:00' == '2026-11-05 19:00'`, and removing the pre-check fails
+  the lock test. The DST test sets its own timezone, because this module's
+  autouse `_utc_department` pins the resolver to UTC and under UTC the two
+  arithmetics are identical — left on the module default the assertion would
+  have been unsatisfiable rather than weak (pitfall #28a). Gate: tsc 0 ·
+  flake8 0 · black 1342 unchanged · isort clean · eslint 0 · docs links 419
+  files 0 broken · **196 passed** across every test file that imports
+  `CourseCohortService` or names a cohort (eight files, listed in the findings
+  file) · **whole backend suite 15,689 passed, 21 skipped, 0 failed** in 8:43.
+  An earlier version of this entry claimed the suite no longer finished inside
+  the session's limits and blamed DB-backed tests added over the preceding three
+  weeks; that was wrong and is corrected here so it is not inherited as fact.
+  Two stale things in the review sandbox caused all of it — a schema built
+  against `main` of 2026-09-10 and never rebuilt after the checkout moved on
+  1165 commits (472 failures on an unknown column, and most of the runtime,
+  since a test erroring through the ORM is not a fast test), and starlette
+  1.6.0 installed against the repo's pinned 1.7.0 (2 failures). Neither fix
+  touched the repository. See course-cohorts.md → Pass 3.
+  Next: A6 member lifecycle & offboarding.

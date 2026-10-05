@@ -4,6 +4,7 @@
  * matching training-program service method and then asks the parent to reload.
  */
 
+import { CallTypeRequirementPicker } from '../components/training/CallTypeRequirementPicker';
 import React, { useEffect, useState } from 'react';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import toast from 'react-hot-toast';
@@ -552,12 +553,16 @@ export const RequirementFormModal: React.FC<{
   const [hours, setHours] = useState(req?.required_hours?.toString() ?? '');
   const [shifts, setShifts] = useState(req?.required_shifts?.toString() ?? '');
   const [calls, setCalls] = useState(req?.required_calls?.toString() ?? '');
+  const [callTypes, setCallTypes] = useState<string[]>(req?.required_call_types ?? []);
   const [passing, setPassing] = useState(req?.passing_score?.toString() ?? '');
   const [attempts, setAttempts] = useState(req?.max_attempts?.toString() ?? '');
   const [checklist, setChecklist] = useState<ChecklistItem[]>(req?.checklist_items ?? []);
   const [requiredCourses, setRequiredCourses] = useState<string[]>(req?.required_courses ?? []);
   const [recencyDays, setRecencyDays] = useState<number | undefined>(req?.recency_days ?? undefined);
   const [isRequired, setIsRequired] = useState(link?.is_required !== false);
+  // Only asked when adding: whether members already enrolled take on the new
+  // requirement too. Defaults to yes, which is what adding always did.
+  const [applyToCurrent, setApplyToCurrent] = useState(true);
   const [allowsExternal, setAllowsExternal] = useState(req?.allows_external_credit === true);
   const [submitting, setSubmitting] = useState(false);
   const { courses, loading: coursesLoading, error: coursesError } = useCourseLibrary();
@@ -590,6 +595,7 @@ export const RequirementFormModal: React.FC<{
         sort_order: sortOrder,
         // The department owns this one; unlinking must not delete it.
         owns_requirement: false,
+        apply_to_current_enrollments: applyToCurrent,
       });
       toast.success('Requirement linked');
       onSaved();
@@ -623,6 +629,8 @@ export const RequirementFormModal: React.FC<{
         required_hours: type === 'hours' && hours ? Number(hours) : null,
         required_shifts: type === 'shifts' && shifts ? Number(shifts) : null,
         required_calls: type === 'calls' && calls ? Number(calls) : null,
+        // Empty means every call counts, so switching away clears it.
+        required_call_types: type === 'calls' ? callTypes : [],
         passing_score: type === 'knowledge_test' && passing ? Number(passing) : null,
         max_attempts: type === 'knowledge_test' && attempts ? Number(attempts) : null,
         checklist_items: type === 'checklist' ? checklist.filter((i) => i.text.trim()) : null,
@@ -653,6 +661,7 @@ export const RequirementFormModal: React.FC<{
           sort_order: sortOrder,
           // Created here for this program, so unlinking may clean it up.
           owns_requirement: true,
+          apply_to_current_enrollments: applyToCurrent,
         });
         toast.success('Requirement added');
       }
@@ -795,6 +804,9 @@ export const RequirementFormModal: React.FC<{
                 value={calls}
                 onChange={(e) => setCalls(e.target.value)}
               />
+              <div className="mt-3">
+                <CallTypeRequirementPicker value={callTypes} onChange={setCallTypes} />
+              </div>
             </div>
           )}
           {type === 'knowledge_test' && (
@@ -879,6 +891,31 @@ export const RequirementFormModal: React.FC<{
         <input type="checkbox" checked={isRequired} onChange={(e) => setIsRequired(e.target.checked)} />
         Required to complete the phase
       </label>
+      {!link && (
+        <fieldset className="space-y-2">
+          <legend className="form-label">Members already enrolled</legend>
+          <label className="text-theme-text-secondary flex items-start gap-2 text-sm">
+            <input
+              type="radio"
+              name="apply-to-current-enrollments"
+              className="mt-1"
+              checked={applyToCurrent}
+              onChange={() => setApplyToCurrent(true)}
+            />
+            <span>Hold them to it too — it is added to their progress now</span>
+          </label>
+          <label className="text-theme-text-secondary flex items-start gap-2 text-sm">
+            <input
+              type="radio"
+              name="apply-to-current-enrollments"
+              className="mt-1"
+              checked={!applyToCurrent}
+              onChange={() => setApplyToCurrent(false)}
+            />
+            <span>Only members who enroll from now on — it is recorded as waived for everyone already enrolled</span>
+          </label>
+        </fieldset>
+      )}
     </ModalShell>
   );
 };

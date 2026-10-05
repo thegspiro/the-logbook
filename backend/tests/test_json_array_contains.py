@@ -136,11 +136,20 @@ def test_no_string_operator_targets_a_json_column():
     Scoped honestly: it matches ``Model.attr.op(...)`` where ``Model`` is
     spelled as the mapped class's own name. A class imported under an alias, or
     a column reached through a variable, is not resolved -- so a clean run is a
-    floor, not proof. The remedy for a JSON array is ``json_array_contains``;
-    for a deliberate substring prefilter it is an explicit
-    ``cast(Model.col, String)``, as ``call_tracking_service`` and
-    ``events`` both do, which this check allows because the receiver is then a
-    string expression in fact and not only by fallback.
+    floor, not proof.
+
+    The remedy for a JSON array is ``json_array_contains``. For a *deliberate*
+    substring prefilter it is ``type_coerce(Model.col, Text)``, as
+    ``call_tracking_service`` does: that changes only the Python-side type, so
+    the emitted SQL is byte-identical to the deprecated bare form and the row
+    set -- and with it any ``FOR UPDATE`` locks the query holds -- is unchanged
+    by construction rather than by measurement. ``cast(Model.col, String)``,
+    which ``events`` uses, also clears the deprecation but emits
+    ``CAST(col AS CHAR)``, so equivalence there is an empirical claim about the
+    engine rather than a property of the change. Prefer ``type_coerce``.
+
+    This check allows both, because with either one the receiver is a string
+    expression in fact and not only by fallback.
     """
     json_columns = _json_columns_by_model()
     assert json_columns, "no JSON columns resolved -- the sweep would pass vacuously"
@@ -174,9 +183,10 @@ def test_no_string_operator_targets_a_json_column():
         "to the string implementation -- deprecated, and InvalidRequestError in "
         "a future release -- and the fallback matches the serialized document, "
         "so a multi-element array never matches and the caller's term becomes a "
-        "LIKE pattern. Use json_array_contains() for array membership, or an "
-        "explicit cast(..., String) if a substring prefilter is what you "
-        "want:\n  " + "\n  ".join(offenders)
+        "LIKE pattern. Use json_array_contains() for array membership, or "
+        "type_coerce(..., Text) if a substring prefilter is genuinely what you "
+        "want -- it emits identical SQL, so the row set cannot shift:\n  "
+        + "\n  ".join(offenders)
     )
 
 

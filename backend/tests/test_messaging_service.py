@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.api.v1.endpoints import messages as messages_endpoint
+from app.models.user import ACTIVE_ACCOUNT_STATUSES
 from app.services.messaging_service import MessagingService
 
 
@@ -104,7 +105,10 @@ class TestTargetedUsers:
         query = db.execute.await_args.args[0]
         sql = str(query)
         assert "users.organization_id = :organization_id_1" in sql
-        assert "users.status = :status_1" in sql
+        # Probationary members are current members and receive messages too;
+        # the filter is User.is_active, whose statuses are this one tuple.
+        assert "users.status IN" in sql
+        assert set(query.compile().params["status_1"]) == set(ACTIVE_ACCOUNT_STATUSES)
         assert "users.deleted_at IS NULL" in sql
 
 
@@ -551,7 +555,10 @@ class TestCreateScheduling:
         assert error == "expires_at must be in the future for a published message"
 
     async def test_rejects_expiry_before_naive_schedule(self):
-        schedule = datetime.now() + timedelta(hours=2)
+        # Naive here means naive UTC, the service's reading of a naive value;
+        # datetime.now() is the machine's local time, which put the schedule
+        # in the past on any host west of UTC.
+        schedule = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=2)
         message, error = await MessagingService(self._db()).create_message(
             "org-1",
             "author",
@@ -685,7 +692,10 @@ class TestRescheduleGuard:
         message, error = await MessagingService(db).update_message(
             "m1",
             "org-1",
-            {"expires_at": datetime.now() + timedelta(minutes=30)},
+            {
+                "expires_at": datetime.now(timezone.utc).replace(tzinfo=None)
+                + timedelta(minutes=30)
+            },
         )
         assert message is None
         assert error == "expires_at must be later than scheduled_at"

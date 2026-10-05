@@ -205,6 +205,14 @@ result that reads as "nothing scheduled".
   through **one shared helper** instead of disagreeing about the default.
 - The phone month grid got its 44px touch targets back.
 
+## Probationary Members Are Active _(2026-10-03)_
+
+`ACTIVE_ACCOUNT_STATUSES = (ACTIVE, PROBATIONARY)` now backs both forms of
+`User.is_active`, the shift-eligibility check and three scheduling rosters that
+compared status to `"active"` by hand. A probationary member can sign in and be
+assigned a shift. To keep them off self-signup, exclude the membership type in
+Scheduling settings.
+
 ## Full Shift Lifecycle, Calendars & Automation (2026-07-16)
 
 A broad review closing gaps from shift start-up through close-out, plus

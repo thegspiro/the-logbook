@@ -29,7 +29,13 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { eventService, eventRequestService, userService } from '../services/api';
-import type { EventModuleSettings, EventType, EventCategoryConfig, EmailTemplate } from '../types/event';
+import type {
+  EventModuleSettings,
+  EventType,
+  EventCategoryConfig,
+  EmailTemplate,
+  EventPositionOption,
+} from '../types/event';
 import {
   VisibilitySection,
   CategoriesSection,
@@ -65,7 +71,7 @@ type SectionKey =
 const SECTIONS: SettingsSection<SectionKey>[] = [
   { key: 'visibility', label: 'Visibility', icon: Settings, description: 'Primary filter categories' },
   { key: 'categories', label: 'Categories', icon: Tag, description: 'Custom event categories' },
-  { key: 'attendance', label: 'Attendance', icon: Users, description: "Who can see who's going" },
+  { key: 'attendance', label: 'Attendance', icon: Users, description: "Who sees who's going; who takes requests" },
   { key: 'outreach', label: 'Outreach Types', icon: FileText, description: 'Public outreach event types' },
   { key: 'hour_tracking', label: 'Hour Tracking', icon: Clock, description: 'Map events to admin hours' },
   { key: 'pipeline', label: 'Pipeline', icon: ClipboardList, description: 'How requests are handled' },
@@ -92,6 +98,10 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
 
   // Org members for default assignee picker
   const [members, setMembers] = useState<OrgMember[]>([]);
+
+  // Positions for the attendance-request fallback; null when they failed to
+  // load, so the section says so instead of offering only "Default".
+  const [positionOptions, setPositionOptions] = useState<EventPositionOption[] | null>([]);
 
   // Outreach type editing
   const [newTypeLabel, setNewTypeLabel] = useState('');
@@ -146,6 +156,13 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
       setError('Failed to load event settings.');
     } finally {
       setLoading(false);
+    }
+    // Separate from the settings load: a failure here costs one picker, not
+    // the whole screen.
+    try {
+      setPositionOptions(await eventService.getFallbackPositionOptions());
+    } catch {
+      setPositionOptions(null);
     }
   }, []);
 
@@ -251,6 +268,15 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
     void saveSettings(
       { defaults: { ...settings.defaults, attendee_visibility: value } },
       'Failed to update attendee list visibility.'
+    );
+  };
+
+  const setFallbackPosition = (eventType: EventType, positionId: string | null) => {
+    // One key per patch: the backend merges this map key by key, and null
+    // returns the type to the default.
+    void saveSettings(
+      { attendance_request_fallback_positions: { [eventType]: positionId } },
+      'Failed to update who receives attendance requests.'
     );
   };
 
@@ -577,6 +603,8 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
             settings={settings}
             saving={saving}
             onChangeAttendeeVisibility={(value) => void setAttendeeVisibility(value)}
+            positionOptions={positionOptions}
+            onChangeFallbackPosition={setFallbackPosition}
           />
         );
       case 'hour_tracking':
@@ -650,6 +678,7 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
       sections={SECTIONS}
       activeSection={activeSection}
       onSectionChange={setActiveSection}
+      inHub
       navLabel="Event settings sections"
       title="Event Settings"
       subtitle="How the events module behaves for this department"

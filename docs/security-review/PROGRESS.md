@@ -16,6 +16,379 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2917](https://github.com/thegspiro/the-logbook/pull/2917)**: branch
+`claude/security-review-cross-cutting-pass7`, Feature 00 (Cross-cutting
+baseline), pass 7, which is also rotation pass 7's first row.
+
+- **Result:** 0 fixes, 0 new findings, 0 flagged.
+- **Method:** all 13 sweep classes were re-run on head and on the pass-6
+  baseline tree (`1bf12e3de`, 1015 commits back), and every count delta was
+  read.
+- **Still open:** the outbound-URL TOCTOU, unchanged.
+- **Also in this PR:** the #2915 closure and the rotation reset to ⬜.
+- **Gate:** backend flake8/black/isort clean, `validate_migrations.py
+--strict` (511 revisions, single head), `check_route_permissions.py
+--strict` (244 routes), 141 backend guard tests, frontend typecheck and
+  lint clean, 25 frontend guard tests and 1 e2e route-integrity test.
+- **Watching:** subscribed for CI/review events.
+
+Full write-up:
+[`SEC-00-cross-cutting-baseline.md`](./SEC-00-cross-cutting-baseline.md) →
+Pass 7.
+
+<details>
+<summary>Superseded — prior Open PR note (PR #2915 merged; rotation pass 6 complete and reset — the state this PR opened from), preserved for history</summary>
+
+**None open from the prior pass.** PR
+[#2915](https://github.com/thegspiro/the-logbook/pull/2915) (Feature 34,
+Frontend shared, pass 7) merged as `532340e3` — docs-only, 0 fixes, 0 new
+findings. That completed rotation pass 6: all 35 rows (00–34) read ✅, so
+the table below is reset to ⬜ for pass 7, folded into this iteration's
+Feature 00 (Cross-cutting baseline) pass 7 PR per the 2026-09-15 precedent
+(a reset never ships as its own `PROGRESS.md`-only PR). Re-confirmed via the
+REST pulls listing (state=open) that no `claude/security-review-*` PR
+exists — only #2916, #2914, #2911 and #2910, none of this rotation. This
+iteration's PR number is recorded in a follow-up commit on the same branch.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 34, Frontend shared, pass 7, PR #2915, before it merged), preserved for history</summary>
+
+**PR [#2915](https://github.com/thegspiro/the-logbook/pull/2915)** —
+branch `claude/security-review-frontend-shared`, Feature 34 (Frontend
+shared), pass 7. 0 fixes, 0 new findings; both standing HIGH
+findings (FE3-34-2, FE3-34-5) and FE5-34-1's flagged broader ask
+re-confirmed still open, unchanged, at their current lines. 11 files differ
+from pass 6's baseline; all read in full — a `logout()`/`endSessionLocally()`
+refactor (preserves FE3-34-2's exact failure shape), an error-detail
+extraction, a new anonymous-suggestion-box error-reporting exclusion
+(verified to match its backend `UNLOGGED_PATH` counterpart
+character-for-character), and five modules' own business-logic additions,
+all through non-caching `createApiClient()` instances. Repo-wide sweep for
+new `api.get` calls found zero new cache-exclusion gaps. Gate:
+whole-tree typecheck/lint clean, 389 scoped frontend tests passed
+(docs-only diff — no source file changed, so the full suite was not
+required per CLAUDE.md), `validate_migrations.py --strict` passed (511
+revisions, single head), 19 + 311 backend tests passed. Subscribed for
+CI/review events. Full write-up:
+[`FE7-34-frontend-shared.md`](./FE7-34-frontend-shared.md).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 33, Core infrastructure, pass 5, PR #2906, merged, docs-only — nothing to record), preserved for history</summary>
+
+**PR [#2906](https://github.com/thegspiro/the-logbook/pull/2906)** —
+branch `claude/security-review-core-infra-pass5`, Feature 33 (Core
+infrastructure), pass 5. 0 fixes, 0 new findings; both of CI3-33's flagged
+owner-decision items (CI3-33-3 HIGH, CI3-33-4 LOW) re-confirmed still open,
+unchanged. All 30 prior findings across CI/CI2/CI3/CI4 re-verified correct;
+CI4-33-1's `EXPORT_ENDPOINTS` drift guard test confirmed actually preventing
+drift in practice (an unrelated PR landed a new export route and the
+matching set entry in the same commit). Gate: flake8/black/isort clean,
+`validate_migrations.py --strict` passed (509 revisions, single head), 241 +
+364 scoped backend tests passed, 141 cross-cutting guard tests passed, full
+backend suite passed (12,493 passed, 1 pre-existing skip), frontend
+typecheck/lint clean (fresh worktree, `npm ci` run once). Subscribed for
+CI/review events. Full write-up:
+[`CI5-33-core-infra.md`](./CI5-33-core-infra.md).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #2900's merge, Feature 32, Locations & kiosk, pass 5 — the state this pass's PR conflicted with), preserved for history</summary>
+
+**None.** PR [#2900](https://github.com/thegspiro/the-logbook/pull/2900)
+(Feature 32, Locations & kiosk, pass 5) merged clean, touching real
+application code (1 fix — LOC5-32-1). Independently re-confirmed via
+`list_pull_requests` (state=open) at the start of this iteration that no
+`claude/security-review-*` PR exists now (only #2902 and #2903, both
+unrelated app-review/style work). Rotation row 32 stays ✅. Next: Feature 33
+(Core infrastructure) — picked up by this iteration, recorded above.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 32, Locations & kiosk, pass 5, PR #2900, before it merged), preserved for history</summary>
+
+**PR [#2900](https://github.com/thegspiro/the-logbook/pull/2900)** — branch
+`claude/security-review-locations-kiosk-pass5`, Feature 32 (Locations &
+kiosk), pass 5. 1 fix (LOC5-32-1 — the now-live `GET /locations/{id}/display`
+redacts `event_description`, matching its public sibling), 0 flagged. Gate:
+flake8/black/isort clean, `validate_migrations.py --strict` passed (509
+revisions, single head), repo-tenancy guard suite passed (75 tests), 564
+scoped backend tests passed, full backend suite passed (15,696 passed, 21
+pre-existing skips), frontend typecheck/lint clean. Subscribed for
+CI/review events. Full write-up:
+[`LOC5-32-locations-kiosk.md`](./LOC5-32-locations-kiosk.md).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #2899's merge, Feature 31, Scheduled tasks, pass 5 — the state this pass's PR conflicted with), preserved for history</summary>
+
+**None.** PR [#2899](https://github.com/thegspiro/the-logbook/pull/2899)
+(Feature 31, Scheduled tasks, pass 5) merged clean (`7a7d6622`,
+"security(scheduled-tasks): pass 5"), touching only
+`docs/security-review/CRON5-31-scheduled-tasks.md`, `KNOWN_LIMITATIONS.md`
+and `PROGRESS.md` — no application code, so per this file's own "a
+docs-only PR is not a recordable event" rule there is nothing to log beyond
+clearing this row. Independently re-confirmed via `list_pull_requests`
+(state=open) at the start of this iteration that no
+`claude/security-review-*` PR exists now. Rotation row 31 stays ✅. Next:
+Feature 32 (Locations & kiosk) — picked up by this iteration.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 31, Scheduled tasks, pass 5, PR #2899, before it merged), preserved for history</summary>
+
+**PR [#2899](https://github.com/thegspiro/the-logbook/pull/2899)** — branch
+`claude/security-review-scheduled-tasks-pass5`, Feature 31 (Scheduled
+tasks), pass 5. Confirmed via `list_pull_requests` (state=open) that no
+`claude/security-review-*` PR existed before starting — PR #2898 (Feature
+30, Onboarding, pass 5) had already merged. Docs-only: 0 fixed, 0 new
+findings; 5 standing findings re-confirmed unchanged, plus a cross-track
+re-verification that app-review's HIGH `CRON-40` (scheduler claim-renewal
+race) is still open in `main.py`. Gate: flake8/black/isort clean,
+`validate_migrations.py --strict` passed (509 revisions, single head), 221
+scoped backend tests passed, frontend typecheck/lint clean. Subscribed for
+CI/review events. Full write-up:
+[`CRON5-31-scheduled-tasks.md`](./CRON5-31-scheduled-tasks.md).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #2898's merge, Feature 30, Onboarding, pass 5 — the state this pass's PR conflicted with), preserved for history</summary>
+
+**None.** PR [#2898](https://github.com/thegspiro/the-logbook/pull/2898)
+(Feature 30, Onboarding, pass 5) merged clean, touching real application
+code (6 backend/frontend fixes-verified-good, 0 new findings — see the
+superseded note below for detail). Re-confirmed via `list_pull_requests`
+(state=open) at the start of this iteration that no `claude/security-review-*`
+PR exists. Rotation row 30 stays ✅. Next: Feature 31 (Scheduled tasks) —
+picked up by this iteration, recorded above in the Log.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 30, Onboarding, pass 5, PR #2898, before it merged), preserved for history</summary>
+
+**PR [#2898](https://github.com/thegspiro/the-logbook/pull/2898)** — branch
+`claude/security-review-onboarding-pass5`,
+Feature 30 (Onboarding), pass 5. Watchdog pickup: independently confirmed via
+`list_pull_requests` (state=open) that no `claude/security-review-*` PR
+exists — PR #2896 (Feature 28, pass 5) and PR #2897 (Feature 29, pass 7) had
+both already merged (both docs-only, so per this file's own rule neither is
+a recordable event; cleared below). Rotation row 30 was the first `⬜`.
+**Not a zero-delta pass** — 6 real backend/frontend changes landed in this
+feature's own files since pass 4 (PR #2521): a default "Compliance"
+suggestion box seeded on org creation, a Cloudflare account-id validator
+consolidated into one function and checked at send time as well as save
+time, a completeness check added for the Cloudflare email platform, a
+username-without-password SMTP config now rejected at test time, `/reset`
+now clearing the caller's stale auth cookies, and a client-side
+session-init retry loop fixed (it had been hammering the rate-limited
+`/start` endpoint). Every one read in full and verified good — none is a
+new vulnerability. 0 fixes (nothing needed fixing); every previously-open
+finding (ONB-7, ONB2-30-8, ONB-30-3, the ONB-8 audit-durability residual,
+the duplicate-role-id 500) re-verified unchanged; every previously-fixed
+finding (ONB3-30-3's System Owner race lock, ONBOARD-7, ONB-1 through
+ONB-9, ONB2-30-1 through ONB2-30-8, ONB3-30-1, ONB3-30-2) re-confirmed
+intact. All 24 routes re-enumerated, no auth/guard regression. Gate:
+flake8/black/isort clean (isort 9.0.1, CI's pin), `validate_migrations.py
+--strict` passed (509 revisions, single head), 255 scoped backend tests
+passed, `npm ci` (fresh worktree) then frontend typecheck/lint clean, 442
+scoped frontend tests passed. Subscribed for CI/review events.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 29, Reports & analytics, pass 7, PR #2897, after it merged), preserved for history</summary>
+
+**None.** PR [#2897](https://github.com/thegspiro/the-logbook/pull/2897)
+(Feature 29, Reports & analytics, pass 7) merged clean (`6c422896`,
+"security(reports-analytics): pass 7"), touching only
+`docs/security-review/RPT5-29-reports-analytics.md`,
+`docs/KNOWN_LIMITATIONS.md` and `PROGRESS.md` — no application code, so per
+this file's own "a docs-only PR is not a recordable event" rule there is
+nothing to log beyond clearing this row. Rotation row 29 stays ✅. Watchdog
+re-check (this entry's author) independently confirmed via
+`list_pull_requests` (state=open) that no `claude/security-review-*` PR
+exists now, so this iteration proceeds to Feature 30 (Onboarding).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 29, Reports & analytics, pass 7, PR #2897, before it merged), preserved for history</summary>
+
+**PR (this PR)** — branch `claude/security-review-reports-analytics-pass7`,
+Feature 29 (Reports & analytics), pass 7. Watchdog pickup: confirmed via
+`list_pull_requests` (state=open) that no `claude/security-review-*` PR
+existed before starting — PR #2892 (Feature 27, Integrations, pass 5) and
+PR #2896 (Feature 28, Security/audit & IP, pass 5) had both already merged,
+both docs-only (0 application-code changes), so neither is a recordable
+event per this file's own rule; cleared below. Rotation row 29 was the first
+`⬜`. **Not a zero-delta pass** — 23 real non-merge commits touched this
+feature's ten files since pass 6 (2026-09-13); every one read in full. All
+verified good except one: `ea939c38` ("let a training requirement exempt
+members who joined before it") routed `_generate_compliance_status` through
+`training_compliance.py`'s shared grandfathering helpers but left its
+sibling `_generate_training_summary`'s `requirement_breakdown` untouched —
+new, concrete evidence for the already-flagged RPT5-29-1 (Pitfall #29 shape),
+recorded as RPT5-29-5 and folded into the same `KNOWN_LIMITATIONS.md` entry
+rather than opened as a separate question. 0 fixes (nothing in the delta was
+a safe mechanical fix); every pass 2-6 finding re-verified intact, none
+regressed. Gate: flake8/black/isort clean (isort 9.0.1, CI's pin),
+`validate_migrations.py --strict` passed (509 revisions, single head),
+719 scoped backend tests passed (1 skipped, environment-only), frontend
+typecheck/lint clean, 42 scoped frontend tests passed. Subscribed for
+CI/review events.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 28, Security, audit & IP, pass 5, PR #2896, merged, docs-only — nothing to record), preserved for history</summary>
+
+**None.** PR [#2896](https://github.com/thegspiro/the-logbook/pull/2896)
+(Feature 28, Security, audit & IP, pass 5) merged clean (`c531e063`,
+"security(security-audit-ip): pass 5"), touching only `docs/security-review/
+SEC2-28-security-audit-ip.md` and `PROGRESS.md` — no application code, so
+per this file's own "a docs-only PR is not a recordable event" rule there is
+nothing to log beyond clearing this row. Rotation row 28 stays ✅. Next:
+Feature 29 (Reports & analytics) — picked up by this same watchdog check,
+recorded above.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 28, Security, audit & IP, pass 5, PR #2896, before it merged), preserved for history</summary>
+
+**PR [#2896](https://github.com/thegspiro/the-logbook/pull/2896)** — branch
+`claude/security-review-security-audit-ip-pass5`, Feature 28 (Security,
+audit & IP), pass 5. Watchdog pickup: confirmed via `list_pull_requests`
+(state=open) that no `claude/security-review-*` PR existed before
+starting — PR #2892 (Feature 27, Integrations, pass 5) had already merged.
+0 fixed, 0 new findings — reviewed the three real code changes to this
+feature's files since pass 4's addendum (an org-scoped actor-username join
+in `audit_logs.py`, an anonymous-suggestion-box discard path in
+`error_logs.py`, and a snake_case request-body fix in the ip-security
+frontend service), all verified good. Re-confirmed all previously-open
+findings unchanged (SEC2-28-5, -6, -7, -10, the dead-detector-code note)
+and all previously-fixed ones intact. Gate: flake8/black/isort clean,
+`validate_migrations.py --strict` passed (509 revisions, no migration
+this pass), 268 scoped backend tests passed, frontend typecheck/lint
+clean. Subscribed for CI/review events.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 5, PR #2892, after it merged), preserved for history</summary>
+
+**None.** PR [#2892](https://github.com/thegspiro/the-logbook/pull/2892)
+(Feature 27, Integrations, pass 5) merged clean (`bf0a45a6`,
+"security(integrations): pass 5"). Watchdog pickup: confirmed via
+`list_pull_requests` (state=open) that no `claude/security-review-*` PR
+exists now, so this iteration proceeds to Feature 28 (Security, audit &
+IP) per the rotation table below, which already shows row 27 ✅.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 5, PR #2892, before it merged), preserved for history</summary>
+
+**PR [#2892](https://github.com/thegspiro/the-logbook/pull/2892)** — branch
+`claude/security-review-integrations-pass5`, Feature 27 (Integrations),
+pass 5. Watchdog pickup: confirmed via `list_pull_requests` (state=open)
+that no `claude/security-review-*` PR existed before starting — PR #2885
+(Feature 26, Forms, pass 5) and PR #2886 (an unrelated fix) were already
+merged. 0 fixed, 0 new findings — every pass 1-4 finding (INT-1 through
+INT-11) re-verified intact, including the three standing flags (INT-5
+uninvoked webhook allowlist, INT-9 Google Calendar's bypass of the shared
+HTTP hardening, INT-11 Salesforce's unreachable "clear the refresh token"
+control). New this pass: reviewed `app/mcp/tools/writes.py`'s three MCP
+write tools against this feature's org-scoping/domain-pinning rigor, per
+Feature 23 pass 12's note that this surface was this feature's scope — no
+gap found. Gate: flake8/black/isort clean, `validate_migrations.py
+--strict` passed (509 revisions, no migration this pass), repo-tenancy +
+MCP guard tests passed, 3548 scoped backend tests passed, frontend
+typecheck/lint clean. Subscribed for CI/review events.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 26, Forms, pass 5, PR #2885, merged, before this watchdog pickup), preserved for history</summary>
+
+**None.** PR [#2885](https://github.com/thegspiro/the-logbook/pull/2885)
+(Feature 26, Forms, pass 5) had already merged by the time this watchdog
+check ran. Rotation row 26 stays ✅. Next: Feature 27 (Integrations) —
+picked up by this same watchdog check, recorded above.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 25, Messaging & notifications, pass 5, PR #2884, merged, before the Feature 26 pass-5 watchdog pickup recorded above), preserved for history</summary>
+
+**None.** PR [#2884](https://github.com/thegspiro/the-logbook/pull/2884)
+(Feature 25, Messaging & notifications, pass 5) had already merged by the
+time this watchdog check ran. Rotation row 25 stays ✅. Next: Feature 26
+(Forms) — picked up by this same watchdog check, recorded above.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 24, Meetings & minutes, pass 5, PR #2881, merged, after the Feature 25 pass-5 watchdog pickup recorded above), preserved for history</summary>
+
+**None.** PR [#2881](https://github.com/thegspiro/the-logbook/pull/2881)
+(Feature 24, Meetings & minutes, pass 5) merged clean — all 17 check runs
+`success` (`CI Success` included), `mergeable_state: clean`, no unresolved
+review threads (only the informational Codex usage-limit comment). Merge
+commit `c23c100b4` confirmed on `main` via `git fetch`. Routine 30-minute
+watchdog check on the `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`); confirmed via `list_pull_requests`
+(state=open) that no other security-review PR was open before recording
+this. Rotation row 24 stays ✅. Next: Feature 25 (Messaging &
+notifications) — not yet started as of this check, no in-progress
+`claude/security-review-*` branch or open PR.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 24, Meetings & minutes, pass 5, PR #2881, before it merged), preserved for history</summary>
+
+**PR [#2881](https://github.com/thegspiro/the-logbook/pull/2881)** — branch
+`claude/security-review-meetings-minutes`, Feature 24 (Meetings & minutes),
+pass 5 (the feature's own fifth review; `PROGRESS.md`'s rotation-wide cycle
+counter calls this "pass 6" — see the findings doc's note on the
+discrepancy). Watchdog pickup: the dedicated loop had stalled 2+ hours with
+no open security-review PR and no in-progress branch, confirmed via the
+GitHub API before starting. 0 fixed, 0 new findings — near-zero-delta since
+pass 4 (PR #2502); MM-9 and MM-17 both re-confirmed unchanged and still
+OPEN. Gate: flake8/black/isort clean, 508 migrations single head, 289
+backend tests passed (scope), frontend typecheck/lint clean, 26 frontend
+tests passed. Subscribed for CI/review events.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #2877's merge, Feature 23, Medical supplies, pass 12 — the state this pass's PR conflicted with), preserved for history</summary>
+
+**None.** PR [#2877](https://github.com/thegspiro/the-logbook/pull/2877)
+(Feature 23, Medical supplies, pass 12) merged directly by a 30-minute
+watchdog check, after that same check resolved a `PROGRESS.md` conflict on
+its branch (both it and PR #2876 had edited the Open PR section at roughly
+the same time — see the superseded note below). Post-resolution: CI green
+(17/17 checks), `mergeable_state: clean`, no unresolved review threads
+(only the informational Codex usage-limit comment). Rotation row 23 stays
+✅. Next: Feature 24 (Meetings & minutes), pass 6 — not yet started as of
+this check, no in-progress `claude/security-review-*` branch or open PR.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 23, Medical supplies, pass 12, PR #2877, merged directly by a 30-minute watchdog check), preserved for history</summary>
+
 **PR [#2877](https://github.com/thegspiro/the-logbook/pull/2877)** — branch
 `claude/security-review-feature23-pass12`, Feature 23 (Medical supplies),
 pass 12. Confirmed via the GitHub API before starting: no open PR whose
@@ -45,6 +418,8 @@ typecheck/lint clean. Full write-up:
 [`MSUP-23-medical-supplies.md`](./MSUP-23-medical-supplies.md)'s **Pass 12**
 section. Rotation row 23 → ✅ (pending PR merge). Next: Feature 24
 (Meetings & minutes).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 6, PR #2875, merged directly by a 30-minute watchdog check), preserved for history</summary>
@@ -17088,32 +17463,40 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 again (PRs #2128–#2382, see the Log for detail on each). Reset to ⬜ for
 pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 
+**Passes 4–5 complete (2026-09-07 → 2026-09-15):** each reset to ⬜ was
+recorded in the Log rather than here (2026-09-14, PR #2534 opening pass 5;
+2026-09-15, "Pass 5 complete; rotation reset to ⬜ for pass 6").
+
+**Pass 6 complete (2026-09-15 → 2026-10-04):** every row below went ✅
+again (PRs #2592–#2915, see the Log for detail on each). Reset to ⬜ for
+pass 7 — each row's prior PR is recorded in the Log, not repeated here.
+
 | #   | Feature                   | Prefix | Principal code                                                                                                                                  | Status |
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
-| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
-| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
-| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
-| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
-| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
-| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
-| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
-| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
-| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
-| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
+| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ⬜     |
+| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
+| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
+| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
+| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
+| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
+| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
+| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
+| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
+| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ⬜     |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
@@ -17132,6 +17515,423 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-04 — Pass 6 complete; rotation reset to ⬜ for pass 7; PR #2915 merge recorded; Feature 00 (Cross-cutting baseline, pass 7) — 0 fixed, 0 new findings — PR #2917 opened
+
+**Closure and reset.** PR [#2915](https://github.com/thegspiro/the-logbook/pull/2915)
+(Feature 34, Frontend shared, pass 7) merged as `532340e3`, docs-only. The
+**Open PR** row still named it. Every row in the Rotation table read ✅, so
+rotation pass 6 (2026-09-15 → 2026-10-04, PRs #2592–#2915) is complete.
+All 35 rows are reset to ⬜ for pass 7 and a summary line added above the
+table. Passes 4 and 5 had no summary line, so one line now covers both and
+points to their reset entries in this Log. Following the 2026-09-15
+precedent, the reset rides in the same PR as the next real review rather
+than shipping as a `PROGRESS.md`-only PR. Fetching `origin/main` turned up
+nothing unexpected, and the REST pulls listing (state=open) showed no
+`claude/security-review-*` PR, only #2916, #2914, #2911 and #2910 from other
+work.
+
+**Feature 00, pass 7.** This was a delta re-sweep against pass 6's merge
+`1bf12e3de`. The window is 1015 commits: 217 backend `app/` files changed
+(39 new), 67 new migrations and 16 new routes. The clone is shallow, so its
+history was deepened to 2026-09-14 to reach the baseline. All 13
+established sweep classes were re-run on head **and** on an exported copy of
+the baseline tree using the same method, so every count difference traces to
+a specific new site that was then read. Results:
+
+- **All 13 classes clean.** The only tracker delta (class 7) is two new
+  caches in `branding_service.py`, and both are bounded. `_asset_cache` is
+  an LRU capped at 40 entries, and its keys come from allowlisted icon
+  variants and splash geometries.
+- **Class 9 was under-reported in pass 6.** That write-up listed 2 of its
+  grep's 5 hits. The other 3 (`onboarding.py`, `inventory_service.py` and
+  `training_programs.py`) were present at baseline and are read and cleared
+  here.
+- **Class 13** is 0 unwrapped broad handlers on both trees. Every
+  `detail=str(e)` is in a narrow handler for a domain exception.
+- **One changed file in the outbound-transport family.**
+  `integration_services/base.py` moved mTLS from httpx's deprecated `cert=`
+  to a `verify=` SSL context, and certificate verification is preserved.
+- **Outbound-URL TOCTOU stays open.** It is still 7 sites with the same
+  disposition. `KNOWN_LIMITATIONS.md` is unchanged.
+
+**0 fixed, 0 new findings, 0 flagged.** Gate:
+
+- Backend: `flake8`, `black` (1862 files) and `isort` 9.0.1 all clean on
+  `app/`, `tests/` and `alembic/`.
+- `validate_migrations.py --strict`: 511 revisions, single head
+  `edf608b5a8ea`.
+- `check_route_permissions.py --strict`: 244 routes, 0 errors, 0 warnings.
+- 141 cross-cutting backend guard tests passed.
+- Frontend: `npm run typecheck` and `npm run lint` both clean.
+- Frontend structural guards: 25/25 across 6 files.
+  `mobile-route-integrity.spec.ts`: 1/1.
+
+The diff is docs-only, so the full suites were left to CI. Rotation row 00 is
+✅ and rows 01–34 are ⬜. Findings doc:
+`SEC-00-cross-cutting-baseline.md` → **Pass 7**. Next: Feature 01 (Auth &
+session lifecycle), once this PR merges.
+
+### 2026-10-04 — Feature 34 (Frontend shared, pass 7) — 0 fixed, 0 flagged (new); both standing HIGH findings re-confirmed open
+
+Watchdog pickup of a stalled `/loop 30m /security-review` session (no
+commit/PR past its 30-minute cadence). Independently re-confirmed via
+`list_pull_requests` (state=open) that no `claude/security-review-*` PR
+existed — only #2914 (hub tab crash guards), #2911 (a documentation sweep),
+#2910 (ID card printing, draft), none of this rotation. PR #2906 (Feature
+33, Core infrastructure, pass 5) had already merged, docs-only (only
+`CI5-33-core-infra.md`, `KNOWN_LIMITATIONS.md` untouched, `PROGRESS.md`), so
+per this file's own rule nothing to log beyond clearing that row (done
+above). Rotation row 34 was the only `⬜` — the last row before the rotation
+wraps to 00 for its next full pass. This worktree was also behind
+`origin/main` by several commits at the start; branched fresh from
+`origin/main` rather than reviewing stale code.
+
+Loaded `CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`, and all five
+prior passes (`FE2`–`FE6-34-frontend-shared.md`) first. Established the
+baseline as `468f5c3ae` (the merge that landed `FE6-34-frontend-shared.md`)
+and diffed every file this feature owns against it: 11 differ, all read in
+full — a `logout()`/`endSessionLocally()` refactor (preserves FE3-34-2's
+exact failure shape; the new method is called from the password-change flow
+for a session the server already revoked, per workflow-review W04-1), an
+error-detail extraction plus a 429 `Retry-After` reader (workflow-review
+W02-2), a new anonymous-suggestion-box error-reporting exclusion (verified
+against `backend/app/core/logging.py`'s `UNLOGGED_PATH` — the two regexes
+match the same path shape character-for-character), an `ip-security`
+camelCase→snake_case request-body fix, and five modules' own business-logic
+additions (finance manual-approval routing, admin-hours self-service
+edit/withdraw, a minutes pagination helper, prospective-members'
+Multi-Signer Approval sign-off service, and scheduling's new 243-line
+"external hours" subsystem) — all through the non-caching
+`createApiClient()` factory, confirmed with 0 diff against baseline.
+
+A repo-wide sweep (not limited to feature-owned files) for every new
+`api.get`/`api.get<` call since the baseline found zero new cache-exclusion
+gaps: every genuinely sensitive new endpoint
+(`/training/sessions/by-event/`, `/attendance-petitions`) had already
+arrived with its own `UNCACHEABLE_PREFIXES`/`UNCACHEABLE_SUBSTRINGS` entry
+from the feature that introduced it, and every other new call was either
+already covered by an existing prefix (`/users`, `/organization/`,
+`/notifications/my`), explicitly cache-bypassed (`_skipCache: true`), or
+confirmed non-sensitive by reading the backend response schema directly
+(an org-wide email-policy catalog, template backups, label-print presets —
+none carrying per-member fields). Also swept for new `axios.create()`/
+`createApiClient()` call sites (still exactly 2 and 16 respectively — no
+new bespoke client), new `localStorage`/`sessionStorage` writes (UI
+preferences and test fixtures only), and hardcoded secret literals (none).
+
+**0 new findings.** Both standing HIGH findings re-verified still open at
+their current lines: FE3-34-2 (`authStore.ts:446-456`, a failed
+server-side logout still leaves httpOnly cookies live while the UI shows
+Login) and FE3-34-5 (`purgeLocalMemberData.ts`, a silently-failed
+IndexedDB purge still lets the next member on a shared device authenticate
+while the previous member's offline-queue entries remain untagged).
+FE5-34-1's flagged broader ask (excluding the whole `/inventory/items`
+catalog from caching) also re-confirmed unchanged. All three
+`KNOWN_LIMITATIONS.md` entries re-read in full and still accurate — no
+edits needed.
+
+Gate: frontend `npm run typecheck` and `npm run lint` both clean (0
+errors/warnings), each run over the whole source tree, not just this
+feature's files. 389 scoped tests passed (10 files). The diff is
+docs-only (`PROGRESS.md` + this write-up — no frontend or backend source
+file changed), which is CLAUDE.md's "documentation-only" case, so the full
+frontend suite was not required and was stopped rather than run to
+completion; CI runs it regardless. `validate_migrations.py --strict`: 511
+revisions, single head, no duplicate ids (unrelated to this feature, run
+regardless per the gate). Backend `test_api_cache_pii_exclusions.py` +
+`test_inventory_member_visibility.py`: 19 passed. Backend
+auth/logout/offline/cache-scoped tests (unit + integration): 311 passed, 2
+pre-existing skips. No backend file was modified, so no backend
+flake8/black/isort run was needed. Rotation row 34 is now `✅` — **every
+row in the 00–34 table is `✅`**. Next: the rotation wraps to Feature 00
+(Cross-cutting baseline) for its next full pass.
+
+### 2026-10-04 — Feature 33 (Core infrastructure, pass 5) — 0 fixed, 0 flagged (new); both CI3-33 flagged items re-confirmed open
+
+Watchdog pickup. Independently re-confirmed via `list_pull_requests`
+(state=open) that no `claude/security-review-*` PR exists — only #2902
+(app-review A5, course cohorts) and #2903 (frontend card-utility style),
+both unrelated to this rotation. Rotation row 33 was the first `⬜` (rows 31
+and 32 were already `✅`, PR #2899 and PR #2900 having both merged before
+this iteration started). This worktree had no `node_modules` installed at
+all; ran `npm ci` from the repo root once (never `rm package-lock.json &&
+npm install`, per CLAUDE.md) before the frontend half of the gate.
+
+Loaded `CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`, and all four prior
+passes (`CI-33-core-infra.md`, `CI2-33-core-infra.md`, `CI3-33-core-infra.md`,
+`CI4-33-core-infra.md`) first. 1,076 commits landed on `main` since pass 4's
+merge (`cf50593c8`); of those, exactly 11 touch this feature's three declared
+files (2 in `security_middleware.py`, 1 in `database.py`, 8 in `config.py`).
+Every one of those 11 commits' diff to the in-scope file was read in full:
+a deliberate, narrowly-scoped privacy feature suppressing access-log lines
+for the anonymous suggestion-box routes (checked for — and found no —
+interaction with rate-limiting or abuse detection, which are untouched); a
+correctness fix to the UTC-stamp listener avoiding a second SELECT inside a
+SQLAlchemy refresh handler; an `EXPORT_ENDPOINTS` addition that is CI4-33-1's
+own guard test visibly doing its job (an unrelated PR added a new export
+route and the matching set entry in the same commit, which only happens if
+their local run failed the guard test first); and a 7-commit "email link
+domain" feature letting an admin override where password-reset/ballot links
+point, read in full and found solid — gated behind a permission granted to no
+default role, the override value checked against an allowlist of hosts the
+server already serves (so it cannot redirect to a look-alike domain), scoped
+to the deployment's own organization rather than the caller's, and using
+`copy.deepcopy()` for its JSON-column write (Pitfall #12-compliant).
+
+**0 new findings.** All 30 prior findings across CI/CI2/CI3/CI4 re-verified
+still correct at or near their documented locations. Both of CI3-33's
+flagged, owner-decision items re-confirmed still open, unchanged:
+`REGISTRATION_REQUIRES_APPROVAL` (HIGH) still has no reader anywhere
+(fresh grep: only the declaration and the still-inaccurate docstring);
+`RATE_LIMIT_PER_MINUTE`/`MAX_FILE_SIZE`/`STORAGE_TYPE`/`DB_POOL_MIN` (LOW)
+still have none either. Both `KNOWN_LIMITATIONS.md` rows are unchanged and
+accurate — not re-edited.
+
+Gate: flake8/black/isort clean (isort 9.0.1, already at CI's pin), 509
+Alembic revisions, single head, no duplicate ids. 241 feature-scoped +
+364 touched-since-pass-4 backend tests passed, 141 cross-cutting guard
+tests passed, full backend suite **12,493 passed, 1 pre-existing skip** (0
+failed). Frontend `npm run typecheck` and `npm run lint` both clean (0
+errors/warnings) after the fresh-worktree `npm ci`. Rotation row 33 is now
+`✅`. Next: Feature 34 (Frontend shared) — the last row before the rotation
+wraps to 00 for its next full pass.
+
+### 2026-10-04 — Feature 32 (Locations & kiosk, pass 5) — 1 fixed, 0 flagged; LOC-3's dead endpoint is dead no longer
+
+Watchdog pickup. Independently re-confirmed via `list_pull_requests`
+(state=open) that no `claude/security-review-*` PR exists — PR #2899
+(Feature 31, Scheduled tasks, pass 5) had already merged, docs-only (only
+`CRON5-31-scheduled-tasks.md`, `KNOWN_LIMITATIONS.md` and `PROGRESS.md`), so
+per this file's own rule nothing to log beyond clearing that row (done
+above). Rotation row 32 was the first `⬜`. This worktree was also a day
+behind `origin/main` (missing PR #2899's own merge) at the start — rebased
+onto latest `origin/main` before branching, rather than reviewing stale code.
+
+Not a zero-diff pass — real new code landed in this feature's surface since
+pass 4 (`f9c67bdf6`, PR #2527): member ID card ("badge") check-in at a
+room's public kiosk (new `nfc_badge_check_in_enabled` column/toggle, a new
+public `POST .../badge-tap` endpoint, `NfcTagService.kiosk_check_in`), and —
+separately — the four-pass-old dead endpoint (`GET /locations/{id}/display`,
+tracked as LOC-3 since 2026-08-08) picked up a real caller
+(`RoomCheckInPage.tsx`, where a room's own NFC tag sends a member's phone).
+Both read in full against all seven checklist dimensions, not spot-checked;
+15 routes re-enumerated (13 at pass 4, +2 new).
+
+The new badge-tap surface is org-scoped end to end with no client-supplied
+organization id on the path, data-minimized in its response (first name +
+last initial only), dual rate-limited (per-IP and per-room), re-checks both
+its on/off switches fresh on every tap, and shipped with its own 34-test
+suite (`tests/test_kiosk_badge_tap.py`) written alongside the feature —
+verified, not re-authored. The two new permission grants
+(`locations.manage_nfc_tags`, `apparatus.manage_nfc_tags`) are seeded onto
+existing installs by a migration that is additions-only and evidence-gated,
+matching CLAUDE.md Pitfall #23 exactly.
+
+**1 fix — LOC5-32-1 (LOW/MED).** The now-live display endpoint shipped
+without closing the redaction gap `KNOWN_LIMITATIONS.md`'s LOC-3 entry had
+made the explicit condition for giving it a caller: it still returned
+`event_description=event.description` while its public sibling has nulled
+the same field since pass 1. Fixed to match (the current caller doesn't
+read the field, so no functional loss); the endpoint's other two previously
+tracked gaps were re-examined rather than copied forward — the
+`is_valid`/`can_check_in` hardcode is confirmed correct (the feeding query
+already applies the precise canonical window), and the missing `timezone`
+field stays open but low-priority (no current consumer). `KNOWN_LIMITATIONS.md`'s
+LOC-3 entry rewritten to record all three outcomes. Guard test:
+`tests/test_location_display_endpoint.py::TestLocationDisplayInfo::
+test_event_description_is_redacted`.
+
+Every prior-pass finding (LOC-1 through LOC-32-5, the pass-3 `_age_days`/
+`_short_staffed_shifts` addendum) re-verified intact by reading the current
+code directly. Full write-up:
+[`LOC5-32-locations-kiosk.md`](./LOC5-32-locations-kiosk.md).
+
+Gate: flake8/black/isort clean over `app/ tests/ alembic/` (isort 9.0.1,
+CI's pin); `validate_migrations.py --strict` passed (509 revisions, single
+head); repo-tenancy's 8-file guard suite passed (75 tests); 564 scoped
+backend tests passed (1 skipped, pre-existing); full backend suite passed
+(15,696 passed, 21 skipped, all pre-existing/environment-only, 0 failed);
+fresh `npm ci` from the repo root, then frontend typecheck/lint both clean
+(0 errors, 0 warnings).
+
+Rotation row 32 → ✅ (pending PR merge). Next: Feature 33 (Core
+infrastructure).
+
+### 2026-10-04 — Feature 31 (Scheduled tasks, pass 5) — 0 fixed, 0 new findings; app-review's CRON-40 re-verified still open
+
+Watchdog pickup. Confirmed via `list_pull_requests` (state=open) that no
+`claude/security-review-*` PR existed before starting — PR #2898 (Feature
+30, Onboarding, pass 5) had already merged. Cleared the Open PR row for it
+above (real application code, not docs-only, so recorded rather than
+silently cleared — see the superseded note above). Rotation row 31 was the
+first `⬜`.
+
+Not a zero-delta pass — `scheduled_tasks.py` grew from pass 4's 6,084 L/44
+runners to 6,452 L/47 runners: three new tasks
+(`run_property_return_reminders`, `run_inventory_audit_digest`,
+`run_prospect_attendance_advance`) plus a repo-wide rewiring of every email
+send in this file onto a new shared `email_policy.py` preference module and
+a new `org_timezone.py` org-local-"today" module. All three new tasks and
+both new helper modules read in full against all seven checklist
+dimensions, not spot-checked: all org-scoped correctly (two via
+`_for_each_org`'s active-org filter, the third — `prospect_attendance_
+advance` — reproduces the same `Organization.active.isnot(False)` +
+per-org commit/rollback shape by hand, citing CRON2-31-10's precedent), no
+injection surface, HTML-escaped free text, and the new digest task
+correctly avoids the CRON-31-7 anti-pattern (only records its weekly-send
+timestamp when the email actually succeeded). `main.py`'s own +27-line diff
+since pass 4 is unrelated to the scheduler (a link-domain listener and a
+public branding router sharing the same `lifespan()` function) — the
+scheduler's own code has zero diff since pass 4.
+
+**Closed a gap between the two review tracks rather than finding a new
+defect.** `docs/app-review/scheduled-tasks.md`'s pass 5 (2026-09-09) flagged
+HIGH — `main.py`'s claim renewal is an unconditional `SET`, not a
+compare-and-swap, so a worker that loses its scheduler claim during an
+overrunning first batch takes it back without ever learning it lost it,
+permanently double-running every task. This feature's own pass 4
+(2026-09-13, four days later) reviewed the same code and did not name that
+finding. Re-verified directly against current `main.py`: still present,
+unchanged, already mirrored in `KNOWN_LIMITATIONS.md` as HIGH/Open — not
+re-applied here, since the project already made the "needs an owner
+decision on the claim-renewal protocol" call and nothing changes that
+analysis. Noted for the record (and flagged directly to the user in this
+iteration's report): a complete, tested fix for this exact finding exists
+unmerged on branch `claude/cron-40-scheduler-claim-cas`, authored the same
+day as this pass, with no pull request open — belongs to the app-review
+track, not touched or adopted here.
+
+Every other standing finding re-confirmed open, unchanged at its current
+(shifted) line number: CRON2-31-12 (`MeetingActionItem` branch still has no
+org-active filter), CRON2-31-13 (`admin_hours_auto_close` still has no
+audit trail), CRON-31-7 (`run_end_of_shift_summary` can still mark "sent"
+without delivery), CRON-31-8 (`run_event_reminders` still stamps a
+zero-recipient interval, by design), CRON4-31-2 (manual `/run-task` still
+has no per-task lock against the scheduler's own run). Registry re-verified
+47/47 via direct Python import, no drift. `system.run_tasks` re-confirmed
+granted to no `DEFAULT_POSITIONS`/`OPERATIONAL_RANKS` entry.
+
+Gate: flake8/black/isort clean over `app/ tests/ alembic/` (isort 9.0.1, CI's
+pin, already installed); `validate_migrations.py --strict` passed (509
+revisions, single head — one migration landed in this window,
+`20260924_2304_b1eb0458782a` for `inventory_nfc_audit_digests`, reviewed and
+sound); 221 scoped backend tests passed across 19 files; `npm ci` (fresh
+worktree) then frontend `tsc --noEmit`/`eslint --max-warnings 10` both 0
+errors. Full write-up:
+[`CRON5-31-scheduled-tasks.md`](./CRON5-31-scheduled-tasks.md).
+
+Rotation row 31 → ✅ (pending PR merge). Next: Feature 32 (Locations &
+kiosk).
+
+### 2026-10-04 — Feature 28 (Security, audit & IP, pass 5) — 0 fixed, 0 new findings
+
+Watchdog pickup. Confirmed via `list_pull_requests` (state=open) that no
+`claude/security-review-*` PR existed before starting — PR #2892 (Feature
+27, Integrations, pass 5) had already merged (`bf0a45a6`). Rotation row 28
+was the first `⬜` (rows 00–27 all `✅`), matching the Open PR section's
+own "Next: Feature 28" note.
+
+`git log --since="2026-09-13"` (pass 4's addendum date) against all nine
+backend files plus the four frontend surfaces this feature covers found
+real touches in three commits, each read in full: `audit_logs.py` gained
+an org-scoped actor-username join (`7aa34054`, part of an unrelated
+elections fix — most `log_audit_event` callers never pass `username`, so
+rows resolve the acting user's name from `users` at read time now; the
+join's org filter lives in the `ON` clause, so a cross-tenant `user_id`
+never resolves a name, and the commit's own
+`test_w50_audit_username.py` already pins the cross-tenant case);
+`error_logs.py` gained a path-based discard for anonymous suggestion-box
+failure reports (`c78a3eca`, a privacy fix — stops naming the member who
+hit a 5xx on a page that's supposed to be anonymous); and
+`ip-security/services/api.ts` was rewritten to send snake_case request
+bodies (`b576d9ae`, a correctness fix — the request schemas have no alias
+generator, so the old camelCase bodies 422'd or silently dropped fields).
+All three verified good, no finding — see
+`docs/security-review/SEC2-28-security-audit-ip.md` → Pass 5 for the full
+read of each.
+
+Re-read the actual current code (not assumed from the doc) for every
+still-open item: **SEC2-28-5** (HIGH — approved IP-allowlist exceptions
+have no enforcement effect), **SEC2-28-6** (LOW — TOCTOU on the duplicate
+IP-exception check), **SEC2-28-7** (HIGH — `security_monitoring.py`'s
+alert surface has no admin UI, plus the `organization_id=NULL`
+brute-force-alert exclusion and the `Content-Length`-gated exfiltration
+gap), **SEC2-28-10** (HIGH — the audit hash chain has no write-concurrency
+control), and the dead-detector-code note (pass 3) — all re-confirmed
+unchanged, all already mirrored in `KNOWN_LIMITATIONS.md` where they need
+an owner decision rather than a drive-by fix. Re-enumerated all 34 routes
+(pass 4's prose said 35; its own table has 34 rows — a pre-existing
+narration typo, not a route change) — every gate and org-scoping
+assessment unchanged. All previously-FIXED items (SEC-1 through SEC-9,
+SEC2-28-1 through SEC2-28-4, SEC2-28-9, SEC2-28-11) re-confirmed intact.
+
+Gate: `flake8`/`black --check`/`isort --check-only` clean over
+`app/ tests/ alembic/`; `validate_migrations.py --strict` passed (509
+revisions, single head, no migration this pass); 268 scoped backend tests
+passed; frontend `npm ci` (this worktree's `node_modules` was unpopulated),
+`tsc --noEmit` 0 errors, `eslint --max-warnings 10` 0 errors/warnings.
+
+Rotation row 28 → ✅ (pending PR merge). Next: Feature 29 (Reports &
+analytics).
+
+### 2026-10-03 — Feature 24 (Meetings & minutes, pass 5) — 0 fixed, 0 new findings, 2 flagged items re-confirmed OPEN
+
+Watchdog pickup. The dedicated `/loop 30m /security-review` session had
+stalled for over 2 hours with no security-review activity, no open PR, and
+no in-progress branch. Confirmed via `list_pull_requests` (state=open) that
+no PR whose head branch starts with `claude/security-review-` existed before
+proceeding. Rotation row 24 was the first `⬜` in the table (rows 00-23 all
+`✅`), matching the Open PR section's own "Next: Feature 24" note.
+
+Near-zero-delta pass: only three substantive commits had landed in this
+feature's declared files since pass 4 merged (PR #2502, 2026-09-13) —
+`6850d691f` (a timezone fix moving `meetings_service.py`'s "meetings this
+month" count and `create_from_event`'s date/time copy onto the department's
+own clock instead of the server's UTC one), `653b4906e` (rewrote
+`attendance_dashboard_service.py` to share its attendance-window math with
+the elections ballot-eligibility check, closing a could-disagree gap between
+the two — Pitfall #29's shape, already fixed correctly, not a defect), and
+two pure copy/wording commits on the two minutes frontend pages. Read all
+four diffs in full, re-verified all 14 previously-fixed findings (MM-1
+through MM-8, MM-10, MM-11, MM-14 through MM-16) at their current lines, and
+freshly enumerated all 42 routes top to bottom rather than trusting the
+pass-4 count. Also read `app/mcp/tools/meetings.py` (642 L) in full for the
+first time as its own surface — a read-only MCP tool set, every handler
+org-scoped, the two minutes-reading tools hard-coding `restricted=True`
+regardless of the calling principal (stricter than the human path) — clean,
+no finding.
+
+**0 new findings.** MM-9 (`approve_meeting`/`update_meeting` has no approval
+state machine or separation-of-duties check) and MM-17
+(`set_meeting_quorum_config` has no finalization guard on approved minutes)
+both re-confirmed unchanged and still open, pending the product decisions
+pass 2/3/4 already described; both already mirrored in
+`KNOWN_LIMITATIONS.md`. Two non-security correctness observations recorded
+for a future pass rather than fixed here (a UTC-vs-org-timezone gap in
+`minute_service.get_stats`'s "this month" count that the recent sitewide
+"today reads" sweep missed because it doesn't match that sweep's AST
+pattern, and an unlocked find-or-create in `grant_waiver` that could
+duplicate a `MeetingAttendee` row under a two-admin race) — see the findings
+doc's "Looked at, not a finding" section for why neither was fixed in place.
+
+This worktree's `node_modules` did not exist at all (not stale — absent),
+so the frontend gates needed `npm ci` from the repo root against the
+committed, unmodified `package-lock.json` before they could run; this is the
+documented-safe operation (exact install from the lockfile), not the
+lockfile-regeneration CLAUDE.md warns against, and `package-lock.json` is
+untouched in this PR's diff.
+
+**Gate:** `flake8`/`black`/`isort` clean on `app/`, `tests/`, `alembic/`;
+`validate_migrations.py --strict` 508 revisions, single head; backend
+`meeting or minutes or quorum` scope 289 passed/1 pre-existing skip
+(identical count to pass 4); frontend `typecheck` 0 errors; `npm run lint` 0
+errors/0 warnings; `vitest run src/modules/minutes` 26 passed/4 files.
+Findings doc: `docs/security-review/MM-24-meetings-minutes.md` → Pass 5 (see
+that file's own note on why it is titled "Pass 5" rather than "Pass 6" —
+this feature's own review count, not the rotation-wide cycle counter).
+Rotation row 24 → `✅` (pending PR merge). Next: Feature 25 (Messaging &
+notifications), once this PR merges.
 
 ### 2026-10-02 — Feature 18 (Training extended, pass 6) — 0 fixed, 0 flagged, 0 new findings — PR #2862 opened
 
@@ -25139,3 +25939,375 @@ typecheck/lint clean. Full write-up:
 [`MSUP-23-medical-supplies.md`](./MSUP-23-medical-supplies.md)'s **Pass 12**
 section. Rotation row 23 → ✅ (pending PR merge). Next: Feature 24
 (Meetings & minutes).
+
+### 2026-10-03 — Feature 23 (Medical supplies, pass 12)'s PR #2877 merged, watchdog resolved a conflict and recorded it
+
+Routine 30-minute check on the `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`). PR #2877 (Feature 23, Medical
+supplies, pass 12) had been opened by the loop session concurrently with
+this watchdog's own prior check-in (the one recording PR #2875's merge,
+above), and both edited `PROGRESS.md`'s Open PR section — `mergeable_state`
+read `dirty`.
+
+Resolved per the merge-conflict procedure: checked out
+`claude/security-review-feature23-pass12`, merged `origin/main` in,
+resolved the two conflicting hunks (the Open PR section and the end-of-file
+log) by keeping both sides' content — Feature 23's pass 12 as the current
+entry, the prior watchdog note nested as superseded history, both dated log
+entries kept in chronological order — then pushed the merge commit
+(`5dc895f99`) directly to the PR's branch (no rebase/force-push, per the
+"never rewrite history on someone else's branch" rule).
+
+Post-resolution, `mergeable_state` read `clean` and all 17 checks went
+green (`CI Success` included) with no unresolved review threads (only the
+informational Codex usage-limit comment), so this watchdog check merged it
+directly (squash, `expectedHeadSha` pinned to `5dc895f99`). Merge commit
+`a9db9aae` confirmed on `main`. Rotation row 23 stays ✅. Next: Feature 24
+(Meetings & minutes), pass 6 — not yet started as of this check, no
+in-progress branch or open PR.
+
+### 2026-10-03 — Feature 24 (Meetings & minutes, pass 5)'s PR #2881 merged, watchdog recorded it
+
+Routine 30-minute check on the `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`). Confirmed independently before acting,
+per Step 0: `list_pull_requests` (state=open) showed no open security-review
+PR, and no `claude/security-review-feature25*` (or equivalent Messaging &
+notifications) branch existed yet.
+
+PR #2881 (opened by an earlier watchdog pickup after the dedicated loop had
+stalled 2+ hours — see the superseded Open PR note above) had already been
+merged by the time this check ran: all 17 check runs `success` (`CI
+Success` included), `mergeable_state: clean`, no unresolved review threads
+(only the informational Codex usage-limit comment). Merge commit
+`c23c100b4` confirmed on `main` via `git fetch`. Rotation row 24 stays ✅.
+Next: Feature 25 (Messaging & notifications) — not yet started as of this
+check, no in-progress `claude/security-review-*` branch or open PR.
+
+**Pattern worth flagging:** this is the third consecutive feature (22, 23, 24) whose review PR was opened and/or merged by a 30-minute watchdog check
+rather than by the dedicated `/loop 30m /security-review` session itself —
+each time because that session was found stalled (2+ hours, in these three
+cases) with no open PR and no in-progress branch. The rotation is still
+moving (rows 22-24 all closed within the last ~10 hours), but it is doing
+so almost entirely via this watchdog rather than the loop it is meant to be
+checking on. Worth the account owner's attention if the loop session itself
+is expected to be doing this work rather than being substituted for
+indefinitely.
+
+### 2026-10-03 — Feature 25 (Messaging & notifications, pass 5)
+
+Watchdog pickup: the dedicated `/loop 30m /security-review` session had
+stalled 2+ hours with no open security-review PR and no in-progress
+`claude/security-review-*` branch. Confirmed via `list_pull_requests`
+(state=open) before starting, and again immediately before opening this
+pass's own PR, that no PR with a head branch starting with
+`claude/security-review-` existed either time.
+
+Loaded prior art in order (`CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+`docs/module-audit/messaging.md`/`notifications.md`,
+`docs/app-review/messaging.md`/`notifications.md`/`email-templates.md`,
+this feature's own passes 1-4) before reading any code, and loaded the
+`repo-tenancy` skill. Substantial churn since pass 4 (2026-09-13): 38
+commits touching this feature's files, including a full email-design reset
+(every default template rewritten onto one shell, with a new
+`email_template_backups` table and restore UI), two new notification
+triggers (suggestion-box submissions, equipment-request status changes),
+in-app notification category stacking, and a new member email
+policy/opt-out screen. Re-read every endpoint and service file fresh
+(`messages.py`, `message_history.py`, `notifications.py`,
+`email_templates.py`, `messaging_service.py`, `message_delivery_service.py`,
+`notifications_service.py`, `push_service.py`, `notification_rules.py`,
+`notification_channels.py`, `integration_services/notification_dispatch.py`,
+`email_template_service.py`, `email_templates_storefront.py`,
+`email_footers.py`, `email_theme.py`, `email_service.py`,
+`schemas/notifications.py`) and two new files the churn surfaced on this
+feature's send path (`email_policy.py`, `email_test_records.py`), plus one
+file formally owned by Inventory but newly calling into this feature's
+shared push/notification-rules machinery (`equipment_request_notifications.py`).
+Re-enumerated all 51 routes (48 at pass 4, +3: `GET`/`PUT
+/email-templates/member-email-policy`, `GET /email-templates/{id}/backups`)
+— every route still carries an auth dependency and no permission string
+reads as under-gated. Re-verified MSG-4 through MSG-9 and MSG-13 through
+MSG-16 (including the push-subscription lock-ordering fix and its
+deadlock-retry) all unchanged and intact; the SMS allowlist (Pitfall #18)
+still has exactly one member and is still the only path to `SMSService`.
+
+Checked the two newly-wired notification triggers specifically against
+Pitfall #19 (a config switch needs a reader): both `SUGGESTION_SUBMITTED`
+and `EQUIPMENT_REQUEST_UPDATE` are in `ENFORCED_TRIGGERS` and both senders
+(`suggestions.py`, `equipment_request_notifications.py`) call
+`NotificationRuleResolver.is_enabled()` before sending — correctly wired,
+not a repeat of the original bug. `equipment_request_notifications.py`'s
+delivery path re-fetches the request and member by id with an explicit
+`organization_id` filter and escapes every user-controlled value reaching
+an HTML email context — no cross-tenant or injection gap. Three new/changed
+migrations (two enum widenings for the new triggers, one large
+data-migrating reset-and-backup for the email redesign) were reviewed:
+nullability/`ondelete` correct on the new `email_template_backups` FK,
+`create_all`-table guards present where needed (Pitfall #26), enum
+snapshots written as literal tuples rather than imported (the established
+pattern).
+
+0 new findings; 0 fixed, 0 flagged. One doc-correction, no code change:
+MAIL-22 (`docs/app-review/email-templates.md` pass 5, 2026-09-09 —
+`upload_attachment` persists the client's claimed MIME type rather than the
+one it just validated) sits inside this feature's own file
+(`email_templates.py`) but had never been cross-referenced from this
+findings doc; re-verified still open against current code
+(`email_templates.py:832`) and noted here, pointing at the existing
+`KNOWN_LIMITATIONS.md` entry rather than creating a second, divergent
+record of the same defect. MSG-3, MSG-12's `failed`/throttled sub-cases,
+MSG-15, MAIL-4, `email_service.py`'s F4, and the
+`NotificationRuleCreate.config` unbounded-JSON note are all re-verified
+unchanged and not re-flagged.
+
+Full completion gate green: flake8/black/isort clean (isort 9.0.1, matching
+CI's pin) over `app/ tests/ alembic/`; `validate_migrations.py --strict`
+passed (508 revisions, single head); 916/916 scoped backend tests passed (1
+pre-existing skip); frontend `npm run typecheck` 0 errors and `npm run
+lint` (`eslint --max-warnings 10`) exit 0. No code changed this pass, so
+the full ~12,900-test suite was not awaited (started, but still running
+past 6+ CPU-minutes with no sign of finishing); the scoped run already
+covers every file this pass read. Findings doc:
+`docs/security-review/MSG-25-messaging-notifications.md` (Pass 5).
+Rotation row 25 stays ✅ (pending PR merge). Next: Feature 26 (Forms).
+
+### 2026-10-03 — Feature 26 (Forms, pass 5)
+
+Watchdog pickup: the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) had stalled roughly 2 hours (PR #2884,
+Feature 25, merged 19:51 UTC; this check ran 21:48 UTC) with no open
+security-review PR and no in-progress `claude/security-review-*` branch.
+Confirmed via `list_pull_requests` (state=open) before starting — the two
+open PRs (#2882, #2878) are unrelated feature work, not security-review.
+
+Loaded prior art (`CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+`docs/module-audit/forms.md`, `docs/app-review/forms.md`, this feature's own
+passes 1-4) before reading code. Growth since pass 4 (2026-09-13):
+`forms_service.py` +323 L, `schemas/forms.py` +3 L, driven by exactly one
+substantive commit, `4c7d69be3` — a **workflow-review** pass (W60, a
+different rotation, functional/UX-focused) that built full-depth
+conditional-visibility ("branching") support, re-read in full against this
+module's two touched files. Re-verified every prior finding (FORM-1 through
+FORM-12, BXC-1) against current code; full route inventory re-enumerated
+(22 routes, unchanged permission set).
+
+**0 new findings; 0 fixed, 0 flagged — but one standing item closed as a
+side effect of other work.** BXC-1 (`FormField.condition_field_id`, open
+since the original module audit, re-confirmed non-security at every prior
+pass because it was a soft reference _never dereferenced server-side_) is
+now closed: W60 added a same-form/cycle check
+(`FormsService._condition_error`, called from `add_field`/`update_field`)
+and started dereferencing the field server-side (`_visible_field_ids`,
+to decide which hidden-branch fields are excused from `required`) — for a
+functional reason, not a security one, but the dangling/foreign-reference
+case BXC-1 was about can no longer occur. `docs/app-review/forms.md` and
+`docs/app-review/CROSS-CUTTING.md`'s BXC-1 batch-list both corrected to
+point here rather than carry a second, stale record. Full completion gate:
+flake8/black/isort clean over `app/ tests/ alembic/`,
+`validate_migrations.py --strict` single head (no migration — no model
+change this pass), 623 `-k form` backend tests passed (1 pre-existing
+skip), frontend typecheck 0 errors, `npm run lint` exit 0. Full write-up:
+[`FORM-26-forms.md`](./FORM-26-forms.md)'s **Pass 5** section. Rotation row
+26 → ✅ (pending PR merge). Next: Feature 27 (Integrations).
+
+### 2026-10-04 — Feature 27 (Integrations, pass 5): 0 fixed, 0 new findings
+
+Watchdog pickup: confirmed via `list_pull_requests` (state=open) that no PR
+whose head branch starts with `claude/security-review-` existed before
+starting — PR #2885 (Feature 26, Forms, pass 5) and PR #2886 (an unrelated
+fix) were already merged (visible at `main`'s tip). Rotation row 26
+confirmed ✅.
+
+Loaded all four prior passes' write-up before reading any code, plus
+`docs/module-audit/integrations.md` and `docs/app-review/integrations.md`
+for their open-finding history, and the `repo-tenancy` skill before touching
+anything under `backend/app/api/` or `backend/app/services/`. Only three
+commits had touched this feature's files since pass 4 (2026-09-13): two
+frontend copy/styling changes to `IntegrationsPage.tsx` (read both diffs in
+full — neither touches a config field, permission, or validator) and one
+merge commit whose diff stat is the same squashed-history artifact pass 4
+already documented. Re-verified every standing finding (INT-1 through
+INT-11) directly against current code rather than trusting that "nothing
+changed" signal — all hold at their pass-4 disposition: INT-5 (uninvoked
+webhook-domain allowlist) and INT-9 (Google Calendar bypasses the shared
+HTTP hardening) remain open/tracked, deliberately out of this review's
+scope to force-fix (the former is an owner behavior decision, the latter
+needs a `httplib2`-specific transport wrapper SEC-00's cross-cutting lane
+is the right place for); INT-11 (Salesforce's "blank the refresh token to
+switch to client credentials" has no reachable UI control) remains flagged
+— the 2026-09-29 copy commit reworded the surrounding help text but added
+no control that sends the explicit `""` the backend already knows how to
+handle, confirmed by reading the full diff.
+
+New to this pass: Feature 23's pass 12 (2026-10-03) note that "a full
+review of the MCP write-tool surface is Feature 27 (Integrations)'s scope"
+was picked up. Read `app/mcp/tools/writes.py` (all three write tools:
+`create_event_draft`, `create_meeting_action_item`,
+`create_reorder_request`) and the service methods each calls into, against
+the same org-scoping/domain-pinning rigor the rest of this feature is held
+to. All three check out: `organization_id` on the bound principal comes
+only from a hash lookup of the presented bearer key
+(`McpKeyService.authenticate`), never from a tool argument;
+`create_meeting_action_item`'s `meeting_id` resolves through an org-scoped
+parent fetch; `create_reorder_request`'s client-supplied `item_id`/
+`category_id` are validated in-org by `InventoryService._assert_reorder_fks_in_org`
+independently of (and in addition to) the medical-domain check the tool
+itself performs, so a cross-org id cannot slip through the domain check's
+org-filtered "not found" and reach storage. The write gate
+(`gate_allows`), pre-write audit (`_audit_apart(..., "attempted", ...)`,
+refusing the mutation if the audit write itself fails), and error
+sanitization (`safe_error_detail()` before anything reaches the MCP
+client) are all the same patterns already verified elsewhere in this
+feature. No finding — recorded in full in `INT-27-integrations.md`'s pass
+5 section so a future pass does not re-derive it.
+
+**0 fixed, 0 new findings.** Full completion gate: flake8/black/isort
+clean over `app/ tests/ alembic/`, `validate_migrations.py --strict`
+single head (509 revisions, no migration this pass), repo-tenancy guard
+tests + MCP tool tests passed, 3548 `-k "integration or salesforce or
+calcom or documenso or paypal or webhook or connector or mcp_key"` backend
+tests passed (21 pre-existing env-only skips), frontend typecheck 0
+errors, `npm run lint` exit 0. Full write-up:
+[`INT-27-integrations.md`](./INT-27-integrations.md)'s **Pass 5** section.
+Rotation row 27 → ✅ (pending PR merge). Next: Feature 28 (Security, audit
+& IP).
+
+---
+
+### 2026-10-04 — Feature 29 (Reports & analytics, pass 7) — real delta, 0 fixes, one finding strengthened
+
+Watchdog pickup: confirmed via `list_pull_requests` (state=open) that no PR
+whose head branch starts with `claude/security-review-` existed before
+starting. PR #2892 (Feature 27, Integrations, pass 5) and PR #2896
+(Feature 28, Security/audit & IP, pass 5) had both already merged by the
+time this check ran; both were docs-only (0 application-code changes), so
+neither is a recordable event per this file's own rule — the stale "Open
+PR" row (still naming #2896) is cleared in this same commit rather than
+given its own PR. Rotation row 29 was the first `⬜`.
+
+Loaded all four prior findings files (`RPT-29-reports-analytics-pass3.md`,
+`RPT2-29-reports-analytics.md`, `RPT4-29-reports-analytics.md`,
+`RPT5-29-reports-analytics.md` — the chronologically latest, continued as
+this pass's "Pass 7" section) plus `CHECKLIST.md` and the `SEC-00` baseline
+before reading any code.
+
+**Not a zero-delta pass, unlike pass 6.** 23 real non-merge commits touched
+at least one of this feature's ten files since pass 6 merged (2026-09-13);
+each read in full via `git show`. (Three additional commits with "Merge
+pull request" titles — `0430faa0`, `bad9fff0`, `703c5123` — are squash/
+rebase history-boundary artifacts in this shallow clone, the same shape
+prior passes' `f8fdd1a` documented, and were excluded after confirming each
+has no recorded parent commit.) All 23 verified good — a real
+credential-exposure fix already landed (`9937d652`, label previews/prints
+no longer encode the applicant's public status-token), a new
+organization-shared label-setup feature with correct org-scoping/
+`copy.deepcopy`/row-locking/cap/FK-validation (`c1e30031`), bounded new
+fields (`8a0d9eaf`), a new org-scoped `storage_areas` label module
+(`999a7195`), and a department's-local-date correctness sweep across
+`reports_service.py`/`dashboard.py`/`dashboard_widget_service.py`/
+`attendance_dashboard_service.py` that also closed a Pitfall #29 "empty set
+reads 100%" gap on `/dashboard/admin-summary` — except one.
+
+**New finding: RPT5-29-5 (MEDIUM, flagged).** `ea939c38` ("let a training
+requirement exempt members who joined before it") routed
+`_generate_compliance_status` through `training_compliance.py`'s shared
+grandfathering helpers (`requirement_applies_to_user`/`catch_up_deadline`/
+`member_join_date`) but left its sibling `_generate_training_summary`'s
+`requirement_breakdown` section untouched — it still counts a
+grandfathered-exempt member as unmet for the identical requirement
+`compliance_status` now correctly excludes. This is RPT5-29-1's own
+already-flagged Pitfall #29 divergence (two reports computing the same
+"compliance" metric by different rules), now reachable with a concrete,
+shipped trigger rather than a hypothetical one, and invisible to
+`tests/test_requirement_grandfathering.py`'s own guard sweep (which only
+catches a call to the shared helpers missing `join_date=`, not a report
+that never calls them at all). Folded into the existing RPT5-29-1 entry in
+`KNOWN_LIMITATIONS.md` rather than opened as a separate architectural
+question — the two closing options are the same ones RPT5-29-1 already
+names. Not fixed: converging the two report shapes (aggregate SQL vs.
+per-member loop) or re-scoping what each claims to measure is a product/
+architecture decision, not a drive-by.
+
+Everything else re-verified unchanged and holding: all 30 routes'
+auth/permission gates (table unchanged since pass 4); zero `.like`/
+`.ilike`/`csv.writer` across all ten files; `SavedReportUpdate`'s
+`apply_updates` fix (RPT5-29-2); the six E712 conversions (RPT5-29-3); the
+dead `reportExportService` deletion (RPT5-29-4) stays deleted;
+`MAX_LABELS_PER_JOB`, `MAX_ACTIVE_SAVED_REPORTS_PER_ORG`, `ExtraLine`'s
+length bound, and `/analytics/export`'s `.limit(1000)` all present;
+`PII_REPORT_PERMISSIONS` still covers all 8 PII-bearing report types;
+`apiCache.ts`'s two pins (`/dashboard/action-items`, `/analytics/export`)
+untouched by the several unrelated-feature commits that also touched that
+file; the one `ondelete="SET NULL"` FK each on `SavedReport` and
+`LabelPrinter` both still `nullable=True`. `RPT2-29-2`, `LBL-29-2`,
+`LBL-29-4`, `DASH-2`, `RPT-5c`/`RPT-6` all re-confirmed unchanged, not
+re-litigated.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean over
+`app/ tests/ alembic/` (isort 9.0.1, CI's pin); `validate_migrations.py
+--strict` passed (509 revisions, single head, no migration of this
+feature's own this pass); scoped backend tests (`-k "reports or label or
+analytics or dashboard or attendance_dashboard or grandfathering"`) 719
+passed, 1 skipped (environment-only — `pywebpush`); frontend `npm run
+typecheck` 0 errors; `npm run lint` 0 errors/0 warnings; scoped frontend
+suite (`npx vitest run src/modules/reports`) 42 passed (5 files). Findings
+doc: [`RPT5-29-reports-analytics.md`](./RPT5-29-reports-analytics.md)'s
+**Pass 7** section. `docs/KNOWN_LIMITATIONS.md`'s RPT5-29-1 entry amended
+with RPT5-29-5's evidence rather than a new entry added. Rotation row 29 →
+✅ (pending PR merge). Next: Feature 30 (Onboarding).
+
+### 2026-10-04 — Feature 30 (Onboarding, pass 5) — 0 fixes, 0 new findings, 6 real changes re-verified good
+
+Watchdog pickup. Step 0: independently confirmed via `list_pull_requests`
+(state=open) that no `claude/security-review-*` PR existed before starting
+— PR #2896 (Feature 28, pass 5) and PR #2897 (Feature 29, pass 7) had both
+already merged, both docs-only, so per this file's own rule neither is a
+recordable event; cleared above. Rotation row 30 was the first `⬜`.
+
+**Not a zero-delta pass.** Pass 4's baseline is PR #2521's merge
+(`abd4fefc` → `main` at `543445c0`, 2026-09-13). Six real changes landed in
+this feature's own files since then, all read in full: a default
+"Compliance" suggestion box seeded on org creation (org-scoped, no new
+grant); a Cloudflare account-id validator (`[a-f0-9]{32}`) consolidated
+into one function and now checked at save time **and** send time
+(`email_service.py:930`, immediately before interpolation into the API
+URL) — closing a latent drift between previously-separate regex copies; a
+completeness check added so an `enabled: true` Cloudflare config without
+its account id/API token/from-address no longer saves silently broken; a
+self-hosted SMTP config with a username but no password now rejected at
+test time (narrows, does not touch, the already-flagged ONB-30-3 SSRF
+gap); `/reset`'s response now clears the caller's stale auth cookies
+(reusing `/auth/logout`'s own helper) so "navigate to /onboarding/start to
+begin again" actually works when reset was called while authenticated as
+the deleted owner; and a frontend fix for a client-side retry loop that
+had been hammering the rate-limited `/start` endpoint at ~75 req/s after a
+reset left stale credentials in the browser. Every one verified good — a
+correctness or security-hardening fix, not a new vulnerability.
+
+All 24 routes re-enumerated against current `onboarding.py`; no
+route lost or gained a compensating control since pass 4. Every
+previously-open finding re-verified unchanged against current code:
+**ONB-7** (role editor accepts client-controlled permissions/priority/
+system-flag, product decision), **ONB2-30-8** (sliding session TTL, no
+absolute cap, three GET routes slide it without CSRF), **ONB-30-3**
+(self-hosted SMTP has no SSRF/private-network protection, product
+decision), the **ONB-8 audit-durability residual** (`reset_initiated`
+shares a transaction with `/reset`'s deletes), and the duplicate-`role.id` 500. Every previously-fixed finding re-confirmed intact by direct code
+read: **ONB3-30-3**'s System Owner race lock (`services/onboarding.py:
+1348-1350`, both halves present), **ONBOARD-7**'s singleton fix, and
+ONB-1 through ONB-9 / ONB2-30-1 through ONB2-30-8 / ONB3-30-1 / ONB3-30-2.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean over
+`app/ tests/ alembic/` (isort 9.0.1, CI's pin; flake8 7.4.1 locally vs. CI's
+7.3.0 pin, same `flake8-pytest-style` 2.2.0 plugin); `validate_migrations.py
+--strict` passed (509 revisions, single head, no migration this pass);
+scoped backend tests (`-k "onboard or org_template or template_service"`)
+255 passed, 1 skipped (environment-only — `pywebpush`); `npm ci` (this
+fresh worktree's `node_modules` was unpopulated) then frontend `npm run
+typecheck` 0 errors, `npm run lint` 0 errors/0 warnings; scoped frontend
+suite (`npx vitest run src/modules/onboarding`) 442 passed (31 files).
+Findings doc: [`ONB3-30-onboarding.md`](./ONB3-30-onboarding.md)'s **Pass 5**
+section. No `KNOWN_LIMITATIONS.md` change needed — every open item's
+entry there was re-verified accurate, none needed amending. Rotation row
+30 → ✅ (pending PR merge). Next: **Feature 31 (Scheduled tasks —
+`scheduled.py`, `services/scheduled_tasks.py`)**.

@@ -40,16 +40,24 @@ import { useOverrideAttendance } from '../hooks/useOverrideAttendance';
 import { EventType as EventTypeEnum, RSVPStatus as RSVPStatusEnum } from '../constants/enums';
 import {
   Bell,
-  Repeat,
+  BookOpen,
+  Calendar,
   CalendarPlus,
   CheckCircle,
-  Clock,
   ChevronDown,
-  MapPin,
-  StopCircle,
+  ChevronLeft,
+  ClipboardCheck,
+  Clock,
+  EllipsisVertical,
   Lock,
+  MapPin,
+  Pencil,
+  QrCode,
+  Repeat,
+  StopCircle,
   Unlock,
   UserRound,
+  Zap,
 } from 'lucide-react';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { Breadcrumbs, PromptDialog } from '../components/ux';
@@ -74,6 +82,7 @@ import TrainingSessionLinkageCard from '../components/event-detail/TrainingSessi
 import EventProspectsCard from '../components/event-detail/EventProspectsCard';
 import EventAttendancePetitionPrompt from '../components/event-detail/EventAttendancePetitionPrompt';
 import EventAttendancePetitionsCard from '../components/event-detail/EventAttendancePetitionsCard';
+import EventTransferModal from '../components/event-detail/EventTransferModal';
 import { buildCsv, downloadCsv } from '../utils/csv';
 
 /**
@@ -210,6 +219,7 @@ export const EventDetailPage: React.FC = () => {
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [showRecordTimesModal, setShowRecordTimesModal] = useState(false);
   const [showCancelSeriesModal, setShowCancelSeriesModal] = useState(false);
+  const [showTransferModal, setShowTransferModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEndEventConfirm, setShowEndEventConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -243,7 +253,7 @@ export const EventDetailPage: React.FC = () => {
   const actionsMenuRef = useRef<HTMLDivElement>(null);
   const reminderMenuRef = useRef<HTMLDivElement>(null);
 
-  const { checkPermission, user: currentUser } = useAuthStore();
+  const { checkPermission } = useAuthStore();
   const tz = useTimezone();
   const canManage = checkPermission('events.manage');
   // Deliberately a separate grant from events.manage: whoever closed the event
@@ -865,9 +875,11 @@ export const EventDetailPage: React.FC = () => {
   // own eligibility (the 30-day window, already present) is the server's call;
   // the page only decides whether to ask.
   const attendancePetitionsOpen = checkInClosed && !event.is_cancelled && !event.is_draft;
-  // The organizer need not hold events.manage to decide their own event's
-  // requests; the API grants the same pair.
-  const canReviewAttendancePetitions = canManage || (Boolean(currentUser?.id) && currentUser?.id === event.created_by);
+  // The organizer and alternate need not hold events.manage to decide their own
+  // event's requests or hand it over. The server decides who that is
+  // (CLAUDE.md #29), so the page reads its answer rather than comparing ids.
+  const canManageOrganizers = Boolean(event.can_manage_organizers);
+  const canReviewAttendancePetitions = canManageOrganizers;
 
   // RSVP deadline countdown
   const rsvpCountdown = (() => {
@@ -933,9 +945,7 @@ export const EventDetailPage: React.FC = () => {
             to="/events"
             className="text-theme-text-muted hover:text-theme-text-primary mb-4 inline-flex items-center text-sm"
           >
-            <svg className="mr-1 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
+            <ChevronLeft className="mr-1 h-5 w-5" aria-hidden="true" />
             Back to Events
           </Link>
 
@@ -1027,20 +1037,7 @@ export const EventDetailPage: React.FC = () => {
                     onClick={() => void navigate(`/events/${eventId}/qr-code`)}
                     className="btn-secondary inline-flex items-center border-blue-300 text-sm font-medium text-blue-700 shadow-xs hover:bg-blue-500/20 dark:text-blue-400"
                   >
-                    <svg
-                      className="mr-2 h-5 w-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      aria-hidden="true"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"
-                      />
-                    </svg>
+                    <QrCode className="mr-2 h-5 w-5" aria-hidden="true" />
                     View QR Code
                   </button>
                 )}
@@ -1079,20 +1076,7 @@ export const EventDetailPage: React.FC = () => {
                       onClick={() => void navigate(`/events/${eventId}/edit`)}
                       className="btn-secondary text-theme-text-secondary inline-flex items-center text-sm font-medium shadow-xs"
                     >
-                      <svg
-                        className="mr-2 h-5 w-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                        aria-hidden="true"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                        />
-                      </svg>
+                      <Pencil className="mr-2 h-5 w-5" aria-hidden="true" />
                       Edit
                     </button>
                     {!isAttendanceFinalized && (
@@ -1100,20 +1084,7 @@ export const EventDetailPage: React.FC = () => {
                         onClick={openCheckInModal}
                         className="btn-secondary text-theme-text-secondary inline-flex items-center text-sm font-medium shadow-xs"
                       >
-                        <svg
-                          className="mr-2 h-5 w-5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                          aria-hidden="true"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-                          />
-                        </svg>
+                        <ClipboardCheck className="mr-2 h-5 w-5" aria-hidden="true" />
                         Check In
                       </button>
                     )}
@@ -1180,20 +1151,7 @@ export const EventDetailPage: React.FC = () => {
                         onClick={() => setShowActionsMenu(!showActionsMenu)}
                         className="btn-secondary text-theme-text-secondary inline-flex items-center text-sm font-medium shadow-xs"
                       >
-                        <svg
-                          className="h-5 w-5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                          aria-hidden="true"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"
-                          />
-                        </svg>
+                        <EllipsisVertical className="h-5 w-5" aria-hidden="true" />
                         <span className="ml-1">More</span>
                       </button>
                       {showActionsMenu && (
@@ -1311,7 +1269,7 @@ export const EventDetailPage: React.FC = () => {
           {/* Main Content */}
           <div className="space-y-6 lg:col-span-2">
             {/* Event Details */}
-            <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+            <div className="card p-6">
               <h2 className="text-theme-text-primary mb-4 text-lg font-medium">Event Details</h2>
 
               {event.is_cancelled && (
@@ -1361,20 +1319,7 @@ export const EventDetailPage: React.FC = () => {
 
               <div className="space-y-3">
                 <div className="flex items-start">
-                  <svg
-                    className="text-theme-text-muted mr-3 h-5 w-5 shrink-0"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                    />
-                  </svg>
+                  <Calendar className="text-theme-text-muted mr-3 h-5 w-5 shrink-0" aria-hidden="true" />
                   <div>
                     <p className="text-theme-text-secondary text-sm font-medium">Date & Time</p>
                     <p className="text-theme-text-secondary text-sm">{formatDateTime(event.start_datetime, tz)}</p>
@@ -1384,26 +1329,7 @@ export const EventDetailPage: React.FC = () => {
 
                 {(event.location_name || event.location) && (
                   <div className="flex items-start">
-                    <svg
-                      className="text-theme-text-muted mr-3 h-5 w-5 shrink-0"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      aria-hidden="true"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                      />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-                      />
-                    </svg>
+                    <MapPin className="text-theme-text-muted mr-3 h-5 w-5 shrink-0" aria-hidden="true" />
                     <div>
                       <p className="text-theme-text-secondary text-sm font-medium">Location</p>
                       <p className="text-theme-text-secondary text-sm">{event.location_name || event.location}</p>
@@ -1423,23 +1349,32 @@ export const EventDetailPage: React.FC = () => {
                   </div>
                 )}
 
-                {/* Who to hand a discrepancy back to. Any officer holding
-                    events.manage can close an event, but the member who
-                    organized it is the one who reconciles its attendance, and
-                    nothing else on this page says who that was.
+                {/* Who to hand a discrepancy back to, and the way to hand the
+                    event itself to someone else. Any officer holding
+                    events.manage can close an event, but its organizer is the
+                    one who reconciles its attendance, and nothing else on this
+                    page says who that is.
 
-                    The server withholds the name from callers without
-                    events.manage, so the canManage check here only keeps it off
-                    a screen it would never be populated for anyway. Renders
-                    nothing when absent: an event predating the column, or one
-                    whose organizer has left the department, has no honest name
-                    to show, and an "Unknown" row would read as a data error. */}
-                {canManage && event.created_by_name && (
+                    The server names the pair only to a caller who may transfer
+                    the event — its organizer, its alternate or an events
+                    manager — so this row is gated on its answer, not on a
+                    permission re-derived here. */}
+                {canManageOrganizers && (
                   <div className="flex items-start">
                     <UserRound className="text-theme-text-muted mr-3 h-5 w-5 shrink-0" aria-hidden="true" />
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <p className="text-theme-text-secondary text-sm font-medium">Organized by</p>
-                      <p className="text-theme-text-secondary text-sm">{event.created_by_name}</p>
+                      <p className="text-theme-text-secondary text-sm">{event.organizer_name ?? 'No organizer set'}</p>
+                      {event.alternate_organizer_name && (
+                        <p className="text-theme-text-muted text-sm">Alternate: {event.alternate_organizer_name}</p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setShowTransferModal(true)}
+                        className="mt-1 text-sm font-medium text-blue-700 underline hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                      >
+                        Transfer event
+                      </button>
                     </div>
                   </div>
                 )}
@@ -1452,22 +1387,9 @@ export const EventDetailPage: React.FC = () => {
                 event the scheduler had touched, since its bookkeeping keys
                 count towards the length but never render. */}
             {event.custom_fields && hasVisibleCustomFields(event, trainingSessionReported) && (
-              <div className="bg-theme-surface rounded-lg border-l-4 border-purple-600 p-6 shadow-sm backdrop-blur-xs">
+              <div className="card p-6">
                 <div className="mb-4 flex items-center">
-                  <svg
-                    className="mr-2 h-6 w-6 text-purple-600"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-                    />
-                  </svg>
+                  <BookOpen className="mr-2 h-5 w-5" aria-hidden="true" />
                   <h2 className="text-theme-text-primary text-lg font-medium">
                     {event.event_type === EventTypeEnum.TRAINING ? 'Training Session Details' : 'Event Details'}
                   </h2>
@@ -1534,20 +1456,7 @@ export const EventDetailPage: React.FC = () => {
                       {event.custom_fields.issues_certification && (
                         <div className="sm:col-span-2">
                           <div className="flex items-center rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-500/30 dark:bg-green-500/10">
-                            <svg
-                              className="mr-2 h-5 w-5 text-green-600"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                              aria-hidden="true"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                              />
-                            </svg>
+                            <CheckCircle className="mr-2 h-5 w-5 text-green-600" aria-hidden="true" />
                             <span className="text-sm font-medium text-green-800 dark:text-green-400">
                               This training issues a certification upon completion
                             </span>
@@ -1558,20 +1467,7 @@ export const EventDetailPage: React.FC = () => {
                       {event.custom_fields.auto_create_records && (
                         <div className="sm:col-span-2">
                           <div className="flex items-center rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-500/30 dark:bg-blue-500/10">
-                            <svg
-                              className="mr-2 h-5 w-5 text-blue-600"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                              aria-hidden="true"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M13 10V3L4 14h7v7l9-11h-7z"
-                              />
-                            </svg>
+                            <Zap className="mr-2 h-5 w-5 text-blue-600" aria-hidden="true" />
                             <span className="text-sm font-medium text-blue-800 dark:text-blue-400">
                               Credited to members&apos; training records when attendance is finalized
                               {trainingSession?.require_completion_confirmation
@@ -1648,7 +1544,7 @@ export const EventDetailPage: React.FC = () => {
 
             {/* Linked Elections */}
             {linkedElections.length > 0 && (
-              <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+              <div className="card p-6">
                 <h2 className="text-theme-text-primary mb-4 text-lg font-medium">Linked Elections</h2>
                 <div className="space-y-3">
                   {linkedElections.map((election) => (
@@ -1679,7 +1575,7 @@ export const EventDetailPage: React.FC = () => {
 
             {/* User's RSVP Status */}
             {event.user_rsvp_status && (
-              <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+              <div className="card p-6">
                 <h2 className="text-theme-text-primary mb-4 text-lg font-medium">Your RSVP</h2>
                 <div className="flex items-center space-x-4">
                   <RSVPStatusBadge status={event.user_rsvp_status} />
@@ -1778,7 +1674,7 @@ export const EventDetailPage: React.FC = () => {
           <div className="space-y-6">
             {/* Stats */}
             {stats && (
-              <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+              <div className="card p-6">
                 <h2 className="text-theme-text-primary mb-4 text-lg font-medium">Statistics</h2>
                 <div className="space-y-3">
                   <div className="flex justify-between">
@@ -1839,7 +1735,7 @@ export const EventDetailPage: React.FC = () => {
 
             {/* Event Info */}
             {hasEventInformation && (
-              <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+              <div className="card p-6">
                 <h2 className="text-theme-text-primary mb-4 text-lg font-medium">Event Information</h2>
                 <div className="space-y-3">
                   {event.requires_rsvp && (
@@ -1956,10 +1852,24 @@ export const EventDetailPage: React.FC = () => {
           />
         )}
 
+        {showTransferModal && (
+          <EventTransferModal
+            eventId={event.id}
+            isRecurring={Boolean(event.is_recurring)}
+            currentOrganizerId={event.organizer_id ?? null}
+            currentAlternateId={event.alternate_organizer_id ?? null}
+            onClose={() => setShowTransferModal(false)}
+            onTransferred={() => {
+              setShowTransferModal(false);
+              void fetchEvent();
+            }}
+          />
+        )}
+
         {showCheckInModal && (
           <EventCheckInModal
             eligibleMembers={eligibleMembers}
-            organizerName={event.created_by_name ?? null}
+            organizerName={event.organizer_name ?? event.created_by_name ?? null}
             rsvps={rsvps}
             memberSearch={memberSearch}
             onMemberSearchChange={setMemberSearch}
@@ -2000,7 +1910,7 @@ export const EventDetailPage: React.FC = () => {
         {override.showOverrideModal && override.editingRsvp && (
           <EventOverrideAttendanceModal
             editingRsvp={override.editingRsvp}
-            organizerName={event.created_by_name ?? null}
+            organizerName={event.organizer_name ?? event.created_by_name ?? null}
             overrideCheckIn={override.overrideCheckIn}
             onOverrideCheckInChange={override.setOverrideCheckIn}
             overrideCheckOut={override.overrideCheckOut}

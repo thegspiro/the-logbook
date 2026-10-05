@@ -159,6 +159,18 @@ Requirements that members must complete.
 - `time_limit_days`: Days to complete from enrollment
 - `required_positions`: Array of positions this applies to
 
+**Grandfathering Fields** (migration `d058b5e7c1f4`):
+
+A department that changes its standard should not turn its existing roster non-compliant overnight. A member's _join date_ is their `hire_date`, or the date their account was created when no hire date is recorded (`training_compliance.member_join_date`).
+
+- `new_member_cutoff_date`: Members who joined before this date are "existing members" for the requirement. `NULL` (every pre-existing row) applies it to everyone, as before.
+- `existing_member_deadline`: With a cutoff set, `NULL` exempts existing members outright — the requirement does not appear for them anywhere. A date holds them to it, but an unmet requirement reads `catch_up` (with the deadline as its due date) and is left out of both sides of their standing (`tally_standing`) until the deadline passes.
+- `applies_to_joined_before`: Read-only. Set on the original when an edit is saved with `apply_to: "new_members_only"` (`PATCH /training/requirements/{id}`): the original keeps its standard for members who joined before `effective_date`, and a copy carrying the edit grades everyone who joined on or after it. The response is the copy. A second split of the earlier standard is refused — edit the newer copy instead. Program links stay on the original.
+
+Every screen that decides who a requirement grades goes through `requirement_applies_to_member` / `requirement_applies_to_user` with the member's join date; `tests/test_requirement_grandfathering.py` sweeps `app/` for a call that omits it. Setting or changing these dates, and every split, writes an audit event (`training_requirement_grandfathering_set`, `training_requirement_grandfathering_changed`, `training_requirement_split_for_new_members`).
+
+When a requirement is added to a training program, `apply_to_current_enrollments: false` records it as **waived** for every member already enrolled (active or on hold) instead of adding it to their progress — a missing progress row would block their phase advancement — so only later enrollees must complete it. Audited as `program_requirement_waived_for_current_enrollees`.
+
 **Due Date Configuration Fields:**
 
 - `due_date_type`: How the due date is calculated (see DueDateType enum above)
@@ -900,7 +912,7 @@ PATCH  /api/v1/training/programs/progress/{id}
 POST   /api/v1/training/shift-reports                                  # Create report
 GET    /api/v1/training/shift-reports/my-reports                       # Trainee's approved reports
 GET    /api/v1/training/shift-reports/my-stats                         # Trainee's aggregate stats
-GET    /api/v1/training/shift-reports/officer-analytics                # Org-wide analytics
+GET    /api/v1/training/shift-reports/officer-analytics                # Own analytics; ?scope=department needs training.view_analytics
 GET    /api/v1/training/shift-reports/by-officer                       # Reports filed by current officer
 GET    /api/v1/training/shift-reports/pending-review                   # Reports awaiting review
 GET    /api/v1/training/shift-reports/drafts                           # Auto-created drafts

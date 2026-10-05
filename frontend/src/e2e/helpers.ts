@@ -311,6 +311,52 @@ const eventMetricSettings = () => {
   };
 };
 
+/** Training Administration's metric choices, keyed as `admin_hub_service.py` declares them. */
+const trainingMetricSettings = () => {
+  const option = (key: string, label: string, description: string, value: string) => ({
+    key,
+    label,
+    description,
+    value,
+    unavailableReason: null,
+    fixed: false,
+  });
+  const defaults = ['compliance_rate', 'hours_this_quarter', 'active_programs'];
+  return {
+    moduleKey: 'training',
+    options: [
+      option('compliance_rate', 'Compliance', 'Share of active members current on required training', '87%'),
+      option(
+        'hours_this_quarter',
+        'Hours this quarter',
+        'Approved training hours completed since the quarter began',
+        '1,840'
+      ),
+      option('active_programs', 'Active programs', 'Training programs currently open for enrollment', '6'),
+      option(
+        'avg_hours_per_member',
+        'Avg hours / member',
+        'Rolling twelve months of approved hours per active member',
+        '31'
+      ),
+      option('certs_this_year', 'Certifications this year', 'New certifications recorded since January 1', '37'),
+      {
+        key: 'needs_attention',
+        label: 'Needs attention',
+        description: 'Items waiting on you',
+        value: '0',
+        unavailableReason: null,
+        fixed: true,
+      },
+    ],
+    selected: defaults,
+    appliesToEveryone: true,
+    isPersonal: false,
+    departmentDefault: [],
+    builtInDefault: defaults,
+  };
+};
+
 export interface MockOptions {
   /**
    * Serve empty collections everywhere so the dashboard's empty states render.
@@ -591,6 +637,31 @@ const routes = ({
   ],
   ['**/api/v1/event-requests/forms**', () => ({ forms: [], total: 0, skip: 0, limit: 50 })],
   ['**/api/v1/admin-hub/events/metrics', eventMetricSettings],
+  ['**/api/v1/admin-hub/training/metrics', trainingMetricSettings],
+  // Scheduling Notifications fails closed on a rules response that is not a
+  // list — every switch reading "off" would hide an enabled notification — so
+  // the catch-all `{}` left that settings section measuring its load-error
+  // panel instead of its switches. One enabled preset, so a switch renders on.
+  [
+    '**/api/v1/notifications/rules**',
+    () => ({
+      rules: [
+        {
+          id: 'rule-1',
+          organization_id: 'org-1',
+          name: 'New Assignment',
+          trigger: 'schedule_change',
+          category: 'scheduling',
+          channel: 'email',
+          enabled: true,
+          enforced: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      ],
+      total: 1,
+    }),
+  ],
 ];
 
 /**

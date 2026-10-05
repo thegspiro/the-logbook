@@ -327,7 +327,7 @@ function LocationSetupWizard({
               {onDismiss && (
                 <button
                   onClick={onDismiss}
-                  className="text-theme-text-muted hover:text-theme-text-primary max-md:mobile-touch-target transition-colors"
+                  className="text-theme-text-muted hover:text-theme-text-primary touch:mobile-touch-target transition-colors"
                   aria-label="Close wizard"
                 >
                   <X className="h-4 w-4" />
@@ -841,70 +841,83 @@ function RoomCard({
 
   return (
     <div className="card group flex flex-col p-3">
-      <div className="flex items-center justify-between">
-        <div className="flex min-w-0 items-center gap-3">
-          <DoorOpen className="text-theme-text-muted h-4 w-4 shrink-0" />
-          <div className="min-w-0">
-            <p className="text-theme-text-primary truncate text-sm font-medium">
-              {room.name}
-              {room.room_number ? ` #${room.room_number}` : ''}
-            </p>
-            <p className="text-theme-text-muted text-xs">
-              {[room.floor ? `Floor ${room.floor}` : null, room.capacity ? `Cap: ${room.capacity}` : null]
-                .filter(Boolean)
-                .join(' · ') || 'No details'}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-0.5">
-          {/* QR toggle stays visible at all times — it was nearly undiscoverable
-              when it only appeared on hover with the edit/delete actions */}
-          {kioskUrl && (
-            <button
-              onClick={() => setShowQR((prev) => !prev)}
-              aria-label="Toggle QR code"
-              className="text-theme-text-muted rounded-sm p-1 transition-colors hover:text-blue-500"
-              title="Show QR code"
-            >
-              <QrCode className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
-          )}
-          {(onEdit || onDelete) && (
-            <div className="flex items-center gap-0.5 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-              {onEdit && (
-                <button
-                  onClick={() => onEdit(room)}
-                  aria-label="Edit room"
-                  className="text-theme-text-muted hover:text-theme-text-primary rounded-sm p-1 transition-colors"
-                >
-                  <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-                </button>
-              )}
-              {onDelete && (
-                <button
-                  onClick={() => onDelete(room)}
-                  aria-label="Delete room"
-                  className="text-theme-text-muted rounded-sm p-1 transition-colors hover:text-red-500"
-                >
-                  <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                </button>
-              )}
-            </div>
-          )}
+      <div className="flex min-w-0 items-center gap-3">
+        <DoorOpen className="text-theme-text-muted h-4 w-4 shrink-0" />
+        <div className="min-w-0">
+          <p className="text-theme-text-primary line-clamp-2 text-sm font-medium">
+            {room.name}
+            {room.room_number ? ` #${room.room_number}` : ''}
+          </p>
+          <p className="text-theme-text-muted text-xs">
+            {[room.floor ? `Floor ${room.floor}` : null, room.capacity ? `Cap: ${room.capacity}` : null]
+              .filter(Boolean)
+              .join(' · ') || 'No details'}
+          </p>
         </div>
       </div>
-      {kioskUrl && (
-        <button
-          onClick={() => {
-            void handleCopyKioskUrl();
-          }}
-          className="text-theme-text-muted mt-2 flex items-center gap-1.5 text-xs transition-colors hover:text-blue-500"
-          title="Copy kiosk display URL for this room"
-        >
-          {copied ? <Check className="h-3 w-3 text-green-500" /> : <Monitor className="h-3 w-3" />}
-          <span className="truncate font-mono">/display/{room.display_code}</span>
-          {!copied && <Copy className="h-3 w-3 sm:opacity-0 sm:group-hover:opacity-100" />}
-        </button>
+      {/* The actions share a row with the display URL rather than the title.
+          Beside the title, three 44px touch targets would have left a 320px
+          phone's 230px room card about 80px for the room name; at their old
+          22px they fit, but were too small to hit. The row wraps rather than
+          squeezing the URL: at 320px the actions drop beneath it. */}
+      {(kioskUrl || onEdit || onDelete) && (
+        <div className="mt-2 flex flex-wrap items-center gap-1">
+          {kioskUrl && (
+            <button
+              onClick={() => {
+                void handleCopyKioskUrl();
+              }}
+              className="text-theme-text-muted touch:min-h-11 flex max-w-full items-center gap-1.5 text-xs transition-colors hover:text-blue-500"
+              title="Copy kiosk display URL for this room"
+            >
+              {copied ? (
+                <Check className="h-3 w-3 shrink-0 text-green-500" />
+              ) : (
+                <Monitor className="h-3 w-3 shrink-0" />
+              )}
+              <span className="truncate font-mono">/display/{room.display_code}</span>
+              {!copied && (
+                <Copy className="h-3 w-3 shrink-0 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100" />
+              )}
+            </button>
+          )}
+          <div className="ml-auto flex shrink-0 items-center gap-0.5">
+            {/* QR toggle stays visible at all times — it was nearly undiscoverable
+                when it only appeared on hover with the edit/delete actions */}
+            {kioskUrl && (
+              <button
+                onClick={() => setShowQR((prev) => !prev)}
+                aria-label="Toggle QR code"
+                className="text-theme-text-muted touch-target-phone rounded-sm p-1 transition-colors hover:text-blue-500"
+                title="Show QR code"
+              >
+                <QrCode className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            )}
+            {(onEdit || onDelete) && (
+              <div className="flex items-center gap-0.5 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100">
+                {onEdit && (
+                  <button
+                    onClick={() => onEdit(room)}
+                    aria-label="Edit room"
+                    className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone rounded-sm p-1 transition-colors"
+                  >
+                    <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+                )}
+                {onDelete && (
+                  <button
+                    onClick={() => onDelete(room)}
+                    aria-label="Delete room"
+                    className="text-theme-text-muted touch-target-phone rounded-sm p-1 transition-colors hover:text-red-500"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       )}
       {showQR && kioskUrl && (
         <div className="border-theme-surface-border mt-3 flex flex-col items-center gap-2 rounded-lg border bg-white p-3">
@@ -1244,7 +1257,7 @@ export default function LocationsPage() {
               onClick={() => {
                 void handleSetStationMode(isSingleStation ? 'multi_station' : 'single_station');
               }}
-              className="text-theme-text-muted hover:text-theme-text-secondary underline"
+              className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 touch:min-w-11 underline"
             >
               Change
             </button>
@@ -1255,7 +1268,7 @@ export default function LocationsPage() {
                 wizardDismissedRef.current = false;
                 setShowWizard(true);
               }}
-              className="text-theme-text-muted hover:text-theme-text-secondary underline"
+              className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 touch:min-w-11 underline"
             >
               Run Setup Wizard
             </button>
@@ -1273,7 +1286,7 @@ export default function LocationsPage() {
             onClick={() => {
               void handleSetStationMode('single_station');
             }}
-            className="text-theme-text-muted hover:text-theme-text-secondary underline"
+            className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 touch:min-w-11 underline"
           >
             Set Single-Station
           </button>
@@ -1281,7 +1294,7 @@ export default function LocationsPage() {
             onClick={() => {
               void handleSetStationMode('multi_station');
             }}
-            className="text-theme-text-muted hover:text-theme-text-secondary underline"
+            className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 touch:min-w-11 underline"
           >
             Set Multi-Station
           </button>
@@ -1291,7 +1304,7 @@ export default function LocationsPage() {
                 wizardDismissedRef.current = false;
                 setShowWizard(true);
               }}
-              className="text-theme-text-muted hover:text-theme-text-secondary underline"
+              className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 touch:min-w-11 underline"
             >
               Run Setup Wizard
             </button>
@@ -1315,7 +1328,7 @@ export default function LocationsPage() {
           {canExportQRCodes && (
             <Link
               to="/locations/qr-codes"
-              className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover hover:text-theme-text-primary flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors max-md:min-h-11"
+              className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover hover:text-theme-text-primary touch:min-h-11 flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors"
             >
               <QrCode className="h-4 w-4" aria-hidden="true" /> Check-In QR Codes
             </Link>
@@ -1409,7 +1422,7 @@ export default function LocationsPage() {
                         onClick={() => openEditStation(station)}
                         title="Edit station"
                         aria-label="Edit station"
-                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-2 transition-colors"
+                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover touch-target-phone rounded-lg p-2 transition-colors"
                       >
                         <Pencil className="h-4 w-4" aria-hidden="true" />
                       </button>
@@ -1421,14 +1434,14 @@ export default function LocationsPage() {
                         }}
                         title="Delete station"
                         aria-label="Delete station"
-                        className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-red-500/10 hover:text-red-500"
+                        className="text-theme-text-muted touch-target-phone rounded-lg p-2 transition-colors hover:bg-red-500/10 hover:text-red-500"
                       >
                         <Trash2 className="h-4 w-4" aria-hidden="true" />
                       </button>
                     )}
                     <button
                       onClick={() => toggleStation(station.name)}
-                      className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors"
+                      className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover touch:min-h-11 flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors"
                     >
                       <DoorOpen className="h-4 w-4" />
                       <span>
@@ -1447,7 +1460,7 @@ export default function LocationsPage() {
                       {canCreate && (
                         <button
                           onClick={() => openAddRoom(station.name)}
-                          className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400"
+                          className="touch:min-h-11 flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400"
                         >
                           <Plus className="h-3 w-3" /> Add Room
                         </button>
@@ -1458,7 +1471,7 @@ export default function LocationsPage() {
                         No rooms added yet. Add rooms for QR check-in and event scheduling.
                       </p>
                     ) : (
-                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                      <div className="card-grid items-start gap-2 [--card-grid-min:18rem]">
                         {stationRooms.map((room) => (
                           <RoomCard
                             key={room.id}
@@ -1485,7 +1498,7 @@ export default function LocationsPage() {
           {rooms.has('__other__') && (
             <div className="card p-5">
               <h3 className="text-theme-text-primary mb-3 text-lg font-semibold">Other Locations</h3>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="card-grid items-start gap-2 [--card-grid-min:18rem]">
                 {(rooms.get('__other__') || []).map((room) => (
                   <RoomCard
                     key={room.id}

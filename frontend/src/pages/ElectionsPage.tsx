@@ -22,6 +22,7 @@ import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
 import { getTimeRemaining, getStatusBadgeClass } from '../utils/electionHelpers';
 import { ElectionSummaryCards } from '../modules/elections/components/ElectionSummaryCards';
 import { DialogPanel } from '../components/ux/DialogPanel';
+import ElectionCloseStamp from '../components/election-detail/ElectionCloseStamp';
 
 export const ElectionsPage: React.FC = () => {
   const [elections, setElections] = useState<ElectionListItem[]>([]);
@@ -273,6 +274,20 @@ export const ElectionsPage: React.FC = () => {
     });
   };
 
+  const addedPositions = formData.positions || [];
+  const positionSuggestions = availableRanks
+    .filter((r) => !addedPositions.includes(r.display_name))
+    .filter(
+      (r) =>
+        !positionInput.trim() ||
+        r.display_name.toLowerCase().includes(positionInput.toLowerCase()) ||
+        r.rank_code.toLowerCase().includes(positionInput.toLowerCase())
+    );
+  // The listbox is open only while there is a suggestion to show; it closes on
+  // the input's blur rather than through a click-away scrim, which used to sit
+  // over the Add button and eat the first tap (W50-63).
+  const positionListboxOpen = showPositionDropdown && positionSuggestions.length > 0;
+
   const getStatusCount = (status: string): number => {
     if (status === 'all') return elections.length;
     return elections.filter((e) => e.status === status).length;
@@ -380,9 +395,9 @@ export const ElectionsPage: React.FC = () => {
               <button
                 key={status}
                 onClick={() => setStatusFilter(status)}
-                className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium max-md:min-h-[44px] ${
+                className={`touch:min-h-[44px] inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium ${
                   statusFilter === status
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-red-800 text-white'
                     : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
                 }`}
               >
@@ -390,7 +405,7 @@ export const ElectionsPage: React.FC = () => {
                 <span
                   className={`rounded-full px-1.5 py-0.5 text-xs ${
                     statusFilter === status
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-red-900 text-white'
                       : 'bg-theme-surface-secondary text-theme-text-muted'
                   }`}
                 >
@@ -472,6 +487,7 @@ export const ElectionsPage: React.FC = () => {
                                   </svg>
                                   {formatDate(election.start_date, tz)} - {formatDate(election.end_date, tz)}
                                 </span>
+                                <ElectionCloseStamp election={election} className="inline-flex items-center" />
                                 {election.total_votes !== undefined && election.total_votes > 0 && (
                                   <span className="inline-flex items-center gap-1.5">
                                     <svg
@@ -797,54 +813,39 @@ export const ElectionsPage: React.FC = () => {
                             autoComplete="off"
                             className="form-input shadow-xs"
                           />
-                          {showPositionDropdown &&
-                            (() => {
-                              const alreadyAdded = formData.positions || [];
-                              const filtered = availableRanks
-                                .filter((r) => !alreadyAdded.includes(r.display_name))
-                                .filter(
-                                  (r) =>
-                                    !positionInput.trim() ||
-                                    r.display_name.toLowerCase().includes(positionInput.toLowerCase()) ||
-                                    r.rank_code.toLowerCase().includes(positionInput.toLowerCase())
-                                );
-                              if (filtered.length === 0) return null;
-                              return (
-                                <ul
-                                  className="popover-panel absolute z-20 mt-1 max-h-48 w-full overflow-auto"
-                                  role="listbox"
-                                  aria-label="Available positions"
-                                >
-                                  {filtered.map((rank) => (
-                                    <li key={rank.id}>
-                                      <button
-                                        type="button"
-                                        role="option"
-                                        className="hover:bg-theme-surface-hover text-theme-text-primary w-full cursor-pointer px-3 py-2 text-left text-sm"
-                                        onMouseDown={(e) => {
-                                          e.preventDefault(); // Prevent input blur before click
-                                          setPositionInput('');
-                                          setShowPositionDropdown(false);
-                                          if (!alreadyAdded.includes(rank.display_name)) {
-                                            setFormData({
-                                              ...formData,
-                                              positions: [...alreadyAdded, rank.display_name],
-                                            });
-                                          }
-                                        }}
-                                      >
-                                        <span className="font-medium">{rank.display_name}</span>
-                                        {rank.description && (
-                                          <span className="text-theme-text-muted ml-2 text-xs">
-                                            — {rank.description}
-                                          </span>
-                                        )}
-                                      </button>
-                                    </li>
-                                  ))}
-                                </ul>
-                              );
-                            })()}
+                          {positionListboxOpen && (
+                            <ul
+                              className="popover-panel absolute z-20 mt-1 max-h-48 w-full overflow-auto"
+                              role="listbox"
+                              aria-label="Available positions"
+                            >
+                              {positionSuggestions.map((rank) => (
+                                <li key={rank.id}>
+                                  <button
+                                    type="button"
+                                    role="option"
+                                    className="hover:bg-theme-surface-hover text-theme-text-primary w-full cursor-pointer px-3 py-2 text-left text-sm"
+                                    onMouseDown={(e) => {
+                                      e.preventDefault(); // Prevent input blur before click
+                                      setPositionInput('');
+                                      setShowPositionDropdown(false);
+                                      if (!addedPositions.includes(rank.display_name)) {
+                                        setFormData({
+                                          ...formData,
+                                          positions: [...addedPositions, rank.display_name],
+                                        });
+                                      }
+                                    }}
+                                  >
+                                    <span className="font-medium">{rank.display_name}</span>
+                                    {rank.description && (
+                                      <span className="text-theme-text-muted ml-2 text-xs">— {rank.description}</span>
+                                    )}
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
                         </div>
                         <button
                           type="button"

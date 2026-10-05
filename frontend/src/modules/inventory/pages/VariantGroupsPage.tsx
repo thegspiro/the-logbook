@@ -351,7 +351,7 @@ const VariantGroupsPage: React.FC = () => {
 
       <Link
         to="/inventory/admin"
-        className="text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1 text-sm"
+        className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 flex items-center gap-1 text-sm"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Admin
@@ -363,8 +363,8 @@ const VariantGroupsPage: React.FC = () => {
           <h1 className="text-theme-text-primary text-2xl font-bold">Variant Groups</h1>
           <p className="text-theme-text-secondary mt-1">Group pool item variants by size, style, and color.</p>
         </div>
-        <div className="flex items-center gap-3">
-          <label className="text-theme-text-secondary flex cursor-pointer items-center gap-2 text-sm">
+        <div className="flex shrink-0 items-center gap-3 whitespace-nowrap">
+          <label className="text-theme-text-secondary touch:min-h-11 flex cursor-pointer items-center gap-2 text-sm">
             <input
               type="checkbox"
               checked={showInactive}
@@ -399,45 +399,16 @@ const VariantGroupsPage: React.FC = () => {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="card-grid gap-4">
           {groups.map((group) => (
             <div key={group.id} className={`card-secondary flex flex-col p-5 ${!group.active ? 'opacity-60' : ''}`}>
-              <div className="mb-3 flex items-start justify-between">
-                <div className="flex min-w-0 items-center gap-2.5">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-teal-500/10">
-                    <Ruler className="h-4 w-4 text-teal-500" />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="text-theme-text-primary line-clamp-2 font-semibold">{group.name}</h3>
-                    {!group.active && <span className="text-theme-text-muted text-xs">Inactive</span>}
-                  </div>
+              <div className="mb-3 flex min-w-0 items-center gap-2.5">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-teal-500/10">
+                  <Ruler className="h-4 w-4 text-teal-500" />
                 </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  <button
-                    onClick={() => void openDetailModal(group)}
-                    aria-label={`View ${group.name}`}
-                    className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-md p-1.5 transition-colors"
-                  >
-                    <Eye className="h-4 w-4" />
-                  </button>
-                  {canManage && (
-                    <>
-                      <button
-                        onClick={() => openEditModal(group)}
-                        aria-label={`Edit ${group.name}`}
-                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-md p-1.5 transition-colors"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => void toggleActive(group)}
-                        aria-label={group.active ? `Deactivate ${group.name}` : `Activate ${group.name}`}
-                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-md p-1.5 transition-colors"
-                      >
-                        {group.active ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </>
-                  )}
+                <div className="min-w-0">
+                  <h3 className="text-theme-text-primary line-clamp-2 font-semibold">{group.name}</h3>
+                  {!group.active && <span className="text-theme-text-muted text-xs">Inactive</span>}
                 </div>
               </div>
 
@@ -452,6 +423,8 @@ const VariantGroupsPage: React.FC = () => {
                 <p className="text-theme-text-secondary mb-3 line-clamp-2 text-sm">{group.description}</p>
               )}
 
+              {/* Actions share the footer with the stats, for the reason given on
+                  the kits card: beside the title they clamped it to two words. */}
               <div className="text-theme-text-muted border-theme-surface-border mt-auto flex flex-wrap items-center gap-3 border-t pt-2 text-xs">
                 {group.base_price != null && (
                   <span className="inline-flex items-center gap-1">
@@ -480,6 +453,33 @@ const VariantGroupsPage: React.FC = () => {
                       </span>
                     ) : null;
                   })()}
+                <div className="ml-auto flex shrink-0 items-center gap-1">
+                  <button
+                    onClick={() => void openDetailModal(group)}
+                    aria-label={`View ${group.name}`}
+                    className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover touch-target-phone rounded-md p-1.5 transition-colors"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </button>
+                  {canManage && (
+                    <>
+                      <button
+                        onClick={() => openEditModal(group)}
+                        aria-label={`Edit ${group.name}`}
+                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover touch-target-phone rounded-md p-1.5 transition-colors"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => void toggleActive(group)}
+                        aria-label={group.active ? `Deactivate ${group.name}` : `Activate ${group.name}`}
+                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover touch-target-phone rounded-md p-1.5 transition-colors"
+                      >
+                        {group.active ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           ))}

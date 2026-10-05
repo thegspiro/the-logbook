@@ -59,7 +59,7 @@ export const StoreCatalogTab: React.FC = () => {
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+        <label className="text-theme-text-secondary touch:min-h-11 flex items-center gap-2 text-sm">
           <input
             type="checkbox"
             className="form-checkbox"
@@ -92,7 +92,7 @@ export const StoreCatalogTab: React.FC = () => {
           description="Add the shirts, coins, or gear the department sells to members."
         />
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="card-grid gap-3">
           {products.map((product) => (
             <div key={product.id} className="card-secondary p-4">
               <div className="flex items-start justify-between gap-2">

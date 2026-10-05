@@ -29,7 +29,7 @@ import toast from 'react-hot-toast';
 import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
 import type { FleetApparatusReadiness, FleetReadinessResponse } from '../../../modules/inventory/types/equipmentCheck';
 import type { ActiveChecklistRecord } from '../services/equipmentCheckApi';
-import { READINESS_LABELS } from '../../../modules/inventory/types/equipmentCheck';
+import { READINESS_LABELS, isChecklistSubmitted } from '../../../modules/inventory/types/equipmentCheck';
 import {
   OUTCOME_LEGEND,
   OUTCOME_SWATCH,
@@ -97,9 +97,12 @@ export const FleetBoardPage: React.FC = () => {
 
   useRegisterPullToRefresh(load);
 
-  /** Checks owed now, worst first — the strip only ever shows what is late or due. */
+  /** Checks owed now, worst first — the strip only ever shows what is late or due.
+   *  A filed check is not owed, whatever its date: My Checklists already says
+   *  "Submitted for this shift" for it, and this strip must not disagree. */
   const owed = useMemo(() => {
     return mine
+      .filter((c) => !isChecklistSubmitted(c.status))
       .map((c) => ({ checklist: c, days: calendarDaysFromToday(c.shiftDate, tz) }))
       .filter(({ days }) => days !== null && days <= 0)
       .sort((a, b) => (a.days ?? 0) - (b.days ?? 0));

@@ -30,7 +30,7 @@ import {
 import toast from 'react-hot-toast';
 import { trainingModuleConfigService } from '../services/api';
 import { DateRangePicker } from '../components/ux/DateRangePicker';
-import { formatDate, getTodayLocalDate, toLocalDateString } from '../utils/dateFormatting';
+import { formatCalendarDate, formatDate, getTodayLocalDate, toLocalDateString } from '../utils/dateFormatting';
 import { formatHours } from '../utils/hoursFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { SubmissionStatus } from '../constants/enums';
@@ -655,12 +655,12 @@ const MyTrainingPage: React.FC = () => {
               against the training you are required to complete.
             </p>
           </div>
-          <div className="flex items-center space-x-3">
+          <div className="flex shrink-0 items-center space-x-3">
             <button
               onClick={() => void navigate('/training/submit')}
-              className="btn-primary flex items-center space-x-2 text-sm font-medium"
+              className="btn-primary flex items-center space-x-2 text-sm font-medium whitespace-nowrap"
             >
-              <Send className="h-4 w-4" />
+              <Send className="h-4 w-4 shrink-0" />
               <span>Submit Training</span>
             </button>
           </div>
@@ -672,7 +672,7 @@ const MyTrainingPage: React.FC = () => {
         <div className="hscroll mb-6 flex gap-2">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors max-md:min-h-[44px] ${
+            className={`touch:min-h-[44px] rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
               tab === 'overview'
                 ? 'bg-red-800 text-white'
                 : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
@@ -682,7 +682,7 @@ const MyTrainingPage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('settings')}
-            className={`flex items-center space-x-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors max-md:min-h-[44px] ${
+            className={`touch:min-h-[44px] flex items-center space-x-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
               tab === 'settings'
                 ? 'bg-red-800 text-white'
                 : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
@@ -863,6 +863,17 @@ const MyTrainingPage: React.FC = () => {
                           </div>
                         )}
 
+                        {/* Existing member inside the requirement's catch-up period */}
+                        {req.catch_up_deadline && !req.is_met && (
+                          <div className="mb-2 rounded-sm border border-blue-500/20 bg-blue-500/10 px-2 py-1">
+                            <p className="text-xs text-blue-700 dark:text-blue-300">
+                              You joined before this requirement took effect. You have until{' '}
+                              {formatCalendarDate(req.catch_up_deadline)} to complete it, and it won&rsquo;t count
+                              against your compliance before then.
+                            </p>
+                          </div>
+                        )}
+
                         {/* Waiver adjustment notice */}
                         {req.waived_months != null && req.waived_months > 0 && (
                           <div className="mb-2 rounded-sm border border-blue-500/20 bg-blue-500/10 px-2 py-1">
@@ -888,6 +899,8 @@ const MyTrainingPage: React.FC = () => {
                           <div className="flex items-center space-x-2">
                             {req.is_met ? (
                               <span className="text-green-700 dark:text-green-400">Complete</span>
+                            ) : req.catch_up_deadline ? (
+                              <span>Due by {formatCalendarDate(req.catch_up_deadline)}</span>
                             ) : req.cert_expired ? (
                               <span className="font-medium text-red-700 dark:text-red-400">Expired — Renew ASAP</span>
                             ) : isOverdue ? (

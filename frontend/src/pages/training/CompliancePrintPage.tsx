@@ -23,6 +23,9 @@ const cellMark = (status: string | undefined): string => {
   if (status === 'completed') return '✓';
   if (status === 'in_progress') return '◐';
   if (status === 'expired') return 'Exp';
+  // An existing member inside the requirement's catch-up period: not yet held
+  // against them, so it must not print as a failure.
+  if (status === 'catch_up') return 'Due';
   return '✗';
 };
 
@@ -197,7 +200,8 @@ const CompliancePrintPage: React.FC = () => {
             </tbody>
           </table>
           <p style={{ margin: '4pt 0 0', fontSize: '7.5pt', color: '#555' }}>
-            ✓ met · ◐ in progress · ✗ not started · Exp expired · — does not apply to this member
+            ✓ met · ◐ in progress · ✗ not started · Exp expired · Due existing member, before their catch-up deadline ·
+            — does not apply to this member
           </p>
 
           {/* Signature Block */}

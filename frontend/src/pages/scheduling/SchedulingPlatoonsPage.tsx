@@ -121,7 +121,7 @@ const SchedulingPlatoonsPage: React.FC = () => {
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
                 disabled={saving || selected.size === 0}
-                className="form-input disabled:opacity-50"
+                className="form-input w-auto min-w-40 disabled:opacity-50"
               >
                 {platoonOptions.map((p) => (
                   <option key={p} value={p}>
@@ -132,21 +132,21 @@ const SchedulingPlatoonsPage: React.FC = () => {
               <button
                 onClick={() => void assign(target)}
                 disabled={saving || selected.size === 0}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
               >
                 {saving && <Loader2 className="h-4 w-4 animate-spin" />} Assign to platoon
               </button>
               <button
                 onClick={() => void assign(null)}
                 disabled={saving || selected.size === 0}
-                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm disabled:opacity-50"
+                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-11 rounded-lg border px-4 py-2 text-sm disabled:opacity-50"
               >
                 Clear platoon
               </button>
             </div>
 
             {/* Platoon group cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="card-grid gap-4">
               {overview.groups.map((group) => {
                 const key = group.platoon ?? '__unassigned__';
                 return (
@@ -165,7 +165,7 @@ const SchedulingPlatoonsPage: React.FC = () => {
                       <ul className="divide-theme-surface-border divide-y">
                         {group.members.map((m) => (
                           <li key={m.user_id}>
-                            <label className="hover:bg-theme-surface-hover flex cursor-pointer items-center gap-3 px-4 py-2.5">
+                            <label className="hover:bg-theme-surface-hover mobile-touch-row cursor-pointer gap-3 px-4 py-2.5">
                               <input
                                 type="checkbox"
                                 checked={selected.has(m.user_id)}

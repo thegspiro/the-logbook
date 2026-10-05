@@ -175,14 +175,18 @@ function QRCard({
     <div
       className={`card flex flex-col items-center text-center print:border-gray-300 ${isSign ? 'qr-sign p-8' : 'qr-card p-4'}`}
     >
-      <div className={`flex items-center gap-1.5 ${isSign ? 'mb-1' : 'mb-2'}`}>
-        <Icon className="text-theme-text-muted h-4 w-4 shrink-0 print:hidden" aria-hidden="true" />
-        <h3
-          className={`text-theme-text-primary font-semibold print:text-black ${isSign ? 'text-3xl font-bold' : 'text-sm'}`}
-        >
-          {title}
-        </h3>
-      </div>
+      {/* The icon is inline in the heading rather than a flex sibling, so a
+          title that wraps keeps it beside its first line instead of leaving it
+          stranded at the left edge of a centred block. */}
+      <h3
+        className={`text-theme-text-primary font-semibold print:text-black ${isSign ? 'mb-1 text-3xl font-bold' : 'mb-2 text-sm'}`}
+      >
+        <Icon
+          className="text-theme-text-muted mr-1.5 inline h-4 w-4 align-[-0.125em] print:hidden"
+          aria-hidden="true"
+        />
+        {title}
+      </h3>
       {isSign && subtitle && <p className="text-theme-text-secondary mb-4 text-lg print:text-black">{subtitle}</p>}
       {/* bg-white intentional for QR code readability in dark mode */}
       <div ref={qrContainerRef} className="rounded-lg bg-white p-2">
@@ -198,7 +202,7 @@ function QRCard({
           onClick={() => {
             void handleCopy();
           }}
-          className="text-theme-text-muted flex items-center gap-1.5 text-xs transition-colors hover:text-blue-500 max-md:min-h-11"
+          className="text-theme-text-muted touch:min-h-11 flex items-center gap-1.5 text-xs transition-colors hover:text-blue-500"
         >
           {copied ? (
             <Check className="h-3 w-3 text-green-500" aria-hidden="true" />
@@ -209,7 +213,7 @@ function QRCard({
         </button>
         <button
           onClick={handleDownload}
-          className="text-theme-text-muted flex items-center gap-1.5 text-xs transition-colors hover:text-blue-500 max-md:min-h-11"
+          className="text-theme-text-muted touch:min-h-11 flex items-center gap-1.5 text-xs transition-colors hover:text-blue-500"
         >
           <Download className="h-3 w-3" aria-hidden="true" />
           Download PNG
@@ -223,7 +227,7 @@ function QRCard({
             }}
             disabled={isRegenerating}
             title="Generate a new code — the current QR code stops working"
-            className="text-theme-text-muted flex items-center gap-1.5 text-xs transition-colors hover:text-red-500 disabled:opacity-50 max-md:min-h-11"
+            className="text-theme-text-muted touch:min-h-11 flex items-center gap-1.5 text-xs transition-colors hover:text-red-500 disabled:opacity-50"
           >
             <RefreshCw className={`h-3 w-3 ${isRegenerating ? 'animate-spin' : ''}`} aria-hidden="true" />
             Regenerate
@@ -284,7 +288,7 @@ function BadgeCheckInSwitch({
         setSaving(true);
         void onToggle(location).finally(() => setSaving(false));
       }}
-      className="text-theme-text-muted flex items-center gap-1.5 text-xs max-md:min-h-11"
+      className="text-theme-text-muted touch:min-h-11 flex items-center gap-1.5 text-xs"
     >
       <span className={`toggle-track-sm ${on ? 'bg-green-700' : 'bg-theme-surface-border'}`}>
         <span className={`toggle-knob-sm ${on ? 'translate-x-6' : 'translate-x-1'}`} />
@@ -504,7 +508,7 @@ export default function RoomQRCodesPage() {
       <div className="no-print">
         <Link
           to="/locations"
-          className="text-theme-text-muted hover:text-theme-text-primary mb-2 inline-flex items-center gap-1.5 text-sm transition-colors max-md:min-h-11"
+          className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 mb-2 inline-flex items-center gap-1.5 text-sm transition-colors"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to Locations
         </Link>
@@ -546,7 +550,7 @@ export default function RoomQRCodesPage() {
             <button
               onClick={() => setLayout('grid')}
               aria-pressed={layout === 'grid'}
-              className={`flex items-center gap-1.5 px-3 py-2 transition-colors max-md:min-h-11 ${
+              className={`touch:min-h-11 flex items-center gap-1.5 px-3 py-2 transition-colors ${
                 layout === 'grid'
                   ? 'bg-theme-surface-hover text-theme-text-primary font-medium'
                   : 'text-theme-text-muted hover:text-theme-text-primary'
@@ -557,7 +561,7 @@ export default function RoomQRCodesPage() {
             <button
               onClick={() => setLayout('signs')}
               aria-pressed={layout === 'signs'}
-              className={`border-theme-surface-border flex items-center gap-1.5 border-l px-3 py-2 transition-colors max-md:min-h-11 ${
+              className={`border-theme-surface-border touch:min-h-11 flex items-center gap-1.5 border-l px-3 py-2 transition-colors ${
                 layout === 'signs'
                   ? 'bg-theme-surface-hover text-theme-text-primary font-medium'
                   : 'text-theme-text-muted hover:text-theme-text-primary'
@@ -623,7 +627,7 @@ export default function RoomQRCodesPage() {
                 <Building2 className="h-5 w-5 text-red-500 print:hidden" aria-hidden="true" />
                 {group.name}
               </h2>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 print:grid-cols-2">
+              <div className="card-grid gap-4 print:grid-cols-2">
                 {group.locations.map((location) => (
                   <QRCard
                     key={location.id}
@@ -646,7 +650,7 @@ export default function RoomQRCodesPage() {
                 Permanent codes — scanning resolves the apparatus's active shift, so one printed card covers every
                 shift.
               </p>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 print:grid-cols-2">
+              <div className="card-grid gap-4 print:grid-cols-2">
                 {filteredApparatus.map((a) => (
                   <QRCard key={a.id} {...apparatusCardProps(a)} nfcUrl={apparatusTagUrl(a)} />
                 ))}

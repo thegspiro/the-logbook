@@ -30,6 +30,7 @@ import {
   X,
 } from 'lucide-react';
 import { getErrorMessage } from '../utils/errorHandling';
+import { asArray } from '../utils/asArray';
 import toast from 'react-hot-toast';
 import { formatDate, formatDateCustom } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
@@ -153,6 +154,14 @@ export default function ComplianceRequirementsConfigPage() {
   const loadConfig = useCallback(async () => {
     try {
       const data = await complianceConfigService.getConfig();
+      // null is a department that has never saved a config, and the defaults
+      // above apply. A body that is not a config (a captive portal's HTML page)
+      // is a failed load: setting from it filled every field with undefined,
+      // so the preview read "Compliant: ≥ undefined%" and the Profiles tab
+      // crashed on `config.profiles.map`.
+      if (data !== null && (typeof data.compliantThreshold !== 'number' || !Array.isArray(data.profiles))) {
+        throw new TypeError('The compliance config response was not a config');
+      }
       setConfig(data);
       if (data) {
         setThresholdType(data.thresholdType);
@@ -180,7 +189,7 @@ export default function ComplianceRequirementsConfigPage() {
   const loadRequirements = useCallback(async () => {
     try {
       const data = await complianceConfigService.getAvailableRequirements();
-      setRequirements(data.requirements);
+      setRequirements(asArray(data.requirements));
     } catch {
       // Non-critical — requirements list may be empty
     }
@@ -189,8 +198,9 @@ export default function ComplianceRequirementsConfigPage() {
   const loadReports = useCallback(async () => {
     try {
       const data = await complianceConfigService.listReports({ limit: 20 });
-      setReports(data.reports);
-      setReportsTotal(data.total);
+      const list = asArray(data.reports);
+      setReports(list);
+      setReportsTotal(typeof data.total === 'number' ? data.total : list.length);
     } catch {
       toast.error('Failed to load reports');
     }
@@ -503,14 +513,19 @@ export default function ComplianceRequirementsConfigPage() {
       </div>
 
       {/* Tabs */}
-      <div className="segmented-group hscroll flex gap-1">
+      {/* Scrolls sideways on a phone: four labelled tabs do not fit 320px. */}
+      <div
+        className="segmented-group hscroll flex gap-1"
+        aria-label="Compliance configuration sections"
+        data-mobile-scroll-region
+      >
         {tabs.map((tab: { id: ActiveTab; label: string; icon: ReactElement }) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             aria-pressed={activeTab === tab.id}
-            className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === tab.id ? 'bg-blue-600 text-white' : 'text-theme-text-secondary hover:bg-theme-surface-hover'
+            className={`touch-target-phone flex shrink-0 items-center gap-2 rounded-md px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
+              activeTab === tab.id ? 'bg-red-800 text-white' : 'text-theme-text-secondary hover:bg-theme-surface-hover'
             }`}
           >
             {tab.icon}
@@ -565,7 +580,7 @@ export default function ComplianceRequirementsConfigPage() {
                   />
                   <p className="text-theme-text-secondary mt-1 text-xs">
                     Members at or above this percentage are marked{' '}
-                    <span className="font-medium text-green-600">compliant</span>
+                    <span className="font-medium text-green-800 dark:text-green-400">compliant</span>
                   </p>
                 </div>
 
@@ -584,8 +599,8 @@ export default function ComplianceRequirementsConfigPage() {
                   />
                   <p className="text-theme-text-secondary mt-1 text-xs">
                     Members between this and the compliant threshold are{' '}
-                    <span className="font-medium text-yellow-600">at risk</span>. Below this ={' '}
-                    <span className="font-medium text-red-600">non-compliant</span>
+                    <span className="font-medium text-amber-800 dark:text-amber-400">at risk</span>. Below this ={' '}
+                    <span className="font-medium text-red-800 dark:text-red-400">non-compliant</span>
                   </p>
                 </div>
               </>
@@ -624,7 +639,7 @@ export default function ComplianceRequirementsConfigPage() {
 
             <div className="md:col-span-2">
               <label className={labelClass}>Evaluation Period</label>
-              <label className="mt-1 flex items-start gap-2">
+              <label className="mobile-touch-target mt-1 flex items-start justify-start gap-2">
                 <input
                   type="checkbox"
                   className={`${checkboxClass} mt-0.5`}
@@ -683,7 +698,7 @@ export default function ComplianceRequirementsConfigPage() {
               become non-compliant.
             </p>
             <div className="space-y-3">
-              <label className="flex items-center gap-2">
+              <label className="mobile-touch-target flex items-center justify-start gap-2">
                 <input
                   type="checkbox"
                   className={checkboxClass}
@@ -716,7 +731,7 @@ export default function ComplianceRequirementsConfigPage() {
             <button
               onClick={() => void handleSaveConfig()}
               disabled={isSaving}
-              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              className="flex min-h-11 items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900 disabled:opacity-50"
             >
               <Save className="h-4 w-4" />
               {isSaving ? 'Saving...' : 'Save Configuration'}
@@ -738,7 +753,7 @@ export default function ComplianceRequirementsConfigPage() {
                   resetProfileForm();
                   setShowProfileForm(true);
                 }}
-                className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                className="flex items-center gap-2 rounded-lg bg-red-800 px-3 py-2 text-sm font-medium text-white hover:bg-red-900"
               >
                 <Plus className="h-4 w-4" />
                 Add Profile
@@ -822,7 +837,7 @@ export default function ComplianceRequirementsConfigPage() {
                         onClick={() => toggleMembershipType(type)}
                         className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                           profileMembershipTypes.includes(type)
-                            ? 'bg-blue-600 text-white'
+                            ? 'bg-red-800 text-white'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
                         }`}
                       >
@@ -880,7 +895,7 @@ export default function ComplianceRequirementsConfigPage() {
                       {requirements.map((req: AvailableRequirement) => (
                         <label
                           key={req.id}
-                          className="hover:bg-theme-surface-hover flex items-center gap-2 rounded p-1"
+                          className="hover:bg-theme-surface-hover mobile-touch-target flex items-center justify-start gap-2 rounded p-1"
                         >
                           <input
                             type="checkbox"
@@ -912,7 +927,7 @@ export default function ComplianceRequirementsConfigPage() {
                         .map((req: AvailableRequirement) => (
                           <label
                             key={req.id}
-                            className="hover:bg-theme-surface-hover flex items-center gap-2 rounded p-1"
+                            className="hover:bg-theme-surface-hover mobile-touch-target flex items-center justify-start gap-2 rounded p-1"
                           >
                             <input
                               type="checkbox"
@@ -1031,7 +1046,7 @@ export default function ComplianceRequirementsConfigPage() {
                 <button
                   onClick={() => void handleSaveProfile()}
                   disabled={isSaving}
-                  className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                  className="flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900 disabled:opacity-50"
                 >
                   <Save className="h-4 w-4" />
                   {isSaving ? 'Saving...' : editingProfileId ? 'Update Profile' : 'Create Profile'}
@@ -1063,14 +1078,14 @@ export default function ComplianceRequirementsConfigPage() {
                 <div className="flex gap-1">
                   <button
                     onClick={() => startEditProfile(profile)}
-                    className="text-theme-text-secondary hover:bg-theme-surface-hover rounded p-1"
+                    className="btn-icon text-theme-text-secondary hover:bg-theme-surface-hover"
                     title="Edit"
                   >
                     <Settings className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => void handleDeleteProfile(profile.id)}
-                    className="rounded p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                    className="btn-icon text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
                     title="Delete"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -1239,7 +1254,7 @@ export default function ComplianceRequirementsConfigPage() {
             <button
               onClick={() => void handleSaveConfig()}
               disabled={isSaving}
-              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              className="flex min-h-11 items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900 disabled:opacity-50"
             >
               <Save className="h-4 w-4" />
               {isSaving ? 'Saving...' : 'Save Schedule'}
@@ -1315,7 +1330,7 @@ export default function ComplianceRequirementsConfigPage() {
                     </div>
                   )}
                   <div>
-                    <label className="flex items-center gap-2 pt-7">
+                    <label className="mobile-touch-target flex items-center justify-start gap-2 pt-7">
                       <input
                         type="checkbox"
                         className={checkboxClass}
@@ -1363,7 +1378,7 @@ export default function ComplianceRequirementsConfigPage() {
               <h2 className="text-theme-text-primary text-lg font-semibold">Report History ({reportsTotal})</h2>
               <button
                 onClick={() => void loadReports()}
-                className="text-theme-text-secondary hover:bg-theme-surface-hover rounded p-1"
+                className="btn-icon text-theme-text-secondary hover:bg-theme-surface-hover"
                 title="Refresh"
               >
                 <RefreshCw className="h-4 w-4" />
@@ -1424,7 +1439,7 @@ export default function ComplianceRequirementsConfigPage() {
                           </p>
                         )}
                         {report.errorMessage && (
-                          <p className="mt-1 text-xs text-red-600">Error: {report.errorMessage}</p>
+                          <p className="mt-1 text-xs text-red-800 dark:text-red-400">Error: {report.errorMessage}</p>
                         )}
                       </div>
                     </div>
@@ -1491,7 +1506,7 @@ export default function ComplianceRequirementsConfigPage() {
               </button>
               <button
                 onClick={() => void handleEmailReport()}
-                className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                className="flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900"
               >
                 <Send className="h-4 w-4" />
                 Send

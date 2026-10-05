@@ -591,6 +591,26 @@ class TrainingRequirement(Base):
         JSON
     )  # List of MembershipType values this applies to (e.g. ["active", "administrative"])
 
+    # Grandfathering. A department that changes its standard must not turn its
+    # existing roster non-compliant overnight, so a requirement can separate
+    # the members who joined before a cutoff from those who joined after it.
+    # A member's join date is their hire_date, else the date their account was
+    # created (see training_compliance.member_join_date).
+    #
+    #   new_member_cutoff_date NULL       -> applies to everyone (prior behavior)
+    #   cutoff set, deadline NULL         -> members who joined before the
+    #                                        cutoff are exempt
+    #   cutoff set, deadline set          -> members who joined before the
+    #                                        cutoff must meet it by the deadline,
+    #                                        and an unmet one does not count
+    #                                        against them until it passes
+    new_member_cutoff_date = Column(Date, nullable=True)
+    existing_member_deadline = Column(Date, nullable=True)
+    # Upper bound, set on the original when an edit is saved for "new members
+    # only": the original keeps grading members who joined before this date,
+    # and a copy carrying the new standard grades everyone who joined after.
+    applies_to_joined_before = Column(Date, nullable=True)
+
     # Deadlines
     start_date = Column(Date)
     due_date = Column(Date)

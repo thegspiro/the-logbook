@@ -412,7 +412,7 @@ const Members: React.FC = () => {
               <div className="flex w-full items-center space-x-2 sm:space-x-3 md:w-auto">
                 <button
                   onClick={() => void navigate('/members/import')}
-                  className="flex flex-1 items-center justify-center space-x-2 rounded-lg bg-purple-600 px-3 py-2 text-white transition-colors hover:bg-purple-700 max-md:min-h-[44px] sm:px-4 md:flex-none"
+                  className="touch:min-h-[44px] flex flex-1 items-center justify-center space-x-2 rounded-lg bg-purple-600 px-3 py-2 text-white transition-colors hover:bg-purple-700 sm:px-4 md:flex-none"
                 >
                   <Upload className="h-4 w-4" />
                   <span className="hidden sm:inline">Import CSV</span>
@@ -582,7 +582,7 @@ const Members: React.FC = () => {
                   </button>
                   <button
                     onClick={handleExportCSV}
-                    className="inline-flex items-center gap-1 rounded-sm bg-blue-600 px-3 py-1.5 text-xs text-white transition-colors hover:bg-blue-700"
+                    className="inline-flex items-center gap-1 rounded-sm bg-red-800 px-3 py-1.5 text-xs text-white transition-colors hover:bg-red-900"
                   >
                     <Download className="h-3 w-3" />
                     Export Selected

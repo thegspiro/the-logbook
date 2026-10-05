@@ -1,6 +1,216 @@
 # Security Review — Integrations
 
-**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-09-13 (pass 4, rotation pass 4), 2026-09-06 (pass 3, rotation pass 3), 2026-08-31 (pass 2, rotation pass 2) · **PR:** #2508 (pass 4); #2307 (pass 3); #2087 (pass 2, merged); #1910 (pass 1, merged)
+**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-10-04 (pass 5, rotation pass 5), 2026-09-13 (pass 4, rotation pass 4), 2026-09-06 (pass 3, rotation pass 3), 2026-08-31 (pass 2, rotation pass 2) · **PR:** #2892 (pass 5); #2508 (pass 4); #2307 (pass 3); #2087 (pass 2, merged); #1910 (pass 1, merged)
+
+---
+
+## Pass 5 (2026-10-04) — watchdog pickup; 0 fixes, 0 new findings; MCP write-tool surface reviewed per Feature 23's cross-reference
+
+Watchdog pickup: confirmed via `list_pull_requests` (state=open) that no PR
+whose head branch starts with `claude/security-review-` existed before
+starting, and the two most recent rotation PRs (#2885 Feature 26 Forms pass
+5, #2886 an unrelated fix) were already merged.
+
+**Backend, read in full:** `app/api/v1/endpoints/integrations.py` (849 L, 7
+routes), `salesforce_sync.py` (585 L, 9 routes), `calcom_sync.py` (73 L, 1
+route), `mcp_keys.py` (244 L, 4 routes), `app/api/public/integrations_webhook.py`
+(258 L), `salesforce_webhook.py` (246 L), `paypal_webhook.py` (153 L),
+`models/integration.py`, `schemas/integration.py` (now 331 L — the +28 lines
+since pass 4 are comments/docstrings only, confirmed by direct read, not a
+functional change). **Spot-verified against pass 4's documented state rather
+than re-read line-by-line** (file sizes and `git log --since` confirmed no
+commit touched them between 2026-09-13 and today): every
+`integration_services/*` file, `app/mcp/registry.py`, `app/mcp/principal.py`,
+`app/mcp/keys.py`. **Read for the first time this pass, per the MCP
+write-surface scope Feature 23 (pass 12, 2026-10-03) deferred here:**
+`app/mcp/tools/writes.py` (all three write tools) and the service methods
+each one calls into (`InventoryService.create_reorder_request` +
+`_assert_reorder_fks_in_org`, `MeetingsService.create_action_item`,
+`EventService.create_event`), `app/mcp/registry.py`'s gating/audit wrapper in
+full.
+**Frontend:** `pages/IntegrationsPage.tsx` (2082 L — re-read the Salesforce
+config branch and the two commits that touched this file since pass 4;
+both are copy-only, confirmed by diff), `hooks/useConnectedIntegrations.ts`
+(re-read; the one change since pass 4, W07-1's module-disabled guard, is a
+client-side UX fix with no data-exposure effect), `components/integrations/McpServiceKeyPanel.tsx`
+(read in full for the first time this pass — no prior pass's file list named
+it explicitly, though pass 4's frontend read covered the page that renders
+it).
+**Migrations:** none this pass (509 revisions, single head, unchanged).
+
+### Scope
+
+Three weeks have passed since pass 4 (2026-09-13). `git log --since
+2026-09-13` against every file this feature owns turned up only three
+commits: two frontend copy/styling changes to `IntegrationsPage.tsx`
+(toast wording, a shared `card-grid` utility — read both diffs in full,
+neither touches a config field, a permission, or a validator) and one
+merge commit whose diff stat against `integration_services/*` is the same
+"unrelated `git log` artifact of this environment's squashed history" pass
+4 already documented for `integrations.py` (confirmed by re-reading every
+file the stat listed; content identical to pass 4's). So this pass's
+contribution is (a) re-verifying every standing finding directly against
+current code rather than trusting the diff-based "nothing changed" signal,
+and (b) the MCP write-tool surface Feature 23's pass 12 note pointed here.
+
+**MCP write-tool surface (new to this file).** `app/mcp/tools/writes.py`
+registers exactly three tools behind `gate="write"`: `create_event_draft`,
+`create_meeting_action_item`, `create_reorder_request`. All three are
+reachable only from a connection the department set to read/write
+(`principal.can_write`, enforced in `registry.gate_allows`), and every
+write commits as an unpublished draft, an unassigned action item, or a
+pending reorder — nothing here publishes, approves, assigns, or sends.
+Checked each against the same org-scoping/domain-pinning rigor the rest of
+this feature is held to:
+
+- **`principal.organization_id` is never client-supplied.** `McpKeyService.authenticate`
+  (`app/mcp/keys.py:271-360`) resolves the principal from a hash lookup of
+  the bearer value the connection presented (`select(McpServiceKey).where(
+McpServiceKey.key_hash == hash_key(presented))`) and takes
+  `organization_id` from the matched row — there is no argument on any
+  tool call that could substitute a different org. `create_event_draft`
+  passes `org_uuid(principal)` straight to `EventService.create_event`;
+  no client-supplied FK to validate.
+- **`create_meeting_action_item`'s `meeting_id` resolves through an
+  org-scoped parent** — `MeetingsService.create_action_item`
+  (`app/services/meetings_service.py:372-400`) calls `get_meeting_by_id(
+meeting_id, organization_id)` before writing, the checklist-14a parent-
+  resolution shape. The tool itself never sets `assigned_to`, so the
+  service's own `assert_in_org` check on that field (MM-4) is `allow_none`
+  on every call from this surface.
+- **`create_reorder_request`'s client-supplied `item_id`/`category_id`
+  are validated in-org independently of the medical-domain check.**
+  `writes.py` calls `InventoryService.item_in_domain`/`category_in_domain`
+  to refuse a request that names a medical item — correctly scoped to
+  `(id, organization_id, item_types)`, so a cross-org id simply isn't
+  found and isn't flagged "medical." That looked, on first read, like it
+  might let a cross-org id slip past the medical check and reach storage
+  unvalidated. It does not: `InventoryService.create_reorder_request` separately
+  calls `_assert_reorder_fks_in_org` (`inventory_service.py:8431-8463`),
+  which runs `assert_in_org` (`app/utils/org_scoping.py`) against
+  `item_id`/`category_id`/`vendor_id` before the row is ever constructed,
+  fails closed with a generic "not found"-shaped `ValueError` (no
+  cross-tenant existence oracle per that helper's own docstring), and that
+  `ValueError`'s message is re-raised by `writes.py` as the tool's error —
+  safe, since `assert_in_org`'s message names only the field, never the
+  other org's data. No XC-1 gap: two independent checks happen to cover
+  the same input for different reasons, and both fail closed.
+- **The write gate itself cannot be bypassed from a read-only connection.**
+  `gate_allows()` (`app/mcp/registry.py:75-94`) returns `principal.can_write`
+  for `gate == "write"`, checked inside `logbook_tool`'s wrapper before the
+  handler runs at all, and a refusal is itself audited
+  (`_audit_apart(..., "refused", exc)`) — so a read-only key's attempt is
+  recorded, not merely declined silently.
+- **A write is audited as "attempted" before the service runs, not only
+  on success.** `logbook_tool`'s wrapper (`registry.py:143-155`) calls
+  `_audit_apart(..., "attempted", None)` and raises if that audit write
+  itself fails (`503`, no mutation attempted) — matching the
+  `require_audit_entry` pattern `integrations.py`/`mcp_keys.py` already use
+  for connect/disconnect/key-issue, now confirmed to extend to this surface
+  too.
+- **Error messages reaching the MCP client are sanitized the same way as
+  the HTTP API.** `registry.py:167-175` routes a `ValueError` (service
+  validation) through `safe_error_detail()` before it becomes a `ToolError`,
+  and any other exception gets the same treatment after being logged
+  server-side — no raw exception text reaches an AI client any more than it
+  reaches a browser.
+
+No new finding from this review. Recorded in full so a future pass does not
+re-derive it from scratch, per Feature 23 pass 12's own note that a full
+review of this surface belonged here.
+
+### Re-verified from passes 1–4 (all hold, re-checked directly against code)
+
+- **INT-1** (send-time SSRF re-validation): `assert_outbound_url_safe` /
+  `_assert_base_url_safe` calls confirmed present, by direct grep and read,
+  in `calcom_service.py`, `slack_service.py`, `discord_service.py`,
+  `teams_service.py`, `webhook_service.py`, and `documenso_service.py`
+  (INT-10's fix, pass 4) — six of seven sites in
+  `KNOWN_LIMITATIONS.md`'s "Outbound Integration Requests" entry that this
+  feature owns; the seventh (`audit_ship_service.py`) belongs to a
+  different feature and was not re-read here.
+- **INT-2** (OAuth `error` URL-encoded): intact, `salesforce_sync.py:419`.
+- **INT-3** (list/get gated on `integrations.manage`; `/connected`
+  status-only on bare auth, registered first): intact,
+  `integrations.py:464-517`.
+- **INT-4** (`exclude_unset` partial-PATCH merge): intact, `integrations.py:345`.
+- **INT-5** (uninvoked `KNOWN_WEBHOOK_DOMAINS` allowlist): unchanged, still
+  an explicit owner decision, `app/utils/url_validator.py`.
+- **INT-6** (connector exception sanitization via `sanitize_connector_error`):
+  intact at `integrations.py:848`, `salesforce_sync_service.py`, and the
+  three non-interpolating re-raises in `google_calendar_service.py`,
+  `outlook_calendar_service.py`, `weather_service.py`.
+- **INT-7** (`_SizeLimitedTransport` response-size cap): intact,
+  `base.py` — `MAX_RESPONSE_SIZE`, `_SizeLimitedTransport`, and its wiring
+  into every transport `create_integration_client()` builds, confirmed by
+  grep and read.
+- **INT-8** (`http1`/`http2`/`cert` kwargs reaching the wrapped transport):
+  intact.
+- **INT-9** (Google Calendar bypasses the shared HTTP hardening): still
+  open, still correctly scoped — `google_calendar_service.py` has no
+  reference to `http=`, `create_integration_client`, or any transport
+  class; confirmed by grep. `KNOWN_LIMITATIONS.md`'s entry is current.
+- **INT-10** (Documenso send-time SSRF re-check): intact, see INT-1 above.
+- **INT-11** (Salesforce "clear the refresh token" has no reachable UI
+  control): **re-verified still open, unchanged.** `IntegrationsPage.tsx:585`
+  still builds `refresh_token: sfRefreshToken || undefined` — a blank field
+  still becomes `undefined`, still dropped from the JSON payload, never the
+  explicit `""` the backend's special case
+  (`integrations.py:568-572`/`:720-724`) looks for. The 2026-09-29 copy
+  commit (`7f3c7ecec`) reworded the help text around this field (and the
+  disconnect/connect toasts) but added no "switch to client credentials"
+  control; confirmed by reading the full diff. Still a product decision
+  between the two options pass 4 named, not re-litigated here.
+- **SOQL injection defense, instance-URL domain pinning, secret handling,
+  frontend cache exclusion, webhook replay dedup**: all re-confirmed
+  against current code, no change since pass 4.
+
+### Checked, no new finding
+
+- **LIKE-pattern usage**: zero hits in this feature's own files (`grep -rn
+"\.like(\|\.ilike("` across every backend file in scope). The one hit
+  found in the wider `app/mcp/` tree (`tools/members.py:89-90`, a read-only
+  member search) already passes `escape=LIKE_ESCAPE_CHAR` — correct, and
+  outside this feature's declared scope (members, not integrations), noted
+  rather than claimed as this feature's own finding.
+- **CSV export**: none in this feature's scope; `grep -rn "csv.writer\|csv\.DictWriter"`
+  across every file in scope: zero hits.
+- **JSON-column mutation** (`integration.config`): every write remains a
+  flat top-level merge (`{**stored, **new}`); no nested-mutation-on-shared-
+  reference shape found, consistent with pass 4.
+- **Module gating**: `/integrations`, `/integrations/salesforce`,
+  `/integrations/calcom`, `/integrations/claude-mcp` are each registered
+  with `dependencies=module_gate("integrations", "Integrations")`
+  (`app/api/v1/api.py`) — confirmed unchanged. The 2026-10-03 `useConnectedIntegrations`
+  fix (W07-1) is a client-side symptom fix for the same backend 403 this
+  gate has always returned when the module is off; no backend change,
+  re-verified the gate itself was never the bug.
+
+## Schema & migration notes
+
+None — no model or migration change this pass. `validate_migrations.py
+--strict`: 509 revisions, single head, unchanged from before this pass.
+
+## Guard tests added
+
+None — no code changed this pass; nothing new to guard. The pass 4 guard
+tests (`test_integration_services.py::TestDocumensoPayload::test_connection_blocks_unsafe_base_url`
+and `::test_create_document_blocks_unsafe_base_url`) were re-run as part of
+the scoped suite below and still pass.
+
+## Completion gate (pass 5)
+
+| Check                                                                                                                                     | Result                                          |
+| ----------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                             | ✅ 0 violations                                 |
+| `black --check app/ tests/ alembic/`                                                                                                      | ✅ 1853 files unchanged                         |
+| `isort --check-only app/ tests/ alembic/`                                                                                                 | ✅ clean (isort 9.0.1, CI's pinned version)     |
+| `python3 scripts/validate_migrations.py --strict`                                                                                         | ✅ 509 revisions, single head, PASSED           |
+| repo-tenancy guards (`test_endpoint_auth_coverage`, `test_require_permission_registry`, `test_like_escaping`, `test_org_scoping_ratchet`) | ✅ 17 passed                                    |
+| MCP tool tests (`test_mcp_transport.py`, `test_mcp_keys.py`, `test_mcp_tools.py`, `test_mcp_key_endpoints.py`, `test_mcp_redaction.py`)   | ✅ 276 passed                                   |
+| backend tests, scope (`-k "integration or salesforce or calcom or documenso or paypal or webhook or connector or mcp_key"`)               | ✅ 3548 passed, 21 skipped (env-only), 0 failed |
+| `tsc --noEmit` (frontend, aliased 7.0.2 compiler)                                                                                         | ✅ 0 errors                                     |
+| `eslint --max-warnings 10` (frontend)                                                                                                     | ✅ exit 0                                       |
 
 ---
 

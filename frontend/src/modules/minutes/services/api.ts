@@ -14,6 +14,7 @@ import type {
   ActionItemCreate,
   MinutesStats,
   MinutesSearchResult,
+  MinutesListItem,
 } from '../types/minutes';
 import { asArray } from '../../../utils/asArray';
 
@@ -21,6 +22,21 @@ const api = createApiClient();
 
 export const minutesService = {
   // ── Minutes CRUD ──
+
+  /**
+   * Every set of minutes the caller may see, all pages. A member sees only
+   * approved, non-executive minutes; the server decides that, not this call.
+   */
+  async listAllMinutes(): Promise<MinutesListItem[]> {
+    const PAGE = 100;
+    const all: MinutesListItem[] = [];
+    for (let skip = 0; ; skip += PAGE) {
+      const response = await api.get<MinutesListItem[]>('/minutes-records', { params: { skip, limit: PAGE } });
+      const page = asArray(response.data);
+      all.push(...page);
+      if (page.length < PAGE) return all;
+    }
+  },
 
   async getMinutes(minutesId: string): Promise<MeetingMinutes> {
     const response = await api.get<MeetingMinutes>(`/minutes-records/${minutesId}`);
