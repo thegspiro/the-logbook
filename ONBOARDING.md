@@ -63,7 +63,9 @@ elsewhere (email, file storage, sign-in) until the end.
 #### Step 2: System Owner Creation
 
 - Create the first administrator account
-- Enforces strong password requirements (12+ characters with complexity rules)
+- Enforces strong password requirements (12+ characters with complexity rules,
+  no runs like 123 or abc, no character three times in a row — all listed on the
+  form since 2026-09-27)
 - Membership Number is optional — all other fields are required
 - Automatically assigns Super Admin access
 
@@ -103,8 +105,9 @@ elsewhere (email, file storage, sign-in) until the end.
 
 - Add apparatus and minimum staffing requirements (optional)
 
-#### Step 7: IT Team & Backup Access
+#### Step 7: IT & Backup Contacts
 
+- Optional — **Skip for now** saves an empty step _(2026-09-27)_
 - Configure IT team contacts and backup access information
 - Each contact may be given an operational rank, applied when their account is
   created at completion
@@ -124,7 +127,7 @@ elsewhere (email, file storage, sign-in) until the end.
 > Drive so its files sit somewhere the server is not should treat that as still
 > to do after setup, not done by it.
 
-#### Step 10: Authentication Choice
+#### Step 10: Sign-In Method
 
 - Select authentication method: Local passwords, Google, Microsoft, or Authentik
 
@@ -314,12 +317,12 @@ The onboarding module is designed to be integrated with a frontend wizard:
 /onboarding/positions           → Step 4: Ranks & Positions
 /onboarding/stations            → Step 5: Stations
 /onboarding/apparatus           → Step 6: Apparatus
-/onboarding/it-team             → Step 7: IT Team & Backup Access
+/onboarding/it-team             → Step 7: IT & Backup Contacts
 /onboarding/email-platform      → Step 8: Email Platform Choice
 /onboarding/email-config        → Step 8a: Email Configuration (if a service is selected)
 /onboarding/file-storage        → Step 9: File Storage Choice
 /onboarding/file-storage-config → Step 9a: File Storage Configuration (if a cloud service is selected)
-/onboarding/authentication      → Step 10: Authentication Choice
+/onboarding/authentication      → Step 10: Sign-In Method
 /onboarding/navigation-choice   → Step 11: Navigation Choice — last step, so it
                                   calls POST /onboarding/complete
 /onboarding/complete            → Summary, then → /setup (Department Setup checklist)

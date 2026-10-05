@@ -19,8 +19,23 @@ Vice President, Chief, Deputy Chief, Assistant Chief), the Membership
 Coordinator and Assistant Membership Coordinator, the Secretary and Assistant
 Secretary, and Captains; a department changes it on the Positions screen.
 
-Cards ship blank, so **the tag's serial number is the credential** — there is
-nothing written onto the card to read instead.
+**Issue card** binds a card one of two ways:
+
+| Option                           | Use it when                            | What becomes the credential                       |
+| -------------------------------- | -------------------------------------- | ------------------------------------------------- |
+| **Write a code to a blank card** | The tag is writable — a sticker, a fob | A freshly generated 128-bit code, written onto it |
+| **Read a printed card's serial** | The card is already made and locked    | The chip's own serial number                      |
+
+Prefer writing a code: it is unguessable, it is not printed anywhere on the
+card, and the tag can be rewritten and reissued to somebody else. A written
+card shows **Written** beside its status. Writing needs Chrome on Android over
+HTTPS; at a desk, a USB reader or a typed serial fills the field instead. An
+officer always does the binding — there is no path by which a member binds
+their own card.
+
+> **Corrected 2026-10-04.** This page said cards ship blank, so the serial is
+> always the credential. Both options have existed since ID cards shipped on
+> 2026-08-23; the serial is the fallback for a card that cannot be written.
 
 ### What the department stores, and what it cannot read back
 
@@ -30,12 +45,50 @@ nothing written onto the card to read instead.
 | `uid_preview` — the **last four characters**, so an officer can tell two of a member's cards apart on screen | —                                        |
 
 There is no screen and no endpoint that reads a card number back out, and none
-should be added. A card serial is the whole of the credential: a plaintext
-column would make a database backup a stack of working ID cards.
+should be added. The serial or written code is the whole of the credential: a
+plaintext column would make a database backup a stack of working ID cards.
 
-**Revoking is permanent.** A revoked card is never reactivated — a replacement
-is a fresh registration. Suspension is the reversible state, for a card a
-member has mislaid and may still find.
+**Revoking is permanent for that registration.** A revoked or lost
+registration is never switched back on. Suspension is the reversible state, for
+a card a member has mislaid and may still find.
+
+**The same physical card can be registered again** _(2026-09-30)_. A card that
+turns up after being reported lost, or a revoked card handed to someone else,
+is issued afresh: the old registration stays terminal on the previous holder's
+record, gives up its slot in the `(organization_id, uid_hash)` unique index by
+being rehashed to a tombstone no card read can produce, and a new active
+registration is inserted. Until then such a card was refused for good. A card
+whose registration is still **active or suspended** is refused with "This card
+is already registered to another member and is still in use. Mark that
+registration lost or revoked, then register the card again."
+
+## Viewing a member's ID card _(2026-09-30)_
+
+The **ID Card** page (`/members/:userId/id-card`) renders the printable badge —
+photo, name, QR code and barcode. Every member can open **their own**. Opening
+**someone else's** needs `members.manage` or `members.manage_id_cards`; the
+profile's **ID Card** button is hidden otherwise, and the page answers "You can
+only view your own ID card." without fetching the colleague.
+
+It used to be open to every `members.view` holder — every member — so anyone
+could pull up a colleague's scannable badge on a phone. The gate is in the app
+rather than the API, deliberately: the profile fields the card is assembled
+from are directory information `GET /users/{id}/with-roles` serves to
+`members.view`, and what is withheld is the assembled badge. Checking members in
+is unaffected — `/members/scan` and the check-in station resolve a code without
+rendering anyone's card.
+
+**Printing badges follows the same rule** _(2026-10-04)_. Member labels
+(`/members/print-labels` and the label API's `membership` module) require
+`members.manage` or `members.manage_id_cards`. They accepted `members.view`,
+so any member could print a colleague's badge even after the card page
+refused to show it.
+
+**Badges for unnumbered members scan** _(2026-09-28)_. A badge printed for a
+member with no membership number carries a short id, and neither **Scan Member
+ID** nor the in-app badge scanner recognised it — the department's own badge
+read "No member found". Both resolve it now. The check-in station and room
+kiosks identify by NFC card, not by the printed QR code.
 
 ## The check-in station
 
@@ -69,7 +122,7 @@ target the check-in endpoint would refuse.
 
 | Status                                | Tap accepted? | Why                                                                        |
 | ------------------------------------- | ------------- | -------------------------------------------------------------------------- |
-| Active, probationary                  | Yes           | —                                                                          |
+| Active, probationary                  | Yes           | — (probationary members can also sign in to the app since 2026-10-03)      |
 | **Retired, on leave**                 | **Yes**       | They attend meetings and banquets, which is exactly what a station records |
 | Suspended, dropped, archived, deleted | No            | —                                                                          |
 

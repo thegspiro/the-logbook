@@ -68,7 +68,20 @@ When your department administrator creates your account, you will receive a welc
 2. Enter the **username** and **password** provided to you.
 3. Click **Sign In**.
 
+If you were sent to sign in from a link — a bookmarked filtered list, or a page
+with a section anchor — you are returned to exactly that address after signing
+in, query and anchor included _(2026-09-27; it used to drop everything after
+the path)_.
+
+After several failed attempts the page counts down before you can try again —
+_"Too many failed attempts. Try again in N seconds."_ — and the number is the
+server's own wait _(2026-09-27)_. It used to show a few seconds while the
+server was refusing for a full minute, so trying again on the screen's word was
+refused again.
+
 ![The Logbook login page with username and password fields](./images/00-01-login-page.png)
+
+**[SCREENSHOT — CHECK `00-01-login-page.png`.** The page itself is unchanged; replace only if the frame shows a lockout or session-expired message, whose wording changed on 2026-09-29.**]**
 
 > **Hint:** If you did not receive a welcome email, contact your department's IT Manager or the person who set up the system. They can resend your credentials or reset your password from the admin panel.
 
@@ -111,11 +124,26 @@ After your first login, you will be prompted to change your temporary password. 
 
 ![The change password form with its three fields and the strength requirements](./images/00-19-change-password.png)
 
+**[SCREENSHOT — REPLACE `00-19-change-password.png`.** The requirements list is visible before typing and now has seven rules — "At least 12 characters", the four character classes, "No runs like 123 or abc" and "No character three times in a row".**]**
+
 **Password Requirements:**
 
-- Minimum 8 characters (your department may require more)
+The form lists every rule from the moment it opens, and ticks each one as you
+type _(2026-09-28: it used to appear only once you started typing, said "8
+characters", and left out two rules the server enforces)_:
+
+- At least 12 characters (your department may require more)
+- One uppercase letter, one lowercase letter, one number, one special character
+- No runs like 123 or abc
+- No character three times in a row
 - Cannot reuse recent passwords
-- Session will time out after a period of inactivity (configured by your department)
+
+Changing your password **signs you out everywhere**, including this browser.
+The sign-in page then says so: _"Your password was changed, and you have been
+signed out everywhere. Sign in with your new password."_ — before 2026-09-28 it
+said nothing, which looked like an error. Sessions also time out after a period
+of inactivity set by your department; the sign-in page then reads _"You were
+signed out after a period of inactivity. Sign in again."_
 
 > **Troubleshooting:** If your password change fails, ensure it meets all displayed requirements. If you are locked out after too many failed attempts, wait for the lockout period to expire or contact your administrator.
 
@@ -354,8 +382,11 @@ From here you can:
 - Make your **privacy choices** — photo use, public roster listing, and SMS notifications _(2026-07-31)_
 - **Download your data** — a complete export of everything the system stores about you _(2026-07-31)_
 - View your **assigned roles and permissions**
+- Choose the two tabs on your **phone's bottom bar** (**Appearance → Phone navigation bar**) _(2026-10-02)_ — saved to your account, so they follow you to every device
 
 ![Account Settings on its Account tab — the tab row leads to password, security, emergency contacts, appearance and notifications](./images/00-09-account-settings.png)
+
+**[SCREENSHOT — REPLACE `00-09-account-settings.png`.** The page title reads **My Account** (was User Settings), and the Appearance tab's description reads "Theme and phone navigation bar".**]**
 
 > **Privacy note:** Privacy choices and the data export live on the
 > **Security** tab. Nothing under Privacy Choices is required for membership,
@@ -380,7 +411,7 @@ From here you can:
 
 ## Getting Help
 
-- **Forgot your password?** Use the "Forgot Password?" link on the login page. You will receive a reset link by email. If no email arrives, wait 30 minutes and try again (a cooldown prevents duplicate emails).
+- **Forgot your password?** Use the "Forgot Password?" link on the login page. You will receive a reset link by email; the confirmation tells you how long it lasts — **30 minutes** (the page used to say an hour). If no email arrives, wait 30 minutes and try again (a cooldown prevents duplicate emails). If your department signs in through Google or Microsoft, the page says **No Reset Link Was Sent** and gives the reason, instead of telling you to check your email for a link that was never sent. Every page in this flow now leads **Back to sign in**, and a finished reset says **Password Changed** with a **Sign In Now** button.
 - **Locked out?** If the correct password keeps being refused after several failed attempts, the account is probably locked — the message will not say so. Wait 15 minutes (unless your department set a different period) and try once more, reset it yourself with "Forgot Password?", or ask your IT Manager to reset your password, which also clears the lock.
 - **Missing a module?** Some modules may be disabled by your department. Contact your administrator to enable them.
 - **Permission denied?** If you see a "Not Authorized" message, the action requires a role you have not been assigned. Contact your officer or IT Manager.
@@ -523,7 +554,10 @@ If you are following an older walkthrough, four things are in different places.
 
 The centre of the bottom bar is now an **Add** button — Quick Add, covering the
 things a member logs most often. The bar keeps five items and the configurable
-slots go from three to two; a saved layout keeps its first two destinations.
+slots go from three to two. _(Corrected 2026-10-02: no screen could ever save a
+layout, so there was none to keep; since that date you choose the two tabs on
+**My Account → Appearance**, and the **Settings** tab opens your own account
+rather than Organization Settings.)_
 
 ### Some pages show members less than they used to
 
@@ -539,3 +573,27 @@ That is the intended state, not a fault. An administrator can re-grant either on
 the positions screen. See the
 [upgrade note](../UPGRADING.md#six-upgrade-steps-take-permissions-away-2026-09-05)
 for why those grants were there in the first place.
+
+## What changed in the interface _(September 24 – October 4, 2026)_
+
+- **Top bar → More.** If your department uses the **Top bar** layout, menu
+  groups that do not fit on your screen move under **More** at its right-hand
+  end, in the same order, separated by dividers so a link after a group is not
+  read as one of its pages.
+- **On a phone, the navigation drawer shows when there is more below** — a
+  fade at the bottom edge and a **More** chevron you can tap to scroll. The
+  desktop sidebar has a permanent scrollbar instead.
+- **Choose your phone's bottom-bar tabs** on **My Account → Appearance**; see
+  [Mobile & PWA](./10-mobile-pwa.md#choose-your-own-bottom-bar-tabs-2026-10-02).
+- **My Account** is titled **My Account** on the page as well as in the menu
+  (it said User Settings), and its messages say what happened —
+  _"Profile saved"_, _"Emergency contacts saved"_.
+- **Dates and times are your department's.** Emails, PDFs and CSV downloads
+  now show times in the department's timezone rather than UTC, and anything
+  that counts days — a certificate expiring, a training deadline, "today" on
+  the dashboard — uses the department's date, which no longer runs a day ahead
+  in the evening.
+- **Layout:** selected toggle buttons are the primary red everywhere; radio
+  buttons and checkboxes no longer squash into ovals; and on a tablet, card
+  lists use two roomy columns and the edit/delete buttons that appear on hover
+  are always shown, since a touch screen cannot hover.

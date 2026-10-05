@@ -1456,7 +1456,7 @@ export interface ExternalUserMapping {
 }
 
 export interface ExternalUserMappingUpdate {
-  internal_user_id?: string;
+  internal_user_id?: string | null;
   is_mapped?: boolean;
 }
 

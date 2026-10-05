@@ -130,6 +130,17 @@ all eight types.]**
 > requirements count toward advancing a phase and toward the overall percentage.
 > Optional ones are there for enrichment without blocking progress."
 
+**[SCREEN: Add a requirement to a program that already has enrollments; the
+"Members already enrolled" choice]**
+
+> "Adding a requirement to a program people are already in? You'll be asked
+> about **Members already enrolled**: hold them to it too, or apply it only to
+> members who enroll from now on — in which case it's recorded as waived for
+> everyone already there."
+
+**[PRODUCTION NOTE — 2026-10-04. New beat (2026-10-03), about 12 seconds;
+re-time Chapter 4. Needs a program with at least one enrollment.]**
+
 ### WRITING OUT A CHECKLIST (6:30 – 7:00) _(added 2026-08-09)_
 
 **[SCREEN: Add a checklist requirement; type the individual steps into the

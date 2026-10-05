@@ -113,8 +113,11 @@ security gate and marks auth cookies `Secure`:
 - **`FRONTEND_URL`** must be the same `https://` origin as `ALLOWED_ORIGINS`.
   Every link in outgoing email is built from it. The setup script writes it
   from the HTTPS URL you give it (and fills it in on an update when it is
-  missing or still `localhost`); a `localhost` value logs a startup warning in
-  production.
+  missing or still `localhost`). The Community Apps template has a **Public
+  Site Address** field for it _(2026-09-25)_. A `localhost` value with no
+  public address in `ALLOWED_ORIGINS` either stops a production backend from
+  starting (`CRITICAL: FRONTEND_URL ...`); with one, the first public origin is
+  used for links and the startup log says so.
 
 Reverse-proxy configuration examples are in the
 [full guide](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/unraid.md#https-with-reverse-proxy).

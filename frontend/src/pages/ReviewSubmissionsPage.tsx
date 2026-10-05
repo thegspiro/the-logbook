@@ -1114,7 +1114,7 @@ const ReviewSubmissionsPage: React.FC = () => {
         >
           <button
             onClick={() => setActiveView('pending')}
-            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+            className={`touch:min-h-11 flex-1 rounded-md px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
               activeView === 'pending'
                 ? 'bg-red-800 text-white'
                 : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
@@ -1130,7 +1130,7 @@ const ReviewSubmissionsPage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveView('all')}
-            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+            className={`touch:min-h-11 flex-1 rounded-md px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
               activeView === 'all'
                 ? 'bg-red-800 text-white'
                 : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
@@ -1141,7 +1141,7 @@ const ReviewSubmissionsPage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveView('config')}
-            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+            className={`touch:min-h-11 flex-1 rounded-md px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
               activeView === 'config'
                 ? 'bg-red-800 text-white'
                 : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'

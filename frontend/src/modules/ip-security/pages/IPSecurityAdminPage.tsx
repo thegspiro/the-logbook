@@ -19,12 +19,12 @@ import type { CountryBlockRuleCreate } from '../types';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 
 // `btn-md` rather than a hand-typed box: it carries the phone-only 44px
-// minimum these tabs were missing (they rendered 36px tall), and blue-800
-// matches the fill `btn-info` uses — white on blue-600 is 5.17:1, which clears
-// AA and misses the 7:1 the rest of the palette holds to.
+// minimum these tabs were missing (they rendered 36px tall). The selected fill
+// is the primary red-800 every other segmented control uses, which also holds
+// the 7:1 the palette is held to — white on blue-600 measured only 5.17:1.
 const tabClass = (active: boolean) =>
   `btn-md font-medium transition-colors ${
-    active ? 'bg-blue-800 text-white' : 'text-theme-text-secondary hover:bg-theme-surface-hover'
+    active ? 'bg-red-800 text-white' : 'text-theme-text-secondary hover:bg-theme-surface-hover'
   }`;
 
 const inputClass = 'form-input';

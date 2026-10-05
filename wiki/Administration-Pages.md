@@ -193,3 +193,22 @@ Settings screen and **their old addresses redirect**, so existing links and
 bookmarks still arrive. Operational Ranks and EVOC came from the same global
 screen; Membership Tiers is new, and shares its editor with the setup wizard's
 step 4.
+
+## Metrics count on the department's calendar _(2026-09-26)_
+
+`AdminHubService._context` and the operations dashboard used to fall back to
+UTC for an organization with no (or an invalid) timezone, while every other
+view fell back to the scheduling default. Both now use
+`scheduling_timezone(org)` — `America/New_York` when unset — and the operations
+dashboard's `_age_days` reads a timestamp as the department's day, as the hub's
+already did. A metric such as "Hours this month" or an item's age therefore no
+longer turns over at UTC midnight (early evening in the US). See
+`docs/KNOWN_LIMITATIONS.md` → "Today" Is the Department's Date.
+
+## Settings screens on phones _(2026-10-04)_
+
+`SettingsLayout` adds no side padding of its own below `sm`, so its screens sit
+on the 16px page gutter; the one screen rendered inside an administration hub
+(Events settings) passes `inHub` to keep its 32px and stay aligned with the hub
+header. The body card is `p-3` on phones (`p-6` from `sm`). Desktop padding is
+unchanged.

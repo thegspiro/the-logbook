@@ -57,6 +57,7 @@ from app.services.event_service import (
     attendance_locked_error,
 )
 from app.services.location_service import LocationService
+from app.utils.json_ids import json_array_contains
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import is_in_org
 from app.utils.org_timezone import local_and_utc_dates, resolve_scheduling_timezone
@@ -2515,7 +2516,7 @@ class TrainingSessionService:
                 ProgramRequirement.program_id == str(program_id),
                 ProgramRequirement.phase_id
                 == (str(phase_id) if phase_id is not None else None),
-                TrainingRequirement.category_ids.contains([str(category_id)]),
+                json_array_contains(TrainingRequirement.category_ids, category_id),
                 TrainingRequirement.requirement_type == RequirementType.HOURS,
             )
         )
