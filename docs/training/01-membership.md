@@ -2188,6 +2188,28 @@ out the same on a monochrome ribbon as on a colour one.
 permission (`members.view`, which every position has) could print a badge that
 scans as a colleague.
 
+### Badge codes _(2026-10-05)_
+
+Every badge — the printed card, the sticker label and the digital ID card on a
+member's phone — now carries a **badge code** such as `MB-7KQ2W9HXRT` instead
+of the membership number. The server issues it at random, it appears nowhere
+in the directory, and only the member and the officers holding
+`members.manage` or `members.manage_id_cards` can see it. The membership number
+is still printed on the card as text; it just no longer scans.
+
+- **Every scanner asks the server.** The badge scanner and the inventory
+  member scanner send what they read to the server, which answers only for
+  members of your own department. A QR code someone made by hand no longer
+  opens a member or books gear to them.
+- **Lost a badge?** Open the member's ID card and choose **Reissue badge**.
+  Every badge printed for them before stops scanning at once; print them a new
+  card.
+- **Old badges keep working until you say so.** Cards printed before badge
+  codes still scan while **Accept old badges** (at the bottom of the Print ID
+  Cards page) is on, so nothing stopped working on upgrade day. Once every
+  member has a reprinted card, turn it off: from then on only badge codes scan.
+  Inventory checkout still refuses a member whose account is not active.
+
 ---
 
 ## A Member Profile No Longer Shows Everyone's Gear _(2026-08-24)_

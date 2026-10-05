@@ -3,7 +3,6 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import { MemberScanPage } from './MemberScanPage';
-import { userService } from '../services/api';
 
 // Mock html5-qrcode
 const mockStart = vi.fn().mockResolvedValue(undefined);
@@ -23,10 +22,10 @@ vi.mock('html5-qrcode', async (importOriginal) => {
   };
 });
 
-// Mock the API module
-vi.mock('../services/api', () => ({
-  userService: {
-    getUsers: vi.fn().mockResolvedValue([]),
+const mockResolve = vi.fn();
+vi.mock('../services/memberBadgeService', () => ({
+  memberBadgeService: {
+    resolve: (...args: unknown[]) => mockResolve(...args) as unknown,
   },
 }));
 
@@ -45,6 +44,8 @@ describe('MemberScanPage', () => {
     vi.clearAllMocks();
     mockStart.mockResolvedValue(undefined);
     mockGetCameras.mockResolvedValue([{ id: 'cam-1', label: 'Front Camera' }]);
+    mockResolve.mockReset();
+    mockResolve.mockResolvedValue(null);
     // jsdom's URL outlives a test, and the trail this page now renders is
     // derived from it. Every test below states the route it runs at rather
     // than inheriting whichever one ran last (CLAUDE.md pitfall #28a).
@@ -184,21 +185,37 @@ describe('MemberScanPage', () => {
     });
   });
 
-  // A printed badge encodes the short id when the member has no membership
-  // number (label_service._short_id), and this page matched membership numbers
-  // only, so the department's own badge scanned as "No member found".
-  it('opens the member a badge printed without a membership number belongs to', async () => {
+  async function scan(value: string) {
     const user = userEvent.setup();
-    vi.mocked(userService.getUsers).mockResolvedValue([
-      { id: '1996d34a-56fe-42b1-9848-c1404ae55992', username: 'javery', membership_number: null },
-    ] as never);
     renderWithRouter(<MemberScanPage />);
-
     await user.click(screen.getByRole('button', { name: /start scanning/i }));
     await waitFor(() => expect(mockStart).toHaveBeenCalled());
     const onSuccess = mockStart.mock.calls[0]?.[2] as ((text: string) => void) | undefined;
-    onSuccess?.('1996D34A56FE');
+    onSuccess?.(value);
+  }
 
+  it('asks the server who a badge names and opens that member', async () => {
+    mockResolve.mockResolvedValue({
+      user_id: '1996d34a-56fe-42b1-9848-c1404ae55992',
+      name: 'Jo Avery',
+      membership_number: null,
+      is_active: true,
+      matched: 'badge_code',
+    });
+
+    await scan('MB-23456789AB');
+
+    expect(mockResolve).toHaveBeenCalledWith('MB-23456789AB');
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/members/1996d34a-56fe-42b1-9848-c1404ae55992'));
+  });
+
+  it('does not open the member id written inside a QR the server does not recognise', async () => {
+    const forged = JSON.stringify({ type: 'member_id', id: 'someone-else' });
+
+    await scan(forged);
+
+    expect(await screen.findByText(/No member found/)).toBeInTheDocument();
+    expect(mockResolve).toHaveBeenCalledWith(forged);
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 });

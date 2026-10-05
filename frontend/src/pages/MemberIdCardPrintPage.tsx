@@ -16,6 +16,8 @@ import { ArrowLeft, CreditCard, Download, Loader2, Save, TestTube2 } from 'lucid
 import toast from 'react-hot-toast';
 import { labelService, Symbology } from '../services/labelService';
 import { memberIdCardService } from '../services/memberIdCardService';
+import { memberBadgeService } from '../services/memberBadgeService';
+import { useConfirm } from '../contexts/ConfirmContext';
 import type { IdCardLayout } from '../services/memberIdCardService';
 import { IdCardOrientation, IdCardSides } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -87,6 +89,89 @@ function ChoiceGroup<T extends string>({ name, legend, choices, value, onChange 
     </fieldset>
   );
 }
+
+/**
+ * The department's switch for badges printed before badge codes existed.
+ *
+ * Those carry the membership number or a short id, which any member can read
+ * off the directory, so anyone could make a copy that scans. They keep working
+ * until an officer turns this off, which they should do once every member
+ * holds a reprinted card.
+ */
+const OldBadgesSetting: React.FC = () => {
+  const { confirm } = useConfirm();
+  const [accept, setAccept] = useState<boolean | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    memberBadgeService
+      .getSettings()
+      .then((settings) => {
+        if (!cancelled) setAccept(settings.accept_legacy);
+      })
+      .catch(() => {
+        if (!cancelled) setAccept(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const toggle = async () => {
+    if (accept === null) return;
+    const next = !accept;
+    if (
+      !next &&
+      !(await confirm({
+        title: 'Stop accepting old badges?',
+        message:
+          'Badges printed before badge codes — the membership number or short id — stop scanning at every station. Only do this once every member has a reprinted card.',
+        confirmLabel: 'Stop accepting them',
+        cancelLabel: 'Keep accepting',
+      }))
+    ) {
+      return;
+    }
+    setSaving(true);
+    try {
+      const saved = await memberBadgeService.saveSettings({ accept_legacy: next });
+      setAccept(saved.accept_legacy);
+      toast.success(saved.accept_legacy ? 'Old badges scan again' : 'Old badges no longer scan');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not save the setting. Try again.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (accept === null) return null;
+
+  return (
+    <div className="card mt-6 flex items-start justify-between gap-4 p-4">
+      <div>
+        <h2 className="text-theme-text-primary text-sm font-semibold" id="old-badges-label">
+          Accept old badges
+        </h2>
+        <p className="text-theme-text-secondary mt-1 text-sm">
+          Cards printed before badge codes carry the membership number, which anyone can read in the directory. Turn
+          this off once every member has a reprinted card.
+        </p>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={accept}
+        aria-labelledby="old-badges-label"
+        disabled={saving}
+        onClick={() => void toggle()}
+        className={`toggle-track-sm shrink-0 ${accept ? 'bg-red-800' : 'bg-theme-surface-border'}`}
+      >
+        <span className={`toggle-knob-sm ${accept ? 'translate-x-6' : 'translate-x-1'}`} />
+      </button>
+    </div>
+  );
+};
 
 const MemberIdCardPrintPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -288,6 +373,8 @@ const MemberIdCardPrintPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      <OldBadgesSetting />
     </div>
   );
 };

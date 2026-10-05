@@ -21,41 +21,10 @@ vi.mock('html5-qrcode', async (importOriginal) => {
 });
 
 // Mock the API module
-const mockGetMembersSummary = vi.fn().mockResolvedValue({
-  members: [
-    {
-      user_id: 'user-1',
-      username: 'jsmith',
-      first_name: 'John',
-      last_name: 'Smith',
-      full_name: 'John Smith',
-      membership_number: 'M-001',
-      permanent_count: 3,
-      checkout_count: 1,
-      issued_count: 0,
-      overdue_count: 0,
-      total_items: 4,
-    },
-    {
-      user_id: 'user-2',
-      username: 'jdoe',
-      first_name: 'Jane',
-      last_name: 'Doe',
-      full_name: 'Jane Doe',
-      membership_number: 'M-002',
-      permanent_count: 1,
-      checkout_count: 0,
-      issued_count: 2,
-      overdue_count: 0,
-      total_items: 3,
-    },
-  ],
-  total: 2,
-});
-
-vi.mock('../services/api', () => ({
-  inventoryService: {
-    getMembersSummary: (...args: unknown[]) => mockGetMembersSummary(...args) as unknown,
+const mockResolve = vi.fn();
+vi.mock('../services/memberBadgeService', () => ({
+  memberBadgeService: {
+    resolve: (...args: unknown[]) => mockResolve(...args) as unknown,
   },
 }));
 
@@ -83,6 +52,8 @@ describe('MemberIdScannerModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetCameras.mockResolvedValue([{ id: 'cam-1', label: 'Front Camera' }]);
+    mockResolve.mockReset();
+    mockResolve.mockResolvedValue(null);
   });
 
   it('should not render when closed', () => {
@@ -204,5 +175,53 @@ describe('MemberIdScannerModal', () => {
     render(<MemberIdScannerModal {...defaultProps} onMemberIdentified={onMemberIdentified} />);
     await user.click(screen.getByRole('button', { name: 'Card tapped' }));
     expect(onMemberIdentified).toHaveBeenCalledWith({ userId: 'u-7', memberName: 'Dana Reyes' });
+  });
+  async function scan(value: string, onMemberIdentified = vi.fn()) {
+    render(<MemberIdScannerModal {...defaultProps} onMemberIdentified={onMemberIdentified} />);
+    await waitFor(() => expect(mockStart).toHaveBeenCalled());
+    const onSuccess = mockStart.mock.calls[0]?.[2] as ((text: string) => void) | undefined;
+    onSuccess?.(value);
+    return onMemberIdentified;
+  }
+
+  it('hands over the member the server resolves the badge to', async () => {
+    mockResolve.mockResolvedValue({
+      user_id: 'user-1',
+      name: 'John Smith',
+      membership_number: 'M-001',
+      is_active: true,
+      matched: 'badge_code',
+    });
+
+    const onMemberIdentified = await scan('MB-23456789AB');
+
+    await waitFor(() =>
+      expect(onMemberIdentified).toHaveBeenCalledWith({ userId: 'user-1', memberName: 'John Smith' })
+    );
+    expect(mockResolve).toHaveBeenCalledWith('MB-23456789AB');
+  });
+
+  it('never hands over an id from a QR the server does not recognise', async () => {
+    // The modal used to pass an unmatched QR's id straight to the caller,
+    // which then issued gear against it.
+    const onMemberIdentified = await scan(JSON.stringify({ type: 'member_id', id: 'forged-id' }));
+
+    expect(await screen.findByText(/No member found/)).toBeInTheDocument();
+    expect(onMemberIdentified).not.toHaveBeenCalled();
+  });
+
+  it('refuses a member who is not active', async () => {
+    mockResolve.mockResolvedValue({
+      user_id: 'user-9',
+      name: 'Pat Former',
+      membership_number: null,
+      is_active: false,
+      matched: 'legacy',
+    });
+
+    const onMemberIdentified = await scan('M-009');
+
+    expect(await screen.findByText('Pat Former is not an active member')).toBeInTheDocument();
+    expect(onMemberIdentified).not.toHaveBeenCalled();
   });
 });

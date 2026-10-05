@@ -1641,7 +1641,6 @@ Camera-based scanning now works on desktop browsers:
 | Module | File                       | Description                                  |
 | ------ | -------------------------- | -------------------------------------------- |
 | Shared | `hooks/useHtml5Scanner.ts` | Reusable scanner hook with camera fallback   |
-| Shared | `types/scanner.ts`         | Scanner configuration types                  |
 | Shared | `constants/camera.ts`      | Camera resolution presets and error messages |
 
 All scanner consumers (InventoryScanModal, MemberIdScannerModal, MemberScanPage) share the same camera initialization, error handling, and resolution logic.

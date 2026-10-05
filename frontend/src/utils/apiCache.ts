@@ -31,6 +31,7 @@ const MAX_CACHE_ENTRIES = 200;
 const UNCACHEABLE_PREFIXES = [
   '/auth/', // credentials, session tokens, password ops
   '/users', // roster + profiles, contact info, emergency contacts (no trailing slash so GET /users list is covered too)
+  '/member-badges', // badge codes are credentials: a cached one keeps scanning after a reissue
   '/security/', // alerts, audit log integrity, monitoring
   '/audit-logs', // org audit trail: who did what, when, from where
   '/ip-security/', // IP exceptions, blocked attempts, country rules

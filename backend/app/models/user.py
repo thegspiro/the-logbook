@@ -97,6 +97,7 @@ from sqlalchemy.sql import and_, func
 
 from app.core.database import Base
 from app.core.utils import generate_uuid
+from app.utils.member_badge import generate_badge_code
 from app.utils.member_names import format_display_name, format_legal_name
 from app.utils.membership import (
     DEFAULT_CLASS,
@@ -316,6 +317,12 @@ class User(Base):
     membership_number = Column(
         String(50)
     )  # Organization-assigned membership ID (e.g., "001", "M-042")
+    # The code a member's printed and on-screen badge carries, issued at
+    # random by the server (app/utils/member_badge.py). Unlike the membership
+    # number it appears nowhere in the directory, so a colleague cannot print
+    # a working copy; reissuing it cancels a lost badge. Never add it to a
+    # general user response — it is served only by /member-badges.
+    badge_code = Column(String(16), nullable=True, default=generate_badge_code)
     previous_membership_number = Column(
         String(50)
     )  # Preserved on soft-delete so returning members can reclaim their number
@@ -535,6 +542,7 @@ class User(Base):
             "membership_number",
             unique=True,
         ),
+        Index("idx_user_org_badge_code", "organization_id", "badge_code", unique=True),
         Index("idx_user_org_status_deleted", "organization_id", "status", "deleted_at"),
         Index("idx_user_created_at", "created_at"),
         Index("idx_user_last_login_at", "last_login_at"),
