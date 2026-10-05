@@ -3,6 +3,7 @@
 import json
 import uuid
 from datetime import date
+from types import SimpleNamespace
 
 import pytest
 
@@ -17,6 +18,7 @@ from app.models.training import (
 )
 from app.models.user import Organization, User
 from app.services.data_export_service import DataExportService
+from app.services.training_module_config_service import TrainingModuleConfigService
 
 pytestmark = pytest.mark.integration
 
@@ -168,6 +170,65 @@ class TestDataExportService:
         assert "officer_narrative" not in exported
         assert "performance_rating" not in exported
         assert "reviewer_notes" not in exported
+
+    async def test_a_missing_visibility_key_hides_the_field_rather_than_exporting_it(
+        self, db_session, monkeypatch
+    ):
+        """Fail closed on a setting the config did not report.
+
+        `to_visibility_dict` returns every key today, so this is unreachable
+        through the real config — which is the point: the export used to carry
+        its own copy of the model's default ("officer narrative off, everything
+        else on"), and that copy resolved a *missing* key to visible. An export
+        is the one path where silently disclosing an officer's written
+        evaluation of a trainee cannot be taken back, so an absent key must
+        withhold the field, not reveal it.
+        """
+        org = Organization(name="Export FD", slug=f"export-{uuid.uuid4().hex[:8]}")
+        db_session.add(org)
+        await db_session.flush()
+        trainee = await _make_member(db_session, org)
+        officer = await _make_member(db_session, org)
+        db_session.add(
+            TrainingModuleConfig(
+                organization_id=org.id,
+                show_areas_of_strength=True,
+                show_performance_rating=True,
+            )
+        )
+        db_session.add(
+            ShiftCompletionReport(
+                organization_id=org.id,
+                trainee_id=trainee.id,
+                officer_id=officer.id,
+                shift_date=date(2026, 8, 1),
+                hours_on_shift=8,
+                review_status="approved",
+                areas_of_strength="Teamwork",
+                performance_rating=4,
+            )
+        )
+        await db_session.flush()
+
+        real_get_config = TrainingModuleConfigService.get_config
+
+        async def _config_missing_a_key(self, organization_id):
+            config = await real_get_config(self, organization_id)
+            full = config.to_visibility_dict()
+            full.pop("show_performance_rating", None)
+            return SimpleNamespace(to_visibility_dict=lambda: full)
+
+        monkeypatch.setattr(
+            TrainingModuleConfigService, "get_config", _config_missing_a_key
+        )
+
+        export = await DataExportService(db_session).export_user_data(trainee)
+
+        exported = export["shift_completion_reports"][0]
+        # The reported key is honoured...
+        assert exported["areas_of_strength"] == "Teamwork"
+        # ...and the unreported one is withheld rather than defaulted open.
+        assert "performance_rating" not in exported
 
     async def test_audit_summary_counts_only_own_entries(self, db_session):
         org = Organization(name="Export FD", slug=f"export-{uuid.uuid4().hex[:8]}")
