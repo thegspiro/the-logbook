@@ -79,6 +79,38 @@ export const RoleManagementPage: React.FC = () => {
     setShowCreateModal(true);
   };
 
+  // ORU-7c: the baseline `member` position is held by every member, so a
+  // permission change to it is an organization-wide grant (or revocation) in
+  // one click. It is allowed — that is how a capability is rolled out — but
+  // never without saying how many people it reaches. The server's grant
+  // ceiling still applies; this is a guard against a slip, not a permission.
+  const confirmBaselineGrantChange = async (role: Role): Promise<boolean> => {
+    if (role.slug !== 'member') return true;
+    const before = new Set(role.permissions);
+    const after = new Set(formData.permissions);
+    const added = formData.permissions.filter((p) => !before.has(p));
+    const removed = role.permissions.filter((p) => !after.has(p));
+    if (added.length === 0 && removed.length === 0) return true;
+
+    const holders =
+      role.user_count === undefined
+        ? 'every member'
+        : `every member (${role.user_count} ${role.user_count === 1 ? 'member' : 'members'})`;
+    const changes = [
+      added.length > 0 ? `grants ${added.join(', ')}` : '',
+      removed.length > 0 ? `removes ${removed.join(', ')}` : '',
+    ]
+      .filter(Boolean)
+      .join(' and ');
+    return confirm({
+      title: `Change permissions for ${holders}`,
+      message: `"${role.name}" is the position every member holds. Saving ${changes} for ${holders} at once.`,
+      confirmLabel: role.user_count === undefined ? 'Apply to every member' : `Apply to ${role.user_count} members`,
+      cancelLabel: 'Keep editing',
+      variant: 'warning',
+    });
+  };
+
   const handleSubmit = () =>
     run(async () => {
       try {
@@ -87,6 +119,10 @@ export const RoleManagementPage: React.FC = () => {
         // "name: Value is too short" (workflow review W05).
         if (!formData.name.trim()) {
           setError('Give the role a name.');
+          return;
+        }
+
+        if (editingRole && !(await confirmBaselineGrantChange(editingRole))) {
           return;
         }
 

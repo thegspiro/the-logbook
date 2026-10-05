@@ -465,6 +465,13 @@ The Logbook uses a **position-based** permission system:
 >   can never lock itself out of member administration. If you see this error,
 >   grant another position the member-management permission first, then retry.
 
+> **Changing the Member position asks first** _(2026-10-05)_. Every member
+> holds the **Member** position, so adding or removing one of its permissions
+> changes what the whole department can do at once. Saving such a change opens
+> a confirmation that names the permissions being granted or removed and how
+> many members hold the position (**Apply to 42 members** / **Keep editing**).
+> Renaming it or editing its description does not ask.
+
 > **A role that holds a wildcard now saves** _(2026-10-04)_. Until this date,
 > changing any permission on a position that carried `*` (the IT Manager) or a
 > module grant such as `inventory.*` — the kind the setup wizard's **Manage**

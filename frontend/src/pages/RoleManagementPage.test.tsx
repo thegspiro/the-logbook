@@ -118,6 +118,81 @@ describe('RoleManagementPage', () => {
     expect(screen.getByText(/only the description and permissions/i)).toBeInTheDocument();
   });
 
+  // ORU-7c: the member position is held by everyone, so changing its grants
+  // asks first and names how many members it reaches.
+  describe('changing the baseline member position', () => {
+    const permissionCategories = [
+      {
+        category: 'events',
+        permissions: [
+          { name: 'events.view', description: 'View events', category: 'events' },
+          { name: 'events.manage', description: 'Manage events', category: 'events' },
+        ],
+      },
+    ];
+
+    beforeEach(() => {
+      vi.mocked(roleService.getRoles).mockReset();
+      vi.mocked(roleService.getRoles).mockResolvedValue([{ ...memberRole, user_count: 42 }]);
+      vi.mocked(roleService.getPermissionsByCategory).mockReset();
+      vi.mocked(roleService.getPermissionsByCategory).mockResolvedValue(permissionCategories);
+      vi.mocked(roleService.updateRole).mockReset();
+      vi.mocked(roleService.updateRole).mockResolvedValue(memberRole);
+    });
+
+    it('names the member count before granting, and saves only on confirm', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<RoleManagementPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Edit' }));
+      await user.click(screen.getByRole('checkbox', { name: /Manage events/ }));
+      await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+      const confirmDialog = await screen.findByRole('dialog', { name: /Change permissions for every member/ });
+      expect(confirmDialog).toHaveTextContent('every member (42 members)');
+      expect(confirmDialog).toHaveTextContent('grants events.manage');
+      expect(roleService.updateRole).not.toHaveBeenCalled();
+
+      await user.click(within(confirmDialog).getByRole('button', { name: 'Apply to 42 members' }));
+      await waitFor(() =>
+        expect(roleService.updateRole).toHaveBeenCalledWith(
+          'member-role',
+          expect.objectContaining({ permissions: ['events.view', 'events.manage'] })
+        )
+      );
+    });
+
+    it('does not save when the officer keeps editing', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<RoleManagementPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Edit' }));
+      await user.click(screen.getByRole('checkbox', { name: /View events/ }));
+      await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+      const confirmDialog = await screen.findByRole('dialog', { name: /Change permissions for every member/ });
+      expect(confirmDialog).toHaveTextContent('removes events.view');
+      await user.click(within(confirmDialog).getByRole('button', { name: 'Keep editing' }));
+
+      await waitFor(() =>
+        expect(screen.queryByRole('dialog', { name: /Change permissions for every member/ })).not.toBeInTheDocument()
+      );
+      expect(roleService.updateRole).not.toHaveBeenCalled();
+    });
+
+    it('does not ask when the change is not a permission change', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<RoleManagementPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Edit' }));
+      await user.type(screen.getByLabelText('Description'), ' updated');
+      await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+      await waitFor(() => expect(roleService.updateRole).toHaveBeenCalled());
+      expect(screen.queryByRole('dialog', { name: /Change permissions for every member/ })).not.toBeInTheDocument();
+    });
+  });
+
   // W05: the save error was rendered on the page behind the dialog, so a
   // refused save looked like a button that did nothing.
   describe('errors while the dialog is open', () => {
