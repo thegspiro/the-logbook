@@ -964,7 +964,9 @@ apparatus staffed** and **Shifts with other departments** — see
 
 ### Compliance Report
 
-The **Shift Compliance** report evaluates each member's shift attendance and hours against active training requirements of type SHIFTS or HOURS.
+The **Shift Compliance** report evaluates each member's shift attendance and hours against the active SHIFTS and HOURS requirements marked **Shift attendance satisfies this requirement** (the **Shift Credit** box on the requirement form).
+
+A SHIFTS requirement is ticked by default. An HOURS requirement is not: training hours such as annual hazmat hours are graded from training records on the training screens, and duty shifts do not count toward them. Tick the box on an HOURS requirement only when hours on shift are what it measures. Before 2026-10-05 the report graded every HOURS requirement from shifts, so an existing HOURS requirement that should stay on this report needs ticking once.
 
 The summary cards above the list count **requirement checks** — one per member
 per requirement that applies to them — so a member under three requirements is

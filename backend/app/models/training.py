@@ -467,6 +467,12 @@ class TrainingRecord(Base):
         return f"<TrainingRecord(user_id={self.user_id}, course={self.course_name}, status={self.status})>"
 
 
+def _default_shift_credited(context) -> bool:
+    """A new SHIFTS requirement is shift-credited unless the caller says not."""
+    value = context.get_current_parameters().get("requirement_type")
+    return str(getattr(value, "value", value)) == RequirementType.SHIFTS.value
+
+
 class TrainingRequirement(Base):
     """
     Training Requirement model
@@ -518,6 +524,21 @@ class TrainingRequirement(Base):
     # hands-on radios drill that a Vector course must not check off).
     allows_external_credit = Column(
         Boolean, default=False, nullable=False, server_default="0"
+    )
+
+    # May shift attendance satisfy this requirement? Read only by the
+    # scheduling Shift Compliance report (``get_shift_compliance``), which
+    # grades from shifts worked rather than training records. Before this
+    # flag it graded every HOURS requirement that way, so a training-hours
+    # requirement such as annual hazmat hours read compliant on ordinary duty
+    # shifts while every training screen said otherwise (W37-2). A SHIFTS
+    # requirement counts shifts by definition, so it defaults on; an HOURS
+    # requirement is shift-credited only when an officer says so.
+    shift_credited = Column(
+        Boolean,
+        default=_default_shift_credited,
+        nullable=False,
+        server_default="0",
     )
 
     # Requirement Quantities (based on requirement_type)

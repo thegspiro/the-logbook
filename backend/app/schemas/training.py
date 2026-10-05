@@ -372,6 +372,9 @@ class TrainingRequirementBase(BaseModel):
     # Opt-in: may imported/external training (e.g. Vector Solutions) auto-credit
     # this requirement by category? Off by default — in-house delivery only.
     allows_external_credit: bool = False
+    # May shift attendance satisfy it on the Shift Compliance report? Omitted
+    # on create, the model decides: on for a SHIFTS requirement, off otherwise.
+    shift_credited: Optional[bool] = None
     training_type: Optional[str] = None
     # Requirement quantities (field used depends on requirement_type)
     required_hours: Optional[float] = Field(None, ge=0)
@@ -540,6 +543,7 @@ class TrainingRequirementUpdate(BaseModel):
     registry_code: Optional[str] = Field(None, max_length=50)
     is_editable: Optional[bool] = None
     allows_external_credit: Optional[bool] = None
+    shift_credited: Optional[bool] = None
     training_type: Optional[str] = None
     required_hours: Optional[float] = Field(None, ge=0)
     required_courses: Optional[List[str]] = None
@@ -586,6 +590,15 @@ class TrainingRequirementUpdate(BaseModel):
     def _validate_frequency(cls, v: Optional[str]) -> Optional[str]:
         return validate_enum_value(v, ModelRequirementFrequency, "frequency")
 
+    @field_validator("shift_credited")
+    @classmethod
+    def _shift_credited_not_null(cls, v: Optional[bool]) -> Optional[bool]:
+        # Runs only when the key is sent. The column is NOT NULL, and there is
+        # no "cleared" state for a yes/no flag to fall back to.
+        if v is None:
+            raise ValueError("shift_credited must be true or false")
+        return v
+
     @field_validator("training_type")
     @classmethod
     def _validate_training_type(cls, v: Optional[str]) -> Optional[str]:
@@ -598,6 +611,7 @@ class TrainingRequirementResponse(TrainingRequirementBase, UTCResponseBase):
     id: UUID
     organization_id: UUID
     active: bool
+    shift_credited: bool = False
     created_at: datetime
     updated_at: datetime
     created_by: Optional[UUID] = None

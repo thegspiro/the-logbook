@@ -1382,10 +1382,15 @@ async def create_requirement(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
 
+    requirement_values = requirement.model_dump()
+    # An explicit NULL would bypass the model's type-dependent default and
+    # fail the NOT NULL column; omitted means "let the type decide".
+    if requirement_values.get("shift_credited") is None:
+        requirement_values.pop("shift_credited", None)
     new_requirement = TrainingRequirement(
         organization_id=current_user.organization_id,
         created_by=current_user.id,
-        **requirement.model_dump(),
+        **requirement_values,
     )
     # due_date only means anything for fixed_date -- clear anything else the
     # client sent so a stale value from a form that hasn't cleared its own

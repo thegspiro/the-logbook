@@ -726,6 +726,7 @@ export interface TrainingRequirement {
   // Opt-in: may imported/external training (e.g. Vector Solutions) auto-credit
   // this requirement by category? Off by default — in-house delivery only.
   allows_external_credit?: boolean;
+  shift_credited?: boolean;
   training_type?: TrainingType;
   // Requirement quantities (field used depends on requirement_type)
   required_hours?: number;
@@ -786,6 +787,8 @@ export interface TrainingRequirementCreate {
   registry_code?: string | undefined;
   is_editable?: boolean | undefined;
   allows_external_credit?: boolean | undefined;
+  /** May shift attendance satisfy it on the Shift Compliance report? Omitted on create, the type decides. */
+  shift_credited?: boolean | undefined;
   training_type?: TrainingType | undefined;
   required_hours?: number | null | undefined;
   required_courses?: string[] | undefined;
@@ -834,6 +837,8 @@ export interface TrainingRequirementUpdate {
   registry_code?: string | undefined;
   is_editable?: boolean | undefined;
   allows_external_credit?: boolean | undefined;
+  /** May shift attendance satisfy it on the Shift Compliance report? Omitted on create, the type decides. */
+  shift_credited?: boolean | undefined;
   training_type?: TrainingType | undefined;
   required_hours?: number | null | undefined;
   required_courses?: string[] | undefined;

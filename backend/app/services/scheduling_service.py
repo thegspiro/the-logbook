@@ -8006,7 +8006,13 @@ class SchedulingService:
     ) -> List[Dict]:
         """
         Compute shift/hours compliance for all members against active
-        TrainingRequirements of type SHIFTS or HOURS.
+        shift-credited TrainingRequirements of type SHIFTS or HOURS.
+
+        Only requirements marked ``shift_credited`` are graded here. Shift
+        attendance is not training, so an HOURS requirement the department
+        has not opted in stays with the training screens, which grade it from
+        training records — grading it here as well put two answers to one
+        question on two screens (W37-2).
 
         Returns a list of requirement compliance summaries, each containing
         per-member progress data.
@@ -8019,6 +8025,7 @@ class SchedulingService:
             select(TrainingRequirement)
             .where(TrainingRequirement.organization_id == str(organization_id))
             .where(TrainingRequirement.active.is_(True))
+            .where(TrainingRequirement.shift_credited.is_(True))
             .where(
                 TrainingRequirement.requirement_type.in_(
                     [
