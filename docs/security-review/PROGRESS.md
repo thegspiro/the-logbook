@@ -16,9 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#PENDING](https://github.com/thegspiro/the-logbook/pull/PENDING)**:
-branch `claude/security-review-storefront-payments`, Feature 04 (Storefront
-& payments), pass 7.
+**PR [#2940](https://github.com/thegspiro/the-logbook/pull/2940)**: branch
+`claude/security-review-storefront-payments`, Feature 04 (Storefront &
+payments), pass 7.
 
 - **Result:** 0 fixes, 0 new findings, 0 flagged.
 - **Method:** not a zero-delta pass (unlike pass 6) — 3 backend files and 22
