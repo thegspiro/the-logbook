@@ -2504,6 +2504,13 @@ class SelfReportConfig(Base):
     # Instructions displayed to members
     member_instructions = Column(Text, nullable=True)
 
+    # Days a decided (approved or rejected) submission's certificate files
+    # are kept after the decision; null = keep indefinitely, which is what
+    # every department had before this setting existed. Read by the
+    # self_report_attachment_retention scheduled task
+    # (app/services/self_report_attachment_retention.py).
+    attachment_retention_days = Column(Integer, nullable=True)
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(

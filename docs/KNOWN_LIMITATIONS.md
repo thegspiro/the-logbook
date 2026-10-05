@@ -725,13 +725,37 @@ also references the file. **If that guard is ever widened, the delete must
 stop unlinking**, or an approved member's evidence disappears from their
 training record.
 
+**Retention is the department's (resolved 2026-10-05).** Training Admin →
+Review Submissions → Settings → **Certificate Files** sets
+`self_report_configs.attachment_retention_days`. Unset means keep
+indefinitely — the previous behaviour, so an upgrade deletes nothing. Once set
+(90-day floor), the daily `self_report_attachment_retention` task deletes the
+stored files of every approved or rejected submission decided longer ago than
+that, and removes the references from the submission and from every training
+record of that member that copied them — including a record voided by an
+approval reversal. Submission and record rows stay. Only paths inside the
+organization's own upload directory are touched, files go before the database
+update so a failed commit is completed by the next run, and each organization's
+sweep is audited as `self_report_attachment_retention`; changing the period is
+audited as `self_report_attachment_retention_updated`.
+
+Still open from the original question: **nothing sweeps an organization's
+files when the organization itself is removed.** The owner chose a
+department-set period over an organization-removal sweep, and the only flow
+that deletes organizations today is the onboarding reset
+(`POST /onboarding/reset`), which runs before a department has members
+reporting training. A future organization-deletion flow must remove
+`self_reported_submissions/<org_id>/` itself — the retention task reads a
+`self_report_configs` row, which goes with the organization. A record whose certificate has been
+swept shows no attachment and says nothing about why — the audit trail is the
+only account of it.
+
 **What is still open:**
 
-| Item                             | Status         | Detail                                                                                                                                                                                                                                                              |
-| -------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **No retention policy**          | Open (policy)  | Approved certificates are kept indefinitely, which is what a training record is for, but nothing expires them and nothing sweeps an organization's files if the organization itself is removed. Needs a records-retention decision from the department before code. |
-| **No malware scanning**          | Open (feature) | Uploads are validated by magic bytes and confined to a server-generated name, so a double extension cannot survive the trip and nothing is executed server-side. They are not scanned. A file served back to an officer is whatever the member uploaded.            |
-| **Voided records keep the file** | By design      | `DELETE /training/records/{id}` marks a record `cancelled` rather than removing it, so the correction stays auditable — and the evidence behind the corrected entry stays with it.                                                                                  |
+| Item                             | Status         | Detail                                                                                                                                                                                                                                                   |
+| -------------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **No malware scanning**          | Open (feature) | Uploads are validated by magic bytes and confined to a server-generated name, so a double extension cannot survive the trip and nothing is executed server-side. They are not scanned. A file served back to an officer is whatever the member uploaded. |
+| **Voided records keep the file** | By design      | `DELETE /training/records/{id}` marks a record `cancelled` rather than removing it, so the correction stays auditable — and the evidence behind the corrected entry stays with it.                                                                       |
 
 ## Scheduling Module
 

@@ -3136,9 +3136,14 @@ stepper.
 
 ### What records officers should know about the files
 
-- **Approved certificates are kept indefinitely.** That is what a training
-  record is for, and nothing expires them. If your department has a
-  records-retention rule, this needs a decision from you.
+- **Certificates are kept indefinitely unless your department sets a
+  retention period** _(2026-10-05)_. In **Review Submissions → Settings →
+  Certificate Files**, enter how many days after an approval or rejection the
+  uploaded files should be kept (minimum 90). A daily task then deletes older
+  files and removes them from the submission and the member's training record —
+  the record itself, its hours and its dates stay. Leave the box empty to keep
+  files indefinitely, which is also what happens until someone sets it. Every
+  change to the period, and every file the task deletes, is in the audit log.
 - **Files are not scanned for malware.** They are checked to be genuinely the
   file type they claim and stored under a name the server chooses, so nothing
   runs on the server — but a certificate opened by an officer is whatever the

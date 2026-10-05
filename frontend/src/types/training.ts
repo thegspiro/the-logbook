@@ -1605,6 +1605,8 @@ export interface SelfReportConfig {
   allowed_training_types?: string[];
   max_hours_per_submission?: number;
   member_instructions?: string;
+  /** Days a decided submission's certificate files are kept; null = indefinitely. */
+  attachment_retention_days?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -1619,6 +1621,7 @@ export interface SelfReportConfigUpdate {
   allowed_training_types?: string[] | null;
   max_hours_per_submission?: number | null;
   member_instructions?: string | null;
+  attachment_retention_days?: number | null;
 }
 
 /**

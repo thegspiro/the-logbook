@@ -311,6 +311,12 @@ SCHEDULE = {
         "recommended_time": "03:30",
         "cron": "30 3 * * *",
     },
+    "self_report_attachment_retention": {
+        "description": "Delete self-reported training certificate files once a decided submission is older than the department's retention period (self-report settings). Departments that never set one keep files indefinitely.",
+        "frequency": "daily",
+        "recommended_time": "03:45",
+        "cron": "45 3 * * *",
+    },
     "scheduled_emails": {
         "description": "Process pending scheduled emails that are due to be sent",
         "frequency": "every 1 minute",
@@ -3890,6 +3896,23 @@ async def run_retention_enforcement(db: AsyncSession) -> Dict[str, Any]:
     return result
 
 
+async def run_self_report_attachment_retention(db: AsyncSession) -> Dict[str, Any]:
+    """Expire self-reported certificate files per each department's setting.
+
+    The reader of ``SelfReportConfig.attachment_retention_days``; see
+    app/services/self_report_attachment_retention.py. Commits per
+    organization itself, so one department's failure does not discard
+    another's completed sweep.
+    """
+    from app.services.self_report_attachment_retention import (
+        SelfReportAttachmentRetention,
+    )
+
+    result = await SelfReportAttachmentRetention(db).sweep()
+    result["task"] = "self_report_attachment_retention"
+    return result
+
+
 async def run_message_history_cleanup(db: AsyncSession) -> Dict[str, Any]:
     """
     Legacy alias for message-history retention (kept for existing crontabs).
@@ -6585,6 +6608,7 @@ TASK_RUNNERS = {
     "audit_log_archival": run_audit_log_archival,
     "audit_log_ship": run_audit_log_ship,
     "retention_enforcement": run_retention_enforcement,
+    "self_report_attachment_retention": run_self_report_attachment_retention,
     "scheduled_emails": run_scheduled_emails,
     "storefront_window_lifecycle": run_storefront_window_lifecycle,
     "storefront_payment_reminders": run_storefront_payment_reminders,
@@ -6681,6 +6705,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "audit_log_ship": 1800,
     # Daily — org-configured records retention
     "retention_enforcement": 86400,
+    "self_report_attachment_retention": 86400,
     # Monthly (approx — 30 days)
     "membership_tier_advance": 2592000,
 }
