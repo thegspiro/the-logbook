@@ -219,8 +219,9 @@ URL / Download PNG / Regenerate in each card's existing action row.
 
 **Prefer an apparatus-keyed tag for anything physically mounted.** The URL is
 `/scheduling/checkin?apparatus=<id>`, which resolves to whichever shift is
-running when the tag is tapped — today's non-finalized shift, else one that
-ended within two hours, else the next upcoming. One tag on the truck therefore
+running when the tag is tapped — the shift whose start and end times span the
+tap, else one that ended within two hours, else the next upcoming. Cancelled and
+finalized shifts are skipped. One tag on the truck therefore
 serves every shift. A shift-keyed tag is dead the moment that shift ends.
 
 The member lands on the shift check-in page, which names the unit, date and

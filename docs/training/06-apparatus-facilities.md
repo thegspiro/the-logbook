@@ -254,12 +254,10 @@ it is used rather than naming a shift, so one sticker on the dashboard serves
 every shift for the life of the truck. A tag tied to a single shift is dead the
 moment that shift ends.
 
-**What it resolves to is looser than "the shift running right now."** It takes
-the truck's earliest open shift dated today, then one that ended within the last
-two hours, then the next one coming up — it does not check the shift's start and
-end times, and it does not skip cancelled shifts. On a truck with a day and a
-night crew, a tap at 2000 lands on the day shift; a shift nobody closed out
-keeps winning until somebody does.
+**What it resolves to.** The truck's shift running right now; if none is, one
+that ended within the last two hours (a late check-in after the tour); if none
+did, the next one coming up. Cancelled and closed-out shifts are skipped. On a
+truck with a day and a night crew, a tap at 2000 lands on the night shift.
 
 The member lands on a page naming the unit, the date and the hours, so they can
 see which shift they were matched to before confirming. **Tell members to

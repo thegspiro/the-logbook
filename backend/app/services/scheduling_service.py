@@ -1975,58 +1975,67 @@ class SchedulingService:
         apparatus_id: str,
         organization_id: UUID,
     ) -> Optional[Shift]:
-        """Find the current or next upcoming shift for an apparatus.
+        """The shift an apparatus QR code or NFC tag should check a member into.
 
-        Looks for a non-finalized shift whose date is today
-        (or the most recent past shift if none today), then
-        falls back to the next future shift.
+        In order: a shift running now; else one that ended within the last two
+        hours (a late check-in after the tour); else the next one to start.
+        Cancelled and finalized shifts are never chosen (owner decision
+        SCHED-18). This used to take the earliest shift dated today with no
+        time check and no status filter, so on an apparatus with day and night
+        shifts a tap at 2000 landed on the 0600 shift, and a cancelled shift
+        won over the one that ran.
+
+        A shift with no end time counts as running from its start to the end
+        of its own date.
         """
         today = await resolve_org_today(self.db, organization_id)
         now = datetime.now(timezone.utc)
+        usable = (
+            Shift.apparatus_id == apparatus_id,
+            Shift.organization_id == str(organization_id),
+            Shift.is_finalized.is_(False),
+            Shift.status != ShiftStatus.CANCELLED,
+        )
 
-        today_shift = (
+        running = (
             await self.db.execute(
                 select(Shift)
                 .where(
-                    Shift.apparatus_id == apparatus_id,
-                    Shift.organization_id == str(organization_id),
-                    Shift.shift_date == today,
-                    Shift.is_finalized.is_(False),
+                    *usable,
+                    Shift.start_time <= now,
+                    or_(
+                        Shift.end_time > now,
+                        and_(Shift.end_time.is_(None), Shift.shift_date == today),
+                    ),
                 )
-                .order_by(Shift.start_time.asc())
-                .limit(1)
-            )
-        ).scalar_one_or_none()
-
-        if today_shift:
-            return today_shift
-
-        recent_shift = (
-            await self.db.execute(
-                select(Shift)
-                .where(
-                    Shift.apparatus_id == apparatus_id,
-                    Shift.organization_id == str(organization_id),
-                    Shift.is_finalized.is_(False),
-                    Shift.end_time >= now - timedelta(hours=2),
-                )
+                # Overlapping shifts: the one that started last is the one
+                # the member is arriving for.
                 .order_by(Shift.start_time.desc())
                 .limit(1)
             )
         ).scalar_one_or_none()
+        if running:
+            return running
 
-        if recent_shift:
-            return recent_shift
+        just_ended = (
+            await self.db.execute(
+                select(Shift)
+                .where(
+                    *usable,
+                    Shift.end_time <= now,
+                    Shift.end_time >= now - timedelta(hours=2),
+                )
+                .order_by(Shift.end_time.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if just_ended:
+            return just_ended
 
         upcoming = (
             await self.db.execute(
                 select(Shift)
-                .where(
-                    Shift.apparatus_id == apparatus_id,
-                    Shift.organization_id == str(organization_id),
-                    Shift.shift_date > today,
-                    Shift.is_finalized.is_(False),
-                )
+                .where(*usable, Shift.start_time > now)
                 .order_by(Shift.start_time.asc())
                 .limit(1)
             )

@@ -767,30 +767,6 @@ wording was not:
   tell a quiet tour from an unanswered question. Preserving it needs a stored
   marker.
 
-## Scheduling — the Apparatus Tag Resolver Is Not a "Currently Running" Lookup (2026-08-19)
-
-`get_active_shift_for_apparatus()` backs `/scheduling/checkin?apparatus=<id>`,
-the form the documentation recommends for a QR code or NFC tag physically
-mounted on a truck — it resolves when used, so one sticker outlives every shift.
-What it resolves to is looser than the phrase "whichever shift is running",
-which several guides used until this was caught:
-
-- The first query takes the **earliest-starting** non-finalized shift whose
-  `shift_date` is today, with **no start/end window check**. On an apparatus
-  running a day and a night shift, a tap at 2000 resolves to the 0600 shift.
-- **`status == cancelled` is excluded nowhere** in any of the three queries —
-  only `is_finalized` is. A cancelled shift dated today wins over the one that
-  actually ran.
-- A stale shift nobody closed out has the same effect, and keeps having it until
-  it is finalized.
-
-The consequence is bounded rather than silent: `ShiftCheckInPage` names the
-unit, date and hours before the member confirms, so a wrong resolution is
-visible to anyone reading the screen — which is why the guides now tell members
-to read it. The resolver is unchanged here because tightening it changes which
-shift existing QR **and** tag check-ins land on, which is a behaviour change
-wanting its own review. (SCHED-18)
-
 ## The Two Apparatus Tables (2026-08-08)
 
 Not a limitation — a piece of the data model that is easy to get wrong, recorded
