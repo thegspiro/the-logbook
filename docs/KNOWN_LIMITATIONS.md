@@ -815,6 +815,29 @@ Still open: order and request numbers (`ORD-YYYY-`, `PR-YYYY-`) take their year
 from UTC, which differs only on the evening of December 31 and changes nothing
 but the prefix.
 
+## Sign-in From a Shared Station Address (2026-10-05)
+
+**Open decision.** A station's members usually share one public address, and
+two sign-in limits are counted per address rather than per member:
+
+- nginx's `login_limit` in both bundled proxies (`infrastructure/nginx/nginx.conf`,
+  `infrastructure/nginx/docker.conf`): 5 a minute, burst 3.
+- The backend's `rate_limit_login` (`app/core/security_middleware.py`): 5
+  attempts in 60 seconds, counting successful ones. With Redis — the bundled
+  stack — the next sign-in is refused with a 429 for the rest of the minute;
+  on the in-memory fallback it locks the address out for 30 minutes.
+
+So at shift change, the sixth member to sign in at the station within a minute
+is turned away, and on the in-memory fallback everyone behind that address is
+locked out for half an hour. Both are brute-force controls, so neither was
+loosened when the general per-address limits were sized for a department
+(`limit_conn 400`, API 50/s with a burst of 600 — see
+`test_nginx_config_consistency.py`). The options are to raise the per-address
+count, or to key the backend limiter on the account as well as the address;
+account lockout and the suspicious-IP throttle already cover the cross-account
+case. Until then, with Redis running, the cost is a member asked to wait a
+minute.
+
 ## Suggestion Boxes — What Anonymity Does and Does Not Cover (2026-09-23)
 
 **Accepted.** An anonymous suggestion is stored with no record of its author:
