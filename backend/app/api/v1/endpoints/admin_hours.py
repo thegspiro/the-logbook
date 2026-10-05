@@ -786,7 +786,7 @@ async def review_entry(
         category = await service.get_category(
             entry.category_id, str(current_user.organization_id)
         )
-        approver_name = f"{current_user.first_name} {current_user.last_name}"
+        approver_name = current_user.display_name
         return {
             "id": entry.id,
             "organization_id": entry.organization_id,

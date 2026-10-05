@@ -503,7 +503,7 @@ export default function RoomQRCodesPage() {
   const nothingMatches = groups.length === 0 && filteredApparatus.length === 0 && tagOnlyRooms.length === 0;
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6">
       {/* Header */}
       <div className="no-print">
         <Link

@@ -71,6 +71,7 @@ def _target(*, rank=None, member_class=None, membership_type="active"):
         membership_type=membership_type,
         membership_type_changed_at=None,
         full_name="Dana Reyes",
+        display_name="Dana Reyes",
     )
 
 
@@ -610,6 +611,7 @@ class TestAutomaticTierAdvancement:
         return SimpleNamespace(
             id=str(uuid4()),
             full_name="Dana Reyes",
+            display_name="Dana Reyes",
             rank=rank,
             member_class=None,
             member_status=None,

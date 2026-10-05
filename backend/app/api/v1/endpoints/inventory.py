@@ -1842,7 +1842,7 @@ async def get_item(
     if item.assigned_to_user:
         # The detail page's Assignment card prints who holds the item; without
         # a name it showed the raw user id.
-        payload.assigned_to_name = item.assigned_to_user.full_name
+        payload.assigned_to_name = item.assigned_to_user.display_name
     is_quartermaster = _is_quartermaster(current_user)
     if is_quartermaster and item.label_printed_by:
         # Org-scoped like every by-id read, though the id came from our row.
@@ -1852,7 +1852,7 @@ async def get_item(
                 User.organization_id == str(current_user.organization_id),
             )
         )
-        payload.label_printed_by_name = printer.full_name if printer else None
+        payload.label_printed_by_name = printer.display_name if printer else None
     return _redact_holder(payload, current_user, is_quartermaster)
 
 
@@ -2526,11 +2526,7 @@ def _build_checkout_response(record: CheckOutRecord) -> dict:
         "item_id": record.item_id,
         "item_name": record.item.name if record.item else "Unknown",
         "user_id": record.user_id,
-        "user_name": (
-            f"{record.user.first_name} {record.user.last_name}".strip()
-            if record.user
-            else "Unknown"
-        ),
+        "user_name": record.user.display_name if record.user else "Unknown",
         "checked_out_at": (
             record.checked_out_at.isoformat() if record.checked_out_at else None
         ),
@@ -2735,7 +2731,7 @@ async def get_item_maintenance_history(
     for record in maintenance_records:
         payload = MaintenanceRecordResponse.model_validate(record)
         if record.technician:
-            payload.performed_by_name = record.technician.full_name
+            payload.performed_by_name = record.technician.display_name
         responses.append(payload)
     return responses
 
@@ -4102,11 +4098,7 @@ async def list_equipment_requests(
             {
                 "id": r.id,
                 "requester_id": r.requester_id,
-                "requester_name": (
-                    f"{r.requester.first_name} {r.requester.last_name}".strip()
-                    if r.requester
-                    else None
-                ),
+                "requester_name": r.requester.display_name if r.requester else None,
                 "item_name": r.item_name,
                 "item_id": r.item_id,
                 "category_id": r.category_id,
@@ -4153,11 +4145,7 @@ async def list_equipment_requests(
                 "reason": r.reason,
                 "status": r.status if isinstance(r.status, str) else r.status.value,
                 "reviewed_by": r.reviewed_by,
-                "reviewer_name": (
-                    f"{r.reviewer.first_name} {r.reviewer.last_name}".strip()
-                    if r.reviewer
-                    else None
-                ),
+                "reviewer_name": r.reviewer.display_name if r.reviewer else None,
                 "reviewed_at": r.reviewed_at.isoformat() if r.reviewed_at else None,
                 "review_notes": r.review_notes,
                 "fulfilled_by": r.fulfilled_by,
@@ -6258,9 +6246,7 @@ async def create_return_request(
 
     # Build response with requester name
     resp = ReturnRequestResponse.model_validate(request_obj)
-    resp.requester_name = (
-        f"{current_user.first_name or ''} {current_user.last_name or ''}".strip()
-    )
+    resp.requester_name = current_user.display_name
     return resp
 
 
@@ -6301,9 +6287,9 @@ async def list_return_requests(
         resp = ReturnRequestResponse.model_validate(req)
         # Enrich with names
         if req.requester:
-            resp.requester_name = f"{req.requester.first_name or ''} {req.requester.last_name or ''}".strip()
+            resp.requester_name = req.requester.display_name
         if req.reviewer:
-            resp.reviewer_name = f"{req.reviewer.first_name or ''} {req.reviewer.last_name or ''}".strip()
+            resp.reviewer_name = req.reviewer.display_name
         result.append(resp)
 
     return result
@@ -6421,14 +6407,10 @@ def _reorder_response(req) -> ReorderRequestResponse:
     )
     requester = req.__dict__.get("requester")
     if requester is not None:
-        resp.requester_name = (
-            f"{requester.first_name or ''} {requester.last_name or ''}".strip()
-        )
+        resp.requester_name = requester.display_name
     approver = req.__dict__.get("approver")
     if approver is not None:
-        resp.approver_name = (
-            f"{approver.first_name or ''} {approver.last_name or ''}".strip()
-        )
+        resp.approver_name = approver.display_name
     vendor = req.__dict__.get("vendor_record")
     if vendor is not None:
         resp.vendor_name = vendor.name

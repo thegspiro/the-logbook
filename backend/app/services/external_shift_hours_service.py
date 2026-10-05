@@ -295,7 +295,7 @@ class ExternalShiftHoursService:
         return {
             "id": entry.id,
             "user_id": entry.user_id,
-            "member_name": member.full_name if member is not None else None,
+            "member_name": member.display_name if member is not None else None,
             "shift_date": entry.shift_date,
             "hours": round((entry.duration_minutes or 0) / 60, 2),
             "start_at": entry.start_at,
@@ -307,7 +307,7 @@ class ExternalShiftHoursService:
             "notes": entry.notes,
             "status": entry.status,
             "reviewed_by": entry.reviewed_by,
-            "reviewer_name": reviewer.full_name if reviewer is not None else None,
+            "reviewer_name": reviewer.display_name if reviewer is not None else None,
             "reviewed_at": entry.reviewed_at,
             "rejection_reason": entry.rejection_reason,
             "created_at": entry.created_at,

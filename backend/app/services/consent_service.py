@@ -120,6 +120,7 @@ class ConsentService:
                 User.id,
                 User.first_name,
                 User.last_name,
+                User.preferred_name,
                 User.photo_url,
                 User.rank,
                 User.station,
@@ -157,6 +158,9 @@ class ConsentService:
                     "user_id": str(row.id),
                     "first_name": row.first_name,
                     "last_name": row.last_name,
+                    # The roster names members as they go by on a photo
+                    # call sheet; the legal parts stay alongside.
+                    "preferred_name": row.preferred_name,
                     "photo_url": row.photo_url,
                     "rank": row.rank,
                     "station": row.station,

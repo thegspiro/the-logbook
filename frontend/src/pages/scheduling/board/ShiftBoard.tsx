@@ -30,6 +30,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatCalendarDate } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { displayNameOf } from '../../../utils/memberName';
 import DayDetailPanel from './DayDetailPanel';
 import GiveUpShiftModal from './GiveUpShiftModal';
 import MonthGrid from './MonthGrid';
@@ -336,7 +337,7 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
               {
                 assignment_id: `pending-${shift.id}`,
                 user_id: String(currentUserId),
-                user_name: user?.full_name ?? 'You',
+                user_name: (user ? displayNameOf(user) : '') || 'You',
                 position: seat,
                 status: 'assigned',
               },

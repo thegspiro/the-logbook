@@ -144,7 +144,7 @@ class DriverExceptionService:
                 approvers.append(
                     {
                         "user_id": str(user.id),
-                        "user_name": user.full_name,
+                        "user_name": user.display_name,
                         "rank": user.rank,
                     }
                 )

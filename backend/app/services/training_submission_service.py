@@ -32,6 +32,7 @@ from app.models.training import (
 from app.models.user import Role, User, user_roles
 from app.services.notifications_service import NotificationsService
 from app.services.separation_of_duties import assert_different_person
+from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
 
@@ -793,18 +794,23 @@ class TrainingSubmissionService:
             f"({submission.hours_completed:g}h, completed {completed})"
         )
 
-    async def _full_name(
+    async def _display_name(
         self, user_id: str, organization_id: str, fallback: str
     ) -> str:
+        """The name a member goes by, for in-app notification text."""
         row = (
             await self.db.execute(
-                select(User.first_name, User.last_name).where(
+                select(User.first_name, User.last_name, User.preferred_name).where(
                     User.id == user_id,
                     User.organization_id == organization_id,
                 )
             )
         ).first()
-        name = f"{row.first_name or ''} {row.last_name or ''}".strip() if row else ""
+        name = (
+            format_display_name(row.first_name, row.last_name, row.preferred_name)
+            if row
+            else ""
+        )
         return name or fallback
 
     async def _deliver_in_app(
@@ -871,7 +877,7 @@ class TrainingSubmissionService:
             ]
             if not officers:
                 return []
-            name = await self._full_name(submitted_by, organization_id, "A member")
+            name = await self._display_name(submitted_by, organization_id, "A member")
             return [
                 NotificationLog(
                     organization_id=organization_id,
@@ -917,7 +923,7 @@ class TrainingSubmissionService:
         notes = (notes or "").strip()
 
         async def build() -> List[NotificationLog]:
-            officer = await self._full_name(
+            officer = await self._display_name(
                 str(officer_id), organization_id, "A training officer"
             )
             if decision == "rejected":

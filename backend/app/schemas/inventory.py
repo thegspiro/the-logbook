@@ -1249,7 +1249,10 @@ class MemberInventorySummary(BaseModel):
     username: str
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    preferred_name: Optional[str] = None
+    # Legal first + last. display_name is the name the member goes by.
     full_name: Optional[str] = None
+    display_name: Optional[str] = None
     membership_number: Optional[str] = None
     permanent_count: int = 0
     checkout_count: int = 0

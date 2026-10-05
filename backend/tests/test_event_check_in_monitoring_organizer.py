@@ -20,6 +20,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.models.event import CheckInWindowType, EventType
+from app.models.user import User
 from app.services.event_service import EventService
 
 pytestmark = [pytest.mark.unit]
@@ -43,8 +44,10 @@ def _event():
     )
 
 
-def _creator(first="Sam", last="Ortiz", username="sortiz"):
-    return SimpleNamespace(first_name=first, last_name=last, username=username)
+def _creator(first="Sam", last="Ortiz", username="sortiz", preferred=None):
+    return User(
+        first_name=first, last_name=last, username=username, preferred_name=preferred
+    )
 
 
 def _db(creator):
@@ -73,6 +76,15 @@ class TestOrganizerOnMonitoringStats:
 
         assert error is None
         assert stats["created_by_name"] == "Sam Ortiz"
+
+    async def test_the_organizer_is_named_as_they_go_by(self):
+        db = _db(_creator(first="John", last="Heather", preferred="Terry"))
+
+        stats, _ = await EventService(db).get_check_in_monitoring_stats(
+            event_id="event-1", organization_id="org-1"
+        )
+
+        assert stats["created_by_name"] == "Terry Heather"
 
     async def test_it_costs_no_extra_query(self):
         """The reason the creator is outer-joined onto the event fetch.
