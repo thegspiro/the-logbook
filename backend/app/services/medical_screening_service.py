@@ -8,7 +8,7 @@ records, and compliance tracking.
 from datetime import date, timedelta
 from typing import List, Optional
 
-from sqlalchemy import and_, select
+from sqlalchemy import Select, and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.utils import generate_uuid
@@ -35,6 +35,15 @@ from app.utils.org_scoping import assert_in_org
 from app.utils.org_timezone import resolve_org_today
 
 
+def _page(query: Select, skip: int, limit: Optional[int]) -> Select:
+    """Apply OFFSET/LIMIT to a list query; ``limit=None`` leaves it unbounded."""
+    if skip:
+        query = query.offset(skip)
+    if limit is not None:
+        query = query.limit(limit)
+    return query
+
+
 class MedicalScreeningService:
     """Service for medical screening operations."""
 
@@ -48,8 +57,16 @@ class MedicalScreeningService:
         organization_id: str,
         is_active: Optional[bool] = None,
         screening_type: Optional[str] = None,
+        skip: int = 0,
+        limit: Optional[int] = None,
     ) -> List[ScreeningRequirement]:
-        """List screening requirements for an organization."""
+        """List screening requirements for an organization.
+
+        ``skip``/``limit`` page in SQL (MS-6) — the endpoint used to load every
+        row and slice in Python. ``limit=None`` keeps the full set for internal
+        callers such as ``get_compliance_status``, which must grade against
+        every active requirement.
+        """
         query = select(ScreeningRequirement).where(
             ScreeningRequirement.organization_id == organization_id
         )
@@ -57,7 +74,10 @@ class MedicalScreeningService:
             query = query.where(ScreeningRequirement.is_active == is_active)
         if screening_type:
             query = query.where(ScreeningRequirement.screening_type == screening_type)
-        query = query.order_by(ScreeningRequirement.name)
+        # id breaks ties so two requirements sharing a name cannot swap pages
+        # between requests.
+        query = query.order_by(ScreeningRequirement.name, ScreeningRequirement.id)
+        query = _page(query, skip, limit)
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -138,8 +158,15 @@ class MedicalScreeningService:
         prospect_id: Optional[str] = None,
         screening_type: Optional[str] = None,
         status: Optional[str] = None,
+        skip: int = 0,
+        limit: Optional[int] = None,
     ) -> List[ScreeningRecord]:
-        """List screening records with optional filters."""
+        """List screening records with optional filters.
+
+        ``skip``/``limit`` page in SQL (MS-6). ``limit=None`` returns every
+        match, which only internal callers use — ``get_compliance_status``
+        always passes a single subject, so its set is one person's history.
+        """
         query = select(ScreeningRecord).where(
             ScreeningRecord.organization_id == organization_id
         )
@@ -151,7 +178,10 @@ class MedicalScreeningService:
             query = query.where(ScreeningRecord.screening_type == screening_type)
         if status:
             query = query.where(ScreeningRecord.status == status)
-        query = query.order_by(ScreeningRecord.created_at.desc())
+        # created_at has one-second resolution, so a batch entered together
+        # ties on it; id keeps the order stable across page requests.
+        query = query.order_by(ScreeningRecord.created_at.desc(), ScreeningRecord.id)
+        query = _page(query, skip, limit)
         result = await self.db.execute(query)
         return list(result.scalars().all())
 

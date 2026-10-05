@@ -51,8 +51,10 @@ async def list_requirements(
         organization_id=current_user.organization_id,
         is_active=is_active,
         screening_type=screening_type,
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
-    return requirements[pagination.skip : pagination.skip + pagination.limit]
+    return requirements
 
 
 @router.get(
@@ -200,12 +202,13 @@ async def list_records(
         prospect_id=prospect_id,
         screening_type=screening_type,
         status=record_status,
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
-    page = records[pagination.skip : pagination.skip + pagination.limit]
-    # Enrich only the returned page — resolves the name fields the response
-    # schema promises (else the UI shows "Unknown" for every row).
-    await service.attach_record_names(current_user.organization_id, page)
-    return page
+    # Resolves the name fields the response schema promises (else the UI
+    # shows "Unknown" for every row).
+    await service.attach_record_names(current_user.organization_id, records)
+    return records
 
 
 @router.get(

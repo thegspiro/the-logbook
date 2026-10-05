@@ -156,8 +156,9 @@ current code rather than carried forward on the strength of its last write-up.
   as an `?? 'Unknown'` row, `ComplianceDashboard.tsx:43`) is already recorded in
   that notice's own guard test and in `KNOWN_LIMITATIONS.md`, so rewording
   another track's deliberate copy would add nothing.
-- **MS-6 (unbounded lists) — still open.** `list_requirements` and
-  `list_records` still `.all()` the org's full set with no SQL `LIMIT`/`OFFSET`.
+- **MS-6 (unbounded lists) — still open at this pass; fixed 2026-10-05.**
+  `list_requirements` and `list_records` now apply `LIMIT`/`OFFSET` in SQL
+  (see `docs/security-review/MS-09-medical-screening.md`, "Owner decisions").
 - **Compliance-by-id does not 404 an unknown subject — still open, and worth
   stating more precisely than before.** `GET /compliance/{user_id}` returns 200
   for any id. The summary is not merely "empty-ish": the subject reads as

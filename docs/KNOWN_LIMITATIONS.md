@@ -2483,23 +2483,6 @@ resolution in this fallback path. (Security review MP-08 pass 4 round 2,
 PR #2177, narrowed pass 4 round 4, MP-26, same PR,
 `docs/security-review/MP-08-membership-pipeline.md`.)
 
-## Medical Screening — Requirement and Record Lists Are Unbounded (2026-08-06, mirrored 2026-08-25)
-
-`list_requirements`/`list_records` (`medical_screening_service.py`) run
-`.all()` with no SQL `LIMIT`/`OFFSET`; the endpoints slice the result in
-Python, and `get_compliance_status`/`get_expiring_soon` build on the same
-unbounded calls internally. Access control is sound — both are org-scoped
-and `medical_screening.view`/`.manage`-gated — so this is the same scaling
-concern as the entries above, not a leak: an organization with years of
-screening history pays a growing per-request cost on every records,
-compliance, and expiring-soon load, with no ceiling.
-
-First flagged in `docs/app-review/medical-screening.md` pass 3 (2026-08-06)
-as "Future dev"; not fixed for the same reason as the entries above —
-SQL-level pagination is a response-envelope/frontend-contract change, not a
-drop-in. Mirrored here for the first time in this security review pass.
-(Security review MS-6, `docs/security-review/MS-09-medical-screening.md`.)
-
 ## Inventory — Two Cross-Member Reads Sit Behind the Baseline `.view` Grant (2026-08-26)
 
 `GET /allowances/check/{user_id}/{category_id}` (allowance usage count) and

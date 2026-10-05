@@ -299,6 +299,30 @@ test's docstring with no assertion change.
 
 ---
 
+## Owner decisions (2026-10-05)
+
+Four findings this rotation had flagged for a product decision were decided by
+the owner and implemented on the same branch, one commit each. Earlier pass
+sections below are left as written; they record what was true when each pass
+ran.
+
+### MS-6 — ✅ FIXED — the requirement and record lists page in SQL
+
+Owner choice: push `LIMIT`/`OFFSET` into SQL, keeping the response shape.
+`list_requirements`/`list_records` take `skip`/`limit` and apply them to the
+query (`_page` in `medical_screening_service.py`); the two endpoints pass
+`PaginationParams` through instead of slicing a full `.all()` in Python. Both
+orderings gained an `id` tie-breaker so a page boundary cannot shuffle rows
+that share a name or a one-second `created_at`. The response is still a bare
+list, so no frontend change. `limit=None` keeps the full set for
+`get_compliance_status`, which grades one subject's history and is bounded by
+that subject; `get_expiring_soon` is bounded by its date window. Guarded by
+`backend/tests/test_medical_screening_list_pagination.py` (integration —
+asserts the page returned and that the SQL MySQL receives carries the
+`LIMIT`).
+
+---
+
 ## Pass 6 (2026-09-16)
 
 **Watchdog pickup.** This iteration ran directly (not through the
@@ -1519,7 +1543,7 @@ field-set or protected-field change: both schemas already omit every
 tenancy/subject FK, so `apply_updates` is a like-for-like replacement of the
 hand-rolled loop, not a behavior change for any valid payload.
 
-### MS-6 — LOW (scale, unchanged) — Unbounded requirement/record lists — 🚩 FLAGGED, re-confirmed and mirrored
+### MS-6 — LOW (scale, unchanged) — Unbounded requirement/record lists — 🚩 FLAGGED, re-confirmed and mirrored (✅ fixed 2026-10-05, see "Owner decisions" at the top)
 
 **What:** `list_requirements`/`list_records` run `.all()` with no SQL
 `LIMIT`/`OFFSET`; the two endpoints slice the full result in Python via
