@@ -4,7 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import EventEditPage from './EventEditPage';
 import * as apiModule from '../services/api';
-import type { Event } from '../types/event';
+import type { Event, EventCategoryConfig } from '../types/event';
+import { ATTENDANCE_LOCKED_EVENT_FIELDS } from '../utils/eventAttendanceLock';
 
 /** Create a mock API error object (not a Promise) */
 function makeApiError(message: string, status = 400) {
@@ -20,13 +21,12 @@ vi.mock('../services/api', () => ({
   eventService: {
     getEvent: vi.fn(),
     updateEvent: vi.fn(),
+    updateFutureEvents: vi.fn(),
     getEvents: vi.fn().mockResolvedValue([]),
     getVisibleEventTypes: vi.fn().mockResolvedValue([]),
-    getVisibleEventTypesWithCategories: vi.fn().mockResolvedValue({
-      visible_event_types: [],
-      custom_event_categories: [],
-      visible_custom_categories: [],
-    }),
+    // Installed per test in the top-level beforeEach, so a block that adds
+    // categories cannot leave them behind for the next one (pitfall #28).
+    getVisibleEventTypesWithCategories: vi.fn(),
   },
   roleService: {
     getRoles: vi.fn().mockResolvedValue([]),
@@ -72,11 +72,22 @@ const mockEvent: Event = {
   updated_at: '2026-01-20T10:00:00Z',
 };
 
+/** The org's event settings, with whatever custom categories a test needs. */
+function visibleTypesWith(categories: EventCategoryConfig[] = []) {
+  return {
+    visible_event_types: [],
+    custom_event_categories: categories,
+    visible_custom_categories: categories.map((c) => c.value),
+  };
+}
+
 describe('EventEditPage', () => {
   const { eventService } = apiModule;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(eventService.getVisibleEventTypesWithCategories).mockReset();
+    vi.mocked(eventService.getVisibleEventTypesWithCategories).mockResolvedValue(visibleTypesWith());
   });
 
   describe('Loading State', () => {
@@ -226,6 +237,252 @@ describe('EventEditPage', () => {
         const errors = screen.getAllByText('Location conflict');
         expect(errors.length).toBeGreaterThanOrEqual(1);
       });
+    });
+  });
+
+  describe('Finalized attendance', () => {
+    const finalizedEvent: Event = {
+      ...mockEvent,
+      event_type: 'training',
+      start_datetime: '2026-03-15T18:00:00Z',
+      end_datetime: '2026-03-15T20:00:00Z',
+      check_in_window_type: 'flexible',
+      check_in_minutes_before: 60,
+      check_in_minutes_after: 15,
+      require_checkout: false,
+      attendance_finalized_at: '2026-03-15T21:00:00Z',
+    };
+
+    beforeEach(() => {
+      vi.mocked(eventService.getEvent).mockReset();
+      vi.mocked(eventService.updateEvent).mockReset();
+      vi.mocked(eventService.updateFutureEvents).mockReset();
+      vi.mocked(eventService.updateEvent).mockResolvedValue(finalizedEvent);
+      vi.mocked(eventService.updateFutureEvents).mockResolvedValue({ updated_count: 3 });
+    });
+
+    const retitle = async (user: ReturnType<typeof userEvent.setup>) => {
+      const title = await screen.findByLabelText(/^title/i);
+      await user.clear(title);
+      await user.type(title, 'Existing Event (corrected)');
+      await user.click(screen.getByRole('button', { name: /save changes/i }));
+    };
+
+    it('shows the lock notice', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue(finalizedEvent);
+
+      renderWithRouter(<EventEditPage />);
+
+      expect(await screen.findByText(/attendance for this event is finalized/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/event type/i)).toBeDisabled();
+    });
+
+    it('saves a title fix without the locked fields', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue(finalizedEvent);
+      const user = userEvent.setup();
+      renderWithRouter(<EventEditPage />);
+
+      await retitle(user);
+
+      await waitFor(() => expect(eventService.updateEvent).toHaveBeenCalledTimes(1));
+      const [eventId, payload] = vi.mocked(eventService.updateEvent).mock.calls[0] ?? [];
+      expect(eventId).toBe('evt-1');
+      expect(payload).toEqual(expect.objectContaining({ title: 'Existing Event (corrected)' }));
+      for (const field of ATTENDANCE_LOCKED_EVENT_FIELDS) {
+        expect(payload).not.toHaveProperty(field);
+      }
+      expect(mockNavigate).toHaveBeenCalledWith('/events/evt-1');
+    });
+
+    it('saves this and all future events without the locked fields', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({ ...finalizedEvent, recurrence_parent_id: 'series-1' });
+      const user = userEvent.setup();
+      renderWithRouter(<EventEditPage />);
+
+      await user.click(await screen.findByLabelText(/this and all future events/i));
+      await retitle(user);
+
+      await waitFor(() => expect(eventService.updateFutureEvents).toHaveBeenCalledTimes(1));
+      const [, payload] = vi.mocked(eventService.updateFutureEvents).mock.calls[0] ?? [];
+      expect(payload).toEqual(expect.objectContaining({ title: 'Existing Event (corrected)' }));
+      for (const field of ATTENDANCE_LOCKED_EVENT_FIELDS) {
+        expect(payload).not.toHaveProperty(field);
+      }
+      expect(eventService.updateEvent).not.toHaveBeenCalled();
+    });
+
+    it('still sends them for an event whose attendance is open', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({ ...finalizedEvent, attendance_finalized_at: null });
+      const user = userEvent.setup();
+      renderWithRouter(<EventEditPage />);
+
+      await retitle(user);
+
+      await waitFor(() => expect(eventService.updateEvent).toHaveBeenCalledTimes(1));
+      expect(eventService.updateEvent).toHaveBeenCalledWith(
+        'evt-1',
+        expect.objectContaining({
+          title: 'Existing Event (corrected)',
+          event_type: 'training',
+          start_datetime: '2026-03-15T18:00:00.000Z',
+          end_datetime: '2026-03-15T20:00:00.000Z',
+          check_in_window_type: 'flexible',
+          check_in_minutes_before: 60,
+          require_checkout: false,
+        })
+      );
+      expect(screen.queryByText(/attendance for this event is finalized/i)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Loads every field it saves', () => {
+    beforeEach(() => {
+      vi.mocked(eventService.getEvent).mockReset();
+      vi.mocked(eventService.updateEvent).mockReset();
+      vi.mocked(eventService.updateEvent).mockResolvedValue(mockEvent);
+    });
+
+    it('saves a mandatory event with the member types it already has', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        is_mandatory: true,
+        mandatory_membership_types: ['active'],
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<EventEditPage />);
+
+      await user.click(await screen.findByRole('button', { name: /save changes/i }));
+
+      await waitFor(() =>
+        expect(eventService.updateEvent).toHaveBeenCalledWith(
+          'evt-1',
+          expect.objectContaining({ is_mandatory: true, mandatory_membership_types: ['active'] })
+        )
+      );
+      expect(screen.queryByText(/select at least one member type/i)).not.toBeInTheDocument();
+    });
+
+    it('saves a mandatory event stored with no member types as mandatory for every member', async () => {
+      // How every course-cohort class is stored. The API reads no member types
+      // as everyone; the form used to refuse each save, title fixes on a
+      // finalized class included, until somebody narrowed it.
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        event_type: 'training',
+        is_mandatory: true,
+        attendance_finalized_at: '2026-03-15T21:00:00Z',
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<EventEditPage />);
+
+      expect(await screen.findByText(/mandatory for every member/i)).toBeInTheDocument();
+      const title = screen.getByLabelText(/^title/i);
+      await user.clear(title);
+      await user.type(title, 'Recruit school, class 3 (corrected)');
+      await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+      await waitFor(() => expect(eventService.updateEvent).toHaveBeenCalledTimes(1));
+      const [, payload] = vi.mocked(eventService.updateEvent).mock.calls[0] ?? [];
+      expect(payload).toEqual(
+        expect.objectContaining({ title: 'Recruit school, class 3 (corrected)', is_mandatory: true })
+      );
+      expect(payload?.mandatory_membership_types).toBeUndefined();
+      expect(screen.queryByText(/select at least one member type/i)).not.toBeInTheDocument();
+    });
+
+    // Only an event stored with no member types means everyone. Narrowing one
+    // down to nothing, or making an event mandatory now, still needs a choice:
+    // the server would read an empty list as every member.
+    it('still asks for a member type when every saved one is unticked', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        is_mandatory: true,
+        mandatory_membership_types: ['active'],
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<EventEditPage />);
+
+      await user.click(await screen.findByLabelText('Active'));
+      await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+      expect(await screen.findByText(/select at least one member type/i)).toBeInTheDocument();
+      expect(eventService.updateEvent).not.toHaveBeenCalled();
+    });
+
+    it('still asks for a member type when an event is newly made mandatory', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
+      const user = userEvent.setup();
+      renderWithRouter(<EventEditPage />);
+
+      await user.click(await screen.findByLabelText(/mandatory attendance/i));
+      await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+      expect(await screen.findByText(/select at least one member type/i)).toBeInTheDocument();
+      expect(eventService.updateEvent).not.toHaveBeenCalled();
+    });
+
+    it('shows a saved member type the department no longer lists, so it can be removed', async () => {
+      vi.mocked(eventService.getVisibleEventTypesWithCategories).mockResolvedValue({
+        ...visibleTypesWith(),
+        membership_types: [{ value: 'active', label: 'Active Member' }],
+      });
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        is_mandatory: true,
+        mandatory_membership_types: ['administrative'],
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<EventEditPage />);
+
+      const stale = await screen.findByLabelText(/administrative \(not a current member type\)/i);
+      expect(stale).toBeChecked();
+      // Unticking keeps the box (and focus) so a mis-tick can be undone.
+      await user.click(stale);
+      expect(stale).toBeInTheDocument();
+      expect(stale).not.toBeChecked();
+      await user.click(stale);
+      expect(stale).toBeChecked();
+      await user.click(stale);
+      await user.click(screen.getByLabelText('Active Member'));
+      await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+      await waitFor(() =>
+        expect(eventService.updateEvent).toHaveBeenCalledWith(
+          'evt-1',
+          expect.objectContaining({ mandatory_membership_types: ['active'] })
+        )
+      );
+    });
+
+    it("does not call a saved member type obsolete when the department's list could not be loaded", async () => {
+      // The form's built-in fallback list lacks real tiers such as "senior".
+      vi.mocked(eventService.getVisibleEventTypesWithCategories).mockRejectedValue(new Error('offline'));
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        is_mandatory: true,
+        mandatory_membership_types: ['senior'],
+      });
+
+      renderWithRouter(<EventEditPage />);
+
+      expect(await screen.findByLabelText('senior')).toBeChecked();
+      expect(screen.queryByText(/not a current member type/i)).not.toBeInTheDocument();
+    });
+
+    it("shows the event's category", async () => {
+      vi.mocked(eventService.getVisibleEventTypesWithCategories).mockResolvedValue(
+        visibleTypesWith([
+          { value: 'drills', label: 'Drills', color: '#991b1b' },
+          { value: 'outreach', label: 'Outreach', color: '#1e40af' },
+        ])
+      );
+      vi.mocked(eventService.getEvent).mockResolvedValue({ ...mockEvent, custom_category: 'outreach' });
+
+      renderWithRouter(<EventEditPage />);
+
+      expect(await screen.findByLabelText(/^category$/i)).toHaveValue('outreach');
+      // A listed category is offered once, not again as an unlisted value.
+      expect(screen.getAllByRole('option', { name: /outreach/i })).toHaveLength(1);
     });
   });
 

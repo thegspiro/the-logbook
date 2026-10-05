@@ -1,10 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { ComponentProps } from 'react';
 import { screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import { EventForm } from './EventForm';
 import * as apiModule from '../services/api';
 import type { Location } from '../services/api';
+import type { EventCategoryConfig, EventType } from '../types/event';
+import { ATTENDANCE_LOCKED_EVENT_FIELDS } from '../utils/eventAttendanceLock';
 
 // Mock the useTimezone hook
 vi.mock('../hooks/useTimezone', () => ({
@@ -25,23 +28,9 @@ vi.mock('../services/api', () => ({
         'ceremony',
         'other',
       ]),
-    getVisibleEventTypesWithCategories: vi.fn().mockResolvedValue({
-      visible_event_types: [
-        'business_meeting',
-        'public_education',
-        'training',
-        'social',
-        'fundraiser',
-        'ceremony',
-        'other',
-      ],
-      custom_event_categories: [],
-      visible_custom_categories: [],
-      membership_types: [
-        { value: 'cadet', label: 'Cadet' },
-        { value: 'active', label: 'Active Member' },
-      ],
-    }),
+    // Installed per test in the top-level beforeEach, so a block that adds
+    // categories cannot leave them behind for the next one (pitfall #28).
+    getVisibleEventTypesWithCategories: vi.fn(),
   },
   locationsService: {
     getLocations: vi.fn(),
@@ -70,6 +59,27 @@ vi.mock('../stores/authStore', () => ({
     selector({ checkPermission: (permission: string) => mockCheckPermission(permission) as boolean }),
 }));
 
+/** The org's event settings, with whatever custom categories a test needs. */
+function visibleTypesWith(categories: EventCategoryConfig[] = []) {
+  return {
+    visible_event_types: [
+      'business_meeting',
+      'public_education',
+      'training',
+      'social',
+      'fundraiser',
+      'ceremony',
+      'other',
+    ] as EventType[],
+    custom_event_categories: categories,
+    visible_custom_categories: categories.map((c) => c.value),
+    membership_types: [
+      { value: 'cadet', label: 'Cadet' },
+      { value: 'active', label: 'Active Member' },
+    ],
+  };
+}
+
 const mockLocations = [
   { id: 'loc-1', name: 'Station 1 Conference Room', is_active: true },
   { id: 'loc-2', name: 'Training Center', is_active: true },
@@ -82,6 +92,8 @@ describe('EventForm', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(apiModule.locationsService.getLocations).mockResolvedValue(mockLocations as unknown as Location[]);
+    vi.mocked(apiModule.eventService.getVisibleEventTypesWithCategories).mockReset();
+    vi.mocked(apiModule.eventService.getVisibleEventTypesWithCategories).mockResolvedValue(visibleTypesWith());
   });
 
   describe('Rendering', () => {
@@ -943,6 +955,167 @@ describe('EventForm', () => {
       await user.click(cancelButton);
 
       expect(mockOnCancel).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Finalized attendance', () => {
+    // A finalized training event in a department with one listed category.
+    const finalized = {
+      title: 'Ladder drill',
+      event_type: 'training' as const,
+      custom_category: 'drills',
+      start_datetime: '2026-09-12T13:00:00Z',
+      end_datetime: '2026-09-12T16:00:00Z',
+      check_in_window_type: 'window' as const,
+      check_in_minutes_before: 30,
+      check_in_minutes_after: 15,
+      require_checkout: false,
+      allow_guest_check_in: false,
+    };
+
+    beforeEach(() => {
+      mockOnSubmit.mockReset();
+      mockOnSubmit.mockResolvedValue(undefined);
+      vi.mocked(apiModule.eventService.getVisibleEventTypesWithCategories).mockResolvedValue(
+        visibleTypesWith([{ value: 'drills', label: 'Drills', color: '#991b1b' }])
+      );
+    });
+
+    const renderLocked = (props: Partial<ComponentProps<typeof EventForm>> = {}) =>
+      renderWithRouter(
+        <EventForm
+          initialData={finalized}
+          editingEventId="evt-1"
+          attendanceLocked
+          submitLabel="Save Changes"
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+          {...props}
+        />
+      );
+
+    it('explains which settings are locked and why', async () => {
+      renderLocked();
+
+      expect(await screen.findByText(/attendance for this event is finalized/i)).toBeInTheDocument();
+      expect(screen.getByText(/credited hours were calculated from them/i)).toBeInTheDocument();
+      expect(screen.getByText(/reopens it from the event page/i)).toBeInTheDocument();
+      expect(screen.queryByText(/later events in the series/i)).not.toBeInTheDocument();
+    });
+
+    it('points a recurring series at an occurrence that is still open', async () => {
+      renderLocked({ initialRecurrence: { is_recurring: true } });
+
+      expect(await screen.findByText(/edit one whose attendance is still open/i)).toBeInTheDocument();
+    });
+
+    it('disables the type, category, schedule and check-in rule controls', async () => {
+      renderLocked();
+
+      expect(await screen.findByLabelText(/^category$/i)).toBeDisabled();
+      expect(screen.getByLabelText(/event type/i)).toBeDisabled();
+      for (const label of [/start date & time/i, /end date & time/i, /^start time hour$/i, /^end time minute$/i]) {
+        expect(screen.getByLabelText(label)).toBeDisabled();
+      }
+      expect(screen.getByRole('button', { name: /^1 hour$/i })).toBeDisabled();
+      expect(screen.getByLabelText(/check-in window/i)).toBeDisabled();
+      expect(screen.getByLabelText(/minutes before start/i)).toBeDisabled();
+      expect(screen.getByLabelText(/minutes after end/i)).toBeDisabled();
+      expect(screen.getByLabelText(/require manual check-out/i)).toBeDisabled();
+    });
+
+    it('leaves the title, description and guest sign-in editable', async () => {
+      renderLocked();
+
+      expect(await screen.findByLabelText(/^title/i)).toBeEnabled();
+      expect(screen.getByLabelText(/^description$/i)).toBeEnabled();
+      expect(screen.getByLabelText(/allow guest \(non-member\) sign-in/i)).toBeEnabled();
+    });
+
+    it('still saves', async () => {
+      const user = userEvent.setup();
+      renderLocked();
+
+      const title = await screen.findByLabelText(/^title/i);
+      await user.clear(title);
+      await user.type(title, 'Ladder drill (corrected)');
+      await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+      await waitFor(() => {
+        expect(mockOnSubmit).toHaveBeenCalledWith(expect.objectContaining({ title: 'Ladder drill (corrected)' }));
+      });
+    });
+
+    it('disables the control behind every field the edit page leaves out', async () => {
+      // Keyed by the list itself: a field added there fails to compile here
+      // until its control is named, and then fails the test until it is locked.
+      const controlFor: Record<(typeof ATTENDANCE_LOCKED_EVENT_FIELDS)[number], RegExp> = {
+        start_datetime: /start date & time/i,
+        end_datetime: /end date & time/i,
+        event_type: /event type/i,
+        custom_category: /^category$/i,
+        check_in_window_type: /check-in window/i,
+        check_in_minutes_before: /minutes before start/i,
+        check_in_minutes_after: /minutes after end/i,
+        require_checkout: /require manual check-out/i,
+      };
+      renderLocked();
+      await screen.findByLabelText(/^category$/i);
+
+      for (const field of ATTENDANCE_LOCKED_EVENT_FIELDS) {
+        expect(screen.getByLabelText(controlFor[field]), field).toBeDisabled();
+      }
+    });
+
+    it('tells a screen reader why each locked control is unavailable', async () => {
+      renderLocked();
+
+      expect(await screen.findByLabelText(/^category$/i)).toHaveAccessibleDescription(
+        /credited hours were calculated from them/i
+      );
+      expect(screen.getByLabelText(/event type/i)).toHaveAccessibleDescription(
+        /credited hours were calculated from them/i
+      );
+      expect(screen.getByRole('group', { name: /schedule, locked while attendance is finalized/i })).toBeDisabled();
+      expect(
+        screen.getByRole('group', { name: /check-in rules, locked while attendance is finalized/i })
+      ).toBeDisabled();
+    });
+
+    it('saves an event that ends in the hour the clocks fall back', async () => {
+      // 01:00 EDT to 01:00 EST: one real hour that the pickers show as zero.
+      // Its times are locked, so nothing the user can reach would clear an
+      // end-before-start error.
+      const user = userEvent.setup();
+      renderLocked({
+        initialData: { ...finalized, start_datetime: '2026-11-01T05:00:00Z', end_datetime: '2026-11-01T06:00:00Z' },
+      });
+
+      const title = await screen.findByLabelText(/^title/i);
+      await user.clear(title);
+      await user.type(title, 'Night drill (corrected)');
+      await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+      await waitFor(() => {
+        expect(mockOnSubmit).toHaveBeenCalledWith(expect.objectContaining({ title: 'Night drill (corrected)' }));
+      });
+      expect(screen.queryByText(/end date must be after start date/i)).not.toBeInTheDocument();
+    });
+
+    it('shows a category no longer on the list by its stored value rather than None', async () => {
+      renderLocked({ initialData: { ...finalized, custom_category: 'retired_category' } });
+
+      expect(await screen.findByLabelText(/^category$/i)).toHaveValue('retired_category');
+    });
+
+    it('locks nothing on an event whose attendance is open', async () => {
+      renderLocked({ attendanceLocked: false });
+
+      expect(await screen.findByLabelText(/^category$/i)).toBeEnabled();
+      expect(screen.getByLabelText(/event type/i)).toBeEnabled();
+      expect(screen.getByLabelText(/start date & time/i)).toBeEnabled();
+      expect(screen.getByLabelText(/check-in window/i)).toBeEnabled();
+      expect(screen.queryByText(/attendance for this event is finalized/i)).not.toBeInTheDocument();
     });
   });
 

@@ -25,6 +25,8 @@ import pytest
 from app.api.v1.endpoints.events import _resolve_display_names
 from app.core.permissions import ALL_PERMISSIONS, OPERATIONAL_RANKS
 from app.models.admin_hours import AdminHoursEntryMethod
+from app.models.event import CheckInWindowType, EventType
+from app.schemas.event import EventUpdate
 from app.services.admin_hours_service import AdminHoursService
 from app.services.event_service import (
     ATTENDANCE_LOCKED_PREFIX,
@@ -67,6 +69,7 @@ def _event(finalized=True, **overrides):
         "check_in_window_type": None,
         "check_in_minutes_before": 60,
         "check_in_minutes_after": 15,
+        "require_checkout": False,
     }
     fields.update(overrides)
     return SimpleNamespace(**fields)
@@ -230,6 +233,201 @@ class TestUpdateSplitsDescriptiveFromAttendanceSensitive:
         assert str(excinfo.value).startswith(ATTENDANCE_LOCKED_PREFIX)
         assert "end_datetime" in str(excinfo.value)
         assert event.end_datetime != new_end
+
+
+def _closed_meeting(**overrides):
+    """A finalized event as the service sees it: UTC times on whole seconds
+    and enum members, no location to double-book against. The times are aware
+    here; MySQL hands them back naive, which one case below and the
+    integration test cover."""
+    start = datetime(2026, 9, 12, 13, 0, tzinfo=timezone.utc)
+    fields = {
+        "title": "Ladder drill",
+        "description": None,
+        "location_id": None,
+        "location": None,
+        "location_obj": None,
+        "is_draft": False,
+        "updated_by": None,
+        "event_type": EventType.BUSINESS_MEETING,
+        "check_in_window_type": CheckInWindowType.FLEXIBLE,
+        "start_datetime": start,
+        "end_datetime": start + timedelta(hours=3),
+        "actual_end_time": None,
+    }
+    fields.update(overrides)
+    return _event(**fields)
+
+
+def _form_save(event, **changes):
+    """What the edit form sends for ``event``: every schedule and check-in
+    field it shows, times as the browser's ``…T13:00:00.000Z``, enums as their
+    lowercase values — parsed by the real schema, as the endpoint does."""
+    body = {
+        "title": event.title,
+        "event_type": "business_meeting",
+        "start_datetime": event.start_datetime.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+        "end_datetime": event.end_datetime.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+        "check_in_window_type": "flexible",
+        "check_in_minutes_before": 60,
+        "check_in_minutes_after": 15,
+        "require_checkout": False,
+    }
+    body.update(changes)
+    return EventUpdate.model_validate(body)
+
+
+def _raw(**update_data):
+    return SimpleNamespace(model_dump=lambda **_: dict(update_data))
+
+
+class TestUpdateLocksOnChangeNotPresence:
+    """The lock refuses a change to what attendance was measured against, not
+    a field's mere presence. The edit form resends every field it shows, so a
+    presence check refused every save of a finalized event."""
+
+    async def test_the_edit_form_s_unchanged_fields_ride_along_with_a_title_fix(self):
+        event = _closed_meeting()
+        svc = EventService(_mock_db(_one(event)))
+
+        result = await svc.update_event(
+            "event-1", "org-1", _form_save(event, title="Ladder drill (corrected)")
+        )
+
+        assert result is event
+        assert event.title == "Ladder drill (corrected)"
+
+    async def test_an_equal_instant_in_another_zone_or_naive_utc_is_unchanged(self):
+        event = _closed_meeting()
+        start, end = event.start_datetime, event.end_datetime
+        svc = EventService(_mock_db(_one(event)))
+
+        await svc.update_event(
+            "event-1",
+            "org-1",
+            _raw(
+                start_datetime=start.astimezone(timezone(timedelta(hours=-4))),
+                end_datetime=end.replace(tzinfo=None),
+            ),
+        )
+
+        assert (event.start_datetime, event.end_datetime) == (start, end)
+
+    async def test_naive_stored_times_match_the_browser_s_utc_times(self):
+        """MySQL DATETIME carries no offset, so a row can arrive naive."""
+        event = _closed_meeting()
+        event.start_datetime = event.start_datetime.replace(tzinfo=None)
+        event.end_datetime = event.end_datetime.replace(tzinfo=None)
+        svc = EventService(_mock_db(_one(event)))
+
+        await svc.update_event(
+            "event-1",
+            "org-1",
+            _form_save(_closed_meeting(), title="Ladder drill (corrected)"),
+        )
+
+        assert event.title == "Ladder drill (corrected)"
+        assert event.start_datetime.tzinfo is None
+
+    async def test_enum_members_and_their_string_values_compare_equal(self):
+        event = _closed_meeting(check_in_window_type=CheckInWindowType.WINDOW)
+        svc = EventService(_mock_db(_one(event)))
+
+        await svc.update_event(
+            "event-1",
+            "org-1",
+            _raw(event_type="business_meeting", check_in_window_type="window"),
+        )
+
+    async def test_unchanged_locked_values_are_not_rewritten(self):
+        """Nothing about a closed event's locked columns is written, not even
+        an equal value in another representation."""
+        event = _closed_meeting()
+        svc = EventService(_mock_db(_one(event)))
+
+        await svc.update_event("event-1", "org-1", _form_save(event))
+
+        assert event.event_type is EventType.BUSINESS_MEETING
+        assert event.check_in_window_type is CheckInWindowType.FLEXIBLE
+
+    async def test_a_refusal_names_only_the_fields_that_change(self):
+        event = _closed_meeting()
+        svc = EventService(_mock_db(_one(event)))
+
+        with pytest.raises(ValueError, match=ATTENDANCE_LOCKED_PREFIX) as excinfo:
+            await svc.update_event(
+                "event-1",
+                "org-1",
+                _form_save(event, title="Renamed", check_in_minutes_before=30),
+            )
+
+        assert str(excinfo.value) == attendance_locked_error(
+            "changing check_in_minutes_before"
+        )
+        assert (event.title, event.check_in_minutes_before) == ("Ladder drill", 60)
+
+    async def test_filling_in_a_null_lead_time_is_a_change(self):
+        """NULL means 15 minutes on a window-type event; the form shows 60.
+        Saving 60 would move the window members were measured against."""
+        event = _closed_meeting(
+            check_in_window_type=CheckInWindowType.WINDOW, check_in_minutes_before=None
+        )
+        svc = EventService(_mock_db(_one(event)))
+
+        with pytest.raises(ValueError, match="check_in_minutes_before"):
+            await svc.update_event(
+                "event-1", "org-1", _form_save(event, check_in_window_type="window")
+            )
+
+        assert event.check_in_minutes_before is None
+
+    async def test_a_one_second_move_is_a_change(self):
+        event = _closed_meeting()
+        svc = EventService(_mock_db(_one(event)))
+
+        with pytest.raises(ValueError, match="end_datetime"):
+            await svc.update_event(
+                "event-1",
+                "org-1",
+                _raw(end_datetime=event.end_datetime + timedelta(seconds=1)),
+            )
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("start_datetime", datetime(2026, 9, 12, 13, 15, tzinfo=timezone.utc)),
+            ("end_datetime", datetime(2026, 9, 12, 16, 15, tzinfo=timezone.utc)),
+            ("actual_start_time", datetime(2026, 9, 12, 13, 5, tzinfo=timezone.utc)),
+            ("actual_end_time", datetime(2026, 9, 12, 16, 5, tzinfo=timezone.utc)),
+            ("require_checkout", True),
+            ("check_in_window_type", "strict"),
+            ("check_in_minutes_before", 30),
+            ("check_in_minutes_after", 30),
+            ("event_type", "training"),
+            ("custom_category", "Drills"),
+        ],
+    )
+    async def test_each_sensitive_field_is_refused_when_it_changes(self, field, value):
+        event = _closed_meeting()
+        before = getattr(event, field)
+        svc = EventService(_mock_db(_one(event)))
+
+        with pytest.raises(ValueError, match=ATTENDANCE_LOCKED_PREFIX) as excinfo:
+            await svc.update_event("event-1", "org-1", _raw(**{field: value}))
+
+        assert str(excinfo.value) == attendance_locked_error(f"changing {field}")
+        assert getattr(event, field) == before
+
+    async def test_an_open_event_still_takes_a_changed_clock(self):
+        event = _closed_meeting(
+            custom_fields={}, attendance_finalized_at=None, attendance_finalized_by=None
+        )
+        new_end = event.end_datetime + timedelta(minutes=30)
+        svc = EventService(_mock_db(_one(event)))
+
+        await svc.update_event("event-1", "org-1", _raw(end_datetime=new_end))
+
+        assert event.end_datetime == new_end
 
 
 class TestReopen:
@@ -635,6 +833,32 @@ class TestCustomFieldsCannotDropTheMarker:
 
         assert event.custom_fields["attendance_finalized"] is True
         assert event.custom_fields["room"] == "bay"
+
+    async def test_a_replacement_cannot_lock_an_open_event(self):
+        """The markers are the server's. One arriving in a replacement — an
+        echo of another occurrence, or a hand-built payload — would lock the
+        event through the legacy marker with no Reopen on offer."""
+        event = _event(
+            finalized=False,
+            custom_fields={"room": "hall"},
+            description=None,
+            location_id=None,
+            location=None,
+            location_obj=None,
+            is_draft=False,
+            updated_by=None,
+        )
+        db = _mock_db(_one(event))
+        payload = SimpleNamespace(
+            model_dump=lambda **_: {
+                "custom_fields": {"attendance_finalized": True, "room": "bay"}
+            }
+        )
+
+        await EventService(db).update_event("event-1", "org-1", payload)
+
+        assert event.custom_fields == {"room": "bay"}
+        assert attendance_is_finalized(event) is False
 
 
 class TestLockIsAnAtomicTransition:

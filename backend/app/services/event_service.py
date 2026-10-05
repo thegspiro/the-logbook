@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from datetime import date, datetime, timedelta
 from datetime import timezone as dt_timezone
+from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Union
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -872,30 +873,25 @@ class EventService:
         # title of last month's drill is housekeeping. What it refuses is a
         # change to the clock or the check-in rules the credited durations were
         # derived from, which would leave the event disagreeing with the hours
-        # already in the ledger.
+        # already in the ledger. A change, not a mention: the edit form resends
+        # every field it shows, so refusing a field for being present refused
+        # every save of a finalized event, title fixes included.
         if attendance_is_finalized(event):
-            locked = ATTENDANCE_SENSITIVE_UPDATE_FIELDS & set(update_data)
-            if locked:
+            changed = self._attendance_sensitive_changes(event, update_data)
+            if changed:
                 raise ValueError(
-                    attendance_locked_error("changing " + ", ".join(sorted(locked)))
+                    attendance_locked_error("changing " + ", ".join(sorted(changed)))
                 )
+            # The rest restate what is stored. Dropping them means a closed
+            # event's locked columns are never written at all, not even with an
+            # equal value in a different representation.
+            for field in ATTENDANCE_SENSITIVE_UPDATE_FIELDS.intersection(update_data):
+                del update_data[field]
 
-        # custom_fields is a whole-column replacement, and it carries the
-        # lifecycle markers as well as whatever the organizer typed. A client
-        # that PATCHes it without them would strip attendance_finalized while
-        # the column keeps the event locked — and the post-event validation
-        # task, which reads only the marker, would then nag about an event
-        # nobody can edit. Carry the lifecycle keys across any replacement.
         if "custom_fields" in update_data:
-            preserved = {
-                key: value
-                for key, value in (event.custom_fields or {}).items()
-                if key in EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS
-            }
-            if preserved:
-                incoming = dict(update_data["custom_fields"] or {})
-                incoming.update(preserved)
-                update_data["custom_fields"] = incoming
+            update_data["custom_fields"] = self._with_own_lifecycle_markers(
+                event, update_data["custom_fields"]
+            )
 
         # Validate dates if being updated
         start_dt = update_data.get("start_datetime", event.start_datetime)
@@ -1071,18 +1067,32 @@ class EventService:
 
         # A series-wide edit reaches finalized occurrences too. Descriptive
         # fields stay allowed here exactly as they do on the single-event path;
-        # only the ones the credited durations were derived from are refused.
-        sensitive = ATTENDANCE_SENSITIVE_UPDATE_FIELDS & changed_fields
-        if sensitive:
-            locked = [e for e in future_events if attendance_is_finalized(e)]
-            if locked:
+        # only the ones the credited durations were derived from are refused,
+        # and only where they would change. That is decided per occurrence:
+        # the loop below writes the anchor's values onto every occurrence, so
+        # a closed occurrence that differs from the anchor is changed by a
+        # save that leaves the anchor itself as it was. A time change moves
+        # every occurrence.
+        if ATTENDANCE_SENSITIVE_UPDATE_FIELDS & changed_fields:
+            would_change: set[str] = set()
+            closed_changed = 0
+            for occurrence in future_events:
+                if not attendance_is_finalized(occurrence):
+                    continue
+                changes = self._attendance_sensitive_changes(occurrence, update_data)
+                if times_change:
+                    changes |= {"start_datetime", "end_datetime"}
+                if changes:
+                    would_change |= changes
+                    closed_changed += 1
+            if would_change:
                 raise ValueError(
                     attendance_locked_error(
                         "changing "
-                        + ", ".join(sorted(sensitive))
-                        + f" across this series ({len(locked)} of "
-                        f"{len(future_events)} occurrences have finalized "
-                        "attendance)"
+                        + ", ".join(sorted(would_change))
+                        + f" across this series ({closed_changed} finalized "
+                        + ("occurrence" if closed_changed == 1 else "occurrences")
+                        + " would change)"
                     )
                 )
 
@@ -1104,6 +1114,8 @@ class EventService:
             was_training = self.event_credits_training(event)
             old_title = event.title
             for field, value in update_data.items():
+                if field == "custom_fields":
+                    value = self._with_own_lifecycle_markers(event, value)
                 setattr(event, field, value)
             follow_up = await self._follow_training_changes(
                 event, was_training, old_title, organization_id
@@ -3542,6 +3554,66 @@ class EventService:
         if value is None:
             return None
         return value if value.tzinfo else value.replace(tzinfo=dt_timezone.utc)
+
+    @staticmethod
+    def _with_own_lifecycle_markers(
+        event: Event, incoming: Optional[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
+        """A ``custom_fields`` replacement carrying this row's own lifecycle
+        markers and nobody else's.
+
+        The column is replaced whole, but the markers belong to the row they
+        were written on. Dropping them would strip ``attendance_finalized``
+        while the column keeps the event locked, and the post-event validation
+        task, which reads only the marker, would nag about an event nobody can
+        edit. Copying them in is worse: the edit form echoes what it loaded,
+        and a series save writes the anchor's onto every occurrence, so an open
+        event would be locked through the legacy marker with no Reopen offered,
+        because the event page reads the column.
+        """
+        own = {
+            key: copy.deepcopy(value)
+            for key, value in (event.custom_fields or {}).items()
+            if key in EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS
+        }
+        if incoming is None and not own:
+            return None
+        merged = {
+            key: copy.deepcopy(value)
+            for key, value in (incoming or {}).items()
+            if key not in EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS
+        }
+        merged.update(own)
+        return merged
+
+    @classmethod
+    def _attendance_sensitive_changes(
+        cls, event: Event, update_data: Dict[str, Any]
+    ) -> set[str]:
+        """The attendance-sensitive fields ``update_data`` would actually change.
+
+        Compared by value, so restating what is stored is not a change: a
+        datetime by instant (a naive one read as UTC, as the column stores it),
+        an enum member against its string value. Otherwise exact, and
+        deliberately not resolved through the check-in window's defaults: a
+        NULL lead time filled in with 60 is refused even on a flexible event,
+        where NULL already reads as 60, because on a window-type event NULL
+        reads as 15 and 60 would move the window members were measured
+        against. A start moved by a second is a change too.
+        """
+
+        def comparable(value: Any) -> Any:
+            if isinstance(value, datetime):
+                return cls._as_utc(value)
+            if isinstance(value, Enum):
+                return value.value
+            return value
+
+        return {
+            field
+            for field in ATTENDANCE_SENSITIVE_UPDATE_FIELDS.intersection(update_data)
+            if comparable(getattr(event, field)) != comparable(update_data[field])
+        }
 
     @classmethod
     def _minutes_before_start(cls, event: Event, moment: datetime) -> Optional[int]:

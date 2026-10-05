@@ -348,6 +348,12 @@ that the organizer who closed an event cannot quietly reopen it and change
 numbers already fed into admin hours, training records and compliance. It is
 held by the three chief ranks and the president.
 
+**A finalized event can still be edited** _(2026-10-04)_. Its title,
+description, location, RSVP, reminder and guest sign-in settings all stay
+editable. Its type, category, schedule and check-in rules are shown greyed out
+on the edit form, because members' credited hours were calculated from them;
+to change one, have attendance reopened first, then finalize again.
+
 **On a Training event, finalizing writes each member's training record**
 _(2026-09-29)_. Every checked-in member gets a **Completed** record for the
 time they are credited with:

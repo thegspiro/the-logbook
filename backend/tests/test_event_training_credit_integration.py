@@ -15,12 +15,17 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.event import Event
 from app.schemas.event import EventCreate, EventUpdate, RSVPOverride
 from app.schemas.training_session import TrainingSessionAttach
-from app.services.event_service import EventService
+from app.services.event_service import (
+    ATTENDANCE_LOCKED_PREFIX,
+    EventService,
+    attendance_locked_error,
+)
 from app.services.training_session_service import TrainingSessionService
 
 pytestmark = [pytest.mark.integration]
@@ -1036,6 +1041,100 @@ class TestATitleFixReachesTheRecords:
 
         (record,) = await _records(db_session, member)
         assert (record["course_name"], record["status"]) == ("Hose Ops", "completed")
+
+    async def _edit_form_save(self, db, event_id: str, **changes) -> EventUpdate:
+        """What the edit form produces for this event, before the page strips
+        the locked fields — as an older client still sends it: the stored row
+        as the API serializes it, every schedule and check-in field the form
+        shows (with the page's defaults), times at the form's minute
+        precision."""
+        event = (
+            await db.execute(
+                select(Event)
+                .where(Event.id == event_id)
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one()
+
+        def form_time(value: datetime) -> str:
+            return value.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:00.000Z")
+
+        body = {
+            "title": event.title,
+            "event_type": event.event_type.value,
+            "start_datetime": form_time(event.start_datetime),
+            "end_datetime": form_time(event.end_datetime),
+            "check_in_window_type": (
+                event.check_in_window_type.value
+                if event.check_in_window_type
+                else "flexible"
+            ),
+            "check_in_minutes_before": (
+                60
+                if event.check_in_minutes_before is None
+                else event.check_in_minutes_before
+            ),
+            "check_in_minutes_after": (
+                15
+                if event.check_in_minutes_after is None
+                else event.check_in_minutes_after
+            ),
+            "require_checkout": bool(event.require_checkout),
+        }
+        body.update(changes)
+        return EventUpdate.model_validate(body)
+
+    async def test_the_edit_form_s_full_payload_saves_a_title_fix(
+        self, db_session, dept
+    ):
+        """The form resends every field it shows. Read back from the database
+        and restated unchanged, none of them counts as moving the event."""
+        org, officer, member = dept
+        event_id, start, end = await _training_event(
+            db_session, org, officer, title="Hose Opps"
+        )
+        await _add_with_edit_times(
+            db_session, event_id, org, officer, member, start, end
+        )
+        service = EventService(db_session)
+        await service.finalize_event_attendance_detailed(event_id, org, officer)
+
+        save = await self._edit_form_save(db_session, event_id, title="Hose Ops")
+        await service.update_event(event_id, org, save, officer)
+
+        (record,) = await _records(db_session, member)
+        assert (record["course_name"], record["status"]) == ("Hose Ops", "completed")
+
+    async def test_a_moved_start_is_still_refused(self, db_session, dept):
+        org, officer, member = dept
+        event_id, start, end = await _training_event(
+            db_session, org, officer, title="Hose Opps"
+        )
+        await _add_with_edit_times(
+            db_session, event_id, org, officer, member, start, end
+        )
+        service = EventService(db_session)
+        await service.finalize_event_attendance_detailed(event_id, org, officer)
+
+        save = await self._edit_form_save(
+            db_session,
+            event_id,
+            title="Hose Ops",
+            start_datetime=(start + timedelta(minutes=15)).strftime(
+                "%Y-%m-%dT%H:%M:00.000Z"
+            ),
+        )
+        with pytest.raises(ValueError, match=ATTENDANCE_LOCKED_PREFIX) as excinfo:
+            await service.update_event(event_id, org, save, officer)
+
+        assert str(excinfo.value) == attendance_locked_error("changing start_datetime")
+        title, stored_start = (
+            await db_session.execute(
+                text("SELECT title, start_datetime FROM events WHERE id = :id"),
+                {"id": event_id},
+            )
+        ).one()
+        assert (title, stored_start) == ("Hose Opps", start.replace(tzinfo=None))
 
 
 async def _admin_mapping(db, org_id: str, event_type: str) -> str:
