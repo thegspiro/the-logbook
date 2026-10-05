@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#PENDING]**: branch `claude/security-review-public-webhooks`, Feature
-03 (Public surface & webhooks), pass 7.
+**PR [#2937](https://github.com/thegspiro/the-logbook/pull/2937)**: branch
+`claude/security-review-public-webhooks`, Feature 03 (Public surface &
+webhooks), pass 7.
 
 - **Result:** 0 fixes, 0 new findings, 0 flagged.
 - **Method:** 5 of 13 scoped files had changed since pass 6's baseline
