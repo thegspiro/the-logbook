@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**288 tables · 4736 columns · 940 foreign keys**
+**288 tables · 4737 columns · 940 foreign keys**
 
 ---
 
