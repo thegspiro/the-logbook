@@ -2940,6 +2940,7 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                     }
 
                     # In-app notification
+                    in_app_ok = False
                     try:
                         notif = NotificationLog(
                             id=generate_uuid(),
@@ -2955,6 +2956,7 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                         )
                         db.add(notif)
                         org_notifications += 1
+                        in_app_ok = True
                     except Exception as e:
                         logger.error(
                             "Failed end-of-shift in-app summary for user "
@@ -2965,16 +2967,25 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                         )
 
                     # Email
-                    if user.email and member_receives_email(
-                        user.notification_preferences,
-                        EmailKind.SHIFT_NOTICES,
-                        department_required_kinds(org),
-                    ):
+                    # An email is due only where one can go: with email off for
+                    # the department, waiting on it would re-send the in-app
+                    # notice every run for the whole lookback window.
+                    email_svc = EmailService(organization=org)
+                    email_due = (
+                        bool(user.email)
+                        and email_svc.can_send
+                        and member_receives_email(
+                            user.notification_preferences,
+                            EmailKind.SHIFT_NOTICES,
+                            department_required_kinds(org),
+                        )
+                    )
+                    email_ok = False
+                    if email_due:
                         try:
                             from app.services.email_service import wrap_email_body
 
                             full_url = f"{settings.FRONTEND_URL}{action_url}"
-                            email_svc = EmailService(organization=org)
 
                             details_rows = [
                                 "<tr><td style='padding:2px 8px;color:#555'>"
@@ -3102,6 +3113,7 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                             )
                             if sent > 0:
                                 org_emails += 1
+                                email_ok = True
                         except Exception as email_err:
                             logger.error(
                                 "End-of-shift summary email failed for {}: {}",
@@ -3109,7 +3121,14 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                                 email_err,
                             )
 
-                    newly_sent.append(uid)
+                    # Delivered means the email went, when one was due: email
+                    # is the channel of record (pitfall #18), so a member whose
+                    # email failed is retried on the next run, inside the
+                    # lookback window, even though that repeats the in-app
+                    # notice (owner decision CRON-31-7). A member who gets no
+                    # email is delivered once the in-app notice is written.
+                    if email_ok if email_due else in_app_ok:
+                        newly_sent.append(uid)
 
                 if newly_sent:
                     shift.activities = {

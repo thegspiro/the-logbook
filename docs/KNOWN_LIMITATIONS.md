@@ -3399,16 +3399,11 @@ See `docs/security-review/CRON2-31-scheduled-tasks.md` for the full pass
 A second security-review pass over `scheduled_tasks.py` and the in-process
 scheduler in `main.py` fixed six new findings (`docs/security-review/
 CRON-31-scheduled-tasks.md`) and flagged three, all deliberate trade-offs
-rather than bugs with an obviously-correct fix:
+rather than bugs with an obviously-correct fix. The end-of-shift summary's
+early "sent" stamp was settled on 2026-10-05 (a member is stamped only once the
+email goes, or once the in-app notice is written where no email can go); the
+other two stand:
 
-- **`run_end_of_shift_summary` can mark a member "sent" without either
-  channel actually reaching them** if both the in-app notification build and
-  the email send fail for the same member — the same dedup-stamped-early
-  shape CRON2-31-3 fixed elsewhere, but here the realistic exposure is much
-  narrower (the in-app half is an in-memory operation, not a flush, so it
-  almost never fails on its own) and changing it means deciding whether
-  "in-app succeeded, email failed" should count as delivered for this one
-  task — a product call.
 - **`run_event_reminders` stamps a due reminder interval as sent when zero
   recipients exist yet** (an event targeted at "going" RSVPs, with nobody
   RSVP'd at the moment that interval comes due) — by explicit, commented
