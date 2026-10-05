@@ -4555,15 +4555,6 @@ Found while fixing that, and left as they are:
   server's text on a failed schedule only when it mentions a double-booked
   room, and a failed postpone as "Failed to postpone request", so a coordinator
   never reads that the event's attendance is closed.
-- **A finalized event cannot be edited from the edit form at all.** The form
-  always sends the schedule and check-in fields, and the lock is decided by
-  which fields are present, not by which ones changed. So a title fix on a
-  finalized event is refused. A single-event save already showed why: the
-  form's usual seven fields make a 293-character refusal, under
-  `safe_error_detail`'s 300 cap. A save that also picks a category, and any
-  "this and all future events" save through update-future (about 355
-  characters with the series suffix), showed the generic error instead; those
-  now show the sentence too.
 
 ## Equipment Checks — Basic Apparatus, and Checks Filed Ahead of Their Shift (2026-09-30)
 

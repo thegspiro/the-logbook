@@ -353,6 +353,12 @@ that the organizer who closed an event cannot quietly reopen it and change
 numbers already fed into admin hours, training records and compliance. It is
 held by the three chief ranks and the president.
 
+A closed event can still be edited for housekeeping — the title, the
+description, the location — from the ordinary edit form. Only a change to its
+times, its check-in rules or its type is refused, because the credited hours
+were worked out from those. The form re-sends every field each time; a field
+saved unchanged is not counted as a change.
+
 **On a Training event, finalizing writes each member's training record**
 _(2026-09-29)_. Every checked-in member gets a **Completed** record for the
 time they are credited with:

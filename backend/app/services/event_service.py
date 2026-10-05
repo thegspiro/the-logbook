@@ -12,7 +12,8 @@ from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from datetime import date, datetime, timedelta
 from datetime import timezone as dt_timezone
-from typing import Any, Dict, List, Optional, Tuple, Union
+from enum import Enum
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -150,6 +151,67 @@ ATTENDANCE_SENSITIVE_UPDATE_FIELDS = frozenset(
         "custom_category",
     }
 )
+
+
+def _comparable_attendance_value(value: Any) -> Any:
+    """A form of ``value`` that compares equal across storage and payload.
+
+    The edit form re-sends every field it shows, so the payload and the stored
+    row say the same thing in different shapes: MySQL DATETIME reads back
+    naive and to the second while the payload is offset-aware, and an enum
+    column reads back as the member while the payload may carry its string.
+    """
+    if isinstance(value, datetime):
+        aware = value if value.tzinfo else value.replace(tzinfo=dt_timezone.utc)
+        return aware.astimezone(dt_timezone.utc).replace(microsecond=0)
+    if isinstance(value, Enum):
+        return value.value
+    return value
+
+
+def _effective_attendance_values(values: Dict[str, Any]) -> Dict[str, Any]:
+    """The attendance-sensitive fields as the check-in rules actually read them.
+
+    A NULL check-in column means its default (``_get_check_in_window``), and
+    the edit form fills a NULL with that default before re-sending it, so the
+    two must compare equal or every older event would read as changed.
+    """
+    window = _comparable_attendance_value(values.get("check_in_window_type"))
+    window = window or CheckInWindowType.FLEXIBLE.value
+    effective = {
+        field: _comparable_attendance_value(values.get(field))
+        for field in ATTENDANCE_SENSITIVE_UPDATE_FIELDS
+    }
+    effective["check_in_window_type"] = window
+    if effective["check_in_minutes_before"] is None:
+        effective["check_in_minutes_before"] = (
+            15 if window == CheckInWindowType.WINDOW.value else 60
+        )
+    if effective["check_in_minutes_after"] is None:
+        effective["check_in_minutes_after"] = 15
+    effective["require_checkout"] = bool(effective["require_checkout"])
+    return effective
+
+
+def changed_attendance_fields(event: Event, update_data: Dict[str, Any]) -> Set[str]:
+    """The attendance-sensitive fields ``update_data`` would actually change.
+
+    Decided by value, not by presence: the edit form always sends the schedule
+    and check-in fields, so a presence test refused a title fix on a finalized
+    event. A field re-sent unchanged leaves the credited durations exactly as
+    they were, which is all the lock protects.
+    """
+    sent = ATTENDANCE_SENSITIVE_UPDATE_FIELDS & set(update_data)
+    if not sent:
+        return set()
+    before = {
+        field: getattr(event, field, None)
+        for field in ATTENDANCE_SENSITIVE_UPDATE_FIELDS
+    }
+    after = {**before, **{field: update_data[field] for field in sent}}
+    old = _effective_attendance_values(before)
+    new = _effective_attendance_values(after)
+    return {field for field in sent if old[field] != new[field]}
 
 
 def attendance_is_finalized(event: Event) -> bool:
@@ -881,7 +943,7 @@ class EventService:
         # derived from, which would leave the event disagreeing with the hours
         # already in the ledger.
         if attendance_is_finalized(event):
-            locked = ATTENDANCE_SENSITIVE_UPDATE_FIELDS & set(update_data)
+            locked = changed_attendance_fields(event, update_data)
             if locked:
                 raise ValueError(
                     attendance_locked_error("changing " + ", ".join(sorted(locked)))
@@ -1067,9 +1129,6 @@ class EventService:
             )
             if timing.get("rsvp_deadline") is not None:
                 deadline_lead = _wall_time(timing["rsvp_deadline"], tz) - new_start
-        changed_fields = set(update_data)
-        if times_change:
-            changed_fields |= {"start_datetime", "end_datetime"}
 
         # EV-17 / XC-1: this path writes the same client-supplied attachment
         # dictionaries as update_event, across every future occurrence.
@@ -1079,19 +1138,31 @@ class EventService:
         # A series-wide edit reaches finalized occurrences too. Descriptive
         # fields stay allowed here exactly as they do on the single-event path;
         # only the ones the credited durations were derived from are refused.
-        sensitive = ATTENDANCE_SENSITIVE_UPDATE_FIELDS & changed_fields
-        if sensitive:
-            locked = [e for e in future_events if attendance_is_finalized(e)]
-            if locked:
-                raise ValueError(
-                    attendance_locked_error(
-                        "changing "
-                        + ", ".join(sorted(sensitive))
-                        + f" across this series ({len(locked)} of "
-                        f"{len(future_events)} occurrences have finalized "
-                        "attendance)"
-                    )
+        # Each finalized occurrence is compared against its own values, so the
+        # form's re-sent check-in settings do not refuse a description edit.
+        # The times are already a computed change (times_change), since each
+        # occurrence moves by the anchor's shift rather than taking its value.
+        sensitive: Set[str] = set()
+        locked = []
+        for occurrence in future_events:
+            if not attendance_is_finalized(occurrence):
+                continue
+            changes = changed_attendance_fields(occurrence, update_data)
+            if times_change:
+                changes |= {"start_datetime", "end_datetime"}
+            if changes:
+                sensitive |= changes
+                locked.append(occurrence)
+        if locked:
+            raise ValueError(
+                attendance_locked_error(
+                    "changing "
+                    + ", ".join(sorted(sensitive))
+                    + f" across this series ({len(locked)} of "
+                    f"{len(future_events)} occurrences have finalized "
+                    "attendance)"
                 )
+            )
 
         # XC-1 (BXC-1): update_event and create_event validate a newly-set
         # location_id in-org, but this series-wide bulk update did not — and the
