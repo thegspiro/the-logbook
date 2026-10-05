@@ -2100,10 +2100,11 @@ as `SavedBallotTemplate` below), so this is a scaling concern rather than a
 leak: an election that accumulates many paper-tally sessions over a long
 voting window pays a growing, uncapped cost on every load of this listing.
 
-Not fixed for the same reason as the saved-ballot-templates item below:
-pagination changes the response envelope (a frontend-affecting contract
-change for the manual-ballots admin screen), and a per-election batch cap
-needs an actual number picked by a human. (Security review ELEC-16,
+**Accepted by the owner (2026-10-05):** left unbounded. Realistic batch
+counts are small — a paper tally is entered once or twice per meeting — so
+neither a cap nor a pagination contract change for the manual-ballots screen
+is worth taking. Revisit if an election ever accumulates more than a few dozen
+batches. (Security review ELEC-16,
 `docs/security-review/ELEC-06-elections-ballots.md`.)
 
 ## Elections — Two Ballot Items Sharing an Alias String Can't Be Fully Disambiguated Without a Schema Change (2026-09-02)

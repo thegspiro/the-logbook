@@ -4,6 +4,17 @@
 
 ---
 
+## Owner decisions applied (2026-10-05)
+
+The owner decided the open ELEC and W50 items on 2026-10-05; each is applied
+in its own commit on the `worktree-elections` branch and recorded here. A
+finding below that says FLAGGED or OPEN is superseded by its line here.
+
+- **ELEC-16** (`list_manual_ballot_batches` unbounded) — **accepted as is.**
+  Paper-tally sessions per election are naturally few; no cap and no
+  pagination. Revisit if an election ever carries more than a few dozen
+  batches. Recorded in `docs/KNOWN_LIMITATIONS.md`.
+
 ## Pass 7 (2026-10-05)
 
 **Scoping.** Step 0 (via GitHub, not the tracker): `list_pull_requests` (open)
