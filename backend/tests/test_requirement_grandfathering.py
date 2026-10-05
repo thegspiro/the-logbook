@@ -153,21 +153,25 @@ class TestAppliesByJoinDate:
         assert not requirement_applies_to_member(req, "active", join_date=VETERAN)
         assert requirement_applies_to_member(req, "active", join_date=RECRUIT)
 
-    def test_user_form_reads_role_ids_from_positions(self):
-        req = _req(applies_to_all=False, required_roles=["pos-officer"])
-        officer = SimpleNamespace(
+    def test_user_form_reads_the_rank_for_required_roles(self):
+        # required_roles holds rank slugs (CMP4-5); a position id there is
+        # not how any writer fills it, and holding that position is no match.
+        req = _req(applies_to_all=False, required_roles=["captain"])
+        captain = SimpleNamespace(
             membership_type="active",
-            positions=[SimpleNamespace(id="pos-officer")],
+            rank="captain",
+            positions=[],
             hire_date=VETERAN,
             created_at=None,
         )
         member = SimpleNamespace(
             membership_type="active",
-            positions=[],
+            rank="firefighter",
+            positions=[SimpleNamespace(id="captain", slug="officer")],
             hire_date=VETERAN,
             created_at=None,
         )
-        assert requirement_applies_to_user(req, officer)
+        assert requirement_applies_to_user(req, captain)
         assert not requirement_applies_to_user(req, member)
 
 

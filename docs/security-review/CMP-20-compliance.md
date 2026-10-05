@@ -27,6 +27,20 @@ Standing flags the owner decided, each implemented in its own commit:
   reports keep the figures they were generated with.
   `tests/test_annual_report_compliance_profiles.py` asserts the report, the
   matrix and `compute_org_compliance_pct` agree for a profile org.
+- **CMP4-5 — ✅ FIXED.** The owner chose to match `required_roles` against
+  the member's rank slug (`User.rank`) — the model's and schema's stated
+  intent — rather than migrate the column to position ids.
+  `requirement_applies_to_member` now takes the member's `rank` where it
+  took position ids, `requirement_applies_to_user` reads `member.rank`, and
+  `member_role_ids` is gone. Every grader goes through the helper, so all
+  of them changed at once; the scheduling shift-compliance report, which
+  already matched the rank in its own copy of the check, now calls the
+  helper too (and so also honours `required_membership_types`). **Reported
+  numbers change**: rank-scoped requirements start grading the members of
+  those ranks on every training screen and in the annual report.
+  `tests/test_required_roles_rank_matching.py` covers My Training, the
+  matrix, `compute_org_compliance_tally`, the annual report and the
+  shift-compliance report.
 
 ## Pass 6 (2026-10-03)
 
@@ -531,7 +545,9 @@ the level this codebase already treats as needing "not applicable" instead.
 (the rendering), `frontend/src/types/training.ts:2585` (`AnnualReportRequirement.compliance_pct: number`,
 would need to widen to `number | null`).
 
-### CMP4-5 — MED — OPEN — `required_roles` is stored as rank **slugs** everywhere it's written, but matched as position **UUIDs** everywhere the role_ids fix (and its canonical precedent) compares it
+### CMP4-5 — MED — ✅ FIXED 2026-10-05 — `required_roles` is stored as rank **slugs** everywhere it's written, but matched as position **UUIDs** everywhere the role_ids fix (and its canonical precedent) compares it
+
+_Fixed by owner decision; see "Owner decisions applied (2026-10-05)" at the top of this file. The text below is the original finding._
 
 **What:** a fourth Codex round on this same PR caught that CMP4-1's own
 role_ids follow-up — passing `[str(r.id) for r in member.roles]` (position

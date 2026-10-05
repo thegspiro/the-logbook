@@ -1069,30 +1069,46 @@ With deduplication, the correct result is 36 × (7/12) = 21 hours.
 
 ### Requirement Applicability
 
-Before evaluating a requirement for a member, the system checks:
+Before evaluating a requirement for a member, the system checks, in this
+order (`requirement_applies_to_member` in
+`backend/app/services/training_compliance.py`, shared by every screen):
 
-1. The requirement must be `active = true`
-2. The requirement must belong to the member's organization
-3. If the requirement specifies `required_roles`, the member must hold one
-   of those roles. If `applies_to_all = true`, it applies regardless of role.
+1. The requirement must be `active = true` and belong to the member's
+   organization, and its grandfathering dates must not exempt the member.
+2. If `applies_to_all = true`, it applies regardless of anything below.
+3. Otherwise, if it lists `required_membership_types`, it applies exactly
+   when the member's membership type is one of them.
+4. Otherwise it applies when the member's **rank** (`User.rank`, e.g.
+   `captain`) is listed in `required_roles`, or the member holds a position
+   whose slug is listed in `required_positions`.
+5. A requirement naming none of these applies to nobody.
 
-#### Example: Role-Specific Requirements
+`required_roles` holds rank slugs, not position ids. Until 2026-10-05 the
+training graders compared it against the member's position ids, which
+nothing writes there, so a requirement scoped only by `required_roles`
+applied to nobody on My Training, the compliance matrix, the dashboard
+percentage or the annual report; only the scheduling shift-compliance report
+matched the rank. All of them now match the rank, so **departments with
+rank-scoped requirements see those requirements start grading the members of
+that rank**, and their compliance figures change accordingly.
 
-Riverside FD has a **Driver/Operator Apparatus Check** requirement with
-`applies_to_all = false` and `required_roles = ["driver_operator"]`.
+#### Example: Rank-Specific Requirements
 
-| Member          | Roles                        | Requirement Applies? |
-| --------------- | ---------------------------- | -------------------- |
-| Danielle Brooks | driver_operator, firefighter | Yes (has the role)   |
-| Maria Torres    | firefighter, emt             | No (missing role)    |
-| Jake Nguyen     | probationary                 | No (missing role)    |
+Riverside FD has a **Company Officer Continuing Education** requirement with
+`applies_to_all = false` and `required_roles = ["lieutenant", "captain"]`.
+
+| Member          | Rank         | Requirement Applies? |
+| --------------- | ------------ | -------------------- |
+| Danielle Brooks | captain      | Yes (rank listed)    |
+| Maria Torres    | firefighter  | No (rank not listed) |
+| Jake Nguyen     | probationary | No (rank not listed) |
 
 Maria and Jake are never evaluated against this requirement. It does not
 appear in their compliance summary or matrix row. Danielle sees it as one
 of her active requirements.
 
 This means different members can have different `requirements_total` values.
-If the department has 4 universal requirements plus 1 driver-only
+If the department has 4 universal requirements plus 1 officer-only
 requirement, Danielle's total is 5 while Maria's total is 4.
 
 ### Grandfathering Existing Members (2026-10-03)

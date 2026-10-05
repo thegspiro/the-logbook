@@ -280,11 +280,9 @@ async def get_my_training_summary(
     all_requirements = req_result.scalars().all()
 
     # Filter to requirements applicable to this user (use eagerly-loaded roles)
-    user_role_ids: list[str] = []
     user_position_slugs: list[str] = []
     try:
         if user_with_roles and user_with_roles.roles:
-            user_role_ids = [str(r.id) for r in user_with_roles.roles]
             user_position_slugs = [str(r.slug) for r in user_with_roles.roles if r.slug]
     except Exception as e:
         logger.warning(f"Failed to load user role IDs for user {current_user.id}: {e}")
@@ -297,7 +295,7 @@ async def get_my_training_summary(
         if requirement_applies_to_member(
             req,
             user_membership_type,
-            user_role_ids,
+            getattr(current_user, "rank", None),
             join_date=join_date,
             position_slugs=user_position_slugs,
         )

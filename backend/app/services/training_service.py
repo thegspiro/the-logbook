@@ -1614,21 +1614,18 @@ class TrainingService:
         # whether this should default to the current year is a compliance-
         # semantics decision (see docs/module-audit/training.md), left as-is.
 
-        # Get user's roles
+        # The member, with the positions requirement_applies_to_user reads.
         user_result = await self.db.execute(
             select(User)
             .where(
                 User.id == str(user_id),
                 User.organization_id == str(organization_id),
             )
-            .options(selectinload(User.roles))
+            .options(selectinload(User.positions))
         )
         user = user_result.scalar_one_or_none()
         if not user:
             return []
-
-        user_role_ids = [str(role.id) for role in user.roles]
-        user_position_slugs = [str(role.slug) for role in user.roles if role.slug]
 
         # Get all active requirements. Ordered so a paged caller sees a
         # stable sequence across calls.
@@ -1653,24 +1650,9 @@ class TrainingService:
         # The shared definition, so /my-training, the matrix and the
         # dashboard agree on who a requirement grades — including its
         # grandfathering dates.
-        from app.services.training_compliance import (
-            member_join_date,
-            requirement_applies_to_member,
-        )
+        from app.services.training_compliance import requirement_applies_to_user
 
-        user_membership_type = getattr(user, "membership_type", None) or "active"
-        join_date = member_join_date(user)
-        return [
-            req
-            for req in requirements
-            if requirement_applies_to_member(
-                req,
-                user_membership_type,
-                user_role_ids,
-                join_date=join_date,
-                position_slugs=user_position_slugs,
-            )
-        ]
+        return [req for req in requirements if requirement_applies_to_user(req, user)]
 
     async def get_expiring_certifications(
         self,

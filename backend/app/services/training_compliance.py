@@ -1061,7 +1061,7 @@ def tally_standing(statuses: Iterable[str]) -> Tuple[int, int]:
 def requirement_applies_to_member(
     req,
     membership_type: str,
-    role_ids: Optional[List[str]] = None,
+    rank: Optional[str] = None,
     join_date: Optional[date] = None,
     position_slugs: Optional[List[str]] = None,
 ) -> bool:
@@ -1070,9 +1070,19 @@ def requirement_applies_to_member(
     Matches ``TrainingService.get_applicable_requirements`` (the
     member-facing ``/my-training`` path) precedence exactly:
     ``applies_to_all`` wins outright; otherwise ``required_membership_types``
-    is checked; otherwise the member matches if they hold any position named
-    in ``required_roles`` (by id) or in ``required_positions`` (by slug). A
-    requirement naming none of these applies to nobody.
+    is checked; otherwise the member matches if their rank is named in
+    ``required_roles`` or they hold a position named in
+    ``required_positions`` (both by slug). A requirement naming none of these
+    applies to nobody.
+
+    ``required_roles`` holds *rank* slugs (``User.rank``, e.g. ``"captain"``):
+    the model's column comment, the training-program requirements schema and
+    every writer say so, and the scheduling shift-compliance report matched
+    it that way all along. Every grader here compared it against position
+    ids instead, which nothing ever writes there, so a requirement scoped
+    only by rank applied to nobody on /my-training, the matrix, the
+    dashboard percentage, the period roster, the profile card or the annual
+    report (CMP4-5; the owner chose rank matching over migrating the column).
 
     ``required_positions`` holds position *slugs*, written by the training
     program requirements API. Before CMP4-2 nothing here read it, so a
@@ -1103,8 +1113,8 @@ def requirement_applies_to_member(
         return True
     if req.required_membership_types:
         return membership_type in req.required_membership_types
-    if req.required_roles and role_ids:
-        if any(rid in role_ids for rid in req.required_roles):
+    if req.required_roles and rank:
+        if rank in req.required_roles:
             return True
     if req.required_positions and position_slugs:
         if any(slug in position_slugs for slug in req.required_positions):
@@ -1112,24 +1122,12 @@ def requirement_applies_to_member(
     return False
 
 
-def member_role_ids(member) -> List[str]:
-    """The ids ``required_roles`` is matched against: the member's positions.
-
-    ``User.roles`` is a synonym for ``User.positions``, and both the requirement
-    form and ``get_applicable_requirements`` store and compare position ids.
-    The relationship is lazy, so a caller loading members in bulk must
-    ``selectinload(User.positions)`` first — touching it unloaded on an
-    AsyncSession raises MissingGreenlet.
-    """
-    positions = getattr(member, "positions", None) or []
-    return [str(p.id) for p in positions if getattr(p, "id", None)]
-
-
 def member_position_slugs(member) -> List[str]:
     """The slugs ``required_positions`` is matched against.
 
-    Same relationship as :func:`member_role_ids`, so the same
-    ``selectinload(User.positions)`` requirement applies.
+    ``User.positions`` is lazy, so a caller loading members in bulk must
+    ``selectinload(User.positions)`` first — touching it unloaded on an
+    AsyncSession raises MissingGreenlet.
     """
     positions = getattr(member, "positions", None) or []
     return [str(p.slug) for p in positions if getattr(p, "slug", None)]
@@ -1138,15 +1136,15 @@ def member_position_slugs(member) -> List[str]:
 def requirement_applies_to_user(req, member) -> bool:
     """:func:`requirement_applies_to_member` with every input read off ``member``.
 
-    The form a bulk caller should use: it cannot forget the role ids or the
-    join date, which is how the dashboard percentage and the compliance matrix
-    came to ignore role-scoped requirements that ``/my-training`` and the
-    profile card enforced.
+    The form a bulk caller should use: it cannot forget the rank, the
+    position slugs or the join date, which is how the dashboard percentage and
+    the compliance matrix came to ignore scoped requirements that
+    ``/my-training`` and the profile card enforced.
     """
     return requirement_applies_to_member(
         req,
         getattr(member, "membership_type", None) or "active",
-        member_role_ids(member),
+        getattr(member, "rank", None),
         join_date=member_join_date(member),
         position_slugs=member_position_slugs(member),
     )

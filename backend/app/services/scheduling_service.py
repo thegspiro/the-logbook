@@ -73,7 +73,7 @@ from app.services.training_compliance import (
     biannual_window,
     catch_up_deadline,
     member_join_date,
-    requirement_applies_by_join_date,
+    requirement_applies_to_member,
 )
 from app.utils.apparatus_ref import (
     apparatus_ref_exists,
@@ -8378,29 +8378,24 @@ class SchedulingService:
             else:
                 required_value = req.required_hours or 0
 
-            # Determine which users this requirement applies to
-            applicable_users = []
-            for user in all_users:
-                # Grandfathering first: a member the requirement's cutoff
-                # exempts is not graded here whatever their rank or position.
-                if not requirement_applies_by_join_date(req, member_join_date(user)):
-                    continue
-                if req.applies_to_all:
-                    applicable_users.append(user)
-                    continue
-
-                # Check rank match
-                if req.required_roles and user.rank:
-                    if user.rank in req.required_roles:
-                        applicable_users.append(user)
-                        continue
-
-                # Check position match
-                if req.required_positions:
-                    user_slugs = user_position_slugs.get(user.id, [])
-                    if any(slug in req.required_positions for slug in user_slugs):
-                        applicable_users.append(user)
-                        continue
+            # Who this requirement grades: the shared definition every
+            # training screen uses (CLAUDE.md pitfall 29), with the rank and
+            # position slugs already loaded above. This report matched
+            # required_roles against the rank before the graders did (CMP4-5);
+            # it now also honours required_membership_types, which it alone
+            # ignored, so a requirement scoped by membership type grades the
+            # same members here as on the compliance matrix.
+            applicable_users = [
+                user
+                for user in all_users
+                if requirement_applies_to_member(
+                    req,
+                    user.membership_type or "active",
+                    user.rank,
+                    join_date=member_join_date(user),
+                    position_slugs=user_position_slugs.get(user.id, []),
+                )
+            ]
 
             if not applicable_users:
                 compliance_data.append(

@@ -3039,32 +3039,28 @@ by filtering through the shared `requirement_applies_to_member` helper
 (`training_compliance.py`). Four rounds of Codex review on that same PR
 surfaced further gaps, all flagged rather than fixed in the same pass:
 
-- **`required_roles` is written as rank slugs everywhere, but matched as
-  position UUIDs everywhere it's read (CMP4-5, MED).** CMP4-1's own
-  role_ids follow-up passes `[str(r.id) for r in member.roles]` (position
-  UUIDs), matching the canonical precedent it cites
-  (`TrainingService.get_applicable_requirements`,
-  `training_service.py:1446`). But every real writer of
-  `TrainingRequirement.required_roles` stores **rank slugs**: the model's
-  own column comment (`app/models/training.py:565`, "List of role slugs"),
-  the training-program requirements schema explicitly ("`required_roles`
-  holds role slugs, not UUIDs", `app/schemas/training_program.py:49-54`),
-  and the one caller that already reads it correctly for its own purpose,
-  `scheduling_service.py:7336-7339`, which matches it against `user.rank`
-  (a plain string column, `app/models/user.py:312`) — not against
-  `User.positions`/`roles` at all. Since nothing ever writes a position id
-  into `required_roles`, this means a `required_roles`-only requirement has
-  apparently never correctly applied to anyone through **any** of the six
-  places that compare it the "position id" way — `/my-training` itself,
+- **`required_roles` was written as rank slugs but matched as position ids
+  (CMP4-5, MED) — ✅ fixed 2026-10-05, owner decision.** The owner chose to
+  match it against the member's rank (`User.rank`), as the model comment,
+  the training-program requirements schema and every writer already say.
+  The change is in the one shared helper, `requirement_applies_to_member`
+  (and `requirement_applies_to_user`, which now reads `member.rank`), so
+  `/my-training` (`get_applicable_requirements`), the My Training summary,
   `get_compliance_matrix`, `compute_org_compliance_pct`,
-  `get_member_period_status`, `get_compliance_summary`, and now
-  `generate_annual_report` — only `scheduling_service.py`'s unrelated
-  shift-eligibility check has ever matched it correctly. This predates
-  CMP4-1 and this pass entirely; fixing it means deciding whether the
-  canonical definition should switch to matching `user.rank` (aligning with
-  the model/schema's own stated intent) or `required_roles` should migrate
-  to position ids — a decision affecting the member-facing `/my-training`
-  endpoint and five other callers, well outside this feature's scope.
+  `get_member_period_status`, `get_compliance_summary`, the competency
+  matrix and the annual report all move together. The scheduling
+  shift-compliance report, which matched the rank all along, now calls the
+  same helper instead of its own copy — which also makes it honour
+  `required_membership_types`, which it alone ignored. **Reported numbers
+  change**: a requirement scoped only by `required_roles` now grades the
+  members of those ranks everywhere (before, it graded nobody outside the
+  shift-compliance report), so those members' standings and the department
+  percentages that include them move; and a shift-credited requirement
+  scoped by membership type now appears in the shift-compliance report for
+  the members it names. No data migration — stored values were already
+  rank slugs. Compliance-profile `role_ids` are unaffected: they hold
+  position ids and are still matched against positions. Tests:
+  `tests/test_required_roles_rank_matching.py`.
 - **The annual report was not compliance-profile-aware (CMP4-3, MED) — ✅
   fixed 2026-10-05, owner decision.** `generate_annual_report` (and the
   monthly report built on it) now resolves every member through the shared

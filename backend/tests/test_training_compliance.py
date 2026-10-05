@@ -149,17 +149,18 @@ class TestRequirementAppliesToMember:
         req = _make_requirement(
             applies_to_all=False,
             required_membership_types=None,
-            required_roles=["role-1", "role-2"],
+            required_roles=["lieutenant", "captain"],
         )
-        assert requirement_applies_to_member(req, "active", ["role-2"]) is True
+        # required_roles holds rank slugs, matched against User.rank (CMP4-5).
+        assert requirement_applies_to_member(req, "active", "captain") is True
 
     def test_role_mismatch_does_not_apply(self):
         req = _make_requirement(
             applies_to_all=False,
             required_membership_types=None,
-            required_roles=["role-1"],
+            required_roles=["captain"],
         )
-        assert requirement_applies_to_member(req, "active", ["role-2"]) is False
+        assert requirement_applies_to_member(req, "active", "firefighter") is False
 
     def test_no_criteria_at_all_applies_to_nobody(self):
         req = _make_requirement(
@@ -167,7 +168,7 @@ class TestRequirementAppliesToMember:
             required_membership_types=None,
             required_roles=None,
         )
-        assert requirement_applies_to_member(req, "active", ["role-1"]) is False
+        assert requirement_applies_to_member(req, "active", "captain") is False
 
     # CMP4-2: required_positions holds position slugs, and nothing read it,
     # so a requirement scoped only that way graded nobody.
@@ -178,7 +179,7 @@ class TestRequirementAppliesToMember:
         )
         assert (
             requirement_applies_to_member(
-                req, "active", [], position_slugs=["firefighter", "driver_candidate"]
+                req, "active", None, position_slugs=["firefighter", "driver_candidate"]
             )
             is True
         )
@@ -187,7 +188,7 @@ class TestRequirementAppliesToMember:
         req = _make_requirement(applies_to_all=False, required_positions=["officer"])
         assert (
             requirement_applies_to_member(
-                req, "active", [], position_slugs=["firefighter"]
+                req, "active", None, position_slugs=["firefighter"]
             )
             is False
         )
@@ -197,12 +198,12 @@ class TestRequirementAppliesToMember:
         # a position match from counting.
         req = _make_requirement(
             applies_to_all=False,
-            required_roles=["role-1"],
+            required_roles=["captain"],
             required_positions=["officer"],
         )
         assert (
             requirement_applies_to_member(
-                req, "active", ["role-9"], position_slugs=["officer"]
+                req, "active", "firefighter", position_slugs=["officer"]
             )
             is True
         )
@@ -218,6 +219,29 @@ class TestRequirementAppliesToMember:
             created_at=None,
         )
         assert requirement_applies_to_user(req, member) is True
+
+    def test_user_form_matches_required_roles_against_the_rank(self):
+        """CMP4-5: required_roles holds rank slugs. Matching it against the
+        member's position ids, as every grader did, matched nobody."""
+        from app.services.training_compliance import requirement_applies_to_user
+
+        req = _make_requirement(applies_to_all=False, required_roles=["captain"])
+        captain = SimpleNamespace(
+            membership_type="active",
+            rank="captain",
+            positions=[],
+            hire_date=None,
+            created_at=None,
+        )
+        firefighter = SimpleNamespace(
+            membership_type="active",
+            rank="firefighter",
+            positions=[SimpleNamespace(id="captain", slug="captain")],
+            hire_date=None,
+            created_at=None,
+        )
+        assert requirement_applies_to_user(req, captain) is True
+        assert requirement_applies_to_user(req, firefighter) is False
 
 
 # =====================================================
