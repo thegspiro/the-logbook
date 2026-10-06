@@ -331,6 +331,14 @@ set its ladder during installation is looking at its own answers here.
 > **Screenshot needed:**
 > _[Admin at `/members/admin/settings/ranks`: the Delete rank confirmation over the Operational Ranks ladder for a rank nobody holds, showing its message and the Keep it / Delete buttons. Press Keep it afterwards; never confirm.]_
 
+**The rank list is the vocabulary once it exists** _(2026-10-05)_. A built-in rank
+such as "firefighter" that your department deleted during setup used to be
+accepted anyway by the member API, CSV import and applicant conversion, along with
+that rank's built-in grants. Built-in rank codes are now honoured only while the
+department has no ranks at all. Members who already hold such a rank keep their
+seats and are not reported as broken, but assigning one fresh needs the rank added
+in this editor first.
+
 ![The Membership Tiers section — the tier ladder and what each tier confers](./images/08-80-members-settings-tiers.png)
 
 ---
@@ -803,12 +811,24 @@ investigating _"the site is broken for Dave"_ meant asking Dave.
 
 What is now recorded automatically:
 
-| Source      | Recorded                                                                                                          |
-| ----------- | ----------------------------------------------------------------------------------------------------------------- |
-| **Server**  | Every 5xx, including the ones raised as a normal error response (which is where most server errors actually live) |
-| **Browser** | Failed API requests — 5xx, transport failures and timeouts, and 403                                               |
-| **Browser** | Uncaught exceptions and unhandled promise rejections, which previously reached nothing at all                     |
-| **Browser** | Chunk-load failures, under their own type                                                                         |
+| Source                            | Recorded                                                                                                                 |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| **Server**                        | Every 5xx, including the ones raised as a normal error response (which is where most server errors actually live)        |
+| **Browser**                       | Failed API requests — 5xx, transport failures and timeouts, and 403                                                      |
+| **Browser**                       | Uncaught exceptions and unhandled promise rejections, which previously reached nothing at all                            |
+| **Browser**                       | Chunk-load failures, under their own type                                                                                |
+| **Scheduled task** _(2026-10-05)_ | A failed reminder run, report or sync for your department, labelled **Scheduled task**, with the task name and traceback |
+
+**Scheduled-task failures now reach this page** _(2026-10-05)_. A background
+job has no member or request behind it, so when one failed — event, shift or
+series reminders, post-event and post-shift validation, the end-of-shift summary,
+trainee escalation, the compliance auto-report, event-request reminders, the
+officer directory sync, prospect attendance advance, the Salesforce sync and
+about twenty others — it reached the server log and Sentry but never this page,
+which is the only one an administrator reads. Each failure is now written for
+the department it failed for and shows with the source **Scheduled task** instead
+of being labelled **Client**. A failure of one department's run does not stop
+the others.
 
 Deliberately **not** recorded: 401 (routine session expiry), 404, and validation
 failures. They are ordinary and would bury the real failures.
@@ -870,17 +890,18 @@ out. So:
 
 Scheduled tasks run automatically on a schedule:
 
-| Task                                  | Description                                                                          |
-| ------------------------------------- | ------------------------------------------------------------------------------------ |
-| **Process Certification Alerts**      | Send expiring certification notifications                                            |
-| **Advance Membership Tiers**          | Auto-promote eligible members                                                        |
-| **Process Property Return Reminders** | Send overdue return emails                                                           |
-| **Detect Struggling Members**         | Flag members behind on training                                                      |
-| **Mark Overdue Checkouts**            | Flag inventory checkouts past their expected return date                             |
-| **Send Event Reminders**              | Deliver scheduled event reminders to RSVP'd members                                  |
-| **Clean Up Sessions**                 | Remove expired login sessions                                                        |
-| **Process Scheduled Emails**          | Send pending pipeline automated emails (polls every 60 seconds) _(added 2026-03-13)_ |
-| **Generate Compliance Reports**       | Auto-generate scheduled compliance reports _(added 2026-03-13)_                      |
+| Task                                  | Description                                                                                                                                                                               |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Process Certification Alerts**      | Send expiring certification notifications                                                                                                                                                 |
+| **Advance Membership Tiers**          | Auto-promote eligible members                                                                                                                                                             |
+| **Process Property Return Reminders** | Send overdue return emails                                                                                                                                                                |
+| **Detect Struggling Members**         | Flag members behind on training                                                                                                                                                           |
+| **Mark Overdue Checkouts**            | Flag inventory checkouts past their expected return date                                                                                                                                  |
+| **Send Event Reminders**              | Deliver scheduled event reminders to RSVP'd members                                                                                                                                       |
+| **Clean Up Sessions**                 | Remove expired login sessions                                                                                                                                                             |
+| **Process Scheduled Emails**          | Send pending pipeline automated emails (polls every 60 seconds) _(added 2026-03-13)_                                                                                                      |
+| **Generate Compliance Reports**       | Auto-generate scheduled compliance reports _(added 2026-03-13)_                                                                                                                           |
+| **Self-Report Attachment Retention**  | Daily: deletes approved or rejected self-reported certificate files older than the department's retention period, where one is set _(added 2026-10-05; see [Training](./02-training.md))_ |
 
 **Not yet built:** there is no **Administration > Scheduled Tasks** page. The
 tasks above are real and do run — see the in-process runner below — but the
@@ -1088,6 +1109,19 @@ When rate-limited, the system returns HTTP 429 with a `Retry-After` header indic
 > reads _"Too many failed attempts. Try again in N seconds."_ with the
 > server's number. A reset-password link hit by the limit says **Too Many
 > Attempts** with the wait in minutes, instead of calling a good link invalid.
+
+> **The bundled proxies are sized for a department, not one person** _(2026-10-05)_.
+> Both bundled nginx configurations used to allow 10 concurrent requests and 10
+> API requests a second per address, and refused the rest with a 503. One
+> dashboard load makes about 20 API calls, so a single member lost most of them,
+> and a station where several members share one address lost nearly all. The
+> limits are now 400 concurrent requests per address, and the API allows 50
+> requests a second with a burst of 600 (the first 100 pass at once, the rest are
+> queued at 50 a second rather than refused). The sign-in limits are unchanged:
+> they are brute-force controls, and the sixth member to sign in from one station
+> address within a minute is still refused (an open decision in
+> [Known Limitations](../KNOWN_LIMITATIONS.md)). If you maintain your own proxy
+> in front of The Logbook, check its per-address limits against these figures.
 
 > **Hint:** If a member reports being locked out, check if they exceeded the login attempt limit. The rate-limit lockout expires automatically after the duration above, and the `Retry-After` header tells the client exactly how long to wait. The per-account lockout under [Password Policies](#password-policies) is separate: it runs for `ACCOUNT_LOCKOUT_DURATION_MINUTES`, and resetting the member's password clears it at once.
 

@@ -764,6 +764,30 @@ record is `docs/workflow-review/W50-elections.md`; the owner decisions left
 open are tabled in `docs/KNOWN_LIMITATIONS.md` under "Elections — Owner
 Decisions From the W50 Drive (2026-09-30)".
 
+**On-screen re-drive of the frontend round** _(2026-10-06)_. The 23 frontend
+fixes were re-driven in the real browser, two drivers at once; twenty held and
+eight more things were fixed:
+
+- **The in-app vote receipt survives the refetch.** Casting a vote refetches the
+  election, and the refetch raised the page's loading skeleton, unmounting the
+  ballot and the receipt it had just recorded. The skeleton now shows only until
+  the election has loaded once; a refetch after a vote, close or publish updates
+  the page in place (W50-53). The nominations panel keeps focus the same way
+  (W50-90).
+- **The election list shows the real close time.** `GET /elections` now carries
+  `closed_at`, so a card for an election closed early is not dated to the
+  scheduled end (W50-83).
+- **A ballot link retired by a zero-vote rollback no longer reads "Voting token
+  has expired".** The rollback stamps `superseded_at` as well. The lookup tells a
+  reminder's supersede (a newer live token for the same voter hash: "replaced by
+  a newer ballot email") from a rollback's (none, since the re-send keys new
+  tokens to the new salt: the election was closed and reopened) (W50-85).
+- The help popover on `/elections` takes its content width (it rendered about
+  100px wide), Results & Publishing wraps its hint at phone width (W50-87), the
+  delete dialog no longer prints a bare "0" bullet on a zero-vote election
+  (W50-88), and the inline candidate edit's controls have accessible names
+  (W50-89).
+
 > **⚠️ Upgrade: close any OPEN election first.** In-app votes on a
 > ballot-item election now carry the item id as their position and token votes
 > key the same vote by a hash of it; rows written before the change match

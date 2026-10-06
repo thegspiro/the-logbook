@@ -737,7 +737,9 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
             )}
 
             <div>
-              <div className="grid grid-cols-2 gap-4">
+              {/* Stacked at every width: side by side, a 512px dialog leaves each
+                  half 223px, under the ~244px a time picker needs on one line. */}
+              <div className="grid grid-cols-1 gap-4">
                 <div>
                   <label htmlFor="template-start" className="form-label">
                     Starts at <span aria-hidden="true">*</span>

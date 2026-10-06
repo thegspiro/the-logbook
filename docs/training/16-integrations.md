@@ -103,6 +103,19 @@ These carry a **Coming Soon** badge and no **Connect** button; the API refuses
 
 ![Slack connect dialog with its webhook URL field](./images/16-02-slack-connect.png)
 
+**Outbound connections are checked and capped** _(2026-10-05)_. Before The
+Logbook calls an address you give an integration (a webhook, Slack, Discord,
+Teams, Cal.com, Documenso, audit-log shipping), it looks the name up once and
+refuses to connect if the answer is an internal address, then connects to
+exactly the address it checked. A hostname that resolves to a private or
+metadata address now fails with an "unsafe URL" style refusal, so point
+integrations at a public hostname. Google Calendar calls are also bounded: a
+response over 10 MB is refused and a call that stalls times out after seconds
+rather than hanging the sync. An integration that fails these checks shows as
+**Connection failed**; a sync that times out simply tries again at its next run.
+Connections made through a corporate proxy are not pinned, because the proxy
+does its own lookup.
+
 ---
 
 ## Salesforce CRM

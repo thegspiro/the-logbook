@@ -155,8 +155,31 @@ guarded. Limits in `docs/KNOWN_LIMITATIONS.md`; endpoints in
   EVOC-qualified member (an 8-second notice), and says "No new shifts. Dates
   already on the schedule are skipped…" instead of "Generated 0 shifts" (W32).
 - **Shift Compliance** reads **Not applicable** for a requirement nobody is
-  held to (W37-1); it still grades training hours requirements from shift
-  attendance alone (W37-2, open).
+  held to (W37-1). Since 2026-10-05 it grades **only shift-credited
+  requirements** (W37-2): a SHIFTS requirement by default, an HOURS requirement
+  only when an officer ticks **Shift Credit** on the requirement form
+  (`training_requirements.shift_credited`, migration `f16b004db34e`). **An
+  existing HOURS requirement drops off the report until it is ticked.** The
+  summary cards are now **Requirement Checks**, **Checks Met** and **Checks Not
+  Met** (they were "Total Members", "Compliant" and "Non-Compliant", though each
+  counts a member-requirement pair, so 22 members under three requirements read
+  66); the numbers are unchanged. A requirement scoped by `required_roles` now
+  matches the member's rank, and one scoped by membership type now appears for
+  the members it names.
+- **Dashboard "Not eligible"** _(2026-10-05)_: the Next 30 Days list asks the bulk
+  eligibility endpoint once for every open shift it shows and labels a shift the
+  member cannot take **Not eligible** instead of offering Sign Up and refusing a
+  tap later. A failed lookup leaves the button, whose tap-time check still
+  refuses.
+- **Flagged shift reports stay reachable** _(2026-10-05)_: with report review
+  switched off, the Shift Reports tab still offers the **Flagged** view while any
+  flagged report exists (it stays offered while open), so a report flagged before
+  review was turned off is not stranded.
+- **End-of-shift summary is retried until the email goes** _(2026-10-05)_: a
+  member is stamped as sent only once their email was sent (or when no email can
+  go: no address, opted out of shift notices, or email off for the department). A
+  failed send is retried on the next run inside the lookback window and repeats
+  the in-app notice, the accepted cost.
 - **Writing an apparatus NFC tag** from the shift panel needs
   `apparatus.manage_nfc_tags` _(2026-10-02)_.
 - Plain-language copy across the module, and accessible names on every row

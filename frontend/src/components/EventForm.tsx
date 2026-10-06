@@ -1032,7 +1032,9 @@ export const EventForm: React.FC<EventFormProps> = ({
           {/* Every control inside is disabled and out of the tab order, so
               the group's name is what a screen reader announces on reaching it. */}
           {attendanceLocked && <legend className="sr-only">Schedule, locked while attendance is finalized</legend>}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {/* Side by side only from lg: a date and three time selects need about
+              380px, and a tablet's half-width column is under 200. */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <div>
               <label htmlFor="start-datetime" className={labelClass}>
                 Start Date & Time <span className="text-red-700 dark:text-red-500">*</span>

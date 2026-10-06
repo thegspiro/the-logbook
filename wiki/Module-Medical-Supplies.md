@@ -125,6 +125,16 @@ Low-stock and expiring-supply alerts reach both the gear officer and the EMS
 officer. **NFPA retirement alerts stay with the gear officer** — that is
 structural PPE and has no medical analogue.
 
+_(2026-10-05)_ The weekly supply email is now titled **Supplies to Replace**: it
+covers expiring items, items a crew reported used or pulled, and positions
+counted below target, and its subject counts each kind separately. The deployed
+tables' **Expires** column is **Status** ("Restock reported", "Short — 2 of 4
+aboard", or the expiry date with days left). Low-stock says "at or below reorder
+point" and the NFPA email "approaching or past". Medical-only managers can no
+longer edit an item whose category was reclassified out of their domain mid-edit
+(the domain is re-checked under the lock), and maintenance cannot be completed
+as `RETIRED`: use the retire action.
+
 **Each recipient group receives only the rows it is allowed to see.** Someone
 holding both grants receives **one** complete email rather than two partial
 ones. These alerts are **email only** — an earlier version of this page

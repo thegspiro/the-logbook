@@ -1941,3 +1941,353 @@ starts from what the design relies on:
 - **Not yet reviewed:** whether an officer taking a test linked to their own
   requirement needs any separation-of-duties rule (an auto-graded test has no
   human grader to collude with, so none was added).
+
+## Pass 7 (2026-10-06) — 0 fixed, 1 flagged (MEDIUM); real delta, not a zero-delta pass
+
+**Prefix:** `TR7` · **PR:** recorded in `PROGRESS.md`. Watchdog pickup: the
+dedicated `/loop 30m /security-review` session had no open PR or branch for
+this feature at the time of this run.
+
+**Scoped since pass 6's merge:** `df0c1dc1` (PR #2635). **Head:** current
+`main`. Unlike every pass since pass 2, this window is **not** a zero-delta
+re-verification: `git diff --stat df0c1dc1..origin/main` across all nine
+declared files shows real feature work — **3,371 insertions / 1,023
+deletions**, 36 commits. All nine files changed:
+
+| File                          | Lines changed |
+| ----------------------------- | ------------- |
+| `training.py`                 | 655           |
+| `training_programs.py`        | 52            |
+| `training_sessions.py`        | 157           |
+| `training_service.py`         | 332           |
+| `training_program_service.py` | 169           |
+| `training_session_service.py` | 2,028         |
+| `training_compliance.py`      | 851           |
+| `schemas/training.py`         | 143           |
+| `mcp/tools/training.py`       | 7             |
+
+Most of this delta is normal feature development that happened to land
+between rotation passes, not drift since the last review — 21 of the 36
+commits already fall inside SEC-00 pass 7's swept window (baseline
+`1bf12e3d`, head `532340e3`, 2026-10-04) and its 13 cross-cutting classes
+(CSV export, LIKE escaping, `BaseHTTPMiddleware`, JSON shallow-copy,
+org-scoping ratchet, capacity locking, route auth coverage, raw exception
+text, …) are confirmed clean through that point. The remaining **15**
+commits (84efdf036 … 9817b8eaa, listed by `git log 532340e3..origin/main --
+<scope files>`) postdate that sweep and were read directly against the full
+checklist below, alongside every commit's effect on the standing TR findings.
+
+### What changed, and what it fixed (re-verified, not re-litigated)
+
+Nearly all of it is already recorded as **FIXED** in-place in this file's
+earlier pass sections (editors updated the original TR2-2/TR2-4/TR3-2/
+TR4-2/TR4-3/TR4-4 entries with their 2026-10-05 fix dates as the commits
+landed, rather than waiting for a numbered pass) or in the "Owner decision
+applied" note at the top of this file (certification name-match legacy
+cut-off). This pass re-read the actual code for each and confirms every one
+still holds at its current citation:
+
+- **TR2-2** (pagination) — `list_records` (`training.py:622`, was `:540`)
+  takes `skip`/`limit` capped at `MAX_TRAINING_RECORDS_PAGE = 500` and
+  returns `X-Total-Count`; ordered by `completion_date DESC, id` so pages
+  stay disjoint under ties. Confirmed.
+- **TR2-4 / TR4-2** (unbounded compliance scans) — `get_training_dashboard_
+summary`, `get_compliance_matrix` and `get_member_period_status` all now
+  load records through `load_graded_records`/`graded_records_clause`
+  (`training_compliance.py:809-920`), which is proven an _exact_ superset of
+  what `_grade_member_requirement` reads, branch by branch, in its own
+  docstring. Read this derivation in full; it is correct — every typed
+  branch's window is covered, the ONE_TIME/CERTIFICATION/fallback
+  unbounded cases are called out explicitly as still unbounded (by
+  necessity, for exactness), and `_merge_spans` coalesces overlapping
+  per-requirement windows into one SQL predicate rather than one per
+  requirement. Confirmed.
+- **TR4-3 / TR4-4** (dashboard-vs-matrix disagreement; zero-requirement
+  members counted as compliant) — `ComplianceGrading`/`MemberGrading`
+  (`training_compliance.py:1283-1358`) are now the one resolution path for
+  profile narrowing, threshold overrides and applicability, called from
+  `get_training_dashboard_summary`, `get_compliance_matrix`,
+  `compute_org_compliance_tally` and `get_member_period_status` alike.
+  `classify_standing` returns `STANDING_NOT_APPLICABLE` with `pct=None` for
+  an empty tally instead of `("compliant", 100.0)`, and `tally_standing`
+  centralizes the catch-up exclusion. Confirmed by direct read, not by
+  trusting the docstrings: traced all four call sites.
+- **TR3-2** (unbounded per-member scan) — still accepted as an owner
+  decision per the 2026-10-05 note at its citation; unchanged by this
+  window.
+- **Enum-validation gap** (bulk/historical import) — `create_records_bulk`
+  (`training.py:872`, validation at `:954-964`) and `confirm_historical_import`
+  (`training.py:2585+`) validate `training_type`/`status` per row with
+  `validate_enum_value`, inside a `db.begin_nested()` savepoint so one bad
+  row no longer poisons the whole transaction. `HistoricalImportConfirmRequest
+.default_training_type`/`.default_status` get request-level
+  `@field_validator`s (schemas/training.py:277-285) since every row falls
+  back to them. Confirmed.
+- **`enroll_member`'s duplicate-active-enrollment race** (flagged open since
+  pass 1) — **now genuinely fixed, but only on one of its two code paths.**
+  See TR7-1 below: the fix landed in `TrainingProgramService.enroll_member`
+  (`training_program_service.py:2137`, reachable via `POST /training/
+programs/enrollments`) with `lock_organization_scope` +
+  `.with_for_update()`, and is covered by `tests/test_program_enrollment_
+race.py` (two real connections) plus the AST-source check in
+  `test_capacity_locking.py`. The sibling endpoint in `training.py` was not
+  touched by that fix and still has the exact same race — this is a new
+  finding, not a re-confirmation, because every prior pass's citation was
+  to the service method only and none noticed the second implementation.
+- Cross-feature fixes that also touch `training_compliance.py` and are
+  owned by other rotation entries, re-verified here only because they live
+  in one of our nine files: **CMP4-5** (`required_roles` matched against
+  `User.rank`, not position ids — `training_compliance.py:1092-1133`) and
+  **CMP4-2** (`required_positions` now read via `member_position_slugs` /
+  `requirement_applies_to_user`, `:1156-1177`), both documented in
+  `docs/security-review/CMP-20-compliance.md`. Read in full; both match
+  their own docstrings' claims and are consistent with how
+  `training_service.get_applicable_requirements` resolves the same
+  members (`training_service.py:1647-1649` calls the identical
+  `requirement_applies_to_user`).
+
+### New functionality this window, reviewed fresh (not a re-verification)
+
+Two substantial features landed in this window with no prior review record,
+read against all seven checklist dimensions:
+
+- **Grandfathering / "new members only" requirement edits**
+  (`new_member_cutoff_date`, `existing_member_deadline`,
+  `applies_to_joined_before`, `RequirementChangeScope`,
+  `TrainingService.split_requirement_for_new_members`, `training.py`'s
+  `update_requirement` (`:1520`) splitting branch at `:1576-1620`).
+  **Verified good**: the split takes `.with_for_update()` on the original
+  row before branching (`training.py:1543-1554`), so two concurrent splits
+  of the same requirement serialize — the loser sees
+  `requirement.applies_to_joined_before is not None` (set by the winner)
+  and is refused with a clear message rather than creating a second,
+  contradictory "new standard" copy. The copy is built by deep-copying the
+  mapper's column attributes (`copy.deepcopy`, `training_service.py:469-
+475`), which is the correct pattern for a JSON-bearing column
+  (`required_courses`, `category_ids`, …) per CLAUDE.md Pitfall #12 — a
+  shallow `dict()`/attribute copy would have shared the original's JSON
+  list objects between two now-independent rows. Both the split and every
+  ordinary grandfathering-field edit on `update_requirement` audit-log a
+  before/after snapshot (`_audit_grandfathering`), which is proportionate:
+  this is a change that can move a whole roster in or out of compliance at
+  once. Permission is `training.manage` throughout, unchanged by the
+  split branch. `tests/test_requirement_grandfathering.py` sweeps for any
+  caller of `requirement_applies_to_member`/`_to_user` that doesn't pass a
+  join date.
+- **Training-session attach/approval endpoints on Training events**
+  (`POST /training/sessions/by-event/{event_id}`, `GET /training/sessions/
+by-event/{event_id}/approval`, plus the credit-reversal machinery in
+  `training_session_service.py`: `void_event_records`, `void_event_credit`,
+  `rename_event_records`, `reverse_event_pipeline_credit`,
+  `_prior_credit_user_ids`). **Verified good**: every query in this family
+  filters `organization_id` explicitly (including the "legacy" pre-
+  `source_event_id` record lookup, which is additionally narrowed to
+  members an approval's own roster actually credited — `only_user_ids`/
+  `legacy_user_ids`, never "any record with a matching title" for an
+  arbitrary member); the event/session/approval rows are locked with
+  `.with_for_update()` in the same order every writer uses (event → session
+  → approvals → RSVPs), matching Pitfall #27; and `get_event_training_
+approval`'s approval token is included in the response only when the
+  caller holds `training.manage` (`include_token=user_has_permission(...,
+"training.manage")`, `training_sessions.py:305`), even though the summary
+  itself is visible to `events.manage` too. `submit_training_approval`'s
+  permission was tightened from `events.manage` to `training.manage`
+  (`training_sessions.py:509-514`) — a narrowing, not a regression —
+  matching the roster-view permission behind it (`get_training_approval`,
+  `:478-483`, same permission). The approval-submission path
+  (`training_session_service.py:2001+`) explicitly checks that every
+  submitted attendee is on the approval's own stored roster and that the
+  roster is submitted in full (XC-1 noted in its own comment,
+  `:2087-2108`), closing the exact gap CLAUDE.md Pitfall #14c warns about
+  for a client-supplied id list.
+- **New external caller**: `event_service.py` (Events feature, not this
+  one) now calls `TrainingSessionService` directly from seven sites
+  (`lock_for_event_finalize`, `record_event_attendance`, `void_event_
+credit`, `reopen_for_event`, …) as part of "Finalize Attendance completes
+  training credit" / "take training credit back when its attendance goes".
+  This is by design — those methods take `organization_id` explicitly and
+  are reviewed above — but it is a genuinely new call site outside the
+  three files `grep -rl "TrainingService(\|TrainingProgramService(\|
+TrainingSessionService("` previously found, so it is recorded here per
+  this pass's instructions. The call-site set is otherwise unchanged from
+  pass 6: the three endpoint files, `mcp/tools/training.py`,
+  `training_submissions.py` (Feature 18/19 territory, untouched), and the
+  same six other-feature services (`course_cohort_service.py`,
+  `external_training_service.py`, `scheduled_tasks.py`,
+  `shift_completion_service.py`, `skills_testing_service.py`,
+  `training_submission_service.py`). `backend/app/docs/TRAINING_MODULE.md`
+  also matches the grep but is documentation prose, not a call site.
+
+### Findings
+
+#### TR7-1 — MEDIUM (abuse resistance / data integrity, Pitfall #27) — `POST /training/enrollments` still has the duplicate-active-enrollment race the rest of the codebase just fixed, and creates a structurally incomplete enrollment — OPEN, FLAGGED
+
+**Where:** `backend/app/api/v1/endpoints/training.py:2107-2186`
+(`enroll_member_in_program`, mounted at `POST /api/v1/training/enrollments`
+via `training.router`'s `/training` prefix — `api/v1/api.py:178-181`).
+
+**What it is:** this function duplicates, by hand, the exact logic that
+`TrainingProgramService.enroll_member` (`training_program_service.py:2137`,
+reachable via the _different_ `POST /api/v1/training/programs/enrollments`
+route on `training_programs.router`) was just fixed to do correctly in
+commit `012f3da49` ("one active enrollment per member and program;
+generalize the org lock"). That commit added `lock_organization_scope(...,
+PROGRAM_ENROLLMENT)` + `.with_for_update()` to the service method's
+existing-enrollment check. It did not touch `training.py`'s own copy of the
+same check, at `training.py:2146-2153`:
+
+```python
+existing = await db.execute(
+    select(ProgramEnrollment).where(
+        ProgramEnrollment.user_id == str(user_id),
+        ProgramEnrollment.program_id == str(program_id),
+        ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
+    )
+)
+if existing.scalar_one_or_none():
+    raise HTTPException(status_code=400, detail=...)
+...
+db.add(enrollment)
+await db.commit()
+```
+
+No lock, no `.with_for_update()`, and no unique constraint on
+`program_enrollments` backs it up (confirmed: the model carries no unique
+index on `(user_id, program_id, status)` or similar — `models/
+training.py:1687+`). Two concurrent `POST /training/enrollments` calls for
+the same `(user_id, program_id)` both read "no active enrollment", both
+pass, and both commit — two ACTIVE `ProgramEnrollment` rows for one member
+in one program, the identical failure mode `012f3da49`'s commit message
+describes for the sibling endpoint, reproducible the same way
+`test_program_enrollment_race.py` reproduces it for the service method (two
+real DB connections racing the same read-then-insert).
+
+**It is also incomplete independent of the race.** Unlike
+`TrainingProgramService.enroll_member`, this endpoint never creates
+`RequirementProgress` rows for the program's requirements, never determines
+a starting phase for a phase-structured program, never schedules a
+recert deadline, and never sends the enrollment notification. A _single_,
+non-concurrent call to this endpoint still produces an enrollment with zero
+`RequirementProgress` tracking rows — which several downstream readers
+(`get_enrollment_progress`, phase-completion checks in
+`training_program_service.py`) were not written expecting. This review did
+not trace every downstream consumer of an enrollment with no progress rows
+to confirm how each one degrades (cleanly reporting zero progress, vs.
+reading an empty requirement set as vacuously complete) — that is exactly
+the kind of behavior question this pass's own rules say to flag rather than
+guess at.
+
+**Exposure, concretely:** `POST /training/enrollments` requires
+`training.manage` (a permission training officers broadly hold), takes
+`user_id`/`program_id` as query parameters, and is a live, documented route
+— `grep` of the frontend (`frontend/src/services/trainingServices.ts:894`)
+confirms the app's own `enrollMember()` call goes to `/training/programs/
+enrollments` (the fixed path) instead, and no frontend file calls `/training/
+enrollments` for this purpose, so there is no in-app user flow that hits the
+broken path today. It remains reachable by any direct API client — a
+script, an integration, or (per this codebase's own MCP surface pattern) a
+future MCP tool — with no guard test catching either defect:
+`test_capacity_locking.py`'s guard for this class asserts only the _source_
+of `TrainingProgramService.enroll_member` takes the lock; it does not know
+the `training.py` duplicate exists.
+
+**Not fixed here.** Two different correct fixes are available — delegate
+`enroll_member_in_program` to `TrainingProgramService.enroll_member`
+(changes the response shape from a flat `{enrollment_id, member_name, ...}`
+dict to the full `ProgramEnrollmentResponse`, and changes the audit event
+emitted) or add the same lock in place while leaving the response shape
+alone (closes the race but leaves the endpoint's missing `RequirementProgress
+`/phase/recert/notification behavior as a separate, undiagnosed correctness
+gap) — and choosing between them, or removing the apparently-dead duplicate
+route outright, is a product decision this pass's own rules reserve for the
+owner rather than a drive-by fix. Mirrored into `docs/KNOWN_LIMITATIONS.md`.
+
+### Verified good ✅ (pass 7 additions)
+
+- **`graded_records_clause`'s exactness claim holds.** Read its full
+  derivation against `_grade_member_requirement`'s actual branches rather
+  than trusting the docstring; every typed branch's window-selection logic
+  matches, and the deliberately-unbounded cases (ONE_TIME with no freshness
+  cutoff, CERTIFICATION's full-history match, fallback types' IN_PROGRESS
+  read) are each justified by a concrete reason the superset can't be
+  narrowed further without changing what gets graded.
+- **The grandfathering split is race-safe and JSON-copy-safe.** Row lock on
+  the original prevents a double split; `copy.deepcopy` on the mapper's
+  column attributes avoids Pitfall #12's shared-reference bug for the new
+  copy's `required_courses`/`category_ids`.
+- **The training-session credit-reversal family (`void_event_records`,
+  `void_event_credit`, `rename_event_records`) is org-scoped and lock-
+  ordered throughout**, including its "legacy pre-source-link record" path,
+  which is narrowed to members an approval's roster actually credited
+  rather than matching by course name and date alone.
+- **`submit_training_approval`'s roster check closes an XC-1c gap
+  explicitly**: every submitted attendee must be on the approval's own
+  stored roster, and the full roster must be submitted (not a subset),
+  checked before any write.
+- **`json_array_contains` (the JSON_CONTAINS fix, commit `04bee94d5`) is
+  parameterized, not interpolated** — `func.json_contains(column,
+literal(json.dumps(str(value).strip()))) == 1` in `app/utils/
+json_ids.py:57-71` — confirmed by direct read, not by the commit
+  message's own description.
+- **No new route is missing an auth dependency.** Enumerated every
+  `@router.*` in all three endpoint files (28 in `training.py`, 13 in
+  `training_programs.py`, 8 in `training_sessions.py`) by signature, not by
+  spot check; every one carries `Depends(get_current_user)` or a
+  `require_permission(...)`/`require_all_permissions(...)` dependency.
+
+## Schema & migration notes
+
+No migration in this window touches training-core tables directly (the one
+migration in the 36-commit range, `3b7918cce37c`, adds `organization_locks`
+— reviewed under TR7-1's context above as the mechanism
+`TrainingProgramService.enroll_member` now takes; it is not a training-core
+table and is edited in place per its own commit message because it exists
+only on the unmerged branch that introduced it). `shift_credited` is a new
+NOT-NULL column on `training_requirements`; its schema validator
+(`schemas/training.py:139-146`) correctly refuses an explicit `null` rather
+than letting one reach the NOT NULL constraint at flush time.
+
+## Guard tests added
+
+None this pass. TR7-1 is flagged, not fixed, so no guard test is owed for
+it yet — the owner's chosen fix should land with one, the same way
+`012f3da49`'s fix of the sibling endpoint was covered by
+`test_program_enrollment_race.py`.
+
+## Completion gate (pass 7)
+
+| Check                                                 | Result                                                                                 |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                         | ✅ 0 violations                                                                        |
+| `black --check app/ tests/ alembic/`                  | ✅ 1953 files unchanged                                                                |
+| `isort --check-only app/ tests/ alembic/`             | ✅ clean                                                                               |
+| `python3 scripts/validate_migrations.py --strict`     | ✅ 527 revisions, single head `15802f3df5c4`                                           |
+| `python3 scripts/check_route_permissions.py --strict` | ✅ 245 routes, 0 errors, 0 warnings                                                    |
+| `pytest tests/ -q -k "training or compliance"`        | ✅ 1475 passed, 1 skipped (pre-existing `pywebpush` skip) — see environment note below |
+| `cd frontend && npm run typecheck`                    | ✅ 0 errors (aliased 7.0.2 compiler)                                                   |
+| `cd frontend && npm run lint`                         | ✅ 0 errors, 0 warnings                                                                |
+
+**Environment note, not a code finding:** the first run of the pytest
+subset above failed 59 tests with `Unknown column 'events.
+recurrence_exceptions' in 'SELECT'` and ten similar errors across
+`events`, `event_rsvps`, `shift_completion_reports` and
+`training_module_configs`. `alembic current`/`validate_migrations.py` both
+showed the chain fully applied at head, so this was not a missing
+migration: each of those columns was added to its SQLAlchemy model months
+ago (`events.recurrence_exceptions`, back in March) with no
+`add_column` migration, by design — `main.py`'s own `_add_missing_model_
+columns` docstring says `create_all(checkfirst=True)` only creates missing
+_tables_, and a column added to a model since is meant to be picked up by
+that startup repair function on the app's next boot, not by Alembic. This
+sandbox's dev database had been migrated but never booted through the
+actual app, so it never got that repair pass. Running
+`_add_missing_model_columns(engine)` once (not a code change — the
+function already exists and is exactly what a normal app startup runs)
+added the twelve missing columns and the suite went green. None of the
+twelve belongs to this feature's nine declared files, and none is a
+training-core schema gap — `training_module_configs`'s six are **shift-
+report integration columns owned by Feature 18/19** (training extended /
+shift reports), not reviewed here. Recorded here rather than silently
+worked around, per this pass's own "never report a gate you did not run"
+rule, and because a from-scratch sandbox hitting this is a sign the repair
+path is exercised rarely enough to be worth knowing about.

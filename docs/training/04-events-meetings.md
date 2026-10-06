@@ -584,6 +584,41 @@ editable. Its type, category, schedule and check-in rules are shown greyed out
 on the edit form, because members' credited hours were calculated from them;
 to change one, have attendance reopened first, then finalize again.
 
+**The lock refuses a changed value, not a mention** _(2026-10-05)_. Earlier the
+edit form re-sent every field it shows, and the server refused any save that
+carried a locked field at all, so a finalized event could not be saved even to
+fix a typo in its title. The server now compares the values: only a change to
+the type, category, schedule or check-in rules is refused (and the refusal names
+just the fields that would change); an unchanged one is simply left alone. On the
+edit form a notice at the top explains what is locked, why, and how to unlock it,
+and the locked controls say so to screen readers. Guest sign-in stays editable.
+A category the department no longer lists is still shown (so it is not lost on
+save).
+
+**A series edit's refusal counts the right occurrences** _(2026-10-05)_. Saving
+**This and all future events** over finalized occurrences is refused when it
+would change one of them, and the message now reads, for example, _"(2 of 3
+finalized occurrences would change)"_ — the ones that would change out of the
+finalized ones — instead of comparing against every occurrence in the series.
+A finalized occurrence the save would not change is not refused. Cancelling or
+deleting a series is still refused whenever any occurrence is finalized, and
+keeps its own wording. A series save also no longer copies one occurrence's
+attendance markers onto the others.
+
+**Edit Times starts from the credited check-in** _(2026-10-05)_. A member who
+self-checked-in before the scheduled start is credited from the start. The
+**Edit Times** dialog used to pre-fill the raw tap, so saving it unchanged turned
+a 40-minute-early tap into a manager override that credited the extra 40
+minutes. It now pre-fills the credited time.
+
+**Scheduling or postponing an event request shows the real reason** _(2026-10-05)_.
+When the server refuses (for example, because the event's attendance is already
+closed), the toast now shows its reason instead of a generic _"Failed to
+postpone request"_ or only the double-booked-room hint.
+
+> **Screenshot needed:**
+> _[Event organizer at /events/:id/edit on a finalized demo event: the "Attendance for this event is finalized" notice at the top, with the type, category, schedule and check-in controls greyed out and the title editable.]_
+
 **On a Training event, finalizing writes each member's training record**
 _(2026-09-29)_. Every checked-in member gets a **Completed** record for the
 time they are credited with:

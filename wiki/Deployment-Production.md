@@ -105,6 +105,14 @@ server {
 }
 ```
 
+> **Size your own proxy's per-address limits for a department** _(2026-10-05)_. If you
+> add `limit_conn` or `limit_req` here, remember that a station's members usually
+> share one public address and that HTTP/2 counts every in-flight request: one
+> dashboard load is about 20 API calls. The bundled configs use `limit_conn 400`
+> and `limit_req zone=api_limit burst=600 delay=100` at 50 requests a second
+> (see `infrastructure/nginx/nginx.conf`); the old 10 concurrent / 10 a second
+> refused most of a page load with 503. Keep sign-in strict (5 a minute).
+
 ### With Let's Encrypt (Free SSL)
 
 ```bash

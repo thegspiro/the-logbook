@@ -1,5 +1,72 @@
 # Screenshot currency
 
+## Queued by the October 5 – 6 documentation pass, 2026-10-06
+
+Covers PRs #2941–#2972. **Nothing has been captured.** The new placeholders are
+inline `> **Screenshot needed:**` paragraphs in the guides, counted by
+`status_report.py` (regenerated: [SCREENSHOT_STATUS.md](./SCREENSHOT_STATUS.md)).
+Topic index: [21 — October 5–6, 2026 workflow updates](./21-october-2026-release-changes.md).
+
+**What the seeded demo cannot produce yet:** a held offline item (seed untagged
+entries straight into IndexedDB), an approval step assigned to someone other than
+the capturing account, an approval step whose position nobody holds, an exchange
+whose member lost a qualification after submission, and a member no requirement
+grades. Never capture a real badge code; use a throwaway demo member.
+
+### New placeholders
+
+| Guide | Section | Capture brief |
+| ----- | ------- | ------------- |
+| 01-membership.md | Badge codes | Print ID Cards page (`/members/print-id-cards`): Orientation, Sides and Code options, Save as department layout, and the **Accept old badges** switch |
+| 01-membership.md | Badge codes | Member ID card page: the badge with its QR code, **Reissue badge** and the "Reissue this badge?" confirmation (do not confirm) |
+| 02-training.md | One definition of "compliant" everywhere | Compliance Matrix rail with the **Not applicable** group and a member's detail |
+| 02-training.md | One definition of "compliant" everywhere | Training dashboard **Department Compliance** card beside the matrix it opens, same percentage |
+| 02-training.md | Compliance Attestations | New Attestation with the **Quarter** picker and the "calculated when you submit" sentence; one history entry showing "as of <date>" |
+| 02-training.md | Shift Credit | Requirement form for an Hours requirement: **Shift attendance satisfies this requirement**, unticked |
+| 03-scheduling.md | Trades somebody can actually accept | Request swap dialog with **Exchange With a Member** chosen and the **Exchange With** list |
+| 03-scheduling.md | Trades somebody can actually accept | Requests tab: **Approve without qualification?** with **Approve anyway** / **Keep it pending** (do not confirm) |
+| 04-events-meetings.md | A finalized event can still be edited | Edit form on a finalized event: the "Attendance for this event is finalized" notice, locked controls, editable title |
+| 05-inventory.md | What the alert emails say now | Supplies to Replace email at 390px: **Status** column with an expiring, a **Restock reported** and a **Short — 2 of 4 aboard** row |
+| 10-mobile-pwa.md | Queued Work Is Sent Only by the Member Who Saved It | The "N offline items are on hold" notice with **Send as me** / **Discard**, and the "Send these as yours?" confirmation (do not confirm) |
+| 11-finance.md | The Approvals screen | Approvals as an approvals admin: "Requests waiting on you.", admin line, **Waiting on** column, **Not assigned to you** badge, **Approve/Deny as approvals admin** |
+| 11-finance.md | The Approvals screen | **Approve as approvals admin** dialog with the **Override reason** box |
+| 11-finance.md | Steps nobody can act on | Approval Chains page banner and the amber "No active member can act on this step" chip with "N requests waiting" |
+| 14-elections.md | Fixes From the On-Screen Re-Drive | In-app vote receipt under "Vote submitted for <position>" |
+| 15-prospective-members.md | Moving Applicants Through Stages | Applicant drawer on a Checklist stage: "1 of 2 items done — tick every item to advance" |
+| 15-prospective-members.md | Pipeline Settings | **Automatic Transfer to Membership** card and its tickbox |
+
+### Existing images
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `11-12-purchase-request-detail`, `11-14-expense-report-detail`, `11-16-check-request-detail` | **REPLACE** | Pending-approval panel now always says "Waiting on <who>" and shows the **Not assigned to you** / override buttons for an approvals admin |
+| the Approvals screen placeholder in guide 11 | **REPLACE** when captured | Gains the **Waiting on** column and admin rows; heading reads "Requests waiting on you." |
+| `11-06-approval-chains` | **CHECK** | Step help text changed to "Only the approver chosen here can approve or deny this step…"; chain cards gain coverage warnings when a step has no one who can act |
+| `02-73-compliance-attestations` | **REPLACE** | Form lost the Compliance % box and gained the Quarter picker; entries show "as of" |
+| `02-66-compliance-matrix`, `02-65-print-compliance`, `02-17-officer-dashboard` | **CHECK** | A Not applicable group and graded-member percentages can change the rail and the Department Compliance card |
+| `02-16-requirements` | **REPLACE** | Requirement form gains the Shift Credit box (Hours and Shifts types) |
+| `03-14-scheduling-reports` | **REPLACE** | Shift Compliance cards are **Requirement Checks**, **Checks Met**, **Checks Not Met** (were Total Members, Compliant, Non-Compliant) |
+| `03-67-swap-request-dialog`, `03-11-swap-requests-tab` | **REPLACE** | Exchange With a Member picker; exchange cards name the other member |
+| `03-60-dashboard-my-shifts`, `00-04-dashboard-overview` | **CHECK** | Open slots the member cannot take read "Not eligible" instead of Sign Up |
+| `01-23-print-member-badges`, `19-37-member-id-cards` | **CHECK** | Badge now encodes the server badge code; Print Badges needs `members.manage` or `members.manage_id_cards` |
+| `15-10-pipeline-settings`, `15-14-applicant-drawer-overview` | **CHECK** | Automatic Transfer card; checklist items as tickboxes in the drawer |
+| `08-11-error-monitor` | **CHECK** | Rows from scheduled tasks carry the source **Scheduled task** |
+| `05-01-inventory-items`, `05-25-admin-hub`, `05-60-admin-hub-groups` | **REPLACE at phone width** | Below 640px the nine Items filters sit behind a **Filters** toggle; eight admin pages lost their doubled side padding; hub metric labels wrap to two lines |
+| `09-12-summary-pending-validation` | **CHECK** | **Needs Validation** is shown to officers always (zero included) beside **Pass Rate** |
+| `14-17-election-results`, election list frames | **CHECK** | Closed card shows the real close time |
+
+### Manifest steps flagged
+
+`scripts/screenshots/manifest.mjs`: only the comment on `09-12-summary-pending-validation`
+was updated (the selector still matches the **Needs Validation** label). Not
+changed, because a capture-step edit needs the new UI to be run: `03-62`
+(dashboard sign-up positions) selects a seeded open shift by its Sign Up button
+and now needs a shift the member **is** eligible for, since an ineligible one
+reads Not eligible; `03-14-scheduling-reports` (check its wait text against the new
+**Requirement Checks** card labels); and the My Training frames may want a pending record seeded.
+The anchor on `09-12` ("The Summary dashboard viewed by a training officer") no
+longer appears verbatim in guide 09.
+
 ## Queued by the second September 23 – 30 reading, ported 2026-10-05
 
 A second reading of PRs #2651–#2846 checked each guide's screens against the code, not against fresh captures. It ran in parallel with the September 24 – October 4 pass and was ported onto it afterwards. Where that pass had already queued an image, the row says so rather than queueing it twice.

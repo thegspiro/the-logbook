@@ -412,6 +412,165 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Member badges carry a server-issued code; old badges keep scanning until you turn them off (2026-10-05)
+
+Migration `ad3b979746f1` adds `users.badge_code` and gives **every existing
+member** a random code such as `MB-7KQ2W9HXRT` (unique per organization; new
+members get one by default). Labels, CR80 ID cards and the digital ID card now
+encode that code instead of the membership number or short member id, which any
+member could read in the directory.
+
+- **Nothing stops working on upgrade.** Both scanners resolve through
+  `POST /member-badges/resolve`, which still accepts the membership number, the
+  short id and the old phone-card QR until an officer turns **Accept old badges**
+  off (Members → select → **Print ID Cards**, switch at the bottom). Absent means
+  accepted. Turn it off only after every member holds a reprinted card; it stops
+  every pre-badge-code card at every station and the inventory issue-by-badge
+  scanner.
+- **A badge printed after the upgrade is only as good as the code.** **Reissue
+  badge** on a member's ID card page cancels a lost badge and prints a new code.
+  The code is shown only to the member and to `members.manage` /
+  `members.manage_id_cards` holders, and is not in rosters, profile responses,
+  exports or anonymized records.
+- Scripts or integrations that built a badge from the membership number must
+  fetch the code (`GET /member-badges/{id}`) or keep Accept old badges on.
+- Rollback: the downgrade drops the column, and badges printed with a code stop
+  scanning on a version below this one.
+
+### Training and compliance figures move (2026-10-05)
+
+Nothing blocks a restart, but percentages a department already published or
+reads on the dashboard can change. Check them after the upgrade.
+
+- **Certification name matching is now legacy-only** (`60aaf273de27`). A
+  completed record whose course name merely contained a certification
+  requirement's name (a "CPR Refresher" crediting "CPR") used to count.
+  The migration sets `training_requirements.name_match_until` on every
+  requirement that exists to **the day it runs (UTC)**: records completed on or
+  before it still match by name, so published standings do not move on upgrade
+  day. From then on a record needs a linked course, the training type or the
+  registry code. Requirements created afterwards, and every requirement on a fresh
+  install, never match by name. Downgrade drops the column and every record name-
+  matches again.
+- **Required roles match the member's rank.** `required_roles` holds rank slugs,
+  but every screen compared it with position ids, so a requirement scoped only by
+  role applied to nobody. It now grades the members of those ranks on My
+  Training, the matrix, the dashboard percentage, the roster, the profile card,
+  the competency matrix, the annual report and Scheduling's Shift Compliance
+  report: **their standings, and the department percentages that include them,
+  move.** Stored values were already rank slugs; there is no data migration.
+  Compliance-profile `role_ids` are unchanged (position ids).
+- **One definition of who is graded.** The dashboard's Department Compliance
+  card and the annual and monthly compliance reports now use compliance profiles
+  (narrowed requirement lists, threshold overrides) and the org's own thresholds,
+  as the matrix always did. Departments with profiles, or a compliant threshold
+  under 100%, see those figures change; **stored annual reports keep the
+  figures they were generated with.**
+- **Members nothing grades are "not applicable", not 100%.** A member with no
+  applicable requirement (none applies, a profile selects none, or all are in
+  catch-up) used to count as compliant at 100% and now shows N/A and leaves every
+  percentage's denominator. Percentages can fall for a department with many
+  such members, and read blank when nobody is graded. A compliance attestation
+  records the server's figure as of the period's last day, not a typed one.
+- **Shift Compliance grades only shift-credited requirements** (`f16b004db34e`).
+  A SHIFTS requirement is shift-credited by default (existing ones are
+  backfilled); an HOURS requirement is not. **Every existing HOURS requirement
+  drops off Scheduling Reports → Shift Compliance until an officer ticks Shift
+  Credit** on it. The cards are now Requirement Checks, Checks Met and Checks Not
+  Met; the numbers are unchanged. Downgrade drops the column.
+- **Skills testing:** `GET /training/skills-testing/tests` returns
+  `{ items, total }` (it was a bare list), and the CSV export needs `date_from`
+  and `date_to` at most 366 days apart. `GET /training/records` is paged
+  (limit 500, `X-Total-Count`). Scripts reading these must page.
+
+### Self-reported certificate files can now expire — default is keep (2026-10-05)
+
+`cdb725bb1d12` adds `self_report_configs.attachment_retention_days`. **NULL, the
+default, keeps files indefinitely and nothing is backfilled, so an upgrade
+deletes nothing.** When a department sets a period (Review Submissions →
+Settings → Certificate Files; 90 days minimum), the daily
+`self_report_attachment_retention` task **permanently deletes** the certificate
+files of submissions decided longer ago than that, and removes the references
+from the submission and the member's training records; the rows stay. It is not
+reversible — back up first, and set the period only after the department's
+records policy says so. Audited as `self_report_attachment_retention` per
+organization run and `self_report_attachment_retention_updated` per change.
+
+### Proxy per-address limits are sized for a department (2026-10-05)
+
+The bundled nginx configs (`infrastructure/nginx/nginx.conf` and `docker.conf`)
+allowed 10 concurrent requests per address and 10 API requests a second (burst
+20, refused beyond it). Under HTTP/2 every in-flight request counts, and one
+dashboard load is about 20 API calls, so one member could lose most of a page to
+503, and a station whose members share one public address lost most requests.
+Now `limit_conn 400` and the API zone at **50/s with `burst=600 delay=100`** (the
+first 100 requests of a burst pass at once, the rest queue at 50/s rather than
+being refused). The sign-in limits (`login_limit`, 5 a minute, burst 3, and the
+backend's `rate_limit_login`) are **unchanged** brute-force controls. **A reverse
+proxy you run yourself keeps whatever limits it was given:** raise its per-address
+connection and rate limits the same way, or a station sees 503 at shift change.
+No migration; a container rebuild or `nginx -s reload` picks the bundled change
+up.
+
+### Events: finalized events can be edited; series saves are checked per occurrence (2026-10-06)
+
+A **finalized** event can be saved from the edit form: the attendance lock now
+refuses a changed value of a locked field (type, category, start, end, check-in
+rules), not the mere presence of one, and the form disables those fields with an
+explanation. **This and all future events** is decided per finalized later
+occurrence and now refuses with "(N of M finalized occurrences would change)"
+(it used to count every occurrence in the series). A description-only series edit
+from an open occurrence is refused when a finalized later occurrence differs in
+type, **category** or check-in rules; the category part is new. A series save no
+longer copies the edited occurrence's `attendance_finalized`, `reminders_sent`
+and `validation_notification_sent` markers onto later occurrences. No migration;
+an occurrence a previous series save wrongly marked finalized or unmarked is not
+repaired.
+
+### Smaller behaviour changes in this release (2026-10-05)
+
+- **Rank vocabulary.** Once a department has any rank rows, the built-in rank
+  codes (`firefighter`, …) are no longer accepted for a _new_ assignment by the
+  member API, CSV import or prospect conversion unless the department's own
+  ladder has that rung (ONBOARD-3); members already holding one keep their
+  seats. A department that deleted a seeded rank during setup and still imports
+  members with it must re-add the rung first.
+- **Two-way shift exchanges** need both members cleared for the seat they would
+  take; an unqualified exchange is refused when submitted. A request that lapsed
+  while pending is refused at approval with `LB-SCHED-002`, and a duty officer can
+  **Approve anyway** (audited).
+- **Alert email wording and subjects changed.** Low stock says "at or below
+  reorder point"; the certification alert subject reads "Expires Today" /
+  "Expires Tomorrow" (it read "Expiring in 0 Days"); the weekly supply alert is
+  "Supplies to Replace" with a Status column; the NFPA alert says "approaching or
+  past". Five more emails (property return reminder, member-dropped notice,
+  election results, low stock, NFPA retirement) were reflowed to fit phones. A
+  mail rule that filters on an old subject needs updating.
+- **Sessions survive a two-tab refresh.** A refresh that loses a rotation race is
+  answered 409 `LB-AUTH-012` and revokes nothing; it no longer logs the member out
+  everywhere. A refresh arriving after the first has committed is still treated
+  as replay.
+- **Sign-out is confirmed.** A failed sign-out is retried and then blocks the
+  screen until the server confirms; offline queue entries are owned by the member
+  who queued them, and entries from before the upgrade are held behind **Send as
+  me** / **Discard**.
+- **Scheduled-task failures** now appear on Error Monitoring ("Scheduled task"),
+  so a department that never saw them may suddenly see a backlog of recurring
+  ones. The end-of-shift summary is retried until its email is sent.
+- **Integrations.** Every integration sender (teams, webhook, slack, discord,
+  calcom, documenso, audit shipping) resolves the destination once and connects
+  to that address; DNS rebinding between check and connect no longer works.
+  `AUDIT_SHIP_ALLOW_PRIVATE_DESTINATION` still lifts the public-address rule only.
+  Proxy-mounted clients are not pinned (KNOWN_LIMITATIONS). Google Calendar
+  responses are capped at 10 MB with 5 s connect and 10 s socket timeouts.
+- **Migrations `99b16109d44c`** resets stale `in_progress` prospect stage rows
+  that sit ahead of the applicant's current stage (idempotent, logs the count,
+  **no downgrade effect**), **`d4d0a483cdd5`** adds cohort missed-class decisions
+  (downgrade drops the table and loses every decision) and **`c56303befb2c`**
+  adds indexed `document_id` columns to facility documents and photos and two
+  folder indexes (backfilled from `file_path`; downgrade drops them). `15802f3df5c4`
+  is a no-op merge. The chain has a single head.
+
 ### Finance approvals now go to the approver each step names (2026-10-04)
 
 Until this release an approval chain step's approver — "Treasurer position",
@@ -484,7 +643,7 @@ rule applies with more force than usual.
 - **No downgrade at all:** `b795d1b3401b` (untouched email templates moved to
   the then-current default) and `6394fbf42581` (clears the duplicate-vote hash
   on voided ballots so the member can vote again — irreversible by design).
-- **Downgrade loses data:** `34d3d56d1479` (every preferred name entered), the inventory NFC revisions `b713c2e8ee26`
+- **Downgrade loses data:** `34d3d56d1479` (every preferred name entered), `d4d0a483cdd5` (every cohort missed-class decision; 2026-10-05), `cdb725bb1d12` (every department's chosen certificate-file retention period), the inventory NFC revisions `b713c2e8ee26`
   (storage-area tags and every recorded scan), `7ad83f52735c` (shelf audits)
   and `45b36bae9098` (compartment tags), and the suggestion-box revisions
   `0010291816fd` (status history and responses to submitters) and

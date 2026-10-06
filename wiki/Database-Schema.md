@@ -253,6 +253,38 @@ The `organizations.settings` JSON column stores email platform configuration und
 
 ---
 
+## Recent Schema Changes (2026-10-05 → 10-06)
+
+**As of 2026-10-06 the single head is `15802f3df5c4`** (a no-op merge of the badge-code and known-limitations branches). Run `alembic heads` to confirm. `docs/DATABASE_SCHEMA.md` is the complete column reference; this section names what changed. Every migration here is guarded and idempotent.
+
+### New Tables
+
+| Table                          | Migration      | Description                                                                                                                                         |
+| ------------------------------ | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `course_cohort_missed_classes` | `d4d0a483cdd5` | One officer decision (credit or make-up) per member and class held before the member joined a cohort. No backfill: a class with no row is undecided |
+
+### New Columns and Indexes
+
+| Table                                   | Column(s)                                                 | Migration      | Description                                                                                                                                                          |
+| --------------------------------------- | --------------------------------------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `users`                                 | `badge_code` (unique with `organization_id`)              | `ad3b979746f1` | Server-issued member badge code, backfilled for every existing member. Not in any API response except `GET /member-badges/{id}`                                      |
+| `training_requirements`                 | `shift_credited` (NOT NULL, default false)                | `f16b004db34e` | Whether shift attendance may satisfy the requirement; SHIFTS rows backfilled true, HOURS left false                                                                  |
+| `training_requirements`                 | `name_match_until` (DATE, nullable)                       | `60aaf273de27` | Certification name matching applies only to records on or before it; every existing row set to the day the migration ran, new rows NULL (no name matching)           |
+| `self_report_configs`                   | `attachment_retention_days` (nullable)                    | `cdb725bb1d12` | NULL keeps certificate files indefinitely; no backfill. The table is built by `create_all`, so the step is skipped where it does not exist yet                       |
+| `course_cohort_classes`                 | `makeup_for_class_id` (FK, SET NULL)                      | `d4d0a483cdd5` | Marks a make-up session so it never counts as a class a later joiner missed                                                                                          |
+| `facility_documents`, `facility_photos` | `document_id`, indexed with `organization_id`             | `c56303befb2c` | Canonical id of a referenced shared document, derived from `file_path` on every write and backfilled; narrows the facility-reference locking read (FAC-41). Not a FK |
+| `document_folders`                      | indexes `(organization_id, slug)` and `(parent_id, slug)` | `c56303befb2c` | Make the system-root and per-record folder lookups index-satisfied (FAC-44)                                                                                          |
+
+### Data Migrations
+
+| Migration      | Effect                                                                                                                                                            |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `99b16109d44c` | Resets `prospect_step_progress` rows left `in_progress` ahead of the applicant's current stage by the old regress bug. Idempotent; **the downgrade does nothing** |
+
+Downgrades: `ad3b979746f1` drops the column (badges printed with a code stop scanning below it), `d4d0a483cdd5` drops the table and every decision in it, and the three single-column revisions drop their column.
+
+---
+
 ## Recent Schema Changes (2026-09-24 → 09-30)
 
 **As of 2026-09-30 the single head is `601fdb28ab8c`.** Run `alembic heads` to

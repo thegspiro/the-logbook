@@ -618,8 +618,12 @@ Deny, one candidate, "Select up to N", or a ranking).
    Everything you selected is recorded together: if any selection is refused
    (say, you are not eligible for that item), nothing is recorded and the
    message names the item
-4. The tab shows a **receipt** for each vote, and the verify form under the
-   ballot checks a receipt later
+4. The tab shows a **receipt** for each vote — _"Save this receipt to verify
+   your vote was counted. It cannot reveal how you voted."_ — and the verify
+   form under the ballot checks a receipt later (see
+   [Vote Receipt Verification](#vote-receipt-verification)). _(Fixed
+   2026-10-05: the receipt was recorded but the page redrew itself after the
+   vote and wiped it before you could see it.)_
 
 ### Email Ballot Voting (Token-Based)
 
@@ -1287,6 +1291,30 @@ After 30 minutes, Sarah closes the election:
 **Secretary:** FF Nguyen wins unopposed with 95%.
 
 The election report is emailed to Sarah — the election secretary who created it — when the election closes (**Send Report** under **Email Results Report** on the Results & Publishing panel sends it again). She forwards it to the department herself.
+
+---
+
+## Fixes From the On-Screen Re-Drive _(2026-10-05)_
+
+The fixes above were driven again in a real browser; these are what that found.
+
+- **A closed election card shows when it was actually closed.** The election list
+  dated an election closed early to its _scheduled_ end; it now shows the real
+  close time, as the detail page does.
+- **A ballot link retired by a rollback says so.** A link made void when an
+  election with no votes was rolled back and reopened read _"Voting token has
+  expired"_ days before the end. It now says the election was closed and
+  reopened, so the voter asks the secretary for a new link. A link replaced by a
+  reminder still says _"This link was replaced by a newer ballot email"_.
+- **Focus stays put after you nominate someone**, the Results & Publishing hints
+  wrap at phone width, the delete dialog no longer prints a stray "0" bullet on
+  an election with no votes, and the inline candidate edit's controls are named
+  for screen readers.
+- **The help pop-up on the Elections page** is as wide as its text rather than a
+  word or two a line.
+
+> **Screenshot needed:**
+> _[A member voting in-app on an open demo election: the "Vote submitted for <position>" block with the receipt hash and the line "Save this receipt to verify your vote was counted. It cannot reveal how you voted." Demo data only.]_
 
 ---
 

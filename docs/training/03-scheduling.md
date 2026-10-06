@@ -973,6 +973,19 @@ When a shift is below minimum staffing:
 
 ---
 
+## End-of-Shift Summary Emails Are Retried _(2026-10-05)_
+
+The end-of-shift summary goes to each member by email (the channel of record)
+and as an in-app notice. A member used to be marked "summary sent" whether or not
+the email actually went, so a failed send was never retried. Now, when an email
+is due (the member has an address, has not turned off shift notices, and your
+department can send email), the member is marked sent only once the email is
+reported sent; a failed send is tried again on the next run within the lookback
+window. The in-app notice is repeated with each retry, which is the accepted cost.
+A member who cannot be emailed is marked sent once the in-app notice is written.
+A failing run for your department now appears in
+[Error Monitoring](./08-admin-reports.md#error-monitoring).
+
 ## Shift Reports and Compliance
 
 **Scheduling Reports** (`/scheduling/admin/reports`, `scheduling.manage`,
@@ -1950,6 +1963,17 @@ force-fails its apparatus on every check and notifies through that path, so this
 alert exists to get ahead of the date rather than to repeat what the check
 already says.
 
+**The weekly alert is titled "Supplies to Replace"** _(2026-10-05)_. It lists
+more than expiring items: it also lists items a crew reported **used or pulled**
+and positions counted **below their target**, and those have no date to expire
+by. The subject, opening line and plain-text body now count each kind separately
+and name only the kinds present, for example _"1 expiring on apparatus, 2 to
+restock on apparatus, 1 stock lot expiring"_. In the tables the old **Expires**
+column is now **Status**: an expiring row still shows its date and days left; a
+reported row reads **Restock reported** with the crew's note; a short row reads
+**Short — 2 of 4 aboard**. A reported item whose own date is months away is no
+longer counted as expiring.
+
 #### Supply Tracking Edge Cases
 
 | Scenario                                                         | Behavior                                                                                                                                                                                                                          |
@@ -2474,6 +2498,14 @@ Officers with `training.manage` permission can now review multiple shift reports
 > **Hint:** Batch review does not support per-report field redaction. For reports requiring individual redaction, review them one at a time using the standard review modal.
 
 ### Flagged Reports View
+
+> **Flagged stays available when review is switched off** _(2026-10-05)_. The
+> Review Queue and Flagged views used to appear only while **report review** was
+> on, so a report flagged before an administrator switched review off sat in no
+> list an officer could act from. With review off, the tab now looks once for
+> flagged reports (officers only) and offers **Flagged** while any remain; it
+> stays offered while you are in it, so clearing the last flag does not remove
+> the view from under you. A department that never flags sees no change.
 
 Reports that reviewers flag for follow-up are now accessible from a dedicated **Flagged** tab in the Shift Reports section:
 
@@ -3520,6 +3552,24 @@ Requests tab it reads "→ Offered to _name_".
   driver seat, but not with a firefighter who isn't cleared to drive. Giving
   your shift away without taking one back isn't an exchange, and isn't limited
   this way.
+  An exchange that names a seat the other member does not hold, or that
+  involves a training seat, is refused when you submit it, so it never reaches
+  the review queue. The picker says _"No upcoming seat you could exchange for.
+  Both members must be qualified for the seat they would take."_ when nothing
+  qualifies.
+- **Qualification is checked again at approval.** If one of you stopped being
+  qualified while the request sat pending, the officer's approval is refused
+  with the reason, and the **Requests** tab asks _"Approve without
+  qualification?"_ with **Approve anyway** and **Keep it pending**. Approving
+  anyway puts the member in that seat; it waives the position check only, and
+  the override is noted on the request and in the audit log. Exchange cards on
+  the Requests tab name the other member.
+
+> **Screenshot needed:**
+> _[Member at /scheduling?tab=my-shifts, Request swap dialog with Exchange With a Member chosen and the Exchange With dropdown listing two seats. Demo members only.]_
+
+> **Screenshot needed:**
+> _[Scheduling officer at /scheduling?tab=requests: the "Approve without qualification?" confirmation over a pending exchange, with Approve anyway and Keep it pending. Needs a seeded exchange whose member lost a qualification after submission. Do not confirm.]_
 - **A request goes away when its seat does.** If you leave a shift — withdraw,
   decline, take approved time off, go on leave, or an officer removes or
   reassigns you — any pending swap or offer for that seat is cancelled, and you

@@ -4581,6 +4581,47 @@ type system connects either to a `path=` string.
   just the row count; a department with years of minutes sends the lot on every
   dashboard load.
 
+## Training — `POST /training/enrollments` Duplicates, and Lags, the Fixed Enrollment Path (2026-10-06)
+
+Found by security review TR-17 pass 7
+(`docs/security-review/TR-17-training-core.md`, TR7-1). There are two HTTP
+routes that create a `ProgramEnrollment`: `POST /api/v1/training/programs/
+enrollments` (`training_programs.py` → `TrainingProgramService.enroll_
+member`) and `POST /api/v1/training/enrollments` (`training.py`'s
+`enroll_member_in_program`), both gated on `training.manage`. The frontend's
+own `enrollMember()` call (`frontend/src/services/trainingServices.ts:894`)
+uses only the first. The second is a hand-written duplicate of the first's
+old logic and was never updated to match it.
+
+- **The race this duplicate was supposed to have inherited a fix for, did
+  not.** `TrainingProgramService.enroll_member`'s existing-ACTIVE-enrollment
+  check was a plain SELECT then INSERT — two concurrent calls for the same
+  member and program could both pass and both commit, leaving two ACTIVE
+  rows. Fixed in that one method with `lock_organization_scope` +
+  `.with_for_update()` (commit `012f3da49`). `training.py`'s copy of the
+  same check (`training.py:2146-2153`) still has no lock and no backing
+  unique constraint, so the identical race reproduces there, the same way
+  `tests/test_program_enrollment_race.py` reproduces it for the fixed method
+  — on two real connections.
+- **It also never creates the enrollment's `RequirementProgress` rows**, nor
+  determines a starting phase for a phase-structured program, nor schedules
+  a recert deadline, nor sends the enrollment notification — all of which
+  `TrainingProgramService.enroll_member` does. A single, non-concurrent call
+  to this route produces an enrollment with no per-requirement tracking rows
+  at all. This review did not trace every downstream reader of an enrollment
+  in that state (whether `get_enrollment_progress` and phase-completion
+  logic report it as stuck at zero, or read an empty requirement set as
+  vacuously complete) — that is exactly the kind of question an owner should
+  settle before this is "fixed" in place.
+
+**Not fixed as part of the review pass.** Closing the race alone (adding the
+same lock) would still leave the enrollment structurally incomplete, and the
+fuller fix — delegating to `TrainingProgramService.enroll_member` (changes
+the response shape and the audit event) or removing the apparently-unused
+duplicate route outright — is a product decision, not a drive-by patch.
+Exposure today is narrow: nothing in the frontend calls this route, so it
+reaches only a direct API client holding `training.manage`.
+
 The review loop (see [review-log.md](./review-log.md)) advances through one area
 per tick and appends findings. New "needs owner decision" items should be
 mirrored here so they're visible outside the log. The parallel module-by-module

@@ -159,7 +159,9 @@ Enable a profile: `docker compose --profile with-search up -d`
 > `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml:docker-compose.proxy.yml`
 > in `.env`; `install.sh` and `universal-install.sh` respect that pin and stop
 > before building if the certificate is missing. Every proxy in the stack now
-> allows 60 MB uploads, matching the backend. Full steps, including Let's
+> allows 60 MB uploads, matching the backend, and bounds each client address at
+> 400 concurrent requests and 50 API requests a second (burst 600, first 100
+> undelayed) — sized for a station's members sharing one address. Full steps, including Let's
 > Encrypt: [DEPLOYMENT.md](../docs/DEPLOYMENT.md#docker-compose-production-profile).
 
 > **Note:** Optional services use default values for credentials. Set `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD` in `.env` if you enable the `with-s3` profile in production.

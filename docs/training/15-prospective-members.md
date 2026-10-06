@@ -78,14 +78,17 @@ Navigate to **Prospective Members > Settings** to configure the pipeline.
 
 ### Pipeline Settings
 
-| Setting                                 | Description                                                                                                                                                                                                       |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Is Default**                          | New applicants automatically enter this pipeline                                                                                                                                                                  |
-| **Auto-Transfer on Approval**           | Automatically convert applicant when they complete the final stage. **No screen sets it** — it is off for any pipeline created in the app and can be turned on only through the API (`auto_transfer_on_approval`) |
-| **Inactivity Config**                   | Timeout settings for stale applications (see [Inactivity Timeout](#inactivity-timeout))                                                                                                                           |
-| **When an Applicant Becomes a Member**  | Member class and starting status for operational and for administrative applicants on conversion (see [What Happens on Conversion](#what-happens-on-conversion))                                                  |
-| **Public Application Status Page**      | "Let applicants check their application status through a public link" — see [Public Application Status Page](#public-application-status-page)                                                                     |
-| **Show upcoming stages** _(2026-09-24)_ | Under the status-page switch. Untick it and applicants see only the visible stages they have completed — not the stage they are on, and not how many remain. On by default, which is what the page always did     |
+| Setting                                                            | Description                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Is Default**                                                     | New applicants automatically enter this pipeline                                                                                                                                                                                                                                                                                                                        |
+| **Automatic Transfer to Membership** (`auto_transfer_on_approval`) | Whether completing the final stage converts the applicant into a member with nobody clicking **Convert**. Set it on its own card in **Pipeline Settings** _(2026-10-05; before that no screen showed or set it)_. Off by default; a recorded vote or sign-off on the final stage then creates the member, a skip never does, and required stages must be complete first |
+| **Inactivity Config**                                              | Timeout settings for stale applications (see [Inactivity Timeout](#inactivity-timeout))                                                                                                                                                                                                                                                                                 |
+| **When an Applicant Becomes a Member**                             | Member class and starting status for operational and for administrative applicants on conversion (see [What Happens on Conversion](#what-happens-on-conversion))                                                                                                                                                                                                        |
+| **Public Application Status Page**                                 | "Let applicants check their application status through a public link" — see [Public Application Status Page](#public-application-status-page)                                                                                                                                                                                                                           |
+| **Show upcoming stages** _(2026-09-24)_                            | Under the status-page switch. Untick it and applicants see only the visible stages they have completed — not the stage they are on, and not how many remain. On by default, which is what the page always did                                                                                                                                                           |
+
+> **Screenshot needed:**
+> _[Membership Coordinator at /prospective-members/settings with a pipeline selected, clipped to the "Automatic Transfer to Membership" card with its tickbox "Make applicants members automatically when they complete the final stage".]_
 
 ---
 
@@ -330,12 +333,30 @@ The system automatically checks for existing members or applicants with the same
    - **Document Upload (Documenso)**: Applicant signs electronically; a completed signature can auto-advance them
    - Other types: Applicant waits for manual action
 
+**A checklist stage** _(2026-10-05)_ lists its items in the applicant's drawer
+as checkboxes under **Checklist**, with a line such as _"1 of 2 items done — tick
+every item to advance"_. Tick each item as it is done, then **Advance**; the
+ticks are sent with the advance and kept per applicant and stage, so refreshing
+the page does not lose them. Before this nothing ever sent the ticks, so a
+checklist stage with items could not be passed. Dragging the card on the board
+sends no ticks, so advance such a stage from the drawer; **Skip** is unchanged.
+
+> **Screenshot needed:**
+> _[Membership Coordinator at /prospective-members with a demo applicant on a Checklist stage that has two items: the drawer's Checklist block with one item ticked and "1 of 2 items done — tick every item to advance".]_
+
 ### Moving Back (Regression)
 
 1. Click **Back** in the applicant's drawer
 2. The applicant returns to the previous stage
 3. Progress on the current stage is reset
 4. Optional notes can be added explaining the reason
+
+**An applicant no longer shows stages they have not reached** _(2026-10-05)_.
+Before moving back worked correctly, going back a stage left the stage the
+applicant had left marked in progress, and the drawer drew a chip for every stage
+that was not pending. A one-time upgrade step resets those leftover rows to
+pending: only stages ahead of the applicant's current one, in their own
+pipeline. Their current stage and everything behind it are untouched.
 
 ### Completing a Step
 
