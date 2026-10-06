@@ -559,9 +559,11 @@ async def _load_attempt(
     return attempt, test
 
 
-async def _owner_name(db: AsyncSession, user_id: str) -> str | None:
+async def _owner_name(db: AsyncSession, user_id: str, org_id: str) -> str | None:
     owner = (
-        await db.execute(select(User).where(User.id == user_id))
+        await db.execute(
+            select(User).where(User.id == user_id, User.organization_id == org_id)
+        )
     ).scalar_one_or_none()
     return owner.display_name if owner else None
 
@@ -588,7 +590,10 @@ async def get_attempt(
     if attempt.status == KnowledgeAttemptStatus.IN_PROGRESS.value and _expired(attempt):
         await _finalize(db, attempt, str(current_user.organization_id))
     return _attempt_response(
-        attempt, test, current_user, await _owner_name(db, attempt.user_id)
+        attempt,
+        test,
+        current_user,
+        await _owner_name(db, attempt.user_id, str(current_user.organization_id)),
     )
 
 
@@ -889,6 +894,7 @@ async def _get_question(
             select(KnowledgeTestQuestion)
             .where(KnowledgeTestQuestion.id == str(question_id))
             .where(KnowledgeTestQuestion.test_id == test.id)
+            .where(KnowledgeTestQuestion.organization_id == test.organization_id)
         )
     ).scalar_one_or_none()
     if question is None:
