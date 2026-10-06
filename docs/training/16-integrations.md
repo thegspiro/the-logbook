@@ -317,7 +317,7 @@ Once Cal.com is connected, a **Meeting** pipeline stage gains a **Scheduling** o
 > works, but it lists bookings fetched live from your Cal.com account — there is
 > nothing to photograph without a connected one, and our documentation
 > environment has no third-party accounts. See
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#integrations--no-detail-page-no-error-history-no-event-triggers-2026-08-12).
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#integrations--no-per-event-notification-triggers-2026-08-12).
 
 ---
 
@@ -373,6 +373,12 @@ Payments**:
 Fuzzy matching on payer name or amount alone was considered and rejected: two members can easily owe the same amount in the same order window, and crediting the wrong member's order is worse than a short wait in a queue.
 
 Every inbound payment is recorded whether or not it matched. The unmatchable ones are the case that most needs a human — the money has already left the member's account, so discarding the notification would leave them chasing an order that still reads unpaid.
+
+### Payments the Webhook Missed
+
+If PayPal cannot reach The Logbook, or The Logbook cannot confirm a delivery with PayPal, the notification is refused and PayPal eventually gives up retrying. Once a day The Logbook asks PayPal directly for the payments the account received in the last seven days and records any it does not already have — matched and settled by exactly the rules above. A payment is never recorded twice, whichever way it arrived.
+
+This needs one extra setting on the PayPal side: in your REST app at [developer.paypal.com](https://developer.paypal.com), turn on the **Transaction Search** feature. Without it the daily check cannot see your payments, and the department's error monitor says so. PayPal's search lags by a few hours, so a missed payment shows up the following day rather than immediately.
 
 ### Getting the Order Number onto the Payment
 
@@ -464,11 +470,12 @@ Each member opens **Subscribe to my shifts** at the top of
 > **You cannot choose which events post _(2026-08-12)_.** Earlier versions of
 > this guide had a step for selecting event triggers and described checkboxes
 > for New Member, Training Completed, Event Scheduled and Shift Change. There is
-> no such control — a messaging integration collects a webhook URL and nothing
-> more — and there is no Test Connection button on an integration. The Slack
-> connect dialog is pictured under
+> no such control — a messaging integration collects a webhook URL and posts
+> every notification the department sends. Use **Test** on the card to check a
+> webhook, and the integration's **Details** page to see whether recent
+> deliveries succeeded. The Slack connect dialog is pictured under
 > [Connecting an Integration](#connecting-an-integration). See
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#integrations--no-detail-page-no-error-history-no-event-triggers-2026-08-12).
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#integrations--no-per-event-notification-triggers-2026-08-12).
 
 ---
 
@@ -731,15 +738,16 @@ The integrations dashboard shows health status for each connected integration:
 | **Gray dot**        | Not connected — available to configure               |
 | **Red X**           | Connection lost — credentials may have expired       |
 
-> **There is no integration detail page _(2026-08-12)_.** This section used to
-> say you could click an integration to see its last sync timestamp, last error
-> message, consecutive error count and sync history. `/integrations` is the only
-> page — the integrations are cards on it, and clicking one does not open
-> anything further. Of those four figures only the **last sync timestamp** is
-> recorded at all; there is no error message, error counter or sync history in
-> the data model, and no **Retry Sync** control anywhere. What you get is the
-> status on the card itself. See
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#integrations--no-detail-page-no-error-history-no-event-triggers-2026-08-12).
+> **Integration detail page _(2026-10-05)_.** Click **Details** on any
+> integration card to open its health page: last sync, last success, the last
+> error and when it happened, how many runs in a row have failed, and its last
+> 50 runs — syncs, connection checks and chat deliveries, each with what
+> triggered it. **Retry sync** (Salesforce) re-runs the sync; for other
+> integrations the same button reads **Retry connection check**. It can be
+> pressed once a minute per integration. Error text is cleaned before it is
+> stored, so it never shows a webhook URL, token or email address. Health is
+> reported as _Healthy_, _Recent failure_, _Failing_ (three or more failures in
+> a row) or _Not run yet_.
 
 ---
 
@@ -959,10 +967,30 @@ Full setup detail, including client configuration, is on the
 Stateless, JSON-response transport: any worker or replica answers any request,
 and **no reverse-proxy change is needed** because it is served under `/api/`.
 
-> **Known limitation.** claude.ai custom connectors authenticate with OAuth 2.1,
-> and The Logbook is an OAuth _client_, not an authorization server — so those
-> clients cannot present a service key directly and use a local bridge for now.
-> Claude Code and the Messages API connector reach the endpoint without one.
+### Member sign-in (OAuth) _(2026-10-06)_
+
+claude.ai custom connectors and Claude Desktop authenticate with OAuth instead
+of a pasted key. **Member sign-in** lets each member connect one of those with
+their **own account**: they sign in, see what the client asks for — and how
+many tools each request would actually reach for them — and choose **Allow**
+or **Don't allow**. The connection can then do only what that member can do in
+The Logbook, within the switches above.
+
+It is **off** until three things are true: the server operator sets
+`MCP_OAUTH_ENABLED` and `MCP_OAUTH_ISSUER_URL`; an administrator ticks **Let
+members connect with their own account** on the integration; and an IT
+administrator registers the client (name, exact redirect URI, optional secret)
+in the **Member sign-in (OAuth)** panel on the card.
+
+- Members review and disconnect their own connections on the **Claude
+  connections** page (`/claude/connections`), linked from the
+  consent screen. It has no menu entry yet.
+- Changing or resetting a password ends every connection the member holds.
+- There is no self-service client registration; every client is registered by
+  someone holding `integrations.mcp_keys`.
+
+Full setup, including the claude.ai redirect URI, is on the
+`Integration-Claude-MCP` wiki page.
 
 ## Integration errors no longer leak internals _(2026-08-31)_
 

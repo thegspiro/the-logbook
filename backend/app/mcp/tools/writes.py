@@ -76,7 +76,9 @@ async def _actor(db: AsyncSession, principal: McpPrincipal) -> UUID:
 
 
 def register(server: Any) -> None:
-    @logbook_tool(server, title="Create draft event", gate="write")
+    @logbook_tool(
+        server, title="Create draft event", gate="write", permissions=("events.manage",)
+    )
     async def create_event_draft(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -129,7 +131,13 @@ def register(server: Any) -> None:
             "is_draft": bool(event.is_draft),
         }
 
-    @logbook_tool(server, title="Create action item", gate="write", module="minutes")
+    @logbook_tool(
+        server,
+        title="Create action item",
+        gate="write",
+        module="minutes",
+        permissions=("meetings.manage",),
+    )
     async def create_meeting_action_item(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -177,7 +185,11 @@ def register(server: Any) -> None:
         }
 
     @logbook_tool(
-        server, title="Create reorder request", gate="write", module="inventory"
+        server,
+        title="Create reorder request",
+        gate="write",
+        module="inventory",
+        permissions=("inventory.manage",),
     )
     async def create_reorder_request(
         db: AsyncSession,

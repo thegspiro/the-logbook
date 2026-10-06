@@ -299,6 +299,110 @@ test's docstring with no assertion change.
 
 ---
 
+## Owner decisions (2026-10-05)
+
+Four findings this rotation had flagged for a product decision were decided by
+the owner and implemented on the same branch, one commit each. Earlier pass
+sections below are left as written; they record what was true when each pass
+ran.
+
+### MS-6 — ✅ FIXED — the requirement and record lists page in SQL
+
+Owner choice: push `LIMIT`/`OFFSET` into SQL, keeping the response shape.
+`list_requirements`/`list_records` take `skip`/`limit` and apply them to the
+query (`_page` in `medical_screening_service.py`); the two endpoints pass
+`PaginationParams` through instead of slicing a full `.all()` in Python. Both
+orderings gained an `id` tie-breaker so a page boundary cannot shuffle rows
+that share a name or a one-second `created_at`. The response is still a bare
+list, so no frontend change. `limit=None` keeps the full set for
+`get_compliance_status`, which grades one subject's history and is bounded by
+that subject; `get_expiring_soon` is bounded by its date window. Guarded by
+`backend/tests/test_medical_screening_list_pagination.py` (integration —
+asserts the page returned and that the SQL MySQL receives carries the
+`LIMIT`).
+
+### MS-12 — ✅ FIXED — PHI reads write one audit event per request
+
+Owner choice: log once per request, naming the subject(s) or the filter.
+The five PHI-bearing reads now call `_audit_phi_read` in
+`endpoints/medical_screening.py`, which writes one `medical_screening`-category
+event and commits it before the response is returned:
+
+| Route                           | Event type                            | `event_data`                                                   |
+| ------------------------------- | ------------------------------------- | -------------------------------------------------------------- |
+| `GET /records`                  | `medical_screening.records_viewed`    | `filters` (incl. skip/limit), `record_count`, subject id lists |
+| `GET /records/{id}`             | `medical_screening.record_viewed`     | `record_id`, `record_user_id`, `record_prospect_id`            |
+| `GET /compliance/{user_id}`     | `medical_screening.compliance_viewed` | `subject_type: "user"`, `subject_id`                           |
+| `GET /compliance/prospect/{id}` | `medical_screening.compliance_viewed` | `subject_type: "prospect"`, `subject_id`                       |
+| `GET /expiring`                 | `medical_screening.expiring_viewed`   | `filters.days`, `record_count`, subject id lists               |
+
+The list events carry the distinct member and prospect ids on the returned
+page, so "who saw member X's results" is answerable without one row per
+record. A 404 is not logged as a view. `GET /compliance/me` stays unlogged —
+it is the caller's own counts, loaded on every dashboard visit — and the two
+MCP tools were already audited by the MCP registry. Guarded by
+`backend/tests/test_medical_screening_read_audit.py` (integration, 8 tests
+against real `audit_logs` rows).
+
+### MS-13 — ✅ FIXED — Add Record files the record against exactly one member or prospect
+
+Owner choice: a picker with exactly one of member or prospect, so records
+count toward compliance. Three parts:
+
+- `ScreeningRecordCreate` gained a `model_validator` rejecting a payload
+  naming neither or both (`user_id` / `prospect_id`; a blank string counts as
+  absent) — a 422. This also closes the long-tracked "`create_record` doesn't
+  enforce exactly-one-of" gap listed under every pass since pass 1.
+- New `GET /medical-screening/subjects` (`medical_screening.manage`,
+  org-scoped) returns `{members, prospects}` as `{id, name}` — current
+  members (active, probationary, leave, suspended; not deleted) and prospects
+  still open (active, on hold). Names only, so not audit-logged. It exists
+  because the `.manage` holder need not hold `users.view` or the pipeline
+  permissions, and `MemberPickerModal`'s inventory-scoped source covers
+  neither that nor prospects.
+- `ScreeningRecordForm` replaces the amber "not linked" notice with a
+  **Record is for** Member/Prospect choice and a name list; submit is disabled
+  until a subject is chosen, a load failure is shown as an alert, and the
+  payload carries only the chosen id.
+
+Records created before the fix remain unattached — nothing records whom they
+were about — and are left to the residual note in `KNOWN_LIMITATIONS.md`.
+Guarded by `backend/tests/test_medical_screening_record_subject.py` (unit
+schema tests + integration tests of the subject list and a prospect create)
+and `ScreeningRecordForm.subjectPicker.test.tsx` (replaces
+`ScreeningRecordForm.linkageNotice.test.tsx`).
+
+### MS-7 — ✅ FIXED (allow but flag) — a self-recorded screening is marked in the compliance views
+
+Owner choice: allow but flag. A `.manage` holder can still record or clear
+their own screening — blocking it would break the department where one person
+logs everyone's results — but the result is no longer indistinguishable from
+an independently recorded one:
+
+- New column `screening_records.self_recorded` (migration `9c1445489666`,
+  guarded — `screening_records` is a `create_all`-only table — with a real
+  downgrade). True when the record's status was last set by its own subject:
+  `create_record` marks it when the caller is `user_id`; `update_record`
+  recomputes it whenever the payload carries a status (the edit form always
+  does), so a colleague's save clears it and an edit that omits the status
+  keeps it. Backfill marks rows where `reviewed_by = user_id`, and rows with no
+  reviewer whose `medical_screening.record_created` audit event (record id on
+  it since MS-8) was written by the subject.
+- Surfaced in every compliance view: `ScreeningRecordResponse.self_recorded`,
+  `ComplianceItem.self_recorded`, `ComplianceSummary.self_recorded_count`,
+  `ExpiringScreening.self_recorded`, and the MCP member-compliance tool's
+  projection. The Records tab and the Compliance tab's expiring list show an
+  amber **Self-recorded** badge (`SelfRecordedBadge.tsx`). Compliance still
+  counts the record.
+- `record_created` / `record_updated` audit events carry `self_recorded`.
+
+`MyComplianceSummary` (the member's own dashboard counts) is unchanged — it is
+the subject's own view. A second-approver workflow was not chosen and is not
+built. Guarded by `backend/tests/test_medical_screening_self_recorded.py`
+(integration, 8 tests) and `SelfRecordedBadge.test.tsx`.
+
+---
+
 ## Pass 6 (2026-09-16)
 
 **Watchdog pickup.** This iteration ran directly (not through the
@@ -390,7 +494,7 @@ pulled it in because it carries no `MS-*` id and wasn't in
 
 ### New this pass
 
-### MS-13 — MED (data integrity / availability, PHI-adjacent) — The "Add Record" dialog has no control for `user_id` or `prospect_id`, so every UI-created screening record is orphaned — 🚩 FLAGGED (interim honesty notice ✅ FIXED)
+### MS-13 — MED (data integrity / availability, PHI-adjacent) — The "Add Record" dialog has no control for `user_id` or `prospect_id`, so every UI-created screening record is orphaned — 🚩 FLAGGED (interim honesty notice ✅ FIXED; ✅ fully fixed 2026-10-05, see "Owner decisions" at the top)
 
 **What:** `ScreeningRecordForm.tsx`'s create-mode payload
 (`handleSubmit`, the `else` branch) builds a `ScreeningRecordCreate` from nine
@@ -596,7 +700,7 @@ warranted today since no live leak exists to justify the added complexity.
 Left for a future pass if a second PHI-adjacent tool needs the same
 guarantee redaction doesn't currently provide.
 
-### MS-12 — LOW (audit completeness, HIPAA §164.312(b)) — PHI reads are not audit-logged, only writes are — 🚩 FLAGGED
+### MS-12 — LOW (audit completeness, HIPAA §164.312(b)) — PHI reads are not audit-logged, only writes are — 🚩 FLAGGED (✅ fixed 2026-10-05, see "Owner decisions" at the top)
 
 The assignment brief for this pass calls out that "an access log for PHI
 views is itself often a compliance requirement" under HIPAA §164.312(b).
@@ -1011,7 +1115,7 @@ route capture `"me"` as a `user_id`.
 
 ## Findings
 
-### MS-7 — MED — No reviewer distinct from the subject or the creator on screening records — 🚩 FLAGGED
+### MS-7 — MED — No reviewer distinct from the subject or the creator on screening records — 🚩 FLAGGED (✅ allow-but-flag fixed 2026-10-05, see "Owner decisions" at the top)
 
 **What:** `create_record` and `update_record` place no constraint on the
 relationship between `current_user` (the caller, who must hold
@@ -1519,7 +1623,7 @@ field-set or protected-field change: both schemas already omit every
 tenancy/subject FK, so `apply_updates` is a like-for-like replacement of the
 hand-rolled loop, not a behavior change for any valid payload.
 
-### MS-6 — LOW (scale, unchanged) — Unbounded requirement/record lists — 🚩 FLAGGED, re-confirmed and mirrored
+### MS-6 — LOW (scale, unchanged) — Unbounded requirement/record lists — 🚩 FLAGGED, re-confirmed and mirrored (✅ fixed 2026-10-05, see "Owner decisions" at the top)
 
 **What:** `list_requirements`/`list_records` run `.all()` with no SQL
 `LIMIT`/`OFFSET`; the two endpoints slice the full result in Python via

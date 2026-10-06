@@ -170,6 +170,7 @@ That touches the authorization core, so it is recorded rather than changed in a 
 
 The Member position carries the 16 baseline grants every member needs: `members.view`, `training.view`, `scheduling.view`, `inventory.view` and so on. Removing it leaves a member who can sign in and see almost nothing.
 **Why flagged:** whether the base position may be removed, and whether it should be refused or only warned about, is a permissions decision. Mirrored to `docs/KNOWN_LIMITATIONS.md`. The W05 lead is closed by this entry.
+**Owner decision (2026-10-05) — fixed:** refuse unless the member is archived. Both write paths (`DELETE /users/{id}/roles/{role_id}` and the replace-all `PUT /users/{id}/roles` the admin screens use) answer `400` when the base `member` position would come off a member who is not archived. Manage Roles no longer offers the "×" on it, and its box stays ticked and locked in both role dialogs; an archived member's can still be removed.
 
 Seen and left:
 

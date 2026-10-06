@@ -644,14 +644,52 @@ describe('electionService', () => {
 
   // --- verifyReceipt ---
   describe('verifyReceipt', () => {
-    it('should GET /elections/:id/verify-receipt with receipt param', async () => {
+    it('should POST the receipt in the body, never the query string', async () => {
       const response = { verified: true, message: 'Vote recorded', voted_at: '2026-01-01T00:00:00', position: 'Chief' };
-      mockGet.mockResolvedValueOnce({ data: response });
+      mockPost.mockResolvedValueOnce({ data: response });
 
       const result = await electionService.verifyReceipt('el1', 'abc123hash');
 
-      expect(mockGet).toHaveBeenCalledWith('/elections/el1/verify-receipt', { params: { receipt: 'abc123hash' } });
+      expect(mockPost).toHaveBeenCalledWith('/elections/el1/verify-receipt', { receipt: 'abc123hash' });
+      expect(mockGet).not.toHaveBeenCalled();
       expect(result).toEqual(response);
+    });
+  });
+
+  // --- member ballot (2026-10-05 convergence) ---
+  describe('member ballot', () => {
+    it('reads the ballot, with the proxy authorization only when one is chosen', async () => {
+      mockGet.mockResolvedValue({ data: { items: [] } });
+
+      await electionService.getMemberBallot('el1');
+      await electionService.getMemberBallot('el1', 'auth-1');
+
+      expect(mockGet).toHaveBeenNthCalledWith(1, '/elections/el1/ballot', { params: undefined });
+      expect(mockGet).toHaveBeenNthCalledWith(2, '/elections/el1/ballot', {
+        params: { proxy_authorization_id: 'auth-1' },
+      });
+    });
+
+    it('posts the ballot in the emailed shape', async () => {
+      mockPost.mockResolvedValue({ data: { votes_cast: 1 } });
+      const votes = [{ ballot_item_id: 'budget', choice: 'approve' }];
+
+      await electionService.submitMemberBallot('el1', votes);
+      await electionService.submitMemberBallot('el1', votes, 'auth-1');
+
+      expect(mockPost).toHaveBeenNthCalledWith(1, '/elections/el1/ballot', { votes });
+      expect(mockPost).toHaveBeenNthCalledWith(2, '/elections/el1/ballot', {
+        votes,
+        proxy_authorization_id: 'auth-1',
+      });
+    });
+
+    it('lists the proxies the member holds', async () => {
+      mockGet.mockResolvedValue({ data: { proxies: [] } });
+
+      await electionService.getMyProxies('el1');
+
+      expect(mockGet).toHaveBeenCalledWith('/elections/el1/ballot/proxies');
     });
   });
 });

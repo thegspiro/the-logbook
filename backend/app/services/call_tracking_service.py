@@ -21,7 +21,7 @@ land it in. A department that wants incident-level records wants an incident
 module, behind its own consent and access-control story.
 """
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import Text, delete, func, or_, select, type_coerce, update
@@ -39,9 +39,15 @@ from app.models.call_tracking import (
 )
 from app.models.training import Shift, ShiftCompletionReport, TrainingRequirement
 from app.services.shift_eligibility_service import ShiftEligibilityService
+from app.utils.apparatus_ref import resolve_apparatus_labels
 from app.utils.call_type_matching import call_type_key
 from app.utils.org_timezone import resolve_org_today
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
+
+# Ceiling on the close-out picker's list. Two overlapping tours each at
+# MAX_CALLS_PER_SHIFT is the realistic maximum; past this the officer is not
+# choosing from a list any more.
+MAX_ATTACHABLE_CALLS = 200
 
 
 class CallTrackingService:
@@ -333,6 +339,17 @@ class CallTrackingService:
                 f"{total_calls} reported. Detach a shared call first."
             )
         owned_needed = total_calls - len(shared)
+        # The breakdown types only this shift's own calls: a shared call keeps
+        # the type the unit that logged it gave it. A breakdown larger than the
+        # calls left to type used to be truncated silently, dropping whichever
+        # types sorted last — now that the close-out picker makes shared calls
+        # routine, that loss would be routine too.
+        if sum(type_counts.values()) > owned_needed:
+            return 0, (
+                f"Call types add up to more than the {owned_needed} call(s) "
+                f"this shift logged itself — the {len(shared)} shared call(s) "
+                f"keep the type the other unit gave them"
+            )
         wanted_types = self._expand_type_slots(type_counts, owned_needed)
 
         # Trim surplus owned calls (officer corrected the number downward).
@@ -528,6 +545,175 @@ class CallTrackingService:
         )
         await self.db.flush()
         return True, None
+
+    async def detach_response(
+        self,
+        call_id: str,
+        shift: Shift,
+        organization_id: str,
+    ) -> Tuple[bool, Optional[str]]:
+        """Withdraw this shift from a call another unit also responded to.
+
+        The undo for :meth:`attach_response`: an officer who ticked the wrong
+        call in the close-out picker needs a way back, and lowering the count
+        cannot do it — :meth:`record_shift_calls` refuses a total below the
+        shared calls and says "Detach a shared call first".
+
+        Only this shift's own response is removed, and only while another
+        unit's response keeps the call on the record. A call this shift alone
+        responded to is not shared, so it is corrected through the count — a
+        detach there would delete a call the department ran.
+
+        Idempotent: detaching a call this shift is not on succeeds and changes
+        nothing, so a resubmitted save cannot fail on its own earlier effect.
+        """
+        organization_id = str(organization_id)
+        # Locking read, for the reason ``_partition_existing`` gives: a
+        # concurrent attach by another unit committed after this
+        # transaction's snapshot must be visible before deciding whether
+        # this shift is the last responder.
+        rows = (
+            (
+                await self.db.execute(
+                    select(OrgCallResponse)
+                    .where(
+                        OrgCallResponse.call_id == str(call_id),
+                        OrgCallResponse.organization_id == organization_id,
+                    )
+                    .with_for_update()
+                )
+            )
+            .scalars()
+            .all()
+        )
+        mine = [r for r in rows if str(r.shift_id) == str(shift.id)]
+        if not mine:
+            return True, None
+        if len(mine) == len(rows):
+            return False, (
+                "That call was logged by this shift alone — lower the call "
+                "count instead of detaching it"
+            )
+        for row in mine:
+            await self.db.delete(row)
+        await self.db.flush()
+        return True, None
+
+    async def list_attachable_calls(
+        self, shift: Shift, organization_id: str
+    ) -> List[Dict[str, Any]]:
+        """Calls another unit logged while this shift was on, for the picker.
+
+        Matched by **time overlap of the responding shifts**, not by call date:
+        a call is dated by the shift that logged it, so a 24-hour tour that
+        started yesterday dates its 0300 call yesterday, and a medic whose
+        tour began at midnight would never see it in a same-date list.
+
+        Calls this shift alone responded to are not offered — they are its own
+        tally, typed in the count rows. Calls it shares with another unit are
+        offered with ``attached: true`` so the officer can see, and undo, what
+        is already claimed.
+        """
+        organization_id = str(organization_id)
+        start = shift.start_time
+        end = shift.end_time or (start + timedelta(hours=24))
+        call_ids = (
+            (
+                await self.db.execute(
+                    select(OrgCallResponse.call_id)
+                    .join(Shift, Shift.id == OrgCallResponse.shift_id)
+                    .where(
+                        OrgCallResponse.organization_id == organization_id,
+                        Shift.organization_id == organization_id,
+                        Shift.id != str(shift.id),
+                        Shift.start_time < end,
+                        func.coalesce(Shift.end_time, Shift.start_time) > start,
+                    )
+                    .distinct()
+                    # Bounded: two overlapping tours at the per-shift cap is
+                    # already more than a phone screen can usefully show.
+                    .limit(MAX_ATTACHABLE_CALLS)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if not call_ids:
+            return []
+        call_ids = [str(c) for c in call_ids]
+
+        calls = (
+            (
+                await self.db.execute(
+                    select(OrgCall)
+                    .where(
+                        OrgCall.id.in_(call_ids),
+                        OrgCall.organization_id == organization_id,
+                    )
+                    .order_by(OrgCall.call_date, OrgCall.created_at)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        responses = (
+            (
+                await self.db.execute(
+                    select(OrgCallResponse).where(
+                        OrgCallResponse.call_id.in_(call_ids),
+                        OrgCallResponse.organization_id == organization_id,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        by_call: Dict[str, List[OrgCallResponse]] = {}
+        for r in responses:
+            by_call.setdefault(str(r.call_id), []).append(r)
+
+        labels = await resolve_apparatus_labels(
+            self.db,
+            {str(r.apparatus_id) for r in responses if r.apparatus_id},
+            organization_id,
+        )
+
+        result = []
+        for call in calls:
+            rows = by_call.get(str(call.id), [])
+            others = [r for r in rows if str(r.shift_id) != str(shift.id)]
+            # This apparatus is already on the call through another of its
+            # tours (a day and a night shift overlapping on one engine).
+            # ``attach_response`` deduplicates by apparatus, so ticking it
+            # would change nothing and the box would spring back unticked.
+            if shift.apparatus_id and any(
+                str(r.apparatus_id) == str(shift.apparatus_id) for r in others
+            ):
+                continue
+            unit_labels = sorted(
+                {
+                    (
+                        labels.get(str(r.apparatus_id), "Unknown unit")
+                        if r.apparatus_id
+                        else "A shift with no apparatus"
+                    )
+                    for r in others
+                }
+            )
+            result.append(
+                {
+                    "id": str(call.id),
+                    "call_date": call.call_date,
+                    "call_type": call.call_type,
+                    "source": call.source,
+                    "apparatus_ids": [
+                        str(r.apparatus_id) for r in others if r.apparatus_id
+                    ],
+                    "unit_labels": unit_labels,
+                    "attached": len(others) < len(rows),
+                }
+            )
+        return result
 
     async def list_calls_in_window(
         self,

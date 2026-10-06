@@ -206,6 +206,13 @@ assumed.
 
 ## Known limitation carried forward (not a new finding)
 
+> **✅ Closed 2026-10-05 (SEC2-28-7, owner decision):** parameterized export
+> routes are now matched by template (`EXPORT_ENDPOINT_TEMPLATES`), and the
+> middleware sizes every export from the bytes it sends rather than a
+> `Content-Length` header. See
+> [`SEC2-28-security-audit-ip.md`](./SEC2-28-security-audit-ip.md). The text
+> below is the finding as it stood.
+
 **`EXPORT_ENDPOINTS`'s exact-match gap still excludes one real export
 route.** CI2-33's "Revised after Codex review" section already documented
 this and left it unfixed by design: `training_programs.py`'s

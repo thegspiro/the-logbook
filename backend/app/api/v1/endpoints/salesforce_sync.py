@@ -5,6 +5,7 @@ Authenticated endpoints for triggering manual syncs, checking sync
 status, and managing field mappings between Logbook and Salesforce.
 """
 
+import functools
 import secrets
 from datetime import datetime, timezone
 from urllib.parse import quote
@@ -23,6 +24,10 @@ from app.models.event import Event
 from app.models.integration import Integration
 from app.models.training import TrainingRecord
 from app.models.user import User
+from app.services.integration_health import (
+    record_integration_run,
+    sanitize_integration_error,
+)
 from app.services.integration_services.salesforce_oauth_service import (
     SalesforceOAuthError,
     build_authorization_url,
@@ -71,6 +76,77 @@ async def _get_sf_integration(db: AsyncSession, organization_id: str) -> Integra
     return integration
 
 
+def _records_sync_failure(operation: str):
+    """Record a manual sync that raised on the integration's health history.
+
+    The run's own success is recorded inline by each endpoint. A failure is
+    rolled back, written to the history with a sanitized message, and
+    reported as a 502 carrying that same message instead of a bare 500.
+    """
+
+    def decorate(endpoint):
+        @functools.wraps(endpoint)
+        async def wrapper(*args, **kwargs):
+            try:
+                return await endpoint(*args, **kwargs)
+            except HTTPException:
+                raise
+            except Exception as exc:
+                db: AsyncSession = kwargs["db"]
+                user: User = kwargs["current_user"]
+                await db.rollback()
+                integration = (
+                    await db.execute(
+                        select(Integration).where(
+                            Integration.organization_id == str(user.organization_id),
+                            Integration.integration_type == "salesforce",
+                        )
+                    )
+                ).scalar_one_or_none()
+                if integration is not None:
+                    await record_integration_run(
+                        db,
+                        integration,
+                        operation=operation,
+                        trigger="manual",
+                        success=False,
+                        error=exc,
+                        user_id=str(user.id),
+                    )
+                    await db.commit()
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=sanitize_integration_error(exc),
+                ) from exc
+
+        return wrapper
+
+    return decorate
+
+
+async def _record_sync_success(
+    db: AsyncSession,
+    integration: Integration,
+    operation: str,
+    user: User,
+    counts: dict,
+) -> None:
+    # Set directly as well: the recorder never raises, and a sync that
+    # succeeded must advance last_sync_at even if its history row could not
+    # be written.
+    integration.last_sync_at = datetime.now(timezone.utc)
+    await record_integration_run(
+        db,
+        integration,
+        operation=operation,
+        trigger="manual",
+        success=True,
+        summary=counts,
+        user_id=str(user.id),
+        mark_synced=True,
+    )
+
+
 # ============================================================
 # Endpoints
 # ============================================================
@@ -97,6 +173,7 @@ async def salesforce_sync_status(
 
 
 @router.post("/push/members")
+@_records_sync_failure("salesforce_push_members")
 async def push_members_to_salesforce(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("integrations.manage")),
@@ -120,9 +197,10 @@ async def push_members_to_salesforce(
     member_dicts = [user_to_member_dict(m) for m in members]
     counts = await sync_service.sync_all_members_to_salesforce(member_dicts)
 
-    # Update last_sync_at
     integration = await _get_sf_integration(db, org_id)
-    integration.last_sync_at = datetime.now(timezone.utc)
+    await _record_sync_success(
+        db, integration, "salesforce_push_members", current_user, counts
+    )
     await db.commit()
 
     await log_audit_event(
@@ -150,6 +228,7 @@ async def push_members_to_salesforce(
 
 
 @router.post("/push/training")
+@_records_sync_failure("salesforce_push_training")
 async def push_training_to_salesforce(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("integrations.manage")),
@@ -173,7 +252,9 @@ async def push_training_to_salesforce(
     counts = await sync_service.sync_all_training_to_salesforce(record_dicts)
 
     integration = await _get_sf_integration(db, org_id)
-    integration.last_sync_at = datetime.now(timezone.utc)
+    await _record_sync_success(
+        db, integration, "salesforce_push_training", current_user, counts
+    )
     await db.commit()
 
     await log_audit_event(
@@ -200,6 +281,7 @@ async def push_training_to_salesforce(
 
 
 @router.post("/push/events")
+@_records_sync_failure("salesforce_push_events")
 async def push_events_to_salesforce(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("integrations.manage")),
@@ -236,7 +318,13 @@ async def push_events_to_salesforce(
             failed += 1
 
     integration = await _get_sf_integration(db, org_id)
-    integration.last_sync_at = datetime.now(timezone.utc)
+    await _record_sync_success(
+        db,
+        integration,
+        "salesforce_push_events",
+        current_user,
+        {"created": created, "updated": updated, "failed": failed},
+    )
     await db.commit()
 
     await log_audit_event(
@@ -263,6 +351,7 @@ async def push_events_to_salesforce(
 
 
 @router.post("/pull/contacts")
+@_records_sync_failure("salesforce_pull_contacts")
 async def pull_contacts_from_salesforce(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("integrations.manage")),
@@ -290,7 +379,13 @@ async def pull_contacts_from_salesforce(
     if inbound_enabled and contacts:
         counts = await sync_service.sync_inbound_contacts(contacts)
 
-    integration.last_sync_at = datetime.now(timezone.utc)
+    await _record_sync_success(
+        db,
+        integration,
+        "salesforce_pull_contacts",
+        current_user,
+        {"contacts_pulled": len(contacts), **counts},
+    )
     await db.commit()
 
     await log_audit_event(

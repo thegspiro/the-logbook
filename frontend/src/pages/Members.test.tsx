@@ -21,20 +21,36 @@ import { renderWithRouter } from '../test/utils';
 import type { User } from '../types/user';
 import { UserStatus } from '../constants/enums';
 
+// Both roster endpoints answer from one fixture, so each test states its roster
+// once whichever view it renders; the two recorders say which was asked (USR-8).
+const mockRoster = vi.fn();
 const mockGetUsers = vi.fn();
+const mockGetDirectory = vi.fn();
 const mockCheckContactInfoEnabled = vi.fn();
 const mockReactivateMember = vi.fn();
 const mockGetServiceHistory = vi.fn();
 
 vi.mock('../services/api', () => ({
   userService: {
-    getUsers: (...args: unknown[]) => mockGetUsers(...args) as unknown,
+    getUsers: (...args: unknown[]) => {
+      mockGetUsers(...args);
+      return mockRoster(...args) as unknown;
+    },
     checkContactInfoEnabled: (...args: unknown[]) => mockCheckContactInfoEnabled(...args) as unknown,
     deleteUserWithMode: vi.fn(),
   },
   memberStatusService: {
     reactivateMember: (...args: unknown[]) => mockReactivateMember(...args) as unknown,
     getServiceHistory: (...args: unknown[]) => mockGetServiceHistory(...args) as unknown,
+  },
+}));
+
+vi.mock('../services/memberDirectoryService', () => ({
+  memberDirectoryService: {
+    getDirectory: (...args: unknown[]) => {
+      mockGetDirectory(...args);
+      return mockRoster(...args) as unknown;
+    },
   },
 }));
 
@@ -135,7 +151,9 @@ function installDefaults(held: string[]): void {
   // Reset rather than clear: an implementation left by a neighbouring block
   // survives vi.clearAllMocks(), and what checkPermission returns is this
   // file's entire subject (CLAUDE.md pitfall #28).
+  mockRoster.mockReset();
   mockGetUsers.mockReset();
+  mockGetDirectory.mockReset();
   mockCheckContactInfoEnabled.mockReset();
   mockCheckPermission.mockReset();
   mockNavigate.mockReset();
@@ -154,7 +172,7 @@ function installDefaults(held: string[]): void {
     is_estimated: false,
     default_rejoin_credit: 'continue',
   });
-  mockGetUsers.mockResolvedValue(ROSTER);
+  mockRoster.mockResolvedValue(ROSTER);
   mockCheckContactInfoEnabled.mockResolvedValue({
     enabled: true,
     show_email: true,
@@ -166,6 +184,38 @@ function installDefaults(held: string[]): void {
 
 describe('Members roster — regular member (no members.manage)', () => {
   beforeEach(() => installDefaults([]));
+
+  it('loads the narrow directory, not the full roster record', async () => {
+    renderWithRouter(<Members />);
+
+    await waitFor(() => expect(mockGetDirectory).toHaveBeenCalledTimes(1));
+    expect(mockGetUsers).not.toHaveBeenCalled();
+  });
+
+  // W15-4: a member's directory opens on Active members; the server already
+  // leaves archived ones out of it.
+  it('opens on Active members, and All Statuses shows the rest', async () => {
+    const user = userEvent.setup();
+    mockRoster.mockResolvedValue([
+      ...ROSTER,
+      makeMember({
+        id: 'u4',
+        username: 'iinactive',
+        email: 'ina@example.org',
+        first_name: 'Ina',
+        last_name: 'Inactive',
+        membership_number: '099',
+        status: UserStatus.INACTIVE,
+      }),
+    ]);
+    await renderRoster();
+
+    expect(screen.getByLabelText('Filter by status')).toHaveValue('active');
+    expect(within(table()).queryByText('Ina Inactive')).not.toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Filter by status'), 'all');
+    expect(await within(table()).findByText('Ina Inactive')).toBeInTheDocument();
+  });
 
   it('hides the username under each member name, in both layouts', async () => {
     await renderRoster();
@@ -186,7 +236,7 @@ describe('Members roster — regular member (no members.manage)', () => {
 
   it("shows each member's rank so a newcomer can tell who is who", async () => {
     installDefaults([]);
-    mockGetUsers.mockResolvedValue([makeMember({ rank: 'captain' }), ROSTER[1]]);
+    mockRoster.mockResolvedValue([makeMember({ rank: 'captain' }), ROSTER[1]]);
     await renderRoster();
 
     expect(columnLabels()).toContain('Rank');
@@ -196,7 +246,7 @@ describe('Members roster — regular member (no members.manage)', () => {
 
   it('drops the member-number column when nobody has a number yet', async () => {
     installDefaults([]);
-    mockGetUsers.mockResolvedValue(ROSTER.map((m) => ({ ...m, membership_number: undefined })));
+    mockRoster.mockResolvedValue(ROSTER.map((m) => ({ ...m, membership_number: undefined })));
     await renderRoster();
 
     expect(columnLabels()).not.toContain('Member #');
@@ -281,7 +331,7 @@ describe('Members roster — regular member (no members.manage)', () => {
   // W10: with the department's work-email visibility off, every email in the
   // roster is null, so the box must not promise an email search.
   it('offers email search only when emails are shown', async () => {
-    mockGetUsers.mockResolvedValue(ROSTER.map((m) => ({ ...m, email: null })));
+    mockRoster.mockResolvedValue(ROSTER.map((m) => ({ ...m, email: null })));
     renderWithRouter(<Members />);
 
     expect(await screen.findByLabelText('Search by name or membership number...')).toBeInTheDocument();
@@ -289,12 +339,12 @@ describe('Members roster — regular member (no members.manage)', () => {
   });
 
   it('leaves the roster blank when it is empty and nothing is filtered', async () => {
-    mockGetUsers.mockResolvedValue([]);
+    mockRoster.mockResolvedValue([]);
     renderWithRouter(<Members />);
 
     // The card exists to offer Add Member / Import CSV, so a member with an
     // unfiltered empty roster gets nothing rather than a prompt they cannot act on.
-    await waitFor(() => expect(mockGetUsers).toHaveBeenCalled());
+    await waitFor(() => expect(mockRoster).toHaveBeenCalled());
     await waitFor(() => expect(screen.queryByText('No Members Found')).not.toBeInTheDocument());
     expect(screen.queryByText(/Add your first member, or import members/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Add Member/i })).not.toBeInTheDocument();
@@ -330,7 +380,7 @@ describe('Members roster — captain (members.manage without users.create)', () 
   });
 
   it('withholds the add-or-import prompt on an empty roster', async () => {
-    mockGetUsers.mockResolvedValue([]);
+    mockRoster.mockResolvedValue([]);
     renderWithRouter(<Members />);
 
     // The heading still answers the question they came with; it is the
@@ -352,8 +402,22 @@ describe('Members roster — captain (members.manage without users.create)', () 
 describe('Members roster — membership coordinator (members.manage)', () => {
   beforeEach(() => installDefaults(['members.manage', 'users.create']));
 
+  it('loads the full roster record, not the directory', async () => {
+    renderWithRouter(<Members />);
+
+    await waitFor(() => expect(mockGetUsers).toHaveBeenCalledTimes(1));
+    expect(mockGetDirectory).not.toHaveBeenCalled();
+  });
+
+  it('opens on the whole roster, archived included', async () => {
+    renderWithRouter(<Members />);
+
+    await waitFor(() => expect(mockGetUsers).toHaveBeenCalledTimes(1));
+    expect(screen.getByLabelText('Filter by status')).toHaveValue('all');
+  });
+
   it('offers the add and import prompt on an empty roster', async () => {
-    mockGetUsers.mockResolvedValue([]);
+    mockRoster.mockResolvedValue([]);
     renderWithRouter(<Members />);
 
     expect(await screen.findByText('No Members Found')).toBeInTheDocument();
@@ -406,7 +470,7 @@ describe('Members roster — membership coordinator (members.manage)', () => {
   });
 
   it('does not offer to delete the signed-in member', async () => {
-    mockGetUsers.mockResolvedValue([makeMember({ id: 'me', first_name: 'Me', last_name: 'Myself' })]);
+    mockRoster.mockResolvedValue([makeMember({ id: 'me', first_name: 'Me', last_name: 'Myself' })]);
     renderWithRouter(<Members />);
     await screen.findByRole('table');
     expect(within(table()).getByText('Me Myself')).toBeInTheDocument();
@@ -430,7 +494,7 @@ describe('Members roster — archived members', () => {
   describe('as a membership coordinator (members.manage)', () => {
     beforeEach(() => {
       installDefaults(['members.manage', 'users.create']);
-      mockGetUsers.mockResolvedValue([...ROSTER, ARCHIVED]);
+      mockRoster.mockResolvedValue([...ROSTER, ARCHIVED]);
     });
 
     it('offers an Archived filter that narrows the list to archived members', async () => {
@@ -454,14 +518,14 @@ describe('Members roster — archived members', () => {
     it('reactivates through the dialog and reloads the roster', async () => {
       const user = userEvent.setup();
       await renderRoster();
-      expect(mockGetUsers).toHaveBeenCalledTimes(1);
+      expect(mockRoster).toHaveBeenCalledTimes(1);
 
       await user.click(within(table()).getByLabelText('Reactivate Casey Former'));
       await screen.findByRole('group', { name: /Earlier service/ });
       await user.type(screen.getByLabelText(/Reason/), 'Moved back to the district');
       await user.click(screen.getByRole('button', { name: 'Reactivate' }));
 
-      await waitFor(() => expect(mockGetUsers).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(mockRoster).toHaveBeenCalledTimes(2));
       expect(mockReactivateMember).toHaveBeenCalledWith(
         'u3',
         expect.objectContaining({ reason: 'Moved back to the district', service_credit: 'continue' })
@@ -472,7 +536,7 @@ describe('Members roster — archived members', () => {
   describe('as a regular member (no members.manage)', () => {
     beforeEach(() => {
       installDefaults([]);
-      mockGetUsers.mockResolvedValue([...ROSTER, ARCHIVED]);
+      mockRoster.mockResolvedValue([...ROSTER, ARCHIVED]);
     });
 
     it('neither offers the Archived filter nor the Reactivate action', async () => {
@@ -531,7 +595,7 @@ describe('Members roster — preferred names', () => {
 
   beforeEach(() => {
     installDefaults([]);
-    mockGetUsers.mockResolvedValue([...ROSTER, terry]);
+    mockRoster.mockResolvedValue([...ROSTER, terry]);
   });
 
   it('lists a member by the name they go by, avatar included', async () => {

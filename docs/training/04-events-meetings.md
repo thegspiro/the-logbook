@@ -1275,13 +1275,12 @@ Each election shows:
 
 > **Hint:** Votes are anonymous by default. The system records that you voted but not how you voted. Write-in candidates are supported when enabled by the election creator.
 
-> **Voting in the app covers position races only _(2026-08-12)_.** The Cast Vote
-> tab builds its ballot from the election's positions, so a ballot item that is
-> not a position — a bylaw amendment or a membership approval — does not appear
-> there and cannot be voted on in the app. Those items do appear on the emailed
-> public ballot link, which renders every ballot item. If your ballot mixes the
-> two, send the public link rather than asking members to vote in the app. See
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#elections--the-in-app-ballot-only-shows-position-races-2026-08-12).
+> **Voting in the app covers the whole ballot _(2026-10-05)_.** The Cast
+> Vote tab used to build its ballot from the election's positions only, so a
+> bylaw amendment or membership approval could not be voted on in the app. It
+> now shows every ballot item and every position, exactly as the emailed link
+> does, and a member holding a proxy on a named election can cast that
+> member's ballot from the same tab.
 
 ### Creating Elections (Officers)
 
@@ -2146,8 +2145,13 @@ The election forensics endpoint response (`ForensicsResponse`) was using untyped
 A new public endpoint allows voters to verify their vote receipt:
 
 ```
-GET /api/v1/elections/{id}/verify-receipt?receipt=<receipt_code>
+POST /api/v1/elections/{id}/verify-receipt
+{"receipt": "<receipt_code>"}
 ```
+
+_(2026-10-05)_ The receipt travels in the body. The original
+`GET …/verify-receipt?receipt=<receipt_code>` still answers, but is deprecated
+because a query string lands in access logs.
 
 This endpoint is **rate-limited** to prevent brute-force attacks. It returns verification status without revealing vote content.
 

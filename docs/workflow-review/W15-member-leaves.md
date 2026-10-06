@@ -90,12 +90,14 @@ Mirrored to `docs/KNOWN_LIMITATIONS.md`.
 
 `record_rejoin` refuses a return date in the future, and one on or before the last day of service. On the day of the drop, no date satisfies both. A drop made by mistake cannot be undone that day except by editing Service History first, which worked here.
 **Why flagged:** whether a same-day return should be allowed, which means a one-day overlap or a zero-length gap, is a rule about how service is counted. Mirrored to `docs/KNOWN_LIMITATIONS.md`.
+**Owner decision (2026-10-05) — fixed with an undo-drop action instead:** `POST /users/{id}/undo-drop` (`members.manage`), available for 7 days after the drop (`GET` reports whether and until when), restores the member to Active, Probationary, Inactive or On Leave and reopens the stint the drop closed — no rejoin, no gap, so how service is counted is unchanged. The dropped member's profile shows the control while it is available.
 
 ### W15-4 — LOW — Departed members are listed in every member's directory — FLAGGED
 
 **Did:** as `member`, opened Members while Ian was archived.
 **Saw:** "Ian Two · IMP-002 · ARCHIVED" in the list. The directory's default filter is "All Status", and `GET /users` returns archived members to a member.
 **Why flagged:** whether members should see former members, and what of them, is a privacy and policy decision. Mirrored to `docs/KNOWN_LIMITATIONS.md`.
+**Owner decision (2026-10-05) — fixed:** hide archived members from non-managers and open their directory on Active. `GET /users/directory` (the non-manager directory, USR-8) leaves archived members out, and the Members page defaults a non-manager's filter to Active; coordinators keep the whole roster.
 
 Seen and left:
 

@@ -62,6 +62,12 @@ async def _set_method(db_session: AsyncSession, election_id: str, method: str):
 
 
 async def _authorize(svc: ElectionService, data, delegating: str, proxy: str):
+    # A proxy ballot is cast on named elections only until ELEC-43 (whether
+    # a proxy vote may be attributable on an anonymous election) is decided.
+    await svc.db.execute(
+        text("UPDATE elections SET anonymous_voting = 0 WHERE id = :id"),
+        {"id": data["election_id"]},
+    )
     record, err = await svc.add_proxy_authorization(
         election_id=uuid.UUID(data["election_id"]),
         organization_id=uuid.UUID(data["org_id"]),

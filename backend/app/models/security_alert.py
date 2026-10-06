@@ -82,6 +82,10 @@ class SecurityAlertRecord(Base):
     resolved = Column(Boolean, nullable=False, default=False, server_default="0")
     resolved_by = Column(String(255))
     resolved_at = Column(DateTime(timezone=True))
+    # What the officer found, written when the alert is resolved. Capped at
+    # the API (1,000 characters); set once, never overwritten by a second
+    # resolve, so the trail keeps the first account of what happened.
+    resolution_note = Column(Text, nullable=True)
 
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

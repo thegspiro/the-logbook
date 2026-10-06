@@ -112,7 +112,7 @@ Beyond membership type, a member may also be restricted by:
 
 - **Membership tier rules** — Organization settings can mark certain tiers as not voting-eligible or require minimum meeting attendance percentages. _(2026-09-29)_ The attendance window runs from the later of `voting_attendance_period_months` ago (calendar months) and the start of the member's current stint (latest `MemberServicePeriod`, else `hire_date`) to the department's today — see [below](#voting-attendance-window-2026-09-29)
 - **Attendance requirement** — Individual ballot items can require the voter to be checked in as present at the meeting. The roll is frozen at open, so a member checked in after opening is recorded present but cannot vote without an override
-- **Secretary overrides** — The secretary can grant eligibility overrides for individual members (chosen by name on the **Overrides** tab since 2026-09-30), bypassing tier, attendance and role checks. **Not** a specific `eligible_voters` list: an override for someone off the list is stored and counted in the eligible denominator, yet their vote is still refused — open owner decision (W50-13)
+- **Secretary overrides** — The secretary can grant eligibility overrides for individual members (chosen by name on the **Overrides** tab since 2026-09-30), bypassing tier, attendance and role checks. On an election restricted to a specific `eligible_voters` list, an override **extends** the list: the member votes in the app, is sent a ballot email and counts in the eligible total, as the roster shows (W50-13, 2026-10-05)
 
 ---
 
@@ -185,6 +185,12 @@ later confirmed count again everywhere; electronic votes (no
 - **Live turnout dashboard** — meeting-night panel (fullscreen-capable)
   with ballots received vs eligible and quorum progress; auto-refreshes;
   never shows candidate tallies before close.
+- **Seats per race** — per-election `seats_per_position` (1–50, W50-11):
+  a multi-seat race marks up to that many winners. The victory condition
+  decides who qualifies, measured against ballots cast rather than vote
+  rows; a tie on the last seat follows the tie policy. Refused with ranked
+  choice (on the election or any item) and with a `max_votes_per_position`
+  below the seat count. Runoffs and clones copy it.
 - **Tie policy** — per-election `tie_policy`: `co_winners` (legacy
   default), `runoff`, `revote`, `chair_decides`. Non-legacy policies
   declare no winner on a tie, flag it in results and the UI, and audit
@@ -317,6 +323,9 @@ POST   /api/v1/elections/{id}/rollback       # Roll back status (guarded — see
 POST   /api/v1/elections/{id}/vote           # Cast a single vote (authenticated)
 POST   /api/v1/elections/{id}/vote/bulk      # Cast votes atomically (approval/ranked/multi-position)
 GET    /api/v1/elections/{id}/eligibility    # Check current user's eligibility
+GET    /api/v1/elections/{id}/ballot         # In-app ballot: every item and position, per-item standing (?proxy_authorization_id= for a proxy ballot)
+POST   /api/v1/elections/{id}/ballot         # Cast the in-app (or proxy) ballot atomically, emailed-ballot shape
+GET    /api/v1/elections/{id}/ballot/proxies # Proxies the current member holds (named elections only)
 GET    /api/v1/elections/{id}/results        # Get results (visibility-gated)
 GET    /api/v1/elections/{id}/stats          # Ballot counts / turnout (manage)
 POST   /api/v1/elections/{id}/open-nominations  # Draft -> nomination phase (manage)
@@ -341,7 +350,8 @@ GET    /api/v1/elections/{id}/package-recipients  # Prefill list for the pre-mee
 GET    /api/v1/elections/{id}/package-pdf    # Download pre-meeting package PDF (manage; variant=member|full)
 POST   /api/v1/elections/{id}/send-package   # Email pre-meeting package to an edited address list (manage)
 GET    /api/v1/elections/{id}/preview-ballot # Preview a member's ballot (manage)
-GET    /api/v1/elections/{id}/verify-receipt # Verify a vote receipt (public, rate-limited)
+POST   /api/v1/elections/{id}/verify-receipt # Verify a vote receipt, {"receipt": …} in the body (public, rate-limited)
+GET    /api/v1/elections/{id}/verify-receipt # Deprecated ?receipt= form — use the POST (2026-10-05)
 GET    /api/v1/elections/{id}/integrity      # Verify vote signatures (manage)
 GET    /api/v1/elections/{id}/forensics      # Full forensic report (manage)
 GET    /api/v1/elections/{id}/attendees      # List meeting check-ins

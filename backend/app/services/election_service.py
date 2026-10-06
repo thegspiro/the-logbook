@@ -153,6 +153,93 @@ def ballot_item_candidate_positions(item: Dict) -> Set[str]:
     return {value for value in (item.get("title"), item.get("id")) if value}
 
 
+# The two option rows an approval item (a motion, a membership vote) is
+# voted through. The names are what the token ballot, the package sync and
+# every results reader match on.
+APPROVAL_OPTION_NAMES: Tuple[str, str] = ("Approve", "Deny")
+
+
+def approval_option_position(item: Any) -> Optional[str]:
+    """The position an approval item's Approve/Deny rows are stored under,
+    or None for any other item.
+
+    The same canonical key ``submit_ballot_with_token`` stores the item's
+    votes under (its explicit position, else its id), so a row created ahead
+    of time is the row the emailed ballot finds rather than a second one.
+    """
+    if not isinstance(item, dict) or item.get("vote_type") != "approval":
+        return None
+    return item.get("position") or item.get("id")
+
+
+def position_item_id(position: str) -> str:
+    """The ballot-item id a plain election position is served under.
+
+    Item ids must match ``[A-Za-z0-9_-]{1,100}`` (``BallotItemVote``), and a
+    position name may hold spaces and run to 200 characters, so the id is a
+    digest rather than the name. It is stable — the same position always
+    maps to the same id — which is what lets a ballot loaded in one request
+    be submitted in the next.
+    """
+    digest = hashlib.sha256(position.encode("utf-8")).hexdigest()[:24]
+    return f"position-{digest}"
+
+
+def position_ballot_items(election: Any) -> List[Dict]:
+    """The election's plain positions that no ballot item claims, each as a
+    ballot item.
+
+    Both ballots render ballot items (owner decision 2026-10-05: converge
+    the in-app ballot onto ballot items, and give the emailed ballot the
+    plain positions it could not show). A plain position used to be
+    invisible to the emailed ballot — a member eligible only for one got an
+    empty page — and the in-app ballot showed nothing else. A position a
+    ballot item already claims (the ELEC-29 collision) is that item's race
+    and is not repeated. The synthesized item carries an explicit
+    ``position``, so votes are stored, deduplicated and tallied under the
+    position name exactly as a plain positional vote always was.
+    """
+    stored = [
+        i
+        for i in (getattr(election, "ballot_items", None) or [])
+        if isinstance(i, dict)
+    ]
+    claimed: Set[str] = set()
+    for item in stored:
+        claimed |= ballot_item_candidate_positions(item)
+    stored_ids = {item.get("id") for item in stored}
+    synthesized: List[Dict] = []
+    for name in getattr(election, "positions", None) or []:
+        item_id = position_item_id(name)
+        if name in claimed or item_id in stored_ids:
+            continue
+        synthesized.append(
+            {
+                "id": item_id,
+                "type": "officer_election",
+                "title": name,
+                "position": name,
+                "vote_type": "candidate_selection",
+                "eligible_voter_types": ["all"],
+                "require_attendance": False,
+            }
+        )
+    return synthesized
+
+
+def effective_ballot_items(election: Any) -> Tuple[List[Dict], Set[str]]:
+    """Every contest on the ballot — stored items, then plain positions —
+    and the ids of the plain-position ones (see ``position_ballot_items``).
+    """
+    stored = [
+        i
+        for i in (getattr(election, "ballot_items", None) or [])
+        if isinstance(i, dict)
+    ]
+    synthesized = position_ballot_items(election)
+    return stored + synthesized, {item["id"] for item in synthesized}
+
+
 def _dedup_position_key(
     item: Optional[Dict], effective_position: Optional[str]
 ) -> Optional[str]:
@@ -408,6 +495,20 @@ def _tier_benefits(user: Any, org: Any) -> dict:
     )
     benefits = tier_def.get("benefits", {}) if tier_def else {}
     return benefits if isinstance(benefits, dict) else {}
+
+
+# Domain label for the key fingerprint stored on each vote; distinct from the
+# audit log's so the two fingerprints of one shared key do not match.
+_VOTE_KEY_ID_LABEL = b"logbook:vote-signing-key-id:v1"
+
+
+def vote_signing_key_id(key: str) -> str:
+    """Return the fingerprint recorded on a vote signed with ``key``.
+
+    A keyed digest of a fixed label, truncated: it identifies the key without
+    revealing it, since recovering the key from it means breaking the HMAC.
+    """
+    return hmac.new(key.encode(), _VOTE_KEY_ID_LABEL, hashlib.sha256).hexdigest()[:16]
 
 
 def office_ineligible_message(name: Optional[str]) -> str:
@@ -1213,6 +1314,29 @@ class ElectionService:
             },
         ]
 
+    @staticmethod
+    def _restricted_voter_ids(election: Election) -> Optional[Set[str]]:
+        """The members a restricted-list election admits, or None if it has
+        no list.
+
+        A secretary voter override extends the list (W50-13, owner decision
+        2026-10-05): the roster reads "Override" and counts the member as
+        eligible, so the vote, the ballot mailer, the non-voter list and
+        the turnout denominator must all agree that the member is admitted.
+        Before this the override was recorded and shown while every vote path
+        still refused the member as "not on the list". An empty stored list
+        is read as "no list", the one meaning every reader agrees on (W50-41).
+        """
+        if not election.eligible_voters:
+            return None
+        admitted = {str(v) for v in election.eligible_voters}
+        admitted |= {
+            str(o["user_id"])
+            for o in (election.voter_overrides or [])
+            if o.get("user_id")
+        }
+        return admitted
+
     async def check_voter_eligibility(
         self,
         user_id: UUID,
@@ -1271,9 +1395,11 @@ class ElectionService:
                 reason="Election has ended",
             )
 
-        # Check if user is in eligible voters list (if specified)
-        if election.eligible_voters is not None:
-            if str(user_id) not in election.eligible_voters:
+        # Check if user is in eligible voters list (if specified). A voter
+        # override extends the list — see _restricted_voter_ids.
+        restricted_ids = self._restricted_voter_ids(election)
+        if restricted_ids is not None:
+            if str(user_id) not in restricted_ids:
                 return VoterEligibility(
                     is_eligible=False,
                     has_voted=False,
@@ -1474,7 +1600,15 @@ class ElectionService:
             election.voting_method not in ("approval", "ranked_choice")
             and (election.max_votes_per_position or 1) <= 1
         )
-        if not all_positions and has_voted and single_vote_method:
+        # A ballot of items is several questions, each guarded by its own
+        # position in _validate_vote_limits; only a ballot that is one
+        # question with no positions is "already voted" after one vote.
+        if (
+            not all_positions
+            and not election.ballot_items
+            and has_voted
+            and single_vote_method
+        ):
             return VoterEligibility(
                 is_eligible=False,
                 has_voted=True,
@@ -1623,6 +1757,7 @@ class ElectionService:
             effective_position,
             vote_rank,
             position_label=target.position_label,
+            item=matching_item,
         )
         if limit_error:
             return None, limit_error
@@ -1657,13 +1792,13 @@ class ElectionService:
                 voter_id_or_hash,
                 _dedup_position_key(matching_item, effective_position),
                 discriminator=self._dedup_discriminator(
-                    election, candidate_id, vote_rank
+                    election, candidate_id, vote_rank, item=matching_item
                 ),
             ),
         )
 
         # Sign the vote for tampering detection
-        vote.vote_signature = self._sign_vote(vote)
+        self._apply_vote_signature(vote)
 
         # Sequential chain hash — links this vote to the previous one
         vote.chain_hash = self._compute_chain_hash(
@@ -1774,6 +1909,7 @@ class ElectionService:
         vote_rank: Optional[int],
         voter_label: str = "You have",
         position_label: Optional[str] = None,
+        item: Optional[Dict] = None,
     ) -> Optional[str]:
         """Rank validation and method-aware duplicate/limit rules, shared by
         ``cast_vote`` and ``cast_proxy_vote`` so a proxy ballot is the same
@@ -1782,12 +1918,23 @@ class ElectionService:
         election row lock. ``position_label`` is what a message calls the
         position (a legacy item's title rather than its id); the comparison
         itself stays on ``position``.
+
+        ``item`` is the ballot item the vote resolved to. Its voting-method
+        override governs, as it does on the emailed ballot and in the tally
+        (ELEC-37); before the in-app ballot carried items this read the
+        election's method only, so an item overridden to approval refused
+        its second approval. An Approve/Deny item is one answer per voter
+        whatever the method.
         """
         if position_label is None:
             position_label = position
-        if election.voting_method == "ranked_choice" and vote_rank is None:
+        method = _effective_voting_method(election, item)
+        is_yes_no = item is not None and item.get("vote_type") == "approval"
+        if is_yes_no:
+            method = "simple_majority"
+        if method == "ranked_choice" and vote_rank is None:
             return "vote_rank is required for ranked-choice voting"
-        if election.voting_method != "ranked_choice" and vote_rank is not None:
+        if method != "ranked_choice" and vote_rank is not None:
             return "vote_rank is not applicable for this voting method"
 
         # Approval voting records one vote per approved candidate and ranked
@@ -1802,18 +1949,18 @@ class ElectionService:
         )
         position_votes = [v for v in existing_votes if v.position == position]
 
-        if election.voting_method == "ranked_choice":
+        if method == "ranked_choice":
             if any(v.vote_rank == vote_rank for v in position_votes):
                 return f"{voter_label} already cast a rank-{vote_rank} vote" + (
                     f" for {position_label}" if position else ""
                 )
             if any(str(v.candidate_id) == str(candidate_id) for v in position_votes):
                 return f"{voter_label} already ranked this candidate"
-        elif election.voting_method == "approval":
+        elif method == "approval":
             if any(str(v.candidate_id) == str(candidate_id) for v in position_votes):
                 return f"{voter_label} already voted for this candidate"
         else:
-            max_votes = election.max_votes_per_position or 1
+            max_votes = 1 if is_yes_no else (election.max_votes_per_position or 1)
             if any(str(v.candidate_id) == str(candidate_id) for v in position_votes):
                 return f"{voter_label} already voted for this candidate"
             if len(position_votes) >= max_votes:
@@ -2028,14 +2175,57 @@ class ElectionService:
             )
         return key
 
-    def _sign_vote(self, vote: Vote) -> str:
+    @staticmethod
+    def _legacy_vote_signing_key(current_key: str) -> Optional[str]:
+        """SECRET_KEY, when a distinct dedicated VOTE_SIGNING_KEY is set.
+
+        Before 2026-10-06 the Unraid compose files did not pass
+        VOTE_SIGNING_KEY through, so installs that set it in ``.env`` signed
+        every ballot with the SECRET_KEY fallback. Those ballots must keep
+        verifying once the dedicated key arrives (owner decision,
+        2026-10-06); verify_vote_integrity bounds how far.
+        """
+        dedicated = settings.VOTE_SIGNING_KEY
+        secret = settings.SECRET_KEY
+        if not dedicated or not secret or secret in (dedicated, current_key):
+            return None
+        return secret
+
+    def _apply_vote_signature(self, vote: Vote) -> None:
+        """Sign ``vote`` and record which key signed it."""
+        signing_key = self._get_vote_signing_key()
+        vote.vote_signature = self._sign_vote(vote, signing_key)
+        vote.signing_key_id = vote_signing_key_id(signing_key)
+
+    async def _vote_key_cutover(self, current_key_id: str) -> Optional[datetime]:
+        """When the first vote recording the dedicated key was cast.
+
+        Deliberately not scoped to one organization: the signing key is a
+        deployment setting, so the moment it took effect is a fact about the
+        deployment. Only this timestamp leaves the query, and an election
+        created after the key arrived then cannot hold a SECRET_KEY ballot
+        merely because none of its own ballots predate it.
+        """
+        cutover = (
+            await self.db.execute(
+                select(func.min(Vote.voted_at)).where(
+                    Vote.signing_key_id == current_key_id
+                )
+            )
+        ).scalar()
+        return self._ensure_utc(cutover)
+
+    def _sign_vote(self, vote: Vote, signing_key: Optional[str] = None) -> str:
         """Generate a cryptographic signature for a vote to detect tampering.
 
         The signature covers all immutable vote fields so any modification
         (changing candidate, deleting and re-inserting, altering rank, or
         converting a proxy vote) will produce a different signature.
+        ``signing_key`` overrides the current key; verification passes the
+        key a vote's ``signing_key_id`` names.
         """
-        signing_key = self._get_vote_signing_key()
+        if signing_key is None:
+            signing_key = self._get_vote_signing_key()
         # Include vote_rank for ranked-choice integrity and proxy fields.
         # voted_at must be canonicalized to a round-trip-stable form: MySQL
         # DATETIME has second precision and returns naive values, so the raw
@@ -2114,15 +2304,58 @@ class ElectionService:
         tampered = []
         unsigned = 0
 
+        current_key = self._get_vote_signing_key()
+        current_id = vote_signing_key_id(current_key)
+        legacy_key = self._legacy_vote_signing_key(current_key)
+        legacy_id = vote_signing_key_id(legacy_key) if legacy_key else None
+        # SECRET_KEY verifies a ballot only if it was cast no later than the
+        # first ballot signed with the dedicated key, so it cannot become a
+        # permanent second key. voted_at is inside the signature, so moving
+        # it earlier needs a key that signs. Looked up only when needed.
+        cutover: Optional[datetime] = None
+        cutover_loaded = False
+        legacy_verified = 0
+
         for vote in all_votes:
             if not vote.vote_signature:
                 unsigned += 1
                 continue
-            expected = self._sign_vote(vote)
-            if vote.vote_signature == expected:
-                valid += 1
-            else:
+            recorded = getattr(vote, "signing_key_id", None)
+            if recorded is not None and recorded not in (current_id, legacy_id):
+                # Signed with a key that is no longer configured.
                 tampered.append(str(vote.id))
+                continue
+            if recorded in (None, current_id) and hmac.compare_digest(
+                vote.vote_signature, self._sign_vote(vote, current_key)
+            ):
+                valid += 1
+                continue
+            if legacy_key is None or recorded == current_id:
+                tampered.append(str(vote.id))
+                continue
+            if not hmac.compare_digest(
+                vote.vote_signature, self._sign_vote(vote, legacy_key)
+            ):
+                tampered.append(str(vote.id))
+                continue
+            if not cutover_loaded:
+                cutover = await self._vote_key_cutover(current_id)
+                cutover_loaded = True
+            voted_at = self._ensure_utc(vote.voted_at)
+            if cutover is not None and (voted_at is None or voted_at > cutover):
+                tampered.append(str(vote.id))
+                continue
+            valid += 1
+            legacy_verified += 1
+
+        if legacy_verified:
+            logger.warning(
+                f"Vote integrity | election={election_id}: {legacy_verified} "
+                "ballots verified with SECRET_KEY, the fallback that signed them "
+                "before VOTE_SIGNING_KEY reached the backend. They are accepted "
+                "only up to the first ballot signed with VOTE_SIGNING_KEY; "
+                "rotating SECRET_KEY will make them unverifiable."
+            )
 
         # Verify the sequential vote chain by RECONSTRUCTING the order from
         # the hashes themselves: from prev_chain, exactly one remaining vote
@@ -2236,6 +2469,13 @@ class ElectionService:
         vote = result.scalar_one_or_none()
         if not vote:
             return None
+
+        election = (
+            await self.db.execute(
+                select(Election).where(Election.id == vote.election_id)
+            )
+        ).scalar_one()
+        await self._record_results_revision(election, "vote_voided", deleted_by, reason)
 
         vote.deleted_at = datetime.now(timezone.utc)
         vote.deleted_by = str(deleted_by)
@@ -2703,8 +2943,9 @@ class ElectionService:
             }
             return len(set(snapshot) | override_ids)
 
-        if election.eligible_voters:
-            return len(election.eligible_voters)
+        restricted_ids = self._restricted_voter_ids(election)
+        if restricted_ids is not None:
+            return len(restricted_ids)
 
         org_result = await self.db.execute(
             select(Organization).where(Organization.id == str(organization_id))
@@ -2758,19 +2999,25 @@ class ElectionService:
         """
         Get comprehensive election results
 
-        SECURITY CRITICAL: Results are only visible AFTER election closing time.
+        SECURITY CRITICAL: Results are only visible once voting has ended.
 
         Before the election closes, use get_election_stats() to view:
         - Number of issued ballots (total_eligible_voters)
         - Number of received ballots (total_votes_cast)
 
         Results visibility rules:
-        1. Election end_date must have passed (current time > end_date)
-        2. Election status must be CLOSED
-        3. OR results_visible_immediately flag is True (override for instant results)
+        1. Election status is CLOSED — voting has ended, whether at the
+           scheduled end or early, by an officer
+        2. OR results_visible_immediately flag is True (override for instant results)
 
-        This prevents election manipulation and ensures integrity by not revealing
-        results until voting has officially ended.
+        A CLOSED election accepts no votes on any path, so its tally is final
+        and revealing it cannot steer a vote. The scheduled end date used to
+        be a second condition, which left an election closed early at the
+        meeting refused to everyone — the officer who closed it included —
+        until a date days later, while the report mail, the certified PDF and
+        the runoff check already carried the same numbers (W50-10, W50-22;
+        owner decision 2026-10-05: an early close releases results exactly
+        as the scheduled end would have).
         """
         # Get the election
         result = await self.db.execute(
@@ -2783,14 +3030,10 @@ class ElectionService:
         if not election:
             return None
 
-        # SECURITY: Check if results can be viewed
-        # Results are ONLY visible after the election closing time has passed
-        current_time = datetime.now(timezone.utc)
-        end_date = self._ensure_utc(election.end_date)
-        election_has_closed = end_date is not None and current_time > end_date
-
+        # SECURITY: results are only visible once voting has ended (CLOSED);
+        # see the docstring for why the scheduled end is not also required.
         can_view = (
-            (election.status == ElectionStatus.CLOSED and election_has_closed)
+            election.status == ElectionStatus.CLOSED
             or election.results_visible_immediately
             or _internal_bypass_visibility
         )
@@ -3078,7 +3321,19 @@ class ElectionService:
         # supermajority / threshold conditions below graded against it. The
         # turnout helper already estimates paper voters conservatively (and
         # prefers the officer-attested count), so it is the one definition.
-        if voting_method == "approval":
+        # A Yes/No item decides one question; only a candidate race fills
+        # seats (W50-11).
+        seats = (
+            1
+            if item is not None and item.get("vote_type") == "approval"
+            else (getattr(election, "seats_per_position", 1) or 1)
+        )
+
+        # A multi-seat race has the same shape: a voter marks up to one
+        # candidate per seat, so dividing by vote rows would cap a candidate
+        # every voter chose at 1/seats of the total and no one could reach a
+        # majority (W50-11).
+        if voting_method == "approval" or seats > 1:
             total_votes = self._count_ballots_cast(election, votes, recorded_ballots)
             # If no voter tracking is possible at all, fall back to total votes
             if total_votes == 0:
@@ -3104,6 +3359,17 @@ class ElectionService:
             )
 
         results.sort(key=lambda x: x.vote_count, reverse=True)
+
+        if seats > 1:
+            self._declare_seat_winners(
+                results,
+                election,
+                victory_condition,
+                seats,
+                victory_percentage,
+                total_votes,
+            )
+            return results
 
         # Determine winners based on victory_condition
         if victory_condition == "most_votes":
@@ -3156,6 +3422,65 @@ class ElectionService:
                         result.is_winner = True
 
         return results
+
+    @staticmethod
+    def _declare_seat_winners(
+        results: List[CandidateResult],
+        election: Election,
+        victory_condition: str,
+        seats: int,
+        victory_percentage: Optional[int],
+        total_votes: int,
+    ) -> None:
+        """Mark up to ``seats`` winners in a multi-seat race (W50-11).
+
+        ``results`` is sorted by votes, highest first. The victory condition
+        decides who *qualifies* — every candidate with a vote under
+        most_votes, the vote or percentage bar under the others — and the
+        seats go to the highest qualifiers. When candidates tie on the last
+        seat's count and there are not enough seats left for all of them,
+        the tie is flagged (``is_tied``) and the election's tie policy
+        decides it, exactly as a one-seat tie: co_winners seats them all,
+        any other policy seats none of them and leaves the seat to the
+        runoff, revote or chair.
+        """
+        if victory_condition == "majority":
+            required = total_votes // 2 + 1
+            qualifying = [r for r in results if r.vote_count >= required]
+        elif victory_condition == "supermajority":
+            bar = victory_percentage or 67
+            qualifying = [r for r in results if r.percentage >= bar]
+        elif victory_condition == "threshold":
+            if election.victory_threshold:
+                qualifying = [
+                    r for r in results if r.vote_count >= election.victory_threshold
+                ]
+            elif victory_percentage:
+                qualifying = [r for r in results if r.percentage >= victory_percentage]
+            else:
+                qualifying = []
+        else:
+            qualifying = [r for r in results if r.vote_count > 0]
+
+        if len(qualifying) <= seats:
+            for r in qualifying:
+                r.is_winner = True
+            return
+
+        cut_line = qualifying[seats - 1].vote_count
+        above = [r for r in qualifying if r.vote_count > cut_line]
+        at_cut = [r for r in qualifying if r.vote_count == cut_line]
+        for r in above:
+            r.is_winner = True
+        if len(above) + len(at_cut) <= seats:
+            for r in at_cut:
+                r.is_winner = True
+            return
+        policy = getattr(election, "tie_policy", None) or "co_winners"
+        for r in at_cut:
+            r.is_tied = True
+            if policy == "co_winners":
+                r.is_winner = True
 
     def _calculate_ranked_choice_results(
         self,
@@ -3357,11 +3682,12 @@ class ElectionService:
         if not election:
             return []
 
-        # Get eligible voters
-        if election.eligible_voters:
+        # Get eligible voters (a restricted list, extended by overrides)
+        restricted_ids = self._restricted_voter_ids(election)
+        if restricted_ids is not None:
             users_result = await self.db.execute(
                 select(User)
-                .where(User.id.in_([str(v) for v in election.eligible_voters]))
+                .where(User.id.in_(sorted(restricted_ids)))
                 .where(User.organization_id == str(organization_id))
                 .options(selectinload(User.roles))
             )
@@ -3576,6 +3902,52 @@ class ElectionService:
             user_id=user_id,
         )
         return sent, failed, skipped, skipped_details
+
+    RESULTS_REVISION_LABELS: Dict[str, str] = {
+        "vote_voided": "a vote was voided",
+        "paper_batch_voided": "a paper-ballot batch was voided",
+        "write_ins_merged": "write-in candidates were merged",
+    }
+
+    async def _record_results_revision(
+        self, election: Election, action: str, by_user_id: Any, detail: str
+    ) -> None:
+        """Stamp a change to a CLOSED election's result (W50-9).
+
+        Merge Write-Ins, Void a Vote and a paper-batch void stay allowed
+        after close — they are how a certified result is corrected — but
+        they used to re-issue the tally silently: an election went from four
+        co-winners to one with the certified PDF unchanged. The owner chose
+        (2026-10-05) to keep the corrections and mark them, "revised <when>
+        by <who>", on the PDF and the Results tab. While voting is open the
+        result is not yet certified, so nothing is stamped then. The caller
+        commits.
+        """
+        if election.status != ElectionStatus.CLOSED:
+            return
+        name = None
+        if by_user_id:
+            row = (
+                await self.db.execute(
+                    select(User.first_name, User.last_name).where(
+                        User.id == str(by_user_id),
+                        User.organization_id == str(election.organization_id),
+                    )
+                )
+            ).one_or_none()
+            if row is not None:
+                name = f"{row[0] or ''} {row[1] or ''}".strip() or None
+        revisions = copy.deepcopy(election.results_revisions or [])
+        revisions.append(
+            {
+                "at": datetime.now(timezone.utc).isoformat(),
+                "by": str(by_user_id) if by_user_id else None,
+                "by_name": name,
+                "action": action,
+                "detail": detail,
+            }
+        )
+        election.results_revisions = revisions
 
     async def closed_by_name(self, election: Election) -> Optional[str]:
         """Display name of the officer who closed ``election``, or None for
@@ -4288,7 +4660,7 @@ class ElectionService:
                     manual_batch_id=batch_id,
                     vote_dedup_hash=None,
                 )
-                vote.vote_signature = self._sign_vote(vote)
+                self._apply_vote_signature(vote)
                 vote.chain_hash = self._compute_chain_hash(
                     election.last_chain_hash, vote.vote_signature
                 )
@@ -4592,7 +4964,8 @@ class ElectionService:
             .where(Election.organization_id == str(organization_id))
             .with_for_update()
         )
-        if election_result.scalar_one_or_none() is None:
+        election = election_result.scalar_one_or_none()
+        if election is None:
             return 0, "Election not found"
 
         # Lock the batch next — it's the row every void of this batch
@@ -4642,6 +5015,12 @@ class ElectionService:
             batch.voided_by = str(deleted_by)
             batch.voided_at = now
             batch.void_reason = reason
+        await self._record_results_revision(
+            election,
+            "paper_batch_voided",
+            deleted_by,
+            f"{len(votes)} paper ballot(s): {reason}",
+        )
         await self.db.commit()
 
         logger.warning(
@@ -4719,6 +5098,7 @@ class ElectionService:
             anonymous_voting=source.anonymous_voting,
             allow_write_ins=source.allow_write_ins,
             max_votes_per_position=source.max_votes_per_position,
+            seats_per_position=getattr(source, "seats_per_position", 1) or 1,
             # Not copied: this is the ONLY field the update endpoint lets an
             # officer change on a CLOSED election, which is how results get
             # published after the fact. That makes it a post-close decision
@@ -4834,6 +5214,12 @@ class ElectionService:
 
         for cand in sources:
             cand.merged_into_candidate_id = target.id
+        await self._record_results_revision(
+            election,
+            "write_ins_merged",
+            merged_by,
+            f"{', '.join(c.name for c in sources)} merged into {target.name}",
+        )
         await self.db.commit()
 
         merged_names = [c.name for c in sources]
@@ -4890,7 +5276,7 @@ class ElectionService:
             and item.get("vote_type") == "approval"
             and item.get("title")
         ]
-        if not election.positions and not approval_items:
+        if not election.positions and not election.ballot_items:
             return (
                 None,
                 "Printable ballots require a positional election",
@@ -4921,6 +5307,23 @@ class ElectionService:
                     "candidates": [
                         c.name for c in candidates if c.position == position
                     ],
+                }
+            )
+        # A candidate-selection item whose race is not a plain position (a
+        # ballot built in the Ballot Builder) is a race on paper too; it was
+        # left off the printout (W50-8). An item colliding with a plain
+        # position is already printed above.
+        plain = set(election.positions or [])
+        for item in election.ballot_items or []:
+            if not isinstance(item, dict) or item.get("vote_type") == "approval":
+                continue
+            aliases = ballot_item_candidate_positions(item)
+            if not aliases or aliases & plain:
+                continue
+            positions.append(
+                {
+                    "name": item.get("title") or item.get("position") or "",
+                    "candidates": [c.name for c in candidates if c.position in aliases],
                 }
             )
 
@@ -4997,6 +5400,18 @@ class ElectionService:
                 "closed_by_display": (
                     await self.closed_by_name(election) or "automatic close"
                 ),
+                "revisions_display": [
+                    "Results revised "
+                    + await self._org_local_time(
+                        organization, datetime.fromisoformat(rev["at"])
+                    )
+                    + f" by {rev.get('by_name') or 'an officer'}: "
+                    + self.RESULTS_REVISION_LABELS.get(
+                        rev.get("action", ""), rev.get("action", "")
+                    )
+                    + (f" ({rev['detail']})" if rev.get("detail") else "")
+                    for rev in (election.results_revisions or [])
+                ],
                 "voting_method": election.voting_method,
                 "victory_condition": election.victory_condition,
                 "tie_policy": getattr(election, "tie_policy", None) or "co_winners",
@@ -5247,12 +5662,18 @@ class ElectionService:
         )
         all_candidates = list(candidates_result.scalars().all())
 
+        seats = getattr(election, "seats_per_position", 1) or 1
+
         def _advancing(ranked: List[Candidate]) -> List[Candidate]:
-            if len(ranked) < 2:
-                return []  # Can't have a runoff with less than 2 candidates
+            # A runoff needs more candidates than seats, or every one of
+            # them would be elected unopposed.
+            if len(ranked) <= seats:
+                return []
             if election.runoff_type == "eliminate_lowest":
                 return ranked[:-1]
-            return ranked[:2]  # top_two, and the default
+            # top_two, and the default; a multi-seat race keeps one more
+            # candidate than it has seats, so the runoff is still a contest.
+            return ranked[: max(2, seats + 1)]
 
         advancing_candidates: List[Candidate] = []
         runoff_positions: List[str] = []
@@ -5391,6 +5812,7 @@ class ElectionService:
             voter_anonymity_salt=secrets.token_hex(32),
             allow_write_ins=False,  # No write-ins in runoffs
             max_votes_per_position=election.max_votes_per_position,
+            seats_per_position=getattr(election, "seats_per_position", 1) or 1,
             results_visible_immediately=election.results_visible_immediately,
             eligible_voters=election.eligible_voters,
             voter_overrides=copy.deepcopy(election.voter_overrides),
@@ -5717,6 +6139,91 @@ class ElectionService:
 
         await self.db.commit()
 
+    async def _ensure_approval_option_rows(self, election: Election) -> int:
+        """Create any missing Approve/Deny rows for the election's approval
+        items. Returns how many were created.
+
+        They used to exist only once an electronic vote materialised them,
+        so a motion decided on a paper ballot — printed with "Approve /
+        Deny" boxes — could not be keyed in: Record Paper Ballots takes
+        candidate ids, and there were none (W50-8, owner decision
+        2026-10-05: create them when the election opens). Idempotent: a row
+        a vote already materialised is reused, never duplicated.
+        """
+        keys = list(
+            dict.fromkeys(
+                key
+                for key in (
+                    approval_option_position(item)
+                    for item in (election.ballot_items or [])
+                )
+                if key
+            )
+        )
+        if not keys:
+            return 0
+        existing = await self.db.execute(
+            select(Candidate.position, Candidate.name)
+            .where(Candidate.election_id == str(election.id))
+            .where(Candidate.position.in_(keys))
+            .where(Candidate.name.in_(APPROVAL_OPTION_NAMES))
+            .where(Candidate.is_write_in.is_(False))
+        )
+        have = {(position, name) for position, name in existing.all()}
+        created = 0
+        for key in keys:
+            for order, name in enumerate(APPROVAL_OPTION_NAMES):
+                if (key, name) in have:
+                    continue
+                self.db.add(
+                    Candidate(
+                        election_id=str(election.id),
+                        name=name,
+                        position=key,
+                        is_write_in=False,
+                        accepted=True,
+                        display_order=order,
+                    )
+                )
+                created += 1
+        if created:
+            await self.db.flush()
+        return created
+
+    async def _drop_unused_approval_option_rows(self, election: Election) -> int:
+        """Remove the Approve/Deny rows no vote has ever referenced.
+
+        Run when an election goes back to DRAFT: the ballot may then be
+        edited, and an option row left behind for an item that is removed
+        would read as an orphaned nominee (the positions guard on update
+        refuses to drop a position a candidate still holds). The next open
+        recreates whatever the ballot then needs. A row any vote references
+        — counted, voided or test — stays, because votes keep their
+        candidate for integrity verification.
+        """
+        keys = [
+            key
+            for key in (
+                approval_option_position(item) for item in (election.ballot_items or [])
+            )
+            if key
+        ]
+        if not keys:
+            return 0
+        rows = await self.db.execute(
+            select(Candidate)
+            .where(Candidate.election_id == str(election.id))
+            .where(Candidate.position.in_(keys))
+            .where(Candidate.name.in_(APPROVAL_OPTION_NAMES))
+            .where(Candidate.is_write_in.is_(False))
+            .where(~select(Vote.id).where(Vote.candidate_id == Candidate.id).exists())
+        )
+        dropped = 0
+        for candidate in rows.scalars().all():
+            await self.db.delete(candidate)
+            dropped += 1
+        return dropped
+
     async def open_election(
         self, election_id: UUID, organization_id: UUID
     ) -> Tuple[Optional[Election], Optional[str]]:
@@ -5798,13 +6305,16 @@ class ElectionService:
             election.start_date = now.replace(microsecond=0)
             start_adjusted = True
 
+        option_rows_created = await self._ensure_approval_option_rows(election)
+
         election.status = ElectionStatus.OPEN
         await self.db.commit()
         await self.db.refresh(election)
 
         logger.info(
             f"Election opened | election={election_id} title={election.title!r} "
-            f"start_adjusted={start_adjusted}"
+            f"start_adjusted={start_adjusted} "
+            f"approval_option_rows_created={option_rows_created}"
         )
         await self._audit(
             "election_opened",
@@ -5912,9 +6422,10 @@ class ElectionService:
             to_status = "open"
             new_status = ElectionStatus.OPEN
             # The reopened election has not closed yet; the eventual re-close
-            # stamps its own instant and officer.
+            # stamps its own instant and officer, and certifies afresh.
             election.closed_at = None
             election.closed_by = None
+            election.results_revisions = None
         elif election.status == ElectionStatus.OPEN:
             # Rollback from open to draft
             to_status = "draft"
@@ -5924,6 +6435,9 @@ class ElectionService:
             # would report members who joined since as off a roll that no
             # longer exists (the next open freezes a fresh one).
             election.eligible_roster_snapshot = None
+            # The draft's ballot may be edited now; the next open recreates
+            # the Approve/Deny rows it needs (W50-8).
+            await self._drop_unused_approval_option_rows(election)
         else:
             return None, 0, f"Cannot rollback election with status {from_status}"
 
@@ -6549,9 +7063,14 @@ class ElectionService:
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
         vote_rank: Optional[int] = None,
+        commit: bool = True,
     ) -> Tuple[Optional[Vote], Optional[str]]:
         """
         Cast a vote on behalf of another member using a proxy authorization.
+
+        ``commit=False`` flushes without committing and lets IntegrityError
+        propagate, as ``cast_vote`` does, so a whole proxy ballot is one
+        transaction (``submit_member_ballot``).
 
         The vote records:
         - voter_id / voter_hash: identifies the *delegating* member (the absent voter)
@@ -6582,6 +7101,9 @@ class ElectionService:
         org = org_result.scalar_one_or_none()
         if not org or not self._is_proxy_voting_enabled(org):
             return None, "Proxy voting is not enabled for this organization"
+        anonymity_error = self._proxy_anonymity_error(election)
+        if anonymity_error:
+            return None, anonymity_error
 
         # Locate the authorization
         auths = election.proxy_authorizations or []
@@ -6626,6 +7148,7 @@ class ElectionService:
             vote_rank,
             voter_label="Delegating member has",
             position_label=target.position_label,
+            item=target.matching_item,
         )
         if limit_error:
             return None, limit_error
@@ -6659,11 +7182,11 @@ class ElectionService:
                 voter_id_or_hash,
                 _dedup_position_key(target.matching_item, effective_position),
                 discriminator=self._dedup_discriminator(
-                    election, candidate_id, vote_rank
+                    election, candidate_id, vote_rank, item=target.matching_item
                 ),
             ),
         )
-        vote.vote_signature = self._sign_vote(vote)
+        self._apply_vote_signature(vote)
         vote.chain_hash = self._compute_chain_hash(
             election.last_chain_hash, vote.vote_signature
         )
@@ -6672,6 +7195,26 @@ class ElectionService:
         )
         self.db.add(vote)
         election.last_chain_hash = vote.chain_hash
+
+        if not commit:
+            await self.db.flush()
+            await self._audit(
+                "proxy_vote_cast",
+                {
+                    "election_id": str(election_id),
+                    "vote_id": str(vote.id),
+                    "position": effective_position,
+                    "delegating_user_id": str(delegating_user_id),
+                    "proxy_user_id": str(proxy_user_id),
+                    "authorization_id": proxy_authorization_id,
+                    "anonymous": election.anonymous_voting,
+                    "bulk": True,
+                },
+                severity="info",
+                user_id=str(proxy_user_id),
+                ip_address=self._audit_ip(election, ip_address),
+            )
+            return vote, None
 
         try:
             await self.db.commit()
@@ -6791,10 +7334,10 @@ class ElectionService:
             )
             recipients = users_result.scalars().all()
         elif election.eligible_voters:
-            # Use election's eligible voters list
+            # The election's list, plus any overridden member (W50-13)
             users_result = await self.db.execute(
                 select(User)
-                .where(User.id.in_([str(v) for v in election.eligible_voters]))
+                .where(User.id.in_(sorted(self._restricted_voter_ids(election) or [])))
                 .where(User.organization_id == str(organization_id))
                 .options(selectinload(User.roles))
             )
@@ -6844,10 +7387,10 @@ class ElectionService:
                 f"using default | election={election_id} error={e}"
             )
 
-        # Build a lookup of delegating_user_id -> proxy user email
-        # so we can CC the proxy holder on ballot notifications.
-        # Batch-fetch all proxy users in a single query instead of N+1.
-        proxy_cc_map: Dict[str, str] = {}
+        # Build a lookup of delegating_user_id -> (proxy email, proxy name)
+        # so we can CC the proxy holder on ballot notifications, and name
+        # them in it (W50-23). Batch-fetch all proxy users in one query.
+        proxy_cc_map: Dict[str, Tuple[str, str]] = {}
         proxy_user_ids: set = set()
         proxy_mappings: List[Tuple[str, str]] = []
         for auth in election.proxy_authorizations or []:
@@ -6864,7 +7407,8 @@ class ElectionService:
                 .where(User.organization_id == str(organization_id))
             )
             proxy_users_by_id = {
-                str(u.id): u.email for u in proxy_result.scalars().all()
+                str(u.id): (u.email, u.full_name or u.username)
+                for u in proxy_result.scalars().all()
             }
             for delegating_uid, proxy_uid in proxy_mappings:
                 if proxy_uid in proxy_users_by_id:
@@ -7081,8 +7625,17 @@ class ElectionService:
                 )
                 continue
 
-            # Build ballot items lists for the email
-            items_html, items_text = self._build_ballot_items_lists(eligible_items)
+            # Build ballot items lists for the email — the plain positions
+            # the recipient may vote for are on the emailed ballot now too.
+            items_html, items_text = self._build_ballot_items_lists(
+                eligible_items
+                + [
+                    item
+                    for item in position_ballot_items(election)
+                    if eligible_positions is None
+                    or item["position"] in eligible_positions
+                ]
+            )
 
             # Generate unique voting token for this voter. For ballot-item
             # elections the recipient's eligible item ids are snapshotted on
@@ -7116,7 +7669,8 @@ class ElectionService:
             )
 
             # If this voter has a proxy, CC the proxy holder
-            cc_email = proxy_cc_map.get(str(recipient.id))
+            proxy_holder = proxy_cc_map.get(str(recipient.id))
+            cc_email = proxy_holder[0] if proxy_holder else None
 
             pending_emails.append(
                 {
@@ -7128,6 +7682,7 @@ class ElectionService:
                     "meeting_date": election.meeting_date,
                     "custom_message": message,
                     "cc_emails": [cc_email] if cc_email else None,
+                    "proxy_holder_name": proxy_holder[1] if proxy_holder else None,
                     "start_date": election.start_date,
                     "end_date": election.end_date,
                     "positions": election.positions,
@@ -7150,6 +7705,7 @@ class ElectionService:
         for params in pending_emails:
             rid = params.pop("recipient_id")
             cc_emails = params.pop("cc_emails", None)
+            proxy_holder_name = params.pop("proxy_holder_name", None)
             try:
                 subj, html_body, text_body = (
                     await email_service.render_ballot_notification(
@@ -7166,6 +7722,7 @@ class ElectionService:
                         admin_contact_name=params["admin_contact_name"],
                         admin_contact_email=params["admin_contact_email"],
                         template=ballot_template,
+                        proxy_holder_name=proxy_holder_name,
                     )
                 )
                 # A caller's subject wins over the template's: a reminder
@@ -8349,19 +8906,12 @@ class ElectionService:
         # token's hash fails the roll check and a member who did vote was
         # told they were never on the roll (W50-44).
         now = datetime.now(timezone.utc)
-        start = self._ensure_utc(election.start_date)
-        end = self._ensure_utc(election.end_date)
         if election.status == ElectionStatus.CLOSED:
             return None, None, "Voting has closed"
 
-        if election.status != ElectionStatus.OPEN:
-            return None, None, f"Election is {election.status.value}"
-
-        if start and now < start:
-            return None, None, "Voting has not started yet"
-
-        if end and now > end:
-            return None, None, "Voting has ended"
+        window_error = self._token_window_error(election, voting_token, now)
+        if window_error:
+            return None, None, window_error
 
         # Defense in depth for tokens issued before the roll was frozen (or
         # by an older application node): a credential cannot bypass the same
@@ -8439,16 +8989,41 @@ class ElectionService:
         now = datetime.now(timezone.utc)
         if now > self._ensure_utc(locked_token.expires_at):
             return None, None, "Voting token has expired"
-        if locked_election.status != ElectionStatus.OPEN:
+        if locked_election.status not in (ElectionStatus.OPEN, ElectionStatus.DRAFT):
             return None, None, "Election is not open for voting"
-        start = self._ensure_utc(locked_election.start_date)
-        end = self._ensure_utc(locked_election.end_date)
-        if start and now < start:
-            return None, None, "Voting has not started yet"
-        if end and now > end:
-            return None, None, "Voting has ended"
+        window_error = self._token_window_error(locked_election, locked_token, now)
+        if window_error:
+            return None, None, window_error
 
         return locked_election, locked_token, None
+
+    def _token_window_error(
+        self, election: Election, voting_token: VotingToken, now: datetime
+    ) -> Optional[str]:
+        """Whether this token may be used on this election right now.
+
+        A live token needs an OPEN election inside its voting window. A test
+        token (``send-test-ballot``) may also be used on a DRAFT — that is
+        the preview Election Settings offers, and drafts are the only
+        elections it offers it for (W50-19, owner decision 2026-10-05). A
+        draft's scheduled start is usually still ahead, so the start is not
+        enforced for it; the end is, since a draft past its end cannot open.
+        Nothing a test token writes counts: its votes are ``is_test``,
+        namespaced in the dedup hash and excluded from every tally, roster
+        and the candidate-edit guard (``_active_vote_count``).
+        """
+        start = self._ensure_utc(election.start_date)
+        end = self._ensure_utc(election.end_date)
+        draft_preview = election.status == ElectionStatus.DRAFT and bool(
+            voting_token.is_test
+        )
+        if election.status != ElectionStatus.OPEN and not draft_preview:
+            return f"Election is {election.status.value}"
+        if start and now < start and not draft_preview:
+            return "Voting has not started yet"
+        if end and now > end:
+            return "Voting has ended"
+        return None
 
     async def cast_vote_with_token(
         self,
@@ -8656,7 +9231,7 @@ class ElectionService:
         )
 
         # Sign the vote for tampering detection
-        vote.vote_signature = self._sign_vote(vote)
+        self._apply_vote_signature(vote)
 
         # Sequential chain hash and voter receipt
         vote.chain_hash = self._compute_chain_hash(
@@ -8820,7 +9395,10 @@ class ElectionService:
         if voting_token.used:
             return None, "This ballot has already been submitted"
 
-        ballot_items = election.ballot_items or []
+        # Stored items plus the plain positions served as items (see
+        # position_ballot_items): the emailed ballot can now carry a race
+        # that is only a plain position.
+        ballot_items, position_item_ids = effective_ballot_items(election)
         if not ballot_items:
             return None, "This election has no ballot items configured"
 
@@ -8896,7 +9474,7 @@ class ElectionService:
                     discriminator=discriminator,
                 ),
             )
-            new_vote.vote_signature = self._sign_vote(new_vote)
+            self._apply_vote_signature(new_vote)
             new_vote.chain_hash = self._compute_chain_hash(
                 election.last_chain_hash, new_vote.vote_signature
             )
@@ -8942,11 +9520,14 @@ class ElectionService:
             # SECURITY: without the item-eligibility half, any token holder
             # could vote on items restricted to other member classes by
             # POSTing their ids.
+            # A plain position is checked as the plain position it is —
+            # against the token's eligible_positions snapshot — never as an
+            # item the token's eligible_item_ids could not list.
             eligibility_error = _token_eligibility_error(
                 voting_token,
                 election,
                 position,
-                ballot_item,
+                None if ballot_item_id in position_item_ids else ballot_item,
                 ineligible_item_message=(
                     "You are not eligible to vote on: "
                     f"{ballot_item.get('title', ballot_item_id)}"
@@ -9110,6 +9691,12 @@ class ElectionService:
                 self.db.add(write_in_candidate)
                 await self.db.flush()
                 candidate_id = write_in_candidate.id
+
+            elif choice in ("approve", "deny") and ballot_item_id in position_item_ids:
+                return (
+                    None,
+                    f"Approve and Deny are not choices for: {item_title}",
+                )
 
             elif choice == "approve":
                 # Find or create an "Approve" candidate for this ballot item
@@ -9277,6 +9864,370 @@ class ElectionService:
             # Receipts let the voter verify their votes were recorded via the
             # public verify-receipt endpoint without revealing vote content.
             "receipt_hashes": [v.receipt_hash for v in created_votes],
+        }, None
+
+    # ------------------------------------------------------------------
+    # Member ballot (in-app Cast Vote tab, own or as a proxy)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _proxy_anonymity_error(election: Election) -> Optional[str]:
+        """Refuse a proxy ballot on an anonymous election.
+
+        A proxy vote stores the delegating member's id in clear and its
+        signature covers it (ELEC-43, W50-2), so on an anonymous election
+        the proxy ballot would be the one attributable ballot in the box.
+        Whether to accept that (and tell the member) or to store the link
+        as a salted hash is an open owner decision; until it is made, proxy
+        voting runs on named elections only rather than quietly breaking
+        another member's anonymity.
+        """
+        if election.anonymous_voting:
+            return (
+                "Proxy voting is available on named (non-anonymous) elections "
+                "only: a proxy ballot records whom it was cast for, which an "
+                "anonymous election must not."
+            )
+        return None
+
+    def _active_proxy_authorization(
+        self, election: Election, authorization_id: str, proxy_user_id: Any
+    ) -> Tuple[Optional[Dict], Optional[str]]:
+        auth = next(
+            (
+                a
+                for a in (election.proxy_authorizations or [])
+                if a.get("id") == authorization_id
+            ),
+            None,
+        )
+        if not auth:
+            return None, "Proxy authorization not found"
+        if auth.get("revoked_at"):
+            return None, "This proxy authorization has been revoked"
+        if auth.get("proxy_user_id") != str(proxy_user_id):
+            return None, "You are not the designated proxy for this authorization"
+        return auth, None
+
+    async def get_my_proxy_authorizations(
+        self, election_id: UUID, organization_id: UUID, user_id: UUID
+    ) -> Optional[Dict]:
+        """The live authorizations naming ``user_id`` as proxy holder, for
+        the Cast Vote tab's "voting for" choice. None if no such election."""
+        election = await self.get_election(election_id, organization_id)
+        if not election:
+            return None
+        org = (
+            await self.db.execute(
+                select(Organization).where(Organization.id == str(organization_id))
+            )
+        ).scalar_one_or_none()
+        enabled = bool(org) and self._is_proxy_voting_enabled(org)
+        unavailable_reason = None
+        if not enabled:
+            unavailable_reason = "Proxy voting is not enabled for this organization"
+        else:
+            unavailable_reason = self._proxy_anonymity_error(election)
+        mine = [
+            {
+                "authorization_id": a.get("id"),
+                "delegating_user_id": a.get("delegating_user_id"),
+                "delegating_user_name": a.get("delegating_user_name"),
+            }
+            for a in (election.proxy_authorizations or [])
+            if a.get("proxy_user_id") == str(user_id) and not a.get("revoked_at")
+        ]
+        return {
+            "proxies": mine if unavailable_reason is None else [],
+            "unavailable_reason": unavailable_reason if mine else None,
+        }
+
+    async def _get_or_create_approval_option(
+        self, election: Election, position: str, name: str
+    ) -> Candidate:
+        """The item's Approve or Deny row, creating it if a pre-existing
+        election never had one (they are created at open since W50-8)."""
+        existing = (
+            await self.db.execute(
+                select(Candidate)
+                .where(Candidate.election_id == str(election.id))
+                .where(Candidate.position == position)
+                .where(Candidate.name == name)
+                .where(Candidate.is_write_in.is_(False))
+            )
+        ).scalar_one_or_none()
+        if existing:
+            return existing
+        candidate = Candidate(
+            election_id=str(election.id),
+            name=name,
+            position=position,
+            is_write_in=False,
+            accepted=True,
+            display_order=APPROVAL_OPTION_NAMES.index(name),
+        )
+        self.db.add(candidate)
+        await self.db.flush()
+        return candidate
+
+    async def get_member_ballot(
+        self,
+        user_id: UUID,
+        election_id: UUID,
+        organization_id: UUID,
+        proxy_authorization_id: Optional[str] = None,
+    ) -> Tuple[Optional[Dict], Optional[str]]:
+        """The ballot a signed-in member votes in the app: every contest
+        the emailed ballot carries (stored items and plain positions), the
+        candidates, and per item whether this voter may vote on it and
+        whether they already have.
+
+        With ``proxy_authorization_id`` it is the delegating member's ballot,
+        read for the proxy holder: their eligibility, their votes so far.
+        """
+        election = await self.get_election(election_id, organization_id)
+        if not election:
+            return None, "Election not found"
+
+        voter_id = user_id
+        proxy: Optional[Dict] = None
+        if proxy_authorization_id:
+            anonymity_error = self._proxy_anonymity_error(election)
+            if anonymity_error:
+                return None, anonymity_error
+            auth, error = self._active_proxy_authorization(
+                election, proxy_authorization_id, user_id
+            )
+            if error:
+                return None, error
+            voter_id = UUID(auth["delegating_user_id"])
+            proxy = {
+                "authorization_id": auth.get("id"),
+                "delegating_user_id": auth.get("delegating_user_id"),
+                "delegating_user_name": auth.get("delegating_user_name"),
+            }
+
+        items, position_item_ids = effective_ballot_items(election)
+        stored = [i for i in items if i.get("id") not in position_item_ids]
+        votes = await self._get_user_votes(voter_id, election.id, election)
+        statuses = []
+        for item in items:
+            key = item.get("position") or item.get("id")
+            verdict = await self.check_voter_eligibility(
+                voter_id, election_id, organization_id, position=key
+            )
+            aliases = (
+                {key}
+                if item.get("id") in position_item_ids
+                else _dedup_scoped_item_aliases(item, stored)
+            )
+            statuses.append(
+                {
+                    "ballot_item_id": item.get("id"),
+                    "eligible": verdict.is_eligible,
+                    "reason": None if verdict.is_eligible else verdict.reason,
+                    "voted": any(v.position in aliases for v in votes),
+                }
+            )
+
+        candidates = (
+            (
+                await self.db.execute(
+                    select(Candidate)
+                    .where(Candidate.election_id == election.id)
+                    .where(Candidate.accepted.is_(True))
+                    .where(Candidate.merged_into_candidate_id.is_(None))
+                    .order_by(Candidate.position, Candidate.display_order)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        return {
+            "election": election,
+            "ballot_items": items,
+            "candidates": list(candidates),
+            "items": statuses,
+            "proxy": proxy,
+        }, None
+
+    async def submit_member_ballot(
+        self,
+        user_id: UUID,
+        election_id: UUID,
+        organization_id: UUID,
+        votes: List[Dict],
+        proxy_authorization_id: Optional[str] = None,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None,
+    ) -> Tuple[Optional[Dict], Optional[str]]:
+        """Record a signed-in member's ballot — the emailed ballot's
+        submission shape, one entry per ballot item — atomically.
+
+        Each selection becomes the same vote the single-vote route records:
+        it goes through ``cast_vote`` (or ``cast_proxy_vote`` for a proxy
+        ballot) with ``commit=False``, so eligibility, the frozen roll,
+        per-item rules, limits, the dedup hash, the signature, the chain and
+        the anonymity of the audit row are exactly those of every other
+        in-app vote, and one refused selection rolls back the whole ballot.
+        Unlike the emailed link the in-app ballot is not single-use: an item
+        left on Abstain stays open to vote on later.
+        """
+        election = (
+            await self.db.execute(
+                select(Election)
+                .where(Election.id == str(election_id))
+                .where(Election.organization_id == str(organization_id))
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if not election:
+            return None, "Election not found"
+        if proxy_authorization_id:
+            anonymity_error = self._proxy_anonymity_error(election)
+            if anonymity_error:
+                return None, anonymity_error
+
+        items, position_item_ids = effective_ballot_items(election)
+        item_map = {item.get("id"): item for item in items}
+        if any(v.get("ballot_item_id") not in item_map for v in votes):
+            return None, (
+                "This ballot is out of date — it names items that are no "
+                "longer on the election. Reload the ballot and try again."
+            )
+
+        candidate_map = {
+            str(c.id): c
+            for c in (
+                await self.db.execute(
+                    select(Candidate)
+                    .where(Candidate.election_id == election.id)
+                    .where(Candidate.accepted.is_(True))
+                )
+            )
+            .scalars()
+            .all()
+        }
+
+        selections: List[Tuple[str, str, Optional[int]]] = []
+        abstentions = 0
+        for vote_data in votes:
+            item_id = vote_data.get("ballot_item_id")
+            item = item_map[item_id]
+            title = item.get("title") or item_id
+            choice = vote_data.get("choice")
+            candidate_ids = vote_data.get("candidate_ids")
+            rankings = vote_data.get("rankings")
+            if choice == "abstain" or (
+                choice is None and not candidate_ids and not rankings
+            ):
+                abstentions += 1
+                continue
+
+            is_position_item = item_id in position_item_ids
+            key = item.get("position") or item_id
+            aliases = ballot_item_candidate_positions(item)
+            method = _effective_voting_method(
+                election, None if is_position_item else item
+            )
+
+            def _valid(cid: str) -> bool:
+                candidate = candidate_map.get(cid)
+                return candidate is not None and candidate.position in aliases
+
+            if rankings is not None:
+                if method != "ranked_choice":
+                    return None, f"Ranked votes are not accepted for: {title}"
+                if not all(_valid(cid) for cid in rankings):
+                    return None, f"Invalid candidate selection for: {title}"
+                selections += [
+                    (title, cid, rank) for rank, cid in enumerate(rankings, start=1)
+                ]
+            elif candidate_ids is not None:
+                cap = election.max_votes_per_position or 1
+                if method != "approval" and cap <= 1:
+                    return None, f"Multiple selections are not accepted for: {title}"
+                if method != "approval" and len(candidate_ids) > cap:
+                    return None, f"Too many selections for: {title} (max {cap})"
+                if not all(_valid(cid) for cid in candidate_ids):
+                    return None, f"Invalid candidate selection for: {title}"
+                selections += [(title, cid, None) for cid in candidate_ids]
+            elif choice in ("approve", "deny"):
+                if is_position_item or item.get("vote_type") != "approval":
+                    return None, f"Approve and Deny are not choices for: {title}"
+                option = await self._get_or_create_approval_option(
+                    election, key, "Approve" if choice == "approve" else "Deny"
+                )
+                selections.append((title, str(option.id), None))
+            elif choice == "write_in":
+                name = (vote_data.get("write_in_name") or "").strip()
+                if not election.allow_write_ins:
+                    return None, f"Write-in votes are not allowed for: {title}"
+                if not name:
+                    return None, f"Write-in name is required for: {title}"
+                write_in = Candidate(
+                    election_id=election.id,
+                    name=name,
+                    position=key,
+                    is_write_in=True,
+                    accepted=True,
+                    display_order=999,
+                )
+                self.db.add(write_in)
+                await self.db.flush()
+                selections.append((title, str(write_in.id), None))
+            else:
+                if not _valid(str(choice)):
+                    return None, f"Invalid candidate selection for: {title}"
+                # A single pick on a ranked race is its first choice.
+                rank = 1 if method == "ranked_choice" else None
+                selections.append((title, str(choice), rank))
+
+        if not selections:
+            return None, "Make a selection on at least one item to cast a vote"
+
+        recorded: List[Vote] = []
+        for title, candidate_id, rank in selections:
+            if proxy_authorization_id:
+                vote, error = await self.cast_proxy_vote(
+                    proxy_user_id=user_id,
+                    election_id=election_id,
+                    candidate_id=UUID(candidate_id),
+                    proxy_authorization_id=proxy_authorization_id,
+                    position=None,
+                    organization_id=organization_id,
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                    vote_rank=rank,
+                    commit=False,
+                )
+            else:
+                vote, error = await self.cast_vote(
+                    user_id=user_id,
+                    election_id=election_id,
+                    candidate_id=UUID(candidate_id),
+                    position=None,
+                    organization_id=organization_id,
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                    vote_rank=rank,
+                    commit=False,
+                )
+            if error:
+                await self.db.rollback()
+                return None, f"{title}: {error} — no votes were recorded"
+            recorded.append(vote)
+
+        await self.db.commit()
+        return {
+            "success": True,
+            "votes_cast": len(recorded),
+            "abstentions": abstentions,
+            "message": (
+                f"Ballot recorded. {len(recorded)} vote(s) cast, "
+                f"{abstentions} item(s) left open."
+            ),
+            "receipt_hashes": [v.receipt_hash for v in recorded],
         }, None
 
     # ------------------------------------------------------------------

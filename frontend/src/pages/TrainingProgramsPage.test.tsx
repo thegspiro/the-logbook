@@ -16,6 +16,8 @@ const mockGetCategories = vi.fn();
 const mockGetCourses = vi.fn();
 const mockUpdateRequirement = vi.fn();
 const mockCreateRequirement = vi.fn();
+const mockPreviewProgramImport = vi.fn();
+const mockImportProgram = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingProgramService: {
@@ -26,6 +28,8 @@ vi.mock('../services/api', () => ({
     instantiateSampleTemplate: (...args: unknown[]) => mockInstantiateSampleTemplate(...args) as unknown,
     importRegistry: (...args: unknown[]) => mockImportRegistry(...args) as unknown,
     previewRegistry: (...args: unknown[]) => mockPreviewRegistry(...args) as unknown,
+    previewProgramImport: (...args: unknown[]) => mockPreviewProgramImport(...args) as unknown,
+    importProgram: (...args: unknown[]) => mockImportProgram(...args) as unknown,
   },
   trainingService: {
     getCategories: (...args: unknown[]) => mockGetCategories(...args) as unknown,
@@ -89,6 +93,8 @@ const serviceMocks = [
   mockGetCourses,
   mockUpdateRequirement,
   mockCreateRequirement,
+  mockPreviewProgramImport,
+  mockImportProgram,
 ];
 
 describe('TrainingProgramsPage', () => {
@@ -528,5 +534,89 @@ describe('TrainingProgramsPage', () => {
     expect(await screen.findByText('No programs yet')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /Create Your First Pipeline/i }));
     expect(mockNavigate).toHaveBeenCalledWith('/training/programs/new');
+  });
+  describe('importing a program file', () => {
+    const programFile = { program: { name: 'Recruit School' }, phases: [] };
+    const summary = {
+      program_name: 'Recruit School',
+      structure_type: 'phases',
+      phase_count: 2,
+      phases: [
+        { phase_number: 1, name: 'Foundations', requirement_count: 2, milestone_count: 1 },
+        { phase_number: 2, name: 'Live Fire', requirement_count: 1, milestone_count: 0 },
+      ],
+      program_requirement_count: 0,
+      milestone_count: 1,
+      requirements_created: ['New Skill Sheet'],
+      requirements_reused: ['Existing CPR'],
+    };
+
+    beforeEach(() => {
+      mockHasPermission = true;
+      mockPreviewProgramImport.mockReset();
+      mockPreviewProgramImport.mockResolvedValue({ success: true, dry_run: true, summary });
+      mockImportProgram.mockReset();
+      mockImportProgram.mockResolvedValue({
+        success: true,
+        dry_run: false,
+        program_id: 'prog-new',
+        program_name: 'Recruit School',
+        summary,
+        message: "Program 'Recruit School' imported successfully",
+      });
+    });
+
+    const chooseFile = async (contents: string) => {
+      renderWithRouter(<TrainingProgramsPage />);
+      await screen.findByText('Probationary Firefighter');
+      const input = screen.getByLabelText('Import pipeline JSON file');
+      await userEvent.upload(input, new File([contents], 'program.json', { type: 'application/json' }));
+    };
+
+    it('previews the file and imports nothing until the officer confirms', async () => {
+      await chooseFile(JSON.stringify(programFile));
+
+      const dialog = await screen.findByRole('dialog');
+      expect(mockPreviewProgramImport).toHaveBeenCalledWith(programFile);
+      expect(mockImportProgram).not.toHaveBeenCalled();
+      const preview = within(dialog).getByTestId('program-import-summary');
+      expect(within(preview).getByText('Recruit School')).toBeInTheDocument();
+      expect(within(preview).getByText(/Phase 1: Foundations/)).toBeInTheDocument();
+      expect(within(preview).getByText('New Skill Sheet')).toBeInTheDocument();
+      expect(within(preview).getByText('Existing CPR')).toBeInTheDocument();
+
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Confirm Import' }));
+
+      await waitFor(() => expect(mockImportProgram).toHaveBeenCalledWith(programFile));
+      expect(toast.success).toHaveBeenCalledWith("Program 'Recruit School' imported successfully");
+    });
+
+    it('imports nothing when the preview is cancelled', async () => {
+      await chooseFile(JSON.stringify(programFile));
+
+      const dialog = await screen.findByRole('dialog');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(mockImportProgram).not.toHaveBeenCalled();
+    });
+
+    it('reports a file the preview rejects without opening the confirmation', async () => {
+      mockPreviewProgramImport.mockRejectedValue(new Error("Invalid structure_type 'bogus' in imported program"));
+      await chooseFile(JSON.stringify(programFile));
+
+      await waitFor(() =>
+        expect(toast.error).toHaveBeenCalledWith("Invalid structure_type 'bogus' in imported program")
+      );
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(mockImportProgram).not.toHaveBeenCalled();
+    });
+
+    it('rejects a file that is not JSON before calling the server', async () => {
+      await chooseFile('not json');
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalled());
+      expect(mockPreviewProgramImport).not.toHaveBeenCalled();
+    });
   });
 });

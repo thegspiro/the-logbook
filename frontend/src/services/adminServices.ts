@@ -745,6 +745,46 @@ export interface NotificationsSummary {
   notifications_sent_this_month: number;
 }
 
+/** Qualifications entered directly on a member's record (QUAL-1). */
+export const memberQualificationService = {
+  async list(userId: string): Promise<import('../types/user').MemberQualification[]> {
+    const response = await api.get<import('../types/user').MemberQualification[]>(`/users/${userId}/qualifications`);
+    return response.data;
+  },
+
+  /** Records or corrects one qualification; resolves with the member's updated list. */
+  async save(
+    userId: string,
+    code: string,
+    data: import('../types/user').MemberQualificationSave
+  ): Promise<import('../types/user').MemberQualification[]> {
+    const response = await api.put<import('../types/user').MemberQualification[]>(
+      `/users/${userId}/qualifications/${encodeURIComponent(code)}`,
+      data
+    );
+    return response.data;
+  },
+
+  async remove(userId: string, code: string): Promise<import('../types/user').MemberQualification[]> {
+    const response = await api.delete<import('../types/user').MemberQualification[]>(
+      `/users/${userId}/qualifications/${encodeURIComponent(code)}`
+    );
+    return response.data;
+  },
+
+  /** Checks a CSV (dryRun) or writes the rows that pass. */
+  async importCsv(file: File, dryRun: boolean): Promise<import('../types/user').QualificationImportResult> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post<import('../types/user').QualificationImportResult>(
+      '/users/qualifications/import',
+      formData,
+      { params: { dry_run: dryRun }, headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return response.data;
+  },
+};
+
 export const memberStatusService = {
   async changeStatus(
     userId: string,
@@ -794,15 +834,20 @@ export const memberStatusService = {
     return response.data;
   },
 
-  async getOverduePropertyReturns(): Promise<{ members: import('../types/user').OverdueMember[] }> {
-    const response = await api.get<{ members: import('../types/user').OverdueMember[] }>(
+  async getOverduePropertyReturns(): Promise<{
+    overdue_count: number;
+    members: import('../types/user').OverdueMember[];
+  }> {
+    const response = await api.get<{ overdue_count: number; members: import('../types/user').OverdueMember[] }>(
       '/users/property-return-reminders/overdue'
     );
-    return response.data;
+    return { ...response.data, members: asArray(response.data?.members) };
   },
 
-  async processPropertyReturnReminders(): Promise<Record<string, unknown>> {
-    const response = await api.post<Record<string, unknown>>('/users/property-return-reminders/process');
+  async processPropertyReturnReminders(): Promise<{ reminders_sent: number; dropped_members_checked: number }> {
+    const response = await api.post<{ reminders_sent: number; dropped_members_checked: number }>(
+      '/users/property-return-reminders/process'
+    );
     return response.data;
   },
 
@@ -862,13 +907,15 @@ export const memberStatusService = {
     return response.data;
   },
 
+  // An update payload: an omitted key is left alone, an explicit null clears
+  // (Pitfall #1) — a permanent leave sends `end_date: null`.
   async updateLeaveOfAbsence(
     leaveId: string,
     data: {
       leave_type?: string;
-      reason?: string;
+      reason?: string | null;
       start_date?: string;
-      end_date?: string;
+      end_date?: string | null;
       active?: boolean;
       exempt_from_training_waiver?: boolean;
     }

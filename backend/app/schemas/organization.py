@@ -1282,6 +1282,31 @@ class ApparatusSettingsUpdate(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+class AdminHoursSettingsUpdate(BaseModel):
+    """Administrative hours review rules; read by app/utils/admin_hours_settings.py."""
+
+    allow_self_approval: Optional[bool] = Field(
+        None,
+        description=(
+            "Let an approver approve their own entries — for a department with "
+            "a single admin_hours.manage holder. Absent reads as off."
+        ),
+    )
+    resync_requeue_growth_percent: Optional[int] = Field(
+        None,
+        ge=0,
+        le=1000,
+        description=(
+            "Return an approved event-attendance entry to Pending Review when a "
+            "reopened event's correction grows it by more than this percentage "
+            "(and its category would not auto-approve the new length). "
+            "Absent reads as 25."
+        ),
+    )
+
+    model_config = ConfigDict(extra="allow")
+
+
 class OrganizationSettingsUpdate(BaseModel):
     """Schema for updating organization settings"""
 
@@ -1301,6 +1326,7 @@ class OrganizationSettingsUpdate(BaseModel):
     appearance: Optional[AppearanceSettings] = None
     inventory: Optional[InventorySettingsUpdate] = None
     apparatus: Optional[ApparatusSettingsUpdate] = None
+    admin_hours: Optional[AdminHoursSettingsUpdate] = None
 
     # Allow additional settings
     model_config = ConfigDict(extra="allow")

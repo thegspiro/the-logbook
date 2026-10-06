@@ -64,6 +64,7 @@ Entry[n].hash = HMAC-SHA256(signing_key, Entry[n].data + Entry[n-1].hash)
 1. Each entry's hash incorporates the previous entry's hash
 2. Modifying any entry invalidates all subsequent hashes
 3. The hash is **keyed** with the audit signing key (`AUDIT_LOG_SIGNING_KEY`, falling back to `SECRET_KEY`), so forging a valid chain requires the key, not just DB write access. Rows written before this upgrade are verified under the legacy unkeyed SHA-256 scheme, and a no-downgrade guard rejects a later unkeyed row after any keyed row
+   - Each row records `signing_key_id`, a short fingerprint of the key that signed it (never the key), and is verified only against that key. Rows signed with `SECRET_KEY` before a dedicated `AUDIT_LOG_SIGNING_KEY` took effect — including installs whose `.env` key never reached the container before 2026-10-06 — keep verifying, but only up to the first row signed with the dedicated key; a `SECRET_KEY` row after that is reported as tampered. Each verification run logs one `WARNING` when it used `SECRET_KEY`. Ballots (`VOTE_SIGNING_KEY`) follow the same rule. See `docs/KNOWN_LIMITATIONS.md` for what the bound does not cover
 4. Periodic checkpoints create verified anchors in the chain
 5. The chain is verified on demand via API
 

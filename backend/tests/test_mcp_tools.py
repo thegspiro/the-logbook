@@ -3420,6 +3420,8 @@ class TestTwentySixthRoundFindings:
                 "last_screening_date": "2026-01-01",
                 "expiration_date": "2027-01-01",
                 "days_until_expiration": 120,
+                # Who recorded it (MS-7), not what it found.
+                "self_recorded": False,
             }
         ]
         assert "waived" not in json.dumps(body)
@@ -4584,6 +4586,19 @@ class TestThirtiethRoundFindings:
                 hours_completed=3.0,
             )
         )
+        # The SHIFTS requirements count shifts worked, not training records
+        # (shifts-three-sources): one finalized shift today meets them.
+        from app.models.training import Shift, ShiftAttendance
+
+        shift = Shift(
+            organization_id=org_id,
+            shift_date=date.today(),
+            start_time=datetime.now(timezone.utc),
+            is_finalized=True,
+        )
+        db_session.add(shift)
+        await db_session.flush()
+        db_session.add(ShiftAttendance(shift_id=shift.id, user_id=member_id))
         await db_session.flush()
         service = TrainingService(db_session)
         original_execute = db_session.execute
@@ -4607,9 +4622,10 @@ class TestThirtiethRoundFindings:
         # The waivers and the member's completed records are read once for
         # the page, however many requirements are on it.
         assert len(statements) == short_page
-        # Waivers, the preload, and the org's timezone for "today" — still a
-        # fixed count, whatever the page size.
-        assert short_page <= 4
+        # Waivers, the preload, the org's timezone for "today", and the
+        # member's shifts worked (attendance and external) — still a fixed
+        # count, whatever the page size.
+        assert short_page <= 6
         # The preload carries only the columns the checks read, and stops
         # at the earliest window on the page: these are annual
         # requirements, so records older than a year are not loaded.

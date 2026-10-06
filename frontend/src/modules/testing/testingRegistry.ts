@@ -355,6 +355,8 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/training/skills-testing/test/new', label: 'Start a skill test', module: 'training' },
       { path: '/training/skills-testing/test/:testId', label: 'Skill test', module: 'training' },
       { path: '/training/skills-testing/test/:testId/active', label: 'Active skill test', module: 'training' },
+      { path: '/training/knowledge-tests', label: 'Knowledge tests', module: 'training' },
+      { path: '/training/knowledge-tests/attempts/:attemptId', label: 'Knowledge test attempt', module: 'training' },
       {
         path: '/training/skills-testing/templates/new',
         label: 'New skill template',
@@ -1077,12 +1079,26 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       },
       { path: '/integrations', label: 'Integrations', permission: 'settings.manage', module: 'integrations' },
       {
+        path: '/integrations/:integrationId',
+        label: 'Integration detail',
+        permission: 'settings.manage',
+        module: 'integrations',
+      },
+      {
+        path: '/claude/authorize',
+        label: 'Connect Claude (consent)',
+        module: 'integrations',
+        note: 'Reached from an MCP client through /api/oauth/authorize?…, which sets ?request=',
+      },
+      { path: '/claude/connections', label: 'My Claude connections', module: 'integrations' },
+      {
         path: '/admin/public-portal',
         label: 'Public portal administration',
         permission: 'settings.manage',
         module: 'public_info',
       },
       { path: '/admin/audit-log', label: 'Audit log', permission: 'audit.view' },
+      { path: '/admin/security-alerts', label: 'Security alerts', permission: 'audit.view' },
       { path: '/admin/errors', label: 'Error monitoring', permission: 'settings.manage' },
       {
         path: '/ip-security',

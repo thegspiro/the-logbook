@@ -431,7 +431,7 @@ class ShiftEligibilityService:
         if shift:
             shift_positions = set(self._shift_position_list(shift))
             if shift_positions:
-                eligible = eligible & shift_positions
+                eligible = self._seats_granted(eligible, shift_positions)
 
         return sorted(eligible)
 
@@ -537,7 +537,7 @@ class ShiftEligibilityService:
             eligible.update(quals_by_date.get(self._shift_date(shift, org), set()))
             shift_positions = set(self._shift_position_list(shift))
             if shift_positions:
-                eligible &= shift_positions
+                eligible = self._seats_granted(eligible, shift_positions)
             answers[str(shift_id)] = sorted(eligible)
         return answers
 
@@ -815,6 +815,19 @@ class ShiftEligibilityService:
                 if pos:
                     result.append(pos)
         return result
+
+    @staticmethod
+    def _seats_granted(granted: Set[str], shift_positions: Set[str]) -> Set[str]:
+        """The shift's seats that ``granted`` covers, in the shift's spelling.
+
+        Case-insensitive, matching how the signup path compares a seat. Built-in
+        seats are lowercase on both sides, so for them this is the plain
+        intersection. A department's own seat is stored verbatim, and a rank
+        granting ``rescue_tech`` must cover a template seat someone typed as
+        ``Rescue_Tech`` — the two are one seat everywhere else.
+        """
+        folded = {str(seat).casefold() for seat in granted}
+        return {seat for seat in shift_positions if str(seat).casefold() in folded}
 
     def _administrative_shift_positions(self, shift: Shift) -> List[str]:
         """Return only positions explicitly opened to administrative members."""

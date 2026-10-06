@@ -1527,14 +1527,14 @@ class ReportsService:
             "period_start": str(period_start),
             "period_end": str(period_end),
             "source": "call_counts",
-            # Until a closing officer can say "we were on that one too", each
-            # unit reports its own tour independently and nothing links two
-            # units to one incident. So this figure counts *unit responses*:
-            # an MVA that an engine and a medic both ran appears as two. The
-            # flag travels with the data so a report cannot silently present
-            # it as a deduplicated incident count — the number is truthful
-            # under one name and overstated under the other.
-            "counts_unit_responses": True,
+            # False since the close-out wizard's shared-call picker (SCHED-10):
+            # a closing officer now says "we were on that one too" by ticking
+            # the call another unit logged, and the incident is one OrgCall
+            # with two responses — so this is the department's incident count.
+            # It was True while nothing could link two units to one incident
+            # and the same MVA appeared once per unit; the renderer still
+            # labels the figure "Unit Responses" for any client that sets it.
+            "counts_unit_responses": False,
             "summary": {
                 "total_calls": total_calls,
                 "avg_calls_per_day": round(total_calls / num_days, 1),

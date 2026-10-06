@@ -55,6 +55,7 @@ Not driven: adding a member **without** a password. Email is off in the review i
 **Why removed:** a control wired to nothing lets an officer believe a member is on leave when the system says otherwise (CLAUDE.md pitfall 19). Removing it loses nothing, since nothing was ever stored.
 **Why flagged:** whether a member can be _created_ inactive or on leave, and whether preferred contact is recorded at all, needs a decision. Either means a new field on the create endpoint, and preferred contact also a new column. Mirrored to `docs/KNOWN_LIMITATIONS.md`.
 **Test:** `AddMember.test.tsx`.
+**Owner decision (2026-10-05) — fixed:** add status to the create endpoint as a new optional field. `AdminUserCreate.status` accepts `active` (the default), `inactive` or `leave`; statuses that end or suspend membership are refused, since the status change is what records them. Add Member offers those three again and sends the choice. Preferred contact stays unrecorded. Tests: `test_add_member_initial_status.py`, `AddMember.test.tsx`.
 
 ### W08-2 — MED — A second member whose email shared a local part could not be added — ✅ FIXED
 

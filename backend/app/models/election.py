@@ -176,6 +176,10 @@ class Election(Base):
     anonymous_voting = Column(Boolean, nullable=False, default=True)
     allow_write_ins = Column(Boolean, nullable=False, default=False)
     max_votes_per_position = Column(Integer, nullable=False, default=1)
+    # How many candidates each race elects (W50-11). max_votes_per_position
+    # is only how many a voter may pick; without a seat count the tally
+    # declared one winner in a "(2 seats)" board race.
+    seats_per_position = Column(Integer, nullable=False, default=1, server_default="1")
     results_visible_immediately = Column(Boolean, nullable=False, default=False)
     eligible_voters = Column(JSON, nullable=True)  # List of user IDs or role slugs
 
@@ -272,6 +276,14 @@ class Election(Base):
 
     # Sequential vote chain hash — last hash in the chain for integrity verification
     last_chain_hash = Column(String(64), nullable=True)
+
+    # Changes to the result after it was certified at close — a voided
+    # vote, a voided paper batch, merged write-ins — each one stamped
+    # [{"at", "by", "by_name", "action", "detail"}] and printed as "Results
+    # revised <when> by <who>" on the certified PDF and the Results tab
+    # (W50-9). Cleared when a rollback reopens the election, like closed_at:
+    # the eventual re-close certifies afresh.
+    results_revisions = Column(JSON, nullable=True)
 
     # Rollback audit trail
     rollback_history = Column(JSON, nullable=True)
@@ -503,6 +515,12 @@ class Vote(Base):
     # Cryptographic signature for tampering detection
     # HMAC-SHA256(id:election_id:candidate_id:voter_hash:position:vote_rank:is_proxy:proxy_delegating:voted_at)
     vote_signature = Column(String(128), nullable=True)
+    # Fingerprint of the key that produced vote_signature
+    # (vote_signing_key_id), never the key itself. NULL on votes cast before
+    # it was recorded: those verify against VOTE_SIGNING_KEY, else SECRET_KEY,
+    # and SECRET_KEY only up to the election's first vote that records the
+    # dedicated key (ElectionService.verify_vote_integrity).
+    signing_key_id = Column(String(16), nullable=True)
 
     # MySQL-compatible dedup hash — SHA256(election_id:voter_id_or_hash:position)
     # Unique constraint on this column prevents double-voting at DB level.

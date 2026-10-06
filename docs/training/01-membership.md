@@ -38,10 +38,10 @@ assignments, and the Membership Coordinator rename.
 
 Navigate to **Members** in the sidebar to view your department roster.
 
-The directory lists every member on the roster, whatever their status, with their name, **rank**, membership number and status, plus contact details where your department's contact-visibility setting allows. Officers with `members.manage` also see username, hire date and row actions. You can:
+The directory lists the members on the roster with their name, **rank**, membership number and status, plus contact details where your department's contact-visibility setting allows. Officers with `members.manage` also see username, hire date and row actions. You can:
 
 - **Search** by name or membership number, and by email when any email is visible to you (officers can also search by username). The box only promises an email search when your department shows you at least one email address
-- **Filter** by status (All Statuses, Active, Inactive, On Leave, Retired; officers with `members.manage` also get **Archived**)
+- **Filter** by status (All Statuses, Active, Inactive, On Leave, Retired; officers with `members.manage` also get **Archived**). A member's directory opens on **Active**; an officer's on **All Statuses**
 - **Click** any member to view their full profile
 
 > **Rank is a column now** _(2026-09-30)_. The directory used to show only name,
@@ -53,11 +53,18 @@ The directory lists every member on the roster, whatever their status, with thei
 > column of dashes. Officers always see it, because they are the ones who fill
 > it in.
 >
-> **"All Statuses" includes archived members for everyone.** Only officers get
-> the **Archived** filter, but an archived member is still listed under the
-> default filter, with an Archived badge, to every member. Whether former
-> members should appear to members at all is an open policy question — see
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md) (workflow review W15-4).
+> **Former members are not in a member's directory** _(2026-10-05)_. A member
+> without `members.manage` no longer sees archived (departed) members at all,
+> and their directory opens on **Active**; choose **All Statuses** to include
+> inactive, on-leave and retired members. Officers with `members.manage` still
+> open on the whole roster, archived members included, and keep the
+> **Archived** filter (workflow review W15-4).
+
+> **What the directory hides is not sent either** _(2026-10-05)_. A member
+> without `members.manage` now loads the directory from its own, narrower
+> source, which carries only what the directory shows — no usernames, hire
+> dates, stations or platoons. The page looks the same; the difference is that
+> those fields no longer travel to a member's browser from this screen.
 
 ![Member directory listing members with their status and contact columns](./images/01-01-member-directory.png)
 
@@ -117,6 +124,7 @@ displaying their card.
 - **Emergency Contacts** - Emergency contact list. **Visible only to leadership (`members.manage`) and to the member themselves** — the section is hidden entirely for everyone else, and no setting publishes it. Date of birth is restricted the same way
 - **Membership** - Rank, member type, station, platoon and "Member since"; officers also see the status here
 - **Service History** - Credited and prior length of service, stint by stint. Shown only to the member and to `members.manage` holders (see [Former Members Who Rejoin](#former-members-who-rejoin-2026-09-24))
+- **Qualifications** - What the member is certified to do (EMT, Paramedic, Driver / Operator, Firefighter I/II), each marked **In force** or **Not in force** as shift eligibility reads it today, and whether it came **from a training record** or was **entered directly**. Shown only to `members.manage` holders, who can add, edit and remove entries here (see [Entering Qualifications Directly](#entering-qualifications-directly-2026-10-06))
 - **Quick Stats** - Training, hours and equipment counts the viewer is allowed to see
 - **Leave of Absence** - Any active leave periods. Shown only to the member themselves and to `members.manage` holders, the same rule the leave endpoint applies _(2026-09-28 — a colleague's profile used to ask for them anyway and get two refusals)_
 
@@ -222,8 +230,8 @@ Navigate to **Administration > Members > Member Management**, then click the **A
 **[SCREENSHOT — REPLACE `01-05-add-member-form.png`.** Four visible changes
 since the frame was taken: one **Membership Number** field whose hint reads
 "Leave blank to assign … automatically" (the separate Membership ID override box
-is gone); the **Status** and **Preferred Contact** controls are gone from
-Department Information; **Rank** and **Position** each carry a help line under
+is gone); **Preferred Contact** is gone from Department Information and
+**Status** offers Active, Inactive and On Leave; **Rank** and **Position** each carry a help line under
 the dropdown; and with **Set initial password** ticked, a password-rules
 checklist sits under the two password fields. Shoot on a department with
 auto-numbering on, so the hint shows a real next number.**]**
@@ -246,13 +254,12 @@ default permissions of its own." **Position** is "the job they hold here, such
 as Secretary or Training Officer. Positions decide most of what they can see and
 do in The Logbook."
 
-> **Status and Preferred Contact are no longer on the form** _(2026-09-28)_. Both
-> were offered and neither was ever sent: the create endpoint has no field for
-> either, so a member added as "On Leave" was created Active. A new member is
-> always created Active; change their status afterwards from their profile.
-> Whether a member can be created inactive, and whether a preferred contact
-> method should be recorded at all, is open in
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md) (workflow review W08-1).
+> **Status is back on the form, and it is saved** _(2026-10-05)_. **Status**
+> under Department Information offers **Active** (the default), **Inactive**
+> and **On Leave**, and the member is created with the one you pick. Retired
+> and dropped are not offered: set those from the member's profile once they
+> are added, so their service history is recorded. **Preferred Contact** stays
+> off the form — the department records no such field (workflow review W08-1).
 
 #### The Membership Number on Add Member _(2026-09-29)_
 
@@ -1035,18 +1042,53 @@ starts empty. A department that recorded somebody as an EMT _rank_ has said
 where they sit, not which card they hold or when it expires — and inventing an
 expiry date would be worse than having none.
 
-> **Qualifications are recorded through courses, not entered directly.** Set
-> **Certifies** on a course in the Course Library, and recording a member's
-> completion of that course creates or renews the qualification. There is **no
-> panel for entering, editing or expiring one on its own** — so a card a member
-> has held for years needs a training record to match, an incorrect expiry is
-> corrected by **editing the training record that produced it** — never by
-> filing a second completion, which would invent training history that never
-> happened — and setting **Certifies** on a
-> course does **not** backfill records already filed against it.
->
+Qualifications arrive two ways. Set **Certifies** on a course in the Course
+Library, and recording a member's completion of that course creates or renews
+the qualification; or enter it directly, on the member's profile or by CSV
+(below). Setting **Certifies** on a course does **not** backfill records already
+filed against it — enter those directly instead.
+
 > Because shift eligibility reads the expiry **as of the shift date**, a stale
 > or missing qualification decides who may be rostered — it is not cosmetic.
+
+### Entering Qualifications Directly _(2026-10-06)_
+
+**Required Permission:** `members.manage`
+
+A licence a member held before your department used The Logbook — a decade-old
+Paramedic card, a county Driver / Operator certificate — is entered directly,
+without inventing a training record to match it.
+
+**On the member's profile:** the **Qualifications** card lists what the member
+holds. **Add** picks a qualification and takes an optional granted date, expiry
+date (leave it blank if it does not expire) and notes. The pencil corrects the
+dates; the bin removes the qualification after you confirm. Each entry shows
+whether the scheduler counts it **today** — a lapsed card, or one granted with a
+future start date, reads **Not in force**.
+
+**From a CSV file:** **Members > Administration > Import Qualifications**. The
+file needs a `membership_number` or `email` column to find each member, a
+`qualification` column (the code, such as `emt`, or the name, such as
+`Driver / Operator`), and optionally `granted_on`, `expires_on` (YYYY-MM-DD, or
+MM/DD/YYYY) and `notes`. **Download template** gives a starting file.
+
+1. Choose the file. It is **checked first and nothing is written**: the screen
+   lists the rows ready to import and every rejected row by its spreadsheet line
+   with the reason — a member number or email that matches nobody in your
+   department, an unknown qualification, a date that is not a date, an expiry
+   before the grant date, or a second row for the same member and qualification.
+2. Click **Import N rows** to write the rows that passed. Fix the rejected rows
+   in the file and import it again; rows already imported are simply updated.
+
+A member who already holds the qualification has its dates replaced by the
+file's.
+
+**Direct entries and training records.** A qualification granted by a training
+record is removed again if every record supporting it is later voided. One you
+entered directly is yours: voiding a record does not remove it. Editing a
+record-derived qualification on the profile turns it into a direct entry, and
+the panel says so before you save. Filing a later completion of a certifying
+course still renews the dates from that record.
 
 ---
 
@@ -1098,6 +1140,18 @@ happen automatically — the dialog has no per-change options for them.
 > the drop note above, and — when bringing a member back — the earlier-service
 > choice.
 
+**Undo a drop made by mistake** _(2026-10-05)_. For a week after a member is
+dropped, their profile shows **Dropped by mistake? You can undo this drop
+until …** under Status, with **Restore as** (Active, Probationary, Inactive or
+On Leave), an optional reason and **Undo drop**. Undoing puts the member back
+and reopens the service stint the drop closed, so their length of service runs
+on as if the drop had not happened — no gap and no second stint. It works on
+the day of the drop, when a rejoin cannot (a return date must fall after the
+last day of service). The property return report and any departure clearance
+the drop created are left for the quartermaster to close. After the week, or
+for a member who really left and has come back, change their status instead,
+which records the rejoin (workflow review W15-3).
+
 ![The Change Member Status dialog with a drop status selected and its property-return note](./images/01-29-status-change-modal.png)
 
 > **Screenshot needed:**
@@ -1148,18 +1202,21 @@ most one reminder — the latest mark they have passed — so a member first
 picked up at day 100 receives the 90-day reminder only, never a late 30-day
 one. A reminder already sent is never repeated.
 
-> **Hint:** Overdue property returns are tracked by the API
-> (`GET /users/property-return-reminders/overdue`) but **have no screen** as of
-> 2026-09-24. The Inventory module's members page shows an "Overdue Returns"
-> figure, which counts inventory checkouts rather than offboarding property, so
-> it is not a substitute. See
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#member-lifecycle--the-page-that-was-documented-but-never-built-2026-08-08).
+**Who still has property** _(2026-10-05)_. **Former members still holding
+property** lists every dropped member with items still out — when they were
+dropped, how many items and their value, and which reminders have gone — on the
+Inventory **Member Equipment** page and on Members Admin → **Member
+Management**, for holders of `members.manage`. Each name opens the member's
+profile. **Send due reminders** runs the same check the daily task makes, after
+asking; a reminder already sent is never repeated, so running it early sends
+nothing twice. (The **Overdue Returns** figure at the top of Member Equipment is
+a different number: inventory checkouts past their due date.)
 
 ---
 
 ## Leave of Absence
 
-**Required Permission:** `members.manage` to view or deactivate a leave.
+**Required Permission:** `members.manage` to view, edit or deactivate a leave.
 Creating one also requires `scheduling.assign`, because a leave cancels the
 member's shift assignments inside it.
 
@@ -1213,15 +1270,12 @@ For rolling-period requirements (e.g., "12 hours of training over 12 months"):
 
 > **Hint:** Deactivating a leave does not delete it -- it becomes inactive and remains in the history, under **All Waivers → Past/Inactive**.
 
-> **⚠️ You cannot edit a leave from any screen** _(verified 2026-09-24)_. You
-> can cancel one with **Deactivate** on the Active Waivers tab, which also
-> deactivates its linked training waiver. Changing a leave's dates is API only:
-> `PATCH /users/leaves-of-absence/{id}` exists, but no screen calls it.
->
-> **Check the dates before you save.** A leave pro-rates the member's hours,
-> shift and call requirements, so a wrong end date quietly changes their
-> compliance. To correct one, deactivate it and create it again. Tracked in
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#member-lifecycle--the-page-that-was-documented-but-never-built-2026-08-08).
+> **Correcting a leave** _(2026-10-05)_. On the **Active Waivers** tab, a leave
+> of absence has **Edit** beside **Deactivate**. It opens the leave's start date,
+> end date (or **Permanent**) and reason; saving corrects the leave in place and
+> keeps its linked training waiver's dates in step. Check the dates: a leave
+> pro-rates the member's hours, shift and call requirements, so a corrected date
+> changes their compliance from the next check.
 
 ### LOA and Training Waiver Auto-Linking
 
@@ -1445,28 +1499,23 @@ fourth is always the count the queue is about — see
 
 Verified against the code on 2026-09-24:
 
-| Operation                                  | Where it is today                                                                   | State                                                                                                                        |
-| ------------------------------------------ | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| **Change a member's status**               | Member profile → status control                                                     | ✅ Full UI (archiving is automatic, not a status choice)                                                                     |
-| **Leave of absence — create**              | [Waiver Management](#waiver-management) (`/members/admin/waivers`)                  | ✅ Works, but it is not where you would look                                                                                 |
-| **Leave of absence — view**                | Member profile (read-only card), and listed on Waiver Management / Training Waivers | ✅ Read-only                                                                                                                 |
-| **Leave of absence — deactivate**          | Waiver Management → Active Waivers → **Deactivate**                                 | ✅ Full UI                                                                                                                   |
-| **Leave of absence — edit**                | —                                                                                   | ❌ API only (`updateLeaveOfAbsence` has no callers)                                                                          |
-| **Archived members — list and reactivate** | Members → status filter **Archived** → **Reactivate**; or the member's profile      | ✅ Full UI (2026-09-24)                                                                                                      |
-| **Overdue property returns**               | —                                                                                   | ❌ API only for _members_. The Inventory module's members page shows an "Overdue Returns" figure, which is a different thing |
-| **Tier configuration**                     | Members Admin → Settings → Membership Tiers                                         | ✅ Full UI (the monthly job advances members; a manual "advance now" is API only)                                            |
+| Operation                                  | Where it is today                                                                   | State                                                                                 |
+| ------------------------------------------ | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| **Change a member's status**               | Member profile → status control                                                     | ✅ Full UI (archiving is automatic, not a status choice)                              |
+| **Leave of absence — create**              | [Waiver Management](#waiver-management) (`/members/admin/waivers`)                  | ✅ Works, but it is not where you would look                                          |
+| **Leave of absence — view**                | Member profile (read-only card), and listed on Waiver Management / Training Waivers | ✅ Read-only                                                                          |
+| **Leave of absence — deactivate**          | Waiver Management → Active Waivers → **Deactivate**                                 | ✅ Full UI                                                                            |
+| **Leave of absence — edit**                | Waiver Management → Active Waivers → **Edit** (dates and reason)                    | ✅ Full UI (2026-10-05)                                                               |
+| **Archived members — list and reactivate** | Members → status filter **Archived** → **Reactivate**; or the member's profile      | ✅ Full UI (2026-09-24)                                                               |
+| **Overdue property returns**               | Inventory → Member Equipment, and Members Admin → Member Management                 | ✅ Full UI (2026-10-05): the list, a link to each profile, and **Send due reminders** |
+| **Tier configuration**                     | Members Admin → Settings → Membership Tiers                                         | ✅ Full UI (the monthly job advances members; a manual "advance now" is API only)     |
 
 **What this means in practice.** An archived member can be reactivated from the
-Members list, and tiers are configured under Settings. A leave of absence cannot
-be edited: if it is entered with the wrong dates, deactivate it from Waiver
-Management and create it again.
-
-> **The remaining gaps are editing a leave of absence and listing overdue
-> property returns for departed members.** Both endpoints exist and are tested;
-> what is missing is the screen. Tracked in
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#member-lifecycle--the-page-that-was-documented-but-never-built-2026-08-08)
-> with the exact API surface, so whoever builds the page does not have to
-> rediscover it.
+Members list, tiers are configured under Settings, a leave of absence is
+corrected with **Edit** beside it on Waiver Management, and former members still
+holding property are listed on the Inventory Member Equipment page and on Member
+Management. The department chose to put each operation where people already
+look rather than build the lifecycle page the old guide described.
 
 ---
 

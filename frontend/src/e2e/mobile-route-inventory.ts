@@ -97,6 +97,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'administration approvals workflow',
   },
   {
+    path: '/admin/security-alerts',
+    source: 'src/modules/admin/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
     path: '/admin-hours',
     source: 'src/modules/admin-hours/routes.tsx',
     coverage: 'ratchet',
@@ -570,6 +576,26 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     source: 'src/modules/integrations/routes.tsx',
     coverage: 'ratchet',
     detail: 'fast route-level mobile presentation ratchet — integrations catalogue',
+  },
+  {
+    path: '/integrations/:integrationId',
+    source: 'src/modules/integrations/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
+    path: '/claude/authorize',
+    source: 'src/modules/integrations/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'OAuth consent screen opened only by the backend redirect with a one-time ?request= id; a single max-w-xl card of checkboxes and two buttons built from the shared form and button utilities',
+  },
+  {
+    path: '/claude/connections',
+    source: 'src/modules/integrations/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      "secondary list of a member's own Claude connections; single-column cards with one shared-utility button each",
   },
   {
     path: '/inventory',
@@ -1557,6 +1583,18 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   },
   {
     path: '/training/skills-testing/test/:testId/active',
+    source: 'src/modules/training/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
+    path: '/training/knowledge-tests',
+    source: 'src/modules/training/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
+    path: '/training/knowledge-tests/attempts/:attemptId',
     source: 'src/modules/training/routes.tsx',
     coverage: 'exempt',
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',

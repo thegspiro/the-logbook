@@ -199,6 +199,19 @@ class ScreeningRecord(Base):
         nullable=True,
     )
     reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    # MS-7 (owner decision 2026-10-05): a medical_screening.manage holder may
+    # record their own screening — in a small department they are often the
+    # only person who can — but the result is marked rather than trusted
+    # silently. True when the record's status was last set by the member it is
+    # about: on create, or by an update that supplies a status. Compliance
+    # still counts it; the compliance views show it as self-recorded.
+    self_recorded = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="0",
+        comment="Status last set by the record's own subject (MS-7).",
+    )
     notes = Column(EncryptedText, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(

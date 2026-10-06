@@ -1900,3 +1900,30 @@ fix from an unrelated commit landed in scope, reviewed above) — the backend
 gate re-confirms nothing regressed, not that new backend code was checked.
 Two frontend files modified (`AllEntriesTab.tsx`, `services/api.ts`) plus one
 new guard test.
+
+## Owner decision (2026-10-05) — both open items closed
+
+The owner chose "add the toggle and re-queue above a threshold" for the two
+items every pass since pass 1 carried as open by design:
+
+- **Per-org SoD toggle.** `Organization.settings["admin_hours"]["allow_self_approval"]`,
+  read by `app/utils/admin_hours_settings.py`. Off unless a literal `true`, so
+  every installation keeps AH-4 on upgrade. `approve_or_reject` and
+  `bulk_approve` skip `assert_different_person` only when it is on. It is
+  written through `PATCH /organization/settings` (`settings.manage` /
+  `organization.update_settings`), deliberately **not** by an
+  `admin_hours.manage` holder alone, since they are the people it relaxes the
+  control on. `GET /admin-hours/settings` reports the resolved values to the
+  new Review Rules tab.
+- **Resync growth re-queue.** `credit_event_attendance(resync=True)` now
+  returns an `APPROVED` attendance entry to `PENDING` (clearing `approved_by`
+  / `approved_at`) when the correction grows it by more than
+  `resync_requeue_growth_percent` of its approved length **and**
+  `_determine_post_clockout_status` would pend the new length. Default **25%**,
+  configurable per department (0–1000; malformed reads as the default rather
+  than failing the resync). Shrinking and small corrections keep the
+  officer's decision, as before.
+
+Tests: `tests/test_admin_hours_review_settings.py` (reader, both approval
+paths, and the re-queue against a real database);
+`ReviewRulesTab.test.tsx`.

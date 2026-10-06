@@ -134,6 +134,127 @@ _is_ the upgrade. Before it:
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
 
+### Every backend setting in `.env` now reaches the container (2026-10-06)
+
+**Review your `.env` before you upgrade.** Until this release the backend's
+`environment:` block in each shipped compose file listed only about a fifth of
+the backend's settings (33 of 170 in `docker-compose.yml`, 44 in
+`unraid/docker-compose-unraid.yml`). Anything else you put in `.env` never
+reached the application: the block is a whitelist, `.env` is not copied into
+the image, and the backend kept its built-in default without a word. The
+shipped files — `docker-compose.yml`, `unraid/docker-compose-unraid.yml` and
+`unraid/docker-compose-build-from-source.yml` — now pass every setting through.
+
+A line in `.env` that has been doing nothing will start doing something on the
+first restart. The groups most likely to carry such a line:
+
+- **Email** — `EMAIL_ENABLED`, `SMTP_*`, `CLOUDFLARE_*`. A stale
+  `EMAIL_ENABLED=true` with old or placeholder SMTP credentials now tries to
+  send, and fails.
+- **Sign-in** — `GOOGLE_*`, `AZURE_AD_*`, `AUTHENTIK_*`, `OAUTH_*`,
+  `SALESFORCE_*`. A provider switched on in `.env` becomes available. A
+  `SALESFORCE_OAUTH_REDIRECT_URI` left at the `.env.example.full` placeholder
+  (`https://your-domain/...`) replaces the address the backend used to derive
+  from the request, and "Connect Salesforce" fails. Set it to your real
+  callback URL or remove the line.
+- **SMS and push** — `TWILIO_*`, `PUSH_ENABLED`, `VAPID_*`.
+- **Password and session policy** — `PASSWORD_*`, `HIPAA_*`,
+  `ACCESS_TOKEN_EXPIRE_MINUTES`, `REFRESH_TOKEN_EXPIRE_DAYS`. These apply from
+  the restart; a stricter password rule binds the next password set. A `.env` copied
+  from `.env.example.full` carries `ACCESS_TOKEN_EXPIRE_MINUTES=480`, which
+  replaces the 30-minute default.
+- **Abuse controls** — `CAPTCHA_*`, `BREACHED_PASSWORD_*`, `MAX_LOGIN_ATTEMPTS`,
+  `ACCOUNT_LOCKOUT_*`, `SUSPICIOUS_IP_*`, `RATE_LIMIT_*`,
+  `PUBLIC_FORM_DAILY_LIMIT`, `GUEST_CHECK_IN_DAILY_LIMIT`.
+- **Geo-blocking** — `GEOIP_*`, `BLOCKED_COUNTRIES`, `IP_LOGGING_ENABLED`.
+  `BLOCKED_COUNTRIES=` (empty) now means "block no countries".
+- **Storage and paths** — `STORAGE_TYPE`, `UPLOAD_DIR`, `MAX_FILE_SIZE`,
+  `MAX_REQUEST_BODY_SIZE`, `AWS_*`, `AZURE_STORAGE_*`, `GCS_*`,
+  `AUDIT_ARCHIVE_DIR`, `GEOIP_DATABASE_PATH`. These are read **inside the
+  container**. A host path left over from a non-Docker install would now send
+  uploads somewhere no volume is mounted, and they would be lost with the
+  container.
+- **Audit shipping and signing keys** — `AUDIT_SHIP_*`,
+  `AUDIT_ALLOW_CHAIN_REHASH`, `ENCRYPTION_KEYS_LEGACY`, `AUDIT_LOG_SIGNING_KEY`,
+  and on the Unraid files `VOTE_SIGNING_KEY`. Read the next paragraph if
+  either signing key is in your `.env`.
+- **Monitoring and startup** — `SENTRY_*`, `LOG_FORMAT`, `DB_ECHO`,
+  `REDIS_REQUIRED`, `SECURITY_BLOCK_INSECURE_DEFAULTS`, `REGISTRATION_ENABLED`.
+
+**A signing key that never arrived signed nothing, and the old records keep
+verifying.** Production startup warns when `AUDIT_LOG_SIGNING_KEY` is unset,
+so many installs added it to `.env` — where it did not reach the backend, and
+every audit row since was signed with the fallback, `SECRET_KEY`. The same
+applies to `VOTE_SIGNING_KEY` and ballots on the Unraid files
+(`docker-compose.yml` already passed that one through). Leave the key in
+`.env`; there is nothing to comment out. Once it arrives:
+
+- New audit rows and ballots are signed with the dedicated key, and each
+  records a short fingerprint of the key that signed it (migration
+  `01f36743137a` adds `signing_key_id` to `audit_logs` and `votes`; it is
+  never the key, nor anything the key can be recovered from).
+- Rows signed before the key arrived still verify: a row with no fingerprint
+  is checked against the dedicated key, then against `SECRET_KEY`. The
+  integrity check logs one `WARNING` per run saying how many it verified with
+  `SECRET_KEY`.
+- `SECRET_KEY` is accepted only for rows written **before the first row signed
+  with the dedicated key** — for ballots, cast no later than the first ballot
+  signed with it. A row after that point signed with `SECRET_KEY` is reported
+  as tampered, as is a row that matches neither key.
+
+Two things follow. **Keep `SECRET_KEY` unchanged** for as long as you need the
+pre-upgrade audit rows and ballots to verify: rotating it makes them read as
+tampered, exactly as rotating the dedicated key would. And an off-host audit
+collector (`AUDIT_SHIP_*`) verifying the shipped batches' HMAC must be given
+the dedicated key, since shipping signs with it from the first restart. To see
+whether a key was reaching the container before the upgrade:
+
+```bash
+docker compose exec backend printenv AUDIT_LOG_SIGNING_KEY VOTE_SIGNING_KEY
+```
+
+A key that printed nothing there but is set in `.env` had never been used,
+and the rows written meanwhile are the ones `SECRET_KEY` now verifies. See
+`docs/KNOWN_LIMITATIONS.md`, "Audit and ballot signing — `SECRET_KEY` still
+verifies rows from before the dedicated key".
+
+**What can stop the boot.** A value that never reached the app was never
+validated either. A typo such as `EMAIL_ENABLED=ture` or `SMTP_PORT=587x`
+now fails settings validation and the backend refuses to start. A newly
+honoured value can also fail a production check that blocks startup:
+`RATE_LIMIT_ENABLED=false`, `DB_ECHO=true`, or an `ALGORITHM` other than
+`HS256`. `REDIS_REQUIRED=true` refuses to start without Redis, and
+`SECURITY_BLOCK_INSECURE_DEFAULTS=true` makes a development stack refuse to
+start on a critical warning.
+
+**One template line reads differently under Compose.** Older copies of
+`.env.example.full` have `CAPTCHA_SITE_KEY=` followed by spaces and a
+`# Public …` comment. Compose takes that whole comment as the value. It does
+nothing while CAPTCHA is off; with CAPTCHA on, the browser is given a key that
+does not exist and every protected form fails. Delete the comment from that
+line.
+
+**Before you upgrade:**
+
+1. Read your `.env` line by line, and delete or correct anything you did not
+   mean to run with. Settings you never set keep the same values they had
+   before: every new line in the compose files defaults to the application's
+   own default, and an empty value for an optional setting counts as unset.
+2. Run preflight against the new version, as at the top of this page. It
+   validates every setting that will now arrive.
+3. After the restart, confirm the values you care about landed:
+
+   ```bash
+   docker compose config | grep -E 'EMAIL_ENABLED|SMTP_HOST|PASSWORD_MIN_LENGTH'
+   ```
+
+A compose file you maintain yourself, such as one kept by Unraid's Compose
+Manager, does not change on upgrade. It keeps its old allowlist, and settings
+missing from it still do nothing — see
+[Find the gaps before an upgrade gates on them](#find-the-gaps-before-an-upgrade-gates-on-them).
+The Unraid Community Apps template (`unraid/the-logbook.xml`) is unaffected:
+it has no allowlist, and every variable it defines goes to the container.
+
 ### The `production` profile's nginx needs a certificate in `infrastructure/nginx/ssl/` (2026-09-30)
 
 Only deployments started with `--profile production` are affected. That
@@ -409,7 +530,7 @@ repaired.
 ### Smaller behaviour changes in this release (2026-10-05)
 
 - **Rank vocabulary.** Once a department has any rank rows, the built-in rank
-  codes (`firefighter`, …) are no longer accepted for a *new* assignment by the
+  codes (`firefighter`, …) are no longer accepted for a _new_ assignment by the
   member API, CSV import or prospect conversion unless the department's own
   ladder has that rung (ONBOARD-3); members already holding one keep their
   seats. A department that deleted a seeded rank during setup and still imports
@@ -1607,8 +1728,10 @@ network."
 A department that registered printers before this upgrade loses direct
 printing until the setting is made. Add the printers' subnet to `.env`, for
 example `LABEL_PRINTER_ALLOWED_NETWORKS=192.168.10.0/24`. The shipped
-`docker-compose.yml` passes it through. **The Unraid compose files in `unraid/`
-do not**, and neither does a compose file of your own: add
+`docker-compose.yml` passes it through, and since 2026-10-06 so do the Unraid
+compose files in `unraid/` (see
+[Every backend setting in `.env` now reaches the container](#every-backend-setting-in-env-now-reaches-the-container-2026-10-06)).
+A compose file of your own does not: add
 `LABEL_PRINTER_ALLOWED_NETWORKS: ${LABEL_PRINTER_ALLOWED_NETWORKS:-}` to the
 backend's `environment:` block, or the value in `.env` never reaches the
 container. Loopback, link-local and

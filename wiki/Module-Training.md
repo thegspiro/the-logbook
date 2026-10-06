@@ -1596,14 +1596,36 @@ because a submission is deletable in `draft`, `pending_review` and
 `TrainingRecord` also references the same file. **If that guard is ever
 widened, the delete must stop unlinking.**
 
-Three open items are recorded in
+Three open items were recorded in
 [`docs/KNOWN_LIMITATIONS.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/KNOWN_LIMITATIONS.md):
-no retention policy (approved certificates are kept indefinitely, and expiring
-them needs a records-retention decision from the department before it needs
-code), **no malware scanning** (a file served back to an officer is whatever
-the member uploaded), and voided records keeping their file by design — a
-`DELETE` marks the record `cancelled` rather than removing it, so the
-correction stays auditable and its evidence stays with it.
+no retention policy (since resolved — a department-set period, 2026-10-05),
+**no malware scanning** (since resolved as an opt-in ClamAV scan, 2026-10-06 —
+below), and voided records keeping their file by design — a `DELETE` marks the
+record `cancelled` rather than removing it, so the correction stays auditable
+and its evidence stays with it.
+
+### Malware scanning of certificates _(2026-10-06)_
+
+With `CLAMAV_ENABLED=true` both certificate upload routes
+(`POST /training/submissions/with-attachment` and
+`POST /training/submissions/{id}/attachments`) stream the file to a ClamAV
+daemon (`app/services/malware_scan_service.py`, clamd `INSTREAM` over TCP)
+after the magic-byte check and **before anything is written to disk**.
+
+| Outcome                    | Response                                 | Stored? | Audit                                                      |
+| -------------------------- | ---------------------------------------- | ------- | ---------------------------------------------------------- |
+| Clean                      | as before                                | yes     | —                                                          |
+| Infected                   | `400`, `LB-UPLD-004`                     | no      | `upload_malware_detected` — signature, type, size, SHA-256 |
+| clamd unreachable/slow/err | `503` + `Retry-After: 60`, `LB-UPLD-005` | no      | — (logged at ERROR)                                        |
+| Scanning disabled          | as before; clamd never called            | yes     | —                                                          |
+
+The outage row **fails closed** — an inferred decision the owner can reverse:
+the operator opted in to scanning, and accepting unscanned files whenever the
+scanner is down is the state an attacker wants (the same reasoning as CAPTCHA).
+The bundled daemon is the `clamav` compose service under the `with-clamav`
+profile; see
+[Security Configuration](Configuration-Security#malware-scanning-of-uploads).
+Files already stored before scanning was enabled are not rescanned.
 
 ### The start time is kept
 

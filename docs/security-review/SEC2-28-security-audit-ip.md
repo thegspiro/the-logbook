@@ -346,7 +346,21 @@ endpoints' `require_permission` — `IPSecurityAdminPage`'s did not
 `settings.manage`); this pass's original claim that all three matched was
 wrong and is fixed below, not just corrected in the writeup.
 
-### SEC2-28-7 — HIGH (operational-security value, not an access-control bypass) — `security_monitoring.py`'s alert surface has no admin UI, and two of its four detectors have a deeper visibility gap than "missing UI" alone
+### SEC2-28-7 — HIGH (operational-security value, not an access-control bypass) — `security_monitoring.py`'s alert surface has no admin UI, and two of its four detectors have a deeper visibility gap than "missing UI" alone — ✅ RESOLVED (2026-10-05), one residual
+
+**Resolved (owner decision SEC2-28-alerts, "build UI + backend fixes"):**
+
+- **Admin screen.** `/admin/security-alerts` (`SecurityAlertsPage`, `audit.view`) lists the department's alerts by state (open / unacknowledged / acknowledged / resolved) with totals, and offers Acknowledge and Resolve only to `audit.export` holders — the backend's existing gate, so a read-only auditor is never shown a control that would 403. Resolve takes an optional note (≤1,000 characters) stored on the new `security_alerts.resolution_note` column (migration `9a4c2e7b5d18`). The first acknowledger and the resolution are never overwritten: a second acknowledge or resolve is a 409, and the row is read `FOR UPDATE` so two officers cannot race past that check. Resolving an unacknowledged alert acknowledges it in the same step. Both actions write an org-attributed audit event (`security_alert_acknowledged` / `security_alert_resolved`, the latter carrying the note).
+- **Exfiltration sizing.** `SecurityMonitoringMiddleware` now counts the bytes it actually sends in `http.response.body` messages instead of reading a `Content-Length` header `StreamingResponse` never sets, so every export is sized — streamed or not. Nothing is buffered; it is a running integer.
+- **Parameterized export routes.** `EXPORT_ENDPOINT_TEMPLATES` lists export routes that carry a path parameter (`/training/programs/programs/{program_id}/export`), matched one segment per parameter. `TestExportEndpointsCoverage::test_every_parameterized_export_route_is_matched` pins the templates to the live GET/POST route table.
+- **Exports logged.** Every completed (2xx) request to an export route writes a `data_export` audit event — route, method, byte count, member, IP — and nothing else: not the query string (filters and searches can name members) and never the body. `GET /security/download-activity` (`audit.view`) lists the department's rows; the screen's second tab shows them.
+- **Brute-force attribution.** `login` now passes the matched account's `user_id`/`organization_id` from `AuthFailure` to `detect_brute_force`, so an alert raised on a failed sign-in against a real account lands in that department's view (it also makes the per-user threshold reachable, which it never was). An alert with no user and no named org is attributed to the installation's only organization when there is exactly one — with one tenant there is no one else it could belong to.
+
+**Residual (still open, in `KNOWN_LIMITATIONS.md`):** on a **multi-organization** installation, a brute-force alert against an _unknown_ username has no tenant and stays `organization_id = NULL`, visible to no one. Showing it needs a platform-operator role that does not exist; that design is not inferred here.
+
+Tests: `backend/tests/test_security_alert_workflow.py`, `test_security_middleware.py::TestExportEndpointsCoverage`, `frontend/src/pages/SecurityAlertsPage.test.tsx`.
+
+As found:
 
 **Corrected after Codex review, in two rounds** (nine findings across this
 section were wrong or overstated in the original writeup — severity,

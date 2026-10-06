@@ -263,7 +263,7 @@ Established before the first iteration, so any later failure is attributable:
   backend capability with **no UI that sets it** — so the room-clash warning the
   service docstring advertises can never fire. Same shape as the finance-dues-UI
   entry; a frontend build-out plus a per-cohort/per-class product call, not a
-  correction). 1 NIT open (CC-3, spring-forward gap resolves via fold=0).
+  correction; ✅ resolved 2026-10-06 — per-cohort room with per-class override). 1 NIT open (CC-3, spring-forward gap resolves via fold=0).
   See course-cohorts.md. Next: A6 member lifecycle & offboarding.
 - **A6 member lifecycle & offboarding ✅** — the irreversible operations
   (anonymization, unattended retention deletion, archival) were the priority and

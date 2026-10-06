@@ -25,7 +25,12 @@ from app.services.inventory_service import InventoryService
 
 
 def register(server: Any) -> None:
-    @logbook_tool(server, title="Inventory summary", module="inventory")
+    @logbook_tool(
+        server,
+        title="Inventory summary",
+        module="inventory",
+        permissions=("inventory.view", "inventory.manage"),
+    )
     async def get_inventory_summary(db: AsyncSession, principal: McpPrincipal) -> dict:
         """Totals for the inventory: items, value, assigned, checked out,
         in maintenance, and low-stock categories. Medical supplies are not
@@ -34,7 +39,12 @@ def register(server: Any) -> None:
             org_uuid(principal), exclude_item_types=MEDICAL_ITEM_TYPES
         )
 
-    @logbook_tool(server, title="Low stock", module="inventory")
+    @logbook_tool(
+        server,
+        title="Low stock",
+        module="inventory",
+        permissions=("inventory.view", "inventory.manage"),
+    )
     async def list_low_stock_items(
         db: AsyncSession, principal: McpPrincipal, limit: int = 50, offset: int = 0
     ) -> dict:
@@ -55,7 +65,12 @@ def register(server: Any) -> None:
         body["has_more"] = len(items) > limit
         return body
 
-    @logbook_tool(server, title="List inventory items", module="inventory")
+    @logbook_tool(
+        server,
+        title="List inventory items",
+        module="inventory",
+        permissions=("inventory.view", "inventory.manage"),
+    )
     async def list_inventory_items(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -115,7 +130,12 @@ def register(server: Any) -> None:
         ]
         return page(rendered, total, limit, offset)
 
-    @logbook_tool(server, title="Overdue checkouts", module="inventory")
+    @logbook_tool(
+        server,
+        title="Overdue checkouts",
+        module="inventory",
+        permissions=("inventory.view", "inventory.manage"),
+    )
     async def list_overdue_checkouts(
         db: AsyncSession, principal: McpPrincipal, limit: int = 100, offset: int = 0
     ) -> dict:

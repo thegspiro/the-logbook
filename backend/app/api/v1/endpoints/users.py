@@ -54,6 +54,7 @@ from app.schemas.user import (
     ContactInfoUpdate,
     DeletionImpactResponse,
     MemberAuditLogEntry,
+    MemberDirectoryEntry,
     MemberEmailChoice,
     MemberEmailChoicesResponse,
     ProfileVisibility,
@@ -98,6 +99,7 @@ from app.utils.membership import (
     is_administrative,
     split_membership_type,
 )
+from app.utils.phone_numbers import validate_member_phone
 from app.utils.security_notifications import notify_security_event
 
 router = APIRouter()
@@ -143,28 +145,9 @@ async def list_users(
     **Permissions required:** members.manage, members.view, or users.view
     """
     user_service = UserService(db)
-    org_service = OrganizationService(db)
-
-    # Get organization settings — if this fails, still return users without
-    # contact info rather than returning a 500 that hides the member list.
-    include_contact_info = False
-    contact_settings = None
-    try:
-        org_settings = await org_service.get_organization_settings(
-            current_user.organization_id
-        )
-        include_contact_info = org_settings.contact_info_visibility.enabled
-        contact_settings = {
-            "contact_info_visibility": {
-                "show_email": org_settings.contact_info_visibility.show_email,
-                "show_phone": org_settings.contact_info_visibility.show_phone,
-                "show_mobile": org_settings.contact_info_visibility.show_mobile,
-            }
-        }
-    except Exception as e:
-        logger.warning(
-            f"Failed to load organization settings, returning users without contact info: {e}"
-        )
+    include_contact_info, contact_settings = await _roster_contact_settings(
+        db, current_user.organization_id
+    )
 
     # Get users with conditional contact info. Members-managers are exempt
     # from the subject's own choice, as they are on the profile endpoint: they
@@ -182,6 +165,85 @@ async def list_users(
     )
 
     return users
+
+
+async def _roster_contact_settings(
+    db: AsyncSession, organization_id
+) -> tuple[bool, Optional[dict]]:
+    """The organisation's contact-visibility ceiling for roster lists.
+
+    If the settings cannot be read, the list is still served — without contact
+    info — rather than a 500 that hides the member list.
+    """
+    try:
+        org_settings = await OrganizationService(db).get_organization_settings(
+            organization_id
+        )
+    except Exception as e:
+        logger.warning(
+            f"Failed to load organization settings, returning users without contact info: {e}"
+        )
+        return False, None
+    visibility = org_settings.contact_info_visibility
+    return visibility.enabled, {
+        "contact_info_visibility": {
+            "show_email": visibility.show_email,
+            "show_phone": visibility.show_phone,
+            "show_mobile": visibility.show_mobile,
+        }
+    }
+
+
+@router.get("/directory", response_model=list[MemberDirectoryEntry])
+async def list_member_directory(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("users.view", "members.view", "members.manage")
+    ),
+):
+    """
+    The member directory: who is in the department and how to reach them
+
+    The narrow roster the Members page shows a member without
+    `members.manage` (USR-8). It carries names, membership number, photo,
+    status, rank and the contact fields the department and each member allow —
+    not the username, hire date, station, platoon or membership classification
+    `GET /users` sends, so what the directory hides is not in the response
+    either. Each member's own contact-visibility choice always applies here,
+    and archived (departed) members are not listed.
+
+    **Authentication required**
+
+    **Permissions required:** members.manage, members.view, or users.view
+    """
+    include_contact_info, contact_settings = await _roster_contact_settings(
+        db, current_user.organization_id
+    )
+    return await UserService(db).get_directory_for_organization(
+        organization_id=current_user.organization_id,
+        include_contact_info=include_contact_info,
+        contact_settings=contact_settings,
+    )
+
+
+def _validated_phone_changes(user: User, sent: dict) -> dict:
+    """The phone/mobile values to store, from whichever of them were sent.
+
+    Blank clears (an explicit null or empty box). Refuses a new value that is
+    not a phone number with a 400 naming the rule.
+    """
+    changes = {}
+    for field in ("phone", "mobile"):
+        if field not in sent:
+            continue
+        try:
+            changes[field] = validate_member_phone(sent[field], getattr(user, field))
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"{'Phone' if field == 'phone' else 'Mobile'}: {e}",
+            ) from e
+    return changes
 
 
 WELCOME_EMAIL_UNAVAILABLE_DETAIL = (
@@ -398,7 +460,7 @@ async def create_member(
         # Emergency contacts (stored as JSON)
         emergency_contacts=[ec.model_dump() for ec in user_data.emergency_contacts],
         email_verified=False,
-        status=UserStatus.ACTIVE,
+        status=UserStatus(user_data.status) if user_data.status else UserStatus.ACTIVE,
         must_change_password=True,
         password_changed_at=datetime.now(timezone.utc),
     )
@@ -1067,6 +1129,27 @@ async def _enforce_account_reset_ceiling(
         )
 
 
+BASE_POSITION_REMOVAL_REFUSED = (
+    "The Member position carries the baseline access every member needs, so it "
+    "can only be removed from an archived member."
+)
+
+
+def _refuse_base_position_removal(user: User, role: Role) -> None:
+    """W11-9: the base ``member`` position stays while the member does.
+
+    It carries the baseline grants (members.view, training.view,
+    scheduling.view and the rest); without it a member can sign in and see
+    almost nothing, and there is no everyday reason to want that. An archived
+    member is the exception — their account is closed anyway.
+    """
+    if role.slug == ROLE_MEMBER and user.status != UserStatus.ARCHIVED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=BASE_POSITION_REMOVAL_REFUSED,
+        )
+
+
 @router.put("/{user_id}/roles", response_model=UserRoleResponse)
 async def assign_user_roles(
     user_id: UUID,
@@ -1121,6 +1204,11 @@ async def assign_user_roles(
             )
     else:
         roles = []
+
+    kept_ids = {str(r.id) for r in roles}
+    for held_role in user.roles:
+        if str(held_role.id) not in kept_ids:
+            _refuse_base_position_removal(user, held_role)
 
     # Prevent privilege escalation: the caller cannot grant a role that exceeds
     # their own permissions (e.g. assigning a wildcard "System Owner" role).
@@ -1363,6 +1451,7 @@ async def remove_role_from_user(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User does not have this role"
         )
+    _refuse_base_position_removal(user, role_to_remove)
 
     resulting_permissions: set[str] = set()
     for role in user.roles:
@@ -1558,6 +1647,13 @@ async def update_contact_info(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
+    # Validated before anything is applied, so a refused number leaves the
+    # rest of the save unapplied too. New writes only (W04-7): a number sent
+    # back unchanged passes even if it predates the rule.
+    new_phones = _validated_phone_changes(
+        user, {k: getattr(contact_update, k) for k in contact_update.model_fields_set}
+    )
+
     # Update fields if provided
     if contact_update.email is not None:
         # Check if email is already in use by another user in the organization
@@ -1585,11 +1681,8 @@ async def update_contact_info(
     # Keyed on what the caller sent, not on None: an explicit null (or a blank)
     # clears the number. `is not None` made clearing impossible -- the member
     # emptied the box, saved, and got the old number back with a 200.
-    if "phone" in contact_update.model_fields_set:
-        user.phone = (contact_update.phone or "").strip() or None
-
-    if "mobile" in contact_update.model_fields_set:
-        user.mobile = (contact_update.mobile or "").strip() or None
+    for field, value in new_phones.items():
+        setattr(user, field, value)
 
     if contact_update.notification_preferences is not None:
         # Merge, never replace. Every field on NotificationPreferences defaults
@@ -1892,6 +1985,10 @@ async def update_user_profile(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=safe_error_detail(e),
                 ) from e
+
+    # New writes only (W04-7): a number sent back unchanged passes even if it
+    # predates the rule, so a member can still save the rest of their profile.
+    update_data.update(_validated_phone_changes(user, update_data))
 
     # Snapshot for the audit trail before `emergency_contacts` is popped below.
     # Taken from `update_data` rather than the raw payload because a move to the

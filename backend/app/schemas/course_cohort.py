@@ -211,6 +211,15 @@ class CohortSchedulePreviewRequest(CohortScheduleConfig):
 
     course_id: UUID
     start_date: date
+    location_id: Optional[UUID] = Field(
+        None,
+        description="The cohort's room, used by every class without one of its own",
+    )
+    classes: Optional[List["CohortClassOverride"]] = Field(
+        None,
+        description="Per-class edits so far, so the preview checks the room and "
+        "time each class will actually book",
+    )
 
 
 class PreviewClass(UTCResponseBase):
@@ -227,6 +236,13 @@ class PreviewClass(UTCResponseBase):
     scheduled_end: datetime
     credit_hours: Optional[float] = None
     instructor: Optional[str] = None
+    # The room this class would book, after the per-class override, the
+    # syllabus row's own room and the cohort's room are resolved in that order.
+    location_id: Optional[UUID] = None
+    location_name: Optional[str] = None
+    # "class" when the officer overrode it in the wizard, "syllabus" when the
+    # syllabus row names a room, "cohort" when it inherits the cohort's.
+    location_source: Optional[str] = None
     warnings: List[str] = Field(default_factory=list)
 
 
@@ -588,3 +604,6 @@ class CohortClassStatusUpdate(BaseModel):
     @classmethod
     def _check_status(cls, v: str) -> str:
         return validate_enum_value(v, ModelCohortClassStatus, "status")
+
+
+CohortSchedulePreviewRequest.model_rebuild()

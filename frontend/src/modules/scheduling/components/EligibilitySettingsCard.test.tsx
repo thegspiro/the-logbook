@@ -13,9 +13,18 @@ vi.mock('../services/api', () => ({
 
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
 
+const mockShiftSettings = vi.fn();
+vi.mock('../services/shiftSettingsApi', () => ({
+  getCachedShiftSettings: () => mockShiftSettings() as unknown,
+  ensureShiftSettingsLoaded: () => Promise.resolve(mockShiftSettings()),
+}));
+
+import { DEFAULT_SETTINGS } from '../types/shiftSettings';
 import { EligibilitySettingsCard } from './EligibilitySettingsCard';
 
 beforeEach(() => {
+  mockShiftSettings.mockReset();
+  mockShiftSettings.mockReturnValue(DEFAULT_SETTINGS);
   mockGetEligibility.mockReset();
   mockGetEligibility.mockResolvedValue({ excluded_membership_types: ['prospective'], open_positions: ['firefighter'] });
   mockUpdateEligibility.mockReset();
@@ -37,5 +46,33 @@ describe('EligibilitySettingsCard', () => {
 
     await user.click(probationary);
     expect(probationary).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it("offers the department's own seats, and keeps an open seat that was retired", async () => {
+    // SCHED-CUSTOM-SEAT: a custom seat is assignable, so opening it to every
+    // member is a grant the backend honours.
+    mockShiftSettings.mockReturnValue({
+      ...DEFAULT_SETTINGS,
+      customPositions: [{ value: 'rescue_tech', label: 'Rescue Technician' }],
+    });
+    mockGetEligibility.mockResolvedValue({
+      excluded_membership_types: [],
+      open_positions: ['old_seat'],
+    });
+    const user = userEvent.setup();
+    render(<EligibilitySettingsCard />);
+
+    const open = await screen.findByRole('group', { name: 'Open Positions' });
+    const rescue = within(open).getByRole('button', { name: 'Rescue Technician' });
+    expect(rescue).toHaveAttribute('aria-pressed', 'false');
+    expect(within(open).getByRole('button', { name: 'old seat' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(open).queryByRole('button', { name: 'Paramedic' })).not.toBeInTheDocument();
+
+    await user.click(rescue);
+    await user.click(screen.getByRole('button', { name: /Save Eligibility Settings/ }));
+    expect(mockUpdateEligibility).toHaveBeenCalledWith({
+      excluded_membership_types: [],
+      open_positions: ['old_seat', 'rescue_tech'],
+    });
   });
 });

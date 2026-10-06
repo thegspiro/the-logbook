@@ -21,7 +21,6 @@ import type {
 } from '../types/election';
 import type { EventListItem } from '../types/event';
 import { ElectionResults } from '../components/ElectionResults';
-import { ElectionBallot } from '../components/ElectionBallot';
 import { CandidateManagement } from '../components/CandidateManagement';
 import { BallotBuilder } from '../components/BallotBuilder';
 import { MeetingAttendance } from '../components/MeetingAttendance';
@@ -32,6 +31,7 @@ import { RunoffChain } from '../modules/elections/components/RunoffChain';
 import { PublishResultsPanel } from '../modules/elections/components/PublishResultsPanel';
 import { ElectionWorkflowTabs } from '../modules/elections/components/ElectionWorkflowTabs';
 import { useAuthStore } from '../stores/authStore';
+import { ElectionBallot } from '../components/ElectionBallot';
 import { ElectionStatus, VotingMethod } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { Breadcrumbs, PromptDialog } from '../components/ux';
@@ -45,6 +45,7 @@ import {
   getStatusBadgeClass,
   getVictoryDescription,
   describePackageSendError,
+  electionCanEmailBallots,
 } from '../utils/electionHelpers';
 import SendBallotEmailsModal from '../components/election-detail/SendBallotEmailsModal';
 import RemindNonVotersModal from '../components/election-detail/RemindNonVotersModal';
@@ -372,9 +373,19 @@ export const ElectionDetailPage: React.FC = () => {
     // ahead, moves it to now (W50-56) — say so before the click, and say
     // that ballots are a separate send, which the manual once got wrong.
     const startIsAhead = new Date(election.start_date).getTime() > Date.now();
-    const openMessage = startIsAhead
-      ? `Open voting now? The scheduled start (${formatDateTime(election.start_date, tz)}) moves to now, the voter roll is frozen and the ballot locks. Ballot emails are not sent by this step — use Send Ballot Emails afterwards.`
-      : 'Open voting now? The voter roll is frozen and the ballot locks. Ballot emails are not sent by this step — use Send Ballot Emails afterwards.';
+    // The emailed ballot carries ballot items and plain positions; an
+    // election with neither (candidates with no race) cannot mail a ballot,
+    // and the ballot locks on opening — say so while it can still be changed
+    // (W50-11, owner decision 2026-10-05).
+    const emailBallotsImpossible = !electionCanEmailBallots(election);
+    const emailWarning = emailBallotsImpossible
+      ? ' This election has no ballot items or positions, so ballot emails cannot be sent once it opens and members can vote in the app only. To email ballots, add the races in the Ballot Builder before opening.'
+      : '';
+    const openMessage =
+      (startIsAhead
+        ? `Open voting now? The scheduled start (${formatDateTime(election.start_date, tz)}) moves to now, the voter roll is frozen and the ballot locks. Ballot emails are not sent by this step — use Send Ballot Emails afterwards.`
+        : 'Open voting now? The voter roll is frozen and the ballot locks. Ballot emails are not sent by this step — use Send Ballot Emails afterwards.') +
+      emailWarning;
     if (
       !(await confirm({
         title: 'Open election',
@@ -1024,7 +1035,7 @@ export const ElectionDetailPage: React.FC = () => {
   const isDraft = election.status === ElectionStatus.DRAFT;
   const isActiveOrCompleted = election.status === ElectionStatus.OPEN || election.status === ElectionStatus.CLOSED;
 
-  const hasBallotItems = (election.ballot_items?.length ?? 0) > 0;
+  const canEmailBallots = electionCanEmailBallots(election);
 
   // ── Lifecycle stepper config ────────────────────────────────────
   const lifecycleSteps = [
@@ -1317,6 +1328,14 @@ export const ElectionDetailPage: React.FC = () => {
               <div className="text-theme-text-muted text-sm">Winner</div>
               <div className="text-theme-text-primary mt-1 text-sm font-medium">{getVictoryDescription(election)}</div>
             </div>
+            {(election.seats_per_position ?? 1) > 1 && (
+              <div>
+                <div className="text-theme-text-muted text-sm">Seats per Race</div>
+                <div className="text-theme-text-primary mt-1 text-sm font-medium">
+                  {`${election.seats_per_position} elected per race`}
+                </div>
+              </div>
+            )}
             <div>
               <div className="text-theme-text-muted text-sm">Anonymous Voting</div>
               <div className="text-theme-text-primary mt-1 text-sm font-medium">
@@ -1642,21 +1661,20 @@ export const ElectionDetailPage: React.FC = () => {
                     {election.status === ElectionStatus.OPEN && (
                       <button
                         onClick={() => setShowSendEmailModal(true)}
-                        disabled={!hasBallotItems}
-                        aria-describedby={hasBallotItems ? undefined : 'send-ballot-unavailable'}
+                        disabled={!canEmailBallots}
+                        aria-describedby={canEmailBallots ? undefined : 'send-ballot-unavailable'}
                         className="btn-primary text-sm"
                       >
                         {election.email_sent ? 'Resend Ballot Emails' : 'Send Ballot Emails'}
                       </button>
                     )}
-                    {/* The emailed ballot page votes on ballot items only, and the
-                        ballot is locked while voting is open. The reason used to
-                        be a hover title on a disabled button, which a phone, a
-                        keyboard and a screen reader never show. */}
-                    {election.status === ElectionStatus.OPEN && !hasBallotItems && (
+                    {/* The emailed ballot carries ballot items and plain positions.
+                        The reason used to be a hover title on a disabled button,
+                        which a phone, a keyboard and a screen reader never show. */}
+                    {election.status === ElectionStatus.OPEN && !canEmailBallots && (
                       <p id="send-ballot-unavailable" className="text-theme-text-muted w-full text-xs">
-                        Ballot emails need ballot items, and the ballot cannot change while voting is open. Members can
-                        vote in the app.
+                        Ballot emails need ballot items or positions, and the ballot cannot change while voting is open.
+                        Members can vote in the app.
                       </p>
                     )}
                     {/* email_sent_at is the ballot-send stamp only: a reminder
@@ -1726,9 +1744,7 @@ export const ElectionDetailPage: React.FC = () => {
         <RunoffChain election={election} />
 
         {/* Publish Results Panel (secretary - open/closed elections) */}
-        {canManage && electionId && (
-          <PublishResultsPanel electionId={electionId} election={election} onUpdate={setElection} />
-        )}
+        {canManage && electionId && <PublishResultsPanel electionId={electionId} election={election} />}
 
         {/* Live turnout dashboard (secretary, meeting night) */}
         {canManage && showTurnout && election.status === ElectionStatus.OPEN && electionId && (

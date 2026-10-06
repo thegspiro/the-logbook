@@ -138,6 +138,12 @@ def render_certified_results_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> 
             f"Generated {_esc(meta.get('generated_at'))}",
             sub_style,
         ),
+    ]
+    # A correction after close is allowed but never silent (W50-9): each one
+    # is printed under the close line, before anything that reads as final.
+    for revision in election.get("revisions_display") or []:
+        story.append(Paragraph(_esc(revision), warn_style))
+    story += [
         Spacer(1, 8),
         HRFlowable(width="100%", thickness=1, color=_GRID),
     ]

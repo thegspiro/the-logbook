@@ -426,6 +426,9 @@ class TestBulkApproveSeparationOfDuties:
                 MagicMock(),  # officer-1's User-row lock
                 _one(other),
                 _one(own),
+                # The department's review rules, read once a self-owned entry
+                # turns up; no settings means self-approval stays refused.
+                _one(None),
             ]
         )
 
@@ -454,6 +457,7 @@ class TestBulkApproveSeparationOfDuties:
                 _owner_lookup([approver]),
                 MagicMock(),  # officer-1's User-row lock
                 _one(own_a),
+                _one(None),  # review rules, read once and cached
                 _one(own_b),
             ]
         )

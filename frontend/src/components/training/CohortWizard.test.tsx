@@ -14,6 +14,7 @@ const mockPreviewSchedule = vi.fn();
 const mockCreateCohort = vi.fn();
 const mockGetCourses = vi.fn();
 const mockGetUsers = vi.fn();
+const mockGetLocations = vi.fn();
 
 vi.mock('../../services/api', () => ({
   courseCohortService: {
@@ -25,6 +26,9 @@ vi.mock('../../services/api', () => ({
   },
   userService: {
     getUsers: (...args: unknown[]) => mockGetUsers(...args) as unknown,
+  },
+  locationsService: {
+    getLocations: (...args: unknown[]) => mockGetLocations(...args) as unknown,
   },
 }));
 
@@ -75,8 +79,17 @@ const advanceTo = async (user: ReturnType<typeof userEvent.setup>, step: 'schedu
   }
 };
 
+const rooms = [
+  { id: 'loc-hall', name: 'Training Hall' },
+  { id: 'loc-annex', name: 'Annex' },
+];
+
 beforeEach(() => {
   vi.clearAllMocks();
+  // Reset, not just clear: a queued *Once value would survive clearAllMocks
+  // into the next test (CLAUDE.md pitfall #28).
+  [mockPreviewSchedule, mockCreateCohort, mockGetCourses, mockGetUsers, mockGetLocations].forEach((m) => m.mockReset());
+  mockGetLocations.mockResolvedValue(rooms);
   mockGetCourses.mockResolvedValue([course]);
   mockGetUsers.mockResolvedValue([{ id: 'u1', first_name: 'Dana', last_name: 'Reyes', email: 'dana@fd.org' }]);
   mockPreviewSchedule.mockResolvedValue(preview);
@@ -239,5 +252,94 @@ describe('CohortWizard', () => {
     await user.click(screen.getByRole('button', { name: /Cancel/i }));
 
     expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('CohortWizard rooms', () => {
+  const roomPreview = {
+    ...preview,
+    classes: [
+      {
+        ...preview.classes[0],
+        location_id: 'loc-hall',
+        location_name: 'Training Hall',
+        location_source: 'cohort',
+        warnings: ['Location already booked: "Board Meeting"'],
+      },
+      { ...preview.classes[1], location_id: 'loc-hall', location_name: 'Training Hall', location_source: 'cohort' },
+    ],
+  };
+
+  beforeEach(() => {
+    mockPreviewSchedule.mockReset();
+    mockPreviewSchedule.mockResolvedValue(roomPreview);
+  });
+
+  const toPreviewWithHall = async (user: ReturnType<typeof userEvent.setup>) => {
+    await waitFor(() => {
+      expect(screen.getByLabelText('Course')).toBeInTheDocument();
+    });
+    await user.selectOptions(screen.getByLabelText('Course'), 'course-1');
+    await user.click(screen.getByRole('button', { name: /Next/i }));
+    await user.selectOptions(await screen.findByLabelText(/^Room/), 'loc-hall');
+    await user.click(screen.getByRole('button', { name: /Next/i }));
+    await screen.findByText('Orientation');
+  };
+
+  it("sends the cohort's room to the preview and shows each class's room and clash", async () => {
+    const user = userEvent.setup();
+    render(<CohortWizard onComplete={vi.fn()} onCancel={vi.fn()} />);
+    await toPreviewWithHall(user);
+
+    expect(mockPreviewSchedule).toHaveBeenCalledWith(expect.objectContaining({ location_id: 'loc-hall' }));
+    expect(screen.getAllByText("Training Hall — the cohort's room")).toHaveLength(2);
+    expect(screen.getByText('Location already booked: "Board Meeting"')).toBeInTheDocument();
+  });
+
+  it('re-checks a class moved to another room, and generates it there', async () => {
+    mockCreateCohort.mockResolvedValue({ id: 'co1', classes: [{ id: 'x' }, { id: 'y' }] });
+    const user = userEvent.setup();
+    render(<CohortWizard onComplete={vi.fn()} onCancel={vi.fn()} />);
+    await toPreviewWithHall(user);
+
+    await user.selectOptions(screen.getByLabelText('Room for Orientation'), 'loc-annex');
+
+    await waitFor(() => expect(mockPreviewSchedule).toHaveBeenCalledTimes(2));
+    expect(mockPreviewSchedule).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        location_id: 'loc-hall',
+        classes: [expect.objectContaining({ course_class_id: 'cc1', location_id: 'loc-annex', skip: false })],
+      })
+    );
+    // The pick survives the re-check rather than being reset by it.
+    expect(screen.getByLabelText('Room for Orientation')).toHaveValue('loc-annex');
+
+    await user.click(screen.getByRole('button', { name: /Next/i }));
+    await user.click(await screen.findByRole('button', { name: /Next/i }));
+    expect(screen.getByText('Training Hall', { selector: 'dd' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Generate 2 classes/i }));
+
+    await waitFor(() => expect(mockCreateCohort).toHaveBeenCalledTimes(1));
+    expect(mockCreateCohort).toHaveBeenCalledWith(
+      expect.objectContaining({
+        location_id: 'loc-hall',
+        classes: [expect.objectContaining({ course_class_id: 'cc1', location_id: 'loc-annex' })],
+      })
+    );
+  });
+
+  it('still generates without a room when the location list fails to load', async () => {
+    mockGetLocations.mockReset();
+    mockGetLocations.mockRejectedValue(new Error('down'));
+    const user = userEvent.setup();
+    render(<CohortWizard onComplete={vi.fn()} onCancel={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Course')).toBeInTheDocument();
+    });
+    await advanceTo(user, 'preview');
+
+    await screen.findByText('Orientation');
+    expect(screen.queryByLabelText('Room for Orientation')).not.toBeInTheDocument();
   });
 });

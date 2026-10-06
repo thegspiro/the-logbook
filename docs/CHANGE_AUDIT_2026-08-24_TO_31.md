@@ -341,8 +341,9 @@ path. What does not exist is any way to enter, edit or expire a qualification
 **on its own** — so a card a member has held for years needs a matching
 training record, an expiry is corrected by editing the training record that produced it (`PATCH /training/records/{id}` re-runs the sync) rather than by filing a second completion, which would invent training history, and
 setting **Certifies** on a course does not backfill records already filed
-against it. Recorded in full as
-[QUAL-1](./KNOWN_LIMITATIONS.md#qual-1--qualifications-can-only-be-written-through-a-course-never-entered-directly-2026-08-26).
+against it. Recorded as QUAL-1 in KNOWN_LIMITATIONS.md; resolved 2026-10-06 by
+the profile's Qualifications card and the qualifications CSV import — see
+[Entering Qualifications Directly](./training/01-membership.md#entering-qualifications-directly-2026-10-06).
 
 **An earlier draft of this audit said there was no write path at all**, and the
 training guides and screenshot plan inherited that. The mistake came from

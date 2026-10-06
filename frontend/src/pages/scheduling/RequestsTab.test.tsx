@@ -9,6 +9,7 @@ const mockGetSwapRequests = vi.fn();
 const mockGetTimeOffRequests = vi.fn();
 const mockReviewSwapRequest = vi.fn();
 const mockReviewTimeOff = vi.fn();
+const mockGetOpenSwaps = vi.fn();
 
 vi.mock('../../modules/scheduling/services/api', () => ({
   schedulingService: {
@@ -16,6 +17,8 @@ vi.mock('../../modules/scheduling/services/api', () => ({
     getTimeOffRequests: (...args: unknown[]) => mockGetTimeOffRequests(...args) as unknown,
     reviewSwapRequest: (...args: unknown[]) => mockReviewSwapRequest(...args) as unknown,
     reviewTimeOff: (...args: unknown[]) => mockReviewTimeOff(...args) as unknown,
+    getOpenSwaps: (...args: unknown[]) => mockGetOpenSwaps(...args) as unknown,
+    pickUpOpenSwap: vi.fn().mockResolvedValue({}),
     cancelSwapRequest: vi.fn().mockResolvedValue(undefined),
     cancelTimeOff: vi.fn().mockResolvedValue(undefined),
     getShift: vi.fn().mockResolvedValue({
@@ -32,12 +35,15 @@ vi.mock('../../modules/scheduling/services/api', () => ({
 }));
 
 const mockCheckPermission = vi.fn();
-vi.mock('../../stores/authStore', () => ({
-  useAuthStore: () => ({
+vi.mock('../../stores/authStore', () => {
+  const state = () => ({
     checkPermission: mockCheckPermission,
     user: { id: 'user-1', first_name: 'Test', last_name: 'User' },
-  }),
-}));
+  });
+  // getState as well as the hook: the open-swap cards label seats through
+  // positionLabel, whose settings cache reads the organization from the store.
+  return { useAuthStore: Object.assign(state, { getState: state }) };
+});
 
 vi.mock('../../hooks/useTimezone', () => ({
   useTimezone: () => 'America/New_York',
@@ -57,6 +63,8 @@ describe('RequestsTab', () => {
     mockReviewTimeOff.mockReset();
     mockCheckPermission.mockReset();
     mockCheckPermission.mockReturnValue(false);
+    mockGetOpenSwaps.mockReset();
+    mockGetOpenSwaps.mockResolvedValue([]);
     mockGetSwapRequests.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 20 });
     mockGetTimeOffRequests.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 20 });
     window.history.replaceState({}, '', '/scheduling?tab=requests');
@@ -182,7 +190,77 @@ describe('RequestsTab', () => {
     renderWithRouter(<RequestsTab />);
 
     expect(await screen.findByText(/Offered to Sam Ortiz/)).toBeInTheDocument();
-    expect(screen.getAllByText(/Open swap/)).toHaveLength(1);
+    expect(screen.getAllByText(/Open to any member cleared for the seat/)).toHaveLength(1);
+  });
+
+  it('offers no Approve on an open swap — a member completes it by picking it up', async () => {
+    // Approving one used to report "Approved" while moving nothing (W33-4).
+    mockCheckPermission.mockReturnValue(true);
+    mockGetSwapRequests.mockResolvedValue({
+      items: [
+        {
+          id: 'swap-open',
+          requesting_user_id: 'user-2',
+          requesting_user_name: 'Lee Park',
+          offering_shift_id: 'shift-2',
+          offering_shift_date: '2026-10-04',
+          status: 'pending',
+          created_at: '2026-09-29T00:00:00Z',
+        },
+      ],
+      total: 1,
+      skip: 0,
+      limit: 20,
+    });
+
+    renderWithRouter(<RequestsTab />);
+
+    expect(await screen.findByRole('button', { name: 'Deny swap for Lee Park' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Approve swap for Lee Park' })).not.toBeInTheDocument();
+  });
+
+  it('names who took an offer once it is approved', async () => {
+    mockCheckPermission.mockReturnValue(true);
+    mockGetSwapRequests.mockResolvedValue({
+      items: [
+        {
+          id: 'swap-taken',
+          requesting_user_id: 'user-2',
+          requesting_user_name: 'Lee Park',
+          target_user_id: 'user-9',
+          target_user_name: 'Sam Ortiz',
+          offering_shift_id: 'shift-2',
+          offering_shift_date: '2026-10-04',
+          status: 'approved',
+          created_at: '2026-09-29T00:00:00Z',
+        },
+      ],
+      total: 1,
+      skip: 0,
+      limit: 20,
+    });
+
+    renderWithRouter(<RequestsTab />);
+
+    expect(await screen.findByText(/Taken by Sam Ortiz/)).toBeInTheDocument();
+  });
+
+  it('lists the open shifts the member can pick up above their requests', async () => {
+    mockGetOpenSwaps.mockResolvedValue([
+      {
+        swap_request_id: 'sw1',
+        shift_id: 'sh1',
+        shift_date: '2026-10-09',
+        start_time: '2026-10-09T11:00:00Z',
+        position: 'driver',
+        requesting_user_name: 'Dana Ruiz',
+      },
+    ]);
+
+    renderWithRouter(<RequestsTab />);
+
+    expect(await screen.findByText('Open shifts you can pick up')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Pick up .* from Dana Ruiz/ })).toBeInTheDocument();
   });
 
   it("shows only the current member's requests in member view", async () => {
@@ -293,6 +371,9 @@ describe('RequestsTab', () => {
           requesting_user_id: 'user-2',
           requesting_user_name: 'Jane Doe',
           offering_shift_id: 'shift-1',
+          // A one-way offer: an open swap has no Approve (W33-4).
+          target_user_id: 'user-9',
+          target_user_name: 'Sam Ortiz',
           status: 'pending',
           created_at: '2026-02-25T00:00:00Z',
         },

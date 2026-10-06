@@ -83,7 +83,12 @@ async def _election(
 
 
 def register(server: Any) -> None:
-    @logbook_tool(server, title="List elections", module="elections")
+    @logbook_tool(
+        server,
+        title="List elections",
+        module="elections",
+        permissions=("elections.view", "elections.manage"),
+    )
     async def list_elections(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -142,7 +147,12 @@ def register(server: Any) -> None:
             )
         return page(items, total, limit, offset)
 
-    @logbook_tool(server, title="Read election description", module="elections")
+    @logbook_tool(
+        server,
+        title="Read election description",
+        module="elections",
+        permissions=("elections.view", "elections.manage"),
+    )
     async def get_election_description(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -158,7 +168,12 @@ def register(server: Any) -> None:
         body.update(_chunk(election.description or "", content_offset))
         return body
 
-    @logbook_tool(server, title="Election results", module="elections")
+    @logbook_tool(
+        server,
+        title="Election results",
+        module="elections",
+        permissions=("elections.view", "elections.manage"),
+    )
     async def get_election_results(
         db: AsyncSession, principal: McpPrincipal, election_id: str
     ) -> dict:
@@ -170,10 +185,9 @@ def register(server: Any) -> None:
         # never shown here, whatever that flag says.
         if election.status != ElectionStatus.CLOSED:
             raise ValueError("Results are not available until the election closes")
-        # The status check above is the gate. The service's own visibility
-        # rule additionally requires the scheduled end to have passed, which
-        # an election an officer closed early never satisfies; bypass it,
-        # since a closed ballot's tally is final either way.
+        # The status check above is the gate, and it is stricter than the
+        # service's own rule, which also honours the publish flag; the
+        # bypass keeps the two from being read as one decision.
         results = await ElectionService(db).get_election_results(
             parse_uuid(election_id, "election_id"),
             org_uuid(principal),

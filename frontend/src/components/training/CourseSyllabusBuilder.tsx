@@ -10,19 +10,24 @@
  * hours, certification settings, and category tagging), so the builder can
  * create one inline — otherwise an officer would have to leave, create fifteen
  * courses, and come back.
+ *
+ * A class may name its own room — the burn tower for live fire — which every
+ * cohort of the course books for that class ahead of the cohort's own room.
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { ArrowDown, ArrowUp, CalendarRange, Clock, GraduationCap, Pencil, Plus, Trash2, Wand2, X } from 'lucide-react';
 import { courseSyllabusService } from '../../services/trainingServices';
-import { trainingService } from '../../services/api';
+import { locationsService, trainingService } from '../../services/api';
+import type { Location } from '../../services/api';
 import { Skeleton } from '../ux/Skeleton';
 import { EmptyState } from '../ux/EmptyState';
 import { ConfirmDialog } from '../ux/ConfirmDialog';
 import { MEETING_WEEKDAYS } from '../../constants/enums';
 import { getErrorMessage } from '../../utils/errorHandling';
-import type { CourseClass, CourseClassCreate, TrainingCourse } from '../../types/training';
+import type { CourseClass, CourseClassCreate, CourseClassUpdate, TrainingCourse } from '../../types/training';
+import { blankToNull, numberOrNull } from '../../utils/formValues';
 
 interface CourseSyllabusBuilderProps {
   course: TrainingCourse;
@@ -64,21 +69,23 @@ const formatDuration = (minutes: number): string => {
 
 interface ClassRowFormProps {
   courses: TrainingCourse[];
-  initial?: CourseClass | undefined;
+  locations: Location[];
   submitting: boolean;
   onCancel: () => void;
-  onSubmit: (data: CourseClassCreate) => void;
   onCreateCourse?: (() => Promise<TrainingCourse | null>) | undefined;
 }
 
-const ClassRowForm: React.FC<ClassRowFormProps> = ({
-  courses,
-  initial,
-  submitting,
-  onCancel,
-  onSubmit,
-  onCreateCourse,
-}) => {
+/**
+ * Adding sends a create payload, which omits blank fields; editing sends an
+ * update payload, which must carry an explicit null for a field the officer
+ * emptied — an omitted key leaves the old value in place (CLAUDE.md pitfall #1).
+ */
+type ClassRowFormModeProps =
+  | { initial?: undefined; onSubmit: (data: CourseClassCreate) => void }
+  | { initial: CourseClass; onSubmit: (data: CourseClassUpdate) => void };
+
+const ClassRowForm: React.FC<ClassRowFormProps & ClassRowFormModeProps> = (props) => {
+  const { courses, locations, initial, submitting, onCancel, onCreateCourse } = props;
   const [classCourseId, setClassCourseId] = useState(initial?.class_course_id ?? '');
   const [title, setTitle] = useState(initial?.title ?? '');
   const [sectionName, setSectionName] = useState(initial?.section_name ?? '');
@@ -87,6 +94,7 @@ const ClassRowForm: React.FC<ClassRowFormProps> = ({
   const [durationMinutes, setDurationMinutes] = useState(String(initial?.duration_minutes ?? 180));
   const [creditHours, setCreditHours] = useState(initial?.credit_hours != null ? String(initial.credit_hours) : '');
   const [countsTowardCert, setCountsTowardCert] = useState(initial?.counts_toward_certification ?? true);
+  const [locationId, setLocationId] = useState(initial?.location_id ?? '');
 
   const selectedCourse = courses.find((c) => c.id === classCourseId);
 
@@ -102,9 +110,23 @@ const ClassRowForm: React.FC<ClassRowFormProps> = ({
       toast.error('Pick the course this class teaches');
       return;
     }
+    if (props.initial) {
+      props.onSubmit({
+        class_course_id: classCourseId,
+        title: blankToNull(title),
+        section_name: blankToNull(sectionName),
+        day_offset: Number(dayOffset) || 0,
+        start_time: blankToNull(startTime),
+        duration_minutes: Number(durationMinutes) || 60,
+        credit_hours: numberOrNull(creditHours),
+        location_id: blankToNull(locationId),
+        counts_toward_certification: countsTowardCert,
+      });
+      return;
+    }
     // `||` not `??`: an empty form field must become undefined so the API
     // omits it, rather than being sent as an empty string.
-    onSubmit({
+    props.onSubmit({
       class_course_id: classCourseId,
       title: title.trim() || undefined,
       section_name: sectionName.trim() || undefined,
@@ -112,6 +134,7 @@ const ClassRowForm: React.FC<ClassRowFormProps> = ({
       start_time: startTime || undefined,
       duration_minutes: Number(durationMinutes) || 60,
       credit_hours: creditHours ? Number(creditHours) : undefined,
+      location_id: locationId || undefined,
       counts_toward_certification: countsTowardCert,
     });
   };
@@ -253,6 +276,28 @@ const ClassRowForm: React.FC<ClassRowFormProps> = ({
             className="form-input"
           />
         </div>
+
+        <div>
+          <label className="form-label" htmlFor="class-location">
+            Room <span className="text-theme-text-muted">(optional)</span>
+          </label>
+          <select
+            id="class-location"
+            value={locationId}
+            onChange={(e) => setLocationId(e.target.value)}
+            className="form-input"
+          >
+            <option value="">The cohort&rsquo;s room</option>
+            {locations.map((loc) => (
+              <option key={loc.id} value={loc.id}>
+                {loc.name}
+              </option>
+            ))}
+          </select>
+          <p className="text-theme-text-muted mt-1 text-xs">
+            Set this only when this class always meets somewhere else, such as the burn tower.
+          </p>
+        </div>
       </div>
 
       <label className="flex items-start gap-3 text-sm">
@@ -286,6 +331,7 @@ const ClassRowForm: React.FC<ClassRowFormProps> = ({
 export const CourseSyllabusBuilder: React.FC<CourseSyllabusBuilderProps> = ({ course, onCreateCourse, onChange }) => {
   const [classes, setClasses] = useState<CourseClass[]>([]);
   const [catalog, setCatalog] = useState<TrainingCourse[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -298,11 +344,14 @@ export const CourseSyllabusBuilder: React.FC<CourseSyllabusBuilderProps> = ({ co
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [syllabus, allCourses] = await Promise.all([
+      const [syllabus, allCourses, locationList] = await Promise.all([
         courseSyllabusService.getClasses(course.id),
         trainingService.getCourses(),
+        // Rooms are optional; a failed list must not take the syllabus down.
+        locationsService.getLocations({ is_active: true }).catch(() => [] as Location[]),
       ]);
       setClasses(syllabus);
+      setLocations(locationList);
       // A course cannot be one of its own classes.
       setCatalog(allCourses.filter((c) => c.id !== course.id));
       onChange?.(syllabus);
@@ -351,7 +400,7 @@ export const CourseSyllabusBuilder: React.FC<CourseSyllabusBuilderProps> = ({ co
     }
   };
 
-  const handleUpdate = async (classId: string, data: CourseClassCreate) => {
+  const handleUpdate = async (classId: string, data: CourseClassUpdate) => {
     setSubmitting(true);
     try {
       await courseSyllabusService.updateClass(course.id, classId, data);
@@ -545,6 +594,7 @@ export const CourseSyllabusBuilder: React.FC<CourseSyllabusBuilderProps> = ({ co
       {adding && (
         <ClassRowForm
           courses={catalog}
+          locations={locations}
           submitting={submitting}
           onCancel={() => setAdding(false)}
           onSubmit={(data) => void handleAdd(data)}
@@ -571,6 +621,7 @@ export const CourseSyllabusBuilder: React.FC<CourseSyllabusBuilderProps> = ({ co
                 <li key={item.id}>
                   <ClassRowForm
                     courses={catalog}
+                    locations={locations}
                     initial={item}
                     submitting={submitting}
                     onCancel={() => setEditingId(null)}
@@ -633,6 +684,9 @@ export const CourseSyllabusBuilder: React.FC<CourseSyllabusBuilderProps> = ({ co
                     )}
                     {item.credit_hours != null && <span>{item.credit_hours} credits</span>}
                     {item.instructor && <span>{item.instructor}</span>}
+                    {item.location_id && (
+                      <span>{locations.find((loc) => loc.id === item.location_id)?.name ?? 'Room set'}</span>
+                    )}
                   </div>
                 </div>
 

@@ -4,7 +4,7 @@
  * Administrative page for creating and managing custom roles and their permissions.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useSubmitGuard } from '../hooks/useSubmitGuard';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import { roleService } from '../services/api';
@@ -23,6 +23,19 @@ export const RoleManagementPage: React.FC = () => {
   const { busy, run } = useSubmitGuard();
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   const roleModalRef = useFocusTrap<HTMLDivElement>(showCreateModal);
+
+  // W05-5: the server refuses a new or renamed position that reuses a name,
+  // but positions that already shared one were left as they are. Mark them, so
+  // an administrator can see which pair is which and rename one apart. Same
+  // comparison as the server: trimmed, case-insensitive.
+  const sharedNameKeys = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of roles) {
+      const key = r.name.trim().toLowerCase();
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return new Set([...counts].filter(([, n]) => n > 1).map(([key]) => key));
+  }, [roles]);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -79,6 +92,38 @@ export const RoleManagementPage: React.FC = () => {
     setShowCreateModal(true);
   };
 
+  // ORU-7c: the baseline `member` position is held by every member, so a
+  // permission change to it is an organization-wide grant (or revocation) in
+  // one click. It is allowed — that is how a capability is rolled out — but
+  // never without saying how many people it reaches. The server's grant
+  // ceiling still applies; this is a guard against a slip, not a permission.
+  const confirmBaselineGrantChange = async (role: Role): Promise<boolean> => {
+    if (role.slug !== 'member') return true;
+    const before = new Set(role.permissions);
+    const after = new Set(formData.permissions);
+    const added = formData.permissions.filter((p) => !before.has(p));
+    const removed = role.permissions.filter((p) => !after.has(p));
+    if (added.length === 0 && removed.length === 0) return true;
+
+    const holders =
+      role.user_count === undefined
+        ? 'every member'
+        : `every member (${role.user_count} ${role.user_count === 1 ? 'member' : 'members'})`;
+    const changes = [
+      added.length > 0 ? `grants ${added.join(', ')}` : '',
+      removed.length > 0 ? `removes ${removed.join(', ')}` : '',
+    ]
+      .filter(Boolean)
+      .join(' and ');
+    return confirm({
+      title: `Change permissions for ${holders}`,
+      message: `"${role.name}" is the position every member holds. Saving ${changes} for ${holders} at once.`,
+      confirmLabel: role.user_count === undefined ? 'Apply to every member' : `Apply to ${role.user_count} members`,
+      cancelLabel: 'Keep editing',
+      variant: 'warning',
+    });
+  };
+
   const handleSubmit = () =>
     run(async () => {
       try {
@@ -87,6 +132,10 @@ export const RoleManagementPage: React.FC = () => {
         // "name: Value is too short" (workflow review W05).
         if (!formData.name.trim()) {
           setError('Give the role a name.');
+          return;
+        }
+
+        if (editingRole && !(await confirmBaselineGrantChange(editingRole))) {
           return;
         }
 
@@ -206,8 +255,19 @@ export const RoleManagementPage: React.FC = () => {
                           System Role
                         </span>
                       )}
+                      {sharedNameKeys.has(role.name.trim().toLowerCase()) && (
+                        <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-500/20 dark:text-amber-300">
+                          Same name as another position
+                        </span>
+                      )}
                       <span className="text-theme-text-muted text-sm">Priority: {role.priority}</span>
                     </div>
+                    {sharedNameKeys.has(role.name.trim().toLowerCase()) && (
+                      <p className="text-theme-text-muted mt-1 text-xs">
+                        Internal name <code>{role.slug}</code>. Rename one of these so they can be told apart where
+                        positions are assigned.
+                      </p>
+                    )}
                     {role.description && <p className="text-theme-text-muted mt-1 text-sm">{role.description}</p>}
                     <div className="mt-2 flex flex-wrap gap-1">
                       {role.permissions.slice(0, 5).map((perm) => (

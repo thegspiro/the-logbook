@@ -20,6 +20,7 @@ from sqlalchemy import (
     String,
     Text,
     Time,
+    TypeDecorator,
     UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
@@ -3293,15 +3294,15 @@ class ShiftCall(Base):
 
 
 class ShiftPosition(str, enum.Enum):
-    """Position/role within a shift.
+    """The built-in crew seats.
 
     Must stay the same set as ``ShiftPosition`` in app/schemas/scheduling.py and
-    ``CANONICAL_POSITIONS`` in app/utils/positions.py. This one is the *stored*
-    vocabulary -- it backs the MySQL ENUM DDL on ``shift_assignments.position``
-    and ``standing_shift_claims.position`` -- so a seat the request schema
-    accepts and this enum omits passes validation and eligibility and then
-    fails when the ORM flushes it. ``tests/test_position_slots.py`` asserts all
-    three agree.
+    ``CANONICAL_POSITIONS`` in app/utils/positions.py;
+    ``tests/test_position_slots.py`` asserts all three agree. It names the seats
+    code refers to by name (the officer seat the shift officer is synced into,
+    the default firefighter seat). It is no longer the stored vocabulary: the
+    position columns are ``SeatName`` (VARCHAR) so a department's own seats can
+    be assigned too (SCHED-CUSTOM-SEAT).
     """
 
     OFFICER = "officer"
@@ -3314,6 +3315,26 @@ class ShiftPosition(str, enum.Enum):
     PROBATIONARY = "probationary"
     VOLUNTEER = "volunteer"
     OTHER = "other"
+
+
+class SeatName(TypeDecorator):
+    """A crew seat token, stored as VARCHAR.
+
+    Built-in seats arrive in code as ``ShiftPosition`` members, and a str-mixin
+    enum is not bound as its value: the MySQL driver renders it through
+    ``str()``, which writes ``'ShiftPosition.OFFICER'`` into a VARCHAR column
+    and compares against the same string in a WHERE clause. The ENUM column this
+    replaced converted members for us; this does the same for every insert,
+    update and query, so no call site has to remember ``.value``.
+    """
+
+    impl = String(100)
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        return str(getattr(value, "value", value))
 
 
 class AssignmentStatus(str, enum.Enum):
@@ -3601,10 +3622,13 @@ class ShiftAssignment(Base):
         nullable=False,
     )
 
+    # VARCHAR, not ENUM: a department's own seats are assigned verbatim
+    # alongside the built-ins. Which seats are valid is decided per shift by
+    # ``app.utils.positions.resolve_seat``, not by the column.
     position = Column(
-        Enum(ShiftPosition, values_callable=lambda x: [e.value for e in x]),
+        SeatName(),
         nullable=False,
-        default=ShiftPosition.FIREFIGHTER,
+        default=ShiftPosition.FIREFIGHTER.value,
         server_default="firefighter",
     )
     assignment_status = Column(
@@ -3616,11 +3640,9 @@ class ShiftAssignment(Base):
 
     # The job this member is doing at a community outreach event — tour guide,
     # educator, facilitator — set only on shifts flagged ``is_outreach`` and
-    # NULL on every duty shift. It is a plain string, not a ShiftPosition:
-    # ``position`` is a MySQL ENUM whose labels are rewritten to the enum's own
-    # values at startup (see utils/enum_normalization), so an outreach role
-    # stored there would be rejected by the column or erased by that pass.
-    # ``position`` therefore stays ``volunteer`` for these seats and this
+    # NULL on every duty shift. It is kept apart from ``position`` because an
+    # outreach role is not a crew seat: capacity, coverage and eligibility
+    # read ``position``, so it stays ``volunteer`` for these seats and this
     # column carries what the member actually signed up to do.
     outreach_role = Column(String(100), nullable=True)
 
@@ -3861,10 +3883,13 @@ class StandingShiftClaim(Base):
         default=StandingShiftPeriod.DAY,
         server_default="day",
     )
+    # VARCHAR, not ENUM: a department's own seats are assigned verbatim
+    # alongside the built-ins. Which seats are valid is decided per shift by
+    # ``app.utils.positions.resolve_seat``, not by the column.
     position = Column(
-        Enum(ShiftPosition, values_callable=lambda x: [e.value for e in x]),
+        SeatName(),
         nullable=False,
-        default=ShiftPosition.FIREFIGHTER,
+        default=ShiftPosition.FIREFIGHTER.value,
         server_default="firefighter",
     )
     # Optional narrowing to one unit. NULL means "whichever shift runs in that

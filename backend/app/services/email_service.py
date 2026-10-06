@@ -1608,19 +1608,29 @@ class EmailService:
         admin_contact_name: str = "",
         admin_contact_email: str = "",
         template: Any = None,
+        proxy_holder_name: Optional[str] = None,
     ) -> Tuple[str, str, Optional[str]]:
         """Render ballot notification email content without sending.
 
         If *template* (an ``EmailTemplate`` instance) is provided it is
         used; otherwise the built-in default template is rendered.
 
+        *proxy_holder_name* is set when the delegating member's ballot is
+        Cc'd to the member holding their proxy. The one message reaches
+        both, so it says whose ballot the link opens and who holds the
+        proxy, instead of telling the holder the link is theirs alone
+        (W50-23, owner decision 2026-10-05: keep the Cc, fix the wording).
+
         Returns ``(subject, html_body, text_body)``.
         """
         from app.services.email_template_service import (
+            BALLOT_LINK_OWN_NOTICE_HTML,
+            BALLOT_LINK_OWN_NOTICE_TEXT,
             DEFAULT_BALLOT_NOTIFICATION_HTML,
             DEFAULT_BALLOT_NOTIFICATION_SUBJECT,
             DEFAULT_BALLOT_NOTIFICATION_TEXT,
         )
+        from app.services.email_theme import callout
 
         org_name = getattr(self.organization, "name", "") if self.organization else ""
         org_logo = (
@@ -1632,6 +1642,40 @@ class EmailService:
         custom_message_html = ""
         if custom_message:
             custom_message_html = f"<p>{_html.escape(custom_message)}</p>"
+
+        link_notice_html = BALLOT_LINK_OWN_NOTICE_HTML
+        link_notice_text = BALLOT_LINK_OWN_NOTICE_TEXT
+        if proxy_holder_name:
+            voter = _html.escape(recipient_name or "the member")
+            holder = _html.escape(proxy_holder_name)
+            link_notice_html = callout(
+                "info",
+                f"{holder} holds {voter}'s proxy",
+                f"This email goes to {voter} and, as their proxy for this "
+                f"election, to {holder}. The link opens {voter}'s ballot and "
+                f"works once: whichever of you submits it casts {voter}'s "
+                "vote. Don't forward it to anyone else.",
+            )
+            link_notice_text = (
+                f"(This link opens {recipient_name or 'the member'}'s ballot. "
+                f"{proxy_holder_name} holds their proxy for this election and "
+                "is copied on this email; the link works once.)"
+            )
+            # A department's own template written before this notice
+            # existed has no place for it, and may still carry the old
+            # "yours alone" card; the names then lead the message instead.
+            stored_html = getattr(template, "html_body", None) or ""
+            if template is not None and "ballot_link_notice_html" not in stored_html:
+                custom_message_html = (
+                    f"<p><strong>{holder} holds {voter}'s proxy for this "
+                    f"election and is copied on this email.</strong> The link "
+                    f"opens {voter}'s ballot.</p>" + custom_message_html
+                )
+                custom_message = (
+                    f"{proxy_holder_name} holds {recipient_name}'s proxy for "
+                    "this election and is copied on this email. The link "
+                    f"opens {recipient_name}'s ballot.\n\n" + (custom_message or "")
+                )
 
         # The meeting is optional, and an election with none used to mail a
         # "Meeting Date:" label followed by nothing. The sender builds the
@@ -1672,6 +1716,8 @@ class EmailService:
             "ballot_items_text": ballot_items_text,
             "admin_contact_name": admin_contact_name,
             "admin_contact_email": admin_contact_email,
+            "ballot_link_notice_html": link_notice_html,
+            "ballot_link_notice_text": link_notice_text,
             "organization_name": org_name,
             "organization_logo": org_logo,
         }

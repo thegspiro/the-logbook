@@ -2,14 +2,14 @@
  * Publish Results Panel
  *
  * Streamlined secretary interface for publishing election results.
- * Provides clear visual feedback about result availability, a one-click
- * publish toggle once voting has closed, and the ability to email the
- * results report to the election secretary.
+ * Provides clear visual feedback about result availability (closing the
+ * election releases them) and the ability to email the results report to
+ * the election secretary.
  */
 
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
-import { Eye, EyeOff, Send, BarChart3, CheckCircle2, AlertCircle, Loader2, Mail, Lock } from 'lucide-react';
+import { Eye, EyeOff, Send, BarChart3, CheckCircle2, AlertCircle, Loader2, Mail } from 'lucide-react';
 import { electionService } from '../../../services/api';
 import type { Election } from '../../../types/election';
 import { ElectionStatus } from '../../../constants/enums';
@@ -17,31 +17,14 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 interface PublishResultsPanelProps {
   electionId: string;
   election: Election;
-  onUpdate: (election: Election) => void;
 }
 
-export const PublishResultsPanel: React.FC<PublishResultsPanelProps> = ({ electionId, election, onUpdate }) => {
-  const [updatingVisibility, setUpdatingVisibility] = useState(false);
+export const PublishResultsPanel: React.FC<PublishResultsPanelProps> = ({ electionId, election }) => {
   const [sendingReport, setSendingReport] = useState(false);
 
   const isClosed = election.status === ElectionStatus.CLOSED;
   const resultsPublished = election.results_visible_immediately;
   const hasVotes = (election.total_votes ?? 0) > 0;
-
-  const handleToggleVisibility = async () => {
-    try {
-      setUpdatingVisibility(true);
-      const updated = await electionService.updateElection(electionId, {
-        results_visible_immediately: !resultsPublished,
-      });
-      onUpdate(updated);
-      toast.success(resultsPublished ? 'Results are now hidden from voters' : 'Results are now visible to all voters');
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to update result visibility'));
-    } finally {
-      setUpdatingVisibility(false);
-    }
-  };
 
   const handleSendReport = async () => {
     try {
@@ -94,58 +77,34 @@ export const PublishResultsPanel: React.FC<PublishResultsPanelProps> = ({ electi
           </div>
         </div>
 
-        {/* Visibility toggle. flex-wrap: at phone width the explanatory line
-            otherwise runs past the card's clipped edge (REDRIVE-A-2). */}
-        <div className="bg-theme-surface-secondary flex flex-wrap items-center justify-between gap-3 rounded-lg p-4">
-          <div className="flex items-center gap-3">
-            {resultsPublished ? (
-              <Eye className="h-5 w-5 text-green-600 dark:text-green-400" />
-            ) : (
-              <EyeOff className="text-theme-text-muted h-5 w-5" />
-            )}
-            <div>
-              <p className="text-theme-text-primary text-sm font-medium">
-                {resultsPublished ? 'Results are visible to all voters' : 'Results are hidden'}
-              </p>
-              <p className="text-theme-text-muted text-xs">
-                {resultsPublished
-                  ? 'Any member can view current results on the election page'
-                  : 'Only administrators can see results until published'}
-              </p>
-            </div>
-          </div>
-          {/* The backend only accepts `results_visible_immediately` on a CLOSED
-              election — while voting is open PATCH allows `end_date` alone, so
-              live counts cannot invite strategic voting. Offering the toggle
-              earlier would only ever produce an error toast. */}
-          {isClosed ? (
-            <button
-              onClick={() => void handleToggleVisibility()}
-              disabled={updatingVisibility}
-              aria-pressed={resultsPublished}
-              className={`rounded-md px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
-                resultsPublished
-                  ? 'bg-theme-surface text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover border'
-                  : 'bg-green-700 text-white hover:bg-green-800'
-              }`}
-            >
-              {updatingVisibility ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : resultsPublished ? (
-                <span className="flex items-center gap-1.5">
-                  <Lock className="h-3.5 w-3.5" />
-                  Hide Results
-                </span>
-              ) : (
-                <span className="flex items-center gap-1.5">
-                  <Eye className="h-3.5 w-3.5" />
-                  Publish Results
-                </span>
-              )}
-            </button>
+        {/* Visibility. Closing is what releases results (W50-10, W50-22):
+            a CLOSED election's tally is readable by every member who can
+            view elections, whether it closed early or at the scheduled end,
+            so there is no publish switch left to offer. While voting is open
+            the backend refuses to reveal a live tally; one can only be
+            configured before opening, on the election form. */}
+        <div className="bg-theme-surface-secondary flex items-center gap-3 rounded-lg p-4">
+          {isClosed || resultsPublished ? (
+            <Eye className="h-5 w-5 text-green-600 dark:text-green-400" />
           ) : (
-            <p className="text-theme-text-muted text-xs">Results can be published once voting closes</p>
+            <EyeOff className="text-theme-text-muted h-5 w-5" />
           )}
+          <div>
+            <p className="text-theme-text-primary text-sm font-medium">
+              {isClosed
+                ? 'Results are visible to members'
+                : resultsPublished
+                  ? 'Live results are visible to members'
+                  : 'Results are hidden while voting is open'}
+            </p>
+            <p className="text-theme-text-muted text-xs">
+              {isClosed
+                ? 'Closing the election released them, early or at the scheduled end alike.'
+                : resultsPublished
+                  ? 'This election was set to show results immediately before it opened.'
+                  : 'They appear for every member who can view elections as soon as voting closes.'}
+            </p>
+          </div>
         </div>
 
         {/* Email report (only when closed) */}

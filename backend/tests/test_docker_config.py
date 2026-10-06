@@ -421,6 +421,61 @@ class TestBaseComposeReachesProductionGates:
         )
 
 
+class TestOptionalClamavService:
+    """ClamAV is opt-in: a stack that does not ask for it must not change.
+
+    The backend's CLAMAV_* settings must also be reachable from .env — the
+    environment block is a whitelist, so a flag missing from it would make
+    "I enabled scanning" silently untrue.
+    """
+
+    @pytest.fixture(
+        autouse=True, params=["docker-compose.yml", "unraid/docker-compose-unraid.yml"]
+    )
+    def _setup(self, request):
+        self.compose = yaml.safe_load(_read(ROOT_DIR / request.param))
+        self.clamav = self.compose["services"]["clamav"]
+
+    def test_service_is_behind_an_opt_in_profile(self):
+        assert self.clamav.get("profiles") == ["with-clamav"]
+
+    def test_image_is_the_official_one_with_a_pinned_tag(self):
+        image, _, tag = self.clamav["image"].partition(":")
+        assert image == "clamav/clamav"
+        assert re.fullmatch(r"\d+\.\d+\.\d+", tag), tag
+
+    def test_has_a_healthcheck(self):
+        assert self.clamav["healthcheck"]["test"]
+
+    def test_signatures_live_in_a_named_volume(self):
+        mounts = self.clamav["volumes"]
+        assert "clamav_data:/var/lib/clamav" in mounts
+        assert "clamav_data" in self.compose["volumes"]
+
+    def test_clamd_port_is_not_published(self):
+        assert "ports" not in self.clamav
+
+    def test_backend_does_not_depend_on_it(self):
+        # depends_on a profiled service breaks every stack that leaves the
+        # profile off.
+        assert "clamav" not in (
+            self.compose["services"]["backend"].get("depends_on") or {}
+        )
+
+    @pytest.mark.parametrize(
+        ("setting", "default"),
+        [
+            ("CLAMAV_ENABLED", "false"),
+            ("CLAMAV_HOST", "clamav"),
+            ("CLAMAV_PORT", "3310"),
+            ("CLAMAV_TIMEOUT_SECONDS", "30"),
+        ],
+    )
+    def test_backend_settings_pass_through_from_dot_env(self, setting, default):
+        env = self.compose["services"]["backend"]["environment"]
+        assert env[setting] == f"${{{setting}:-{default}}}"
+
+
 class TestCaCertificateMount:
     """DB_SSL_CA / REDIS_SSL_CA are read inside the container.
 
@@ -468,6 +523,163 @@ class TestProductionComposeSecuritySwitches:
 
     def test_backend_volumes_replace_development_bind_mounts(self):
         assert "volumes: !override" in self.content
+
+
+class _ComposeTag:
+    """A value carrying a Compose merge tag (`!reset`, `!override`)."""
+
+    def __init__(self, tag: str, value):
+        self.tag = tag
+        self.value = value
+
+
+class _ComposeLoader(yaml.SafeLoader):
+    """SafeLoader that keeps Compose's merge tags instead of rejecting them."""
+
+
+def _construct_compose_tag(loader, suffix, node):
+    if isinstance(node, yaml.MappingNode):
+        value = loader.construct_mapping(node, deep=True)
+    elif isinstance(node, yaml.SequenceNode):
+        value = loader.construct_sequence(node, deep=True)
+    else:
+        value = loader.construct_scalar(node)
+    return _ComposeTag(suffix, value)
+
+
+_ComposeLoader.add_multi_constructor("!", _construct_compose_tag)
+
+
+def _load_compose(rel: str) -> dict:
+    loader = _ComposeLoader(_read(ROOT_DIR / rel))
+    try:
+        return loader.get_single_data()
+    finally:
+        loader.dispose()
+
+
+def _dependency_names(service: dict) -> set[str]:
+    depends = service.get("depends_on") or {}
+    if isinstance(depends, _ComposeTag):
+        depends = depends.value
+    return set(depends)
+
+
+class TestExternalServicesOverride:
+    """docker-compose.external-services.yml runs against RDS/ElastiCache.
+
+    The base file pins the backend to the bundled mysql/redis and depends on
+    both, so pointing it anywhere else needs this override; without it the
+    documented AWS managed-services method ran the bundled pair regardless.
+    """
+
+    OVERRIDE = "docker-compose.external-services.yml"
+    REPLACED = {"mysql", "redis"}
+    HOST_PORT = ["DB_HOST", "DB_PORT", "REDIS_HOST", "REDIS_PORT"]
+
+    @pytest.fixture(autouse=True)
+    def _setup(self):
+        self.override = _load_compose(self.OVERRIDE)["services"]
+        self.base = _load_compose("docker-compose.yml")["services"]
+        self.prod = _load_compose("docker-compose.prod.yml")["services"]
+        self.proxy = _load_compose("docker-compose.proxy.yml")["services"]
+
+    def _disabled_profile(self) -> str:
+        profiles = self.override["mysql"]["profiles"]
+        assert len(profiles) == 1, profiles
+        return profiles[0]
+
+    @pytest.mark.parametrize("name", HOST_PORT)
+    def test_requires_each_host_and_port_with_no_default(self, name: str):
+        value = self.override["backend"]["environment"][name]
+        assert re.fullmatch(rf"\$\{{{name}:\?[^}}]*\.env[^}}]*\}}", value), (
+            f"{name} must be `${{{name}:?<message naming .env>}}` — a default "
+            "here would connect somewhere the operator did not choose"
+        )
+
+    def test_sets_only_host_and_port(self):
+        # TLS and credentials reach the backend from .env through the base and
+        # production files; restating them here would shadow that passthrough.
+        assert set(self.override["backend"]["environment"]) == set(self.HOST_PORT)
+
+    def test_drops_backend_dependency_on_bundled_services(self):
+        depends = self.override["backend"]["depends_on"]
+        assert isinstance(depends, _ComposeTag)
+        assert depends.tag == "reset"
+        assert not depends.value
+
+    def test_base_backend_depends_only_on_the_replaced_services(self):
+        # The override resets depends_on wholesale. A new base dependency
+        # would be dropped with it, so it has to be restated there first.
+        assert _dependency_names(self.base["backend"]) <= self.REPLACED
+
+    def test_bundled_services_and_their_dependents_are_profiled_out(self):
+        profile = self._disabled_profile()
+        files = {**self.base, **self.prod}
+        expected = set(self.REPLACED)
+        for name, service in files.items():
+            if name != "backend" and _dependency_names(service) & self.REPLACED:
+                expected.add(name)
+        assert "backup" in expected
+        for name in expected:
+            assert self.override.get(name, {}).get("profiles") == [profile], (
+                f"{name} needs the bundled database or cache and must not start "
+                "when the external-services override is applied"
+            )
+
+    def test_disabled_profile_is_used_nowhere_else(self):
+        profile = self._disabled_profile()
+        for services in (self.base, self.prod, self.proxy):
+            for service in services.values():
+                profiles = service.get("profiles") or []
+                if isinstance(profiles, _ComposeTag):
+                    profiles = profiles.value
+                assert profile not in profiles
+
+    def test_default_profile_set_starts_only_the_app(self):
+        profile = self._disabled_profile()
+        merged: dict[str, list] = {}
+        for services in (self.base, self.prod, self.proxy, self.override):
+            for name, service in services.items():
+                if "profiles" in service:
+                    profiles = service["profiles"]
+                    if isinstance(profiles, _ComposeTag):
+                        profiles = profiles.value
+                    merged[name] = list(profiles or [])
+                else:
+                    merged.setdefault(name, [])
+        default = {name for name, profiles in merged.items() if not profiles}
+        assert default == {"backend", "frontend", "nginx"}
+        assert all(merged[name] == [profile] for name in ("mysql", "redis", "backup"))
+
+    def test_frontend_and_nginx_are_untouched(self):
+        assert set(self.override) == {"backend", "mysql", "redis", "backup"}
+
+    def test_base_file_still_runs_the_bundled_services(self):
+        env = self.base["backend"]["environment"]
+        assert (env["DB_HOST"], env["DB_PORT"]) == ("mysql", 3306)
+        assert (env["REDIS_HOST"], env["REDIS_PORT"]) == ("redis", 6379)
+        assert self.base["backend"]["depends_on"] == {
+            "mysql": {"condition": "service_healthy"},
+            "redis": {"condition": "service_healthy"},
+        }
+        for name in self.REPLACED:
+            assert "profiles" not in self.base[name]
+        assert "profiles" not in self.prod["backup"]
+
+
+class TestMigrationEnginesUseDatabaseTls:
+    """Startup migrations and `alembic upgrade` honour DB_SSL / DB_SSL_CA.
+
+    With an external database (RDS) those settings are the only thing
+    authenticating the server. The async engine always used them; the two sync
+    engines that write the schema did not, so PyMySQL fell back to
+    opportunistic, unverified TLS for every migration.
+    """
+
+    @pytest.mark.parametrize("rel", ["backend/main.py", "backend/alembic/env.py"])
+    def test_sync_engine_uses_the_app_connect_args(self, rel: str):
+        assert "connect_args=settings.get_db_connect_args()" in _read(ROOT_DIR / rel)
 
 
 class TestDockerComposeMinimal:
@@ -558,6 +770,32 @@ class TestUnraidComposeSecuritySwitches:
 
     def test_setup_script_records_the_risk_acceptance(self):
         assert "SECURITY_REQUIRE_TLS=false" in self.setup_script
+
+
+class TestUnraidTemplateRequiredSecrets:
+    """The Unraid template defaults ENVIRONMENT to production, where
+    validate_security_configuration refuses to boot while any of these is
+    empty. Unraid passes only the variables the template lists, so a secret
+    missing from it is one every template install has to discover by hand —
+    ENCRYPTION_SALT was, and the backend boot-looped until it was added."""
+
+    @pytest.fixture(autouse=True)
+    def _setup(self):
+        self.template = _read(ROOT_DIR / "unraid" / "the-logbook.xml")
+
+    def test_template_defaults_to_production(self):
+        assert re.search(
+            r'Target="ENVIRONMENT"[^>]*>production<', self.template
+        ), "the premise of this class changed; revisit which secrets are required"
+
+    @pytest.mark.parametrize(
+        "setting", ["SECRET_KEY", "ENCRYPTION_KEY", "ENCRYPTION_SALT", "DB_PASSWORD"]
+    )
+    def test_boot_blocking_secret_is_a_required_masked_field(self, setting: str):
+        match = re.search(rf'<Config [^>]*Target="{setting}"[^>]*>', self.template)
+        assert match, f"{setting} is missing from the Unraid template"
+        assert 'Required="true"' in match.group(0)
+        assert 'Mask="true"' in match.group(0)
 
 
 # ===========================================================================

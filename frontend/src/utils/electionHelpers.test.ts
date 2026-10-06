@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-import { getTimeRemaining, getStatusBadgeClass, getVictoryDescription } from './electionHelpers';
+import {
+  electionCanEmailBallots,
+  getTimeRemaining,
+  getStatusBadgeClass,
+  getVictoryDescription,
+} from './electionHelpers';
 import { ElectionStatus, VictoryCondition } from '../constants/enums';
 import type { Election } from '../types/election';
 
@@ -125,5 +130,13 @@ describe('getVictoryDescription', () => {
       victory_condition: 'mystery' as Election['victory_condition'],
     });
     expect(getVictoryDescription(e)).toBe('Simple Majority');
+  });
+});
+
+describe('electionCanEmailBallots', () => {
+  // Plain positions are on the emailed ballot since the 2026-10-05 convergence.
+  it('is true for ballot items or plain positions, false with neither', () => {
+    expect(electionCanEmailBallots({ ballot_items: [], positions: ['Chief'] })).toBe(true);
+    expect(electionCanEmailBallots({ ballot_items: undefined, positions: [] })).toBe(false);
   });
 });

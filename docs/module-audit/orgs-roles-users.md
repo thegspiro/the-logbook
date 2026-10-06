@@ -123,10 +123,12 @@ the email actually changes.
   recounts the org with the proposed permissions and raises `LastAdministratorError`
   if no active member would still satisfy `members.manage`; wired into
   `update_role` (both branches) and `delete_role`. Closed since the audit.
-- **🚩 Member-role mass-escalation (roles #4) — still flagged.** The org-wide
-  `member` role can be escalated up to the caller's ceiling (intended-but-sharp);
-  a dedicated guard/confirmation is a product decision. In `KNOWN_LIMITATIONS.md`.
-  **Status:** roles #2 fixed, roles #3 already-fixed, roles #4 flagged. See
+- **✅ Member-role mass-escalation (roles #4) — confirmation added (owner
+  decision 2026-10-05).** The org-wide `member` role can still be changed up to
+  the caller's ceiling (that is how a capability is rolled out), but Role
+  Management now asks before saving a permission change to it, naming the
+  grants/removals and the member count (`GET /roles` `user_count`).
+  **Status:** roles #2 fixed, roles #3 already-fixed, roles #4 confirmed-before-save. See
   `docs/app-review/orgs-roles-users.md`.
 
 ### ORU-8 — MED/LOW — ✅ FIXED (2026-08-04) — Broader PII/config exposure than the privacy gate intends

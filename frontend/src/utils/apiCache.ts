@@ -77,6 +77,7 @@ const UNCACHEABLE_PREFIXES = [
   '/training/effectiveness/evaluations', // per-member evaluation: user_id + free-text comments/behavior/results notes (PII)
   '/training/records', // individual training records (scores, certs) — member PHI-adjacent
   '/training/skills-testing/tests', // per-member skills-test scores + evaluator notes (PHI)
+  '/training/knowledge-tests', // answer keys (officers) and members' test scores
   '/training/cohorts/', // cohort detail carries a resolved-name+email member roster (bare list is roster-free)
   '/training/programs/programs/', // per-program enrollment eligibility carries a full member roster + reason
   '/training/external/providers', // provider list itself: config.additional_headers can carry an

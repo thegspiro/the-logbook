@@ -156,12 +156,31 @@ Complete the onboarding wizard to configure your organization, create the admin 
 
 ## Configuration
 
-All settings live in `/mnt/user/appdata/the-logbook/.env`. After editing, restart with:
+All settings live in `/mnt/user/appdata/the-logbook/.env`. After editing, apply
+them with:
 
 ```bash
 cd /mnt/user/appdata/the-logbook
-docker compose restart
+docker compose up -d
 ```
+
+`up -d` recreates the containers whose configuration changed; `docker compose
+restart` keeps the environment they were created with, so an edit to `.env`
+does not take effect.
+
+Since 2026-10-06 the backend's `environment:` block in
+`unraid/docker-compose-unraid.yml` and `unraid/docker-compose-build-from-source.yml`
+passes every backend setting through from `.env`, each defaulting to the
+application's own default. Before that, a setting missing from the block —
+`SMTP_FROM_NAME`, `GOOGLE_*`, `CAPTCHA_*` and most others — was silently
+ignored. Read the matching entry in `docs/UPGRADING.md` before upgrading an
+existing install. `DB_HOST`, `DB_PORT`, `REDIS_HOST`, `REDIS_PORT` and `PORT`
+stay pinned to the bundled containers. A compose file kept by the Compose
+Manager plugin is your own copy and is not updated by this change.
+
+The Community Apps template (`the-logbook.xml`) works differently: Unraid passes
+every variable on the template to the container directly, with no allowlist, so
+any backend setting can be added there as a Variable.
 
 ### Ports
 
@@ -188,6 +207,30 @@ SMTP_USER=your-email@gmail.com
 SMTP_PASSWORD=your-app-password
 SMTP_FROM_EMAIL=noreply@yourdomain.com
 ```
+
+### Malware Scanning (Optional)
+
+Uploaded self-report training certificates can be scanned with ClamAV. The
+Unraid compose file includes a `clamav` service under the `with-clamav`
+profile; it is not started otherwise.
+
+```bash
+docker compose --profile with-clamav up -d
+```
+
+and in `.env`:
+
+```bash
+CLAMAV_ENABLED=true
+```
+
+Budget 1.5–3 GB of RAM for clamd. Its signatures live in a Docker-managed
+`clamav_data` volume rather than under `appdata`, because the image's own
+`clamav` user must own them. First start takes a few minutes; until clamd is
+healthy, certificate uploads are refused with a "try again in a few minutes"
+message rather than stored unscanned. If you use the single-container Community
+Apps template instead, run the official `clamav/clamav` image as its own
+container on the same network and set **ClamAV Host** to its name or IP.
 
 ### Data Directories
 

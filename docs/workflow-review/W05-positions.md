@@ -76,6 +76,7 @@ Test: `MembersAdminPage.test.tsx` (new). Re-driven: the server's reason appears 
 
 **Saw:** a second "Report Reader" was accepted (slug `report_reader_2`). Both then appear identically in Role Management and Manage Roles.
 **Why not fixed:** refusing duplicates changes behaviour an installation may rely on, and may want a migration. Mirrored to `docs/KNOWN_LIMITATIONS.md`.
+**Owner decision (2026-10-05) — fixed:** refuse duplicates on create and rename; existing duplicates are left and flagged. A new, cloned or renamed position whose name (trimmed, case-insensitive) another position in the organization uses is refused with `409`. Pairs that already exist still save, and Role Management marks each with "Same name as another position" and its internal name, so one can be renamed apart. No migration.
 
 ### W05-6 — LOW — Permission chips showed only the last word — ✅ FIXED
 

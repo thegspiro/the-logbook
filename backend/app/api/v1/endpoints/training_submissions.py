@@ -6,6 +6,7 @@ and self-report configuration management.
 """
 
 import asyncio
+import hashlib
 import os
 import uuid as uuid_lib
 from datetime import datetime, timezone
@@ -47,6 +48,11 @@ from app.schemas.training_submission import (
     TrainingSubmissionResponse,
     TrainingSubmissionUpdate,
     sanitize_attachments,
+)
+from app.services.malware_scan_service import (
+    MalwareScanUnavailable,
+    is_malware_scan_enabled,
+    scan_bytes,
 )
 from app.services.training_submission_service import TrainingSubmissionService
 from app.utils.mime_validation import detect_mime_type
@@ -157,7 +163,7 @@ async def create_submission_with_attachment(
         # {field, message} body as every other validation failure in the app.
         raise RequestValidationError(e.errors()) from e
 
-    stored = await _store_attachment_file(file, current_user)
+    stored = await _store_attachment_file(file, current_user, db)
 
     service = TrainingSubmissionService(db)
     async with handle_service_errors("Failed to create submission"):
@@ -562,12 +568,76 @@ def _confined_attachment_paths(attachments) -> list[str]:
     return [path for path in paths if path]
 
 
-async def _store_attachment_file(file: UploadFile, current_user: User) -> dict:
+async def _reject_if_malicious(
+    db: AsyncSession, content: bytes, detected_mime: str, current_user: User
+) -> None:
+    """Scan the bytes with ClamAV when the operator has enabled it.
+
+    Runs before anything touches the disk, so an infected file is never
+    written. Fails closed: with scanning enabled, a scanner that cannot give a
+    verdict refuses the upload rather than letting an unscanned file through
+    (same reasoning as CAPTCHA — an outage must not be a bypass).
+    """
+    if not is_malware_scan_enabled():
+        return
+
+    try:
+        result = await scan_bytes(content)
+    except MalwareScanUnavailable:
+        raise CodedHTTPException(
+            status_code=503,
+            detail=(
+                "Files cannot be checked for malware right now, so this one "
+                "was not accepted. Please try again in a few minutes."
+            ),
+            error_code=ErrorCode.UPLD_SCAN_UNAVAILABLE,
+            headers={"Retry-After": "60"},
+        )
+
+    if not result.infected:
+        return
+
+    # Identifies the file without recording any of it: the hash lets an
+    # administrator match a later report to this rejection.
+    await log_audit_event(
+        db=db,
+        event_type="upload_malware_detected",
+        event_category="security",
+        severity="warning",
+        event_data={
+            "upload": "self_report_certificate",
+            "signature": result.signature,
+            "file_type": detected_mime,
+            "file_size": len(content),
+            "sha256": hashlib.sha256(content).hexdigest(),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    # The request ends in an error, which rolls the session back; commit now
+    # or the audit row goes with it. Nothing else is pending at this point in
+    # either caller.
+    await db.commit()
+    raise CodedHTTPException(
+        status_code=400,
+        detail=(
+            "This file was flagged as malicious by the malware scan and was "
+            "not uploaded. Please obtain a fresh copy of the certificate and "
+            "try again."
+        ),
+        error_code=ErrorCode.UPLD_MALWARE_DETECTED,
+    )
+
+
+async def _store_attachment_file(
+    file: UploadFile, current_user: User, db: AsyncSession
+) -> dict:
     """Validate an upload and write it under the org's attachment directory.
 
     MIME type comes from the file's magic bytes, never the client-supplied
     Content-Type, and the stored name is server-generated with a magic-derived
     extension so a double extension (cert.pdf.exe) cannot survive the trip.
+    When CLAMAV_ENABLED, the bytes are malware-scanned before they are written.
     """
     try:
         content = await read_upload_limited(file, MAX_SUBMISSION_ATTACHMENT_BYTES)
@@ -597,6 +667,8 @@ async def _store_attachment_file(file: UploadFile, current_user: User) -> dict:
             ),
             error_code=ErrorCode.UPLD_TYPE_NOT_ALLOWED,
         )
+
+    await _reject_if_malicious(db, content, detected_mime, current_user)
 
     org_dir = os.path.join(SUBMISSION_ATTACHMENT_DIR, str(current_user.organization_id))
     await asyncio.to_thread(os.makedirs, org_dir, exist_ok=True)
@@ -641,7 +713,7 @@ async def upload_submission_attachment(
             detail="Cannot attach to a submission that has been approved or rejected.",
         )
 
-    attachment = await _store_attachment_file(file, current_user)
+    attachment = await _store_attachment_file(file, current_user, db)
 
     # Plain JSON column — reassign rather than append in place so SQLAlchemy
     # detects the change (CLAUDE.md pitfall #12).

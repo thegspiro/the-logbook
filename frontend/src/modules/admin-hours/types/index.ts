@@ -146,6 +146,12 @@ export interface AdminHoursSummary {
   periodEnd: string | null;
 }
 
+/** The department's review rules, as the server resolves them (camelCase wire). */
+export interface AdminHoursReviewSettings {
+  allowSelfApproval: boolean;
+  resyncRequeueGrowthPercent: number;
+}
+
 export interface AdminHoursQRData {
   categoryId: string;
   categoryName: string;

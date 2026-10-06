@@ -34,7 +34,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.medical_screening import ScreeningStatus, ScreeningType
 from app.models.training import (
     AssignmentStatus,
-    ShiftPosition,
     SwapRequestStatus,
     TimeOffStatus,
 )
@@ -54,11 +53,12 @@ _TARGET_COLUMNS: tuple[_EnumColumn, ...] = (
     _EnumColumn("screening_requirements", "screening_type", ScreeningType, None),
     _EnumColumn("screening_records", "screening_type", ScreeningType, None),
     _EnumColumn("screening_records", "status", ScreeningStatus, "scheduled"),
-    _EnumColumn("shift_assignments", "position", ShiftPosition, "firefighter"),
-    # Same enum, same DDL shape, and it needs the same widening when a seat is
-    # added -- this module compares the column's labels against the model enum,
-    # so a column left out of this list silently keeps the older set.
-    _EnumColumn("standing_shift_claims", "position", ShiftPosition, "firefighter"),
+    # ``shift_assignments.position`` and ``standing_shift_claims.position`` were
+    # listed here while they were ENUMs. They are VARCHAR now, holding a
+    # department's own seats verbatim, and must never be listed again: this pass
+    # treats any non-ENUM column as one to convert back, which would either
+    # fail on the first custom seat or, on a database with none yet, quietly
+    # re-close the vocabulary.
     _EnumColumn("shift_assignments", "assignment_status", AssignmentStatus, "assigned"),
     _EnumColumn("shift_swap_requests", "status", SwapRequestStatus, "pending"),
     _EnumColumn("shift_time_off", "status", TimeOffStatus, "pending"),

@@ -201,12 +201,16 @@ curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/u
    - Engine: MySQL 8.0
    - Instance: db.t3.micro (testing) or db.t3.small (production)
    - Enable automated backups
+   - A parameter group with `character_set_server=utf8mb4` and
+     `collation_server=utf8mb4_unicode_ci`, matching the bundled MySQL
 
 2. Create ElastiCache Redis:
-   - Engine: Redis 7.x
+   - Engine: Redis 7.x, cluster mode disabled
    - Node: cache.t3.micro
+   - Encryption in transit on, with a Redis AUTH token
 
-3. Configure .env:
+3. Configure .env (CA files go in `infrastructure/certs/`; the paths below are
+   where the backend container sees them):
 
 ```bash
 DB_HOST=your-rds-endpoint.rds.amazonaws.com
@@ -214,17 +218,31 @@ DB_PORT=3306
 DB_NAME=the_logbook
 DB_USER=admin
 DB_PASSWORD=your-secure-password
+DB_SSL=true
+DB_SSL_CA=/etc/ssl/logbook/rds-global-bundle.pem
 
-REDIS_HOST=your-elasticache-endpoint.cache.amazonaws.com
+REDIS_HOST=your-elasticache-primary-endpoint.cache.amazonaws.com
 REDIS_PORT=6379
+REDIS_PASSWORD=your-elasticache-auth-token
+REDIS_SSL=true
+REDIS_SSL_CA=/etc/ssl/logbook/amazon-root-ca-1.pem
+
+COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml:docker-compose.external-services.yml
 ```
 
-4. Deploy without local database (layer the production override — see the
-   hardening note under [Resource Requirements](#resource-requirements)):
+4. Deploy without the bundled database and Redis (the production override
+   hardens the stack — see the note under
+   [Resource Requirements](#resource-requirements); the external-services
+   override points the backend at RDS and ElastiCache and keeps `mysql`,
+   `redis` and the backup sidecar from starting):
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d backend frontend
+docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  -f docker-compose.external-services.yml up -d
 ```
+
+Step-by-step, including where to get the CA files, backups and migrations:
+[AWS Deployment Guide, Method 2](../docs/deployment/aws.md#method-2-ec2--rds--elasticache-production).
 
 #### AWS ECS/Fargate
 

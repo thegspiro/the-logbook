@@ -38,6 +38,7 @@ from app.models.training import (
 from app.models.user import User, UserStatus
 from app.services.training_compliance import (
     CATCH_UP_STATUS,
+    load_credited_shift_dates,
     member_join_date,
     requirement_applies_to_user,
     tally_standing,
@@ -89,7 +90,9 @@ def _forecast_pct(met: int, total: int, expiring_count: int) -> Optional[float]:
     return round(max(0, current - (expiring_count / total * 100)), 1)
 
 
-def _requirement_cells(requirements, user, records, today: date) -> List[str]:
+def _requirement_cells(
+    requirements, user, records, today: date, shift_dates: List[date]
+) -> List[str]:
     """One export cell per requirement column for ``user``.
 
     "N/A" where the requirement does not grade this member — their membership
@@ -106,7 +109,7 @@ def _requirement_cells(requirements, user, records, today: date) -> List[str]:
             cells.append("N/A")
             continue
         detail = TrainingService.evaluate_requirement_detail(
-            req, records, today, join_date=join_date
+            req, records, today, join_date=join_date, shift_dates=shift_dates
         )
         if detail.get("catch_up_deadline"):
             cells.append(f"Due {detail['catch_up_deadline']}")
@@ -382,15 +385,90 @@ class CompetencyService:
         await self.db.refresh(matrix)
         return matrix
 
-    async def get_member_competencies(self, user_id: str, organization_id: str) -> list:
-        """Get all competencies for a member"""
-        result = await self.db.execute(
-            select(MemberCompetency)
-            .where(MemberCompetency.user_id == user_id)
+    def _competencies_query(self, organization_id: str):
+        """Stored MemberCompetency rows with their skill's name, newest first.
+
+        The one read behind both the per-member endpoints and the department
+        heat-map, so the level a heat-map cell shows is exactly the level the
+        member's own view reports — the heat-map grades nothing itself
+        (CLAUDE.md pitfall #29). The skill join carries the org predicate so a
+        row can never be named from another department's catalog.
+        """
+        return (
+            select(MemberCompetency, SkillEvaluation.name)
+            .outerjoin(
+                SkillEvaluation,
+                (SkillEvaluation.id == MemberCompetency.skill_evaluation_id)
+                & (SkillEvaluation.organization_id == organization_id),
+            )
             .where(MemberCompetency.organization_id == organization_id)
             .order_by(MemberCompetency.updated_at.desc())
         )
-        return result.scalars().all()
+
+    @staticmethod
+    def _named(rows) -> list:
+        competencies = []
+        for competency, skill_name in rows:
+            # ``skill_name`` is the response schema's enriched field; it is
+            # not a mapped column, so setting it writes nothing.
+            competency.skill_name = skill_name
+            competencies.append(competency)
+        return competencies
+
+    async def get_member_competencies(self, user_id: str, organization_id: str) -> list:
+        """Get all competencies for a member"""
+        result = await self.db.execute(
+            self._competencies_query(organization_id).where(
+                MemberCompetency.user_id == user_id
+            )
+        )
+        return self._named(result.all())
+
+    async def get_department_competencies(self, organization_id: str) -> Dict[str, Any]:
+        """Every active member's stored levels, for the readiness heat-map.
+
+        Members are the department's active roster — including those with no
+        evaluation yet, who show as a row of empty cells rather than vanishing
+        — and skills are its active skill evaluations, which are the columns.
+        """
+        members_result = await self.db.execute(
+            select(User)
+            .where(
+                User.organization_id == organization_id,
+                User.status == UserStatus.ACTIVE,
+                User.deleted_at.is_(None),
+            )
+            .order_by(User.last_name, User.first_name)
+        )
+        members = [
+            {
+                "user_id": str(member.id),
+                "name": member.full_name,
+                "station": member.station,
+                "rank": member.rank,
+            }
+            for member in members_result.scalars().all()
+        ]
+        active_ids = {m["user_id"] for m in members}
+
+        skills_result = await self.db.execute(
+            select(SkillEvaluation)
+            .where(
+                SkillEvaluation.organization_id == organization_id,
+                SkillEvaluation.active.is_(True),
+            )
+            .order_by(SkillEvaluation.category, SkillEvaluation.name)
+        )
+        skills = [
+            {"id": str(skill.id), "name": skill.name, "category": skill.category}
+            for skill in skills_result.scalars().all()
+        ]
+
+        result = await self.db.execute(self._competencies_query(organization_id))
+        competencies = [
+            c for c in self._named(result.all()) if str(c.user_id) in active_ids
+        ]
+        return {"members": members, "skills": skills, "competencies": competencies}
 
 
 class InstructorQualificationService:
@@ -1051,6 +1129,9 @@ class ReportExportService:
         # "Met" is judged as of the department's today, the same day the
         # compliance screens use; a caller's end_date only bounds the rows.
         today = await resolve_org_today(self.db, organization_id)
+        shifts_by_user = await load_credited_shift_dates(
+            self.db, organization_id, [u.id for u in users], requirements, today, True
+        )
         for user in users:
             records_result = await self.db.execute(
                 select(TrainingRecord)
@@ -1070,7 +1151,15 @@ class ReportExportService:
                 str(len(records)),
             ]
 
-            row.extend(_requirement_cells(requirements, user, records, today))
+            row.extend(
+                _requirement_cells(
+                    requirements,
+                    user,
+                    records,
+                    today,
+                    shifts_by_user.get(str(user.id), []),
+                )
+            )
 
             writer.writerow(row)
 
@@ -1182,6 +1271,17 @@ class ReportExportService:
             )
         )
         all_requirements = req_result.scalars().all()
+        # Full history: a rolling requirement's due date, which the at-risk
+        # list below reads, anchors on the latest shift however old.
+        shifts_by_user = await load_credited_shift_dates(
+            self.db,
+            organization_id,
+            [u.id for u in users],
+            all_requirements,
+            today,
+            True,
+            full_history=True,
+        )
 
         for user in users:
             # Only what grades this member — by type, role, and grandfathering.
@@ -1209,7 +1309,11 @@ class ReportExportService:
                 from app.services.training_service import TrainingService
 
                 detail = TrainingService.evaluate_requirement_detail(
-                    req, records, today, join_date=join_date
+                    req,
+                    records,
+                    today,
+                    join_date=join_date,
+                    shift_dates=shifts_by_user.get(str(user.id), []),
                 )
                 statuses.append(_detail_status(detail))
                 if (
@@ -1295,6 +1399,14 @@ class ReportExportService:
         # tomorrow for a US department every evening.
         org_tz = await resolve_scheduling_timezone(self.db, organization_id)
         generated_on = datetime.now(org_tz).date()
+        shifts_by_user = await load_credited_shift_dates(
+            self.db,
+            organization_id,
+            [u.id for u in users],
+            requirements,
+            generated_on,
+            True,
+        )
 
         buf = io.BytesIO()
         c = canvas.Canvas(buf, pagesize=letter)
@@ -1354,7 +1466,13 @@ class ReportExportService:
             c.drawString(col_x[2], y, f"{total_hours:.1f}")
             c.drawString(col_x[3], y, str(len(records)))
 
-            cells = _requirement_cells(requirements, user, records, generated_on)
+            cells = _requirement_cells(
+                requirements,
+                user,
+                records,
+                generated_on,
+                shifts_by_user.get(str(user.id), []),
+            )
             for i, status_text in enumerate(cells):
                 x = req_col_start + i * 70
                 if x + 60 > page_w - margin:

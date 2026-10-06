@@ -339,19 +339,23 @@ export interface MemberAnonymizationResponse {
 
 export interface OverdueMember {
   user_id: string;
-  name: string;
   member_name: string;
-  email?: string;
-  membership_number?: string;
-  drop_date: string;
+  email?: string | null | undefined;
+  status: string;
+  /** The drop date, in the department's timezone (YYYY-MM-DD). */
+  dropped_date: string;
   days_since_drop: number;
-  items_outstanding: unknown[];
+  items_outstanding: number;
+  total_value: number;
   items: Array<{
-    item_id: string;
-    item_name: string;
-    due_date: string;
-    days_overdue: number;
+    name: string;
+    serial_number: string;
+    asset_tag: string;
+    value: number;
+    type: 'assigned' | 'checked_out';
   }>;
+  /** Reminder marks already sent, e.g. "30_day". */
+  reminders_sent: string[];
 }
 
 export interface MembershipTierBenefits {
@@ -478,6 +482,54 @@ export interface ServicePeriodInput {
   counts_toward_service: boolean;
   separation_status: SeparationStatus | null;
   notes: string | null;
+}
+
+/**
+ * A qualification on a member's record (QUAL-1). snake_case, matching the
+ * backend's member_qualification schema, which has no alias generator.
+ */
+export interface MemberQualification {
+  id: string;
+  user_id: string;
+  qualification_code: string;
+  label: string;
+  /** The shift seats it clears the holder for. */
+  positions: string[];
+  granted_on: string | null;
+  expires_on: string | null;
+  notes: string | null;
+  /** "training_record" when a completed course granted it; "manual" when entered directly. */
+  source: 'manual' | 'training_record';
+  /** Whether shift eligibility counts it today — computed by the backend's own rule. */
+  in_force: boolean;
+}
+
+/** Every field is sent on every save: a null date is "no bound", not "unchanged". */
+export interface MemberQualificationSave {
+  granted_on: string | null;
+  expires_on: string | null;
+  notes: string | null;
+}
+
+export interface QualificationImportRow {
+  row: number;
+  user_id: string;
+  member_name: string;
+  qualification_code: string;
+  label: string;
+  granted_on: string | null;
+  expires_on: string | null;
+  action: 'create' | 'update';
+}
+
+export interface QualificationImportResult {
+  dry_run: boolean;
+  total_rows: number;
+  valid_rows: number;
+  imported: number;
+  rows: QualificationImportRow[];
+  /** One entry per rejected row; `row` is the spreadsheet line number. */
+  errors: { row: number; message: string }[];
 }
 
 export interface MemberStatusChangeResponse {

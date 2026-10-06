@@ -60,6 +60,10 @@ def _svc(db):
     # The real updater is exercised elsewhere; here we only care that the ledger
     # method routes the right accrual through it.
     svc.update_requirement_progress = AsyncMock(return_value=(MagicMock(), None))
+    # These rows belong to a program's own requirement, which keeps the
+    # ledger; a linked department requirement accrues nothing (W26-1) and is
+    # covered by test_program_linked_requirement_reads_compliance.py.
+    svc._is_linked_row = AsyncMock(return_value=False)
     return svc
 
 

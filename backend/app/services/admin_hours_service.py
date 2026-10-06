@@ -26,6 +26,10 @@ from app.models.admin_hours import (
 from app.models.event import Event
 from app.models.user import Organization, User
 from app.services.separation_of_duties import assert_different_person
+from app.utils.admin_hours_settings import (
+    load_admin_hours_review_settings,
+    resync_growth_needs_review,
+)
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.hours import hours_from_minutes
 from app.utils.member_names import format_display_name
@@ -1072,8 +1076,17 @@ class AdminHoursService:
         # SEC (AH-4): admin hours are credited service time, and officers hold
         # the approval permission for the same pool they log into. Approving
         # your own entry is the entire control. Rejection stays open — an
-        # officer withdrawing their own claim is not a conflict.
-        if action == "approve":
+        # officer withdrawing their own claim is not a conflict. A department
+        # with one officer can relax it (``admin_hours.allow_self_approval``,
+        # settable only under settings.manage); the approval still records
+        # approved_by == user_id, so it is visible as a self-approval.
+        if (
+            action == "approve"
+            and str(entry.user_id) == str(approver_id)
+            and not (
+                await load_admin_hours_review_settings(self.db, organization_id)
+            ).allow_self_approval
+        ):
             assert_different_person(
                 approver_id,
                 entry.user_id,
@@ -1223,6 +1236,9 @@ class AdminHoursService:
         now = datetime.now(timezone.utc)
         approved_count = 0
         skipped_self = 0
+        # Read only once a self-owned entry turns up, so a batch of other
+        # members' entries costs no extra query.
+        allow_self: Optional[bool] = None
 
         # Lock the affected members' User rows *before* any entry row
         # (Pitfall #27), in sorted member-id order — the same "member rows
@@ -1280,8 +1296,13 @@ class AdminHoursService:
             # "the entire control" — the bulk path must honor the same
             # separation of duties, or an officer could self-credit at scale.
             # Skip self-owned entries (they stay PENDING for another approver)
-            # rather than aborting the whole batch on one included id.
-            if entry.user_id == approver_id:
+            # rather than aborting the whole batch on one included id — unless
+            # the department has allowed self-approval, as approve_or_reject.
+            if entry.user_id == approver_id and allow_self is None:
+                allow_self = (
+                    await load_admin_hours_review_settings(self.db, organization_id)
+                ).allow_self_approval
+            if entry.user_id == approver_id and not allow_self:
                 skipped_self += 1
                 continue
             entry.status = AdminHoursEntryStatus.APPROVED
@@ -1924,8 +1945,11 @@ class AdminHoursService:
         how the event screen and the hours ledger came to disagree. The entry is
         updated in place rather than deleted and recreated so its id, its
         approval and its audit trail survive the correction — only the numbers
-        move. An entry whose method is no longer EVENT_ATTENDANCE was taken over
-        by hand and is left alone.
+        move. The exception is an approved entry the correction grew past the
+        department's ``resync_requeue_growth_percent`` into a length its
+        category would not auto-approve: that one returns to Pending Review.
+        An entry whose method is no longer EVENT_ATTENDANCE was taken over by
+        hand and is left alone.
         """
         # A Training event credits training records instead. Checked before
         # the mappings so a mapping stored before the rule existed does nothing.
@@ -1958,6 +1982,9 @@ class AdminHoursService:
             for stale in stale_result.scalars().all():
                 await self.db.delete(stale)
 
+        # Read only when an approved entry actually grows, for the same reason.
+        growth_percent: Optional[int] = None
+
         created_count = 0
         for category_id, percentage, category in mappings:
             # Skip if entry already exists for this RSVP + category (idempotent)
@@ -1977,11 +2004,43 @@ class AdminHoursService:
                     != AdminHoursEntryMethod.EVENT_ATTENDANCE
                 ):
                     continue
+                new_minutes = max(1, int(duration_minutes * percentage / 100))
+                # A correction keeps the officer's decision (that is why the
+                # entry is updated in place), unless it grew the session past
+                # the department's threshold into a length the category would
+                # not have auto-approved: then the approval covered hours it
+                # never saw, and the entry goes back for review (AH-21).
+                approved_minutes = existing_entry.duration_minutes or 0
+                if (
+                    existing_entry.status == AdminHoursEntryStatus.APPROVED
+                    and new_minutes > approved_minutes
+                    and growth_percent is None
+                ):
+                    growth_percent = (
+                        await load_admin_hours_review_settings(self.db, organization_id)
+                    ).resync_requeue_growth_percent
+                if (
+                    existing_entry.status == AdminHoursEntryStatus.APPROVED
+                    and growth_percent is not None
+                    and resync_growth_needs_review(
+                        approved_minutes, new_minutes, growth_percent
+                    )
+                    and self._determine_post_clockout_status(category, new_minutes)
+                    == AdminHoursEntryStatus.PENDING
+                ):
+                    logger.info(
+                        "Re-queued admin hours entry {} for review: resync grew "
+                        "it from {} to {} minutes",
+                        existing_entry.id,
+                        existing_entry.duration_minutes,
+                        new_minutes,
+                    )
+                    existing_entry.status = AdminHoursEntryStatus.PENDING
+                    existing_entry.approved_by = None
+                    existing_entry.approved_at = None
                 existing_entry.clock_in_at = _ensure_utc(check_in_at)
                 existing_entry.clock_out_at = _ensure_utc(check_out_at)
-                existing_entry.duration_minutes = max(
-                    1, int(duration_minutes * percentage / 100)
-                )
+                existing_entry.duration_minutes = new_minutes
                 existing_entry.description = f"Event attendance: {event_title}"
                 created_count += 1
                 continue

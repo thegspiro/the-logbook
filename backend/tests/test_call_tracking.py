@@ -2348,3 +2348,342 @@ class TestCallVolumeReportPreliminaryMarker:
         report = await self._report(db_session, org)
 
         assert report["unfinalized_shifts"] == 0
+
+
+# ======================================================================
+# The close-out shared-call picker (SCHED-10)
+# ======================================================================
+
+
+class TestCloseoutDetachSchema:
+    def test_a_call_cannot_be_attached_and_detached_at_once(self):
+        from app.schemas.scheduling import CloseoutCallsRequest
+
+        call = "22222222-2222-2222-2222-222222222222"
+        with pytest.raises(ValidationError):
+            CloseoutCallsRequest(attach_call_ids=[call], detach_call_ids=[call])
+
+    def test_detach_alone_is_accepted(self):
+        from app.schemas.scheduling import CloseoutCallsRequest
+
+        body = CloseoutCallsRequest(
+            detach_call_ids=["22222222-2222-2222-2222-222222222222"]
+        )
+        assert len(body.detach_call_ids) == 1
+
+
+class TestCountOnlyReportCountsIncidents:
+    async def test_the_count_only_report_no_longer_claims_unit_responses(self):
+        """With the picker a shared incident is one call, so the figure is the
+        department's incident count and is labelled as one."""
+        from app.services.reports_service import ReportsService
+
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=_scalars([]))
+        call_service = MagicMock()
+        call_service.apparatus_run_counts = AsyncMock(return_value={})
+        call_service.type_labels = AsyncMock(return_value={})
+        with patch(
+            "app.services.reports_service.resolve_apparatus_labels",
+            AsyncMock(return_value={}),
+        ):
+            report = await ReportsService(db)._generate_call_volume_from_counts(
+                "org-1", date(2026, 8, 1), date(2026, 8, 31), call_service
+            )
+        assert report["counts_unit_responses"] is False
+
+
+async def _make_timed_shift(db_session, org, apparatus_id, start, hours=12):
+    shift = await _make_shift(db_session, org, apparatus_id, start.date())
+    shift.start_time = start
+    shift.end_time = start + timedelta(hours=hours)
+    await db_session.flush()
+    return shift
+
+
+@pytest.mark.integration
+class TestAttachableCalls:
+    """What the picker offers: other units' calls while this shift was on."""
+
+    async def test_offers_another_units_call_and_not_this_shifts_own(self, db_session):
+        org = await _make_org(db_session)
+        svc = CallTrackingService(db_session)
+        engine = await _make_shift(db_session, org, "engine-5")
+        medic = await _make_shift(db_session, org, "medic-1")
+        await svc.record_shift_calls(engine, org.id, total_calls=1)
+        await svc.record_shift_calls(medic, org.id, total_calls=2)
+
+        offered = await svc.list_attachable_calls(medic, org.id)
+
+        assert len(offered) == 1
+        assert offered[0]["attached"] is False
+        assert offered[0]["apparatus_ids"] == ["engine-5"]
+        # "engine-5" is not a real apparatus row; the label says so rather
+        # than showing a raw id.
+        assert offered[0]["unit_labels"] == ["Unknown unit"]
+
+    async def test_a_claimed_call_is_offered_as_attached(self, db_session):
+        org = await _make_org(db_session)
+        svc = CallTrackingService(db_session)
+        engine = await _make_shift(db_session, org, "engine-5")
+        medic = await _make_shift(db_session, org, "medic-1")
+        await svc.record_shift_calls(engine, org.id, total_calls=1)
+        call_id = (await svc.list_attachable_calls(medic, org.id))[0]["id"]
+        await svc.attach_response(call_id, medic, org.id)
+
+        offered = await svc.list_attachable_calls(medic, org.id)
+        assert [(c["id"], c["attached"]) for c in offered] == [(call_id, True)]
+        # The other unit sees the same call as shared with it.
+        assert (await svc.list_attachable_calls(engine, org.id))[0]["attached"]
+
+    async def test_matches_by_overlap_not_by_call_date(self, db_session):
+        """A 24-hour tour dates its 0300 call yesterday; a medic who came on at
+        midnight still has to be able to claim it."""
+        org = await _make_org(db_session)
+        svc = CallTrackingService(db_session)
+        tour = await _make_timed_shift(
+            db_session,
+            org,
+            "engine-5",
+            datetime(2026, 8, 17, 7, 0, tzinfo=timezone.utc),
+            hours=24,
+        )
+        medic = await _make_timed_shift(
+            db_session,
+            org,
+            "medic-1",
+            datetime(2026, 8, 18, 0, 0, tzinfo=timezone.utc),
+        )
+        await svc.record_shift_calls(tour, org.id, total_calls=1)
+
+        assert len(await svc.list_attachable_calls(medic, org.id)) == 1
+
+    async def test_a_shift_that_did_not_overlap_is_not_offered(self, db_session):
+        org = await _make_org(db_session)
+        svc = CallTrackingService(db_session)
+        earlier = await _make_timed_shift(
+            db_session,
+            org,
+            "engine-5",
+            datetime(2026, 8, 18, 0, 0, tzinfo=timezone.utc),
+            hours=6,
+        )
+        later = await _make_timed_shift(
+            db_session,
+            org,
+            "medic-1",
+            datetime(2026, 8, 18, 12, 0, tzinfo=timezone.utc),
+        )
+        await svc.record_shift_calls(earlier, org.id, total_calls=2)
+
+        assert await svc.list_attachable_calls(later, org.id) == []
+
+    async def test_this_apparatus_on_another_tour_is_not_offered(self, db_session):
+        """``attach_response`` deduplicates by apparatus, so ticking a call the
+        same engine already ran would do nothing and spring back unticked."""
+        org = await _make_org(db_session)
+        svc = CallTrackingService(db_session)
+        day = await _make_shift(db_session, org, "engine-5")
+        overlap = await _make_shift(db_session, org, "engine-5")
+        await svc.record_shift_calls(day, org.id, total_calls=1)
+
+        assert await svc.list_attachable_calls(overlap, org.id) == []
+
+    async def test_another_orgs_calls_are_never_offered(self, db_session):
+        org_a = await _make_org(db_session, "Dept A")
+        org_b = await _make_org(db_session, "Dept B")
+        svc = CallTrackingService(db_session)
+        a_shift = await _make_shift(db_session, org_a, "engine-a")
+        b_shift = await _make_shift(db_session, org_b, "engine-b")
+        await svc.record_shift_calls(a_shift, org_a.id, total_calls=3)
+
+        assert await svc.list_attachable_calls(b_shift, org_b.id) == []
+
+
+@pytest.mark.integration
+class TestDetachResponse:
+    async def test_detaching_removes_only_this_shifts_response(self, db_session):
+        org = await _make_org(db_session)
+        svc = CallTrackingService(db_session)
+        engine = await _make_shift(db_session, org, "engine-5")
+        medic = await _make_shift(db_session, org, "medic-1")
+        window = (date(2026, 8, 1), date(2026, 8, 31))
+        await svc.record_shift_calls(engine, org.id, total_calls=1)
+        call_id = (await svc.list_attachable_calls(medic, org.id))[0]["id"]
+        await svc.attach_response(call_id, medic, org.id)
+
+        ok, err = await svc.detach_response(call_id, medic, org.id)
+
+        assert ok
+        assert err is None
+        assert await svc.apparatus_run_counts(org.id, *window) == {"engine-5": 1}
+        assert await svc.department_call_count(org.id, *window) == 1
+
+    async def test_a_call_this_shift_alone_logged_cannot_be_detached(self, db_session):
+        """That would delete a call the department ran; the count corrects it."""
+        org = await _make_org(db_session)
+        svc = CallTrackingService(db_session)
+        engine = await _make_shift(db_session, org, "engine-5")
+        medic = await _make_shift(db_session, org, "medic-1")
+        await svc.record_shift_calls(engine, org.id, total_calls=1)
+        call_id = (await svc.list_attachable_calls(medic, org.id))[0]["id"]
+
+        ok, err = await svc.detach_response(call_id, engine, org.id)
+
+        assert not ok
+        assert "lower the call count" in err
+        assert await svc.shift_response_count(str(engine.id)) == 1
+
+    async def test_detaching_a_call_this_shift_is_not_on_changes_nothing(
+        self, db_session
+    ):
+        org = await _make_org(db_session)
+        svc = CallTrackingService(db_session)
+        engine = await _make_shift(db_session, org, "engine-5")
+        medic = await _make_shift(db_session, org, "medic-1")
+        await svc.record_shift_calls(engine, org.id, total_calls=1)
+        call_id = (await svc.list_attachable_calls(medic, org.id))[0]["id"]
+
+        ok, err = await svc.detach_response(call_id, medic, org.id)
+
+        assert ok
+        assert err is None
+        assert await svc.shift_response_count(str(engine.id)) == 1
+
+    async def test_another_orgs_call_is_untouched(self, db_session):
+        org_a = await _make_org(db_session, "Dept A")
+        org_b = await _make_org(db_session, "Dept B")
+        svc = CallTrackingService(db_session)
+        a_engine = await _make_shift(db_session, org_a, "engine-a")
+        a_medic = await _make_shift(db_session, org_a, "medic-a")
+        b_shift = await _make_shift(db_session, org_b, "engine-b")
+        await svc.record_shift_calls(a_engine, org_a.id, total_calls=1)
+        call_id = (await svc.list_attachable_calls(a_medic, org_a.id))[0]["id"]
+        await svc.attach_response(call_id, a_medic, org_a.id)
+
+        ok, _ = await svc.detach_response(call_id, b_shift, org_b.id)
+
+        assert ok
+        assert await svc.shift_response_count(str(a_medic.id)) == 1
+
+
+@pytest.mark.integration
+class TestSharedCallsAndTheTypeBreakdown:
+    async def test_a_breakdown_larger_than_the_own_calls_is_refused(self, db_session):
+        """It used to be truncated, silently dropping whichever types sorted
+        last."""
+        org = await _make_org(db_session)
+        svc = CallTrackingService(db_session)
+        engine = await _make_shift(db_session, org, "engine-5")
+        medic = await _make_shift(db_session, org, "medic-1")
+        await svc.record_shift_calls(engine, org.id, total_calls=1)
+        call_id = (await svc.list_attachable_calls(medic, org.id))[0]["id"]
+        await svc.attach_response(call_id, medic, org.id)
+
+        _, err = await svc.record_shift_calls(
+            medic, org.id, total_calls=2, type_counts={"ems": 2}
+        )
+
+        assert err is not None
+        assert "shared call" in err
+
+    async def test_a_breakdown_of_the_own_calls_is_accepted(self, db_session):
+        org = await _make_org(db_session)
+        svc = CallTrackingService(db_session)
+        engine = await _make_shift(db_session, org, "engine-5")
+        medic = await _make_shift(db_session, org, "medic-1")
+        window = (date(2026, 8, 1), date(2026, 8, 31))
+        await svc.record_shift_calls(engine, org.id, total_calls=1)
+        call_id = (await svc.list_attachable_calls(medic, org.id))[0]["id"]
+        await svc.attach_response(call_id, medic, org.id)
+
+        total, err = await svc.record_shift_calls(
+            medic, org.id, total_calls=2, type_counts={"ems": 1}
+        )
+
+        assert err is None
+        assert total == 2
+        assert await svc.department_call_count(org.id, *window) == 2
+
+
+@pytest.mark.integration
+class TestCloseoutPickerEndToEnd:
+    """The wizard's two calls: read the picker, then save ticks and unticks."""
+
+    async def test_state_serves_the_picker_and_a_save_claims_the_call(self, db_session):
+        org = await _make_org(db_session)
+        engine = await _make_shift(db_session, org, "engine-5")
+        medic = await _make_shift(db_session, org, "medic-1")
+        await CallTrackingService(db_session).record_shift_calls(
+            engine, org.id, total_calls=1
+        )
+        sched = SchedulingService(db_session)
+
+        state, err = await sched.get_closeout_state(medic.id, org.id)
+        assert err is None
+        assert len(state["attachable_calls"]) == 1
+        call_id = state["attachable_calls"][0]["id"]
+
+        state, err = await sched.save_closeout_calls(
+            shift_id=medic.id,
+            organization_id=org.id,
+            reported_call_count=2,
+            attach_call_ids=[call_id],
+            count_provided=True,
+        )
+        assert err is None
+        assert state["reported_call_count"] == 2
+        assert state["attachable_calls"][0]["attached"] is True
+        window = (date(2026, 8, 1), date(2026, 8, 31))
+        # The shared MVA counts once; the medic's own second call adds one.
+        assert (
+            await CallTrackingService(db_session).department_call_count(org.id, *window)
+            == 2
+        )
+
+    async def test_unticking_detaches_before_the_count_is_reconciled(self, db_session):
+        """Lowering the total below the shared calls used to be refused with
+        "Detach a shared call first" and nothing could detach one."""
+        org = await _make_org(db_session)
+        engine = await _make_shift(db_session, org, "engine-5")
+        medic = await _make_shift(db_session, org, "medic-1")
+        await CallTrackingService(db_session).record_shift_calls(
+            engine, org.id, total_calls=1
+        )
+        sched = SchedulingService(db_session)
+        state, _ = await sched.get_closeout_state(medic.id, org.id)
+        call_id = state["attachable_calls"][0]["id"]
+        await sched.save_closeout_calls(
+            shift_id=medic.id,
+            organization_id=org.id,
+            reported_call_count=1,
+            attach_call_ids=[call_id],
+            count_provided=True,
+        )
+
+        state, err = await sched.save_closeout_calls(
+            shift_id=medic.id,
+            organization_id=org.id,
+            reported_call_count=0,
+            detach_call_ids=[call_id],
+            count_provided=True,
+        )
+
+        assert err is None
+        assert state["reported_call_count"] == 0
+        assert state["attachable_calls"][0]["attached"] is False
+
+    async def test_a_finalized_shift_is_served_no_picker(self, db_session):
+        org = await _make_org(db_session)
+        engine = await _make_shift(db_session, org, "engine-5")
+        medic = await _make_shift(db_session, org, "medic-1")
+        await CallTrackingService(db_session).record_shift_calls(
+            engine, org.id, total_calls=1
+        )
+        medic.is_finalized = True
+        await db_session.flush()
+
+        state, _ = await SchedulingService(db_session).get_closeout_state(
+            medic.id, org.id
+        )
+        assert state["attachable_calls"] == []

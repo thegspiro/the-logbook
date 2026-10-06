@@ -415,27 +415,41 @@ Requires `events.manage` permission. Tab-based admin interface.
 >
 > Officer-only controls rendered _within_ these pages: **Validate** and **Void** on the Test Records tab, the **Release** action, the per-template **Result Disclosure** editor in the template builder, and the **TestViewersPanel** on the active test screen.
 
+### Knowledge Tests _(2026-10-06)_
+
+| URL                                             | Page                                                  | Permission        |
+| ----------------------------------------------- | ----------------------------------------------------- | ----------------- |
+| `/training/knowledge-tests`                     | Knowledge Tests — **member-facing** (published tests) | **Authenticated** |
+| `/training/knowledge-tests/attempts/:attemptId` | Taking a knowledge test, and its result               | **Authenticated** |
+
+> Any member may sit a published test, so both routes are authenticated-only.
+> The API scopes an attempt to the member who sat it (an officer may read it,
+> never submit it) and withholds the answers until it is submitted. Writing
+> tests and questions is the **Knowledge Tests** tab of the Training Admin hub.
+
 ### Training Admin Hub (`/training/admin`)
 
 Requires `training.manage` permission. Tab-based admin interface.
 
-| Tab              | Label                         |
-| ---------------- | ----------------------------- |
-| `dashboard`      | Officer Dashboard             |
-| `waivers`        | Training Waivers              |
-| `submissions`    | Review Submissions            |
-| `requirements`   | Requirements                  |
-| `sessions`       | Create Session                |
-| `cohorts`        | Course Cohorts                |
-| `templates`      | Templates (Skills Testing)    |
-| `tests`          | Test Records (Skills Testing) |
-| `compliance`     | Compliance Matrix             |
-| `expiring-certs` | Expiring Certs                |
-| `pipelines`      | Pipelines                     |
-| `shift-reports`  | Shift Reports                 |
-| `integrations`   | Integrations                  |
-| `import`         | Import History                |
-| `enhancements`   | Enhancements                  |
+| Tab                 | Label                         |
+| ------------------- | ----------------------------- |
+| `dashboard`         | Officer Dashboard             |
+| `waivers`           | Training Waivers              |
+| `submissions`       | Review Submissions            |
+| `requirements`      | Requirements                  |
+| `sessions`          | Create Session                |
+| `cohorts`           | Course Cohorts                |
+| `templates`         | Templates (Skills Testing)    |
+| `tests`             | Test Records (Skills Testing) |
+| `skill-evaluations` | Skill Evaluations (Setup)     |
+| `knowledge-tests`   | Knowledge Tests (Setup)       |
+| `compliance`        | Compliance Matrix             |
+| `expiring-certs`    | Expiring Certs                |
+| `pipelines`         | Pipelines                     |
+| `shift-reports`     | Shift Reports                 |
+| `integrations`      | Integrations                  |
+| `import`            | Import History                |
+| `enhancements`      | Enhancements                  |
 
 > The two **Skills Testing** tabs were missing from this list. `templates` is the skill-sheet library (create, edit, publish, archive, and the per-template result-disclosure override); `tests` is the records tab, which is where an officer **validates**, **voids**, **releases** and **cancels** results, and where the "awaiting validation" filter lives. Both are officer-only, unlike `/training/skills-testing`, which is the member's entry point.
 
@@ -1158,9 +1172,14 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ## Integrations
 
-| URL             | Page         | Permission        |
-| --------------- | ------------ | ----------------- |
-| `/integrations` | Integrations | `settings.manage` |
+| URL                            | Page                                                             | Permission        |
+| ------------------------------ | ---------------------------------------------------------------- | ----------------- |
+| `/integrations`                | Integrations                                                     | `settings.manage` |
+| `/integrations/:integrationId` | Integration detail — health, last error, run history, Retry Sync | `settings.manage` |
+| `/claude/authorize`            | Connect Claude (consent)                                         | Authenticated     |
+| `/claude/connections`          | My Claude connections                                            | Authenticated     |
+
+> _(2026-10-06)_ **Claude (MCP) member sign-in.** `/claude/authorize` is the OAuth consent screen the backend's `/api/oauth/authorize` sends a member to (with `?request=`); `/claude/connections` lists and ends the member's own connections. Both need only a session and the Integrations module: what a connection can reach is bounded server-side by the member's own permissions. See `wiki/Integration-Claude-MCP.md`.
 
 > _(2026-04-11)_ The Integrations page now includes **Salesforce CRM** as a connectable integration. Configuration requires `integrations.manage` permission. Features: OAuth 2.0 connection, bidirectional sync (members↔contacts, training→tasks, events→events), configurable field mappings, webhook-based real-time updates, and sync history dashboard. Supports both production and sandbox Salesforce environments.
 
@@ -1505,16 +1524,17 @@ reviewable in one place.
 
 ## Settings & Administration
 
-| URL                    | Page                  | Permission                     |
-| ---------------------- | --------------------- | ------------------------------ |
-| `/settings`            | Organization Settings | `settings.manage`              |
-| `/settings/roles`      | Role Management       | `positions.manage_permissions` |
-| `/setup`               | Department Setup      | `settings.manage`              |
-| `/admin/errors`        | Error Monitoring      | `settings.manage`              |
-| `/admin/analytics`     | Analytics Dashboard   | `analytics.view`               |
-| `/admin/audit-log`     | `AuditLogPage`        | `audit.view`                   |
-| `/admin/public-portal` | Public Portal Admin   | `settings.manage`              |
-| `/account`             | User Account Settings | Any authenticated user         |
+| URL                      | Page                  | Permission                     |
+| ------------------------ | --------------------- | ------------------------------ |
+| `/settings`              | Organization Settings | `settings.manage`              |
+| `/settings/roles`        | Role Management       | `positions.manage_permissions` |
+| `/setup`                 | Department Setup      | `settings.manage`              |
+| `/admin/errors`          | Error Monitoring      | `settings.manage`              |
+| `/admin/analytics`       | Analytics Dashboard   | `analytics.view`               |
+| `/admin/audit-log`       | `AuditLogPage`        | `audit.view`                   |
+| `/admin/security-alerts` | `SecurityAlertsPage`  | `audit.view`                   |
+| `/admin/public-portal`   | Public Portal Admin   | `settings.manage`              |
+| `/account`               | User Account Settings | Any authenticated user         |
 
 > **Organization Settings** includes the **records-retention schedule**
 > (`GET/PUT /organizations/retention-policy`) — per-record-class retention

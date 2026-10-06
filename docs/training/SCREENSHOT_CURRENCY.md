@@ -1801,7 +1801,7 @@ These are worth handling as sweeps rather than one image at a time.
 | --- | --- |
 | Equipment check crew **"Sweep"** | **Shipped behind a prop and not switched on for crews.** It is visible only in the template builder's preview. Capturing it as the member experience would document a screen no crew can reach |
 | Equipment check **lap** | Still built and unwired; the live check screen renders the previous flat compartment list |
-| **Member qualifications** entry | Still no direct entry screen (QUAL-1) — a qualification is written only as a side effect of a training record against a course whose **Certifies** field is set |
+| **Member qualifications** entry | ~~Still no direct entry screen (QUAL-1)~~ — superseded 2026-10-06: the profile's **Qualifications** card and **Members > Administration > Import Qualifications** now exist and can be captured |
 
 
 ## Captured 2026-09-01 — the dashboard timeline at thirty days, and the manifest that pointed at the old heading

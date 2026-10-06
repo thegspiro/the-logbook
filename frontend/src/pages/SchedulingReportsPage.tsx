@@ -105,6 +105,14 @@ const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
 // Summary Stats Component
 // ============================================
 
+/** The window a requirement counts; a one-time requirement leaves it open. */
+const compliancePeriodLabel = (start: string | null, end: string | null, tz: string): string => {
+  if (start && end) return `${formatDate(start, tz)} — ${formatDate(end, tz)}`;
+  if (start) return `Since ${formatDate(start, tz)}`;
+  if (end) return `Through ${formatDate(end, tz)}`;
+  return 'All shifts on record';
+};
+
 interface StatCardProps {
   label: string;
   value: string | number;
@@ -1074,7 +1082,7 @@ export const SchedulingReportsPage: React.FC = () => {
                                 {req.frequency.replace('_', ' ')}
                               </span>
                               <span className="text-theme-text-muted text-xs">
-                                {formatDate(req.period_start, tz)} — {formatDate(req.period_end, tz)}
+                                {compliancePeriodLabel(req.period_start, req.period_end, tz)}
                               </span>
                               <span className="text-theme-text-secondary text-xs font-medium">
                                 Required: {req.required_value} {req.requirement_type === 'shifts' ? 'shifts' : 'hours'}

@@ -208,6 +208,7 @@ export {
   dashboardService,
   reportsService,
   memberStatusService,
+  memberQualificationService,
   shiftCompletionService,
   integrationsService,
 } from './adminServices';

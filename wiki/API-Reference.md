@@ -457,6 +457,8 @@ require `medical_screening.view`; without it the metric is returned with an
 ```
 GET    /api/v1/scheduling/shifts/{shift_id}/trade-candidates
 POST   /api/v1/scheduling/swap-requests/{request_id}/respond
+GET    /api/v1/scheduling/swap-requests/open              # 2026-10-05, scheduling.swap
+POST   /api/v1/scheduling/swap-requests/{request_id}/pick-up  # 2026-10-05, scheduling.swap
 GET    /api/v1/scheduling/standing-shifts
 GET    /api/v1/scheduling/standing-shifts/preview
 POST   /api/v1/scheduling/standing-shifts
@@ -881,7 +883,8 @@ DELETE /api/v1/inventory/impact-planner/plans/{plan_id}                # Delete 
 
 ```
 POST   /api/v1/elections/{id}/send-report                              # Email election results to voters
-GET    /api/v1/elections/{id}/verify-receipt                            # Public vote receipt verification (rate-limited)
+POST   /api/v1/elections/{id}/verify-receipt                            # Public vote receipt verification, receipt in the body (rate-limited)
+GET    /api/v1/elections/{id}/verify-receipt                            # Deprecated ?receipt= form of the above (2026-10-05)
 ```
 
 ## Election Pre-Meeting Package _(2026-07-28)_
@@ -924,6 +927,11 @@ POST   /api/v1/elections/{id}/remind-non-voters                         # Remind
 POST   /api/v1/elections/{id}/clone                                     # Fresh draft from this election's setup (new salt; votes/tokens never copied)
 POST   /api/v1/elections/{id}/write-ins/merge                           # Consolidate write-in variants (audited alias; vote rows untouched)
 GET    /api/v1/elections/{id}/certified-results                         # Certified results package PDF (closed elections only)
+
+# In-app ballot (authenticated; the emailed ballot's model, 2026-10-05)
+GET    /api/v1/elections/{id}/ballot                                    # Every ballot item and plain position + candidates + per-item standing (?proxy_authorization_id=)
+POST   /api/v1/elections/{id}/ballot                                    # Cast the ballot atomically: {votes: [...], proxy_authorization_id?}
+GET    /api/v1/elections/{id}/ballot/proxies                            # Proxies the caller holds (refused on anonymous elections)
 
 # Public token-ballot endpoints (no auth, rate-limited; token travels in the
 # POST body — never a query string or path)

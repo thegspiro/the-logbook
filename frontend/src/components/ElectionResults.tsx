@@ -9,10 +9,9 @@
 import React, { useEffect, useState } from 'react';
 import { electionService } from '../services/api';
 import type { ElectionResults as ElectionResultsType, CandidateResult, Election } from '../types/election';
-import { getErrorMessage, toAppError } from '../utils/errorHandling';
+import { getErrorMessage } from '../utils/errorHandling';
 import { formatDateTime } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
-import { ElectionStatus } from '../constants/enums';
 import { getVictoryDescription } from '../utils/electionHelpers';
 
 interface ElectionResultsProps {
@@ -98,6 +97,13 @@ const CandidateResultCard: React.FC<{ candidate: CandidateResult }> = ({ candida
   </div>
 );
 
+// What each correction did, in the words the certified PDF uses.
+const REVISION_LABELS: Record<string, string> = {
+  vote_voided: 'a vote was voided',
+  paper_batch_voided: 'a paper-ballot batch was voided',
+  write_ins_merged: 'write-in candidates were merged',
+};
+
 export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, election }) => {
   const tz = useTimezone();
   const [results, setResults] = useState<ElectionResultsType | null>(null);
@@ -115,18 +121,7 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
       const data = await electionService.getResults(electionId);
       setResults(data);
     } catch (err: unknown) {
-      // The server withholds results until the scheduled end date has passed,
-      // even when the election was closed early. Say when, rather than show a
-      // bare refusal to the secretary who just closed it.
-      const heldUntilEnd =
-        toAppError(err).status === 403 &&
-        election.status === ElectionStatus.CLOSED &&
-        new Date(election.end_date).getTime() > Date.now();
-      setError(
-        heldUntilEnd
-          ? `Voting is closed. Results will be available after the scheduled end, ${formatDateTime(election.end_date, tz)}.`
-          : getErrorMessage(err, 'Results not available yet')
-      );
+      setError(getErrorMessage(err, 'Results not available yet'));
     } finally {
       setLoading(false);
     }
@@ -156,8 +151,27 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
     );
   }
 
+  const revisions = election.results_revisions ?? [];
+
   return (
     <div className="space-y-6">
+      {/* A correction after close is allowed but never silent (W50-9): the
+          same "revised <when> by <who>" lines the certified PDF prints. */}
+      {revisions.length > 0 && (
+        <div role="status" className="alert-warning">
+          <p className="text-sm font-semibold">These results were revised after the election closed</p>
+          <ul className="mt-1 space-y-1 text-sm">
+            {revisions.map((rev) => (
+              <li key={`${rev.at}-${rev.action}`}>
+                {`Revised ${formatDateTime(rev.at, tz)} by ${rev.by_name || 'an officer'}: ${
+                  REVISION_LABELS[rev.action] ?? rev.action
+                }${rev.detail ? ` (${rev.detail})` : ''}`}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Overall Stats */}
       <div className="bg-theme-surface rounded-lg p-6 backdrop-blur-xs">
         <h3 className="text-theme-text-primary mb-4 text-lg font-medium">Election Summary</h3>

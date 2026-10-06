@@ -42,6 +42,23 @@ Standing flags the owner decided, each implemented in its own commit:
   matrix, `compute_org_compliance_tally`, the annual report and the
   shift-compliance report.
 
+## Owner decisions applied (2026-10-06)
+
+- **shifts-three-sources — ✅ FIXED.** The owner chose `ShiftAttendance` as
+  the authority for a SHIFTS requirement. `load_credited_shift_dates` in
+  `training_compliance.py` is the one count — attendance on the
+  department's own finalized shifts plus counted external shifts, scoped
+  through `Shift.organization_id`, bounded by the requirement windows, one
+  grouped query per source per request — and every grader takes it,
+  including the annual and monthly report (`_generate_period_report`, which
+  also caps it at the monthly report's as-of day). **The annual report's
+  figures move** for any department with a shift-credited SHIFTS requirement:
+  a member's training records no longer stand in for shifts.
+  `tests/test_shift_requirement_counts_attendance.py` asserts the report, the
+  matrix, `compute_org_compliance_tally`, My Training, the profile card, the
+  period roster, the competency matrix and the shift-compliance report give
+  each member the same count.
+
 ## Pass 6 (2026-10-03)
 
 **Not a zero-delta pass** — real commits landed in this feature's declared

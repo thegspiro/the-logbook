@@ -56,12 +56,14 @@ medical screening permission, and it is counts only. See
 > **HIPAA Note:** Medical screening records contain protected health information (PHI). Access to this module should be restricted to authorized personnel only. Assign the `medical_screening.view` and `medical_screening.manage` permissions exclusively to roles that have a legitimate need to access medical compliance data (e.g., Chief Officers, Health & Safety Officers, HR administrators).
 >
 > **Audit trail — what is and is not recorded.** Creating, updating and deleting
-> requirements and records are written to the audit trail. **Reads are not.**
-> That includes one officer reading another member's records or compliance
-> (`GET /medical-screening/records`, `/records/{id}`, `/compliance/{user_id}`),
-> which is the access an audit trail most exists to detect. If your department
-> needs read access to PHI logged for its HIPAA obligations, treat that as an
-> open gap rather than an implemented control.
+> requirements and records are written to the audit trail, and so is every
+> screen or request that shows somebody's screening data: the Records list, a
+> single record, a member's or prospect's compliance, and the expiring-soon
+> list. Each of those writes **one** entry per page load — naming the members
+> and prospects it showed, or the filter used — rather than one per row, so the
+> trail answers "who looked at this member's results, and when" without
+> filling up every time the Records tab opens. A member's own compliance counts
+> on their dashboard are not logged: they show nothing about anyone else.
 
 ### Screening Types
 
@@ -213,9 +215,10 @@ Navigate to **Medical Screening > Records** tab to view all records.
 | **Result Data**     | JSON (optional)            | Structured result data (lab values, measurements, scores)                                                |
 | **Reviewed By**     | Foreign key (optional)     | Officer who reviewed the result                                                                          |
 | **Reviewed At**     | Datetime (optional)        | When the result was reviewed                                                                             |
+| **Self-recorded**   | Set by the system          | The record's status was last saved by the member it is about — see below                                 |
 | **Notes**           | Text (optional)            | Additional notes or comments                                                                             |
 
-> **HIPAA Note:** The `result_summary`, `result_data`, and `notes` fields may contain PHI. The system does not cache API responses for medical screening endpoints (they are included in `UNCACHEABLE_PREFIXES`). All record access is logged in the audit trail. Limit the specificity of data entered — record compliance outcomes (passed/failed/waived) rather than detailed medical findings when possible.
+> **HIPAA Note:** The `result_summary`, `result_data`, and `notes` fields may contain PHI. The system does not cache API responses for medical screening endpoints (they are included in `UNCACHEABLE_PREFIXES`). Every view of screening records, compliance and the expiring list is logged in the audit trail, one entry per page load. Limit the specificity of data entered — record compliance outcomes (passed/failed/waived) rather than detailed medical findings when possible.
 
 ---
 
@@ -230,7 +233,7 @@ Navigate to **Medical Screening > Records** tab to view all records.
 | Field               | Example Value                                              |
 | ------------------- | ---------------------------------------------------------- |
 | **Requirement**     | Annual NFPA 1582 Physical                                  |
-| **Member**          | FF Jake Thompson                                           |
+| **Record is for**   | Member — FF Jake Thompson                                  |
 | **Screening Type**  | Physical Exam                                              |
 | **Status**          | Passed                                                     |
 | **Scheduled Date**  | 2026-05-15                                                 |
@@ -242,28 +245,43 @@ Navigate to **Medical Screening > Records** tab to view all records.
 
 4. Click **Add Record** (editing saves with **Save Changes**).
 
-> **Corrected 2026-08-12.** **There is no member dropdown.**
-> `ScreeningRecordForm` builds its payload from nine fields — requirement,
-> type, status, three dates, provider, result, notes — and sets neither
-> `user_id` nor `prospect_id`. Both are accepted by the API; the form has no
-> control for either, so a record entered here belongs to nobody and counts
-> toward nobody's compliance. Recorded in [Medical Screening — The Add Record Form Attaches to Nobody](../KNOWN_LIMITATIONS.md#medical-screening--the-add-record-form-attaches-to-nobody-2026-08-08), which is worth reading before
-> using this form.
+> **The Record is for picker** _(2026-10-05)_. Every record belongs to exactly
+> one member or one prospect. Choose **Member** or **Prospect**, then pick the
+> person from the list — current members (including those on leave or
+> suspended) or prospects still open in the pipeline. **Add Record** stays
+> disabled until someone is chosen, and the API refuses a record naming nobody
+> or both. Editing a record never changes who it belongs to.
 >
-> **The dialog now says so itself** _(2026-09-16; reworded 2026-09-29)_. Opening **Add Record** shows
-> an amber notice at the top: _"Not linked to a member or prospect. You can't
-> choose who a screening is for here, so this record won't count toward
-> anyone's compliance or appear in their screening history."_ In the records
-> list such a record's name column reads **Not linked to a member or prospect**
-> (it read "Unknown"). The success message after saving used to
-> imply the record was usable. **Nothing else about the dialog changed** — the
-> member picker is still missing, and a record created here still counts toward
-> nobody. The **Edit** dialog does not show the notice, because editing never
-> changes who a record belongs to.
+> Records entered before this change could not be attached to anyone. They
+> read **Not linked to a member or prospect** on the Records tab and count
+> toward nobody's compliance — re-enter them with the right person and delete
+> the unattached copy. See
+> [Medical Screening — No Per-Member Compliance Screen](../KNOWN_LIMITATIONS.md#medical-screening--no-per-member-compliance-screen-2026-08-08).
 
-![The Add Screening Record dialog with the amber notice at the top: not linked to a member or prospect, so the record will not count toward anyone's compliance](./images/13-07-add-record-linkage-notice.png)
+![The Add Screening Record dialog](./images/13-07-add-record-linkage-notice.png)
 
-**[SCREENSHOT — REPLACE `13-07-add-record-linkage-notice.png`.** The amber notice is reworded ("Not linked to a member or prospect. You can't choose who a screening is for here, …") and the submit button reads **Add Record** (was Create).**]**
+**[SCREENSHOT — REPLACE `13-07-add-record-linkage-notice.png`.** The frame still shows the retired amber "Not linked" notice. The dialog now opens with a **Record is for** choice (Member / Prospect) and a name list above Linked Requirement; retake it with a member selected.**]**
+
+### Self-Recorded Screenings
+
+A screening manager may record their own screening — in a small department the
+person who logs everyone's external results often needs their own entered too —
+and the result counts toward compliance like any other. It is not trusted
+silently, though: a record whose status was last saved by the member it is
+about carries an amber **Self-recorded** badge on the Records tab and in the
+expiring list on the Compliance tab, and the compliance summary for that member
+reports how many of their compliant items rest on a self-recorded result.
+
+The badge follows whoever last saved the record's status:
+
+- Adding a record for yourself, or saving the status on your own record, marks it.
+- Another manager saving the record's status (the Edit dialog always saves it)
+  clears the mark — they have looked at the result and stood behind it, and they
+  become its **Reviewed By** when the status is Passed, Failed or Waived.
+- An edit that does not touch the status leaves the mark as it was.
+
+If your department wants every result independently confirmed, have a second
+manager open and save each self-recorded record.
 
 ### Status Workflow
 
@@ -388,7 +406,7 @@ This returns a `ComplianceSummary` for the specified member:
 > **Corrected 2026-08-12.** There is no per-member compliance view.
 > `fetchUserCompliance` and `fetchProspectCompliance` are defined in
 > `medicalScreeningStore` and called by no component; `ComplianceDashboard`
-> lists expiring screenings and nothing else. Recorded in [Medical Screening — The Add Record Form Attaches to Nobody](../KNOWN_LIMITATIONS.md#medical-screening--the-add-record-form-attaches-to-nobody-2026-08-08).
+> lists expiring screenings and nothing else. Recorded in [Medical Screening — No Per-Member Compliance Screen](../KNOWN_LIMITATIONS.md#medical-screening--no-per-member-compliance-screen-2026-08-08).
 
 ---
 
@@ -448,14 +466,12 @@ The process is identical to recording a member screening, except you select a **
 
 1. Navigate to **Medical Screening > Records** tab.
 2. Click **Add Record**.
-3. In the **Prospect** field, search for and select the prospective member.
-4. Leave the **Member** field blank.
-5. Complete the remaining fields as usual.
-6. Click **Save**.
+3. Under **Record is for**, choose **Prospect**, then select the prospective member from the list.
+4. Complete the remaining fields as usual.
+5. Click **Add Record**.
 
-> **Corrected 2026-08-12.** Same gap as the Add Record form above: the form
-> has neither a Member nor a Prospect control, so a screening cannot be
-> attached to a prospect through the UI at all. Recorded in [Medical Screening — The Add Record Form Attaches to Nobody](../KNOWN_LIMITATIONS.md#medical-screening--the-add-record-form-attaches-to-nobody-2026-08-08).
+Only prospects still open in the pipeline (Active or On Hold) are listed. Once
+a prospect becomes a member, record new screenings against the member.
 
 ### Prospect Compliance
 
@@ -577,7 +593,7 @@ Captain Alvarez takes action:
 
 > **Corrected 2026-08-12.** The Compliance tab has **no filter controls of any
 > kind**, and no per-member breakdown to filter — it lists expiring screenings.
-> Recorded in [Medical Screening — The Add Record Form Attaches to Nobody](../KNOWN_LIMITATIONS.md#medical-screening--the-add-record-form-attaches-to-nobody-2026-08-08).
+> Recorded in [Medical Screening — No Per-Member Compliance Screen](../KNOWN_LIMITATIONS.md#medical-screening--no-per-member-compliance-screen-2026-08-08).
 
 ---
 
@@ -587,7 +603,7 @@ A new candidate, **Alex Rivera**, is moving through the membership pipeline. Cap
 
 1. Navigates to **Medical Screening > Records** tab.
 2. Clicks **Add Record**.
-3. Selects **Alex Rivera** in the Prospect field.
+3. Under **Record is for**, chooses **Prospect** and selects **Alex Rivera**.
 4. Sets Screening Type to **Drug Screening**.
 5. Sets Status to **Pending Review** (lab results expected in 3 days).
 6. Enters Scheduled Date: 2026-06-25, Provider: "QuickScreen Labs".

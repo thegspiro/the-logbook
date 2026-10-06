@@ -19,44 +19,18 @@
  * 7. Success confirmation displayed
  */
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import { VerifyReceipt } from '../components/VerifyReceipt';
 import { electionService } from '../services/api';
-import type {
-  BallotElection,
-  BallotItem,
-  Candidate,
-  BallotItemVote,
-  BallotSubmissionResponse,
-} from '../types/election';
+import type { BallotElection, Candidate, BallotSubmissionResponse } from '../types/election';
 import { toAppError } from '../utils/errorHandling';
 import { formatDate } from '../utils/dateFormatting';
 import { BallotChoice } from '../constants/enums';
-import { VoteType } from '../constants/enums';
 import { useTimezone } from '../hooks/useTimezone';
-
-type ItemChoice = {
-  choice: string; // 'approve' | 'deny' | 'write_in' | 'abstain' | candidate UUID
-  write_in_name: string;
-  // Multi-select for approval / multi-vote items (candidate UUIDs)
-  candidate_ids: string[];
-  // Ranked choice: candidate UUID → rank number (unique per item)
-  ranks: Record<string, number>;
-};
-
-const emptyChoice = (): ItemChoice => ({
-  choice: BallotChoice.ABSTAIN,
-  write_in_name: '',
-  candidate_ids: [],
-  ranks: {},
-});
-
-/** Ordered candidate ids for the wire payload — index 0 = rank 1. */
-const ranksToOrderedIds = (ranks: Record<string, number>): string[] =>
-  Object.entries(ranks)
-    .sort((a, b) => a[1] - b[1])
-    .map(([cid]) => cid);
+import { BallotItemCard } from '../components/ballot/BallotItemCard';
+import { useBallotChoices } from '../components/ballot/useBallotChoices';
+import { candidatesForItem, choiceLabel, choiceToVote, missingWriteIn } from '../components/ballot/ballotChoices';
 
 /**
  * Capture the voting token from the URL (fragment preferred, query-string
@@ -149,7 +123,8 @@ export const BallotVotingPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loadErrorHint, setLoadErrorHint] = useState<string | null>(CONTACT_SECRETARY_HINT);
-  const [choices, setChoices] = useState<Record<string, ItemChoice>>({});
+  const { choices, resetChoices, updateChoice, updateWriteInName, toggleCandidate, setCandidateRank } =
+    useBallotChoices();
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -198,12 +173,8 @@ export const BallotVotingPage: React.FC = () => {
       setCandidates(candidateData);
       setIsTest(testBallot === true);
 
-      // Initialize choices with 'abstain' for all ballot items
-      const initialChoices: Record<string, ItemChoice> = {};
-      for (const item of electionData.ballot_items || []) {
-        initialChoices[item.id] = emptyChoice();
-      }
-      setChoices(initialChoices);
+      // Every item starts on Abstain
+      resetChoices(electionData.ballot_items || []);
     } catch (err: unknown) {
       const { message, hint } = describeLoadError(
         publicErrorText(err, "Couldn't load your ballot. The link may have expired or be invalid.")
@@ -215,70 +186,12 @@ export const BallotVotingPage: React.FC = () => {
     }
   };
 
-  const updateChoice = useCallback((itemId: string, choice: string, writeInName?: string) => {
-    // Picking any single-selection option clears multi-select / rank state
-    setChoices((prev) => ({
-      ...prev,
-      [itemId]: {
-        choice,
-        write_in_name: writeInName !== undefined ? writeInName : prev[itemId]?.write_in_name || '',
-        candidate_ids: [],
-        ranks: {},
-      },
-    }));
-  }, []);
-
-  const updateWriteInName = useCallback((itemId: string, name: string) => {
-    setChoices((prev) => ({
-      ...prev,
-      [itemId]: {
-        ...(prev[itemId] ?? emptyChoice()),
-        write_in_name: name,
-      },
-    }));
-  }, []);
-
-  /** Toggle a candidate in an approval / multi-vote item's checkbox list. */
-  const toggleCandidate = useCallback((itemId: string, candidateId: string, maxSelections: number | null) => {
-    setChoices((prev) => {
-      const current = prev[itemId] ?? emptyChoice();
-      const selected = current.candidate_ids.includes(candidateId)
-        ? current.candidate_ids.filter((id) => id !== candidateId)
-        : maxSelections !== null && current.candidate_ids.length >= maxSelections
-          ? current.candidate_ids // at the cap — ignore (box is disabled anyway)
-          : [...current.candidate_ids, candidateId];
-      return {
-        ...prev,
-        [itemId]: { ...current, choice: '', candidate_ids: selected, ranks: {} },
-      };
-    });
-  }, []);
-
-  /** Assign a rank to a candidate; a rank held by another candidate is freed. */
-  const setCandidateRank = useCallback((itemId: string, candidateId: string, rank: number | null) => {
-    setChoices((prev) => {
-      const current = prev[itemId] ?? emptyChoice();
-      const ranks: Record<string, number> = {};
-      for (const [cid, r] of Object.entries(current.ranks)) {
-        if (cid !== candidateId && r !== rank) ranks[cid] = r;
-      }
-      if (rank !== null) ranks[candidateId] = rank;
-      return {
-        ...prev,
-        [itemId]: { ...current, choice: '', candidate_ids: [], ranks },
-      };
-    });
-  }, []);
-
   /** Validates all choices (e.g. write-ins must have names) then shows the confirmation modal. */
   const handleSubmitBallot = () => {
-    // Validate write-ins have names
-    for (const [itemId, itemChoice] of Object.entries(choices)) {
-      if (itemChoice.choice === BallotChoice.WRITE_IN && !itemChoice.write_in_name.trim()) {
-        const item = (election?.ballot_items || []).find((i) => i.id === itemId);
-        setError(`Enter a name for your write-in on: ${item?.title || itemId}`);
-        return;
-      }
+    const unnamed = missingWriteIn(choices, election?.ballot_items || []);
+    if (unnamed) {
+      setError(`Enter a name for your write-in on: ${unnamed.title || unnamed.id}`);
+      return;
     }
     setError(null);
     setShowConfirmation(true);
@@ -292,20 +205,7 @@ export const BallotVotingPage: React.FC = () => {
       setSubmitting(true);
       setError(null);
 
-      const votes: BallotItemVote[] = Object.entries(choices).map(([itemId, itemChoice]) => {
-        if (itemChoice.candidate_ids.length > 0) {
-          return { ballot_item_id: itemId, candidate_ids: itemChoice.candidate_ids };
-        }
-        const ordered = ranksToOrderedIds(itemChoice.ranks);
-        if (ordered.length > 0) {
-          return { ballot_item_id: itemId, rankings: ordered };
-        }
-        return {
-          ballot_item_id: itemId,
-          choice: itemChoice.choice || BallotChoice.ABSTAIN,
-          write_in_name: itemChoice.choice === BallotChoice.WRITE_IN ? itemChoice.write_in_name.trim() : undefined,
-        };
-      });
+      const votes = Object.entries(choices).map(([itemId, itemChoice]) => choiceToVote(itemId, itemChoice));
 
       const result = await electionService.submitBallot(token, votes);
       setSubmitResult(result);
@@ -319,56 +219,7 @@ export const BallotVotingPage: React.FC = () => {
     }
   };
 
-  const candidateName = (candidateId: string): string =>
-    candidates.find((c) => c.id === candidateId)?.name ?? candidateId;
-
-  /** Converts a selection (choice/multi-select/rankings) to a display label. */
-  const getChoiceLabel = (itemId: string): string => {
-    const itemChoice = choices[itemId];
-    if (!itemChoice) return 'Abstain';
-
-    if (itemChoice.candidate_ids.length > 0) {
-      return `Approved: ${itemChoice.candidate_ids.map(candidateName).join(', ')}`;
-    }
-    const ordered = ranksToOrderedIds(itemChoice.ranks);
-    if (ordered.length > 0) {
-      return `Ranked: ${ordered.map((cid, i) => `${i + 1}. ${candidateName(cid)}`).join(', ')}`;
-    }
-    if (!itemChoice.choice) return 'Abstain (No Vote)';
-
-    switch (itemChoice.choice) {
-      case BallotChoice.APPROVE:
-        return 'Approve';
-      case BallotChoice.DENY:
-        return 'Deny';
-      case BallotChoice.ABSTAIN:
-        return 'Abstain (No Vote)';
-      case BallotChoice.WRITE_IN:
-        return `Write-in: ${itemChoice.write_in_name || '(empty)'}`;
-      default: {
-        // Candidate UUID
-        const candidate = candidates.find((c) => c.id === itemChoice.choice);
-        return candidate ? candidate.name : itemChoice.choice;
-      }
-    }
-  };
-
-  /**
-   * Returns accepted candidates for a ballot item, matched by exact position.
-   * Substring matching against the item title is deliberately avoided — a
-   * position named "Chief" would match an item titled "Assistant Chief
-   * Election" and surface candidates under the wrong item. For legacy items
-   * without a position, the backend derives position from the item title, so
-   * an exact title match is the correct fallback.
-   */
-  const getCandidatesForItem = (item: BallotItem): Candidate[] => {
-    if (item.position) {
-      return candidates.filter((c) => c.position === item.position && !c.is_write_in);
-    }
-    return candidates.filter(
-      (c) => c.position != null && (c.position === item.title || c.position === item.id) && !c.is_write_in
-    );
-  };
+  const getChoiceLabel = (itemId: string): string => choiceLabel(choices[itemId], candidates);
 
   // ---- Render states ----
 
@@ -493,217 +344,20 @@ export const BallotVotingPage: React.FC = () => {
 
         {/* Ballot Items */}
         <div className="space-y-6">
-          {ballotItems.map((item, index) => {
-            const itemChoice = choices[item.id];
-            const itemCandidates = getCandidatesForItem(item);
-            const isApprovalType = item.vote_type === VoteType.APPROVAL;
-            // Items may override the election-level method (mirrors backend)
-            const effectiveMethod = item.voting_method ?? election.voting_method;
-            const maxVotes = election.max_votes_per_position || 1;
-            const isRanked = !isApprovalType && effectiveMethod === 'ranked_choice';
-            const isMultiSelect = !isApprovalType && !isRanked && (effectiveMethod === 'approval' || maxVotes > 1);
-            // Approval-method items have no selection cap; multi-vote items do
-            const selectionCap = effectiveMethod === 'approval' ? null : maxVotes;
-            const atCap =
-              isMultiSelect && selectionCap !== null && (itemChoice?.candidate_ids.length ?? 0) >= selectionCap;
-
-            return (
-              <div key={item.id} className="card overflow-hidden shadow-xs">
-                {/* Item Header */}
-                <div className="bg-theme-surface-secondary border-theme-surface-border border-b px-6 py-4">
-                  <div className="flex items-start gap-3">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-100 text-sm font-bold text-red-700 dark:bg-red-500/20 dark:text-red-400">
-                      {index + 1}
-                    </span>
-                    <div>
-                      <h3 className="text-theme-text-primary font-semibold">{item.title}</h3>
-                      {item.description && <p className="text-theme-text-muted mt-1 text-sm">{item.description}</p>}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Voting Options */}
-                <fieldset className="space-y-3 px-6 py-4">
-                  <legend className="sr-only">Voting options for {item.title}</legend>
-                  {isApprovalType ? (
-                    <>
-                      {/* Approve */}
-                      <label className="border-theme-surface-border flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors hover:border-green-300 hover:bg-green-50 dark:hover:bg-green-500/10">
-                        <input
-                          type="radio"
-                          name={`item-${item.id}`}
-                          checked={itemChoice?.choice === BallotChoice.APPROVE}
-                          onChange={() => updateChoice(item.id, BallotChoice.APPROVE)}
-                          className="focus:ring-theme-focus-ring h-4 w-4 text-green-600"
-                        />
-                        <span className="text-theme-text-primary font-medium">Approve</span>
-                      </label>
-
-                      {/* Deny */}
-                      <label className="border-theme-surface-border flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors hover:border-red-300 hover:bg-red-50 dark:hover:bg-red-500/10">
-                        <input
-                          type="radio"
-                          name={`item-${item.id}`}
-                          checked={itemChoice?.choice === BallotChoice.DENY}
-                          onChange={() => updateChoice(item.id, BallotChoice.DENY)}
-                          className="focus:ring-theme-focus-ring h-4 w-4 text-blue-600"
-                        />
-                        <span className="text-theme-text-primary font-medium">Deny</span>
-                      </label>
-                    </>
-                  ) : isRanked ? (
-                    <>
-                      {/* Ranked choice: assign a unique rank per candidate */}
-                      <p className="text-theme-text-muted text-xs">
-                        Rank the candidates in order of preference (1 = first choice). Leave a candidate unranked to
-                        exclude them.
-                      </p>
-                      {itemCandidates.map((candidate) => {
-                        const currentRank = itemChoice?.ranks[candidate.id];
-                        return (
-                          <div
-                            key={candidate.id}
-                            className="border-theme-surface-border flex items-center gap-3 rounded-lg border p-3 transition-colors hover:border-blue-300 hover:bg-blue-50 dark:hover:bg-blue-500/10"
-                          >
-                            <select
-                              value={currentRank ?? ''}
-                              onChange={(e) =>
-                                setCandidateRank(item.id, candidate.id, e.target.value ? Number(e.target.value) : null)
-                              }
-                              aria-label={`Rank for ${candidate.name}`}
-                              className="form-input-sm w-16"
-                            >
-                              <option value="">—</option>
-                              {itemCandidates.map((_, rankIdx) => (
-                                <option key={rankIdx + 1} value={rankIdx + 1}>
-                                  {rankIdx + 1}
-                                </option>
-                              ))}
-                            </select>
-                            <div>
-                              <span className="text-theme-text-primary font-medium">{candidate.name}</span>
-                              {candidate.statement && (
-                                <p className="text-theme-text-muted mt-0.5 text-sm">{candidate.statement}</p>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </>
-                  ) : isMultiSelect ? (
-                    <>
-                      {/* Approval / multi-vote: select every candidate you support */}
-                      <p className="text-theme-text-muted text-xs">
-                        {selectionCap === null
-                          ? 'Select every candidate you approve of.'
-                          : `Select up to ${selectionCap} candidates.`}
-                      </p>
-                      {itemCandidates.map((candidate) => {
-                        const isChecked = itemChoice?.candidate_ids.includes(candidate.id) ?? false;
-                        const disabled = !isChecked && atCap;
-                        return (
-                          <label
-                            key={candidate.id}
-                            className={`border-theme-surface-border flex items-center gap-3 rounded-lg border p-3 transition-colors ${
-                              disabled
-                                ? 'cursor-not-allowed opacity-50'
-                                : 'cursor-pointer hover:border-blue-300 hover:bg-blue-50 dark:hover:bg-blue-500/10'
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              disabled={disabled}
-                              onChange={() => toggleCandidate(item.id, candidate.id, selectionCap)}
-                              className="focus:ring-theme-focus-ring h-4 w-4 rounded text-blue-600"
-                            />
-                            <div>
-                              <span className="text-theme-text-primary font-medium">{candidate.name}</span>
-                              {candidate.statement && (
-                                <p className="text-theme-text-muted mt-0.5 text-sm">{candidate.statement}</p>
-                              )}
-                            </div>
-                          </label>
-                        );
-                      })}
-                    </>
-                  ) : (
-                    <>
-                      {/* Candidate Selection */}
-                      {itemCandidates.map((candidate) => (
-                        <label
-                          key={candidate.id}
-                          className="border-theme-surface-border flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors hover:border-blue-300 hover:bg-blue-50 dark:hover:bg-blue-500/10"
-                        >
-                          <input
-                            type="radio"
-                            name={`item-${item.id}`}
-                            checked={itemChoice?.choice === candidate.id}
-                            onChange={() => updateChoice(item.id, candidate.id)}
-                            className="focus:ring-theme-focus-ring h-4 w-4 text-blue-600"
-                          />
-                          <div>
-                            <span className="text-theme-text-primary font-medium">{candidate.name}</span>
-                            {candidate.statement && (
-                              <p className="text-theme-text-muted mt-0.5 text-sm">{candidate.statement}</p>
-                            )}
-                          </div>
-                        </label>
-                      ))}
-                    </>
-                  )}
-
-                  {/* Write-in option */}
-                  {election.allow_write_ins && (
-                    <div>
-                      {/* The bordered card is the label, as for every other
-                          option: with only the inner row clickable the
-                          write-in target was 24px tall (W50-52). */}
-                      <label
-                        className={`mobile-touch-row cursor-pointer gap-3 rounded-lg border p-3 transition-colors ${
-                          itemChoice?.choice === BallotChoice.WRITE_IN
-                            ? 'border-purple-300 bg-purple-50 dark:border-purple-500/30 dark:bg-purple-500/10'
-                            : 'border-theme-surface-border hover:border-purple-300 hover:bg-purple-50 dark:hover:bg-purple-500/10'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name={`item-${item.id}`}
-                          checked={itemChoice?.choice === BallotChoice.WRITE_IN}
-                          onChange={() => updateChoice(item.id, BallotChoice.WRITE_IN)}
-                          className="focus:ring-theme-focus-ring h-4 w-4 text-purple-600"
-                        />
-                        <span className="text-theme-text-primary font-medium">Write-in</span>
-                      </label>
-                      {itemChoice?.choice === BallotChoice.WRITE_IN && (
-                        <input
-                          type="text"
-                          value={itemChoice.write_in_name}
-                          onChange={(e) => updateWriteInName(item.id, e.target.value)}
-                          placeholder="Enter name or option..."
-                          aria-label="Enter name or option"
-                          className="form-input mt-2 ml-7 w-[calc(100%-1.75rem)] shadow-xs"
-                          autoFocus
-                        />
-                      )}
-                    </div>
-                  )}
-
-                  {/* Abstain */}
-                  <label className="border-theme-surface-border hover:bg-theme-surface-hover flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors">
-                    <input
-                      type="radio"
-                      name={`item-${item.id}`}
-                      checked={itemChoice?.choice === BallotChoice.ABSTAIN}
-                      onChange={() => updateChoice(item.id, BallotChoice.ABSTAIN)}
-                      className="text-theme-text-muted focus:ring-theme-focus-ring h-4 w-4"
-                    />
-                    <span className="text-theme-text-muted">Abstain (Do not vote on this item)</span>
-                  </label>
-                </fieldset>
-              </div>
-            );
-          })}
+          {ballotItems.map((item, index) => (
+            <BallotItemCard
+              key={item.id}
+              item={item}
+              index={index}
+              settings={election}
+              candidates={candidatesForItem(item, candidates)}
+              choice={choices[item.id]}
+              onChoice={updateChoice}
+              onWriteInName={updateWriteInName}
+              onToggleCandidate={toggleCandidate}
+              onRank={setCandidateRank}
+            />
+          ))}
         </div>
 
         {/* Submit Button */}

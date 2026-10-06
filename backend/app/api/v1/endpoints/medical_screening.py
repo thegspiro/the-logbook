@@ -25,10 +25,50 @@ from app.schemas.medical_screening import (
     ScreeningRequirementCreate,
     ScreeningRequirementResponse,
     ScreeningRequirementUpdate,
+    ScreeningSubjects,
 )
 from app.services.medical_screening_service import MedicalScreeningService
 
 router = APIRouter()
+
+
+async def _audit_phi_read(
+    db: AsyncSession,
+    current_user: User,
+    event_type: str,
+    event_data: dict,
+) -> None:
+    """Record one audit event for a read that returned screening PHI (MS-12).
+
+    HIPAA's audit-control standard (§164.312(b)) covers access to PHI, not only
+    changes to it, so who opened a member's drug-screening or psychological
+    result has to be answerable after the fact. Owner decision: one event per
+    request, naming the subject(s) returned or the filter used — not one per
+    row, which would flood the log from the list views loaded on every visit.
+
+    Committed here rather than left to the session teardown so the entry is
+    written before the PHI response leaves the server.
+    """
+    await log_audit_event(
+        db=db,
+        event_type=event_type,
+        event_category="medical_screening",
+        severity="info",
+        event_data=event_data,
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    await db.commit()
+
+
+def _subjects_of(rows) -> dict:
+    """The distinct members and prospects a list response discloses."""
+    return {
+        "subject_user_ids": sorted({str(r.user_id) for r in rows if r.user_id}),
+        "subject_prospect_ids": sorted(
+            {str(r.prospect_id) for r in rows if r.prospect_id}
+        ),
+    }
 
 
 # --- Screening Requirements ---
@@ -51,8 +91,10 @@ async def list_requirements(
         organization_id=current_user.organization_id,
         is_active=is_active,
         screening_type=screening_type,
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
-    return requirements[pagination.skip : pagination.skip + pagination.limit]
+    return requirements
 
 
 @router.get(
@@ -200,12 +242,50 @@ async def list_records(
         prospect_id=prospect_id,
         screening_type=screening_type,
         status=record_status,
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
-    page = records[pagination.skip : pagination.skip + pagination.limit]
-    # Enrich only the returned page — resolves the name fields the response
-    # schema promises (else the UI shows "Unknown" for every row).
-    await service.attach_record_names(current_user.organization_id, page)
-    return page
+    # Resolves the name fields the response schema promises (else the UI
+    # shows "Unknown" for every row).
+    await service.attach_record_names(current_user.organization_id, records)
+    await _audit_phi_read(
+        db,
+        current_user,
+        "medical_screening.records_viewed",
+        {
+            "filters": {
+                "user_id": user_id,
+                "prospect_id": prospect_id,
+                "screening_type": screening_type,
+                "status": record_status,
+                "skip": pagination.skip,
+                "limit": pagination.limit,
+            },
+            "record_count": len(records),
+            **_subjects_of(records),
+        },
+    )
+    return records
+
+
+@router.get(
+    "/subjects",
+    response_model=ScreeningSubjects,
+)
+async def list_subjects(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("medical_screening.manage")),
+):
+    """Members and prospects a new screening record can be filed against.
+
+    Backs the member/prospect picker on the Add Record dialog. Names and ids
+    only, nothing about anyone's screenings, so it is not audit-logged the way
+    the PHI reads are.
+
+    **Requires permission: medical_screening.manage**
+    """
+    service = MedicalScreeningService(db)
+    return await service.list_subjects(current_user.organization_id)
 
 
 @router.get(
@@ -226,6 +306,16 @@ async def get_record(
             detail="Screening record not found",
         )
     await service.attach_record_names(current_user.organization_id, [record])
+    await _audit_phi_read(
+        db,
+        current_user,
+        "medical_screening.record_viewed",
+        {
+            "record_id": record.id,
+            "record_user_id": record.user_id,
+            "record_prospect_id": record.prospect_id,
+        },
+    )
     return record
 
 
@@ -245,6 +335,7 @@ async def create_record(
         record = await service.create_record(
             organization_id=current_user.organization_id,
             data=data,
+            recorded_by=str(current_user.id),
         )
     except ValueError as exc:
         raise HTTPException(
@@ -260,6 +351,7 @@ async def create_record(
             "record_id": record.id,
             "record_user_id": data.user_id,
             "screening_type": data.screening_type,
+            "self_recorded": record.self_recorded,
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -289,7 +381,7 @@ async def update_record(
             record_id,
             current_user.organization_id,
             data,
-            reviewed_by=current_user.id,
+            reviewed_by=str(current_user.id),
         )
     except ValueError as exc:
         raise HTTPException(
@@ -306,7 +398,7 @@ async def update_record(
         event_type="medical_screening.record_updated",
         event_category="medical_screening",
         severity="info",
-        event_data={"record_id": record_id},
+        event_data={"record_id": record_id, "self_recorded": record.self_recorded},
         user_id=str(current_user.id),
         username=current_user.username,
     )
@@ -370,6 +462,10 @@ async def get_my_compliance(
     Returns counts only, never which screening or what it found — see
     ``MyComplianceSummary`` for why the dashboard is not given the detail.
 
+    Not audit-logged, unlike the reads below (MS-12): it discloses nothing
+    about anyone but the caller, and only counts at that, while the dashboard
+    loads it on every visit.
+
     **Authentication required**
     """
     service = MedicalScreeningService(db)
@@ -390,10 +486,17 @@ async def get_user_compliance(
 ):
     """Get compliance status for a specific user."""
     service = MedicalScreeningService(db)
-    return await service.get_compliance_status(
+    summary = await service.get_compliance_status(
         organization_id=current_user.organization_id,
         user_id=user_id,
     )
+    await _audit_phi_read(
+        db,
+        current_user,
+        "medical_screening.compliance_viewed",
+        {"subject_type": "user", "subject_id": user_id},
+    )
+    return summary
 
 
 @router.get(
@@ -407,10 +510,17 @@ async def get_prospect_compliance(
 ):
     """Get compliance status for a prospective member."""
     service = MedicalScreeningService(db)
-    return await service.get_compliance_status(
+    summary = await service.get_compliance_status(
         organization_id=current_user.organization_id,
         prospect_id=prospect_id,
     )
+    await _audit_phi_read(
+        db,
+        current_user,
+        "medical_screening.compliance_viewed",
+        {"subject_type": "prospect", "subject_id": prospect_id},
+    )
+    return summary
 
 
 @router.get(
@@ -424,7 +534,18 @@ async def get_expiring_screenings(
 ):
     """Get screening records expiring within the specified number of days."""
     service = MedicalScreeningService(db)
-    return await service.get_expiring_soon(
+    expiring = await service.get_expiring_soon(
         organization_id=current_user.organization_id,
         days=days,
     )
+    await _audit_phi_read(
+        db,
+        current_user,
+        "medical_screening.expiring_viewed",
+        {
+            "filters": {"days": days},
+            "record_count": len(expiring),
+            **_subjects_of(expiring),
+        },
+    )
+    return expiring

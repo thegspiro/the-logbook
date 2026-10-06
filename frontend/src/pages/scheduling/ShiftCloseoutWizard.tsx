@@ -16,6 +16,13 @@
  * reconciliation rule per direction — the downward one was missing, so
  * revising a count down left the total stranded at its old value and that
  * stale figure was what got saved.
+ *
+ * **A call another unit already logged is ticked, not typed.** The picker on
+ * step 2 lists the calls other units recorded while this shift was on; ticking
+ * one claims it (`attach_call_ids`) so the department counts the incident once
+ * and each unit gets the run. The unit's total is the typed rows plus the
+ * ticked calls — the typed rows are only the calls this unit logged itself,
+ * because a claimed call keeps the type the other unit gave it.
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -23,7 +30,7 @@ import { AlertTriangle, ArrowLeft, Check, CheckCircle2, Loader2 } from 'lucide-r
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import type { CloseoutState, CloseoutAttendanceEntry, MemberCallCredit } from '../../modules/scheduling/types';
-import { formatForDateTimeInput, localToUTC } from '../../utils/dateFormatting';
+import { formatCalendarDate, formatForDateTimeInput, localToUTC } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import {
   MAX_ATTENDANCE_HOURS,
@@ -109,6 +116,8 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
   const [saving, setSaving] = useState(false);
   const [members, setMembers] = useState<MemberDraft[]>([]);
   const [counts, setCounts] = useState<Record<string, string>>({});
+  /** Ids of the other units' calls this shift claims — the picker's ticks. */
+  const [claimed, setClaimed] = useState<Set<string>>(new Set());
   const [passDownNotes, setPassDownNotes] = useState('');
   const [overrideChecks, setOverrideChecks] = useState(false);
   const [overrideReason, setOverrideReason] = useState('');
@@ -133,8 +142,19 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
       next.call_types.forEach((t) => {
         seeded[t.slug] = '';
       });
+      // The server's tally covers every call this shift is on, claimed ones
+      // included. Those are shown as ticks, not typed counts, so their types
+      // come off the tally first — otherwise a claimed MVA would appear both
+      // ticked and typed, and be saved as two calls.
+      const attached = next.attachable_calls.filter((c) => c.attached);
+      const ownTypes: Record<string, number> = { ...(next.reported_call_types || {}) };
+      attached.forEach((c) => {
+        const slug = c.call_type;
+        if (slug && (ownTypes[slug] ?? 0) > 0) ownTypes[slug] = (ownTypes[slug] ?? 0) - 1;
+      });
       let typed = 0;
-      Object.entries(next.reported_call_types || {}).forEach(([slug, n]) => {
+      Object.entries(ownTypes).forEach(([slug, n]) => {
+        if (n <= 0) return;
         // A type retired since this shift was saved has no row to show it, so
         // its count folds into the uncategorised remainder below rather than
         // inflating a total nobody can see or edit.
@@ -145,12 +165,12 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
       });
       // Whatever the shift recorded beyond its typed breakdown was never given
       // a type, so it belongs in the uncategorised row rather than vanishing.
-      const remainder = (next.reported_call_count || 0) - typed;
+      const remainder = (next.reported_call_count || 0) - attached.length - typed;
       if (remainder > 0) seeded[UNCATEGORISED] = String(remainder);
       // Seed credits here rather than in an effect: an effect runs after the
       // first paint, so the confirm step rendered a frame of empty credit
       // fields before filling them in.
-      const seededTotal = deriveCallTotal(seeded) ?? 0;
+      const seededTotal = (deriveCallTotal(seeded) ?? 0) + attached.length;
       setMembers((prev) => {
         const local = new Map(prev.map((m) => [m.userId, m]));
         return next.members.map((m) => {
@@ -181,6 +201,7 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
         });
       });
       setCounts(seeded);
+      setClaimed(new Set(attached.map((c) => c.id)));
       // Resume where the officer left off. A finalized shift has no wizard.
       if (adoptServerStep) setStep(next.is_finalized ? 3 : Math.min(next.closeout_step + 1, 3));
     },
@@ -218,7 +239,13 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
   const hasInvalidHours = members.some(
     (m) => m.hoursDraft !== null && m.hoursDraft.trim() !== '' && parseHoursEntry(m.hoursDraft) === null
   );
-  const callTotal = useMemo(() => deriveCallTotal(counts), [counts]);
+  // Typed rows plus ticked calls. Still null while neither has been touched:
+  // null is "not answered", 0 is a quiet tour, and they are stored differently.
+  const callTotal = useMemo(() => {
+    const typed = deriveCallTotal(counts);
+    if (typed === null && claimed.size === 0) return null;
+    return (typed ?? 0) + claimed.size;
+  }, [counts, claimed]);
   const totalOrZero = callTotal ?? 0;
 
   /** Credit defaults to the apparatus count and can never exceed it. */
@@ -304,10 +331,17 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
       Object.entries(counts).forEach(([slug, v]) => {
         if (slug !== UNCATEGORISED && known.has(slug) && num(v) > 0) types[slug] = num(v);
       });
+      // Sent as a change against what the server already holds, so a call
+      // another officer detached meanwhile is not silently re-claimed.
+      const wasAttached = new Set((state?.attachable_calls ?? []).filter((c) => c.attached).map((c) => c.id));
+      const attach = [...claimed].filter((id) => !wasAttached.has(id));
+      const detach = [...wasAttached].filter((id) => !claimed.has(id));
       hydrate(
         await schedulingService.saveCloseoutCalls(shiftId, {
           reported_call_count: callTotal,
           reported_call_types: Object.keys(types).length ? types : undefined,
+          attach_call_ids: attach.length ? attach : undefined,
+          detach_call_ids: detach.length ? detach : undefined,
         })
       );
       setStep(3);
@@ -362,6 +396,15 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
   // clear it — so the row list is the authority and stale keys are dropped.
   const rows = state.call_types.map((t) => ({ slug: t.slug, label: t.label }));
   rows.push({ slug: UNCATEGORISED, label: 'Not categorised' });
+  const typeLabel = (slug?: string | null): string =>
+    slug ? (state.call_types.find((t) => t.slug === slug)?.label ?? 'Retired type') : 'Not categorised';
+  const toggleClaim = (callId: string, on: boolean) =>
+    setClaimed((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(callId);
+      else next.delete(callId);
+      return next;
+    });
 
   return (
     <div className="border-theme-surface-border bg-theme-surface space-y-3 rounded-lg border p-4">
@@ -523,8 +566,40 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
             </span>
             <span className="text-theme-text-muted text-[10px] tracking-wider uppercase">Total calls</span>
           </div>
+          {state.attachable_calls.length > 0 && (
+            <fieldset className="space-y-1">
+              <legend className="text-theme-text-secondary text-xs font-medium">Already logged by another unit</legend>
+              <p className="text-theme-text-muted text-xs">
+                Tick any of these {unitLabel} was also on. The department counts each one once, and {unitLabel} gets the
+                run — don’t enter it again below.
+              </p>
+              <div className="divide-theme-surface-border divide-y">
+                {state.attachable_calls.map((c) => {
+                  const units = c.unit_labels.length ? c.unit_labels.join(', ') : 'Another unit';
+                  const label = `${units} · ${typeLabel(c.call_type)} · ${formatCalendarDate(c.call_date, {
+                    month: 'short',
+                    day: 'numeric',
+                  })}`;
+                  return (
+                    <label key={c.id} className="touch:min-h-11 flex cursor-pointer items-center gap-2 py-2">
+                      <input
+                        type="checkbox"
+                        className="form-checkbox"
+                        checked={claimed.has(c.id)}
+                        onChange={(e) => toggleClaim(c.id, e.target.checked)}
+                      />
+                      <span className="text-theme-text-secondary min-w-0 flex-1 text-sm">{label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+          )}
           <p className="text-theme-text-muted text-xs">
-            Enter them by type below. If you don’t break them down, enter them all under “Not categorised”.
+            {state.attachable_calls.length > 0
+              ? `Enter the calls only ${unitLabel} logged by type below.`
+              : 'Enter them by type below.'}{' '}
+            If you don’t break them down, enter them all under “Not categorised”.
           </p>
           <div className="divide-theme-surface-border divide-y">
             {rows.map((r) => (

@@ -73,6 +73,7 @@ Key pages:
    - **Start Date** — When voting opens
    - **End Date** — When voting closes
    - **How is the Winner Determined?** — The voting method and victory condition, chosen together as one option (see below)
+   - **Seats per Race** — How many people each race elects (1 to 50). A two-seat board race elects its top two, and each voter may choose up to two. The victory condition decides who qualifies and the seats go to the highest qualifiers; a tie on the last seat is settled by the tie policy. Ranked choice elects one per race, so choosing it sets this back to 1
    - **Anonymous Voting** — Whether votes are anonymous (recommended for officer elections)
    - **Allow Write-Ins** — Whether voters can write in candidates not on the ballot
 3. Click **Create** — the election is created in **Draft** status
@@ -153,12 +154,19 @@ and apply it to next year's election:
    has at least one item, and not on a closed election)
 3. Name it — e.g. "Annual officer election" — and click **Save Template**
 
+A department can keep up to **200** saved templates _(2026-10-05)_. Saving a
+201st is refused with "This organization has reached the maximum of 200 saved
+ballot templates" — delete one you no longer use from the template picker
+first.
+
 > **What is saved — and what deliberately is not.** A template snapshots the
 > ballot **structure only**: items, positions, voting methods, victory
 > conditions, write-in settings, eligibility types. It never carries
 > candidates, voters, votes, tokens, or attendance — the builder says exactly
-> this under the name field, and the stored shape has nowhere to put them, so
-> they cannot survive the round trip even if something tries to send them.
+> this under the name field, and the stored shape has nowhere to put them.
+> Since 2026-10-05 a save request that tries to send one anyway — a
+> `candidates` list inside an item, say — is refused outright rather than
+> accepted with the extra quietly dropped.
 > Applying last year's template gives you last year's _questions_, with nobody
 > pre-nominated.
 
@@ -388,13 +396,11 @@ The **Eligibility Roster** tab is where you find who needs one: a member who
 will not receive a ballot is explained there, row by row, and the panel points
 you to the **Overrides** tab.
 
-> **An override does not extend a specific voter list.** On an election
-> restricted to a named list of voters, an override for someone not on the list
-> is created and shown as **Override**, but that member's vote is still refused
-> ("restricted to a specific voter list") — and the eligible count and turnout
-> treat them as eligible. Whether it should admit them is an open owner
-> decision (2026-09-30, `docs/KNOWN_LIMITATIONS.md`). Add the member to the list
-> instead.
+> **An override extends a specific voter list** _(2026-10-05)_. On an election
+> restricted to a named list of voters, an override for someone not on the
+> list admits them as though they were on it: they can vote in the app, they
+> receive a ballot email, and they count in the eligible total and turnout
+> exactly as the roster shows.
 
 > **Linkable tabs** _(2026-08-12)_: every tab on the election detail page can
 > now be sent as a URL — the eligibility roster is
@@ -486,7 +492,7 @@ When the election is ready:
 
 > **Hint:** Send a **test ballot** to yourself first (`POST /elections/:id/send-test-ballot`) to verify the email rendering and voting link before sending to all members. Votes cast from a test ballot are flagged as test votes — they are excluded from results, statistics, and rosters, and they never consume your real vote.
 >
-> **Known gap (2026-09-30):** Election Settings offers test ballots for **draft** elections only, and the emailed test link for a draft answers "Election is draft" — the ballot page opens only for an election that is open. You can check the email itself, but not vote through the link, until the election is open. Recorded as an open owner decision in `docs/KNOWN_LIMITATIONS.md`.
+> **Previewing a draft** _(2026-10-05)_: Election Settings offers test ballots for **draft** elections, and the emailed test link now opens the draft's ballot — you can vote through it, see the **TEST BALLOT** banner and get a receipt that says the vote is not counted. A real (non-test) link still opens only once the election is open.
 
 ### Ballot Distribution
 
@@ -506,16 +512,14 @@ skipped member with the reason, which is the part you act on.
 
 **What the ballot email needs, and when it says so** _(2026-09-30)_:
 
-- **Ballot emails need ballot items.** The emailed ballot page votes on ballot
-  items only, and the ballot is locked once voting opens. An election built
-  from positions and candidates alone — as the create form offers — can be
-  voted on in the app but can never be emailed. **Send Ballot Emails** is then
-  disabled, and the page now says why in text beside it: _"Ballot emails need
-  ballot items, and the ballot cannot change while voting is open. Members can
-  vote in the app."_ (it was a hover tooltip a phone or screen reader never
-  showed). A locked, empty ballot says the same. Nothing warns before **Open
-  Election**, so add at least one ballot item first if you mean to email
-  ballots (open owner decision, `docs/KNOWN_LIMITATIONS.md`).
+- **Ballot emails carry every race** _(2026-10-05)_. The emailed ballot
+  page shows ballot items **and** plain positions — a race created from the
+  create form's positions is served to it as a ballot item — so an election
+  built from positions and candidates alone can be emailed. **Send Ballot
+  Emails** is disabled only for an election with neither ballot items nor
+  positions, and the page then says why in text beside it. A member eligible
+  only for a plain position now gets that race on the link, where the page
+  used to open empty.
 - **A draft cannot be mailed.** Sending ballots is refused for a Draft or
   Nominations election ("Ballot emails cannot be sent for a draft election")
   except as a test ballot; it was already refused once closed or cancelled.
@@ -532,14 +536,14 @@ skipped member with the reason, which is the part you act on.
 
 ### Edge Cases
 
-| Scenario                                                     | Behavior                                                                                                                                                 |
-| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Member without email address                                 | Skipped during send; reason logged                                                                                                                       |
-| Ballot sent to member who already voted                      | Second submission is rejected — votes are never overwritten (double-vote prevention is enforced at the database level)                                   |
-| Member with zero eligible ballot items                       | Skipped during send (no empty ballot); reason shown in the send summary                                                                                  |
-| Election opened without ballot items or candidates           | Cannot open — at least one accepted candidate or one ballot item is required                                                                             |
-| Election opened with candidates but no ballot items          | Members vote in the app; ballot emails can never be sent for it (the ballot is locked once open) — see above                                             |
-| A member checked in at the meeting after the election opened | Recorded as present, but **cannot vote**: the roll froze at opening. The Attendance tab says so while voting is open; add a voter override to admit them |
+| Scenario                                                     | Behavior                                                                                                                                                                                                                                 |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Member without email address                                 | Skipped during send; reason logged                                                                                                                                                                                                       |
+| Ballot sent to member who already voted                      | Second submission is rejected — votes are never overwritten (double-vote prevention is enforced at the database level)                                                                                                                   |
+| Member with zero eligible ballot items                       | Skipped during send (no empty ballot); reason shown in the send summary                                                                                                                                                                  |
+| Election opened without ballot items or candidates           | Cannot open — at least one accepted candidate or one ballot item is required                                                                                                                                                             |
+| Election opened with candidates but no ballot items          | Since 2026-10-05 its positions are on the emailed ballot, so ballots can be emailed. Only an election with neither positions nor ballot items cannot email ballots, and the **Open election** dialog warns about that before you confirm |
+| A member checked in at the meeting after the election opened | Recorded as present, but **cannot vote**: the roll froze at opening. The Attendance tab says so while voting is open; add a voter override to admit them                                                                                 |
 
 ### Voter-Roll Freeze
 
@@ -602,11 +606,24 @@ are never contacted.
 
 ### In-App Voting (Authenticated)
 
-1. Navigate to **Elections** and open the active election
-2. Review each ballot item and the candidates
-3. Select your choice for each position (or your approvals/rankings for approval and ranked-choice elections)
-4. Click **Submit Vote** — for approval and ranked-choice elections all of your selections for the position are submitted together, atomically
-5. Your vote is confirmed on screen (_"Vote submitted for …"_), and a **receipt** appears beneath it — _"Save this receipt to verify your vote was counted. It cannot reveal how you voted."_ — which you can check later under [Vote Receipt Verification](#vote-receipt-verification). _(Fixed 2026-10-05: the receipt was recorded but the page redrew itself after the vote and wiped it before you could see it.)_
+_(2026-10-05)_ The **Cast Vote** tab is the same ballot as the emailed link:
+every ballot item and every position race, answered the same way (Approve /
+Deny, one candidate, "Select up to N", or a ranking).
+
+1. Navigate to **Elections** and open the active election, then **Cast Vote**
+2. Make a selection on the items you are voting on now. An item you leave on
+   **Abstain** stays open — unlike the emailed link, the in-app ballot is not
+   single-use — and an item you have already voted on is shown as done
+3. Click **Cast Ballot**, check the summary in the confirmation and confirm.
+   Everything you selected is recorded together: if any selection is refused
+   (say, you are not eligible for that item), nothing is recorded and the
+   message names the item
+4. The tab shows a **receipt** for each vote — _"Save this receipt to verify
+   your vote was counted. It cannot reveal how you voted."_ — and the verify
+   form under the ballot checks a receipt later (see
+   [Vote Receipt Verification](#vote-receipt-verification)). _(Fixed
+   2026-10-05: the receipt was recorded but the page redrew itself after the
+   vote and wiped it before you could see it.)_
 
 ### Email Ballot Voting (Token-Based)
 
@@ -660,6 +677,15 @@ they count toward results.
    Lt. Reyes and FF Park, 2 spoiled ballots discarded")
 4. Submit — one vote row is stored per paper ballot, flagged as manual and
    attributed to you as the recording officer
+
+**Motions and membership votes on paper** _(2026-10-05)_: opening an election
+now creates an **Approve** and a **Deny** row for every approval item, so
+Record Paper Ballots lists them beside the candidates, labelled with the
+item's title, and the "Approve / Deny" boxes on the printed ballot can be
+keyed in. A Board-style race built in the Ballot Builder (one that is not a
+plain position) is printed on the paper ballot too. An election already open
+before this release gets an item's rows only once someone votes on the item
+electronically.
 
 Because paper votes are ordinary vote rows, a closed election's results carry
 no separate "paper" figure — the paper votes are simply in the counts. What
@@ -748,17 +774,35 @@ When enabled for the organization, proxy voting allows one member to vote on beh
 4. Select the **delegating member** (who can't attend)
 5. Select the **proxy holder** (who will vote for them)
 6. Save — nothing is sent at this point. When ballots go out, the proxy holder is **Cc'd on the delegating member's ballot email** (their own ballot email is separate)
+   _(2026-10-05)_ That copied email says so: its card under the ballot reads
+   _"<holder> holds <member>'s proxy"_ and explains that the link opens the
+   delegating member's ballot and works once, whichever of the two submits
+   it — where it used to tell the holder the link was theirs alone. A
+   department that edited its ballot email template before this change gets
+   the same sentence at the top of the message instead.
 
 ### Casting a Proxy Vote
 
-> **Not built _(2026-08-12)_.** This section described a flow that does not
-> exist. Proxies can be **configured** — the Proxy Voting panel on the election
-> detail page assigns them and caps how many one member may hold — but there is
-> no way to cast a vote as one. There is no "Vote as Proxy" button, no
-> "Voting as proxy for…" banner, and no proxy mode on the ballot anywhere in the
-> application. Until that is built, a member who cannot attend should be sent an
-> email ballot instead. See
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#elections--proxy-voting-has-an-admin-panel-but-no-ballot-mode-2026-08-12).
+_(2026-10-05)_ A member who holds someone's proxy votes it from the **Cast
+Vote** tab:
+
+1. Open the election's **Cast Vote** tab
+2. In **Voting for**, choose _"<member> (as their proxy)"_ instead of
+   **Myself** — the list shows only the proxies you hold, live
+3. The ballot reloads as that member's: a **"Voting as proxy for: <member>"**
+   banner, their eligibility, and the items they have already voted on shown
+   as done
+4. Make the selections and click **Cast <member>'s Ballot**. The votes are
+   recorded as theirs (double-vote prevention applies to them, not you) and
+   marked as cast by you as their proxy
+
+**Named elections only.** A proxy vote records whom it was cast for, so on an
+**anonymous** election the proxy ballot is refused — the tab says so instead
+of offering the choice. Whether an anonymous election may accept an
+attributable proxy ballot is an open owner decision (ELEC-43 in
+`docs/KNOWN_LIMITATIONS.md`). Proxy voting must also be enabled in Election
+Settings. The holder can still use the delegating member's emailed link they
+are copied on.
 
 ### Edge Cases
 
@@ -794,16 +838,27 @@ If results are hidden until close:
    - Write-in tally
    - Turnout statistics (turnout counts only voting-eligible members — tiers marked not voting-eligible are excluded from the denominator)
 
-> **Note on early closes:** results stay gated until the election's scheduled end date has passed — for everyone, including the officer who closed it (an open owner decision, 2026-09-30). The Results tab says when: _"Voting is closed. Results will be available after the scheduled end, …"_. If you close early and want results seen right away, press **Publish Results** on the closed election's **Results & Publishing** panel. Internal processes like runoff creation and the emailed report are not affected by the gate.
+> **Note on early closes** _(2026-10-05)_: closing releases the results. An election closed early at the meeting shows them on the **Results** tab straight away — to the officer who closed it and to every member who can view elections — exactly as it would have at the scheduled end. **Publish Results** is only needed to show results _before_ voting closes, which the app does not allow while voting is open.
 
-**The Results & Publishing panel** _(changed 2026-09-30)_ appears once the
-election is open. **Publish Results** / **Hide Results** is offered only on a
-closed election — while voting is open the panel reads _"Results can be
-published once voting closes"_, where it used to offer a switch the server
-refused. **Email Results Report** (_"Email the results report to the election
+**The Results & Publishing panel** _(changed 2026-10-05)_ appears once the
+election is open. It no longer carries a **Publish Results** / **Hide
+Results** switch: closing the election is what releases the results, so a
+closed election's panel reads _"Results are visible to members"_ and an open
+one _"Results are hidden while voting is open"_. (A live tally while voting is
+open is still possible only if **results visible immediately** was set on the
+election before it opened.) **Email Results Report** (_"Email the results report to the election
 secretary"_, button **Send Report**) appears only once closed; the server now
 refuses the report while the election is open, where it used to mail a
 mid-vote tally headed "has been closed … official report".
+
+**Corrections after close are marked** _(2026-10-05)_. **Merge Write-Ins**,
+**Void a Vote** and voiding a paper-ballot batch still work once an election
+has closed — they are how a certified result is corrected — but each one now
+leaves a mark: the **Results** tab shows _"These results were revised after
+the election closed"_ with a line per correction (_"Revised <when> by <who>: a
+vote was voided (<reason>)"_), and the certified PDF prints the same lines
+under its "Election closed …" line. Rolling the election back to open clears
+the marks; the re-close certifies afresh.
 
 **What the results, the report and the certified PDF now show** _(2026-09-30)_:
 
@@ -926,7 +981,7 @@ Each vote generates a cryptographic **receipt hash** that:
 - Is returned to the voter when they submit their ballot (shown on the confirmation screen — voters should save it)
 - Proves the vote was recorded
 - Does NOT reveal which candidate was selected
-- Can be verified by anyone holding the receipt via `GET /elections/{id}/verify-receipt?receipt=...` (public, rate-limited — returns only the vote's timestamp and position)
+- Can be verified by anyone holding the receipt via `POST /elections/{id}/verify-receipt` with `{"receipt": …}` in the body (public, rate-limited; the older `GET …?receipt=` form still works but is deprecated — returns only the vote's timestamp and position)
 
 ### Forensics Report
 
@@ -1172,18 +1227,8 @@ is still open.
 `docs/KNOWN_LIMITATIONS.md` under "Elections — Owner Decisions From the W50
 Drive"):
 
-- The in-app **Cast Vote** tab shows position races only and treats every race
-  as one-choice; the emailed ballot is the complete one.
-- There is no seat count — a "(2 seats)" race declares one winner.
 - The emailed ballot pre-selects **Abstain** on every item; an untouched
   Submit casts no votes and uses up the link.
-- Results of an election closed early stay hidden until its scheduled end
-  unless published.
-- A paper ballot cannot record a vote on a motion or membership item.
-- Merge Write-Ins, Void a Vote and a paper-batch void still change the results
-  after close and after publishing, with no revision mark.
-- A proxy holder is Cc'd on the delegating member's ballot email, whose text
-  says the link is the recipient's alone.
 - Scheduled opening (**Open Automatically at Start Time**) sends no ballots.
 - Several screen fixes found in the same review — the delete and close dialog
   wording, a close stamp on the election cards, a test-ballot banner on the
@@ -1284,7 +1329,7 @@ The fixes above were driven again in a real browser; these are what that found.
 | Election closed accidentally                             | Use **Rollback** to reopen (requires `elections.manage`); leadership receives notification. **Exception:** an anonymous election that already has votes cannot be reopened after closing — its anonymity salt was destroyed, so reopening would permit double voting. Create a new election. |
 | Candidate wants to withdraw                              | Remove candidate from ballot (only if no votes cast). If votes exist, mark as "declined" instead.                                                                                                                                                                                            |
 | Proxy holder can't find proxy vote button                | Verify proxy authorization was created. Check that the election is still open.                                                                                                                                                                                                               |
-| Results don't show after closing                         | If the election was closed _before_ its scheduled end date, results stay hidden until that date passes — flip **results visible immediately** on the closed election (Publish Results panel) to show them now.                                                                               |
+| Results don't show after closing                         | Since 2026-10-05 a closed election shows its results whether it closed early or at the scheduled end. If the tab still refuses, reload the page — the election may have been rolled back to open by another officer.                                                                         |
 | Vote count doesn't match attendance                      | Check for proxy votes (counted separately). Check for voter overrides (members not on attendance list).                                                                                                                                                                                      |
 | Forensics shows integrity warning                        | Run full forensics report. Contact system administrator if vote signatures are invalid.                                                                                                                                                                                                      |
 | Runoff not auto-created                                  | Verify **Enable Runoffs** is on in election settings. Check that the victory condition was set correctly.                                                                                                                                                                                    |

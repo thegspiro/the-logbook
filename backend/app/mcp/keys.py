@@ -274,9 +274,7 @@ class McpKeyService:
         """Resolve a bearer value to a principal, or raise ``McpAuthError``.
 
         Fails closed at every step: an unknown key, a revoked or expired one,
-        an organization whose integration row is missing, disabled or not in
-        the ``connected`` state (disconnecting sets it back to ``available``
-        without deleting anything) all refuse.
+        or a department ``resolve_department_access`` refuses.
         """
         presented = presented.strip()
         if not looks_like_key(presented):
@@ -295,52 +293,9 @@ class McpKeyService:
         if key.expires_at is not None and _as_utc(key.expires_at) <= now:
             raise McpAuthError("This service key has expired")
 
-        integration = await self.db.execute(
-            select(Integration).where(
-                Integration.organization_id == key.organization_id,
-                Integration.integration_type == MCP_INTEGRATION_TYPE,
-            )
+        config, enabled_modules = await resolve_department_access(
+            self.db, key.organization_id
         )
-        row = integration.scalar_one_or_none()
-        if row is None or not row.enabled or row.status != "connected":
-            raise McpAuthError(
-                "The Claude MCP integration is not enabled for this organization. "
-                "An administrator can turn it on under Settings → Integrations.",
-                status=403,
-            )
-        config = parse_config(row.config)
-
-        # A deactivated department is refused the way its members are at
-        # sign-in (auth_service filters on Organization.active): a lifetime
-        # key must not outlive the tenant it was issued for.
-        active = (
-            await self.db.execute(
-                select(Organization.active).where(
-                    Organization.id == key.organization_id
-                )
-            )
-        ).scalar_one_or_none()
-        if not active:
-            raise McpAuthError(
-                "This organization is not active.",
-                status=403,
-            )
-
-        # The same module switches the API routers enforce. Integrations is
-        # the module this feature lives under, so a department that switched
-        # it off has switched this off too, key or no key.
-        from app.services.organization_service import OrganizationService
-
-        modules = await OrganizationService(self.db).get_enabled_modules(
-            UUID(key.organization_id)
-        )
-        enabled_modules = frozenset(modules.enabled_modules)
-        if "integrations" not in enabled_modules:
-            raise McpAuthError(
-                "The Integrations module is not enabled for this organization. "
-                "An administrator can turn it on under Settings → Modules.",
-                status=403,
-            )
 
         if _last_used_is_stale(key.last_used_at, now):
             key.last_used_at = now
@@ -358,6 +313,63 @@ class McpKeyService:
             client_ip=client_ip,
             enabled_modules=enabled_modules,
         )
+
+
+async def resolve_department_access(
+    db: AsyncSession, organization_id: str
+) -> tuple[ClaudeMcpConfig, frozenset[str]]:
+    """What the department allows an MCP caller, or ``McpAuthError``.
+
+    Shared by both ways in — a service key and a member's OAuth token — so
+    the department-level gate is one definition (CLAUDE.md pitfall 29).
+    Fails closed at every step: an integration row that is missing,
+    disabled or not in the ``connected`` state (disconnecting sets it back
+    to ``available`` without deleting anything), an inactive organization,
+    or the Integrations module switched off all refuse.
+    """
+    integration = await db.execute(
+        select(Integration).where(
+            Integration.organization_id == organization_id,
+            Integration.integration_type == MCP_INTEGRATION_TYPE,
+        )
+    )
+    row = integration.scalar_one_or_none()
+    if row is None or not row.enabled or row.status != "connected":
+        raise McpAuthError(
+            "The Claude MCP integration is not enabled for this organization. "
+            "An administrator can turn it on under Settings → Integrations.",
+            status=403,
+        )
+    config = parse_config(row.config)
+
+    # A deactivated department is refused the way its members are at
+    # sign-in (auth_service filters on Organization.active): a lifetime
+    # credential must not outlive the tenant it was issued for.
+    active = (
+        await db.execute(
+            select(Organization.active).where(Organization.id == organization_id)
+        )
+    ).scalar_one_or_none()
+    if not active:
+        raise McpAuthError(
+            "This organization is not active.",
+            status=403,
+        )
+
+    # The same module switches the API routers enforce. Integrations is
+    # the module this feature lives under, so a department that switched
+    # it off has switched this off too, credential or no credential.
+    from app.services.organization_service import OrganizationService
+
+    modules = await OrganizationService(db).get_enabled_modules(UUID(organization_id))
+    enabled_modules = frozenset(modules.enabled_modules)
+    if "integrations" not in enabled_modules:
+        raise McpAuthError(
+            "The Integrations module is not enabled for this organization. "
+            "An administrator can turn it on under Settings → Modules.",
+            status=403,
+        )
+    return config, enabled_modules
 
 
 def _as_utc(value: datetime) -> datetime:

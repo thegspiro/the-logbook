@@ -876,9 +876,18 @@ async def login(
         # flushed (not committed) and this handler then raises (rolling back the
         # session), commit when an alert actually fired so it persists — mirroring
         # authenticate_user's failed-attempt commit.
+        # When the attempted name matched a real account, attribute the alert
+        # to that account and its department: without it every login-page
+        # alert was stored org-less and no department's alert screen could
+        # ever show it (SEC2-28-7). An unknown name still has neither.
+        failure = auth_service.last_auth_failure
         try:
             alert = await security_monitor.detect_brute_force(
-                db, ip=login_ip, user_id=None, success=False
+                db,
+                ip=login_ip,
+                user_id=failure.user_id if failure else None,
+                organization_id=failure.organization_id if failure else None,
+                success=False,
             )
             if alert is not None:
                 await db.commit()

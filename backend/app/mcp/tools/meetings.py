@@ -248,7 +248,17 @@ async def _counts_by_minutes(
 
 
 def register(server: Any) -> None:
-    @logbook_tool(server, title="List meetings", module="minutes")
+    @logbook_tool(
+        server,
+        title="List meetings",
+        module="minutes",
+        permissions=(
+            "meetings.view",
+            "minutes.view",
+            "meetings.manage",
+            "minutes.manage",
+        ),
+    )
     async def list_meetings(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -313,7 +323,17 @@ def register(server: Any) -> None:
             )
         return page(items, total, limit, offset)
 
-    @logbook_tool(server, title="Read meeting agenda", module="minutes")
+    @logbook_tool(
+        server,
+        title="Read meeting agenda",
+        module="minutes",
+        permissions=(
+            "meetings.view",
+            "minutes.view",
+            "meetings.manage",
+            "minutes.manage",
+        ),
+    )
     async def get_meeting_agenda(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -337,7 +357,17 @@ def register(server: Any) -> None:
         body.update({"meeting_id": meeting.id, "title": meeting.title})
         return body
 
-    @logbook_tool(server, title="Open action items", module="minutes")
+    @logbook_tool(
+        server,
+        title="Open action items",
+        module="minutes",
+        permissions=(
+            "meetings.view",
+            "minutes.view",
+            "meetings.manage",
+            "minutes.manage",
+        ),
+    )
     async def list_open_action_items(
         db: AsyncSession, principal: McpPrincipal, limit: int = 50, offset: int = 0
     ) -> dict:
@@ -392,7 +422,17 @@ def register(server: Any) -> None:
             )
         return page(rendered, total, limit, offset)
 
-    @logbook_tool(server, title="Read action item description", module="minutes")
+    @logbook_tool(
+        server,
+        title="Read action item description",
+        module="minutes",
+        permissions=(
+            "meetings.view",
+            "minutes.view",
+            "meetings.manage",
+            "minutes.manage",
+        ),
+    )
     async def get_action_item_description(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -418,7 +458,17 @@ def register(server: Any) -> None:
         body.update({"action_item_id": item.id, "meeting_id": item.meeting_id})
         return body
 
-    @logbook_tool(server, title="List published minutes", module="minutes")
+    @logbook_tool(
+        server,
+        title="List published minutes",
+        module="minutes",
+        permissions=(
+            "meetings.view",
+            "minutes.view",
+            "meetings.manage",
+            "minutes.manage",
+        ),
+    )
     async def list_minutes(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -449,7 +499,17 @@ def register(server: Any) -> None:
         ]
         return page(items, None, limit, offset)
 
-    @logbook_tool(server, title="Get published minutes", module="minutes")
+    @logbook_tool(
+        server,
+        title="Get published minutes",
+        module="minutes",
+        permissions=(
+            "meetings.view",
+            "minutes.view",
+            "meetings.manage",
+            "minutes.manage",
+        ),
+    )
     async def get_minutes(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -566,7 +626,17 @@ def register(server: Any) -> None:
         body["truncated_fields"] = truncated_fields
         return body
 
-    @logbook_tool(server, title="Read minutes text", module="minutes")
+    @logbook_tool(
+        server,
+        title="Read minutes text",
+        module="minutes",
+        permissions=(
+            "meetings.view",
+            "minutes.view",
+            "meetings.manage",
+            "minutes.manage",
+        ),
+    )
     async def get_minutes_text(
         db: AsyncSession,
         principal: McpPrincipal,

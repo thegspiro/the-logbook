@@ -19,7 +19,7 @@ The Scheduling module manages the full shift lifecycle for fire departments and 
 
 - **Shift creation and calendar views** (week/month)
 - **Member self-service signup** for open shift positions
-- **Shift assignments** with 9 position types (officer, driver, firefighter, EMT, captain, lieutenant, probationary, volunteer, other)
+- **Shift assignments** to the 10 built-in seats (officer, driver, firefighter, EMT, paramedic, captain, lieutenant, probationary, volunteer, other) and any seat the department defines itself
 - **Shift conflict detection** preventing duplicate assignments and overlapping time conflicts
 - **Shift officer assignment** from a member dropdown in the create/edit modal
 - **Understaffing indicators** with amber warning badges on calendar when staffing is below minimum
@@ -137,16 +137,16 @@ Core shift record representing a single scheduled shift.
 
 Links a member to a shift with a specific position.
 
-| Field               | Type     | Description                                                                            |
-| ------------------- | -------- | -------------------------------------------------------------------------------------- |
-| `id`                | UUID     | Primary key                                                                            |
-| `shift_id`          | UUID     | FK to shifts                                                                           |
-| `user_id`           | UUID     | FK to users                                                                            |
-| `position`          | String   | officer, driver, firefighter, emt, captain, lieutenant, probationary, volunteer, other |
-| `assignment_status` | String   | assigned, confirmed, declined, no_show, cancelled                                      |
-| `assigned_by`       | UUID     | Who made the assignment                                                                |
-| `confirmed_at`      | DateTime | When member confirmed                                                                  |
-| `notes`             | Text     | Optional notes                                                                         |
+| Field               | Type     | Description                                                                    |
+| ------------------- | -------- | ------------------------------------------------------------------------------ |
+| `id`                | UUID     | Primary key                                                                    |
+| `shift_id`          | UUID     | FK to shifts                                                                   |
+| `user_id`           | UUID     | FK to users                                                                    |
+| `position`          | String   | A seat the shift names: a built-in seat or the department's own (VARCHAR(100)) |
+| `assignment_status` | String   | assigned, confirmed, declined, no_show, cancelled                              |
+| `assigned_by`       | UUID     | Who made the assignment                                                        |
+| `confirmed_at`      | DateTime | When member confirmed                                                          |
+| `notes`             | Text     | Optional notes                                                                 |
 
 ### OrgCall _(2026-08-18)_
 
@@ -317,6 +317,48 @@ DELETE /api/v1/scheduling/shifts/{id}/signup         # Withdraw from a shift
 
 These endpoints use `get_current_user` (not `require_permission`), allowing any authenticated member to sign up.
 
+**Seats are an open vocabulary** _(2026-10-06, SCHED-CUSTOM-SEAT)_ — `position`
+is a string, not the ten built-in seats. A department's own seat (Scheduling →
+Position Names, or a seat typed onto a template or apparatus) can be signed up
+for, assigned, edited onto an assignment, swapped, offered, picked up and
+claimed as a standing shift. **Breaking:** the request schemas
+(`ShiftSignupRequest`, `ShiftAssignmentCreate`, `ShiftAssignmentUpdate`,
+`StandingShiftCreate`) accept any trimmed string up to 100 characters, and
+`ShiftAssignmentResponse.position` is a plain string rather than an enum.
+`shift_assignments.position` and `standing_shift_claims.position` are
+`VARCHAR(100)` (migration `56c91e7d9e10`).
+
+The rule is one function, `app.utils.positions.resolve_seat`, reached through
+`SchedulingService.resolve_shift_seat` from every path that seats a member
+(`create_assignment`, `update_assignment`, `_validate_assignment_candidate` —
+which swap review, offer acceptance and open-swap pickup all go through — and
+the exchange qualification check):
+
+| Requested seat                                | Result                                                                                  |
+| --------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Named on the shift (case-insensitive)         | Accepted, stored in the shift's own spelling                                            |
+| A built-in seat the shift does not name       | Unchanged: open on a shift with no seats; refused by the seat cap (400) on one that has |
+| Anything else (a custom seat the shift lacks) | **422**, `LB-SCHED-003` — including a seat another department defined                   |
+
+A request seat is settled the way `normalize_stored_positions` settles a stored
+one (`canonical_position`: built-ins case-folded and de-aliased, `EMT` → `ems`;
+a custom seat trimmed and otherwise verbatim). The shift's own `positions` list
+is the authority — the same list the seat cap and the eligibility intersection
+read. A standing shift is checked against the department's vocabulary when it is
+created (built-ins, Position Names, and every seat on the department's templates
+and apparatus), and each date it seats the member on is checked against that
+shift; a date whose shift lacks the seat is reported as skipped.
+
+**Eligibility for a custom seat** comes from where the department already grants
+seats: a rank's `eligible_positions` (the rank editor offers custom seats again),
+the Open Positions list (likewise), an open-to-all shift, or a seat flagged for
+administrative members. Qualifications and training programs map onto built-in
+seats only. With no grant nobody is eligible — the same answer as for any seat
+nothing grants — and officer assignment enforces eligibility too (#1752), so a
+custom seat with no grant cannot be filled until a rank or the open list grants
+it. The intersection with the shift's seats is case-insensitive, so a rank
+granting `rescue_tech` covers a template seat typed `Rescue_Tech`.
+
 A self signup is stored as `assigned` — the same state an officer's assignment
 produces — and the only confirmation is the member's own
 (`POST /assignments/{id}/confirm`). No officer queue receives it; the UI said
@@ -461,6 +503,36 @@ GET    /api/v1/scheduling/shifts/{id}/exchange-candidates   # Member self-servic
   `shift_exchange_qualification_override` audit event. Because an unqualified
   exchange cannot be submitted, the override only ever applies to one that
   lapsed while pending; a deliberate one-off seating is made from the roster.
+
+**Open swaps are picked up by eligible members** _(2026-10-05, W33-4)_ — an
+open swap (no target member, no requested shift) is offered to every member
+cleared for its seat, and the first to pick it up takes it:
+
+```
+GET    /api/v1/scheduling/swap-requests/open            # scheduling.swap
+POST   /api/v1/scheduling/swap-requests/{id}/pick-up    # scheduling.swap
+```
+
+- **One eligibility rule.** The list filters with `get_eligible_positions_bulk`
+  through `_seat_in`, exactly as the exchange picker does, and the pickup
+  places the member through `_validate_assignment_candidate` with
+  `enforce_position_eligibility` and `enforce_capacity` on — the duplicate,
+  overlap, leave, eligibility, EVOC and seat-cap checks a signup gets, after
+  the member signup window. The offered seat is excluded from the capacity
+  count because it moves in the same transaction. Nothing waives either; there
+  is no override on a pickup.
+- **Listed:** pending open swaps, non-training seats, on upcoming open and
+  unfinalized shifts within 90 days that the caller is not already on, from
+  other members, capped at 100.
+- **Pickup** locks request → shift → seat (the order `respond_to_swap_offer`
+  and `review_swap_request` use), moves the assignment's `user_id`, records the
+  picker as `target_user_id`, marks the request approved with the picker as
+  reviewer, tells the offerer, cancels the offerer's other pending swaps of the
+  seat, and writes a `shift_open_swap_picked_up` audit event. A second
+  concurrent pickup waits on the request lock and is told it is no longer open.
+- **Officer approval of an open swap is refused** — there is nobody to move the
+  seat to, and it used to report "Swap Request Approved" while the member stayed
+  rostered. Deny still works; the Requests tab shows no Approve on one.
 
 **Expiry** _(2026-08-23)_ — a pending offer holds the seat with the member who
 made it, so left alone it survives the shift itself: the offerer believes they
@@ -727,12 +799,21 @@ behind a success response. A tab left open across a mode switch is the
 realistic way either was reached; no shipped client sends these fields outside
 the count-only wizard.
 
-> **`attachable_calls` is deliberately empty.** Claiming another unit's call has
-> no UI yet, so nothing can send `attach_call_ids` from the browser, and
-> `list_calls_in_window` would cost two queries on every close-out GET for a
-> list nothing reads. The field stays on the response so the contract does not
-> change when the picker lands. See **SCHED-10** in
-> [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md#scheduling-module).
+> **The shared-call picker (SCHED-10).** In count-only mode, for a shift not yet
+> finalized, `GET .../closeout` serves `attachable_calls` from
+> `CallTrackingService.list_attachable_calls`: calls with a response from
+> another shift whose time **overlaps** this one (matched by the responding
+> shifts' times, not by call date, so a 24-hour tour's 0300 call dated the
+> previous day is still offered), each with `unit_labels` and `attached`. A call
+> only this shift is on is its own tally and is not listed; a call this
+> apparatus already ran on another tour is not listed either, because
+> `attach_response` deduplicates by apparatus. `PATCH .../closeout/calls` takes
+> `attach_call_ids` (tick) and `detach_call_ids` (untick); detaches run first,
+> then attaches, then the count is reconciled. `detach_response` removes only
+> this shift's response, and refuses a call no other unit is on — that is
+> corrected through the count. The typed breakdown covers only the calls the
+> shift logged itself: `record_shift_calls` refuses a breakdown larger than the
+> total minus the shared calls (it used to truncate it silently).
 
 ### Basic Apparatus
 
@@ -1180,11 +1261,12 @@ whole department over one hand-edited entry.
 
 `GET /scheduling/reports/call-volume` reads **one** source and never mixes them;
 reading both and adding them would count every call twice for an org that has
-used each mode in turn. The count-only branch sets `counts_unit_responses`, and
-the renderer relabels **Total Calls → Unit Responses**, **Avg Calls/Day → Avg
-Responses/Day**, **Peak Calls → Peak Responses**, with a footnote — because
-until the attach picker lands, two units on one incident are counted twice, and
-calling that "calls" overstates the department's volume.
+used each mode in turn. The count-only branch serves `counts_unit_responses:
+false` since the close-out wizard's shared-call picker shipped (SCHED-10): a
+second unit on an incident ticks the call the first unit logged rather than
+logging its own, so distinct `OrgCall` rows are incidents. Before the picker it
+was `true` and the renderer relabelled **Total Calls → Unit Responses** (and the
+average and peak cards) with a footnote; the renderer still honours the flag.
 
 ### ApparatusBasicPage
 
@@ -2954,12 +3036,17 @@ skipped, as are dates outside the pattern's own start and end." in place of
 ### Smaller fixes
 
 - **Shift Compliance** shows **Not applicable** for a requirement with
-  `total_members == 0` instead of "0% · 0/0 compliant" in red (W37-1). It still
-  grades training HOURS requirements from shift attendance alone (W37-2, open).
-  Since 2026-10-03 it skips members a requirement grandfathers by join date.
-- **Open Swap** reads "An officer finds cover; it stays yours until then" — no
-  other member can see an open swap and approving one moves nothing (W33-4,
-  open). The Requests tab's quick Approve/Deny drop a double click, and a
+  `total_members == 0` instead of "0% · 0/0 compliant" in red (W37-1). It
+  grades only requirements marked `shift_credited` (W37-2). Since 2026-10-03 it
+  skips members a requirement grandfathers by join date. Since 2026-10-06 a
+  SHIFTS requirement is graded by the shared compliance grader from finalized
+  attendance plus counted external shifts, over the requirement's own window —
+  the same figure the training screens show (shifts-three-sources; see
+  `docs/training-compliance-calculations.md` §2c).
+- **Open Swap** reads "Offered to members cleared for your seat; it stays
+  yours until one picks it up" — see
+  [Open swaps are picked up by eligible members](#swap-requests) (W33-4). The
+  Requests tab's quick Approve/Deny drop a double click, and a
   filtered empty list says it is showing one status only (W33-3, W33-5).
 - **Concurrent first saves of shift settings** collided on the unique
   `organization_id` index and 500'd; the insert now runs in a savepoint and

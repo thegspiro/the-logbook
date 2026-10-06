@@ -13,7 +13,7 @@ Provides endpoints for:
 import hashlib
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,12 +25,20 @@ from app.core.audit import (
     verify_audit_log_integrity,
 )
 from app.core.config import settings
+from app.core.constants import AUDIT_EVENT_DATA_EXPORT
 from app.core.database import get_db
 from app.core.security_middleware import get_client_ip
 from app.core.utils import safe_error_detail
 from app.models.audit import AuditLog
 from app.models.user import User
-from app.services.security_monitoring import AlertType, ThreatLevel, security_monitor
+from app.schemas.security_alert import SecurityAlertResolveRequest
+from app.services.security_monitoring import (
+    ALERT_ACTION_ALREADY,
+    ALERT_STATES,
+    AlertType,
+    ThreatLevel,
+    security_monitor,
+)
 
 router = APIRouter()
 
@@ -87,6 +95,9 @@ async def get_security_alerts(
     limit: int = Query(50, ge=1, le=500),
     threat_level: str | None = Query(None),
     alert_type: str | None = Query(None),
+    state: str | None = Query(
+        None, description="open, unacknowledged, acknowledged or resolved"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("audit.view")),
 ):
@@ -97,6 +108,11 @@ async def get_security_alerts(
         - limit: Maximum number of alerts to return (1-500)
         - threat_level: Filter by threat level (low, medium, high, critical)
         - alert_type: Filter by alert type
+        - state: Filter by workflow state (see ``ALERT_STATES``)
+
+    ``counts`` reports the org's open / unacknowledged / acknowledged /
+    resolved totals regardless of the filters, so the screen can show how much
+    is waiting without a second request.
     """
     # Parse threat level if provided
     threat_level_enum = None
@@ -120,15 +136,25 @@ async def get_security_alerts(
                 detail=f"Invalid alert_type. Must be one of: {[t.value for t in AlertType]}",
             )
 
+    state_value = state.lower() if state else None
+    if state_value and state_value not in ALERT_STATES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid state. Must be one of: {list(ALERT_STATES)}",
+        )
+
+    org_id = str(current_user.organization_id)
     alerts = await security_monitor.get_recent_alerts(
-        str(current_user.organization_id),
+        org_id,
         limit=limit,
         threat_level=threat_level_enum,
         alert_type=alert_type_enum,
         db=db,
+        state=state_value,
     )
+    counts = await security_monitor.count_alerts_by_state(db, org_id)
 
-    return {"alerts": alerts, "total": len(alerts)}
+    return {"alerts": alerts, "total": len(alerts), "counts": counts}
 
 
 @router.post("/alerts/{alert_id}/acknowledge")
@@ -139,16 +165,21 @@ async def acknowledge_alert(
     current_user: User = Depends(require_permission("audit.export")),
 ):
     """
-    Acknowledge a security alert
+    Acknowledge a security alert — "somebody is looking at this".
+
+    409 when it was already acknowledged or resolved: the first officer's
+    attribution stays on the record.
     """
-    success = await security_monitor.acknowledge_alert(
+    outcome = await security_monitor.acknowledge_alert(
         alert_id, str(current_user.organization_id), db, username=current_user.username
     )
 
-    if not success:
+    if outcome is None:
+        raise HTTPException(status_code=404, detail="Security alert not found.")
+    if outcome == ALERT_ACTION_ALREADY:
         raise HTTPException(
-            status_code=404,
-            detail="Security alert not found. It may have already been resolved or removed.",
+            status_code=409,
+            detail="This alert has already been acknowledged.",
         )
 
     await log_audit_event(
@@ -161,6 +192,7 @@ async def acknowledge_alert(
             "acknowledged_by": current_user.username,
         },
         user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
         ip_address=get_client_ip(request),
     )
 
@@ -171,20 +203,31 @@ async def acknowledge_alert(
 async def resolve_alert(
     alert_id: str,
     request: Request,
+    body: SecurityAlertResolveRequest = Body(
+        default_factory=SecurityAlertResolveRequest
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("audit.export")),
 ):
     """
-    Mark a security alert as resolved
+    Mark a security alert as resolved, with an optional note of what was found.
+
+    409 when it is already resolved — a resolution is not rewritten.
     """
-    success = await security_monitor.resolve_alert(
-        alert_id, str(current_user.organization_id), db, username=current_user.username
+    outcome = await security_monitor.resolve_alert(
+        alert_id,
+        str(current_user.organization_id),
+        db,
+        username=current_user.username,
+        note=body.note,
     )
 
-    if not success:
+    if outcome is None:
+        raise HTTPException(status_code=404, detail="Security alert not found.")
+    if outcome == ALERT_ACTION_ALREADY:
         raise HTTPException(
-            status_code=404,
-            detail="Security alert not found. It may have already been resolved or removed.",
+            status_code=409,
+            detail="This alert has already been resolved.",
         )
 
     await log_audit_event(
@@ -195,12 +238,60 @@ async def resolve_alert(
         event_data={
             "alert_id": alert_id,
             "resolved_by": current_user.username,
+            "resolution_note": body.note,
         },
         user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
         ip_address=get_client_ip(request),
     )
 
     return {"status": "resolved", "alert_id": alert_id}
+
+
+@router.get("/download-activity")
+async def list_monitored_exports(
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("audit.view")),
+):
+    """
+    Recent data exports by members of this organization.
+
+    Every completed request to an export route is recorded by
+    ``SecurityMonitoringMiddleware`` as a ``data_export`` audit event holding
+    who, which route, when, from where and how many bytes — never the exported
+    content or the query string, which can carry search terms naming members.
+    """
+    rows = (
+        (
+            await db.execute(
+                select(AuditLog)
+                .where(
+                    AuditLog.event_type == AUDIT_EVENT_DATA_EXPORT,
+                    AuditLog.organization_id == str(current_user.organization_id),
+                )
+                .order_by(AuditLog.id.desc())
+                .limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return {
+        "exports": [
+            {
+                "id": row.id,
+                "timestamp": row.timestamp.isoformat() if row.timestamp else None,
+                "user_id": row.user_id,
+                "username": row.username,
+                "ip_address": row.ip_address,
+                "endpoint": (row.event_data or {}).get("endpoint"),
+                "method": (row.event_data or {}).get("method"),
+                "bytes": (row.event_data or {}).get("bytes"),
+            }
+            for row in rows
+        ]
+    }
 
 
 @router.get("/audit-log/integrity")

@@ -268,7 +268,12 @@ export interface CourseClassCreate {
   counts_toward_certification?: boolean | undefined;
 }
 
-export type CourseClassUpdate = Partial<CourseClassCreate> & { active?: boolean };
+/** Fields an edit can empty: sent as null so the clear persists (pitfall #1). */
+type ClearableCourseClassField = 'section_name' | 'title' | 'start_time' | 'credit_hours' | 'location_id';
+
+export type CourseClassUpdate = Omit<Partial<CourseClassCreate>, ClearableCourseClassField> & {
+  [K in ClearableCourseClassField]?: CourseClassCreate[K] | null;
+} & { active?: boolean };
 
 export interface CourseClassAutofill {
   meeting_days: number[]; // Weekday numbers, 0 = Monday
@@ -288,6 +293,10 @@ export interface CohortScheduleConfig {
 export interface CohortSchedulePreviewRequest extends CohortScheduleConfig {
   course_id: string;
   start_date: string;
+  /** The cohort's room: every class without one of its own books it. */
+  location_id?: string | undefined;
+  /** Per-class edits so far, so the preview checks the room each class will book. */
+  classes?: CohortClassOverride[] | undefined;
 }
 
 /** One computed class in a schedule preview — nothing is created yet. */
@@ -301,6 +310,11 @@ export interface PreviewClass {
   scheduled_end: string;
   credit_hours?: number;
   instructor?: string;
+  /** The room this class would book, already resolved by the backend. */
+  location_id?: string | null;
+  location_name?: string | null;
+  /** Where the room came from: a per-class pick, the syllabus row, or the cohort. */
+  location_source?: 'class' | 'syllabus' | 'cohort' | null;
   warnings: string[];
 }
 
@@ -1216,6 +1230,12 @@ export interface RequirementProgressRecord {
   created_at: string;
   updated_at: string;
   requirement?: TrainingRequirementEnhanced;
+  /**
+   * A linked department requirement: the row is the member's compliance
+   * result, read live, and the program cannot mark it off (it can only waive
+   * it). Sent by the enrollment progress read.
+   */
+  reads_compliance?: boolean;
 }
 
 export interface RequirementProgressUpdate {
@@ -1267,6 +1287,40 @@ export interface RegistryImportResult {
   errors: string[];
   last_updated?: string;
   source_url?: string;
+}
+
+/** What a program import creates — the same shape on a dry run and a real one. */
+export interface ProgramImportSummary {
+  program_name: string;
+  structure_type: string;
+  phase_count: number;
+  phases: Array<{
+    phase_number: number;
+    name: string;
+    requirement_count: number;
+    milestone_count: number;
+  }>;
+  program_requirement_count: number;
+  milestone_count: number;
+  /** Requirements the department does not have yet; the import creates them. */
+  requirements_created: string[];
+  /** Existing department requirements the program will link to. */
+  requirements_reused: string[];
+}
+
+export interface ProgramImportPreview {
+  success: boolean;
+  dry_run: true;
+  summary: ProgramImportSummary;
+}
+
+export interface ProgramImportResult {
+  success: boolean;
+  dry_run: false;
+  program_id: string;
+  program_name: string;
+  summary: ProgramImportSummary;
+  message: string;
 }
 
 export interface RegistryInfo {
@@ -2302,6 +2356,17 @@ export interface MemberCompetency {
   created_at: string;
   updated_at: string;
   skill_name?: string;
+}
+
+/**
+ * The department readiness heat-map. `competencies` are the stored rows the
+ * per-member endpoint serves, for every active member at once; the screen
+ * shows them as they are and grades nothing itself.
+ */
+export interface CompetencyHeatmap {
+  members: Array<{ user_id: string; name: string; station?: string | null; rank?: string | null }>;
+  skills: Array<{ id: string; name: string; category?: string | null }>;
+  competencies: MemberCompetency[];
 }
 
 // ==================== Instructor Qualification Types ====================

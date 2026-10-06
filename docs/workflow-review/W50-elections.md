@@ -167,7 +167,9 @@ Covered by the new `VoterOverrideManagement.test.tsx`. Re-driven: Alex Brooks pi
 
 Covered by `ElectionDetailPage.loaded.test.tsx` and the new `test_ballot_send_message.py` (unit). Re-driven: "The eligibility summary email could not be sent" (capitalised since the re-drive).
 
-### W50-9 — MED — A member checked in after the election opens cannot vote — 🚩 FLAGGED
+### W50-9 — MED — A member checked in after the election opens cannot vote — ✅ DECIDED (2026-10-05)
+
+**Owner decision (2026-10-05):** secretary override only. A late arrival does not join the frozen roll by checking in; the secretary admits them with a voter override, which is recorded with its reason. No code change: this is the behaviour the Attendance tab and the elections guide already describe.
 
 **Did:** on the open bylaw election (attendance required), checked in Jordan Avery; then Cast Vote as `member`.
 **Saw:**
@@ -179,7 +181,9 @@ Covered by `ElectionDetailPage.loaded.test.tsx` and the new `test_ballot_send_me
 **Where:** `backend/app/services/election_service.py:5142` (the roll is frozen at opening) and `:6203`.
 **Flagged:** whether a late arrival may vote is a question of who is authorized to vote. The Attendance tab now says a check-in after opening does not add a voter, and points to the override. Mirrored into `docs/KNOWN_LIMITATIONS.md`.
 
-### W50-10 — MED — Results of an election closed early stay hidden until its scheduled end — 🚩 FLAGGED
+### W50-10 — MED — Results of an election closed early stay hidden until its scheduled end — ✅ DECIDED (2026-10-05)
+
+**Owner decision (2026-10-05):** an early close releases results per the visibility an election has at its scheduled end. `get_election_results` now unlocks on CLOSED alone (or the pre-open live-tally flag); the scheduled end is no longer a condition, so the officer and the members see the result at the meeting. Test: `TestResultsVisibilityGate` in `backend/tests/test_election_voting_flow.py`.
 
 **Did:** closed the officer election on 9/30, whose scheduled end is 10/7 9:00 PM. Opened Results as `secretary` and as `member`.
 **Saw:**
@@ -190,7 +194,9 @@ Covered by `ElectionDetailPage.loaded.test.tsx` and the new `test_ballot_send_me
 **Where:** `backend/app/services/election_service.py:2517`.
 **Flagged:** whether an early close should release results, and to whom, is a visibility decision. The tab now says "Voting is closed. Results will be available after the scheduled end, Wednesday, October 7, 2026 at 9:00 PM." Mirrored into `KNOWN_LIMITATIONS.md`.
 
-### W50-11 — LOW — An election on positions alone cannot email ballots, found out only after opening — 🚩 FLAGGED
+### W50-11 — LOW — An election on positions alone cannot email ballots, found out only after opening — ✅ DECIDED (2026-10-05)
+
+**Owner decision (2026-10-05):** warn on Open when email ballots are impossible. The Open election confirmation now names it for an election with no ballot items (`ElectionDetailPage.w50-open-confirm.test.tsx`).
 
 **Did:** the officer election, built from positions and candidates as the create form offers, and then opened.
 **Saw:**
@@ -213,7 +219,7 @@ The link after voting shows "Unable to Load Ballot — This ballot has already b
 
 | Section                 | Result                                                                              |
 | ----------------------- | ----------------------------------------------------------------------------------- |
-| 1. The job gets done    | Create, nominate, candidates, open, vote in app and by link, close; W50-11 flagged  |
+| 1. The job gets done    | Create, nominate, candidates, open, vote in app and by link, close; W50-11 fixed    |
 | 2. The right people     | ✅ member refused every manage call and page; W50-9 flagged                         |
 | 3. Wrong input, failure | ✅ empty create refused; seven double-clicks acted once; bad and used links refused |
 | 4. Browser signals      | 403 on results after close (W50-10)                                                 |
@@ -670,7 +676,9 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `frontend/src/modules/elections/components/ElectionResults.tsx:238-289`; `election_service.py:2592-2613`; the report template (~S:7227); the certified builder (S:4467-4541).
 **Fix:** S05 returns per-item results with a `label`, and the PDF and report use them (`test_w50_s05.py`). `review-backend-1.md` #4 found the tab still rendering the raw item id; `d6f828c` adds `label` to `PositionResults` and uses `label ?? position` in the heading and tie alert (`ElectionResults.w50-s25.test.tsx`).
 
-### W50-8 — HIGH — "Print Blank Ballots" prints the position races only; the paper path cannot carry a motion or membership vote — ✅ FIXED (round 2, `7aa3405`), PDF half · confirmed live · FLAGGED, recording half
+### W50-8 — HIGH — "Print Blank Ballots" prints the position races only; the paper path cannot carry a motion or membership vote — ✅ FIXED (round 2, `7aa3405`), PDF half · confirmed live · ✅ DECIDED & FIXED (2026-10-05), recording half
+
+**Owner decision (2026-10-05):** pre-create the option rows at open, so paper motions can be entered. `open_election` creates each approval item's Approve/Deny rows (reusing any a vote already made); a rollback to draft drops the unused ones; the printout also carries candidate-selection items outside `election.positions`. Test: `backend/tests/test_w50_paper_motion_options.py`.
 
 **Did:** as `secretary` on E1 (A2 step 20) and `admin` on EB1 (B1 step 12, B2 step 5): Print Blank Ballots.
 **Saw:** `ballot_2027_Officer_Election.pdf` carries Chief only while Preview Ballot showed three items; EB1's carries Chief/Secretary only. Read from code: `POST …/manual-ballots {entries: [{candidate_id, count}]}` targets candidates only, and Approve/Deny rows exist only once a token vote has materialised them (A7 step 1; W50-30).
@@ -678,7 +686,9 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `election_service.py:4391-4455` `build_printable_ballot_pdf`; `GET /elections/{id}/printable-ballot` (`elections.py:1804`).
 **Fix:** round 2 renders each approval item as "☐ Approve ☐ Deny" under its title (`backend/tests/test_w50_printable_ballot_items.py`, pypdf text contains each item title). **Confirmed live** (CONFIRM-07): the PDF's text reads "Attendance Motion CN / Approval requiring attendance / Mark ONE box. ■ Approve ■ Deny" after the Chief race. **Flagged:** recording paper item votes needs Approve/Deny option rows pre-created per item at open, or a documented "paper is positions-only". Owner decides.
 
-### W50-9 — HIGH — Certified, published results can be rewritten after close — ✅ FIXED (S09, `3de83db`, corrected in `7aa3405`), candidate identity · confirmed live · FLAGGED, post-close merge / void
+### W50-9 — HIGH — Certified, published results can be rewritten after close — ✅ FIXED (S09, `3de83db`, corrected in `7aa3405`), candidate identity · confirmed live · ✅ DECIDED & FIXED (2026-10-05), post-close merge / void
+
+**Owner decision (2026-10-05):** allow the corrections with a "revised <when> by <who>" mark on the PDF and the panel. Each post-close void, batch void and write-in merge appends to `elections.results_revisions` (migration `5b1e7d3c9a42`); the certified PDF and the Results tab print every entry. Test: `backend/tests/test_w50_results_revised.py`, `ElectionResults.w50-9-revised.test.tsx`.
 
 **Did:** as `admin`: rename the winner on CLOSED EB1 (B7 C-06); merge after publish and PDF on EB3 (C-07); void a vote on CLOSED (C-08); void a confirmed batch after publish on EB2 (C-10); re-position a candidate while OPEN with votes (B3 O-37). As `secretary`, merge and void after close on E1 as planned (A8 steps 10/14).
 **Saw:** every one → 200. The PDF then read "Somebody Else … WINNER" with integrity unchanged; EB3 went from four co-winners to Finley sole winner; EB2 from a 1–1 tie to a Blair win.
@@ -686,7 +696,11 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `elections.py` `update_candidate` (E:2065-2127); merge (S:4324-4389); void batch (S:4103); soft-delete (E:2851).
 **Fix:** S09 refuses identity edits once votes exist (`test_w50_s09.py`). `review-backend-1.md` #1 found it keying on key presence, so a statement-only edit was refused and test votes counted; `7aa3405` compares values and ignores test votes. **Confirmed live** (CONFIRM-13): a statement-only PATCH on a voted candidate → 200; a rename → 400 "Cannot change a candidate's name, position or acceptance once votes have been cast"; the unchanged name resubmitted with a new statement → 200; a candidate with no votes on the same election renames freely. **Flagged:** merge, void and batch-void after close are deliberate corrections; the owner chooses between a gate after publish and a "results revised <when> by <who>" marker on the PDF and panel.
 
-### W50-10 — HIGH — The in-app "Cast Vote" tab is not the ballot: items are missing and a multi-seat race is single-select — FLAGGED
+### W50-10 — HIGH — The in-app "Cast Vote" tab is not the ballot: items are missing and a multi-seat race is single-select — ✅ FIXED (2026-10-05)
+
+**Converged (2026-10-05):** the in-app ballot is now the emailed ballot's model — `GET/POST /elections/{id}/ballot` serve and take every ballot item and plain position — so the interim hide is lifted. A member holding a proxy on a named election casts it from the same tab. Tests: `backend/tests/test_ballot_convergence.py`, `ElectionBallot.w50-receipt.test.tsx`.
+
+**Owner decision (2026-10-05):** hide the in-app ballot for ballot items and caps above 1 and point to the email link — shipped first, as `CastVoteTab` (`frontend/src/components/election-detail/CastVoteTab.w50-10.test.tsx`) — then converge the in-app ballot onto ballot items, which lifts the hide.
 
 **Did:** as `member` on E1 (A6 step 1) and E2 (A9 step 7); the same members' emailed links.
 **Saw:** E1's tab offers Chief only; voting the two items by link then needed "Abstain" on Chief to get past "You have already voted on: Chief". E2's tab says "Select one candidate" and a second click deselects the first, while the token page says "Select up to 2 candidates." with checkboxes.
@@ -694,7 +708,9 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `frontend/src/components/ElectionBallot.tsx:60-78, 232` (iterates `election.positions`; ignores `ballot_items` and `max_votes_per_position`); `BallotVotingPage.tsx:396-402`.
 **Why flagged:** either rewrite `ElectionBallot` on the token page's model, or hide the tab when the election has ballot items or a cap > 1 and say "Vote from the ballot link in your email". The second is small and can ship first (`ElectionBallot.w50.test.tsx`); S24 records the gap as a design decision (email-first token ballot), not a regression.
 
-### W50-11 — HIGH — A "(2 seats)" board race declares one winner; the module has no seat count — FLAGGED
+### W50-11 — HIGH — A "(2 seats)" board race declares one winner; the module has no seat count — ✅ FIXED (2026-10-05)
+
+**Owner decision (2026-10-05): a real seat count.** `elections.seats_per_position` (migration `8c4f2a6e1d93`, default 1) is set on the create form (**Seats per Race**) and the settings API; the tally marks up to that many qualifiers, measured against ballots cast, with a last-seat tie settled by the tie policy. Ranked choice and a cap below the seats are refused. The ballot says "N will be elected" and the detail page shows the seat count. Guards: `tests/test_w50_seats_per_position.py`, `BallotItemCard.seats.test.tsx`, `ElectionsPage.w50-seats.test.tsx`.
 
 **Did:** as `secretary` on E2 (A9 steps 2/10): `max_votes_per_position = 2` by API (no UI), three token ballots, close, publish.
 **Saw:** "Finley Grant ✓ Winner 3 / Harper Hayes 2" with one `is_winner`; the report "Finley Grant — ELECTED"; nothing anywhere says two seats.
@@ -709,7 +725,9 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `election_service.py` `generate_and_send_election_report` (~6546-6592, `_internal_bypass_visibility=True`).
 **Fix:** S14 gates the report on status (`test_w50_s14.py`). **Confirmed live** (CONFIRM-04): `POST …/send-report` on an OPEN election → 400 "Election report is only available after the election closes"; the sink received nothing.
 
-### W50-13 — HIGH — An override on a restricted-list election says "to let a member vote" while the member is still refused, and inflates the eligible denominator — FLAGGED
+### W50-13 — HIGH — An override on a restricted-list election says "to let a member vote" while the member is still refused, and inflates the eligible denominator — ✅ DECIDED & FIXED (2026-10-05)
+
+**Owner decision (2026-10-05):** an override extends the list — the member can vote as the roster says. One definition (`_restricted_voter_ids`: the list plus override holders) now feeds the eligibility check, the ballot mailer, the non-voter list and the denominator. Test: `backend/tests/test_w50_override_extends_list.py`.
 
 **Did:** as `admin` on EB2 (`eligible_voters = [Tariq]`), B4 steps 2/8/9: an override for Tess → 201; Tess votes.
 **Saw:** 400 "restricted to a specific voter list"; roster "Tess Park · Active · Override · 0/1"; the panel "add a voter override on the Overrides tab to let a member vote"; `total_eligible_voters` 1 → 2 and "2 vote(s) cast · 100.0% turnout"; the API row `has_override: true, will_receive_ballot: false, eligible_item_count: 0, ineligibility_reason: null`.
@@ -754,7 +772,9 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `election_service.py:6614-6615` (`email_sent` stamped even when `is_test`); `email_template_service.py:2286-2310`; `elections.py:3880-3895` (`verify-receipt` never filters `is_test`); `BallotVotingPage.tsx:335,616`.
 **Fix:** round 2 — subject, stamp, receipt and the lookup's `is_test` for the page banner. Tests: `backend/tests/test_w50_test_ballot_marking.py`; the banner (`frontend/src/pages/BallotVotingPage.w50-test-banner.test.tsx`) is frontend round 2. **Confirmed live** (CONFIRM-14/15): subject "[TEST] Ballot Available: CONFIRM anon"; `email_sent` stayed false; the lookup answered `is_test: true`; the receipt verified `counted: false` with "This was a test vote…"; and the secretary's real in-app vote afterwards → 201 with the test vote absent from stats (S16, `test_w50_s16.py`). The plain-text body still opens with the old heading — W50-81.
 
-### W50-19 — MED — A draft's test ballot cannot be opened: settings promise a preview, the link says "Election is draft" — FLAGGED
+### W50-19 — MED — A draft's test ballot cannot be opened: settings promise a preview, the link says "Election is draft" — ✅ DECIDED & FIXED (2026-10-05)
+
+**Owner decision (2026-10-05):** admit test tokens on drafts, so officers get the promised preview. `_token_window_error` lets an `is_test` token use a DRAFT (start not enforced, end still is); a live token still needs an open election. Test: `backend/tests/test_w50_test_token_draft.py`.
 
 **Did:** as `secretary`, A4 step 7: Settings → Test Ballot (the select offers drafts only) → the emailed link.
 **Saw:** "Unable to Load Ballot — Election is draft (Error code: LB-API-400) — If you think this is a mistake, contact your organization's secretary."
@@ -775,14 +795,18 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `PublishResultsPanel.tsx:59-61, 107-139`; `ElectionDetailPage.tsx` gating and the publish handler; `ElectionResults.tsx` fetch keyed on id only.
 **Fix:** S19 shows the toggle only when CLOSED, no panel before OPEN, and reworded the copy (`PublishResultsPanel.w50-s19.test.tsx`). A refetch after Publish/Void in `ElectionDetailPage` is still to be asserted.
 
-### W50-22 — MED — Closed early, unpublished: results are 403 for everyone, including the officer who closed it, until the scheduled end — FLAGGED
+### W50-22 — MED — Closed early, unpublished: results are 403 for everyone, including the officer who closed it, until the scheduled end — ✅ DECIDED (2026-10-05)
+
+**Owner decision (2026-10-05):** CLOSED unlocks results — for managers and, per W50-10 above, for every `elections.view` holder, since the same numbers are already in the report mail and the certified PDF. The Publish/Hide switch on a closed election had nothing left to do and was removed from Results & Publishing; the Results tab no longer promises a date.
 
 **Did:** as `secretary` (A8 step 2, A9 step 10, A10 step 6) and `admin` (B7 C-02): `GET /results` seconds after the close.
 **Saw:** 403 "Results not available yet", while the report mail with the results had reached the same person seconds earlier.
 **Where:** `election_service.py` results gate (`can_view` needs `now > end_date` even when CLOSED, S:2517-2522).
 **Why flagged:** the owner decides whether CLOSED alone unlocks results for managers; the report mail, the PDF and the runoff logic already bypass the gate, which is Pitfall #29 in miniature. S10 records the gate and the 403-vs-404 shape, and held live (CONFIRM-16: a member's `GET /results` on a closed, published election → 200 with the manager's numbers; signed out → 401). Then `test_w50_results_gate_closed.py`.
 
-### W50-23 — MED — The proxy holder is Cc'd a ballot that says "This link is yours alone … Don't forward this email", with no mention of the proxy — FLAGGED
+### W50-23 — MED — The proxy holder is Cc'd a ballot that says "This link is yours alone … Don't forward this email", with no mention of the proxy — ✅ DECIDED & FIXED (2026-10-05)
+
+**Owner decision (2026-10-05):** keep the Cc, fix the wording. The link card under the ballot is now `{{ballot_link_notice_html}}`/`_text`, filled with "<holder> holds <member>'s proxy" on a proxied send; migration `24f56e4fc320` moves untouched stored bodies onto it, and an edited template gets the sentence at the head of the message. Test: `backend/tests/test_w50_proxy_ballot_mail.py`.
 
 **Did:** as `secretary`, A4 step 5 (authorisation Alex for Cameron; the sink unchanged 5 s later) and A5 step 6 (Send Ballot Emails); the reminder (A7 step 8).
 **Saw:** Cameron's mail `Cc: review_member2` with a body that says nothing about Alex or a proxy; Alex's own mail says nothing either; the manual (`14-elections.md:672`) promises a proxy-holder mail. Read from code: no proxy ballot UI exists (`castProxyVote` has no caller).

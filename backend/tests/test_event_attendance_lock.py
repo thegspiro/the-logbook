@@ -24,7 +24,7 @@ import pytest
 
 from app.api.v1.endpoints.events import _resolve_display_names
 from app.core.permissions import ALL_PERMISSIONS, OPERATIONAL_RANKS
-from app.models.admin_hours import AdminHoursEntryMethod
+from app.models.admin_hours import AdminHoursEntryMethod, AdminHoursEntryStatus
 from app.models.event import CheckInWindowType, EventType
 from app.schemas.event import EventUpdate
 from app.services.admin_hours_service import AdminHoursService
@@ -779,6 +779,9 @@ class TestAdminHoursResync:
             clock_out_at=None,
             description="Event attendance: Monthly Drill",
             entry_method=method,
+            # Approved, so the shrinking correction below also shows the
+            # officer's decision surviving one that needs no second review.
+            status=AdminHoursEntryStatus.APPROVED,
         )
 
     async def _credit(self, svc, duration, resync):
@@ -815,6 +818,7 @@ class TestAdminHoursResync:
 
         assert count == 1
         assert entry.duration_minutes == 45
+        assert entry.status == AdminHoursEntryStatus.APPROVED
         assert entry.clock_out_at is not None
         # Updated in place: the id, and with it the approval and audit trail,
         # survive the correction.

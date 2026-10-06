@@ -192,7 +192,7 @@ from app.models.grant import (
     RecurringFrequency,
     ReportingFrequency,
 )
-from app.models.integration import Integration
+from app.models.integration import Integration, IntegrationSyncLog
 from app.models.inventory import (
     AssignmentType,
     CheckOutRecord,
@@ -253,6 +253,11 @@ from app.models.ip_security import (
     IPExceptionAuditLog,
     IPExceptionType,
 )
+from app.models.knowledge_test import (
+    KnowledgeTest,
+    KnowledgeTestAttempt,
+    KnowledgeTestQuestion,
+)
 from app.models.label_printer import LabelPrinter
 from app.models.legal import (
     LegalDocumentRevision,
@@ -260,6 +265,7 @@ from app.models.legal import (
     LegalRevisionStatus,
 )
 from app.models.location import Location
+from app.models.mcp_oauth import McpOAuthAuthorization, McpOAuthClient, McpOAuthGrant
 from app.models.mcp_service_key import McpServiceKey
 from app.models.medical_screening import (
     ScreeningRecord,
@@ -487,7 +493,11 @@ __all__ = [
     "MessageTargetType",
     # Integration models
     "Integration",
+    "IntegrationSyncLog",
     "McpServiceKey",
+    "McpOAuthClient",
+    "McpOAuthGrant",
+    "McpOAuthAuthorization",
     # Analytics models
     "AnalyticsEvent",
     # Error log models
@@ -569,6 +579,9 @@ __all__ = [
     "ProgramEnrollment",
     "RequirementProgress",
     "SkillEvaluation",
+    "KnowledgeTest",
+    "KnowledgeTestAttempt",
+    "KnowledgeTestQuestion",
     "SkillCheckoff",
     "ExternalTrainingProvider",
     "ExternalCategoryMapping",

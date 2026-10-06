@@ -459,6 +459,37 @@ const routes = ({
     }),
   ],
 
+  // The security alerts screen rejects the catch-all `{}` for the same reason
+  // as the audit log: "nothing waiting" over a broken endpoint is the wrong
+  // answer. One open alert, so the pass measures its actions.
+  [
+    '**/api/v1/security/alerts**',
+    () => ({
+      alerts: [
+        {
+          id: 'alert-1',
+          alert_type: 'brute_force',
+          threat_level: 'high',
+          timestamp: new Date().toISOString(),
+          description: 'Brute force attack detected from 198.51.100.4',
+          source_ip: '198.51.100.4',
+          user_id: null,
+          details: { failed_attempts: 10, time_window: '1 hour' },
+          acknowledged: false,
+          acknowledged_by: null,
+          acknowledged_at: null,
+          resolved: false,
+          resolved_by: null,
+          resolved_at: null,
+          resolution_note: null,
+        },
+      ],
+      total: 1,
+      counts: { open: 1, unacknowledged: 1, acknowledged: 0, resolved: 0 },
+    }),
+  ],
+  ['**/api/v1/security/download-activity**', () => ({ exports: [] })],
+
   ['**/api/v1/medical-supplies/lots/expiring**', () => []],
   ['**/api/v1/medical-supplies/categories**', () => []],
   ['**/api/v1/medical-supplies/items**', () => ({ items: [], total: 0, skip: 0, limit: 200 })],

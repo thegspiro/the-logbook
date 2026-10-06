@@ -13,9 +13,10 @@ import ActiveSessionsTab from '../components/ActiveSessionsTab';
 import PendingReviewTab from '../components/PendingReviewTab';
 import AllEntriesTab from '../components/AllEntriesTab';
 import SummaryTab from '../components/SummaryTab';
+import ReviewRulesTab from '../components/ReviewRulesTab';
 import toast from 'react-hot-toast';
 
-type TabKey = 'categories' | 'active' | 'pending' | 'all' | 'summary';
+type TabKey = 'categories' | 'active' | 'pending' | 'all' | 'summary' | 'rules';
 
 const TAB_LABELS: Record<TabKey, string> = {
   categories: 'Categories',
@@ -23,9 +24,10 @@ const TAB_LABELS: Record<TabKey, string> = {
   pending: 'Pending Review',
   all: 'All Entries',
   summary: 'Summary',
+  rules: 'Review Rules',
 };
 
-const TAB_KEYS: readonly TabKey[] = ['categories', 'active', 'pending', 'all', 'summary'] as const;
+const TAB_KEYS: readonly TabKey[] = ['categories', 'active', 'pending', 'all', 'summary', 'rules'] as const;
 
 const AdminHoursManagePage: React.FC = () => {
   const activeSessions = useAdminHoursStore((s) => s.activeSessions);
@@ -95,6 +97,7 @@ const AdminHoursManagePage: React.FC = () => {
       {activeTab === 'pending' && <PendingReviewTab />}
       {activeTab === 'all' && <AllEntriesTab />}
       {activeTab === 'summary' && <SummaryTab onNavigate={setActiveTab} />}
+      {activeTab === 'rules' && <ReviewRulesTab />}
     </div>
   );
 };

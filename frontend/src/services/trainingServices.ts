@@ -81,6 +81,8 @@ import type {
   ProgramWithDetails,
   SampleTemplateSummary,
   RegistryImportResult,
+  ProgramImportPreview,
+  ProgramImportResult,
   RegistryInfo,
   RegistryRequirementPreview,
   RequirementProgress,
@@ -1037,13 +1039,19 @@ export const trainingProgramService = {
     return response.data;
   },
 
-  async importProgram(
-    data: Record<string, unknown>
-  ): Promise<{ success: boolean; program_id: string; program_name: string; message: string }> {
-    const response = await api.post<{ success: boolean; program_id: string; program_name: string; message: string }>(
-      '/training/programs/programs/import',
-      data
-    );
+  /**
+   * Validate an exported program file and report what importing it would
+   * create, without creating anything.
+   */
+  async previewProgramImport(data: Record<string, unknown>): Promise<ProgramImportPreview> {
+    const response = await api.post<ProgramImportPreview>('/training/programs/programs/import', data, {
+      params: { dry_run: true },
+    });
+    return response.data;
+  },
+
+  async importProgram(data: Record<string, unknown>): Promise<ProgramImportResult> {
+    const response = await api.post<ProgramImportResult>('/training/programs/programs/import', data);
     return response.data;
   },
 
@@ -1660,6 +1668,16 @@ export const recertificationService = {
 // ==================== Competency Services ====================
 
 export const competencyService = {
+  /** Every active member's stored levels, for the department heat-map. */
+  async getDepartmentCompetencies(): Promise<import('../types/training').CompetencyHeatmap> {
+    const response = await api.get<import('../types/training').CompetencyHeatmap>('/training/competency/department');
+    return {
+      members: asArray(response.data.members),
+      skills: asArray(response.data.skills),
+      competencies: asArray(response.data.competencies),
+    };
+  },
+
   async getMatrices(position?: string): Promise<import('../types/training').CompetencyMatrix[]> {
     const response = await api.get<import('../types/training').CompetencyMatrix[]>('/training/competency/matrices', {
       params: position ? { position } : undefined,

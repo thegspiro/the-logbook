@@ -20,7 +20,24 @@ import type {
   SkillTestingSummary,
   CriterionResult,
 } from '../types/skillsTesting';
-import { getErrorMessage } from '../utils/errorHandling';
+import { getErrorMessage, isNetworkError } from '../utils/errorHandling';
+import { useAuthStore } from './authStore';
+import { displayNameOf } from '../utils/memberName';
+import {
+  SKILLS_OFFLINE_QUEUED_EVENT,
+  applyPending,
+  buildOfflineSkillTest,
+  cacheSkillTest,
+  enqueueSkillsComplete,
+  enqueueSkillsCreate,
+  enqueueSkillsUpdate,
+  getCachedSkillTemplate,
+  getCachedSkillTest,
+  getOwnSkillsPending,
+  mintTestId,
+  rememberCandidate,
+  type SkillsPendingEntry,
+} from '../utils/skillsTestOffline';
 
 interface SkillsTestingState {
   // Template state
@@ -49,6 +66,14 @@ interface SkillsTestingState {
   // Error
   error: string | null;
 
+  /**
+   * Offline state of the test on screen (see utils/skillsTestOffline.ts):
+   * whether its scoring is waiting on this device to sync, whether a
+   * submission is, and why the server refused it if it did. Null when the
+   * test has nothing waiting.
+   */
+  offlineState: SkillsOfflineState | null;
+
   // Template actions
   loadTemplates: (params?: { status?: string; category?: string }) => Promise<void>;
   loadTemplate: (id: string) => Promise<void>;
@@ -61,7 +86,8 @@ interface SkillsTestingState {
   // Test actions
   loadTests: (params?: SkillTestListParams) => Promise<void>;
   loadTest: (id: string) => Promise<void>;
-  createTest: (data: SkillTestCreate) => Promise<SkillTest>;
+  /** `candidateName` lets a test started with no signal be labelled. */
+  createTest: (data: SkillTestCreate, offline?: { candidateName: string }) => Promise<SkillTest>;
   updateTest: (id: string, data: SkillTestUpdate) => Promise<SkillTest>;
   completeTest: (id: string) => Promise<SkillTest>;
   deleteTest: (id: string) => Promise<void>;
@@ -91,11 +117,47 @@ interface SkillsTestingState {
   // Summary actions
   loadSummary: () => Promise<void>;
 
+  /** Called by the sync engine after the offline queue sent a test's work. */
+  handleSynced: (testId: string, test: SkillTest | null, completed: boolean) => Promise<void>;
+
   // General
   clearError: () => void;
   clearCurrentTemplate: () => void;
   clearCurrentTest: () => void;
 }
+
+export interface SkillsOfflineState {
+  testId: string;
+  /** Scoring is saved on this device and has not reached the server. */
+  queued: boolean;
+  /** The examiner submitted; it is scored once it reaches the server. */
+  completionQueued: boolean;
+  /** The server refused the queued work; the payload is kept. */
+  failed: string | null;
+}
+
+const offlineStateFor = (testId: string, entry: SkillsPendingEntry | null): SkillsOfflineState | null =>
+  entry
+    ? {
+        testId,
+        queued: true,
+        completionQueued: entry.complete,
+        failed: entry.failed?.message ?? null,
+      }
+    : null;
+
+const testLabel = (test: { template_name?: string | undefined; candidate_name?: string | undefined } | null) =>
+  [test?.template_name, test?.candidate_name].filter(Boolean).join(' — ') || 'Skills evaluation';
+
+/** Tell the sync engine there is something to send (it decides whether it can). */
+const announceQueued = () => {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(SKILLS_OFFLINE_QUEUED_EVENT));
+};
+
+/** Only the examiner's own live tests are kept on the device. */
+const cacheIfExamining = (test: SkillTest) => {
+  if (test.examiner_id === useAuthStore.getState().user?.id) void cacheSkillTest(test);
+};
 
 /** Drop a deleted test from the loaded page, and from the count behind it, so
  *  the pager does not offer a page that no longer has anything on it. */
@@ -125,6 +187,7 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
   summary: null,
   summaryLoading: false,
   error: null,
+  offlineState: null,
 
   // Template actions
   loadTemplates: async (params) => {
@@ -240,7 +303,26 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
   loadTest: async (id) => {
     set({ testLoading: true, error: null });
     try {
-      const test = await skillsTestingService.getTest(id);
+      let test: SkillTest;
+      try {
+        test = await skillsTestingService.getTest(id);
+        cacheIfExamining(test);
+      } catch (err: unknown) {
+        // The read path (offline plan, phase 3): with no signal, the copy kept
+        // when the test was last opened here is what the examiner scores into.
+        if (!isNetworkError(err)) throw err;
+        const cached = await getCachedSkillTest(id);
+        if (!cached) {
+          throw new Error(
+            'You are offline, and this test has not been opened on this device yet. Open it once with signal to score it offline.',
+            { cause: err }
+          );
+        }
+        test = cached;
+      }
+      // Work still waiting to sync is newer than either copy.
+      const entry = await getOwnSkillsPending(id);
+      test = applyPending(test, entry);
       // Only a *different* test starts at section 1. Re-loading the one
       // already open — a second in-flight load, a retry after a failed save,
       // a manual refresh — used to reset the index unconditionally, and it
@@ -251,6 +333,7 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
       set({
         currentTest: test,
         testLoading: false,
+        offlineState: offlineStateFor(test.id, entry),
         ...(sameTest ? {} : { activeSectionIndex: 0 }),
       });
     } catch (err: unknown) {
@@ -261,12 +344,44 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
     }
   },
 
-  createTest: async (data) => {
+  createTest: async (data, offline) => {
     set({ error: null });
+    // The id is minted here, not by the server (owner decision: cold start).
+    // Online it changes nothing; with no signal it is what lets the test be
+    // scored now and created when the device reconnects, under the same id.
+    const payload = { ...data, id: mintTestId() };
     try {
-      const test = await skillsTestingService.createTest(data);
-      set({ currentTest: test });
+      const test = await skillsTestingService.createTest(payload);
+      set({ currentTest: test, offlineState: null });
+      cacheIfExamining(test);
+      void rememberCandidate({ id: test.candidate_id, name: test.candidate_name });
       return test;
+    } catch (err: unknown) {
+      if (!isNetworkError(err)) {
+        set({ error: getErrorMessage(err, 'Failed to create test') });
+        throw err;
+      }
+    }
+    // Cold start: no signal at all.
+    try {
+      const template = await getCachedSkillTemplate(data.template_id);
+      const user = useAuthStore.getState().user;
+      if (!template || !user) {
+        throw new Error(
+          'This skill sheet is not saved on this device. Open Start a Skill Test once with signal to save the published sheets for offline use.'
+        );
+      }
+      const candidateName = offline?.candidateName ?? '';
+      const local = buildOfflineSkillTest(template, payload, {
+        examinerId: user.id,
+        examinerName: displayNameOf(user),
+        candidateName,
+      });
+      await enqueueSkillsCreate({ ...payload, expected_template_version: template.version }, testLabel(local));
+      await cacheSkillTest(local);
+      set({ currentTest: local, offlineState: offlineStateFor(local.id, await getOwnSkillsPending(local.id)) });
+      announceQueued();
+      return local;
     } catch (err: unknown) {
       const msg = getErrorMessage(err, 'Failed to create test');
       set({ error: msg });
@@ -276,10 +391,35 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
 
   updateTest: async (id, data) => {
     set({ error: null });
+    const current = get().currentTest?.id === id ? get().currentTest : null;
+    // Once anything for this test is waiting, every later save joins the
+    // queue too: sent directly, it could land before the older queued one and
+    // be overwritten by it on reconnect.
+    const waiting = await getOwnSkillsPending(id);
+    if (!waiting) {
+      try {
+        const test = await skillsTestingService.updateTest(id, data);
+        set({ currentTest: test });
+        cacheIfExamining(test);
+        return test;
+      } catch (err: unknown) {
+        if (!isNetworkError(err) || !current) {
+          set({ error: getErrorMessage(err, 'Failed to save test progress') });
+          throw err;
+        }
+      }
+    }
     try {
-      const test = await skillsTestingService.updateTest(id, data);
-      set({ currentTest: test });
-      return test;
+      const entry = await enqueueSkillsUpdate(
+        { id, label: waiting?.label ?? testLabel(current), version: current?.version },
+        data
+      );
+      const base = current ?? (await getCachedSkillTest(id));
+      if (!base) throw new Error('This test is not open on this device');
+      const local = applyPending(base, entry);
+      set({ currentTest: local, offlineState: offlineStateFor(id, entry) });
+      announceQueued();
+      return local;
     } catch (err: unknown) {
       const msg = getErrorMessage(err, 'Failed to save test progress');
       set({ error: msg });
@@ -289,10 +429,34 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
 
   completeTest: async (id) => {
     set({ error: null });
+    const current = get().currentTest?.id === id ? get().currentTest : null;
+    const waiting = await getOwnSkillsPending(id);
+    if (!waiting) {
+      try {
+        const test = await skillsTestingService.completeTest(id);
+        set({ currentTest: test, activeTestRunning: false });
+        cacheIfExamining(test);
+        return test;
+      } catch (err: unknown) {
+        if (!isNetworkError(err) || !current) {
+          set({ error: getErrorMessage(err, 'Failed to complete test') });
+          throw err;
+        }
+      }
+    }
+    // Queued behind the test's last save; scoring happens server-side when it
+    // lands, never on the device. A completion whose response was lost on the
+    // way back is recognised by the drain rather than reported as a failure.
     try {
-      const test = await skillsTestingService.completeTest(id);
-      set({ currentTest: test, activeTestRunning: false });
-      return test;
+      await enqueueSkillsComplete({ id, label: waiting?.label ?? testLabel(current) });
+      set({
+        activeTestRunning: false,
+        offlineState: offlineStateFor(id, await getOwnSkillsPending(id)),
+      });
+      announceQueued();
+      const shown = current ?? (await getCachedSkillTest(id));
+      if (!shown) throw new Error('This test is not open on this device');
+      return shown;
     } catch (err: unknown) {
       const msg = getErrorMessage(err, 'Failed to complete test');
       set({ error: msg });
@@ -532,9 +696,32 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
     }
   },
 
+  handleSynced: async (testId, test, completed) => {
+    const current = get().currentTest;
+    if (current?.id !== testId) return;
+    const entry = await getOwnSkillsPending(testId);
+    if (completed && test) {
+      set({ currentTest: test, offlineState: null, activeTestRunning: false });
+      return;
+    }
+    // Still on screen and partly or wholly sent: adopt the server's version so
+    // the next save is made against it, keep the local scoring (it is at least
+    // as new as what was sent), and re-read what is still waiting.
+    set({
+      currentTest: test ? applyPending({ ...current, version: test.version }, entry) : current,
+      offlineState: offlineStateFor(testId, entry),
+    });
+  },
+
   // General
   clearError: () => set({ error: null }),
   clearCurrentTemplate: () => set({ currentTemplate: null }),
   clearCurrentTest: () =>
-    set({ currentTest: null, activeTestTimer: 0, activeTestRunning: false, activeSectionIndex: 0 }),
+    set({
+      currentTest: null,
+      offlineState: null,
+      activeTestTimer: 0,
+      activeTestRunning: false,
+      activeSectionIndex: 0,
+    }),
 }));

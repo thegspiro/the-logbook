@@ -545,6 +545,21 @@ class AuthService:
             logger.error(f"Token refresh failed: {e}")
             return None, None
 
+    async def _revoke_mcp_connections(self, user_id: str) -> int:
+        """End the member's Claude (MCP) OAuth connections.
+
+        A password change or reset is how a member answers "someone may have
+        my account", so it has to reach every credential the account minted,
+        not only browser sessions — an MCP client's refresh token would
+        otherwise keep working for up to its grant's lifetime. Flushes, does
+        not commit: it rides the caller's commit with the session revocation.
+        """
+        from app.mcp.oauth import McpOAuthService
+
+        return await McpOAuthService(self.db).revoke_all_for_user(
+            user_id, reason="password_change"
+        )
+
     async def _revoke_all_user_sessions(self, user_id: str) -> int:
         """
         Revoke all active sessions for a user.
@@ -802,6 +817,7 @@ class AuthService:
         # Revoke all existing sessions — forces re-login with new password
         # and invalidates any stolen tokens
         revoked = await self._revoke_all_user_sessions(str(user.id))
+        await self._revoke_mcp_connections(str(user.id))
 
         await self.db.commit()
 
@@ -1102,6 +1118,7 @@ class AuthService:
         # Revoke all existing sessions — forces re-login with new password
         # and invalidates any stolen tokens that triggered the reset
         await self._revoke_all_user_sessions(str(user.id))
+        await self._revoke_mcp_connections(str(user.id))
 
         await self.db.commit()
         logger.info("Password successfully reset via token")

@@ -119,6 +119,17 @@ event-request intake.
 > cross-origin frontend's preflight rejects the header and the challenge can
 > never be submitted.
 
+### Malware scanning (ClamAV) _(2026-10-06)_
+
+| Variable                 | Default  | Description                                                              |
+| ------------------------ | -------- | ------------------------------------------------------------------------ |
+| `CLAMAV_ENABLED`         | `false`  | Scan self-reported training certificates before they are stored          |
+| `CLAMAV_HOST`            | `clamav` | clamd host — the compose service name, or your own daemon                |
+| `CLAMAV_PORT`            | `3310`   | clamd TCP port                                                           |
+| `CLAMAV_TIMEOUT_SECONDS` | `30`     | Wall-clock budget for one scan (connect, stream, verdict) before refusal |
+
+See [Malware scanning of uploads](#malware-scanning-of-uploads) below.
+
 ---
 
 ## Session Management
@@ -311,6 +322,49 @@ accept every bot it had already detected.
 - **Guest check-in is deliberately excluded.** It is reached by scanning a QR
   code on a station display, where a challenge is hostile to somebody standing
   in a firehouse.
+
+### Malware scanning of uploads
+
+Self-reported training certificates (PDF, JPG, PNG) can be scanned by a ClamAV
+daemon before they are written to disk. The backend streams the bytes to clamd
+with its `INSTREAM` command over TCP; nothing is written to a temporary file
+first.
+
+```bash
+docker compose --profile with-clamav up -d   # starts the bundled clamav service
+```
+
+```bash
+CLAMAV_ENABLED=true
+CLAMAV_HOST=clamav
+CLAMAV_PORT=3310
+CLAMAV_TIMEOUT_SECONDS=30
+```
+
+- **Infected:** the upload is refused with `LB-UPLD-004`, nothing is stored,
+  and an `upload_malware_detected` audit event records the signature name, the
+  file's type, size and SHA-256. The file's content and its name are never
+  logged.
+- **Scanner down or slow — fails closed:** with scanning enabled, an
+  unreachable clamd or one that misses `CLAMAV_TIMEOUT_SECONDS` refuses the
+  upload with a retryable `503` (`LB-UPLD-005`). Same reasoning as CAPTCHA:
+  accepting unscanned files during an outage is the state an attacker wants,
+  and one they can bring about. _This direction was inferred, not chosen by
+  the owner — it can be reversed if availability matters more._
+- **Off is unchanged.** With `CLAMAV_ENABLED=false` (the default) the scanner
+  is never contacted and uploads behave exactly as before; an upgrade needs no
+  new container.
+- **clamd's `StreamMaxLength` must cover the 10 MB certificate limit.** The
+  default (25 MB) does. A stream clamd refuses as too long is treated as "no
+  verdict" and refused, never as clean.
+- **The backend does not wait for clamav to be healthy** — a dependency on a
+  profiled service would break stacks that leave the profile off. Until clamd
+  has loaded its signatures (a few minutes on first start), scanned uploads are
+  refused with the retryable 503.
+- **Only self-report certificates are scanned.** Documents (including
+  facility files), event and training-record attachments, prospect documents
+  and email-template attachments each write files through their own code and
+  are not scanned yet; see `docs/KNOWN_LIMITATIONS.md`.
 
 ---
 

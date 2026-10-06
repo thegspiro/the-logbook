@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.schemas.base import UTCResponseBase
 from app.utils.membership import MemberClass, MemberStatus
+from app.utils.phone_numbers import validate_member_phone
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -209,6 +210,12 @@ class UserCreate(UserBase):
     phone: Optional[str] = Field(None, max_length=20)
     mobile: Optional[str] = Field(None, max_length=20)
 
+    @field_validator("phone", "mobile")
+    @classmethod
+    def _valid_member_phone(cls, v: Optional[str]) -> Optional[str]:
+        # A create is always a new write (W04-7); see app/utils/phone_numbers.py.
+        return validate_member_phone(v)
+
 
 class MembershipClassificationFields(BaseModel):
     """The two independent facts ``membership_type`` used to fuse.
@@ -269,6 +276,9 @@ class MembershipClassificationFields(BaseModel):
         return normalised
 
 
+CREATABLE_MEMBER_STATUSES = frozenset({"active", "inactive", "leave"})
+
+
 class AdminUserCreate(MembershipClassificationFields):
     """Schema for admin/secretary creating a new member"""
 
@@ -298,6 +308,13 @@ class AdminUserCreate(MembershipClassificationFields):
     )
     phone: Optional[str] = Field(None, max_length=20)
     mobile: Optional[str] = Field(None, max_length=20)
+
+    @field_validator("phone", "mobile")
+    @classmethod
+    def _valid_member_phone(cls, v: Optional[str]) -> Optional[str]:
+        # A create is always a new write (W04-7); see app/utils/phone_numbers.py.
+        return validate_member_phone(v)
+
     date_of_birth: Optional[date] = None
     hire_date: Optional[date] = None
 
@@ -333,6 +350,30 @@ class AdminUserCreate(MembershipClassificationFields):
     role_ids: List[UUID] = Field(
         default_factory=list, description="Initial roles to assign"
     )
+    status: Optional[str] = Field(
+        None,
+        description=(
+            "Initial account status: active (the default), inactive or leave. "
+            "Statuses that end or suspend membership are reached through the "
+            "status change, which records the separation."
+        ),
+    )
+
+    @field_validator("status")
+    @classmethod
+    def _creatable_status(cls, v: Optional[str]) -> Optional[str]:
+        # W08-1: a member may be added inactive or on leave. Dropped, retired,
+        # archived and suspended are not starting states: each closes or
+        # suspends service, which the status change records (service history,
+        # property return) and a create would silently skip.
+        if v is None:
+            return v
+        v = v.strip().lower()
+        if v not in CREATABLE_MEMBER_STATUSES:
+            allowed = ", ".join(sorted(CREATABLE_MEMBER_STATUSES))
+            raise ValueError(f"A new member's status must be one of: {allowed}")
+        return v
+
     send_welcome_email: bool = Field(
         default=True, description="Send welcome email with password setup link"
     )
@@ -487,6 +528,35 @@ class UserListResponse(BaseModel):
     rank: Optional[str] = None
     station: Optional[str] = None
     platoon: Optional[str] = None
+
+    model_config = _response_config
+
+
+class MemberDirectoryEntry(BaseModel):
+    """One row of the member directory (``GET /users/directory``).
+
+    USR-8: what a member *without* ``members.manage`` sees of a colleague —
+    the fields the Members page's directory view shows, and nothing it hides.
+    ``username``, ``hire_date``, ``station``, ``platoon``, ``membership_type``
+    and the classification fields stay on ``UserListResponse`` for the roster's
+    other callers; they are deliberately absent here, not merely unset, so a
+    later change cannot widen the directory by populating them.
+    """
+
+    id: UUID
+    first_name: Optional[str] = None
+    middle_name: Optional[str] = None
+    last_name: Optional[str] = None
+    preferred_name: Optional[str] = None
+    full_name: Optional[str] = None
+    display_name: Optional[str] = None
+    membership_number: Optional[str] = None
+    photo_url: Optional[str] = None
+    status: str
+    rank: Optional[str] = None
+    email: Optional[str] = None  # Conditionally included
+    phone: Optional[str] = None  # Conditionally included
+    mobile: Optional[str] = None  # Conditionally included
 
     model_config = _response_config
 

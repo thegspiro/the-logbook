@@ -45,11 +45,13 @@ from app.schemas.training_module_config import (
 from app.services.training_compliance import (
     CATCH_UP_STATUS,
     get_org_include_current_month,
+    load_credited_shift_dates,
     member_join_date,
     requirement_applies_to_member,
     tally_standing,
 )
 from app.services.training_module_config_service import TrainingModuleConfigService
+from app.services.training_program_service import TrainingProgramService
 from app.services.training_service import TrainingService
 from app.services.training_waiver_service import fetch_user_waivers
 from app.utils.org_timezone import resolve_org_today
@@ -313,11 +315,24 @@ async def get_my_training_summary(
         )
     )
     member_records = list(all_records_result.scalars().all())
+    org_include_current = await get_org_include_current_month(db, str(org_id))
+    # Shifts worked, for a requirement counted from attendance; full history,
+    # as a rolling one anchors its due date on the latest shift.
+    shift_dates = (
+        await load_credited_shift_dates(
+            db,
+            str(org_id),
+            [str(user_id)],
+            applicable,
+            today,
+            org_include_current,
+            full_history=True,
+        )
+    ).get(str(user_id), [])
 
     # Evaluate every applicable requirement using the shared helper which
     # handles all requirement types (hours, courses, certification,
     # shifts, calls, fallback) and rolling period windows.
-    org_include_current = await get_org_include_current_month(db, str(org_id))
     total_progress_pct = 0.0
     requirements_detail: list[dict[str, Any]] = []
     statuses: list[str] = []
@@ -330,6 +345,7 @@ async def get_my_training_summary(
             waivers=user_waivers,
             org_include_current_month=org_include_current,
             join_date=join_date,
+            shift_dates=shift_dates,
         )
         requirements_detail.append(detail)
         # Listed with its deadline, but left out of the summary until the
@@ -408,6 +424,20 @@ async def get_my_training_summary(
             .order_by(ProgramEnrollment.enrolled_at.desc())
         )
         enrollments = enrollments_result.scalars().all()
+        # A linked requirement reads the compliance result (W26-1), so this
+        # card and the Training Requirements list above it show one figure.
+        program_service = TrainingProgramService(db)
+        if await program_service.refresh_linked_progress(list(enrollments)):
+            enrollments_result = await db.execute(
+                select(ProgramEnrollment)
+                .where(ProgramEnrollment.user_id == str(user_id))
+                .order_by(ProgramEnrollment.enrolled_at.desc())
+                .execution_options(populate_existing=True)
+            )
+            enrollments = enrollments_result.scalars().all()
+        linked_by_program = await program_service.linked_requirement_ids(
+            list({str(e.program_id) for e in enrollments})
+        )
 
         # The card named neither the program nor its requirements, so a member
         # enrolled in two programs saw two anonymous progress bars.
@@ -473,6 +503,8 @@ async def get_my_training_summary(
                         "completed_at": (
                             rp.completed_at.isoformat() if rp.completed_at else None
                         ),
+                        "reads_compliance": str(rp.requirement_id)
+                        in linked_by_program.get(str(e.program_id), set()),
                     }
                     for rp in rps
                 ]

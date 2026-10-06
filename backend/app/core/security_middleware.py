@@ -1649,6 +1649,16 @@ class IPLoggingMiddleware:
 # ============================================
 
 
+def _route_template_pattern(template: str) -> "re.Pattern[str]":
+    """Compile a route template ("/a/{id}/export") into a full-path regex.
+
+    Each ``{param}`` matches exactly one path segment, so a template cannot
+    swallow a longer, unrelated path.
+    """
+    parts = re.split(r"\{[^/{}]+\}", template)
+    return re.compile("[^/]+".join(re.escape(part) for part in parts))
+
+
 class SecurityMonitoringMiddleware:
     """
     Middleware for real-time security monitoring.
@@ -1672,14 +1682,11 @@ class SecurityMonitoringMiddleware:
 
     # Export endpoints for data exfiltration monitoring. None of the
     # original four entries matched a real route (Codex, PR #1917) — this
-    # set is now every non-parameterized GET/POST route in app/api/v1
-    # whose path contains "export" (grep '@router\.(get|post)([^)]*export'
-    # across app/api/v1/endpoints/*.py, each resolved against its router's
-    # registered prefix). One real export route is excluded on purpose:
-    # training_programs.py's "/programs/{program_id}/export" takes a path
-    # parameter, so the request's actual path never equals a fixed string
-    # here — this exact-match set structurally cannot cover it without a
-    # prefix/pattern check, which is a larger change than this fix's scope.
+    # set is every non-parameterized GET/POST route in app/api/v1 whose path
+    # contains "export". Parameterized export routes cannot equal a fixed
+    # string, so they are listed as templates in EXPORT_ENDPOINT_TEMPLATES
+    # and matched by pattern (SEC2-28-7). TestExportEndpointsCoverage pins
+    # both against the live route table.
     EXPORT_ENDPOINTS = {
         "/api/v1/admin-hours/entries/export",
         "/api/v1/analytics/export",
@@ -1700,6 +1707,18 @@ class SecurityMonitoringMiddleware:
         "/api/v1/training/skills-testing/tests/export/csv",
         "/api/v1/users/me/data-export",
     }
+    EXPORT_ENDPOINT_TEMPLATES = (
+        "/api/v1/training/programs/programs/{program_id}/export",
+    )
+    _EXPORT_PATTERNS = tuple(
+        _route_template_pattern(t) for t in EXPORT_ENDPOINT_TEMPLATES
+    )
+
+    @classmethod
+    def is_export_endpoint(cls, path: str) -> bool:
+        return path in cls.EXPORT_ENDPOINTS or any(
+            pattern.fullmatch(path) for pattern in cls._EXPORT_PATTERNS
+        )
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
@@ -1747,18 +1766,20 @@ class SecurityMonitoringMiddleware:
             hashlib.sha256(raw_token.encode()).hexdigest() if raw_token else None
         )
 
-        # Track response status and content-length for exfiltration monitoring
+        # Track response status and the bytes actually sent for exfiltration
+        # monitoring. Counted from the body messages rather than read from a
+        # Content-Length header: StreamingResponse never sets one, and most
+        # export routes return one, so a header-gated check never saw them
+        # (SEC2-28-7). Counting is a running integer — nothing is buffered.
         response_status = 0
-        content_length_value: str | None = None
+        response_bytes = 0
 
         async def send_with_monitoring(message: Message) -> None:
-            nonlocal response_status, content_length_value
+            nonlocal response_status, response_bytes
             if message["type"] == "http.response.start":
                 response_status = message.get("status", 0)
-                for header_name, header_value in message.get("headers", []):
-                    if header_name == b"content-length":
-                        content_length_value = header_value.decode()
-                        break
+            elif message["type"] == "http.response.body":
+                response_bytes += len(message.get("body", b"") or b"")
             await send(message)
 
         await self.app(scope, receive, send_with_monitoring)
@@ -1801,26 +1822,41 @@ class SecurityMonitoringMiddleware:
             except Exception as e:
                 logger.debug(f"Session monitoring error: {e}")
 
-        # Monitor data exfiltration on export endpoints (post-response)
-        if path in self.EXPORT_ENDPOINTS and user_id:
+        # Record and monitor every completed export (post-response). The audit
+        # row is the export log GET /security/download-activity reads: who, which route,
+        # how many bytes, from where. Deliberately not the query string —
+        # filters and searches there can name members — and never the body.
+        if user_id and 200 <= response_status < 300 and self.is_export_endpoint(path):
             try:
-                if content_length_value:
-                    data_size = int(content_length_value)
+                from app.core.audit import log_audit_event
+                from app.core.constants import AUDIT_EVENT_DATA_EXPORT
+                from app.core.database import async_session_factory
+                from app.services.security_monitoring import security_monitor
 
-                    from app.core.database import async_session_factory
-                    from app.services.security_monitoring import security_monitor
-
-                    async with async_session_factory() as db:
-                        await security_monitor.detect_data_exfiltration(
-                            db=db,
-                            user_id=user_id,
-                            data_size_bytes=data_size,
-                            endpoint=path,
-                            ip_address=client_ip,
-                        )
-                        # Same bare-session gap as the hijack check above:
-                        # nothing else commits this session (Codex, PR #1917).
-                        await db.commit()
+                async with async_session_factory() as db:
+                    await log_audit_event(
+                        db=db,
+                        event_type=AUDIT_EVENT_DATA_EXPORT,
+                        event_category="security",
+                        severity="info",
+                        event_data={
+                            "endpoint": path,
+                            "method": scope.get("method", ""),
+                            "bytes": response_bytes,
+                        },
+                        user_id=user_id,
+                        ip_address=client_ip,
+                    )
+                    await security_monitor.detect_data_exfiltration(
+                        db=db,
+                        user_id=user_id,
+                        data_size_bytes=response_bytes,
+                        endpoint=path,
+                        ip_address=client_ip,
+                    )
+                    # Same bare-session gap as the hijack check above:
+                    # nothing else commits this session (Codex, PR #1917).
+                    await db.commit()
             except Exception as e:
                 logger.debug(f"Data exfiltration monitoring error: {e}")
 

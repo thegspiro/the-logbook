@@ -7151,7 +7151,10 @@ class MembershipPipelineService:
         """
         result = await self.db.execute(
             select(ProspectiveMember)
-            .where(ProspectiveMember.status_token == token)
+            .where(
+                ProspectiveMember.status_token_hash
+                == ProspectiveMember.hash_status_token(token)
+            )
             .options(
                 selectinload(ProspectiveMember.pipeline).selectinload(
                     MembershipPipeline.steps
@@ -7432,7 +7435,10 @@ class MembershipPipelineService:
         """
         query = (
             select(ProspectiveMember)
-            .where(ProspectiveMember.status_token == token)
+            .where(
+                ProspectiveMember.status_token_hash
+                == ProspectiveMember.hash_status_token(token)
+            )
             .options(
                 selectinload(ProspectiveMember.current_step),
                 selectinload(ProspectiveMember.pipeline).selectinload(

@@ -266,6 +266,7 @@ const AddMember: React.FC = () => {
         address_country: 'USA',
         emergency_contacts: emergencyContacts,
         send_welcome_email: !useCustomPassword,
+        status: formData.status,
         ...(formData.middleName ? { middle_name: formData.middleName } : {}),
         ...(formData.preferredName.trim() ? { preferred_name: formData.preferredName.trim() } : {}),
         ...(formData.membershipNumber.trim() ? { membership_number: formData.membershipNumber.trim() } : {}),
@@ -742,11 +743,10 @@ const AddMember: React.FC = () => {
             </div>
           </div>
 
-          {/* Department Information. There is no Status or Preferred Contact
-              control: both were offered here, and neither was sent — the create
-              endpoint has no field for either, so "On Leave" produced an active
-              member (workflow review W08; the owner question is in
-              KNOWN_LIMITATIONS). */}
+          {/* Department Information. Status is sent (W08-1): a member can be
+              added inactive or on leave. Preferred Contact Method is not
+              offered — the department records no such field, and a control
+              wired to nothing is worse than none (CLAUDE.md pitfall 19). */}
           <div className="card p-6">
             <div className="mb-4 flex items-center space-x-2">
               <Calendar className="h-5 w-5 text-orange-700 dark:text-orange-400" />
@@ -754,6 +754,27 @@ const AddMember: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <label htmlFor="add-status" className="text-theme-text-primary mb-2 block text-sm font-medium">
+                  Status
+                </label>
+                <select
+                  id="add-status"
+                  aria-describedby="add-status-help"
+                  value={formData.status}
+                  onChange={(e) => handleInputChange('status', e.target.value)}
+                  className="form-input"
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                  <option value="leave">On Leave</option>
+                </select>
+                <p id="add-status-help" className="text-theme-text-muted mt-1 text-xs">
+                  Retired or dropped is set from the member&rsquo;s profile once they are added, so their service
+                  history is recorded.
+                </p>
+              </div>
+
               <div>
                 <label htmlFor="add-joinDate" className="text-theme-text-primary mb-2 block text-sm font-medium">
                   Join Date

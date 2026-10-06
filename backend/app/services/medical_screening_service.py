@@ -8,7 +8,7 @@ records, and compliance tracking.
 from datetime import date, timedelta
 from typing import List, Optional
 
-from sqlalchemy import and_, select
+from sqlalchemy import Select, and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.utils import generate_uuid
@@ -17,8 +17,8 @@ from app.models.medical_screening import (
     ScreeningRequirement,
     ScreeningStatus,
 )
-from app.models.membership_pipeline import ProspectiveMember
-from app.models.user import User
+from app.models.membership_pipeline import ProspectiveMember, ProspectStatus
+from app.models.user import User, UserStatus
 from app.schemas.medical_screening import (
     ComplianceItem,
     ComplianceSummary,
@@ -28,11 +28,41 @@ from app.schemas.medical_screening import (
     ScreeningRecordUpdate,
     ScreeningRequirementCreate,
     ScreeningRequirementUpdate,
+    ScreeningSubject,
+    ScreeningSubjects,
 )
 from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
 from app.utils.org_timezone import resolve_org_today
+
+
+def _page(query: Select, skip: int, limit: Optional[int]) -> Select:
+    """Apply OFFSET/LIMIT to a list query; ``limit=None`` leaves it unbounded."""
+    if skip:
+        query = query.offset(skip)
+    if limit is not None:
+        query = query.limit(limit)
+    return query
+
+
+# Members a screening can be recorded for: everyone still on the roster,
+# including a member on leave or suspended — a return-to-duty physical is
+# exactly the record those two statuses need. Former members are left out.
+_SCREENABLE_MEMBER_STATUSES = (
+    UserStatus.ACTIVE,
+    UserStatus.PROBATIONARY,
+    UserStatus.LEAVE,
+    UserStatus.SUSPENDED,
+)
+# Prospects still in the pipeline. An approved prospect becomes a member and
+# is screened as one from then on.
+_SCREENABLE_PROSPECT_STATUSES = (ProspectStatus.ACTIVE, ProspectStatus.ON_HOLD)
+
+
+def _is_self(actor_id: Optional[str], subject_user_id: Optional[str]) -> bool:
+    """Whether the person writing a record is the member it is about."""
+    return bool(actor_id) and str(actor_id) == str(subject_user_id or "")
 
 
 class MedicalScreeningService:
@@ -48,8 +78,16 @@ class MedicalScreeningService:
         organization_id: str,
         is_active: Optional[bool] = None,
         screening_type: Optional[str] = None,
+        skip: int = 0,
+        limit: Optional[int] = None,
     ) -> List[ScreeningRequirement]:
-        """List screening requirements for an organization."""
+        """List screening requirements for an organization.
+
+        ``skip``/``limit`` page in SQL (MS-6) — the endpoint used to load every
+        row and slice in Python. ``limit=None`` keeps the full set for internal
+        callers such as ``get_compliance_status``, which must grade against
+        every active requirement.
+        """
         query = select(ScreeningRequirement).where(
             ScreeningRequirement.organization_id == organization_id
         )
@@ -57,7 +95,10 @@ class MedicalScreeningService:
             query = query.where(ScreeningRequirement.is_active == is_active)
         if screening_type:
             query = query.where(ScreeningRequirement.screening_type == screening_type)
-        query = query.order_by(ScreeningRequirement.name)
+        # id breaks ties so two requirements sharing a name cannot swap pages
+        # between requests.
+        query = query.order_by(ScreeningRequirement.name, ScreeningRequirement.id)
+        query = _page(query, skip, limit)
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -138,8 +179,15 @@ class MedicalScreeningService:
         prospect_id: Optional[str] = None,
         screening_type: Optional[str] = None,
         status: Optional[str] = None,
+        skip: int = 0,
+        limit: Optional[int] = None,
     ) -> List[ScreeningRecord]:
-        """List screening records with optional filters."""
+        """List screening records with optional filters.
+
+        ``skip``/``limit`` page in SQL (MS-6). ``limit=None`` returns every
+        match, which only internal callers use — ``get_compliance_status``
+        always passes a single subject, so its set is one person's history.
+        """
         query = select(ScreeningRecord).where(
             ScreeningRecord.organization_id == organization_id
         )
@@ -151,7 +199,10 @@ class MedicalScreeningService:
             query = query.where(ScreeningRecord.screening_type == screening_type)
         if status:
             query = query.where(ScreeningRecord.status == status)
-        query = query.order_by(ScreeningRecord.created_at.desc())
+        # created_at has one-second resolution, so a batch entered together
+        # ties on it; id keeps the order stable across page requests.
+        query = query.order_by(ScreeningRecord.created_at.desc(), ScreeningRecord.id)
+        query = _page(query, skip, limit)
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -169,12 +220,62 @@ class MedicalScreeningService:
         )
         return result.scalar_one_or_none()
 
+    async def list_subjects(self, organization_id: str) -> ScreeningSubjects:
+        """Members and prospects a new screening record can be filed against.
+
+        Backs the Add Record picker (MS-13). Org-scoped; names only. Bounded by
+        the roster and the open pipeline rather than paged, because a picker
+        that silently omits someone is worse than a long list.
+        """
+        member_rows = await self.db.execute(
+            select(User.id, User.first_name, User.last_name, User.preferred_name)
+            .where(
+                User.organization_id == organization_id,
+                User.deleted_at.is_(None),
+                User.status.in_(_SCREENABLE_MEMBER_STATUSES),
+            )
+            .order_by(User.last_name, User.first_name, User.id)
+        )
+        prospect_rows = await self.db.execute(
+            select(
+                ProspectiveMember.id,
+                ProspectiveMember.first_name,
+                ProspectiveMember.last_name,
+            )
+            .where(
+                ProspectiveMember.organization_id == organization_id,
+                ProspectiveMember.status.in_(_SCREENABLE_PROSPECT_STATUSES),
+            )
+            .order_by(
+                ProspectiveMember.last_name,
+                ProspectiveMember.first_name,
+                ProspectiveMember.id,
+            )
+        )
+        return ScreeningSubjects(
+            members=[
+                ScreeningSubject(
+                    id=uid, name=format_display_name(first, last, preferred)
+                )
+                for uid, first, last, preferred in member_rows.all()
+            ],
+            prospects=[
+                ScreeningSubject(id=pid, name=f"{first or ''} {last or ''}".strip())
+                for pid, first, last in prospect_rows.all()
+            ],
+        )
+
     async def create_record(
         self,
         organization_id: str,
         data: ScreeningRecordCreate,
+        recorded_by: Optional[str] = None,
     ) -> ScreeningRecord:
-        """Create a new screening record."""
+        """Create a new screening record.
+
+        ``recorded_by`` is the caller; when it is the record's own subject the
+        record is marked ``self_recorded`` (MS-7).
+        """
         # MS-3 (XC-1): the record is org-stamped from the caller, but its
         # subject/requirement ids come from the client. This record holds PHI,
         # so a foreign user_id doesn't just dangle — it attaches medical
@@ -220,6 +321,7 @@ class MedicalScreeningService:
             result_summary=data.result_summary,
             result_data=data.result_data,
             notes=data.notes,
+            self_recorded=_is_self(recorded_by, data.user_id),
         )
         self.db.add(record)
         await self.db.flush()
@@ -244,12 +346,19 @@ class MedicalScreeningService:
         # screening_type and status are NOT NULL columns; an explicit null on
         # either used to reach db.flush() unguarded and 500 as a raw
         # IntegrityError instead of the clean 400 apply_updates raises.
-        apply_updates(record, data.model_dump(exclude_unset=True))
+        changes = data.model_dump(exclude_unset=True)
+        apply_updates(record, changes)
         if reviewed_by and data.status in ("passed", "failed", "waived"):
             from datetime import datetime, timezone
 
             record.reviewed_by = reviewed_by
             record.reviewed_at = datetime.now(timezone.utc)
+        # MS-7: whoever submits the status owns it. The edit form always sends
+        # the status, so saving a record — with its result on screen — counts,
+        # which is also what lets a colleague's save clear a self-recorded
+        # pass. An update that leaves the status out keeps the flag.
+        if reviewed_by and "status" in changes:
+            record.self_recorded = _is_self(reviewed_by, record.user_id)
         await self.db.flush()
         return record
 
@@ -337,6 +446,7 @@ class MedicalScreeningService:
         items: List[ComplianceItem] = []
         compliant_count = 0
         expiring_soon_count = 0
+        self_recorded_count = 0
 
         for req in requirements:
             # Find the most recent passing/completed record for this requirement type
@@ -378,8 +488,11 @@ class MedicalScreeningService:
                     # No expiration = compliant indefinitely
                     is_compliant = True
 
+            self_recorded = bool(latest and latest.self_recorded)
             if is_compliant:
                 compliant_count += 1
+                if self_recorded:
+                    self_recorded_count += 1
 
             items.append(
                 ComplianceItem(
@@ -391,6 +504,7 @@ class MedicalScreeningService:
                     expiration_date=(latest.expiration_date if latest else None),
                     days_until_expiration=days_until_exp,
                     status=latest.status if latest else None,
+                    self_recorded=self_recorded,
                 )
             )
 
@@ -419,6 +533,7 @@ class MedicalScreeningService:
             non_compliant_count=len(requirements) - compliant_count,
             expiring_soon_count=expiring_soon_count,
             is_fully_compliant=compliant_count == len(requirements),
+            self_recorded_count=self_recorded_count,
             items=items,
         )
 
@@ -515,6 +630,7 @@ class MedicalScreeningService:
                     prospect_name=names["prospects"].get(record.prospect_id),
                     expiration_date=record.expiration_date,
                     days_until_expiration=days_left,
+                    self_recorded=bool(record.self_recorded),
                 )
             )
 

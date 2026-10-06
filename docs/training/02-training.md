@@ -254,6 +254,7 @@ There are two pieces:
    - **Day** — how many days after the course start this class happens. Day 1 is the first day.
    - **Start time** and **Duration**.
    - **Credit hours** _(optional)_ — defaults to the catalog course's value.
+   - **Room** _(optional)_ — only for a class that always meets somewhere else, such as live fire at the burn tower. Every cohort of the course books this room for this class instead of the cohort's own room. Leave it on **The cohort's room** otherwise.
    - **Counts toward certification requirements** — leave on for classes delivered the way a certifying body accepts. Turn it off for an informal in-house drill: attendance still earns hours, but the class won't advance a certificate.
 5. Repeat for each class. Use the up/down arrows to reorder.
 
@@ -274,8 +275,12 @@ Each class shows the gap since the one before it — **"Next day"**, **"2 days l
    - _Keep the computed date_ — leave it where it falls.
    - _Move weekends to the next weekday_.
    - _Move to the next meeting day_ — uses the meeting days you selected.
+
+   **Room** _(optional)_ — the room the cohort meets in. It is booked for every class that has no room of its own on the syllabus.
+
 5. **Preview** — this is the important step. Every class is listed with the date it will actually get. Anything that had to move (a weekend, a holiday) is flagged, along with archived courses and rooms already booked. You can:
    - Change any individual date and time.
+   - Pick a different **room** for one class. The preview re-checks straight away, so you see at once whether the new room is free. Each class shows the room it will book and why: _chosen for this class_, _from the syllabus_, or _the cohort's room_ — in that order of precedence.
    - Tick **Skip this class** to leave one out of this intake.
    - Tick any of the suggested holidays to skip them, then **Recalculate**.
 6. **Roster** — select the members taking the course. They're enrolled in the pipeline and added to every class on their calendar.
@@ -567,9 +572,65 @@ For a **knowledge test** requirement, the officer records the result:
 3. The system compares the score to the requirement's **passing score** (default **70%**). A score at or above the passing score is a **pass**, and a pass **completes the requirement**.
 4. Each entry counts against the requirement's **maximum attempts**. The current count is shown as **"Attempts: X / N"**, and the most recent result as **"Last score: 86% (pass)"**. Once the maximum is reached the field and the Record button are disabled, and the count is annotated "no attempts remaining".
 
-> **Note:** Knowledge-test scoring is **officer-entered** today. A member-facing, online test-taking feature is planned for a future release.
+> **Members can also take the test online** _(2026-10-06)_. When a training
+> officer links an online knowledge test to the requirement, a member's
+> submitted attempt is graded by the system and recorded here exactly like a
+> typed-in score — the same passing score, and the same attempt count. See
+> [Online Knowledge Tests](#online-knowledge-tests-2026-10-06).
 
 ![A knowledge-test requirement — the last score with its pass, the attempts used, and the score field that records the next](./images/02-95-knowledge-test-entry.png)
+
+### Online Knowledge Tests _(2026-10-06)_
+
+**Required Permission:** `training.manage` to write and publish a test;
+any member may take a published one.
+
+**Writing a test.** Open **Training Admin > Setup > Knowledge Tests** and click
+**New test**:
+
+| Setting                              | What it does                                                                                                  |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| **Counts toward requirement**        | A _Knowledge Test_ requirement. A submitted attempt is recorded on it for every active enrollment that has it |
+| **Passing score %**                  | Blank uses the requirement's passing score, else 70%                                                          |
+| **Time limit**                       | Blank for none. When time runs out, the answers saved so far are graded                                       |
+| **Questions per attempt**            | Blank asks every active question. A number draws that many at random from the bank for each attempt           |
+| **Shuffle**                          | Shuffles the question order and each question's options per attempt (true/false keeps True before False)      |
+| **Show members the correct answers** | Off by default. On, a member sees which answers were right, and each question's explanation, after submitting |
+
+Then **Questions & results** opens the question bank. Each question is one
+correct answer, several correct answers, or true/false, with points (default 1)
+and an optional explanation. A several-answers question scores only when the
+member picks **exactly** the correct set — ticking every box earns nothing.
+**Publish** makes the test available; it needs at least one active question,
+and at least as many as it asks per attempt. The same screen lists every
+attempt with its score and whether it was recorded on the requirement.
+
+**Taking a test.** Members open **Training > Knowledge Tests**, press
+**Start**, and answer; answers save as they go. **Submit answers** grades the
+attempt at once and shows the score. Starting a test you already have open
+continues it rather than drawing a new paper.
+
+> **The answers stay on the server.** A member's screen never receives the
+> correct answers before they submit, and the score is computed by the server
+> from the saved answers — nothing the browser sends is taken as a score.
+
+> **Editing a published test does not change attempts already started.** Each
+> attempt keeps the questions, options and passing score it was given, so a
+> correction to a question cannot re-score a member who has already answered
+> it.
+
+> **One allowance of attempts.** The requirement's **maximum attempts** counts
+> online attempts and officer-entered scores together. A member who has used
+> them all cannot start another attempt; once the requirement is satisfied the
+> cap no longer applies, so a member can retake a test to refresh.
+
+> **When an attempt is not recorded.** The result page says why: the member is
+> not enrolled in a program with the requirement, the requirement was already
+> satisfied, or the attempt cap refused it. The score itself still stands and
+> is listed on the officer's results.
+
+> **Deleting.** A test nobody has taken can be deleted; one with attempts can
+> only be archived, which keeps the members' results.
 
 ### Phases & Advancing
 
@@ -1777,6 +1838,45 @@ The report form can auto-populate skills and tasks relevant to the specific appa
 
 If no mapping exists for the shift's apparatus type, the system falls back to the org-wide default skills and tasks lists. If neither exists, the skills/tasks sections are empty (but still visible unless toggled off via form section toggles).
 
+### Skill Evaluations _(2026-10-05)_
+
+**Required Permission:** `training.manage` to add, edit, deactivate or delete;
+`training.manage` or `training.configure` to view.
+
+A skill score on a shift report counts toward a trainee's competency history and
+pipeline progress only when the skill is defined here. Open **Training Admin >
+Setup > Skill Evaluations** and click **Add skill**:
+
+| Field                           | What it does                                                                                                                                   |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Name**                        | The join key. A shift report's skill links to this skill when the names match, ignoring capitals — "Pump Operations" matches "pump operations" |
+| **Category**                    | Optional grouping (Driver, EMS, Firefighting…)                                                                                                 |
+| **Description**                 | Optional                                                                                                                                       |
+| **Criteria**                    | Optional, one per line — what the evaluator looks for                                                                                          |
+| **What counts as passing**      | Optional free text                                                                                                                             |
+| **Who can sign this skill off** | Anyone with training management (the default), members holding chosen positions, or named members                                              |
+
+Each skill card shows who can sign it off, how many criteria it has and how many
+sign-offs have been recorded against it.
+
+> **Renaming a skill unlinks it.** The match is by name, so renaming "Pump
+> Operations" turns every apparatus skill tag still spelled the old way amber
+> until it is renamed too. The editor warns when you change a name.
+
+> **Two active skills cannot share a name.** A shift report's skill would match
+> both, and which one received the sign-off would be arbitrary, so the second is
+> refused. Deactivating a skill frees its name.
+
+> **Deactivate rather than delete.** A skill with sign-offs, competency history
+> or instructor qualifications against it cannot be deleted — deleting it would
+> erase that history. **Deactivate** stops new shift-report scores from creating
+> sign-offs and keeps everything already recorded; **Reactivate** brings it back.
+> **Delete** is offered only for a skill nothing has used.
+
+> **Pipeline requirements.** A _Skills Evaluation_ requirement progresses by one
+> for each matching skill signed off on a shift report. A requirement that names
+> specific skills counts only those.
+
 ### Save as Draft _(2026-04-04)_
 
 Officers can save incomplete shift completion reports as drafts:
@@ -1836,8 +1936,8 @@ shift to draw a crew from.
 - **Draft regression guard:** _(2026-04-11)_ The system prevents re-creation of draft reports for shifts that already have submitted or reviewed reports, avoiding duplicate credit.
 - **Non-authorized user accessing a report by ID:** Returns 403 Forbidden. Only the trainee, the filing officer, or users with `training.manage` permission can access a specific report. _(Security fix 2026-04-07)_
 - **Trainee accessing their own report:** Data is filtered by visibility settings (e.g., if `show_performance_rating` is off, the rating is stripped). `reviewer_notes` are always stripped for trainees regardless of settings.
-- **Skill linkage status:** When an apparatus-type skill name exactly matches a `SkillEvaluation.name` in the training module, it shows as "linked" (green) in the settings panel. Unlinked skills (amber) are still observed on reports but don't flow into formal competency tracking.
-- **No SkillEvaluation records in org:** All skills show amber "unlinked" tags in the apparatus settings panel.
+- **Skill linkage status:** When an apparatus-type skill name matches a skill under **Setup > Skill Evaluations** (ignoring capitals), it shows as "linked" (green) in the settings panel. Unlinked skills (amber) are still observed on reports but don't flow into formal competency tracking.
+- **No skills defined:** All skills show amber "unlinked" tags in the apparatus settings panel. Add them under [Skill Evaluations](#skill-evaluations-2026-10-05).
 
 ---
 
@@ -2083,14 +2183,19 @@ Officers can share training programs between departments:
 
 1. Navigate to **Training > Programs**
 2. Click **Import** and choose the JSON package file
-3. The package is imported **as soon as you choose the file** — a toast names
-   the program that was created, or says what was wrong with the file
+3. The file is checked and a **preview** opens before anything is created: the
+   program name and structure, each phase with its requirement count, the
+   milestone count, the requirements the import will **create** in your
+   department, and the existing requirements it will **link** to
+4. Click **Confirm Import** to create the program, or **Cancel** to leave the
+   department untouched — a toast names the program that was created
 
-**There is no preview and no confirmation step.** A file that is not a program
-export is rejected before anything is created ("Invalid import format — missing
-'program' key"), so a mis-clicked file is not destructive, but a package that
-_is_ valid is imported without asking twice. Import into a scratch department
-first if you want to see what a package contains before it lands in yours.
+The preview runs the real import and then discards it, so a file it accepts is
+a file the import accepts. A file that is not a program export, or that carries
+an invalid value or a category from another department, is rejected at the
+preview step with the reason, and nothing is created. New requirements are
+listed by name because they outlive a regretted import: deleting the program
+afterwards leaves them in the department's requirement list.
 
 **Edge Cases:**
 
@@ -2146,13 +2251,30 @@ A competency matrix is a per-position definition: a name, the position it applie
 
 ![The Competency tab: the Dreyfus legend above one card per matrix, each naming its position and how many skills it requires, with Add Matrix beside the heading](./images/02-67-competency-matrix.png)
 
-**Not yet built:** the department-wide member-by-competency heat-map — one row per member, one column per competency area, with a station/rank filter bar. The tab today shows only the matrix definitions; a member's own levels are readable through the API (`/training/competency/me` and `/training/competency/members/{id}`) but have no screen.
+### Department Readiness Heat-Map _(2026-10-06)_
+
+Below the matrices, **Department Readiness** shows every active member down the
+side and every active skill across the top. Each cell is the member's current
+Dreyfus level, abbreviated — **N** Novice, **AB** Advanced Beginner, **C**
+Competent, **P** Proficient, **E** Expert — and a dash where no evaluation is on
+record. Hover or focus a cell for the full level, when the member was last
+evaluated, and when re-evaluation is due.
+
+Filter the rows by **Station** or **Rank** and the columns by **Skill
+category** to look at one crew or one discipline.
+
+The cells are the levels already stored for each member — exactly what that
+member's own competency view reports. The heat-map does not grade anything
+itself: it does not compare a level against a matrix's required level, apply
+waivers, or mark a skill not applicable to a member's role. A member who has
+left the department is not on the map.
 
 ### Edge Cases
 
-- Member competency levels are cached for approximately 5 minutes. Changes to training records or skill test results may not appear immediately — wait for cache expiry or refresh the page.
-- Members whose roles do not include a particular competency area show gray (N/A) cells, not red. This prevents false negatives in department readiness views.
-- If a member has a waiver active for a competency-related requirement, their cell reflects the waiver-adjusted status, not the full requirement.
+- The heat-map is read when the tab opens; reopen the tab to see an evaluation
+  recorded since.
+- An active member with no evaluations yet appears as a row of dashes rather
+  than being left off, so a gap in the roster is visible.
 
 ---
 
@@ -2494,7 +2616,7 @@ The training module has several boundary behaviors that affect how submissions a
 | How to list available registries             | Use the CLI tool: `python scripts/generate_registry.py --list` to see all available registries (NFPA, NREMT, Pro Board, etc.).                                                                                                |
 | Source filter not working on requirements    | Update to the latest version. The source field has been added to the API schema and the filter is now wired up.                                                                                                               |
 | Recertification reminders not sending        | Verify: (1) certification has expiration date, (2) recertification lead time is configured, (3) `EMAIL_ENABLED=true` in environment, (4) Celery beat is running the `process_recertification_reminders` task.                 |
-| Competency matrix shows stale data           | The competency heat-map is cached for ~5 minutes. Wait for cache expiry or clear Redis cache in development.                                                                                                                  |
+| Competency matrix shows stale data           | The readiness heat-map is read when the Competency tab opens and is never cached. Switch away and back to see an evaluation recorded since.                                                                                   |
 | xAPI statements not appearing in LRS         | Multi-agency training records are sent asynchronously via Celery. Check Celery worker logs for delivery failures. Verify LRS endpoint URL and API key in training integration settings.                                       |
 | Instructor not available for session         | Instructor availability is tracked separately from member scheduling. Check the instructor's availability calendar in Training Admin > Instructors.                                                                           |
 | Effectiveness score not calculating          | Training effectiveness scoring (Kirkpatrick model) requires post-training evaluations to be submitted. Scores appear after the evaluation period configured on the training session.                                          |
@@ -3232,10 +3354,16 @@ stepper.
   the record itself, its hours and its dates stay. Leave the box empty to keep
   files indefinitely, which is also what happens until someone sets it. Every
   change to the period, and every file the task deletes, is in the audit log.
-- **Files are not scanned for malware.** They are checked to be genuinely the
-  file type they claim and stored under a name the server chooses, so nothing
-  runs on the server — but a certificate opened by an officer is whatever the
-  member uploaded.
+- **Files can be scanned for malware** _(2026-10-06)_. They are always
+  checked to be genuinely the file type they claim and stored under a name the
+  server chooses, so nothing runs on the server. If your administrator has
+  turned on ClamAV scanning, each certificate is also scanned before it is
+  saved: a file the scanner flags is refused with _"This file was flagged as
+  malicious…"_ and never stored, and the rejection is in the audit log. If the
+  scanner is temporarily unavailable the member sees _"Files cannot be checked
+  for malware right now…"_ and can try again in a few minutes — the file is
+  not saved unscanned. Without scanning turned on, a certificate opened by an
+  officer is whatever the member uploaded.
 - **Voiding a record keeps its file.** A delete marks the record cancelled
   rather than removing it, so the correction stays auditable and its evidence
   stays with it.

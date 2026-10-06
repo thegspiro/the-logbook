@@ -473,6 +473,20 @@ The Logbook uses a **position-based** permission system:
 >   can never lock itself out of member administration. If you see this error,
 >   grant another position the member-management permission first, then retry.
 
+> **Position names are unique** _(2026-10-05)_. A new or renamed position
+> cannot reuse a name another position already has (capital letters and
+> surrounding spaces do not make a name different), because two identical
+> names cannot be told apart when assigning one. Positions that already shared
+> a name are marked **Same name as another position**, with the internal name
+> shown underneath; rename one of them.
+
+> **Changing the Member position asks first** _(2026-10-05)_. Every member
+> holds the **Member** position, so adding or removing one of its permissions
+> changes what the whole department can do at once. Saving such a change opens
+> a confirmation that names the permissions being granted or removed and how
+> many members hold the position (**Apply to 42 members** / **Keep editing**).
+> Renaming it or editing its description does not ask.
+
 > **A role that holds a wildcard now saves** _(2026-10-04)_. Until this date,
 > changing any permission on a position that carried `*` (the IT Manager) or a
 > module grant such as `inventory.*` — the kind the setup wizard's **Manage**
@@ -527,6 +541,12 @@ Permission categories include:
 3. Click **Edit Roles**.
 4. Add or remove positions.
 5. Save.
+
+> **The Member position stays on** _(2026-10-05)_. Every member holds the
+> **Member** position, which carries the baseline access they need to use the
+> app. It cannot be removed from anyone who is still a member — the remove
+> control is not offered and its box stays ticked — only from an archived
+> member.
 
 ---
 
@@ -3116,6 +3136,28 @@ January 1 to today, not the last 365 days.
 
 > **Screenshot needed:**
 > _[Member at `/admin-hours`: the inline edit form open on a rejected entry, showing "Returned with: <reason>", the Category, Start Time, End Time and Description fields, and the Resubmit and Cancel buttons.]_
+
+### Admin Hours review rules _(2026-10-05)_
+
+**Where:** `/admin-hours/manage` → **Review Rules** tab · **Who:** anyone with
+`admin_hours.manage` can read them; changing them needs `settings.manage`.
+
+Two department-wide rules decide how approvals hold up:
+
+- **Let an approver approve their own entries.** Off by default: an officer's
+  own entry must be approved by somebody else, and bulk approval skips it.
+  A department with a single officer who reviews admin hours can turn it on.
+  A self-approved entry still records its approver, so it can be seen as one.
+- **Send a corrected event entry back for review when it grows by more than
+  _N_ percent** (default **25**). When a reopened event's check-out is
+  corrected, attendance hours already approved are updated in place. If the
+  correction grows an entry past the threshold, and its category would not
+  have approved the new length automatically, the entry returns to **Pending
+  Review** instead of keeping an approval that covered fewer hours. `0` sends
+  back any growth at all.
+
+Only a settings administrator can change them because the first one relaxes a
+control on the very people who review admin hours.
 
 ## Scheduling Staffing Tiles on the Dashboard _(2026-08-23)_
 

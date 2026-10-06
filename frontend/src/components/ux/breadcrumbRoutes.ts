@@ -94,6 +94,7 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   '/facilities': {},
   '/finance': { permissions: ['finance.view'] },
   '/grants': { permissions: ['fundraising.view'] },
+  '/integrations': { permissions: ['settings.manage'] },
   '/inventory': { permissions: ['inventory.manage'] },
   '/ip-security': { permissions: ['security.manage', 'settings.manage'] },
   '/learning': {},
@@ -160,6 +161,7 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   '/training/cohorts': { permissions: ['training.manage'] },
   '/training/programs': {},
   '/training/skills-testing': {},
+  '/training/knowledge-tests': {},
 };
 
 /**

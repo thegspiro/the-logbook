@@ -60,6 +60,8 @@ export interface Election {
   anonymous_voting: boolean;
   allow_write_ins: boolean;
   max_votes_per_position: number;
+  // How many candidates each race elects (W50-11); 1 on older servers
+  seats_per_position?: number;
   results_visible_immediately: boolean;
   eligible_voters?: string[];
   email_sent: boolean;
@@ -88,6 +90,8 @@ export interface Election {
   closed_at?: string | null;
   closed_by?: string | null;
   closed_by_name?: string | null;
+  // Corrections to the result after close, oldest first (W50-9)
+  results_revisions?: ResultsRevision[] | null;
   created_at: string;
   updated_at: string;
   total_votes?: number;
@@ -100,6 +104,48 @@ export interface Election {
  * (GET /elections/ballot). Deliberately excludes roster/PII fields
  * (attendees, eligible_voters, email_recipients, created_by, ...).
  */
+/** Whether the voter may vote on one ballot item, and whether they have. */
+export interface MemberBallotItemStatus {
+  ballot_item_id: string;
+  eligible: boolean;
+  reason?: string | null;
+  voted: boolean;
+}
+
+/** A proxy the signed-in member holds in an election. */
+export interface MemberBallotProxy {
+  authorization_id: string;
+  delegating_user_id?: string | null;
+  delegating_user_name?: string | null;
+}
+
+/**
+ * GET /elections/{id}/ballot — the in-app ballot: every contest the emailed
+ * ballot carries (plain positions arrive as ballot items), the candidates,
+ * and the voter's per-item standing. `proxy` is set on a proxy ballot.
+ */
+export interface MemberBallotResponse {
+  election: BallotElection;
+  candidates: Candidate[];
+  items: MemberBallotItemStatus[];
+  proxy?: MemberBallotProxy | null;
+}
+
+/** GET /elections/{id}/ballot/proxies */
+export interface MyProxyAuthorizationsResponse {
+  proxies: MemberBallotProxy[];
+  unavailable_reason?: string | null;
+}
+
+/** One correction made to a closed election's result (W50-9). */
+export interface ResultsRevision {
+  at: string;
+  by?: string | null;
+  by_name?: string | null;
+  action: string; // vote_voided | paper_batch_voided | write_ins_merged
+  detail?: string | null;
+}
+
 export interface BallotElection {
   id: string;
   title: string;
@@ -114,6 +160,7 @@ export interface BallotElection {
   allow_write_ins: boolean;
   voting_method: VotingMethod;
   max_votes_per_position: number;
+  seats_per_position?: number;
 }
 
 /** POST /elections/ballot/lookup — election + candidates in one round-trip */
@@ -157,6 +204,7 @@ export interface ElectionCreate {
   anonymous_voting?: boolean | undefined;
   allow_write_ins?: boolean | undefined;
   max_votes_per_position?: number | undefined;
+  seats_per_position?: number | undefined;
   results_visible_immediately?: boolean | undefined;
   eligible_voters?: string[] | undefined;
   voting_method?: VotingMethod | undefined;
@@ -189,6 +237,7 @@ export interface ElectionUpdate {
   anonymous_voting?: boolean;
   allow_write_ins?: boolean;
   max_votes_per_position?: number;
+  seats_per_position?: number;
   results_visible_immediately?: boolean;
   eligible_voters?: string[];
   voting_method?: VotingMethod;

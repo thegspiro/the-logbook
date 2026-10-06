@@ -1142,8 +1142,8 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
           <h4 className="text-theme-text-secondary text-lg font-medium">No ballot items yet</h4>
           <p className="text-theme-text-muted mt-1 max-w-md text-sm">
             {isLocked
-              ? 'The ballot cannot be changed once voting has opened. Without ballot items, members vote in the app and no ballot emails can be sent.'
-              : 'Add items from a template or create custom ones to build your ballot. Ballot emails need at least one item; without one, members vote in the app.'}
+              ? "The ballot cannot be changed once voting has opened. The election's positions are its ballot, in the app and in ballot emails alike."
+              : "Add items from a template or create custom ones to build your ballot. Without items, the election's positions are the ballot, in the app and in ballot emails alike."}
           </p>
           {!isLocked && (
             <div className="mt-4 flex gap-3">

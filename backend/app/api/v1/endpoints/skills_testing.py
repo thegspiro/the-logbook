@@ -1485,6 +1485,38 @@ async def create_test(
             status_code=status.HTTP_404_NOT_FOUND, detail="Skill template not found"
         )
 
+    # A client-minted id (offline cold start). A replay of a create that
+    # already landed — the response was lost, or the queue retried — returns
+    # the test it made instead of a second one. Anything else holding that id
+    # is refused with one message whoever owns it, so the answer says nothing
+    # about another department's tests.
+    if test_data.id is not None:
+        existing = (
+            await db.execute(select(SkillTest).where(SkillTest.id == str(test_data.id)))
+        ).scalar_one_or_none()
+        if existing is not None:
+            if not (
+                existing.organization_id == current_user.organization_id
+                and str(existing.examiner_id) == str(current_user.id)
+                and str(existing.template_id) == str(test_data.template_id)
+                and str(existing.candidate_id) == str(test_data.candidate_id)
+                and bool(existing.is_practice) == bool(test_data.is_practice)
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="That test id is already in use",
+                )
+            replay_candidate = (
+                await db.execute(select(User).where(User.id == existing.candidate_id))
+            ).scalar_one_or_none()
+            return _build_test_response(
+                existing,
+                template,
+                replay_candidate,
+                current_user,
+                org_config=await _org_training_config(db, current_user.organization_id),
+            )
+
     # Mirror get_template's visibility rule. The test response carries the full
     # template body (template_sections), so without this a member could practice
     # against an officers_only/assigned_only template and read the very content
@@ -1499,6 +1531,22 @@ async def create_test(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Template must be published before it can be used for testing",
+        )
+
+    # Scored on a device against a cached copy of the sheet: the snapshot
+    # frozen below must be the sheet that was scored, or the scorecard's
+    # criterion ids may not line up with it.
+    if (
+        test_data.expected_template_version is not None
+        and (template.version or 1) != test_data.expected_template_version
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This skill sheet was changed after the evaluation was started "
+                "offline, so it cannot be filed against the new version. The "
+                "scoring is still on the examiner's device."
+            ),
         )
 
     # Verify candidate exists in org
@@ -1558,6 +1606,8 @@ async def create_test(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     new_test = SkillTest(
+        # A client-minted id when one was sent; otherwise the column default.
+        **({"id": str(test_data.id)} if test_data.id is not None else {}),
         organization_id=current_user.organization_id,
         template_id=str(test_data.template_id),
         candidate_id=str(test_data.candidate_id),

@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**288 tables · 4738 columns · 940 foreign keys**
+**295 tables · 4852 columns · 963 foreign keys**
 
 ---
 
@@ -111,7 +111,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`audit_log_checkpoints`](#audit_log_checkpoints) | `AuditLogCheckpoint` | 13 | Periodic integrity checkpoints for audit logs |
-| [`audit_logs`](#audit_logs) | `AuditLog` | 18 | Tamper-proof audit log entries |
+| [`audit_logs`](#audit_logs) | `AuditLog` | 19 | Tamper-proof audit log entries |
 | [`audit_ship_state`](#audit_ship_state) | `AuditShipState` | 5 | High-water mark for off-host audit-log shipping. |
 
 ### Call_Tracking
@@ -157,11 +157,11 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`candidates`](#candidates) | `Candidate` | 15 | Candidate model for election candidates |
-| [`elections`](#elections) | `Election` | 52 | Election model for managing elections within an organization |
+| [`elections`](#elections) | `Election` | 54 | Election model for managing elections within an organization |
 | [`manual_ballot_attestations`](#manual_ballot_attestations) | `ManualBallotAttestation` | 5 | One officer's confirmation that a paper-tally batch matches the |
 | [`manual_ballot_batches`](#manual_ballot_batches) | `ManualBallotBatch` | 14 | One paper-tally entry — the set of manual votes sharing a batch id. |
 | [`saved_ballot_templates`](#saved_ballot_templates) | `SavedBallotTemplate` | 11 | Organization-scoped, reusable snapshot of a structured ballot. |
-| [`votes`](#votes) | `Vote` | 25 | Vote model for recording votes |
+| [`votes`](#votes) | `Vote` | 26 | Vote model for recording votes |
 | [`voting_tokens`](#voting_tokens) | `VotingToken` | 16 | Voting token model for secure anonymous ballot access |
 
 ### Email Templates
@@ -312,7 +312,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`integrations`](#integrations) | `Integration` | 14 | Stores integration configurations per organization |
+| [`integration_sync_logs`](#integration_sync_logs) | `IntegrationSyncLog` | 12 | One run of an integration: a sync, a connection check, a chat delivery. |
+| [`integrations`](#integrations) | `Integration` | 18 | Stores integration configurations per organization |
 
 ### Inventory
 
@@ -356,6 +357,16 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`return_requests`](#return_requests) | `ReturnRequest` | 23 | Member-initiated return request. |
 | [`storage_areas`](#storage_areas) | `StorageArea` | 15 | Storage Area model |
 
+### Knowledge_Test
+
+<sub>`app/models/knowledge_test.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`knowledge_test_attempts`](#knowledge_test_attempts) | `KnowledgeTestAttempt` | 21 | One member's sitting of a test. |
+| [`knowledge_test_questions`](#knowledge_test_questions) | `KnowledgeTestQuestion` | 13 | One question in a test's bank. |
+| [`knowledge_tests`](#knowledge_tests) | `KnowledgeTest` | 15 | A test definition and the bank its questions are drawn from. |
+
 ### Label_Printer
 
 <sub>`app/models/label_printer.py`</sub>
@@ -380,6 +391,16 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`locations`](#locations) | `Location` | 22 | Location model for managing physical spaces |
 
+### Mcp_Oauth
+
+<sub>`app/models/mcp_oauth.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`mcp_oauth_authorizations`](#mcp_oauth_authorizations) | `McpOAuthAuthorization` | 16 |  |
+| [`mcp_oauth_clients`](#mcp_oauth_clients) | `McpOAuthClient` | 10 |  |
+| [`mcp_oauth_grants`](#mcp_oauth_grants) | `McpOAuthGrant` | 16 |  |
+
 ### Mcp_Service_Key
 
 <sub>`app/models/mcp_service_key.py`</sub>
@@ -394,7 +415,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`screening_records`](#screening_records) | `ScreeningRecord` | 18 | Individual screening instance for a user or prospective member. |
+| [`screening_records`](#screening_records) | `ScreeningRecord` | 19 | Individual screening instance for a user or prospective member. |
 | [`screening_requirements`](#screening_requirements) | `ScreeningRequirement` | 11 | Organization-level definition of a required screening. |
 
 ### Meeting Minutes
@@ -432,7 +453,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`prospect_event_links`](#prospect_event_links) | `ProspectEventLink` | 6 | Links a prospective member to an upcoming event. |
 | [`prospect_interviews`](#prospect_interviews) | `ProspectInterview` | 12 | Interview record for a prospective member. |
 | [`prospect_step_progress`](#prospect_step_progress) | `ProspectStepProgress` | 10 | Tracks a prospect's progress on each pipeline step. |
-| [`prospective_members`](#prospective_members) | `ProspectiveMember` | 35 | Prospective member record, kept separate from the users table. |
+| [`prospective_members`](#prospective_members) | `ProspectiveMember` | 36 | Prospective member record, kept separate from the users table. |
 
 ### Nfc_Tag
 
@@ -531,7 +552,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`security_alerts`](#security_alerts) | `SecurityAlertRecord` | 16 | Persistent security alert records |
+| [`security_alerts`](#security_alerts) | `SecurityAlertRecord` | 17 | Persistent security alert records |
 
 ### Skills Testing
 
@@ -1838,6 +1859,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `previous_hash` | VARCHAR(64) | no |  |  |  |
 | `current_hash` | VARCHAR(64) | no | IDX |  |  |
 | `hash_version` | INTEGER | yes |  |  |  |
+| `signing_key_id` | VARCHAR(16) | yes |  |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 
 **Indexes**
@@ -2160,6 +2182,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `anonymous_voting` | BOOL | no |  | `True` |  |
 | `allow_write_ins` | BOOL | no |  | `False` |  |
 | `max_votes_per_position` | INTEGER | no |  | `1` |  |
+| `seats_per_position` | INTEGER | no |  | `1` |  |
 | `results_visible_immediately` | BOOL | no |  | `False` |  |
 | `eligible_voters` | JSON | yes |  |  |  |
 | `voting_method` | VARCHAR(50) | no |  | `simple_majority` |  |
@@ -2181,6 +2204,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `quorum_type` | VARCHAR(20) | no |  | `none` |  |
 | `quorum_value` | INTEGER | yes |  |  |  |
 | `last_chain_hash` | VARCHAR(64) | yes |  |  |  |
+| `results_revisions` | JSON | yes |  |  |  |
 | `rollback_history` | JSON | yes |  |  |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | no |  | `now()` |  |
@@ -2287,6 +2311,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `vote_rank` | INTEGER | yes |  |  |  |
 | `voted_at` | DATETIME | no |  | `now()` |  |
 | `vote_signature` | VARCHAR(128) | yes |  |  |  |
+| `signing_key_id` | VARCHAR(16) | yes |  |  |  |
 | `vote_dedup_hash` | VARCHAR(64) | yes | UQ |  |  |
 | `chain_hash` | VARCHAR(64) | yes |  |  |  |
 | `receipt_hash` | VARCHAR(64) | yes |  |  |  |
@@ -4692,6 +4717,32 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 ## Integrations
 
+### `integration_sync_logs`
+
+**IntegrationSyncLog** · `app/models/integration.py`
+
+> One run of an integration: a sync, a connection check, a chat delivery. Bounded per integration (``MAX_SYNC_HISTORY`` in app.services.integration_health). ``summary`` holds integer counts only and ``error_message`` is sanitized, so the history never carries the records that moved or a provider's raw response.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `integration_id` | VARCHAR(36) | no | FK, IDX |  | → `integrations.id` ON DELETE CASCADE |
+| `operation` | VARCHAR(50) | no |  |  |  |
+| `trigger_source` | VARCHAR(20) | no |  |  |  |
+| `status` | VARCHAR(20) | no |  |  |  |
+| `started_at` | DATETIME | no |  | `now()` |  |
+| `finished_at` | DATETIME | yes |  |  |  |
+| `duration_ms` | INTEGER | yes |  |  |  |
+| `summary` | JSON | yes |  |  |  |
+| `error_message` | TEXT | yes |  |  |  |
+| `triggered_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+
+**Indexes**
+
+- `ix_integration_sync_logs_integration_started` (`integration_id`, `started_at`)
+- `ix_integration_sync_logs_org_started` (`organization_id`, `started_at`)
+
 ### `integrations`
 
 **Integration** · `app/models/integration.py`
@@ -4712,6 +4763,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `enabled` | BOOL | yes |  | `False` |  |
 | `contains_phi` | BOOL | yes |  | `False` |  |
 | `last_sync_at` | DATETIME | yes |  |  |  |
+| `last_success_at` | DATETIME | yes |  |  |  |
+| `last_error` | TEXT | yes |  |  |  |
+| `last_error_at` | DATETIME | yes |  |  |  |
+| `consecutive_error_count` | INTEGER | no |  | `0` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
@@ -5837,6 +5892,100 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_storage_areas_parent` (`parent_id`)
 - `ix_storage_areas_is_active` (`is_active`)
 
+## Knowledge_Test
+
+### `knowledge_test_attempts`
+
+**KnowledgeTestAttempt** · `app/models/knowledge_test.py`
+
+> One member's sitting of a test.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `test_id` | VARCHAR(36) | no | FK, IDX |  | → `knowledge_tests.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
+| `status` | VARCHAR(20) | no |  | `'in_progress'` |  |
+| `started_at` | DATETIME | no |  |  |  |
+| `expires_at` | DATETIME | yes |  |  |  |
+| `submitted_at` | DATETIME | yes |  |  |  |
+| `questions_snapshot` | JSON | no |  |  |  |
+| `answers` | JSON | yes |  |  |  |
+| `score` | FLOAT | yes |  |  |  |
+| `points_earned` | FLOAT | yes |  |  |  |
+| `points_possible` | FLOAT | yes |  |  |  |
+| `passed` | BOOL | yes |  |  |  |
+| `passing_score` | FLOAT | no |  |  |  |
+| `requirement_id` | VARCHAR(36) | yes | FK |  | → `training_requirements.id` ON DELETE SET NULL |
+| `show_correct_answers` | BOOL | no |  | `False` |  |
+| `credited` | BOOL | no |  | `False` |  |
+| `credit_note` | VARCHAR(500) | yes |  |  |  |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `idx_knowledge_attempt_test_user` (`test_id`, `user_id`, `status`)
+- `idx_knowledge_attempt_user` (`user_id`)
+- `ix_knowledge_test_attempts_organization_id` (`organization_id`)
+
+### `knowledge_test_questions`
+
+**KnowledgeTestQuestion** · `app/models/knowledge_test.py`
+
+> One question in a test's bank.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `test_id` | VARCHAR(36) | no | FK, IDX |  | → `knowledge_tests.id` ON DELETE CASCADE |
+| `prompt` | TEXT | no |  |  |  |
+| `question_type` | VARCHAR(20) | no |  |  |  |
+| `options` | JSON | no |  |  |  |
+| `correct_option_ids` | JSON | no |  |  |  |
+| `explanation` | TEXT | yes |  |  |  |
+| `points` | FLOAT | no |  | `1.0` |  |
+| `sort_order` | INTEGER | no |  | `0` |  |
+| `active` | BOOL | no |  | `True` |  |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `ix_knowledge_test_questions_organization_id` (`organization_id`)
+- `ix_knowledge_test_questions_test_id` (`test_id`)
+
+### `knowledge_tests`
+
+**KnowledgeTest** · `app/models/knowledge_test.py`
+
+> A test definition and the bank its questions are drawn from.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `name` | VARCHAR(255) | no |  |  |  |
+| `description` | TEXT | yes |  |  |  |
+| `instructions` | TEXT | yes |  |  |  |
+| `requirement_id` | VARCHAR(36) | yes | FK |  | → `training_requirements.id` ON DELETE SET NULL |
+| `passing_score` | FLOAT | yes |  |  |  |
+| `time_limit_minutes` | INTEGER | yes |  |  |  |
+| `question_count` | INTEGER | yes |  |  |  |
+| `shuffle_questions` | BOOL | no |  | `True` |  |
+| `show_correct_answers` | BOOL | no |  | `False` |  |
+| `status` | VARCHAR(20) | no |  | `'draft'` |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `idx_knowledge_test_org_status` (`organization_id`, `status`)
+- `ix_knowledge_tests_organization_id` (`organization_id`)
+
 ## Label_Printer
 
 ### `label_printers`
@@ -5945,6 +6094,88 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - UNIQUE `uq_locations_facility_room_id` (`facility_room_id`)
 
+## Mcp_Oauth
+
+### `mcp_oauth_authorizations`
+
+**McpOAuthAuthorization** · `app/models/mcp_oauth.py`
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `client_pk` | VARCHAR(36) | no | FK, IDX |  | → `mcp_oauth_clients.id` ON DELETE CASCADE |
+| `redirect_uri` | TEXT | no |  |  |  |
+| `scope` | VARCHAR(255) | no |  |  |  |
+| `state` | TEXT | yes |  |  |  |
+| `code_challenge` | VARCHAR(128) | no |  |  |  |
+| `resource` | VARCHAR(500) | no |  |  |  |
+| `status` | VARCHAR(16) | no |  | `'pending'` |  |
+| `user_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE CASCADE |
+| `code_hash` | VARCHAR(64) | yes | UQ, UQ-IDX |  |  |
+| `expires_at` | DATETIME | no |  |  |  |
+| `decided_at` | DATETIME | yes |  |  |  |
+| `consumed_at` | DATETIME | yes |  |  |  |
+| `grant_id` | VARCHAR(36) | yes | FK |  | → `mcp_oauth_grants.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_mcp_oauth_authorizations_client_pk` (`client_pk`)
+- UNIQUE `ix_mcp_oauth_authorizations_code_hash` (`code_hash`)
+- `ix_mcp_oauth_authorizations_organization_id` (`organization_id`)
+
+### `mcp_oauth_clients`
+
+**McpOAuthClient** · `app/models/mcp_oauth.py`
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `client_id` | VARCHAR(64) | no | UQ, UQ-IDX |  |  |
+| `client_secret_hash` | VARCHAR(64) | yes |  |  |  |
+| `name` | VARCHAR(100) | no |  |  |  |
+| `redirect_uris` | JSON | no |  |  |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `revoked_at` | DATETIME | yes |  |  |  |
+| `revoked_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+
+**Indexes**
+
+- UNIQUE `ix_mcp_oauth_clients_client_id` (`client_id`)
+- `ix_mcp_oauth_clients_organization_id` (`organization_id`)
+
+### `mcp_oauth_grants`
+
+**McpOAuthGrant** · `app/models/mcp_oauth.py`
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `client_pk` | VARCHAR(36) | no | FK, IDX |  | → `mcp_oauth_clients.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
+| `scope` | VARCHAR(255) | no |  |  |  |
+| `resource` | VARCHAR(500) | no |  |  |  |
+| `access_token_hash` | VARCHAR(64) | yes |  |  |  |
+| `access_expires_at` | DATETIME | yes |  |  |  |
+| `refresh_token_hash` | VARCHAR(64) | yes |  |  |  |
+| `refresh_expires_at` | DATETIME | yes |  |  |  |
+| `expires_at` | DATETIME | no |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `last_used_at` | DATETIME | yes |  |  |  |
+| `revoked_at` | DATETIME | yes |  |  |  |
+| `revoked_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `revoked_reason` | VARCHAR(32) | yes |  |  |  |
+
+**Indexes**
+
+- `ix_mcp_oauth_grants_client_pk` (`client_pk`)
+- `ix_mcp_oauth_grants_organization_id` (`organization_id`)
+- `ix_mcp_oauth_grants_user_id` (`user_id`)
+
 ## Mcp_Service_Key
 
 ### `mcp_service_keys`
@@ -5995,6 +6226,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `result_data` | TEXT | yes |  |  |  |
 | `reviewed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `reviewed_at` | DATETIME | yes |  |  |  |
+| `self_recorded` | BOOL | no |  | `0` |  |
 | `notes` | TEXT | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
@@ -6497,7 +6729,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `status` | ENUM(`active`, `on_hold`, `approved`, `rejected`, `withdrawn`, `inactive`, `transferred`) | no | IDX | `active` |  |
 | `metadata` | JSON | yes |  | `dict()` |  |
 | `form_submission_id` | VARCHAR(36) | yes | FK |  | → `form_submissions.id` ON DELETE SET NULL |
-| `status_token` | VARCHAR(64) | yes | UQ, UQ-IDX |  |  |
+| `status_token` | TEXT | yes |  |  |  |
+| `status_token_hash` | VARCHAR(64) | yes | UQ, UQ-IDX |  |  |
 | `status_token_created_at` | DATETIME | yes |  |  |  |
 | `transferred_user_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `transferred_at` | DATETIME | yes |  |  |  |
@@ -6518,7 +6751,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_prospect_org_status` (`organization_id`, `status`)
 - `ix_prospective_members_pipeline_id` (`pipeline_id`)
 - `ix_prospective_members_status` (`status`)
-- UNIQUE `ix_prospective_members_status_token` (`status_token`)
+- UNIQUE `ix_prospective_members_status_token_hash` (`status_token_hash`)
 - UNIQUE `uq_prospect_org_active_email` (`organization_id`, `active_email`)
 
 ## Nfc_Tag
@@ -7128,6 +7361,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `resolved` | BOOL | no |  | `0` |  |
 | `resolved_by` | VARCHAR(255) | yes |  |  |  |
 | `resolved_at` | DATETIME | yes |  |  |  |
+| `resolution_note` | TEXT | yes |  |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 
 **Indexes**
@@ -8696,7 +8930,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `shift_id` | VARCHAR(36) | no | FK, IDX |  | → `shifts.id` ON DELETE CASCADE |
 | `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
-| `position` | ENUM(`officer`, `driver`, `firefighter`, `ems`, `paramedic`, `captain`, `lieutenant`, `probationary`, `volunteer`, `other`) | no |  | `firefighter` |  |
+| `position` | VARCHAR(100) | no |  | `firefighter` |  |
 | `assignment_status` | ENUM(`assigned`, `confirmed`, `declined`, `pending`, `cancelled`, `no_show`) | no |  | `assigned` |  |
 | `outreach_role` | VARCHAR(100) | yes |  |  |  |
 | `is_training` | BOOL | no |  | `0` |  |
@@ -9176,7 +9410,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `pattern` | ENUM(`weekly`, `biweekly`, `monthly`) | no |  | `weekly` |  |
 | `weekday` | INTEGER | no |  |  |  |
 | `period` | ENUM(`day`, `night`) | no |  | `day` |  |
-| `position` | ENUM(`officer`, `driver`, `firefighter`, `ems`, `paramedic`, `captain`, `lieutenant`, `probationary`, `volunteer`, `other`) | no |  | `firefighter` |  |
+| `position` | VARCHAR(100) | no |  | `firefighter` |  |
 | `apparatus_id` | VARCHAR(36) | yes |  |  |  |
 | `start_date` | DATE | no |  |  |  |
 | `end_date` | DATE | no |  |  |  |
@@ -10028,7 +10262,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (345 references)
+### → `users` (353 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10182,6 +10416,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `instructor_qualifications` | `created_by` | SET NULL | yes |
 | `instructor_qualifications` | `user_id` | CASCADE | no |
 | `instructor_qualifications` | `verified_by` | SET NULL | yes |
+| `integration_sync_logs` | `triggered_by` | SET NULL | yes |
 | `inventory_categories` | `created_by` | RESTRICT | yes |
 | `inventory_impact_plans` | `created_by` | SET NULL | yes |
 | `inventory_item_pins` | `user_id` | CASCADE | no |
@@ -10213,6 +10448,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `item_issuances` | `returned_by` | RESTRICT | yes |
 | `item_issuances` | `user_id` | CASCADE | no |
 | `item_variant_groups` | `created_by` | RESTRICT | yes |
+| `knowledge_test_attempts` | `user_id` | CASCADE | no |
+| `knowledge_tests` | `created_by` | SET NULL | yes |
 | `label_printers` | `created_by_id` | SET NULL | yes |
 | `legal_document_revisions` | `created_by` | SET NULL | yes |
 | `legal_document_revisions` | `published_by` | SET NULL | yes |
@@ -10222,6 +10459,11 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `manual_ballot_attestations` | `attested_by` | SET NULL | yes |
 | `manual_ballot_batches` | `recorded_by` | SET NULL | yes |
 | `manual_ballot_batches` | `voided_by` | SET NULL | yes |
+| `mcp_oauth_authorizations` | `user_id` | CASCADE | yes |
+| `mcp_oauth_clients` | `created_by` | SET NULL | yes |
+| `mcp_oauth_clients` | `revoked_by` | SET NULL | yes |
+| `mcp_oauth_grants` | `revoked_by` | SET NULL | yes |
+| `mcp_oauth_grants` | `user_id` | CASCADE | no |
 | `mcp_service_keys` | `created_by` | SET NULL | yes |
 | `mcp_service_keys` | `revoked_by` | SET NULL | yes |
 | `meeting_action_items` | `assigned_to` | RESTRICT | yes |
@@ -10378,7 +10620,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (234 references)
+### → `organizations` (241 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10486,6 +10728,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `grant_applications` | `organization_id` | CASCADE | no |
 | `grant_opportunities` | `organization_id` | CASCADE | no |
 | `instructor_qualifications` | `organization_id` | CASCADE | no |
+| `integration_sync_logs` | `organization_id` | CASCADE | no |
 | `inventory_categories` | `organization_id` | CASCADE | no |
 | `inventory_impact_plans` | `organization_id` | CASCADE | no |
 | `inventory_item_pins` | `organization_id` | CASCADE | no |
@@ -10506,12 +10749,18 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `item_assignments` | `organization_id` | CASCADE | no |
 | `item_issuances` | `organization_id` | CASCADE | no |
 | `item_variant_groups` | `organization_id` | CASCADE | no |
+| `knowledge_test_attempts` | `organization_id` | CASCADE | no |
+| `knowledge_test_questions` | `organization_id` | CASCADE | no |
+| `knowledge_tests` | `organization_id` | CASCADE | no |
 | `label_printers` | `organization_id` | CASCADE | no |
 | `legal_document_revisions` | `organization_id` | CASCADE | no |
 | `locations` | `organization_id` | CASCADE | no |
 | `maintenance_records` | `organization_id` | CASCADE | no |
 | `manual_ballot_attestations` | `organization_id` | CASCADE | no |
 | `manual_ballot_batches` | `organization_id` | CASCADE | no |
+| `mcp_oauth_authorizations` | `organization_id` | CASCADE | no |
+| `mcp_oauth_clients` | `organization_id` | CASCADE | no |
+| `mcp_oauth_grants` | `organization_id` | CASCADE | no |
 | `mcp_service_keys` | `organization_id` | CASCADE | no |
 | `meeting_action_items` | `organization_id` | CASCADE | no |
 | `meeting_attendees` | `organization_id` | CASCADE | no |
@@ -10726,6 +10975,21 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `storage_areas` | `location_id` | SET NULL | yes |
 | `training_records` | `location_id` | SET NULL | yes |
 
+### → `training_requirements` (10 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `course_classes` | `requirement_id` | SET NULL | yes |
+| `course_cohort_classes` | `requirement_id` | SET NULL | yes |
+| `knowledge_test_attempts` | `requirement_id` | SET NULL | yes |
+| `knowledge_tests` | `requirement_id` | SET NULL | yes |
+| `program_requirements` | `requirement_id` | CASCADE | no |
+| `recertification_pathways` | `source_requirement_id` | CASCADE | yes |
+| `requirement_progress` | `requirement_id` | CASCADE | no |
+| `skill_templates` | `requirement_id` | SET NULL | yes |
+| `skill_tests` | `requirement_id` | SET NULL | yes |
+| `training_sessions` | `requirement_id` | SET NULL | yes |
+
 ### → `shifts` (9 references)
 
 | From table | Column | On delete | Nullable |
@@ -10807,19 +11071,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_effectiveness_evaluations` | `training_record_id` | CASCADE | yes |
 | `training_submissions` | `training_record_id` | SET NULL | yes |
 | `xapi_statements` | `training_record_id` | SET NULL | yes |
-
-### → `training_requirements` (8 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `course_classes` | `requirement_id` | SET NULL | yes |
-| `course_cohort_classes` | `requirement_id` | SET NULL | yes |
-| `program_requirements` | `requirement_id` | CASCADE | no |
-| `recertification_pathways` | `source_requirement_id` | CASCADE | yes |
-| `requirement_progress` | `requirement_id` | CASCADE | no |
-| `skill_templates` | `requirement_id` | SET NULL | yes |
-| `skill_tests` | `requirement_id` | SET NULL | yes |
-| `training_sessions` | `requirement_id` | SET NULL | yes |
 
 ### → `inventory_categories` (7 references)
 
@@ -11208,6 +11459,20 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `check_item_deployed_lots` | `inventory_lot_id` | SET NULL | yes |
 | `reorder_receipts` | `inventory_lot_id` | RESTRICT | no |
 
+### → `knowledge_tests` (2 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `knowledge_test_attempts` | `test_id` | CASCADE | no |
+| `knowledge_test_questions` | `test_id` | CASCADE | no |
+
+### → `mcp_oauth_clients` (2 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `mcp_oauth_authorizations` | `client_pk` | CASCADE | no |
+| `mcp_oauth_grants` | `client_pk` | CASCADE | no |
+
 ### → `meeting_minutes` (2 references)
 
 | From table | Column | On delete | Nullable |
@@ -11386,6 +11651,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `grant_applications` | `opportunity_id` | SET NULL | yes |
 
+### → `integrations` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `integration_sync_logs` | `integration_id` | CASCADE | no |
+
 ### → `inventory_nfc_audits` (1 references)
 
 | From table | Column | On delete | Nullable |
@@ -11433,6 +11704,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `manual_ballot_attestations` | `batch_id` | CASCADE | no |
+
+### → `mcp_oauth_grants` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `mcp_oauth_authorizations` | `grant_id` | SET NULL | yes |
 
 ### → `member_dues` (1 references)
 

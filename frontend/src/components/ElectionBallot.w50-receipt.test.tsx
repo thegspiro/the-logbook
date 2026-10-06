@@ -1,25 +1,28 @@
 /**
- * ElectionBallot — an in-app cast shows the receipt hash the API returned,
- * and the verify form is mounted with the ballot (W50-53).
+ * ElectionBallot — the in-app Cast Vote tab.
  *
- * Before this the hash reached the browser in the vote response and was
- * dropped on the floor: the voter saw a toast and had nothing to verify.
+ * Since the 2026-10-05 ballot convergence it is the emailed ballot's model:
+ * every ballot item and plain position from `GET /elections/{id}/ballot`,
+ * submitted in the emailed ballot's shape. It used to render
+ * `election.positions` only, so a motion was invisible here (W50-10,
+ * ELEC-28). An in-app cast still shows the receipt hash the API returned and
+ * mounts the verify form (W50-53), and a member holding a proxy can cast the
+ * delegating member's ballot.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { renderWithRouter } from '../test/utils';
 
-const mockGetCandidates = vi.fn();
-const mockCheckEligibility = vi.fn();
-const mockCastVote = vi.fn();
-const mockBulkCastVotes = vi.fn();
+const mockGetMemberBallot = vi.fn();
+const mockSubmitMemberBallot = vi.fn();
+const mockGetMyProxies = vi.fn();
 const mockVerifyReceipt = vi.fn();
 vi.mock('../services/api', () => ({
   electionService: {
-    getCandidates: (...args: unknown[]) => mockGetCandidates(...args) as unknown,
-    checkEligibility: (...args: unknown[]) => mockCheckEligibility(...args) as unknown,
-    castVote: (...args: unknown[]) => mockCastVote(...args) as unknown,
-    bulkCastVotes: (...args: unknown[]) => mockBulkCastVotes(...args) as unknown,
+    getMemberBallot: (...args: unknown[]) => mockGetMemberBallot(...args) as unknown,
+    submitMemberBallot: (...args: unknown[]) => mockSubmitMemberBallot(...args) as unknown,
+    getMyProxies: (...args: unknown[]) => mockGetMyProxies(...args) as unknown,
     verifyReceipt: (...args: unknown[]) => mockVerifyReceipt(...args) as unknown,
   },
 }));
@@ -28,13 +31,10 @@ vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() 
 import { ElectionBallot } from './ElectionBallot';
 import type { Election } from '../types/election';
 
-const CANDIDATES = [
-  { id: 'c1', name: 'Alice Anderson', position: 'Chief', accepted: true },
-  { id: 'c2', name: 'Bob Baker', position: 'Captain', accepted: true },
-];
+const CHIEF_ID = 'position-abc123';
 
-const election = (overrides: Partial<Election> = {}): Election =>
-  ({
+const ballot = (overrides: Record<string, unknown> = {}) => ({
+  election: {
     id: 'el1',
     title: 'Officer Election',
     election_type: 'officer',
@@ -42,111 +42,190 @@ const election = (overrides: Partial<Election> = {}): Election =>
     end_date: '2026-08-01T00:00:00Z',
     status: 'open',
     voting_method: 'simple_majority',
-    positions: ['Chief', 'Captain'],
-    ...overrides,
-  }) as Election;
+    max_votes_per_position: 1,
+    allow_write_ins: false,
+    positions: ['Chief'],
+    ballot_items: [
+      {
+        id: 'budget',
+        type: 'general_vote',
+        title: 'Approve the 2027 budget',
+        vote_type: 'approval',
+        eligible_voter_types: ['all'],
+      },
+      {
+        id: CHIEF_ID,
+        type: 'officer_election',
+        title: 'Chief',
+        position: 'Chief',
+        vote_type: 'candidate_selection',
+        eligible_voter_types: ['all'],
+      },
+    ],
+  },
+  candidates: [
+    { id: 'c1', name: 'Alice Anderson', position: 'Chief', accepted: true, is_write_in: false },
+    { id: 'c2', name: 'Bob Baker', position: 'Chief', accepted: true, is_write_in: false },
+  ],
+  items: [
+    { ballot_item_id: 'budget', eligible: true, voted: false },
+    { ballot_item_id: CHIEF_ID, eligible: true, voted: false },
+  ],
+  proxy: null,
+  ...overrides,
+});
 
-const openEligibility = {
-  is_eligible: true,
-  has_voted: false,
-  positions_voted: [],
-  positions_remaining: ['Chief', 'Captain'],
+const election = { id: 'el1', title: 'Officer Election' } as unknown as Election;
+
+const confirmCast = async (user: ReturnType<typeof userEvent.setup>) => {
+  const dialog = await screen.findByRole('dialog');
+  await user.click(within(dialog).getByRole('button', { name: 'Cast ballot' }));
 };
 
-describe('ElectionBallot receipts (W50-53)', () => {
+describe('ElectionBallot (ballot convergence, W50-10, W50-53)', () => {
   beforeEach(() => {
-    mockGetCandidates.mockReset();
-    mockCheckEligibility.mockReset();
-    mockCastVote.mockReset();
-    mockBulkCastVotes.mockReset();
+    mockGetMemberBallot.mockReset();
+    mockSubmitMemberBallot.mockReset();
+    mockGetMyProxies.mockReset();
     mockVerifyReceipt.mockReset();
-    mockGetCandidates.mockResolvedValue(CANDIDATES);
-    mockCheckEligibility.mockResolvedValue(openEligibility);
+    mockGetMemberBallot.mockResolvedValue(ballot());
+    mockGetMyProxies.mockResolvedValue({ proxies: [], unavailable_reason: null });
   });
 
-  it('shows the receipt hash beside the position after a simple cast', async () => {
-    const user = userEvent.setup();
-    mockCastVote.mockResolvedValue({
-      id: 'v1',
-      election_id: 'el1',
-      candidate_id: 'c1',
-      voted_at: '2026-07-04T15:30:00Z',
-      receipt_hash: 'hash-chief',
-    });
-    mockCheckEligibility.mockResolvedValueOnce(openEligibility).mockResolvedValueOnce({
-      is_eligible: true,
-      has_voted: true,
-      positions_voted: ['Chief'],
-      positions_remaining: ['Captain'],
-    });
+  it('shows the ballot items and the plain position on one ballot', async () => {
+    renderWithRouter(<ElectionBallot electionId="el1" election={election} />);
 
-    render(<ElectionBallot electionId="el1" election={election()} />);
-    await user.click(await screen.findByRole('button', { name: 'Select Alice Anderson' }));
-    await user.click(screen.getByRole('button', { name: 'Submit Vote for Chief' }));
-
-    const receipt = await screen.findByTestId('receipt-Chief');
-    expect(receipt).toHaveTextContent('hash-chief');
-    expect(receipt).toHaveTextContent(/Save this receipt/);
-    expect(screen.getByText('Vote submitted for Chief')).toBeInTheDocument();
+    expect(await screen.findByText('Approve the 2027 budget')).toBeInTheDocument();
+    expect(screen.getByText('Chief')).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Approve' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /Alice Anderson/ })).toBeInTheDocument();
   });
 
-  it('keeps the receipts on screen when the last cast flips the ballot to "already voted"', async () => {
-    const user = userEvent.setup();
-    mockCastVote.mockResolvedValue({
-      id: 'v2',
-      election_id: 'el1',
-      candidate_id: 'c1',
-      voted_at: '2026-07-04T15:30:00Z',
-      receipt_hash: 'hash-only',
+  it('casts the whole ballot in one submission and shows every receipt', async () => {
+    mockSubmitMemberBallot.mockResolvedValue({
+      success: true,
+      votes_cast: 2,
+      abstentions: 0,
+      message: 'Ballot recorded. 2 vote(s) cast, 0 item(s) left open.',
+      receipt_hashes: ['hash-budget', 'hash-chief'],
     });
-    mockCheckEligibility
-      .mockResolvedValueOnce({ is_eligible: true, has_voted: false, positions_voted: [], positions_remaining: [] })
-      .mockResolvedValueOnce({ is_eligible: false, has_voted: true, positions_voted: [], positions_remaining: [] });
+    const user = userEvent.setup();
+    renderWithRouter(<ElectionBallot electionId="el1" election={election} />);
 
-    render(<ElectionBallot electionId="el1" election={election({ positions: [] })} />);
-    await user.click(await screen.findByRole('button', { name: 'Select Alice Anderson' }));
-    await user.click(screen.getByRole('button', { name: 'Submit Vote' }));
+    await user.click(await screen.findByRole('radio', { name: 'Approve' }));
+    await user.click(screen.getByRole('radio', { name: /Bob Baker/ }));
+    // The refresh after the cast reads the items as voted.
+    mockGetMemberBallot.mockResolvedValue(
+      ballot({
+        items: [
+          { ballot_item_id: 'budget', eligible: true, voted: true },
+          { ballot_item_id: CHIEF_ID, eligible: true, voted: true },
+        ],
+      })
+    );
+    await user.click(screen.getByRole('button', { name: 'Cast Ballot' }));
+    await confirmCast(user);
 
+    expect(mockSubmitMemberBallot).toHaveBeenCalledWith(
+      'el1',
+      [
+        { ballot_item_id: 'budget', choice: 'approve', write_in_name: undefined },
+        { ballot_item_id: CHIEF_ID, choice: 'c2', write_in_name: undefined },
+      ],
+      undefined
+    );
     expect(await screen.findByText('You have already voted in this election.')).toBeInTheDocument();
-    expect(screen.getByTestId('receipt-_default')).toHaveTextContent('hash-only');
-    expect(screen.getByRole('heading', { name: 'Verify a vote receipt' })).toBeInTheDocument();
+    const receipts = screen.getByTestId('ballot-receipts');
+    expect(within(receipts).getByText('hash-budget')).toBeInTheDocument();
+    expect(within(receipts).getByText('hash-chief')).toBeInTheDocument();
   });
 
-  it('shows every hash a bulk (approval) cast returns', async () => {
-    const user = userEvent.setup();
-    mockBulkCastVotes.mockResolvedValue([
-      { id: 'v3', election_id: 'el1', candidate_id: 'c1', voted_at: '2026-07-04T15:30:00Z', receipt_hash: 'hash-a' },
-      { id: 'v4', election_id: 'el1', candidate_id: 'c2', voted_at: '2026-07-04T15:30:00Z', receipt_hash: 'hash-b' },
-    ]);
-    mockGetCandidates.mockResolvedValue(CANDIDATES.map((c) => ({ ...c, position: undefined })));
-    mockCheckEligibility
-      .mockResolvedValueOnce({ is_eligible: true, has_voted: false, positions_voted: [], positions_remaining: [] })
-      .mockResolvedValueOnce({ is_eligible: true, has_voted: true, positions_voted: [], positions_remaining: ['x'] });
+  it('shows an item already voted as done and leaves the rest open', async () => {
+    mockGetMemberBallot.mockResolvedValue(
+      ballot({
+        items: [
+          { ballot_item_id: 'budget', eligible: true, voted: true },
+          { ballot_item_id: CHIEF_ID, eligible: true, voted: false },
+        ],
+      })
+    );
+    renderWithRouter(<ElectionBallot electionId="el1" election={election} />);
 
-    render(<ElectionBallot electionId="el1" election={election({ voting_method: 'approval', positions: [] })} />);
-    await user.click(await screen.findByRole('button', { name: 'Approve Alice Anderson' }));
-    await user.click(screen.getByRole('button', { name: 'Approve Bob Baker' }));
-    await user.click(screen.getByRole('button', { name: 'Submit Vote' }));
-
-    const receipt = await screen.findByTestId('receipt-_default');
-    expect(receipt).toHaveTextContent('hash-a');
-    expect(receipt).toHaveTextContent('hash-b');
+    expect(await screen.findByText('You have already voted on this item.')).toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: 'Approve' })).not.toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /Alice Anderson/ })).toBeInTheDocument();
   });
 
-  it('mounts the verify form under the ballot and routes it to the election', async () => {
-    const user = userEvent.setup();
-    mockVerifyReceipt.mockResolvedValue({
-      verified: true,
-      counted: true,
-      message: 'Your vote has been recorded and is counted',
+  it('says why a member cannot vote when no item is open to them', async () => {
+    mockGetMemberBallot.mockResolvedValue(
+      ballot({
+        items: [
+          { ballot_item_id: 'budget', eligible: false, reason: 'Election is closed', voted: false },
+          { ballot_item_id: CHIEF_ID, eligible: false, reason: 'Election is closed', voted: false },
+        ],
+      })
+    );
+    renderWithRouter(<ElectionBallot electionId="el1" election={election} />);
+
+    expect(await screen.findByText('Election is closed')).toBeInTheDocument();
+  });
+
+  it('mounts the verify form and routes it to the election', async () => {
+    renderWithRouter(<ElectionBallot electionId="el1" election={election} />);
+
+    expect(await screen.findByRole('region', { name: /verify/i })).toBeInTheDocument();
+  });
+
+  it('lets a proxy holder switch to the delegating member and cast their ballot', async () => {
+    mockGetMyProxies.mockResolvedValue({
+      proxies: [{ authorization_id: 'auth-1', delegating_user_id: 'u-2', delegating_user_name: 'Bob Baker' }],
+      unavailable_reason: null,
     });
+    mockSubmitMemberBallot.mockResolvedValue({
+      success: true,
+      votes_cast: 1,
+      abstentions: 1,
+      message: 'Ballot recorded. 1 vote(s) cast, 1 item(s) left open.',
+      receipt_hashes: ['hash-proxy'],
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<ElectionBallot electionId="el1" election={election} />);
 
-    render(<ElectionBallot electionId="el1" election={election()} />);
-    await screen.findByRole('button', { name: 'Select Alice Anderson' });
-    await user.type(screen.getByLabelText('Receipt'), 'abc');
-    await user.click(screen.getByRole('button', { name: 'Verify' }));
+    const chooser = await screen.findByLabelText('Voting for');
+    mockGetMemberBallot.mockResolvedValue(
+      ballot({
+        proxy: { authorization_id: 'auth-1', delegating_user_id: 'u-2', delegating_user_name: 'Bob Baker' },
+      })
+    );
+    await user.selectOptions(chooser, 'auth-1');
 
-    expect(mockVerifyReceipt).toHaveBeenCalledWith('el1', 'abc');
-    expect(await screen.findByRole('status')).toHaveTextContent('Vote counted');
+    expect(mockGetMemberBallot).toHaveBeenLastCalledWith('el1', 'auth-1');
+    expect(await screen.findByText('Voting as proxy for: Bob Baker')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('radio', { name: 'Deny' }));
+    await user.click(screen.getByRole('button', { name: "Cast Bob Baker's Ballot" }));
+    await confirmCast(user);
+
+    expect(mockSubmitMemberBallot).toHaveBeenCalledWith(
+      'el1',
+      [
+        { ballot_item_id: 'budget', choice: 'deny', write_in_name: undefined },
+        { ballot_item_id: CHIEF_ID, choice: 'abstain', write_in_name: undefined },
+      ],
+      'auth-1'
+    );
+  });
+
+  it('names why held proxies cannot be voted here', async () => {
+    mockGetMyProxies.mockResolvedValue({
+      proxies: [],
+      unavailable_reason: 'Proxy voting is available on named (non-anonymous) elections only.',
+    });
+    renderWithRouter(<ElectionBallot electionId="el1" election={election} />);
+
+    expect(
+      await screen.findByText('Proxy voting is available on named (non-anonymous) elections only.')
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText('Voting for')).not.toBeInTheDocument();
   });
 });

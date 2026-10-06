@@ -243,6 +243,7 @@ EXPECTED_GATES = {
     "/api/v1/finance": "finance",
     "/api/v1/grants": "grants",
     "/api/v1/integrations": "integrations",
+    "/api/v1/mcp-oauth": "integrations",
     "/api/v1/inventory": "inventory",
     "/api/v1/medical-screening": "medical_screening",
     "/api/v1/medical-supplies": "medical_supplies",

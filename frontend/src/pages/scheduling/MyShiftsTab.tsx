@@ -769,11 +769,11 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                     }`}
                   >
                     <span className="block font-medium">Open Swap</span>
-                    {/* Not "any member can pick it up": no member can see an open
-                        swap, and approving one moves nothing — it only asks an
-                        officer to find cover (docs/KNOWN_LIMITATIONS.md, W33). */}
+                    {/* Offered on the Requests tab to every member the signup
+                        eligibility rule clears for this seat; the first to pick
+                        it up takes the seat (W33-4). */}
                     <span className="text-theme-text-muted text-xs">
-                      An officer finds cover; it stays yours until then
+                      Offered to members cleared for your seat; it stays yours until one picks it up
                     </span>
                   </button>
                   <button

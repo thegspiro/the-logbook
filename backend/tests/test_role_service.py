@@ -167,6 +167,9 @@ class TestRoleMutationAuditing:
             priority=10,
         )
         service.get_role = AsyncMock(return_value=member)
+        # The name-uniqueness lookup has its own DB-backed tests
+        # (test_position_name_uniqueness.py); a mocked session cannot answer it.
+        service._assert_position_name_free = AsyncMock()
 
         with patch(
             "app.services.role_service.log_audit_event",
@@ -209,6 +212,7 @@ class TestRoleMutationAuditing:
         db = _mutation_db()
         service = RoleManagementService()
         service.get_role_by_slug = AsyncMock(return_value=None)
+        service._assert_position_name_free = AsyncMock()
 
         with patch(
             "app.services.role_service.log_audit_event",
@@ -224,6 +228,7 @@ class TestRoleMutationAuditing:
         db = _mutation_db()
         service = RoleManagementService()
         service.get_role_by_slug = AsyncMock(return_value=None)
+        service._assert_position_name_free = AsyncMock()
 
         with patch(
             "app.services.role_service.log_audit_event",

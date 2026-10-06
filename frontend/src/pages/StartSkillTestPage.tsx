@@ -27,6 +27,10 @@ import { trainingProgramService } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
 import { formatMemberName } from '../utils/memberName';
 import { useMemberSearch } from '../hooks/useMemberSearch';
+import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { skillsTestingService } from '../services/api';
+import { cacheSkillTemplates, listCachedSkillTemplates, listRecentCandidates } from '../utils/skillsTestOffline';
+import type { SkillTemplateListItem } from '../types/skillsTesting';
 import { MEMBER_SEARCH_MAX_RESULTS, MEMBER_SEARCH_MIN_CHARS } from '../constants/config';
 import type { TrainingRequirementEnhanced } from '../types/training';
 
@@ -43,7 +47,13 @@ export const StartSkillTestPage: React.FC = () => {
     searchParams.get('from') === 'member'
       ? '/training/skills-testing'
       : '/training/admin?page=skills-testing&tab=tests';
-  const { templates, templatesLoading, loadTemplates, createTest } = useSkillsTestingStore();
+  const { templates: loadedTemplates, templatesLoading, loadTemplates, createTest } = useSkillsTestingStore();
+  const online = useOnlineStatus();
+  // Published sheets and recently examined members kept on the device, so a
+  // test can be started with no signal at all (owner decision: cold start).
+  const [offlineTemplates, setOfflineTemplates] = useState<SkillTemplateListItem[]>([]);
+  const [recentCandidates, setRecentCandidates] = useState<MemberOption[]>([]);
+  const templates = loadedTemplates.length > 0 ? loadedTemplates : offlineTemplates;
   const { user, checkPermission } = useAuthStore();
   const isOfficer = checkPermission('training.manage');
   // Search results only — the roster is never held client-side, because the
@@ -81,20 +91,69 @@ export const StartSkillTestPage: React.FC = () => {
       await loadTemplates({ status: 'published' });
       setTemplatesLoaded(true);
     })();
+    void listRecentCandidates()
+      .then(setRecentCandidates)
+      .catch(() => undefined);
   }, [loadTemplates]);
+
+  // Once the published list has answered: with nothing back (no signal), offer
+  // the sheets this device kept; otherwise keep the full sheets, not just the
+  // list, so one can be scored later with no signal. Sheets carry no member
+  // data. Bounded so a large library does not turn opening this page into
+  // dozens of requests.
+  const [offlineChecked, setOfflineChecked] = useState(false);
+  const offlinePrepared = useRef(false);
+  useEffect(() => {
+    if (!templatesLoaded || offlinePrepared.current) return;
+    offlinePrepared.current = true;
+    if (loadedTemplates.length === 0) {
+      void (async () => {
+        const cached = await listCachedSkillTemplates();
+        setOfflineTemplates(
+          cached.map((t) => ({
+            id: t.id,
+            name: t.name,
+            ...(t.category ? { category: t.category } : {}),
+            ...(t.description ? { description: t.description } : {}),
+            status: t.status,
+            visibility: t.visibility,
+            version: t.version,
+            section_count: t.sections.length,
+            criteria_count: t.sections.reduce((n, sec) => n + sec.criteria.length, 0),
+            created_at: t.created_at,
+            updated_at: t.updated_at,
+          }))
+        );
+        setOfflineChecked(true);
+      })();
+      return;
+    }
+    setOfflineChecked(true);
+    void (async () => {
+      const bodies = [];
+      for (const t of loadedTemplates.slice(0, 25)) {
+        try {
+          bodies.push(await skillsTestingService.getTemplate(t.id));
+        } catch {
+          // A sheet that fails to load is simply not available offline.
+        }
+      }
+      await cacheSkillTemplates(bodies);
+    })();
+  }, [templatesLoaded, loadedTemplates]);
 
   // Pre-select the template the user tapped on the previous screen. Waits for
   // the published list so a stale/unpublished id is caught rather than silently
   // selecting nothing.
   useEffect(() => {
-    if (!templateParam || !templatesLoaded || preselectApplied.current) return;
+    if (!templateParam || !templatesLoaded || !offlineChecked || preselectApplied.current) return;
     preselectApplied.current = true;
     if (templates.some((t) => t.id === templateParam)) {
       setSelectedTemplateId(templateParam);
     } else {
       toast.error('That test is no longer available — choose one below.');
     }
-  }, [templateParam, templatesLoaded, templates]);
+  }, [templateParam, templatesLoaded, offlineChecked, templates]);
 
   // A member arriving here is most often drilling on their own, and practice is
   // the mode that needs no sign-off — so it is the safer default to land on.
@@ -136,8 +195,9 @@ export const StartSkillTestPage: React.FC = () => {
   } = useMemberSearch(memberSearch);
 
   useEffect(() => {
-    if (membersError) toast.error(membersError);
-  }, [membersError]);
+    // Offline the lookup cannot work; the recent list below stands in for it.
+    if (membersError && online) toast.error(membersError);
+  }, [membersError, online]);
 
   // Load training requirements for the optional per-test override.
   useEffect(() => {
@@ -156,8 +216,12 @@ export const StartSkillTestPage: React.FC = () => {
       (t.category ?? '').toLowerCase().includes(templateSearch.toLowerCase())
   );
 
-  // Already filtered and capped by the server; nothing left to narrow here.
-  const filteredMembers = members;
+  // Online: already filtered and capped by the server. Offline: the members
+  // this examiner has tested on this device, narrowed here.
+  const offlineQuery = memberSearch.trim().toLowerCase();
+  const filteredMembers = online
+    ? members
+    : recentCandidates.filter((c) => !offlineQuery || c.name.toLowerCase().includes(offlineQuery));
 
   // The backend refuses an official test whose examiner and candidate are the
   // same person (separation of duties — a self-recorded pass would satisfy a
@@ -199,15 +263,18 @@ export const StartSkillTestPage: React.FC = () => {
       for (const candidate of candidates) {
         try {
           created.push(
-            await createTest({
-              template_id: selectedTemplateId,
-              candidate_id: candidate.id,
-              ...(notes.trim() ? { notes: notes.trim() } : {}),
-              // Only a real (non-practice) test with an explicit override needs to send
-              // a requirement; otherwise the backend inherits the template's default.
-              ...(!isPractice && overrideRequirementId ? { requirement_id: overrideRequirementId } : {}),
-              is_practice: isPractice,
-            })
+            await createTest(
+              {
+                template_id: selectedTemplateId,
+                candidate_id: candidate.id,
+                ...(notes.trim() ? { notes: notes.trim() } : {}),
+                // Only a real (non-practice) test with an explicit override needs to send
+                // a requirement; otherwise the backend inherits the template's default.
+                ...(!isPractice && overrideRequirementId ? { requirement_id: overrideRequirementId } : {}),
+                is_practice: isPractice,
+              },
+              { candidateName: candidate.name }
+            )
           );
         } catch (err: unknown) {
           // One refusal must not discard the rest of the squad — a candidate
@@ -452,11 +519,16 @@ export const StartSkillTestPage: React.FC = () => {
                   className="form-input placeholder:text-theme-text-muted py-3 pr-4 pl-10"
                 />
               </div>
-              {membersLoading ? (
+              {!online && (
+                <p className="text-theme-text-muted pb-2 text-xs">
+                  No signal — showing members you have examined on this device.
+                </p>
+              )}
+              {online && membersLoading ? (
                 <div className="flex justify-center py-4" role="status" aria-live="polite">
                   <div className="h-6 w-6 animate-spin rounded-full border-t-2 border-b-2 border-red-500" />
                 </div>
-              ) : searchTooShort ? (
+              ) : online && searchTooShort ? (
                 <p className="text-theme-text-muted py-4 text-center text-sm">
                   Type at least {MEMBER_SEARCH_MIN_CHARS} characters of a name to search
                 </p>
@@ -478,7 +550,9 @@ export const StartSkillTestPage: React.FC = () => {
                     </button>
                   ))}
                   {filteredMembers.length === 0 && (
-                    <p className="text-theme-text-muted py-4 text-center text-sm">No members found</p>
+                    <p className="text-theme-text-muted py-4 text-center text-sm">
+                      {online ? 'No members found' : 'No one examined on this device matches'}
+                    </p>
                   )}
                   {filteredMembers.length === MEMBER_SEARCH_MAX_RESULTS && (
                     <p className="text-theme-text-muted py-1 text-center text-xs">

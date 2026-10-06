@@ -14,8 +14,9 @@ import type {
   ScreeningRecordUpdate,
   ComplianceSummary,
   ExpiringScreening,
+  ScreeningSubjects,
 } from '../types';
-import { asArray } from '../../../utils/asArray';
+import { asArray, expectArray } from '../../../utils/asArray';
 
 const api = createApiClient();
 const BASE = '/medical-screening';
@@ -59,6 +60,16 @@ export const medicalScreeningService = {
       params,
     });
     return asArray(data);
+  },
+
+  async listSubjects(): Promise<ScreeningSubjects> {
+    const { data } = await api.get<ScreeningSubjects>(`${BASE}/subjects`);
+    // expectArray, not asArray: an empty picker reads as "this department has
+    // no members", so a malformed body must surface as a load error instead.
+    return {
+      members: expectArray(data.members, 'screening members'),
+      prospects: expectArray(data.prospects, 'screening prospects'),
+    };
   },
 
   async getRecord(id: string): Promise<ScreeningRecord> {

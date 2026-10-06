@@ -1828,3 +1828,36 @@ standing flags (SKT3-2, SKT4-1, SKT4-2, SKT4-3, SKT4-7) were re-verified
 directly against current code rather than re-cited from this document's own
 prior prose. One new frontend file (`ResultVerdictBanner.tsx`) was read in
 full and found to introduce no new data-exposure surface.
+
+## New surface (2026-10-06) — offline scoring
+
+Owner decisions skills-offline-read-path / skills-offline-queue-design
+(see `docs/SKILLS_TESTING_OFFLINE_PLAN.md` §11). What the next pass should
+check, and what the design relies on:
+
+- **Data at rest on a shared device.** Live tests the examiner is examining
+  (scorecard, notes, candidate name) are held in IndexedDB
+  `logbook-offline-skills`, unencrypted, owner-tagged, and served only to their
+  owner. They are cleared by every `purgeLocalMemberData` run, and a finished
+  test's copy is deleted. `/api/*` remains `NetworkOnly` in the service worker.
+- **No client-side authority.** The queue replays the same `PUT /tests/{id}`
+  and `POST /complete` an online examiner sends, with `expected_version`, so
+  every server-side rule — the write guard, separation of duties, the attempt
+  cap, voided/completed refusals, disclosure — applies on sync unchanged. No
+  score is computed on the device.
+- **Owner check at send time.** The drain lists only the signed-in member's
+  entries and re-checks ownership per entry before sending (FE3-34-5).
+- **Refusals are retained.** A refused step keeps its payload for the examiner
+  to read or discard; nothing is dropped automatically (offline plan §3.1).
+- **Client-minted test ids (2026-10-06, cold start).** `POST /tests` accepts a
+  caller-supplied UUID. A replay is honoured only for the same examiner,
+  template, candidate and mode in the caller's own department; every other
+  holder of the id gets the same 409, so the endpoint cannot be used to probe
+  for another department's test ids. Template lookup is org-scoped before the
+  id check, separation of duties and the attempt cap run as before, and
+  `expected_template_version` refuses a create scored against a sheet that has
+  since changed. Guarded by `tests/test_skill_test_client_minted_id.py`.
+- **Logout guard (2026-10-06).** An interactive sign-out with unsent
+  evaluations is blocked behind a confirmation; choosing to sign out still
+  runs the full purge. The idle timeout and expired-session paths purge without
+  asking — deliberately unchanged, recorded as an open owner question.

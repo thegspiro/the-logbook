@@ -107,4 +107,31 @@ describe('SchedulingReportsPage shift compliance', () => {
     expect(screen.queryByText('Total Members')).not.toBeInTheDocument();
     expect(screen.queryByText('Non-Compliant')).not.toBeInTheDocument();
   });
+
+  it('names an open window rather than formatting a missing date', async () => {
+    // A one-time shifts requirement counts every shift on record, so the
+    // report sends no window bounds; formatting them read "N/A — N/A".
+    mockGetComplianceReport.mockResolvedValue({
+      requirements: [
+        requirement({
+          requirement_id: 'lifetime',
+          requirement_name: 'Probationary Shifts',
+          requirement_type: 'shifts',
+          period_start: null,
+          period_end: null,
+        }),
+      ],
+      reference_date: '2026-09-29',
+      total_requirements: 1,
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<SchedulingReportsPage />);
+
+    await user.click(screen.getByRole('tab', { name: /Shift Compliance/ }));
+    await user.click(await screen.findByRole('button', { name: 'Check Compliance' }));
+
+    const row = await screen.findByRole('button', { name: /Probationary Shifts/ });
+    expect(row).toHaveTextContent('All shifts on record');
+    expect(row).not.toHaveTextContent('N/A');
+  });
 });

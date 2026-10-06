@@ -4,6 +4,39 @@
 
 ---
 
+## Addendum (2026-10-06) — SF-backfill: PayPal reconciliation backfill
+
+Owner decision on the open "no reconciliation backfill" item: build it. New
+daily task `paypal_capture_backfill` (`app/services/paypal_backfill_service.py`).
+No new route — it is manually runnable only through the existing
+System-Owner-only `POST /scheduled/run-task`. Reviewed for the properties a
+payment path must hold:
+
+- **No unverified data settles an order.** Transaction Search only discovers
+  ids. Each id is re-read from `GET /v2/payments/captures/{id}` with the
+  department's own credentials; only a capture whose `status` is `COMPLETED`
+  and whose `id` equals the one asked for is recorded, and the id is
+  path-escaped so it cannot steer the request. Amount, currency and the
+  references matched on come from that capture object — the same object a
+  verified `PAYMENT.CAPTURE.COMPLETED` webhook carries. The search's payer
+  name/email fills only the display field the treasurer sees.
+- **Idempotent with the webhook.** Already-recorded ids are skipped before any
+  capture read. A concurrent webhook insert loses or wins on
+  `uq_store_payment_events_provider_external`; `record_external_payment` now
+  answers a lost race with the winning row (previously an unhandled
+  IntegrityError → 500 and a PayPal retry), so nothing is applied twice.
+- **Org-scoped.** One integration per org; every lookup is filtered on, and
+  every write stamped with, the integration's `organization_id`; the PayPal
+  account behind the credentials can only report its own captures. Lookback
+  never precedes the integration's `created_at`.
+- **Bounded.** 20 search pages × 100 rows and 200 capture reads per
+  integration per run; the remainder is picked up next run.
+
+Tests: `tests/test_paypal_backfill.py` (PayPal mocked at the HTTP client and
+at the wrapper functions; no network).
+
+---
+
 ## Pass 7 (2026-10-05) — real changes, all reviewed, 0 new findings
 
 **Scope, same `git diff`-between-tree-states method passes 3–6 used.** Diffed

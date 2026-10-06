@@ -141,6 +141,42 @@ describe('MyProgramProgressPage', () => {
     expect(await screen.findByText(/12 \/ 24 hrs/)).toBeInTheDocument();
   });
 
+  it('says a linked requirement is the figure from the training record', async () => {
+    // W26-1: the same 4 of 6 the member sees under Training Requirements.
+    mockGetEnrollmentProgress.mockResolvedValue({
+      enrollment: {
+        id: 'enr-1',
+        current_phase_id: null,
+        progress_percentage: 33,
+        enrolled_at: '2026-02-01T00:00:00Z',
+        status: 'active',
+      },
+      program: { id: 'prog-1', name: 'Driver Candidate Program' },
+      current_phase: null,
+      requirement_progress: [
+        {
+          id: 'rp-9',
+          requirement_id: 'req-9',
+          status: 'in_progress',
+          progress_value: 4,
+          progress_percentage: 66.67,
+          reads_compliance: true,
+          requirement: { id: 'req-9', name: 'Annual Hazmat Hours', requirement_type: 'hours', required_hours: 6 },
+        },
+      ],
+      completed_requirements: 0,
+      total_requirements: 1,
+      next_milestones: [],
+      is_behind_schedule: false,
+    });
+    mockGetProgramPhases.mockResolvedValue([]);
+    mockGetProgramRequirements.mockResolvedValue([]);
+    renderWithRouter(<MyProgramProgressPage />);
+
+    expect(await screen.findByText(/4 \/ 6 hrs/)).toBeInTheDocument();
+    expect(screen.getByText(/Counted from your training record/)).toBeInTheDocument();
+  });
+
   it('shows an action hint only on requirements that are not satisfied', async () => {
     renderWithRouter(<MyProgramProgressPage />);
 

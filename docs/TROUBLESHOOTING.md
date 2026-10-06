@@ -3320,7 +3320,8 @@ is excluded from `GET /summary` (pass rate, average score).
 
 **Fix**: An officer opens **Training Admin > Skills Testing > Tests**, filters
 `pending_validation=true`, reads the scorecard, and clicks **Validate**. The
-badge count is on the summary dashboard.
+count waiting is the **Needs Validation** card on the **Templates** tab (officers
+only, shown even at 0); clicking it opens Test Records filtered to them.
 
 #### "You cannot validate a test you are the candidate in"
 
@@ -3509,25 +3510,24 @@ percentage = (total points earned across all sections / total possible points ac
 
 **Fix Applied**: As of 2026-02-28, all completed test timestamps are displayed in the user's local timezone using the standard date formatting utilities. Pull latest changes and hard-refresh.
 
-### Summary Dashboard Issues
+### Summary Cards Issues
 
-#### Pass Rate Shows 0%
+The summary is the row of cards on **Training Admin > Skills Testing >
+Templates** _(corrected 2026-10-06 — there is no separate summary dashboard)_.
 
-**Cause**: The pass rate only includes tests with `completed` status. Tests that are `in_progress`, `not_started`, or `cancelled` are excluded.
+#### Pass Rate or Avg Score Shows "—"
 
-**Fix**: Ensure at least one test has been completed (not just started).
+**Cause**: There is nothing to measure yet. Both figures count only
+**validated**, completed, non-practice, non-voided tests, so a department whose
+results are all still awaiting sign-off reads "—", as does one that has run none.
 
-#### Summary Shows No Data
+**Fix**: Validate the waiting results — the **Needs Validation** card links to
+them.
 
-**Causes**:
+#### Pass Rate, Avg Score and Needs Validation Are Missing or "—" for Me
 
-1. No templates or tests exist for your organization
-2. You don't have the `training.manage` permission
-
-**Fix**:
-
-- Create templates and administer tests first
-- Contact your administrator to verify your permissions
+**Cause**: Working as designed. Those figures are officer-only (`training.manage`);
+a member sees the Templates and Tests This Month cards and "—" for the rest.
 
 ---
 
@@ -4308,6 +4308,13 @@ cd backend
 alembic upgrade head
 docker-compose restart backend
 ```
+
+**Also check whose alert it is.** The Security Alerts screen shows only your
+department's alerts. A failed sign-in against a real account is attributed to
+that account's department, and on a single-department installation every
+alert is. On an installation hosting several departments, a brute-force alert
+against a username that matches no account belongs to no department and is
+not shown anywhere (see `docs/KNOWN_LIMITATIONS.md`).
 
 ---
 

@@ -289,6 +289,10 @@ async def _build_department(db) -> _Dept:
         RequirementFrequency.QUARTERLY,
         required_shifts=2,
         training_type=TrainingType.SPECIALTY,
+        # Not shift-credited, so it is still graded from training records —
+        # the record load this file is about. A shift-credited one counts
+        # shift attendance (load_credited_shift_dates) and reads no records.
+        shift_credited=False,
     )
     await _req(
         db,

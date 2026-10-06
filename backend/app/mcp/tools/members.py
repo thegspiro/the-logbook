@@ -66,7 +66,11 @@ async def _get_member(
 
 
 def register(server: Any) -> None:
-    @logbook_tool(server, title="List members")
+    @logbook_tool(
+        server,
+        title="List members",
+        permissions=("users.view", "members.view", "members.manage"),
+    )
     async def list_members(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -119,7 +123,11 @@ def register(server: Any) -> None:
         users = list(rows.scalars().all())
         return page([_member(u) for u in users], total, limit, offset)
 
-    @logbook_tool(server, title="Get member")
+    @logbook_tool(
+        server,
+        title="Get member",
+        permissions=("users.view", "members.view", "members.manage"),
+    )
     async def get_member(
         db: AsyncSession, principal: McpPrincipal, member_id: str
     ) -> dict:

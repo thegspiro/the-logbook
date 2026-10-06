@@ -5,7 +5,9 @@ A tool handler is written as ``async def name(db, principal, **args)`` and
 registered with ``logbook_tool``. The wrapper the SDK actually sees:
 
 1. reads the bound principal and refuses if the tool needs a switch the
-   department has not turned on (write access, finance, medical screening);
+   department has not turned on (write access, finance, medical screening)
+   or, for a member's OAuth connection, a permission the member does not
+   hold;
 2. bounds the size of every string argument;
 3. opens a database session for the handler;
 4. passes the result through the personal-information boundary;
@@ -60,6 +62,15 @@ GATE_MESSAGES: dict[str, str] = {
 # The tool metadata keys the server's list filter reads.
 META_GATE = "logbook_gate"
 META_MODULE = "logbook_module"
+META_PERMISSIONS = "logbook_permissions"
+
+# What an OAuth-connected member is told when their own permissions do not
+# reach a tool. The department's switches are not the issue, so the message
+# must not send them to the integration settings.
+MEMBER_PERMISSION_MESSAGE = (
+    "Your account does not have permission to use this tool. Claude can do "
+    "only what you can do in The Logbook yourself."
+)
 
 ToolHandler = Callable[..., Awaitable[Any]]
 
@@ -73,15 +84,21 @@ def module_message(module: str) -> str:
 
 
 def gate_allows(
-    principal: McpPrincipal, gate: Optional[str], module: Optional[str] = None
+    principal: McpPrincipal,
+    gate: Optional[str],
+    module: Optional[str] = None,
+    permissions: Optional[tuple[str, ...]] = None,
 ) -> bool:
     """Whether ``principal`` may see and call a tool.
 
-    Two independent switches: the department's module enablement (the same
-    flag the module's API router enforces) and the MCP-specific switch the
-    tool sits behind. Both have to say yes.
+    Three independent checks: the department's module enablement (the same
+    flag the module's API router enforces), for a member's OAuth connection
+    the member's own permissions (the ones the equivalent screen requires),
+    and the MCP-specific switch the tool sits behind. All have to say yes.
     """
     if not principal.module_enabled(module):
+        return False
+    if not principal.member_allows(permissions):
         return False
     if gate is None:
         return True
@@ -113,6 +130,7 @@ def logbook_tool(
     title: Optional[str] = None,
     gate: Optional[Gate] = None,
     module: Optional[str] = None,
+    permissions: tuple[str, ...],
     destructive: bool = False,
 ) -> Callable[[ToolHandler], ToolHandler]:
     """Register ``fn`` on ``server`` behind gating, redaction and audit.
@@ -122,6 +140,12 @@ def logbook_tool(
     key the module's API router is gated on; ``None`` is an essential module
     (members, events, documents) that cannot be switched off. A ``write``
     tool is also marked non-read-only for the client.
+
+    ``permissions`` is required: the member permissions (any one of them)
+    an OAuth-connected member must hold for the tool, matching what the
+    app's own endpoint for the same data requires. A service key ignores it.
+    It is keyword-only with no default so a new tool cannot be registered
+    without deciding it, and an empty tuple refuses every OAuth caller.
     """
 
     def decorator(fn: ToolHandler) -> ToolHandler:
@@ -134,6 +158,8 @@ def logbook_tool(
             try:
                 if not principal.module_enabled(module):
                     raise ToolError(module_message(module or ""))
+                if not principal.member_allows(permissions):
+                    raise ToolError(MEMBER_PERMISSION_MESSAGE)
                 if not gate_allows(principal, gate):
                     raise ToolError(GATE_MESSAGES[gate or ""])
                 check_argument_sizes(kwargs)
@@ -195,10 +221,16 @@ def logbook_tool(
                 idempotent_hint=gate != "write",
                 open_world_hint=False,
             ),
-            meta=(
-                {k: v for k, v in ((META_GATE, gate), (META_MODULE, module)) if v}
-                or None
-            ),
+            meta={
+                k: v
+                for k, v in (
+                    (META_GATE, gate),
+                    (META_MODULE, module),
+                    (META_PERMISSIONS, list(permissions)),
+                )
+                if v
+            }
+            or None,
         )(wrapper)
         return fn
 
@@ -370,6 +402,10 @@ async def _audit(
             "access_mode": principal.access_mode,
             "outcome": outcome,
         }
+        if principal.is_oauth:
+            # key_id is the grant; the member is the row's user_id.
+            payload["auth_method"] = "oauth"
+            payload["oauth_client_id"] = principal.oauth_client_id
         if exc is not None:
             payload["reason"] = bound_for_audit(_reason(exc))
         entry = await log_audit_event(

@@ -1917,6 +1917,17 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     autoSaveFadeRef.current = setTimeout(() => setAutoSaveStatus('idle'), failed ? 4000 : 2000);
   }, []);
 
+  // The fade above outlives the save by up to four seconds. Left running past
+  // unmount it calls setState on a torn-down tree — under test teardown that is
+  // an uncaught "window is not defined" from react-dom, failing an otherwise
+  // green run whenever the machine is slow enough for the timer to land late.
+  useEffect(
+    () => () => {
+      if (autoSaveFadeRef.current) clearTimeout(autoSaveFadeRef.current);
+    },
+    []
+  );
+
   /**
    * Registers `request` as outstanding for `itemId` and removes it again
    * once it settles -- the only place a PATCH becomes visible to a subtree

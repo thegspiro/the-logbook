@@ -144,7 +144,11 @@ class TestEnforcementIsWiredIntoBothWritePaths:
 
     async def test_officer_assignment_enforces_position_eligibility(self):
         svc = SchedulingService(MagicMock())
-        svc.get_shift_by_id = AsyncMock(return_value=SimpleNamespace(id="shift-1"))
+        # ``positions``: the seat is resolved against the shift's own seats
+        # before the candidate check (SCHED-CUSTOM-SEAT).
+        svc.get_shift_by_id = AsyncMock(
+            return_value=SimpleNamespace(id="shift-1", positions=["officer"])
+        )
         svc._validate_training_slot_fields = AsyncMock(return_value=None)
         svc._validate_assignment_candidate = AsyncMock(return_value="ineligible")
 

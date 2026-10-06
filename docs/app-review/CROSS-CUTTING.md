@@ -73,7 +73,7 @@ could exhaust the limit for every visitor. That is the H5 global-lockout shape
 the red team fixed for login, still live on the public surface. It is now keyed
 on the real client, with a comment recording why.
 
-### Follow-up still open
+### Follow-up (decided 2026-10-05)
 
 The sweep corrects IPs **going forward only**. Rows already written — session
 records, audit events, and per-vote election IPs — still hold the proxy
@@ -88,6 +88,9 @@ will still see the inverted result. Two options, both owner decisions:
 
 Recommend option 1 plus a line in the forensics guide; the audit chain exists
 precisely so that historical rows are not rewritten.
+
+**Decided (2026-10-05):** the owner chose option 1. `BALLOT_FORENSICS_GUIDE.md`
+Step 3 now carries the "IP cutover — 2026-08-05" note; no row is changed.
 
 ### Related documentation gap
 

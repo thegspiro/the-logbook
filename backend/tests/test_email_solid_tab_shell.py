@@ -443,9 +443,13 @@ class TestTheMigrationsFrozenDefaults:
         # current text)}; a text of None means the revision left it alone.
         # ba5c348d7045 carried the event reminder's body (it gained the date
         # tile); c8266855a348 carried the three election bodies the W50 drive
-        # reworded. Each revision's own test pins that its pair lines up.
+        # reworded, and 24f56e4fc320 carried the ballot body on again when its
+        # link notice became a variable (W50-23), so for that type the chain
+        # runs frozen -> c8266855a348 -> 24f56e4fc320 -> shipped. Each
+        # revision's own test pins that its pair lines up.
         date_tile = _load("*_ba5c348d7045_*.py")
         w50_wording = _load("*_c8266855a348_*.py")
+        proxy_notice = _load("*_24f56e4fc320_*.py")
         carried = {
             date_tile.TEMPLATE_TYPE: (
                 date_tile.PREVIOUS_BODY,
@@ -463,6 +467,15 @@ class TestTheMigrationsFrozenDefaults:
                 for template_type, pair in w50_wording.CARRIED.items()
             },
         }
+        ballot = carried[proxy_notice.TEMPLATE_TYPE]
+        assert ballot[1] == proxy_notice.BODIES["previous"]["html"]
+        assert ballot[3] == proxy_notice.BODIES["previous"]["text"]
+        carried[proxy_notice.TEMPLATE_TYPE] = (
+            ballot[0],
+            proxy_notice.BODIES["current"]["html"],
+            ballot[2],
+            proxy_notice.BODIES["current"]["text"],
+        )
         assert set(MIGRATION.DEFAULTS) == set(_DEFAULTS) - set(_ADDED_AFTER_THE_FREEZE)
         for template_type, frozen in MIGRATION.DEFAULTS.items():
             shipped = _DEFAULTS[template_type]

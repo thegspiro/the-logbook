@@ -7,7 +7,8 @@
  *
  *   Dashboard  – Overview, Compliance Matrix, Expiring Certs
  *   Records    – Review Submissions, Sessions, Shift Reports
- *   Setup      – Requirements, Pipelines, Integrations, Import History
+ *   Setup      – Requirements, Pipelines, Skill Evaluations, Knowledge Tests,
+ *                Integrations, Import History
  *
  * URL structure: /training/admin?page=dashboard&tab=overview
  *
@@ -41,6 +42,8 @@ const ReviewSubmissionsPage = lazyWithRetry(() => import('./ReviewSubmissionsPag
 const CreateTrainingSessionPage = lazyWithRetry(() => import('./CreateTrainingSessionPage'));
 const ShiftReportPage = lazyWithRetry(() => import('./ShiftReportPage'));
 const ManualEntrySettingsPanel = lazyWithRetry(() => import('./training/ManualEntrySettingsPanel'));
+const SkillEvaluationsTab = lazyWithRetry(() => import('./training/SkillEvaluationsTab'));
+const KnowledgeTestsTab = lazyWithRetry(() => import('./training/KnowledgeTestsTab'));
 
 const TrainingRequirementsPage = lazyWithRetry(() => import('./TrainingRequirementsPage'));
 const CreatePipelinePage = lazyWithRetry(() => import('./CreatePipelinePage'));
@@ -120,6 +123,8 @@ const pages: PageDef[] = [
       { id: 'requirements', label: 'Requirements' },
       { id: 'courses', label: 'Course Library' },
       { id: 'pipelines', label: 'Pipelines' },
+      { id: 'skill-evaluations', label: 'Skill Evaluations' },
+      { id: 'knowledge-tests', label: 'Knowledge Tests' },
       { id: 'manual-entry', label: 'Manual Entry' },
       { id: 'integrations', label: 'Integrations' },
       { id: 'import', label: 'Import History' },
@@ -189,6 +194,8 @@ const legacyTabMap: Record<string, { page: PageId; tab: string }> = {
   requirements: { page: 'setup', tab: 'requirements' },
   courses: { page: 'setup', tab: 'courses' },
   pipelines: { page: 'setup', tab: 'pipelines' },
+  'skill-evaluations': { page: 'setup', tab: 'skill-evaluations' },
+  'knowledge-tests': { page: 'setup', tab: 'knowledge-tests' },
   integrations: { page: 'setup', tab: 'integrations' },
   import: { page: 'setup', tab: 'import' },
   metrics: { page: 'setup', tab: 'metrics' },
@@ -259,6 +266,8 @@ const TabContent: React.FC<{ page: PageId; tab: string; onMetricsSaved: () => vo
     if (tab === 'requirements') return <TrainingRequirementsPage />;
     if (tab === 'courses') return <CourseLibraryPage embedded />;
     if (tab === 'pipelines') return <CreatePipelinePage />;
+    if (tab === 'skill-evaluations') return <SkillEvaluationsTab />;
+    if (tab === 'knowledge-tests') return <KnowledgeTestsTab />;
     if (tab === 'manual-entry') return <ManualEntrySettingsPanel />;
     if (tab === 'integrations') return <ExternalTrainingPage />;
     if (tab === 'import') return <HistoricalImportPage />;

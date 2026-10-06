@@ -96,3 +96,9 @@ current recommendation, which auditors do check.
   and expect users to sign in again. `AUDIT_LOG_SIGNING_KEY` must NOT be
   casually rotated: historical audit rows verify under the key that wrote
   them (use the documented rehash procedure if it is ever compromised).
+  Audit rows and ballots signed with `SECRET_KEY` before a dedicated
+  `AUDIT_LOG_SIGNING_KEY` / `VOTE_SIGNING_KEY` took effect verify under
+  `SECRET_KEY` (up to the first row signed with the dedicated key), so a
+  `SECRET_KEY` rotation also makes them read as tampered. See
+  `docs/UPGRADING.md`, "Every backend setting in `.env` now reaches the
+  container (2026-10-06)".
