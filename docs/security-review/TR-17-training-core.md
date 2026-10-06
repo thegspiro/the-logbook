@@ -1911,3 +1911,33 @@ No files changed by this pass other than this findings doc and
   and the fallback types' IN_PROGRESS read stay unbounded because exact
   equivalence needs them. See the fix note under TR4-2. Tests:
   `tests/test_graded_records_bounded_load.py`.
+
+## New surface (2026-10-06) — online knowledge tests
+
+Built on the owner's decision to replace officer-entered knowledge-test scores
+with a test engine (`app/api/v1/endpoints/knowledge_tests.py`,
+`app/models/knowledge_test.py`). Recorded here so the next pass of this review
+starts from what the design relies on:
+
+- **Answer secrecy.** `QuestionDelivered` has no answer field; answers and
+  explanations are serialized only by `_attempt_response` after submission, to
+  the member only when the attempt's `show_correct_answers` (frozen at start)
+  allows it, and always to `training.manage`. `GET /{test_id}` returns the
+  bank only to `training.manage`. Guarded by
+  `tests/test_knowledge_tests.py::TestSitting::test_answers_are_never_delivered_before_submission`.
+- **Scoring integrity.** The score is computed server-side from stored answers
+  against the attempt's own `questions_snapshot`; answers are validated
+  against the paper (question and option ids, one option for single-answer
+  questions). Multiple-answer questions score on an exact set match.
+- **Tenancy (pitfall #14).** Every test, question and attempt read filters
+  `organization_id` or resolves through an org-scoped parent; the linked
+  requirement is validated as the caller's own and of type `knowledge_test`
+  (XC-1). An attempt is readable by its member or `training.manage`, and
+  writable (answers, submit) only by its member.
+- **Attempt cap.** Starting an attempt serializes on the requirement row
+  (`lock_attempt_capacity`) and counts attempts on the member's progress notes,
+  the same allowance officer-entered scores draw on; crediting goes through
+  `update_requirement_progress`, which enforces the cap again.
+- **Not yet reviewed:** whether an officer taking a test linked to their own
+  requirement needs any separation-of-duties rule (an auto-graded test has no
+  human grader to collude with, so none was added).

@@ -355,6 +355,8 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/training/skills-testing/test/new', label: 'Start a skill test', module: 'training' },
       { path: '/training/skills-testing/test/:testId', label: 'Skill test', module: 'training' },
       { path: '/training/skills-testing/test/:testId/active', label: 'Active skill test', module: 'training' },
+      { path: '/training/knowledge-tests', label: 'Knowledge tests', module: 'training' },
+      { path: '/training/knowledge-tests/attempts/:attemptId', label: 'Knowledge test attempt', module: 'training' },
       {
         path: '/training/skills-testing/templates/new',
         label: 'New skill template',

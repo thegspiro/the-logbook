@@ -564,9 +564,65 @@ For a **knowledge test** requirement, the officer records the result:
 3. The system compares the score to the requirement's **passing score** (default **70%**). A score at or above the passing score is a **pass**, and a pass **completes the requirement**.
 4. Each entry counts against the requirement's **maximum attempts**. The current count is shown as **"Attempts: X / N"**, and the most recent result as **"Last score: 86% (pass)"**. Once the maximum is reached the field and the Record button are disabled, and the count is annotated "no attempts remaining".
 
-> **Note:** Knowledge-test scoring is **officer-entered** today. A member-facing, online test-taking feature is planned for a future release.
+> **Members can also take the test online** _(2026-10-06)_. When a training
+> officer links an online knowledge test to the requirement, a member's
+> submitted attempt is graded by the system and recorded here exactly like a
+> typed-in score — the same passing score, and the same attempt count. See
+> [Online Knowledge Tests](#online-knowledge-tests-2026-10-06).
 
 ![A knowledge-test requirement — the last score with its pass, the attempts used, and the score field that records the next](./images/02-95-knowledge-test-entry.png)
+
+### Online Knowledge Tests _(2026-10-06)_
+
+**Required Permission:** `training.manage` to write and publish a test;
+any member may take a published one.
+
+**Writing a test.** Open **Training Admin > Setup > Knowledge Tests** and click
+**New test**:
+
+| Setting                              | What it does                                                                                                  |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| **Counts toward requirement**        | A _Knowledge Test_ requirement. A submitted attempt is recorded on it for every active enrollment that has it |
+| **Passing score %**                  | Blank uses the requirement's passing score, else 70%                                                          |
+| **Time limit**                       | Blank for none. When time runs out, the answers saved so far are graded                                       |
+| **Questions per attempt**            | Blank asks every active question. A number draws that many at random from the bank for each attempt           |
+| **Shuffle**                          | Shuffles the question order and each question's options per attempt (true/false keeps True before False)      |
+| **Show members the correct answers** | Off by default. On, a member sees which answers were right, and each question's explanation, after submitting |
+
+Then **Questions & results** opens the question bank. Each question is one
+correct answer, several correct answers, or true/false, with points (default 1)
+and an optional explanation. A several-answers question scores only when the
+member picks **exactly** the correct set — ticking every box earns nothing.
+**Publish** makes the test available; it needs at least one active question,
+and at least as many as it asks per attempt. The same screen lists every
+attempt with its score and whether it was recorded on the requirement.
+
+**Taking a test.** Members open **Training > Knowledge Tests**, press
+**Start**, and answer; answers save as they go. **Submit answers** grades the
+attempt at once and shows the score. Starting a test you already have open
+continues it rather than drawing a new paper.
+
+> **The answers stay on the server.** A member's screen never receives the
+> correct answers before they submit, and the score is computed by the server
+> from the saved answers — nothing the browser sends is taken as a score.
+
+> **Editing a published test does not change attempts already started.** Each
+> attempt keeps the questions, options and passing score it was given, so a
+> correction to a question cannot re-score a member who has already answered
+> it.
+
+> **One allowance of attempts.** The requirement's **maximum attempts** counts
+> online attempts and officer-entered scores together. A member who has used
+> them all cannot start another attempt; once the requirement is satisfied the
+> cap no longer applies, so a member can retake a test to refresh.
+
+> **When an attempt is not recorded.** The result page says why: the member is
+> not enrolled in a program with the requirement, the requirement was already
+> satisfied, or the attempt cap refused it. The score itself still stands and
+> is listed on the officer's results.
+
+> **Deleting.** A test nobody has taken can be deleted; one with attempts can
+> only be archived, which keeps the members' results.
 
 ### Phases & Advancing
 

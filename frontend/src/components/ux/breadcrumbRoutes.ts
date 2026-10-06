@@ -161,6 +161,7 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   '/training/cohorts': { permissions: ['training.manage'] },
   '/training/programs': {},
   '/training/skills-testing': {},
+  '/training/knowledge-tests': {},
 };
 
 /**

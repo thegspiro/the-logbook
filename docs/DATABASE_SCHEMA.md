@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**292 tables · 4801 columns · 954 foreign keys**
+**295 tables · 4850 columns · 963 foreign keys**
 
 ---
 
@@ -356,6 +356,16 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`reorder_requests`](#reorder_requests) | `ReorderRequest` | 25 | Tracks reorder requests for inventory items that have dropped below |
 | [`return_requests`](#return_requests) | `ReturnRequest` | 23 | Member-initiated return request. |
 | [`storage_areas`](#storage_areas) | `StorageArea` | 15 | Storage Area model |
+
+### Knowledge_Test
+
+<sub>`app/models/knowledge_test.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`knowledge_test_attempts`](#knowledge_test_attempts) | `KnowledgeTestAttempt` | 21 | One member's sitting of a test. |
+| [`knowledge_test_questions`](#knowledge_test_questions) | `KnowledgeTestQuestion` | 13 | One question in a test's bank. |
+| [`knowledge_tests`](#knowledge_tests) | `KnowledgeTest` | 15 | A test definition and the bank its questions are drawn from. |
 
 ### Label_Printer
 
@@ -5880,6 +5890,100 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_storage_areas_parent` (`parent_id`)
 - `ix_storage_areas_is_active` (`is_active`)
 
+## Knowledge_Test
+
+### `knowledge_test_attempts`
+
+**KnowledgeTestAttempt** · `app/models/knowledge_test.py`
+
+> One member's sitting of a test.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `test_id` | VARCHAR(36) | no | FK, IDX |  | → `knowledge_tests.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
+| `status` | VARCHAR(20) | no |  | `'in_progress'` |  |
+| `started_at` | DATETIME | no |  |  |  |
+| `expires_at` | DATETIME | yes |  |  |  |
+| `submitted_at` | DATETIME | yes |  |  |  |
+| `questions_snapshot` | JSON | no |  |  |  |
+| `answers` | JSON | yes |  |  |  |
+| `score` | FLOAT | yes |  |  |  |
+| `points_earned` | FLOAT | yes |  |  |  |
+| `points_possible` | FLOAT | yes |  |  |  |
+| `passed` | BOOL | yes |  |  |  |
+| `passing_score` | FLOAT | no |  |  |  |
+| `requirement_id` | VARCHAR(36) | yes | FK |  | → `training_requirements.id` ON DELETE SET NULL |
+| `show_correct_answers` | BOOL | no |  | `False` |  |
+| `credited` | BOOL | no |  | `False` |  |
+| `credit_note` | VARCHAR(500) | yes |  |  |  |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `idx_knowledge_attempt_test_user` (`test_id`, `user_id`, `status`)
+- `idx_knowledge_attempt_user` (`user_id`)
+- `ix_knowledge_test_attempts_organization_id` (`organization_id`)
+
+### `knowledge_test_questions`
+
+**KnowledgeTestQuestion** · `app/models/knowledge_test.py`
+
+> One question in a test's bank.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `test_id` | VARCHAR(36) | no | FK, IDX |  | → `knowledge_tests.id` ON DELETE CASCADE |
+| `prompt` | TEXT | no |  |  |  |
+| `question_type` | VARCHAR(20) | no |  |  |  |
+| `options` | JSON | no |  |  |  |
+| `correct_option_ids` | JSON | no |  |  |  |
+| `explanation` | TEXT | yes |  |  |  |
+| `points` | FLOAT | no |  | `1.0` |  |
+| `sort_order` | INTEGER | no |  | `0` |  |
+| `active` | BOOL | no |  | `True` |  |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `ix_knowledge_test_questions_organization_id` (`organization_id`)
+- `ix_knowledge_test_questions_test_id` (`test_id`)
+
+### `knowledge_tests`
+
+**KnowledgeTest** · `app/models/knowledge_test.py`
+
+> A test definition and the bank its questions are drawn from.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `name` | VARCHAR(255) | no |  |  |  |
+| `description` | TEXT | yes |  |  |  |
+| `instructions` | TEXT | yes |  |  |  |
+| `requirement_id` | VARCHAR(36) | yes | FK |  | → `training_requirements.id` ON DELETE SET NULL |
+| `passing_score` | FLOAT | yes |  |  |  |
+| `time_limit_minutes` | INTEGER | yes |  |  |  |
+| `question_count` | INTEGER | yes |  |  |  |
+| `shuffle_questions` | BOOL | no |  | `True` |  |
+| `show_correct_answers` | BOOL | no |  | `False` |  |
+| `status` | VARCHAR(20) | no |  | `'draft'` |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `idx_knowledge_test_org_status` (`organization_id`, `status`)
+- `ix_knowledge_tests_organization_id` (`organization_id`)
+
 ## Label_Printer
 
 ### `label_printers`
@@ -10156,7 +10260,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (351 references)
+### → `users` (353 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10342,6 +10446,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `item_issuances` | `returned_by` | RESTRICT | yes |
 | `item_issuances` | `user_id` | CASCADE | no |
 | `item_variant_groups` | `created_by` | RESTRICT | yes |
+| `knowledge_test_attempts` | `user_id` | CASCADE | no |
+| `knowledge_tests` | `created_by` | SET NULL | yes |
 | `label_printers` | `created_by_id` | SET NULL | yes |
 | `legal_document_revisions` | `created_by` | SET NULL | yes |
 | `legal_document_revisions` | `published_by` | SET NULL | yes |
@@ -10512,7 +10618,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (238 references)
+### → `organizations` (241 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10641,6 +10747,9 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `item_assignments` | `organization_id` | CASCADE | no |
 | `item_issuances` | `organization_id` | CASCADE | no |
 | `item_variant_groups` | `organization_id` | CASCADE | no |
+| `knowledge_test_attempts` | `organization_id` | CASCADE | no |
+| `knowledge_test_questions` | `organization_id` | CASCADE | no |
+| `knowledge_tests` | `organization_id` | CASCADE | no |
 | `label_printers` | `organization_id` | CASCADE | no |
 | `legal_document_revisions` | `organization_id` | CASCADE | no |
 | `locations` | `organization_id` | CASCADE | no |
@@ -10864,6 +10973,21 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `storage_areas` | `location_id` | SET NULL | yes |
 | `training_records` | `location_id` | SET NULL | yes |
 
+### → `training_requirements` (10 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `course_classes` | `requirement_id` | SET NULL | yes |
+| `course_cohort_classes` | `requirement_id` | SET NULL | yes |
+| `knowledge_test_attempts` | `requirement_id` | SET NULL | yes |
+| `knowledge_tests` | `requirement_id` | SET NULL | yes |
+| `program_requirements` | `requirement_id` | CASCADE | no |
+| `recertification_pathways` | `source_requirement_id` | CASCADE | yes |
+| `requirement_progress` | `requirement_id` | CASCADE | no |
+| `skill_templates` | `requirement_id` | SET NULL | yes |
+| `skill_tests` | `requirement_id` | SET NULL | yes |
+| `training_sessions` | `requirement_id` | SET NULL | yes |
+
 ### → `shifts` (9 references)
 
 | From table | Column | On delete | Nullable |
@@ -10945,19 +11069,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_effectiveness_evaluations` | `training_record_id` | CASCADE | yes |
 | `training_submissions` | `training_record_id` | SET NULL | yes |
 | `xapi_statements` | `training_record_id` | SET NULL | yes |
-
-### → `training_requirements` (8 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `course_classes` | `requirement_id` | SET NULL | yes |
-| `course_cohort_classes` | `requirement_id` | SET NULL | yes |
-| `program_requirements` | `requirement_id` | CASCADE | no |
-| `recertification_pathways` | `source_requirement_id` | CASCADE | yes |
-| `requirement_progress` | `requirement_id` | CASCADE | no |
-| `skill_templates` | `requirement_id` | SET NULL | yes |
-| `skill_tests` | `requirement_id` | SET NULL | yes |
-| `training_sessions` | `requirement_id` | SET NULL | yes |
 
 ### → `inventory_categories` (7 references)
 
@@ -11345,6 +11456,13 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `check_item_deployed_lots` | `inventory_lot_id` | SET NULL | yes |
 | `reorder_receipts` | `inventory_lot_id` | RESTRICT | no |
+
+### → `knowledge_tests` (2 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `knowledge_test_attempts` | `test_id` | CASCADE | no |
+| `knowledge_test_questions` | `test_id` | CASCADE | no |
 
 ### → `mcp_oauth_clients` (2 references)
 

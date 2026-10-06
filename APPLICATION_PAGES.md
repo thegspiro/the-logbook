@@ -415,27 +415,41 @@ Requires `events.manage` permission. Tab-based admin interface.
 >
 > Officer-only controls rendered _within_ these pages: **Validate** and **Void** on the Test Records tab, the **Release** action, the per-template **Result Disclosure** editor in the template builder, and the **TestViewersPanel** on the active test screen.
 
+### Knowledge Tests _(2026-10-06)_
+
+| URL                                             | Page                                                  | Permission        |
+| ----------------------------------------------- | ----------------------------------------------------- | ----------------- |
+| `/training/knowledge-tests`                     | Knowledge Tests — **member-facing** (published tests) | **Authenticated** |
+| `/training/knowledge-tests/attempts/:attemptId` | Taking a knowledge test, and its result               | **Authenticated** |
+
+> Any member may sit a published test, so both routes are authenticated-only.
+> The API scopes an attempt to the member who sat it (an officer may read it,
+> never submit it) and withholds the answers until it is submitted. Writing
+> tests and questions is the **Knowledge Tests** tab of the Training Admin hub.
+
 ### Training Admin Hub (`/training/admin`)
 
 Requires `training.manage` permission. Tab-based admin interface.
 
-| Tab              | Label                         |
-| ---------------- | ----------------------------- |
-| `dashboard`      | Officer Dashboard             |
-| `waivers`        | Training Waivers              |
-| `submissions`    | Review Submissions            |
-| `requirements`   | Requirements                  |
-| `sessions`       | Create Session                |
-| `cohorts`        | Course Cohorts                |
-| `templates`      | Templates (Skills Testing)    |
-| `tests`          | Test Records (Skills Testing) |
-| `compliance`     | Compliance Matrix             |
-| `expiring-certs` | Expiring Certs                |
-| `pipelines`      | Pipelines                     |
-| `shift-reports`  | Shift Reports                 |
-| `integrations`   | Integrations                  |
-| `import`         | Import History                |
-| `enhancements`   | Enhancements                  |
+| Tab                 | Label                         |
+| ------------------- | ----------------------------- |
+| `dashboard`         | Officer Dashboard             |
+| `waivers`           | Training Waivers              |
+| `submissions`       | Review Submissions            |
+| `requirements`      | Requirements                  |
+| `sessions`          | Create Session                |
+| `cohorts`           | Course Cohorts                |
+| `templates`         | Templates (Skills Testing)    |
+| `tests`             | Test Records (Skills Testing) |
+| `skill-evaluations` | Skill Evaluations (Setup)     |
+| `knowledge-tests`   | Knowledge Tests (Setup)       |
+| `compliance`        | Compliance Matrix             |
+| `expiring-certs`    | Expiring Certs                |
+| `pipelines`         | Pipelines                     |
+| `shift-reports`     | Shift Reports                 |
+| `integrations`      | Integrations                  |
+| `import`            | Import History                |
+| `enhancements`      | Enhancements                  |
 
 > The two **Skills Testing** tabs were missing from this list. `templates` is the skill-sheet library (create, edit, publish, archive, and the per-template result-disclosure override); `tests` is the records tab, which is where an officer **validates**, **voids**, **releases** and **cancels** results, and where the "awaiting validation" filter lives. Both are officer-only, unlike `/training/skills-testing`, which is the member's entry point.
 

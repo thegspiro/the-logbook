@@ -253,6 +253,11 @@ from app.models.ip_security import (
     IPExceptionAuditLog,
     IPExceptionType,
 )
+from app.models.knowledge_test import (
+    KnowledgeTest,
+    KnowledgeTestAttempt,
+    KnowledgeTestQuestion,
+)
 from app.models.label_printer import LabelPrinter
 from app.models.legal import (
     LegalDocumentRevision,
@@ -574,6 +579,9 @@ __all__ = [
     "ProgramEnrollment",
     "RequirementProgress",
     "SkillEvaluation",
+    "KnowledgeTest",
+    "KnowledgeTestAttempt",
+    "KnowledgeTestQuestion",
     "SkillCheckoff",
     "ExternalTrainingProvider",
     "ExternalCategoryMapping",

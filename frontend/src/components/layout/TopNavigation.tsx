@@ -159,6 +159,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
               { label: 'Course Library', path: '/training/courses' },
               { label: 'Programs', path: '/training/programs' },
               { label: 'Skills Testing', path: '/training/skills-testing' },
+              { label: 'Knowledge Tests', path: '/training/knowledge-tests' },
             ],
           } as NavItem,
         ]

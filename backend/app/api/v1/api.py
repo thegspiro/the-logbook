@@ -43,6 +43,7 @@ from app.api.v1.endpoints import (
     inventory_last_seen,
     inventory_nfc,
     ip_security,
+    knowledge_tests,
     labels,
     legal_documents,
     locations,
@@ -180,6 +181,13 @@ api_router.include_router(admin_hub.router, prefix="/admin-hub", tags=["admin-hu
 api_router.include_router(
     training.router,
     prefix="/training",
+    tags=["training"],
+    dependencies=module_gate("training", "Training"),
+)
+# Online knowledge tests: question bank, delivery and auto-grading.
+api_router.include_router(
+    knowledge_tests.router,
+    prefix="/training/knowledge-tests",
     tags=["training"],
     dependencies=module_gate("training", "Training"),
 )

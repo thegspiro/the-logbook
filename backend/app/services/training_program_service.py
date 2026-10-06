@@ -2824,9 +2824,14 @@ class TrainingProgramService:
         can_manage: bool = False,
         completion_credit_id: Optional[str] = None,
         enforce_prerequisites: bool = True,
+        test_attempt_source: Optional[dict] = None,
     ) -> Tuple[Optional[RequirementProgress], Optional[str]]:
         """
         Update progress on a specific requirement
+
+        ``test_attempt_source`` is merged into the attempt a ``test_score``
+        records, so an online knowledge test's attempt can be told apart from
+        an officer-entered one (``{"source": "online_test", ...}``).
 
         Authorization: when ``acting_user_id`` is supplied (a member-initiated
         request), the member may only update progress on their own enrollment
@@ -3054,6 +3059,7 @@ class TrainingProgramService:
                     "passed": passed,
                     "recorded_at": datetime.now(timezone.utc).isoformat(),
                     "recorded_by": str(verified_by) if verified_by else None,
+                    **(test_attempt_source or {}),
                 }
             )
             notes["test_attempts"] = attempts
