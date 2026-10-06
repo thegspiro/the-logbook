@@ -2569,19 +2569,27 @@ client than its `limit` allows — but the _internal_ working set both build
 before answering scales with catalog size with no cap, which
 `docs/security-review/CHECKLIST.md`'s abuse-resistance dimension rejects.
 
-Not fixed because it is the same shape as this rotation's own DOC-9
-(`documents_service.py`'s `accessible_folder_ids`): both queries' own
-docstrings explain that the full set has to be materialized in Python
-before a correct answer can be given (a normalized size/colour/style
-identity comparison for the fulfilment picker, a per-item rank/position
-eligibility check for the category chips), so a SQL-level cap on either
-query would silently produce a wrong "cannot fulfill"/"category has
-nothing" answer for a department whose free-text request or single-category
-stock exceeds the cap, rather than merely reading fewer rows to reach the
-same correct answer. Bounding it without breaking that correctness is a
-design decision (what should happen once one category or one free-text
-match legitimately exceeds a cap), not a safe drive-by `LIMIT`. (Security
-review INV-22, `docs/security-review/INV-11-inventory.md`.)
+Not fixed because, at the time this was written, it was the same shape as
+this rotation's own DOC-9 (`documents_service.py`'s `accessible_folder_ids`):
+both queries' own docstrings explained that the full set had to be
+materialized in Python before a correct answer could be given. **Correction
+(security review DOC-10 pass 7, 2026-10-06): DOC-9 was subsequently fixed
+(2026-10-05, PR #2954)** — not by bounding the materialized set, but by
+recognizing that folder access is a tree-reachability question answerable
+with a SQL recursive CTE once only the folders carrying a restriction of
+their own are loaded (see `restricted_folders_query`/`reachable_folder_ids`
+in `documents_service.py`). That technique does not transfer here: a
+fulfilment/category match is a per-item comparison (normalized size/colour/
+style identity, rank/position eligibility), not a graph walk, so there is no
+analogous SQL predicate to delegate it to. INV-22 is therefore its own
+open question, no longer a shared one — a SQL-level cap would still silently
+produce a wrong "cannot fulfill"/"category has nothing" answer for a
+department whose free-text request or single-category stock exceeds the
+cap, rather than merely reading fewer rows to reach the same correct answer.
+Bounding it without breaking that correctness is a design decision (what
+should happen once one category or one free-text match legitimately exceeds
+a cap), not a safe drive-by `LIMIT`. (Security review INV-22,
+`docs/security-review/INV-11-inventory.md`.)
 
 **Not the same shape as `get_inventory_summary`'s own (unrelated)
 maintenance-due count**, which looked identical on the surface — also an
