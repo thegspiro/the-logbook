@@ -123,8 +123,11 @@ export const HelpLink: React.FC<HelpLinkProps> = ({
         </button>
 
         {/* Tooltip */}
+        {/* w-max: the containing block is the icon-sized wrapper, so without
+            it the panel shrinks to the icon's width and wraps a word a line;
+            the card's max-w-xs is what bounds it. */}
         {showTooltip && tooltip && (
-          <div ref={panelRef} className={`absolute z-50 ${getTooltipPositionClasses()}`}>
+          <div ref={panelRef} className={`absolute z-50 w-max ${getTooltipPositionClasses()}`}>
             <div className="card text-theme-text-primary max-w-xs p-3 text-sm shadow-xl">
               <div className="mb-2 flex items-start justify-between space-x-2">
                 <p>{tooltip}</p>
