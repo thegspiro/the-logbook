@@ -439,6 +439,8 @@ When an applicant reaches the final pipeline stage and is approved, the coordina
 
 On success the system creates the member record, applies class/status/role, sets the applicant to `converted`, links `converted_to_member_id`, and records the conversion.
 
+**Automatic Transfer to Membership** _(2026-10-05)_. `MembershipPipeline.auto_transfer_on_approval` decides whether completing the final stage converts the applicant without a coordinator clicking Convert. The backend always accepted and returned it, but the frontend `Pipeline` type dropped it and nothing sent it, so a department could neither turn it on nor see which way it was set (CLAUDE.md pitfall #19, mirrored). It is now carried on `Pipeline`, `PipelineCreate` and `PipelineUpdate`, mapped from the response, and sent only when given, so an update that does not mention it leaves it alone. **Pipeline Settings** has an **Automatic Transfer to Membership** card with the checkbox "Make applicants members automatically when they complete the final stage". When on: a recorded vote or sign-off on the final stage creates the member (account created and, where email is set up, a welcome email sent, as if Convert had been used); **skipping the final stage never converts anyone**; every Required stage must be complete first. When off, applicants who finish wait for a coordinator.
+
 ---
 
 ## Election Package Integration
@@ -799,6 +801,14 @@ again unnoticed.
 | An id from another organization                     | Same — "not found", never an existence oracle                                                                                                                                                                                                            |
 | A `reason` on `bulk-status`                         | Recorded in the **activity log**. It deliberately does **not** touch the `notes` column — the old client-side path sent it through the update endpoint as `notes`, so a bulk rejection silently overwrote the coordinator notes on every selected record |
 | More than 200 ids                                   | `422` from Pydantic's `max_length`                                                                                                                                                                                                                       |
+
+### Checklist Stages Advance With Their Ticks _(2026-10-05)_
+
+A checklist stage with items configured could not be passed: `_validate_step_completion` refuses until `completed_items` covers the items, and nothing in the app ever sent that key (the drawer only read it back, "No checklist data recorded yet"). `POST /prospects/{id}/advance` now accepts an optional `completed_items` list (at most 200 items, each at most 255 characters), which `advance_prospect` passes to `complete_step` as the `action_result` the validator grades. The applicant drawer renders the stage's configured items as checkboxes, seeded from any ticks already stored for the stage, shows "N of M items done", and holds the ticks per applicant and stage so a refetch keeps them; Advance sends them for a checklist stage only. **Dragging a card on the board sends no ticks**, so a checklist stage with items is advanced from the drawer. Skip is unchanged.
+
+### Stale In-Progress Stage Rows Are Reset _(2026-10-05)_
+
+Before `regress_prospect` was fixed, moving an applicant back a stage left the stage they vacated marked `in_progress`. Those rows survive in long-lived databases, and the drawer draws a chip for every non-pending row, so an applicant could show stages they had not reached. Migration `99b16109d44c` resets a row to `pending` (no completion stamp, as `regress_prospect` writes today) only when it is `in_progress`, its step is in the same pipeline as the applicant's current step, and that step sorts after the current one. The current stage, every stage behind it, other pipelines and prospects with no current stage are untouched. It is idempotent, skips a database without the tables, logs how many rows it reset, and its downgrade does nothing.
 
 ### Advance Reports What Actually Happened
 

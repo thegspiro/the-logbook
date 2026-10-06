@@ -199,6 +199,20 @@ Medical supplies use the same dated-lot machinery as other consumables
 > delivery**, and `quantity` is left out of the payload entirely rather than
 > sent as a null that would clear a column nothing shows.
 
+### The medical domain is re-checked under each write's lock _(2026-10-05, MSUP-25)_
+
+Five medical-supplies writes (item update, lot add, delivery receipt, lot update,
+lot delete) checked domain membership in a preflight and then called a general
+mutation, so a category reclassification landing in between let a medical-only
+manager edit an item outside their domain. `_items_in_domain_locked` now locks
+the item rows in id order and reads their categories with a locking read; each
+mutation takes `required_item_types` and the medical routes pass
+`MEDICAL_ITEM_TYPES`. A miss reads as the route's existing 404, and a delivery
+with one such line receives nothing. Callers passing no domain are unchanged.
+Completing maintenance with condition `RETIRED` is refused on both maintenance
+paths (retirement goes through `retire_item`, with its lock, blockers and audit
+event), and the maintenance form no longer offers it.
+
 ---
 
 ## Alerts
@@ -206,6 +220,22 @@ Medical supplies use the same dated-lot machinery as other consumables
 Low-stock and expiring-supply alerts reach both domains; **NFPA retirement
 stays with the gear officer**, since it is structural PPE and has no medical
 analogue.
+
+**What the emails now say** _(2026-10-05)_. The weekly supply alert lists more
+than expiring items: it also lists items a crew reported used or pulled, and
+counted positions below their target, which have no date to expire by. The
+email is titled **Supplies to Replace**; the subject, opening line and plain-text
+body share one summary that counts each kind separately and names only the kinds
+present ("1 expiring on apparatus, 2 to restock on apparatus, 1 stock lot
+expiring"). The deployed tables' former **Expires** column is **Status**: an
+expiring row shows its date and days left, a reported row shows "Restock
+reported" with the crew's note, a short row shows "Short — 2 of 4 aboard". A
+reported item whose own date is months away is no longer counted as expiring.
+The low-stock alert says "at or below reorder point" (the query includes items
+sitting exactly at it), and the NFPA retirement alert says "approaching or past"
+and gives the past-due count. The low-stock and NFPA emails put the category and
+the serial number or asset tag on a grey line under the item name so the table
+fits a phone.
 
 Recipients are grouped by the domains they may actually see:
 
