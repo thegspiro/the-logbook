@@ -10,11 +10,12 @@ import { Breadcrumbs } from '../components/ux';
 import { Calendar, ArrowLeft, Info } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { eventService } from '../services/api';
-import type { EventCreate, Event } from '../types/event';
+import type { EventCreate, Event, EventUpdate } from '../types/event';
 import { EventForm } from '../components/EventForm';
 import type { ConflictEvent, InitialRecurrence } from '../components/EventForm';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { getErrorDetail } from '../utils/errorHandling';
+import { withoutAttendanceLockedFields } from '../utils/eventAttendanceLock';
 
 export const EventEditPage: React.FC = () => {
   const { id: eventId } = useParams<{ id: string }>();
@@ -72,12 +73,19 @@ export const EventEditPage: React.FC = () => {
     setIsSubmitting(true);
     setError(null);
     try {
+      // Only on a finalized event, where the form disables these controls:
+      // leaving them out keeps what the server has, so a value the browser
+      // rounded or defaulted (a time's seconds, an unset lead time) cannot be
+      // refused as a change nobody made. An open event's save keeps them as
+      // the form produced them (a blank category is still left out rather than
+      // cleared; see "Events — Edit Form Gaps" in docs/KNOWN_LIMITATIONS.md).
+      const payload: EventUpdate = event?.attendance_finalized_at ? withoutAttendanceLockedFields(data) : data;
       const isRecurring = event?.is_recurring || event?.recurrence_parent_id;
       if (isRecurring && updateScope === 'future') {
-        const result = await eventService.updateFutureEvents(eventId, data);
+        const result = await eventService.updateFutureEvents(eventId, payload);
         toast.success(`Updated ${result.updated_count} event(s) in the series`);
       } else {
-        await eventService.updateEvent(eventId, data);
+        await eventService.updateEvent(eventId, payload);
         toast.success('Event updated');
       }
       void navigate(`/events/${eventId}`);
@@ -134,6 +142,7 @@ export const EventEditPage: React.FC = () => {
     title: event.title,
     description: event.description ?? undefined,
     event_type: event.event_type,
+    custom_category: event.custom_category ?? undefined,
     location_id: event.location_id ?? undefined,
     location: event.location ?? undefined,
     location_details: event.location_details ?? undefined,
@@ -144,6 +153,9 @@ export const EventEditPage: React.FC = () => {
     max_attendees: event.max_attendees ?? undefined,
     allowed_rsvp_statuses: event.allowed_rsvp_statuses ?? undefined,
     is_mandatory: event.is_mandatory,
+    // Without the saved member types a mandatory event opened with none ticked,
+    // and the form refused to save it until somebody ticked them again.
+    mandatory_membership_types: event.mandatory_membership_types ?? undefined,
     allow_guests: event.allow_guests,
     // ?? null, not ?? undefined: null is the "inherit the org default" state
     // and has to reach the form as a real value. Omitting it left the select
@@ -257,6 +269,7 @@ export const EventEditPage: React.FC = () => {
             initialRecurrence={initialRecurrence}
             userEvents={userEvents}
             editingEventId={eventId}
+            attendanceLocked={Boolean(event.attendance_finalized_at)}
           />
         </div>
       </div>

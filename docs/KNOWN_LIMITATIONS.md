@@ -4273,6 +4273,50 @@ Found while fixing that, and left as they are:
   that rather than a 404, so a caller is not told nothing happened. No screen
   calls the route.
 
+## Events — Edit Form Gaps (2026-10-04)
+
+A finalized event can now be edited: the lock refuses a change to its type,
+category, schedule or check-in rules rather than their presence in the save,
+and the edit form disables those controls and leaves them out. Found on the
+same screen, and left as they are:
+
+- **Saving a draft publishes it.** The edit page does not load `is_draft`, so
+  the form starts from its default and every save sends `is_draft: false`.
+- **Clearing an optional field does not stick.** A blank description,
+  location, location details, RSVP deadline, capacity (max attendees) or
+  category is left out of the save rather than sent as `null`, so the stored
+  value survives behind a success toast (CLAUDE.md pitfall #1). Choosing
+  Category → None is the same no-op.
+- **A window-type event stored with no lead time is shown, and saved, as 60
+  minutes.** The backend reads a missing lead time on a window-type event as 15,
+  so the first save of an open one moves its check-in window. A finalized
+  one's check-in rules are locked and left alone.
+- **An open event's times are saved at the form's minute precision.** A stored
+  start or end with seconds, or one in the hour repeated when clocks fall back,
+  can move by those seconds or by an hour on its first save. A finalized
+  event's times are locked, never resent, and not checked by the form either.
+- **A series save from an open occurrence can be refused for a field nobody
+  touched.** "This and all future events" writes the edited occurrence's type,
+  category (when it has one) and check-in rules onto every later occurrence,
+  and moves every occurrence when the form's restatement of its times, which
+  is to the minute, differs from what is stored (a start or end saved with
+  seconds). Where a later occurrence is finalized and would change, the save
+  is refused and names that field. Edit the later occurrences one at a time
+  instead. The category part is new with this change: the form used to show
+  every event's category as None and leave it out of the save, so a series
+  save never touched it. It now loads the stored category, so a save from an
+  open occurrence also writes that category onto later open occurrences that
+  had a different one. A save from a finalized occurrence leaves all of these
+  fields out and is not affected.
+- **Reminder and validation markers an earlier series save copied are still
+  there.** Before this change, a "This and all future events" save wrote the
+  edited occurrence's `reminders_sent` and `validation_notification_sent` onto
+  every later occurrence. It no longer does, and each row now keeps only its own
+  markers, but rows already reached keep the copies: those occurrences skip the
+  reminder or the post-event validation prompt the copy says was sent. Clearing
+  them needs a data migration that tells a copied marker from a sent one by each
+  row's schedule, which was left for a decision rather than shipped here.
+
 ## Equipment Checks — Basic Apparatus, and Checks Filed Ahead of Their Shift (2026-09-30)
 
 Found driving W46 (`docs/workflow-review/W46-equipment-checks.md`). Each
