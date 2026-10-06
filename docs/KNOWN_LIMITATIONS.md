@@ -3741,6 +3741,40 @@ feature addition rather than a scoped fix. Found in
 `docs/security-review/MS-09-medical-screening.md` (feature 09, pass 5,
 MS-12).
 
+## MS-14 — `medical_screening.view` Grants Full Narrative PHI, With No Finer-Grained Read Tier (2026-10-06)
+
+Five routes are gated on `medical_screening.view`:
+`GET /requirements`/`{id}` (configuration only, not PHI), `GET /records`/
+`{id}` (the full `ScreeningRecordResponse` — including the decrypted
+`provider_name`, `result_summary`, `notes`, `result_data` fields), and
+`GET /compliance/{user_id}`/`.../prospect/{id}`/`GET /expiring` (derived
+status only — a requirement name, a date, a `passed`/`failed`/`waived`
+status — never the narrative fields). There is no permission tier between
+"can see who is compliant" and "can see the clinical narrative": anyone an
+administrator grants `.view` to, without also granting `.manage`, can read
+every member's examining provider, free-text result summary, and reviewer
+notes for every screening in the organization. HIPAA's minimum-necessary
+principle would be better served by a split that lets an org grant
+read-only compliance visibility (e.g. for scheduling) without also granting
+read access to the clinical detail.
+
+Not fixed, and not escalated to "the permission model is wrong": the
+`view`/`manage` split here is the same pattern used uniformly across every
+other resource in this codebase (view reads, manage writes), so a
+three-tier model for this one feature would be an inconsistent special case
+rather than a drop-in fix. Neither permission is baseline-granted — an
+administrator must deliberately assign `.view` to a role, which is a
+materially different posture than a route reachable by every member by
+default. Splitting `GET /records`/`{id}` onto a narrower permission (or
+trimming the response for `.view`-only callers) would change who can read
+what for any organization that has already assigned `.view` without
+`.manage` today — a behavior change on a PHI read path that only the
+application owner can decide. If this is to be wired, the shape is a new
+permission (e.g. `medical_screening.view_detail`) gating only the narrative
+fields, with plain `.view` continuing to cover the five derived-status
+routes. Found in `docs/security-review/MS-09-medical-screening.md` (feature
+09, pass 7, MS-14).
+
 ## FAC-13 — Every Facility Folder Requires the Sensitive-Family Permission Set, Silencing Three Established-Baseline Categories for Their Intended Audience (2026-09-03)
 
 `GET /{facility_id}/folders` is gated at baseline `facilities.view`/

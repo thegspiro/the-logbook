@@ -16,6 +16,27 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2957](https://github.com/thegspiro/the-logbook/pull/2957)**: branch
+`claude/security-review-medical-screening`, Feature 09 (Medical screening,
+PHI), pass 7 — 0 code fixes, 1 new flagged (MS-14, LOW, permission
+proportionality — `medical_screening.view` grants full narrative PHI with no
+finer-grained read tier), 1 comment-accuracy correction (a test docstring
+quoting a frontend caption a copy commit had since trimmed). All 14 routes
+re-enumerated; every standing flagged item (MS-6, MS-7, MS-12, MS-13, the
+exactly-one-of-subject gap, the compliance-404 gap, MS-9's unwired fields)
+re-verified unchanged. Real delta since pass 6 reviewed in full (4 backend +
+3 frontend commits, found via per-path `git log` since pass 6's own PR head
+SHA is not a resolvable object in this repo's history — the same
+squash/orphan-merge issue earlier passes documented). Gate green
+(flake8/black/isort, migrations, route-permission check — 245 routes, 58
+scoped + 12,930 full-suite backend tests). See the Log entry below for
+detail. This PR also carries this iteration's Step 0 bookkeeping: PR #2955
+(Feature 08) merged since the prior iteration, so its note below is now
+superseded and pass 6's own PR link is backfilled to #2608.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 8, PR #2955, merged), preserved for history</summary>
+
 **PR [#2955](https://github.com/thegspiro/the-logbook/pull/2955)**: branch
 `claude/security-review-membership-pipeline`, Feature 08 (Membership
 pipeline), pass 8 — opened by one watchdog session, then continued by a
@@ -57,6 +78,8 @@ now also present in the rewritten `purge_inactive_prospects`. Gate green
 file, up from 52 — 72 cross-cutting guard tests, 1,517 scoped + 12,660
 full-suite backend tests, frontend typecheck/lint, 259 scoped frontend
 tests).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 07, Users &amp; organizations, pass 7, PR #2952, merged — 0 fixes, 0 new findings), preserved for history</summary>
@@ -17773,7 +17796,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
@@ -17806,6 +17829,64 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-06 — Feature 09 (Medical screening, PHI, pass 7) — 0 code fixes, 1 new flagged (MS-14, LOW), 1 comment-accuracy correction, real delta reviewed (watchdog pickup)
+
+Watchdog pickup — `list_pull_requests` (state=open) returned only #2953 and
+#2954, neither a `claude/security-review-*` head branch, confirming no
+security-review PR to tend and that the prior iteration's merge of #2955
+(Feature 08) had already landed. Row 08 was already ✅; row 09 (Medical
+screening) was the next `⬜`.
+
+**This session's checked-out branch was 104 commits behind `origin/main`** —
+a stale leftover from the merged Feature 08 branch — caught before trusting
+any file read by comparing `wc -l` against pass 6's documented line counts,
+then fixed with a fresh `git checkout -B claude/security-review-medical-screening
+origin/main`. Also found pass 6's own PR link had never been filled in after
+merge (`(this PR)` left unresolved); corrected to #2608.
+
+**Real delta since pass 6, found by per-path `git log` rather than diffing a
+resolved baseline** — pass 6's PR head SHA is not a valid object in this
+repo's history (the same squash/orphan-merge unreliability MP-08 and pass
+1/4 already documented, hit again here on a fresh example). Four backend
+commits and three frontend commits since pass 6: an org-timezone fix in
+`mcp/tools/medical.py` (not previously reviewed by this rotation — app-review
+pass 5's own sweep didn't cover the MCP tool), two commits already reviewed
+by app-review pass 5 (an org-timezone fix in the service, and a
+cascade-delete fix on `ScreeningRequirement.records` with `passive_deletes`
+replacing `delete-orphan`), one genuinely new commit no prior pass had seen
+(members now named by `preferred_name` on screening records/compliance/
+expiring responses — checked directly: still org-scoped, no PHI exposure),
+and three frontend copy-only commits (button labels, empty-state text, a
+delete-confirmation message that was correctly widened then narrowed back
+down around the cascade-delete fix). All read in full and found clean; one
+of the copy commits trimmed a caption that a backend test's docstring still
+quoted verbatim — fixed as a comment-only correction, no assertion changed.
+
+**All 14 routes re-enumerated directly; auth/permission/org-scoping,
+encryption-at-rest, and every standing flagged item (MS-6, MS-7, MS-12,
+MS-13, the exactly-one-of-subject gap, the compliance-404 gap, MS-9's
+unwired fields) re-verified unchanged against current code — not copied
+forward.**
+
+**New this pass — MS-14 (LOW, flagged):** asked explicitly to re-examine
+whether `medical_screening.view` is a proportionate gate for PHI per
+Checklist §2's XC-2 framing. Found that `.view` does grant full narrative
+PHI (`provider_name`/`result_summary`/`notes`/`result_data` on
+`GET /records`/`{id}`) with no finer-grained tier separating "can see who is
+compliant" from "can see the clinical detail" — a genuine minimum-necessary
+gap, but not escalated to a fix: the view/manage split matches every other
+resource in this codebase, neither permission is baseline-granted, and
+narrowing the response or adding a new permission tier is a behavior change
+needing an owner decision. Mirrored into `KNOWN_LIMITATIONS.md`.
+
+**Gate:** flake8/black/isort clean on `app/ tests/ alembic/`,
+`validate_migrations.py --strict` (525 revisions, single head),
+`check_route_permissions.py --strict` (245 routes, 0 errors), scoped pytest
+(58 passed), full backend unit suite (12,930 passed, 1 pre-existing skip, 0
+failed). Frontend typecheck/lint not run — no frontend file was changed by
+this pass. Full write-up:
+[`MS-09-medical-screening.md`](./MS-09-medical-screening.md) → Pass 7.
 
 ### 2026-10-05 — Feature 08 (Membership pipeline, pass 8) — 1 fixed (MP-32, LOW/MEDIUM), 0 new flagged, a real delta reviewed (watchdog pickup, continued by a second session)
 
