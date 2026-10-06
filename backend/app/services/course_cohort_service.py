@@ -74,6 +74,7 @@ from app.services.event_service import (
     attendance_locked_error,
 )
 from app.services.location_service import LocationService
+from app.services.separation_of_duties import assert_different_person
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
 from app.utils.org_timezone import local_date, resolve_scheduling_timezone
@@ -1673,12 +1674,21 @@ class CourseCohortService:
         Returns the decision, the record, and any warnings: a pipeline that
         refuses the credit leaves the record standing, because the member did
         cover the class, and says why.
+
+        Separation of duties (TRX7-1): this writes a COMPLETED record on the
+        officer's sign-off alone, the same shape as a submission approval
+        (``TrainingSubmissionService.review_submission``'s ``approve`` path),
+        so an officer who is also a late-joining member of their own cohort
+        must not be able to credit themselves.
         """
         cohort = await self.get_cohort(cohort_id, organization_id)
         if not cohort:
             raise ValueError("Cohort not found")
         member, cohort_class, existing = await self._missed_class_for_decision(
             cohort_id, user_id, cohort_class_id, organization_id
+        )
+        assert_different_person(
+            actor_id, member.user_id, action="credit", record="missed class"
         )
 
         course = (
