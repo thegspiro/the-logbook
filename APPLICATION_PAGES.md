@@ -1162,6 +1162,10 @@ lot's number or expiration date require `inventory.check_manage` or
 | ------------------------------ | ---------------------------------------------------------------- | ----------------- |
 | `/integrations`                | Integrations                                                     | `settings.manage` |
 | `/integrations/:integrationId` | Integration detail — health, last error, run history, Retry Sync | `settings.manage` |
+| `/claude/authorize`            | Connect Claude (consent)                                         | Authenticated     |
+| `/claude/connections`          | My Claude connections                                            | Authenticated     |
+
+> _(2026-10-06)_ **Claude (MCP) member sign-in.** `/claude/authorize` is the OAuth consent screen the backend's `/api/oauth/authorize` sends a member to (with `?request=`); `/claude/connections` lists and ends the member's own connections. Both need only a session and the Integrations module: what a connection can reach is bounded server-side by the member's own permissions. See `wiki/Integration-Claude-MCP.md`.
 
 > _(2026-04-11)_ The Integrations page now includes **Salesforce CRM** as a connectable integration. Configuration requires `integrations.manage` permission. Features: OAuth 2.0 connection, bidirectional sync (members↔contacts, training→tasks, events→events), configurable field mappings, webhook-based real-time updates, and sync history dashboard. Supports both production and sandbox Salesforce environments.
 

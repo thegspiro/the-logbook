@@ -1083,6 +1083,13 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         module: 'integrations',
       },
       {
+        path: '/claude/authorize',
+        label: 'Connect Claude (consent)',
+        module: 'integrations',
+        note: 'Reached from an MCP client through /api/oauth/authorize?…, which sets ?request=',
+      },
+      { path: '/claude/connections', label: 'My Claude connections', module: 'integrations' },
+      {
         path: '/admin/public-portal',
         label: 'Public portal administration',
         permission: 'settings.manage',

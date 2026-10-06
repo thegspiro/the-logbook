@@ -72,7 +72,7 @@ AUTHORIZE_PATH = f"{ISSUER_PATH}/authorize"
 TOKEN_PATH = f"{ISSUER_PATH}/token"
 REVOKE_PATH = f"{ISSUER_PATH}/revoke"
 # Where /authorize sends the browser: the SPA's consent screen.
-CONSENT_PATH = "/integrations/claude/authorize"
+CONSENT_PATH = "/claude/authorize"
 
 # Short-lived access, rotating refresh, bounded connection. An MCP client
 # refreshes on its own, so a short access lifetime costs the member nothing

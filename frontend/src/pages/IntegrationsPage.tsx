@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import { McpServiceKeyPanel } from '../components/integrations/McpServiceKeyPanel';
+import { McpOAuthPanel } from '../components/integrations/McpOAuthPanel';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router';
 import {
   Plug,
@@ -389,12 +390,17 @@ const IntegrationsPage: React.FC = () => {
   const [mcpExposeFinance, setMcpExposeFinance] = useState(false);
   const [mcpExposeMedical, setMcpExposeMedical] = useState(false);
   const [mcpExposeFullSchedule, setMcpExposeFullSchedule] = useState(false);
+  const [mcpOauthEnabled, setMcpOauthEnabled] = useState(false);
   const [showMcpPanel, setShowMcpPanel] = useState(false);
   // While the panel is issuing or revoking a key its response carries the
   // one-time plaintext; closing it then would lose the only copy.
   const [mcpPanelBusy, setMcpPanelBusy] = useState(false);
+  // A newly registered OAuth client's secret is shown once, so that panel
+  // holds the same controls the key panel does while its request runs.
+  const [mcpOAuthBusy, setMcpOAuthBusy] = useState(false);
+  const mcpBusy = mcpPanelBusy || mcpOAuthBusy;
   const toggleMcpPanel = () => {
-    if (mcpPanelBusy) return;
+    if (mcpBusy) return;
     setShowMcpPanel((open) => !open);
   };
   // A delegated key manager cannot list integrations (that needs
@@ -531,6 +537,7 @@ const IntegrationsPage: React.FC = () => {
     setMcpExposeFinance(stored['expose_finance'] === true);
     setMcpExposeMedical(stored['expose_medical_screening'] === true);
     setMcpExposeFullSchedule(stored['expose_full_schedule'] === true);
+    setMcpOauthEnabled(stored['oauth_enabled'] === true);
   };
 
   const getConfigFromForm = (integrationType: string): Record<string, unknown> => {
@@ -576,6 +583,7 @@ const IntegrationsPage: React.FC = () => {
           expose_finance: mcpExposeFinance,
           expose_medical_screening: mcpExposeMedical,
           expose_full_schedule: mcpExposeFullSchedule,
+          oauth_enabled: mcpOauthEnabled,
         };
       case 'salesforce':
         return {
@@ -624,7 +632,7 @@ const IntegrationsPage: React.FC = () => {
 
   const handleDisconnect = async (integrationId: string) => {
     const integration = integrations.find((i) => i.id === integrationId);
-    if (mcpPanelBusy && integration?.integration_type === 'claude-mcp') return;
+    if (mcpBusy && integration?.integration_type === 'claude-mcp') return;
     const activation = integration ? isActivation(integration.integration_type) : false;
     try {
       await integrationsService.disconnectIntegration(integrationId);
@@ -1303,6 +1311,23 @@ const IntegrationsPage: React.FC = () => {
                 </span>
               </span>
             </label>
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                className="form-checkbox mt-0.5"
+                checked={mcpOauthEnabled}
+                onChange={(e) => setMcpOauthEnabled(e.target.checked)}
+              />
+              <span>
+                <span className="text-theme-text-primary text-sm">Let members connect with their own account</span>
+                <span className="text-theme-text-muted block text-xs">
+                  Members sign in and approve a client such as the claude.ai connector themselves. A member&apos;s
+                  connection reaches only what that member can see in The Logbook, within the switches above. Needs the
+                  server&apos;s OAuth setting (MCP_OAUTH_ENABLED) and at least one client registered from the card. Off
+                  by default.
+                </span>
+              </span>
+            </label>
           </div>
         );
 
@@ -1514,8 +1539,8 @@ const IntegrationsPage: React.FC = () => {
               <div className="flex justify-end">
                 <button
                   onClick={toggleMcpPanel}
-                  disabled={mcpPanelBusy}
-                  title={mcpPanelBusy ? 'Wait for the current key request to finish' : undefined}
+                  disabled={mcpBusy}
+                  title={mcpBusy ? 'Wait for the current key request to finish' : undefined}
                   className="touch:min-h-11 flex items-center space-x-1 rounded-lg bg-orange-500/10 px-3 py-1.5 text-sm text-orange-700 transition-colors hover:bg-orange-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:text-orange-400"
                 >
                   <KeyRound className="h-3.5 w-3.5" />
@@ -1584,8 +1609,8 @@ const IntegrationsPage: React.FC = () => {
                     (canManage || canIssueKeys) && (
                       <button
                         onClick={toggleMcpPanel}
-                        disabled={mcpPanelBusy}
-                        title={mcpPanelBusy ? 'Wait for the current key request to finish' : undefined}
+                        disabled={mcpBusy}
+                        title={mcpBusy ? 'Wait for the current key request to finish' : undefined}
                         className="touch:min-h-11 flex items-center space-x-1 rounded-lg bg-orange-500/10 px-3 py-1.5 text-sm text-orange-700 transition-colors hover:bg-orange-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:text-orange-400"
                       >
                         <KeyRound className="h-3.5 w-3.5" />
@@ -1632,9 +1657,9 @@ const IntegrationsPage: React.FC = () => {
                         }}
                         // Disconnecting the Claude integration unmounts the key
                         // panel; mid-issue that would lose the one-time plaintext.
-                        disabled={mcpPanelBusy && integration.integration_type === 'claude-mcp'}
+                        disabled={mcpBusy && integration.integration_type === 'claude-mcp'}
                         title={
-                          mcpPanelBusy && integration.integration_type === 'claude-mcp'
+                          mcpBusy && integration.integration_type === 'claude-mcp'
                             ? 'Wait for the current key request to finish'
                             : undefined
                         }
@@ -1668,7 +1693,12 @@ const IntegrationsPage: React.FC = () => {
           (showDelegatedMcpCard ||
             integrations.some(
               (i) => i.integration_type === 'claude-mcp' && i.status === ConnectionStatus.CONNECTED
-            )) && <McpServiceKeyPanel onClose={() => setShowMcpPanel(false)} onBusyChange={setMcpPanelBusy} />}
+            )) && (
+            <>
+              <McpServiceKeyPanel onClose={() => setShowMcpPanel(false)} onBusyChange={setMcpPanelBusy} />
+              <McpOAuthPanel onBusyChange={setMcpOAuthBusy} />
+            </>
+          )}
 
         {/* Cal.com Bookings Panel */}
         {showBookingsPanel &&

@@ -584,6 +584,20 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
+    path: '/claude/authorize',
+    source: 'src/modules/integrations/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'OAuth consent screen opened only by the backend redirect with a one-time ?request= id; a single max-w-xl card of checkboxes and two buttons built from the shared form and button utilities',
+  },
+  {
+    path: '/claude/connections',
+    source: 'src/modules/integrations/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      "secondary list of a member's own Claude connections; single-column cards with one shared-utility button each",
+  },
+  {
     path: '/inventory',
     source: 'src/modules/inventory/routes.tsx',
     coverage: 'ratchet',
