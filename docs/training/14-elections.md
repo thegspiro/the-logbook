@@ -1180,7 +1180,10 @@ is still open.
 Drive"):
 
 - The in-app **Cast Vote** tab shows position races only and treats every race
-  as one-choice; the emailed ballot is the complete one.
+  as one-choice, so since 2026-10-05 an election with ballot items or a
+  "choose up to N" race shows no in-app ballot: the tab tells members to vote
+  from the **Vote Now** link in their ballot email, which carries the whole
+  ballot.
 - There is no seat count — a "(2 seats)" race declares one winner.
 - The emailed ballot pre-selects **Abstain** on every item; an untouched
   Submit casts no votes and uses up the link.

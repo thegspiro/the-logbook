@@ -21,7 +21,6 @@ import type {
 } from '../types/election';
 import type { EventListItem } from '../types/event';
 import { ElectionResults } from '../components/ElectionResults';
-import { ElectionBallot } from '../components/ElectionBallot';
 import { CandidateManagement } from '../components/CandidateManagement';
 import { BallotBuilder } from '../components/BallotBuilder';
 import { MeetingAttendance } from '../components/MeetingAttendance';
@@ -60,6 +59,7 @@ import EditDatesModal from '../components/election-detail/EditDatesModal';
 import PreMeetingPackageModal from '../components/election-detail/PreMeetingPackageModal';
 import BallotPreviewModal from '../components/election-detail/BallotPreviewModal';
 import RollbackElectionModal from '../components/election-detail/RollbackElectionModal';
+import CastVoteTab from '../components/election-detail/CastVoteTab';
 
 /** Floor the void-reason prompt already enforced, now stated to the user
  *  instead of silently rejecting anything shorter. */
@@ -1874,7 +1874,7 @@ export const ElectionDetailPage: React.FC = () => {
               {/* Tab: Cast Vote (when election is open) */}
               {activeTab === 'voting' && election.status === ElectionStatus.OPEN && (
                 <div className="mb-6">
-                  <ElectionBallot
+                  <CastVoteTab
                     electionId={electionId}
                     election={election}
                     onVoteCast={() => {

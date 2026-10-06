@@ -690,7 +690,9 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `elections.py` `update_candidate` (E:2065-2127); merge (S:4324-4389); void batch (S:4103); soft-delete (E:2851).
 **Fix:** S09 refuses identity edits once votes exist (`test_w50_s09.py`). `review-backend-1.md` #1 found it keying on key presence, so a statement-only edit was refused and test votes counted; `7aa3405` compares values and ignores test votes. **Confirmed live** (CONFIRM-13): a statement-only PATCH on a voted candidate → 200; a rename → 400 "Cannot change a candidate's name, position or acceptance once votes have been cast"; the unchanged name resubmitted with a new statement → 200; a candidate with no votes on the same election renames freely. **Flagged:** merge, void and batch-void after close are deliberate corrections; the owner chooses between a gate after publish and a "results revised <when> by <who>" marker on the PDF and panel.
 
-### W50-10 — HIGH — The in-app "Cast Vote" tab is not the ballot: items are missing and a multi-seat race is single-select — FLAGGED
+### W50-10 — HIGH — The in-app "Cast Vote" tab is not the ballot: items are missing and a multi-seat race is single-select — 🔶 INTERIM FIX (2026-10-05)
+
+**Owner decision (2026-10-05):** hide the in-app ballot for ballot items and caps above 1 and point to the email link — shipped first, as `CastVoteTab` (`frontend/src/components/election-detail/CastVoteTab.w50-10.test.tsx`) — then converge the in-app ballot onto ballot items, which lifts the hide.
 
 **Did:** as `member` on E1 (A6 step 1) and E2 (A9 step 7); the same members' emailed links.
 **Saw:** E1's tab offers Chief only; voting the two items by link then needed "Abstain" on Chief to get past "You have already voted on: Chief". E2's tab says "Select one candidate" and a second click deselects the first, while the token page says "Select up to 2 candidates." with checkboxes.
