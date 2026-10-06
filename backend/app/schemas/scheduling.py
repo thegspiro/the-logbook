@@ -1621,8 +1621,10 @@ class RequirementComplianceSummary(BaseModel):
     requirement_type: str
     required_value: float
     frequency: str
-    period_start: str
-    period_end: str
+    # The window counted. None on a side the window leaves open: a one-time
+    # SHIFTS requirement counts every shift on record.
+    period_start: Optional[str] = None
+    period_end: Optional[str] = None
     members: List[MemberComplianceRecord]
     total_members: int
     compliant_count: int

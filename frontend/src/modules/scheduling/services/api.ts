@@ -492,8 +492,9 @@ export interface RequirementComplianceSummary {
   requirement_type: string;
   required_value: number;
   frequency: string;
-  period_start: string;
-  period_end: string;
+  /** The window counted; null on a side it leaves open (a one-time requirement). */
+  period_start: string | null;
+  period_end: string | null;
   members: MemberComplianceRecord[];
   total_members: number;
   compliant_count: number;

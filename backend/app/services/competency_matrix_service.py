@@ -34,7 +34,10 @@ from app.services.training_compliance import (
     biannual_window,
     catch_up_deadline,
     certification_record_matches,
+    counts_shift_attendance,
+    evaluate_member_requirement_detail,
     get_org_include_current_month,
+    load_credited_shift_dates,
     member_join_date,
     requirement_applies_to_user,
 )
@@ -147,6 +150,14 @@ class CompetencyMatrixService:
         org_include_current = await get_org_include_current_month(
             self.db, str(organization_id)
         )
+        shifts_by_user = await load_credited_shift_dates(
+            self.db,
+            str(organization_id),
+            [m.id for m in members],
+            requirements,
+            today,
+            org_include_current,
+        )
 
         # Counters
         current_count = 0
@@ -196,6 +207,8 @@ class CompetencyMatrixService:
                     expiring_threshold,
                     waivers=member_waivers,
                     org_include_current_month=org_include_current,
+                    shift_dates=shifts_by_user.get(uid, []),
+                    join_date=join_date,
                 )
                 deadline = catch_up_deadline(req, join_date, today)
                 if deadline is not None and status_info["status"] not in (
@@ -292,8 +305,41 @@ class CompetencyMatrixService:
         expiring_threshold: date,
         waivers: Optional[List[WaiverPeriod]] = None,
         org_include_current_month: bool = True,
+        shift_dates: Optional[List[date]] = None,
+        join_date: Optional[date] = None,
     ) -> Dict:
         """Evaluate a single requirement for a single member using type-aware matching."""
+        if counts_shift_attendance(requirement):
+            # Counted from shifts worked by the one shared grader, so this
+            # cell reads what the compliance matrix reads for the member
+            # (shifts-three-sources). Partial progress is yellow, as hours is.
+            ev = evaluate_member_requirement_detail(
+                requirement,
+                [],
+                today,
+                waivers=waivers,
+                org_include_current_month=org_include_current_month,
+                join_date=join_date,
+                shift_dates=shift_dates,
+            )
+            # A catch-up status lands on "not_started" here; the caller turns
+            # an unmet cell inside the catch-up period into its own status.
+            cell_status = {
+                TrainingStatus.COMPLETED.value: "current",
+                TrainingStatus.IN_PROGRESS.value: "expiring_soon",
+            }.get(ev.status, "not_started")
+            return {
+                "status": cell_status,
+                "expiration_date": None,
+                "completion_date": ev.completion_date,
+                "details": (
+                    f"{ev.progress_current:g}/{ev.progress_required:g} shifts"
+                    if cell_status != "not_started"
+                    and ev.progress_current is not None
+                    and ev.progress_required is not None
+                    else None
+                ),
+            }
         req_type = (
             requirement.requirement_type.value
             if hasattr(requirement.requirement_type, "value")

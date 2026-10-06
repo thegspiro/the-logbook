@@ -44,6 +44,7 @@ from app.services.training_compliance import (
     _load_compliance_config,
     compute_org_compliance_pct,
     evaluate_member_requirement,
+    load_credited_shift_dates,
     load_graded_records,
     member_join_date,
     tally_standing,
@@ -955,6 +956,14 @@ class AnnualComplianceReportService:
         else:
             year_records = []
             all_records = []
+        shifts_by_user = await load_credited_shift_dates(
+            self.db,
+            organization_id,
+            member_ids,
+            requirements,
+            today,
+            org_include_current,
+        )
 
         # A period that ended in the past is graded on what was known then.
         if as_of_cap is not None:
@@ -963,6 +972,10 @@ class AnnualComplianceReportService:
                 for r in all_records
                 if r.completion_date is None or r.completion_date <= today
             ]
+            shifts_by_user = {
+                uid: [d for d in dates if d <= today]
+                for uid, dates in shifts_by_user.items()
+            }
 
         # Build per-user record lookup
         records_by_user: Dict[str, list] = defaultdict(list)
@@ -1013,6 +1026,7 @@ class AnnualComplianceReportService:
                     waivers=user_waivers,
                     org_include_current_month=org_include_current,
                     join_date=join_date,
+                    shift_dates=shifts_by_user.get(str(member.id), []),
                 )[0]
                 for req in applicable_reqs
             )
@@ -1103,6 +1117,7 @@ class AnnualComplianceReportService:
                     waivers=waivers_by_user.get(str(member.id), []),
                     org_include_current_month=org_include_current,
                     join_date=member_join_date(member),
+                    shift_dates=shifts_by_user.get(str(member.id), []),
                 )[0]
                 for member in applicable_members
             )

@@ -261,6 +261,19 @@ class TrainingService:
                 str(user_id),
             )
             today = await resolve_org_today(self.db, organization_id)
+            from app.services.training_compliance import load_credited_shift_dates
+
+            shift_dates = (
+                await load_credited_shift_dates(
+                    self.db,
+                    str(organization_id),
+                    [str(user_id)],
+                    requirements,
+                    today,
+                    True,
+                    full_history=True,
+                )
+            ).get(str(user_id), [])
 
             for req in requirements:
                 # Tier-based exemption: treat requirement as met
@@ -284,6 +297,7 @@ class TrainingService:
                     waivers=user_waivers,
                     today=today,
                     join_date=join_date,
+                    shift_dates=shift_dates,
                 )
                 if progress.is_complete:
                     requirements_met.append(req.id)
@@ -546,6 +560,7 @@ class TrainingService:
         waivers=None,
         org_include_current_month: bool = True,
         join_date: Optional[date] = None,
+        shift_dates: Optional[Sequence[date]] = None,
     ) -> Dict:
         """Evaluate a member's progress on a single requirement (in-memory).
 
@@ -563,13 +578,23 @@ class TrainingService:
         With *join_date*, an unmet requirement inside an existing member's
         catch-up period reports ``catch_up_deadline`` and takes it as its due
         date; callers leave such a requirement out of the met/total summary.
+
+        *shift_dates* is the member's worked shifts
+        (``training_compliance.load_credited_shift_dates``), required for a
+        requirement counted from attendance (``counts_shift_attendance``).
+        A rolling one anchors its due date on the latest of them, so pass
+        them loaded with ``full_history=True`` when it matters.
         """
         from app.models.training import RequirementType
         from app.services.training_compliance import (
+            _require_shift_dates,
             apply_recency,
             catch_up_deadline,
             certification_record_matches,
+            counts_shift_attendance,
+            credited_shifts_in_window,
             hours_record_counts,
+            recency_cutoff,
         )
 
         # The real day, captured before it is replaced by the evaluation
@@ -686,12 +711,21 @@ class TrainingService:
 
         # ---- SHIFTS ----
         elif req_type == RequirementType.SHIFTS.value:
-            type_matched = windowed
-            if req.training_type:
-                type_matched = [
-                    r for r in windowed if r.training_type == req.training_type
-                ]
-            completed_value = float(len(type_matched))
+            if counts_shift_attendance(req):
+                completed_value = float(
+                    len(
+                        credited_shifts_in_window(
+                            req, _require_shift_dates(req, shift_dates), today
+                        )
+                    )
+                )
+            else:
+                type_matched = windowed
+                if req.training_type:
+                    type_matched = [
+                        r for r in windowed if r.training_type == req.training_type
+                    ]
+                completed_value = float(len(type_matched))
             base_required = float(req.required_shifts or 0)
             adjusted_required = base_required
 
@@ -806,6 +840,19 @@ class TrainingService:
                         (r.completion_date for r in anchors if r.completion_date),
                         default=None,
                     )
+                    if counts_shift_attendance(req):
+                        # Anchored on the latest shift worked, as fresh as
+                        # the freshness cutoff allows: the evidence the
+                        # count reads, not a training record.
+                        cutoff = recency_cutoff(req, today)
+                        latest_completion = max(
+                            (
+                                d
+                                for d in _require_shift_dates(req, shift_dates)
+                                if cutoff is None or d >= cutoff
+                            ),
+                            default=None,
+                        )
                     effective_due_date = (
                         latest_completion + relativedelta(months=rolling_months)
                         if latest_completion
@@ -892,6 +939,7 @@ class TrainingService:
         completed_records: Optional[Sequence[Any]] = None,
         today: Optional[date] = None,
         join_date: Optional[date] = None,
+        shift_dates: Optional[Sequence[date]] = None,
     ) -> RequirementProgress:
         """
         Check a user's progress towards a specific requirement.
@@ -913,13 +961,21 @@ class TrainingService:
         *join_date* is the member's ``member_join_date``; with it, an unmet
         requirement inside an existing member's catch-up period reports the
         catch-up deadline as its due date.
+
+        *shift_dates* is the member's worked shifts, full history
+        (``load_credited_shift_dates(..., full_history=True)``), for a
+        requirement counted from attendance; without them the check loads
+        them itself.
         """
         from app.models.training import RequirementType
         from app.services.training_compliance import (
             apply_recency,
             catch_up_deadline,
             certification_record_matches,
+            counts_shift_attendance,
+            credited_shifts_in_window,
             hours_record_counts,
+            load_credited_shift_dates,
             recency_cutoff,
         )
 
@@ -939,6 +995,18 @@ class TrainingService:
         # against the same day.
         if today is None:
             today = await resolve_org_today(self.db, organization_id)
+        if shift_dates is None and counts_shift_attendance(requirement):
+            shift_dates = (
+                await load_credited_shift_dates(
+                    self.db,
+                    str(organization_id),
+                    [str(user_id)],
+                    [requirement],
+                    today,
+                    True,
+                    full_history=True,
+                )
+            ).get(str(user_id), [])
         start_date, end_date = self._get_date_window(requirement, today)
         # Every RequirementProgress this method returns carries this, so
         # consumers (the MCP `get_member_requirements_progress` tool
@@ -959,6 +1027,21 @@ class TrainingService:
         honors_explicit_due_date = due_date_type in (None, "fixed_date")
         if requirement.due_date and honors_explicit_due_date:
             effective_due_date = requirement.due_date
+        elif rolling_months and counts_shift_attendance(requirement):
+            # Anchored on the latest shift worked, not a training record:
+            # the same evidence the count below reads.
+            from dateutil.relativedelta import relativedelta
+
+            cutoff = recency_cutoff(requirement, today)
+            latest_shift = max(
+                (d for d in shift_dates or [] if cutoff is None or d >= cutoff),
+                default=None,
+            )
+            effective_due_date = (
+                latest_shift + relativedelta(months=rolling_months)
+                if latest_shift
+                else None
+            )
         elif rolling_months:
             # Rolling due dates are anchored to the member's last applicable
             # completion, not the window end: _get_date_window() always
@@ -1229,14 +1312,22 @@ class TrainingService:
 
         # ---- SHIFTS requirements ----
         elif req_type == RequirementType.SHIFTS.value:
-            records = await _windowed()
-            type_matched = records
-            if requirement.training_type:
-                type_matched = [
-                    r for r in records if r.training_type == requirement.training_type
-                ]
-
-            completed_value = float(len(type_matched))
+            if counts_shift_attendance(requirement):
+                completed_value = float(
+                    len(
+                        credited_shifts_in_window(requirement, shift_dates or [], today)
+                    )
+                )
+            else:
+                records = await _windowed()
+                type_matched = records
+                if requirement.training_type:
+                    type_matched = [
+                        r
+                        for r in records
+                        if r.training_type == requirement.training_type
+                    ]
+                completed_value = float(len(type_matched))
             required_value = float(requirement.required_shifts or 0)
 
             # Adjust for waivers
@@ -1406,6 +1497,22 @@ class TrainingService:
         # and a partial entity load would collide with any full copy of the
         # same record already in the session.
         completed = list((await self.db.execute(preload)).all())
+        # The member's worked shifts, for any requirement counted from
+        # attendance; full history, as a rolling one anchors its due date on
+        # the latest shift however old.
+        from app.services.training_compliance import load_credited_shift_dates
+
+        shift_dates = (
+            await load_credited_shift_dates(
+                self.db,
+                str(organization_id),
+                [str(user_id)],
+                requirements,
+                today,
+                True,
+                full_history=True,
+            )
+        ).get(str(user_id), [])
         progress_list = []
         for req in requirements:
             progress = await self.check_requirement_progress(
@@ -1417,6 +1524,7 @@ class TrainingService:
                 completed_records=completed,
                 today=today,
                 join_date=join_date,
+                shift_dates=shift_dates,
             )
             progress_list.append(progress)
         return progress_list

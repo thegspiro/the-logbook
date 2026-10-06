@@ -955,9 +955,10 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
               </div>
             )}
 
-            {/* Which requirements the scheduling Shift Compliance report grades
-              from shifts worked. Training screens grade from training records,
-              so an HOURS requirement left unticked is not on that report. */}
+            {/* Which requirements are graded from shifts worked. A ticked SHIFTS
+              requirement is counted from finalized shift attendance on every
+              screen; a ticked HOURS requirement only on the scheduling Shift
+              Compliance report, the training screens grading it from records. */}
             {(formData.requirement_type === 'hours' || formData.requirement_type === 'shifts') && (
               <div className="space-y-3">
                 <h4 className="text-theme-text-primary border-theme-surface-border border-b pb-2 font-semibold">
@@ -973,8 +974,9 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                   <span className="text-theme-text-secondary text-sm">
                     Shift attendance satisfies this requirement
                     <span className="text-theme-text-muted block text-xs">
-                      Graded from shifts worked on the scheduling Shift Compliance report. Leave unticked for training
-                      hours, which are graded from training records.
+                      {formData.requirement_type === 'shifts'
+                        ? 'Counted from finalized shifts worked, including counted external shifts, on every compliance screen. Unticked, it counts training records instead and is left off the Shift Compliance report.'
+                        : 'Graded from shifts worked on the scheduling Shift Compliance report. Leave unticked for training hours, which are graded from training records.'}
                     </span>
                   </span>
                 </label>

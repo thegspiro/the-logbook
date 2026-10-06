@@ -45,6 +45,7 @@ from app.schemas.training_module_config import (
 from app.services.training_compliance import (
     CATCH_UP_STATUS,
     get_org_include_current_month,
+    load_credited_shift_dates,
     member_join_date,
     requirement_applies_to_member,
     tally_standing,
@@ -313,11 +314,24 @@ async def get_my_training_summary(
         )
     )
     member_records = list(all_records_result.scalars().all())
+    org_include_current = await get_org_include_current_month(db, str(org_id))
+    # Shifts worked, for a requirement counted from attendance; full history,
+    # as a rolling one anchors its due date on the latest shift.
+    shift_dates = (
+        await load_credited_shift_dates(
+            db,
+            str(org_id),
+            [str(user_id)],
+            applicable,
+            today,
+            org_include_current,
+            full_history=True,
+        )
+    ).get(str(user_id), [])
 
     # Evaluate every applicable requirement using the shared helper which
     # handles all requirement types (hours, courses, certification,
     # shifts, calls, fallback) and rolling period windows.
-    org_include_current = await get_org_include_current_month(db, str(org_id))
     total_progress_pct = 0.0
     requirements_detail: list[dict[str, Any]] = []
     statuses: list[str] = []
@@ -330,6 +344,7 @@ async def get_my_training_summary(
             waivers=user_waivers,
             org_include_current_month=org_include_current,
             join_date=join_date,
+            shift_dates=shift_dates,
         )
         requirements_detail.append(detail)
         # Listed with its deadline, but left out of the summary until the

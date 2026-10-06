@@ -346,6 +346,60 @@ def _name_match_is_legacy(req, record) -> bool:
     return when is not None and when <= until
 
 
+def counts_shift_attendance(req) -> bool:
+    """Whether SHIFTS requirement ``req`` is counted from shifts worked.
+
+    The owner's decision (shifts-three-sources): a "shifts completed"
+    requirement is counted from ``ShiftAttendance`` — the measured figure the
+    hours reports already use — on every screen, not from training records on
+    some and attendance on others. ``shift_credited`` ("may shift attendance
+    satisfy this requirement?") defaults on for SHIFTS; an officer who turns it
+    off keeps the requirement on training records everywhere instead, and the
+    scheduling Shift Compliance report leaves it out, as it always has.
+
+    ``is True`` rather than truthiness: only a real column value opts in.
+    """
+    req_type = getattr(req, "requirement_type", None)
+    req_type = getattr(req_type, "value", req_type)
+    return (
+        req_type == RequirementType.SHIFTS.value
+        and getattr(req, "shift_credited", False) is True
+    )
+
+
+def credited_shifts_in_window(
+    req, shift_dates: Sequence[date], as_of: date
+) -> List[date]:
+    """The worked shifts that count toward ``req`` as of ``as_of``.
+
+    ``shift_dates`` is one date per shift worked (see
+    :func:`load_credited_shift_dates`). The window is the one a training
+    record is held to — :func:`completion_window`, the frequency window
+    narrowed by any freshness cutoff — so moving a SHIFTS requirement from
+    records to attendance changes what is counted, never the period.
+    """
+    start, end = completion_window(req, as_of)
+    return [
+        d
+        for d in shift_dates
+        if (start is None or d >= start) and (end is None or d <= end)
+    ]
+
+
+def _require_shift_dates(req, shift_dates: Optional[Sequence[date]]):
+    """``shift_dates``, or a loud failure when a caller did not load them.
+
+    Grading an attendance-counted requirement without the member's shifts
+    would read zero for everybody, a plausible number nobody would question.
+    """
+    if shift_dates is None:
+        raise ValueError(
+            f"Requirement {getattr(req, 'id', '?')} counts shifts worked; "
+            "pass the member's shift_dates (load_credited_shift_dates)"
+        )
+    return shift_dates
+
+
 @dataclass(frozen=True)
 class RequirementEvaluation:
     """A single member's standing against a single requirement.
@@ -381,6 +435,7 @@ def evaluate_member_requirement_detail(
     waivers=None,
     org_include_current_month: bool = True,
     join_date: Optional[date] = None,
+    shift_dates: Optional[Sequence[date]] = None,
 ) -> RequirementEvaluation:
     """Evaluate one member against one requirement, honouring a catch-up period.
 
@@ -390,6 +445,10 @@ def evaluate_member_requirement_detail(
     whose requirement is not yet met is reported as ``catch_up`` rather than
     unmet, carrying the deadline. ``join_date`` is the member's
     :func:`member_join_date`; omitting it skips the rule.
+
+    ``shift_dates`` is the member's worked shifts from
+    :func:`load_credited_shift_dates`, required whenever ``req`` is counted
+    from attendance (:func:`counts_shift_attendance`).
     """
     ev = _grade_member_requirement(
         req,
@@ -397,6 +456,7 @@ def evaluate_member_requirement_detail(
         today,
         waivers=waivers,
         org_include_current_month=org_include_current_month,
+        shift_dates=shift_dates,
     )
     # Measured against the real day rather than the evaluation cut-off: the
     # deadline is a calendar promise to the member, not a period boundary.
@@ -414,6 +474,7 @@ def _grade_member_requirement(
     today: date,
     waivers=None,
     org_include_current_month: bool = True,
+    shift_dates: Optional[Sequence[date]] = None,
 ) -> RequirementEvaluation:
     """
     Evaluate a single member's status for a single requirement.
@@ -436,7 +497,10 @@ def _grade_member_requirement(
     - HOURS:          Sum hours of completed records matching training_type within date window
     - COURSES:        Check if required course IDs are all completed
     - CERTIFICATION:  Check for matching records (see certification_record_matches)
-    - SHIFTS/CALLS:   Count matching records within date window
+    - SHIFTS:         Count shifts worked within the window
+                      (:func:`counts_shift_attendance`), or matching records
+                      when the requirement is not shift-credited
+    - CALLS:          Count matching records within date window
     - Others:         Match by training_type or name
     """
     req_type = (
@@ -630,10 +694,21 @@ def _grade_member_requirement(
 
     # ---- SHIFTS requirements ----
     if req_type == RequirementType.SHIFTS.value:
-        type_matched = windowed
-        if req.training_type:
-            type_matched = [r for r in windowed if r.training_type == req.training_type]
-        count = len(type_matched)
+        latest_shift: Optional[date] = None
+        if counts_shift_attendance(req):
+            worked = credited_shifts_in_window(
+                req, _require_shift_dates(req, shift_dates), today
+            )
+            count = len(worked)
+            latest_shift = max(worked, default=None)
+            type_matched = []
+        else:
+            type_matched = windowed
+            if req.training_type:
+                type_matched = [
+                    r for r in windowed if r.training_type == req.training_type
+                ]
+            count = len(type_matched)
         required = req.required_shifts or 0
         base_required = required
         waived_months = 0
@@ -666,6 +741,8 @@ def _grade_member_requirement(
             if latest and latest.completion_date
             else None
         )
+        if latest_shift is not None:
+            latest_comp = latest_shift.isoformat()
         latest_exp = None
 
         if required > 0 and count >= required:
@@ -769,6 +846,7 @@ def evaluate_member_requirement(
     waivers=None,
     org_include_current_month: bool = True,
     join_date: Optional[date] = None,
+    shift_dates: Optional[Sequence[date]] = None,
 ):
     """
     Evaluate a single member's status for a single requirement.
@@ -788,6 +866,7 @@ def evaluate_member_requirement(
         waivers=waivers,
         org_include_current_month=org_include_current_month,
         join_date=join_date,
+        shift_dates=shift_dates,
     )
     return ev.status, ev.completion_date, ev.expiry_date
 
@@ -952,6 +1031,115 @@ async def load_graded_records(
         .order_by(TrainingRecord.id)
     )
     return list(result.scalars().all())
+
+
+async def load_credited_shift_dates(
+    db: AsyncSession,
+    org_id: str,
+    member_ids: Sequence[str],
+    requirements: Iterable[TrainingRequirement],
+    today: date,
+    org_include_current_month: bool,
+    *,
+    full_history: bool = False,
+) -> Dict[str, List[date]]:
+    """Each member's worked shifts, one date per shift, for SHIFTS grading.
+
+    The one definition of "a shift completed" (shifts-three-sources):
+
+    - an attendance row on one of this organization's shifts that has been
+      **finalized** — the rule the member hours report and My Hours apply
+      to credited hours, so pending, member-controlled attendance is not
+      credit until an officer closes the shift out; and
+    - a **counted** external shift entry (another jurisdiction's
+      apparatus), which the Shift Compliance report has always counted as a
+      shift worked here.
+
+    Dated by the shift's date. Scoped through ``Shift.organization_id`` —
+    ``shift_attendance`` carries no org column of its own.
+
+    Loaded only when one of ``requirements`` is counted from attendance
+    (:func:`counts_shift_attendance`); otherwise ``{}``, and callers pass
+    ``.get(member_id, [])``. Bounded, like :func:`load_graded_records`, by
+    the union of those requirements' :func:`completion_window` as of their
+    own cut-off. ``full_history`` lifts the bound when one of them is
+    rolling: a caller deriving a rolling due date from the latest shift
+    needs the shifts older than the window.
+    Grouped by member and date in SQL, so the rows returned scale with days
+    worked, not with attendance rows.
+    """
+    from app.models.external_shift_hours import (
+        ExternalShiftHours,
+        ExternalShiftHoursStatus,
+    )
+    from app.models.training import Shift, ShiftAttendance
+
+    counted = [r for r in requirements if counts_shift_attendance(r)]
+    if not counted or not member_ids:
+        return {}
+
+    spans: List[Tuple[date, Optional[date]]] = []
+    # Only a rolling requirement reads a shift older than its window.
+    unbounded = full_history and any(get_rolling_period_months(r) for r in counted)
+    for req in counted:
+        start, end = completion_window(
+            req, requirement_as_of(req, today, org_include_current_month)
+        )
+        if start is None:
+            unbounded = True
+        elif end is None or start <= end:
+            spans.append((start, end))
+    if not unbounded and not spans:
+        return {}
+
+    def _dated(column) -> List[ColumnElement[bool]]:
+        if unbounded:
+            return []
+        return [
+            or_(
+                *(
+                    column >= start if end is None else column.between(start, end)
+                    for start, end in _merge_spans(spans)
+                )
+            )
+        ]
+
+    ids = [str(m) for m in member_ids]
+    by_user: Dict[str, List[date]] = {}
+    attendance = await db.execute(
+        select(
+            ShiftAttendance.user_id,
+            Shift.shift_date,
+            func.count(ShiftAttendance.id),
+        )
+        .join(Shift, ShiftAttendance.shift_id == Shift.id)
+        .where(
+            Shift.organization_id == str(org_id),
+            Shift.is_finalized.is_(True),
+            ShiftAttendance.user_id.in_(ids),
+            *_dated(Shift.shift_date),
+        )
+        .group_by(ShiftAttendance.user_id, Shift.shift_date)
+    )
+    external = await db.execute(
+        select(
+            ExternalShiftHours.user_id,
+            ExternalShiftHours.shift_date,
+            func.count(ExternalShiftHours.id),
+        )
+        .where(
+            ExternalShiftHours.organization_id == str(org_id),
+            ExternalShiftHours.status == ExternalShiftHoursStatus.COUNTED.value,
+            ExternalShiftHours.user_id.in_(ids),
+            *_dated(ExternalShiftHours.shift_date),
+        )
+        .group_by(ExternalShiftHours.user_id, ExternalShiftHours.shift_date)
+    )
+    for user_id, shift_date, n in [*attendance.all(), *external.all()]:
+        by_user.setdefault(str(user_id), []).extend([shift_date] * int(n or 0))
+    for dates in by_user.values():
+        dates.sort()
+    return by_user
 
 
 def _find_matching_profile(
@@ -1238,6 +1426,7 @@ def _evaluate_member_compliance(
     threshold_type: str,
     org_include_current_month: bool = True,
     join_date: Optional[date] = None,
+    shift_dates: Optional[Sequence[date]] = None,
 ) -> Tuple[str, Optional[float]]:
     """Evaluate a member's compliance status against a set of requirements.
 
@@ -1253,6 +1442,7 @@ def _evaluate_member_compliance(
             waivers=waivers,
             org_include_current_month=org_include_current_month,
             join_date=join_date,
+            shift_dates=shift_dates,
         )
         statuses.append(req_status)
     completed_count, total_count = tally_standing(statuses)
@@ -1526,6 +1716,14 @@ async def compute_org_compliance_tally(
         grading.include_current_month,
     ):
         records_by_user.setdefault(r.user_id, []).append(r)
+    shifts_by_user = await load_credited_shift_dates(
+        db,
+        org_id,
+        [m.id for m in members],
+        requirements,
+        today,
+        grading.include_current_month,
+    )
 
     # Fetch waivers
     waivers_by_user = await fetch_org_waivers(db, str(org_id))
@@ -1548,6 +1746,7 @@ async def compute_org_compliance_tally(
             grading.threshold_type,
             org_include_current_month=grading.include_current_month,
             join_date=member_join_date(member),
+            shift_dates=shifts_by_user.get(str(member.id), []),
         )
         if status == STANDING_NOT_APPLICABLE:
             not_applicable_count += 1

@@ -50,6 +50,7 @@ from app.models.training import (
     TimeOffStatus,
     TrainingProgram,
     TrainingRequirement,
+    TrainingStatus,
 )
 from app.models.user import (
     MemberLeaveOfAbsence,
@@ -74,9 +75,16 @@ from app.services.shift_eligibility_service import (
 from app.services.training_compliance import (
     biannual_window,
     catch_up_deadline,
+    completion_window,
+    counts_shift_attendance,
+    evaluate_member_requirement_detail,
+    get_org_include_current_month,
+    load_credited_shift_dates,
     member_join_date,
     requirement_applies_to_member,
+    requirement_as_of,
 )
+from app.services.training_waiver_service import fetch_org_waivers
 from app.utils.apparatus_ref import (
     apparatus_ref_exists,
     resolve_apparatus_display_map,
@@ -8729,6 +8737,16 @@ class SchedulingService:
         training records — grading it here as well put two answers to one
         question on two screens (W37-2).
 
+        A SHIFTS requirement is graded by the shared compliance grader
+        (``evaluate_member_requirement_detail``) from the shared count of
+        shifts worked (``load_credited_shift_dates``): finalized attendance
+        plus counted external shifts, over the requirement's own compliance
+        window and cut-off, with training waivers applied. That is the figure
+        the compliance matrix, My Training and the annual report show for the
+        same member (shifts-three-sources). Its ``period_start`` /
+        ``period_end`` are that window, and are ``None`` where the window is
+        open (a one-time requirement counts every shift on record).
+
         Returns a list of requirement compliance summaries, each containing
         per-member progress data.
         """
@@ -8777,11 +8795,43 @@ class SchedulingService:
             for uid, slug in pos_result.all():
                 user_position_slugs.setdefault(uid, []).append(slug)
 
+        # SHIFTS requirements are graded by the shared grader, from the shared
+        # count of shifts worked, on the same cut-off and waivers.
+        include_current_month = True
+        shifts_by_user: Dict[str, List[date]] = {}
+        waivers_by_user: Dict[str, list] = {}
+        if any(counts_shift_attendance(r) for r in requirements):
+            include_current_month = await get_org_include_current_month(
+                self.db, str(organization_id)
+            )
+            shifts_by_user = await load_credited_shift_dates(
+                self.db,
+                str(organization_id),
+                [u.id for u in all_users],
+                requirements,
+                reference_date,
+                include_current_month,
+            )
+            waivers_by_user = await fetch_org_waivers(self.db, str(organization_id))
+
         # 3. For each requirement, compute compliance
         compliance_data = []
 
         for req in requirements:
-            period_start, period_end = self._compute_period_bounds(req, reference_date)
+            graded_by_shared_grader = counts_shift_attendance(req)
+            open_start: Optional[date]
+            open_end: Optional[date]
+            if graded_by_shared_grader:
+                open_start, open_end = completion_window(
+                    req,
+                    requirement_as_of(req, reference_date, include_current_month),
+                )
+            else:
+                open_start, open_end = self._compute_period_bounds(req, reference_date)
+            # The attendance and external queries below need concrete bounds;
+            # an open end of the window reads every shift on that side.
+            period_start = open_start or date.min
+            period_end = open_end or date.max
 
             # Determine required value
             if req.requirement_type == RequirementType.SHIFTS.value:
@@ -8816,8 +8866,8 @@ class SchedulingService:
                         "requirement_type": req.requirement_type,
                         "required_value": required_value,
                         "frequency": req.frequency,
-                        "period_start": period_start.isoformat(),
-                        "period_end": period_end.isoformat(),
+                        "period_start": open_start.isoformat() if open_start else None,
+                        "period_end": open_end.isoformat() if open_end else None,
                         "members": [],
                         "total_members": 0,
                         "compliant_count": 0,
@@ -8827,9 +8877,12 @@ class SchedulingService:
                 )
                 continue
 
-            # Batch-query attendance for all applicable users in the period
+            # Batch-query attendance for all applicable users in the period.
+            # A SHIFTS requirement credits finalized shifts only, as the shared
+            # count does; the hours column beside it follows the same rule so
+            # the row does not mix two kinds of attendance.
             user_ids = [u.id for u in applicable_users]
-            att_result = await self.db.execute(
+            att_query = (
                 select(
                     ShiftAttendance.user_id,
                     func.count(ShiftAttendance.id).label("shift_count"),
@@ -8844,6 +8897,9 @@ class SchedulingService:
                 .where(ShiftAttendance.user_id.in_(user_ids))
                 .group_by(ShiftAttendance.user_id)
             )
+            if graded_by_shared_grader:
+                att_query = att_query.where(Shift.is_finalized.is_(True))
+            att_result = await self.db.execute(att_query)
             attendance_map: Dict[str, Dict] = {}
             for row in att_result.all():
                 attendance_map[row.user_id] = {
@@ -8864,7 +8920,9 @@ class SchedulingService:
             # Pre-load leave months for rolling requirements so we can
             # pro-rate each member's required value.
             is_rolling = (
-                req.due_date_type == DueDateType.ROLLING and req.rolling_period_months
+                not graded_by_shared_grader
+                and req.due_date_type == DueDateType.ROLLING
+                and req.rolling_period_months
             )
             user_leave_months: Dict[str, int] = {}
             if is_rolling:
@@ -8895,8 +8953,37 @@ class SchedulingService:
                 shift_count = int(att["shift_count"] or 0) + ext["shift_count"]
                 total_minutes = int(att["total_minutes"] or 0) + ext["minutes"]
                 total_hours = hours_from_minutes(total_minutes)
+                leave_months = user_leave_months.get(user.id, 0)
 
-                if req.requirement_type == RequirementType.SHIFTS.value:
+                if graded_by_shared_grader:
+                    ev = evaluate_member_requirement_detail(
+                        req,
+                        [],
+                        reference_date,
+                        waivers=waivers_by_user.get(str(user.id), []),
+                        org_include_current_month=include_current_month,
+                        join_date=member_join_date(user),
+                        shift_dates=shifts_by_user.get(str(user.id), []),
+                    )
+                    completed_value = ev.progress_current or 0
+                    shift_count = int(completed_value)
+                    member_required = ev.progress_required or 0
+                    leave_months = ev.waived_months
+                    is_compliant = ev.status == TrainingStatus.COMPLETED.value
+                    deadline = (
+                        date.fromisoformat(ev.catch_up_deadline)
+                        if ev.catch_up_deadline
+                        else None
+                    )
+                    percentage = round(
+                        (
+                            completed_value / member_required * 100
+                            if member_required > 0
+                            else (100 if is_compliant else 0)
+                        ),
+                        1,
+                    )
+                elif req.requirement_type == RequirementType.SHIFTS.value:
                     completed_value = shift_count
                     compliance_value = completed_value
                 else:
@@ -8906,33 +8993,37 @@ class SchedulingService:
                     # can otherwise erase a shortfall of nearly 7.5 minutes.
                     compliance_value = float(total_minutes) / 60.0
 
-                # Adjust required value for rolling-period requirements
-                # by excluding months the member was on leave.
-                member_required = required_value
-                leave_months = user_leave_months.get(user.id, 0)
-                if is_rolling and leave_months > 0 and req.rolling_period_months:
-                    active_months = max(req.rolling_period_months - leave_months, 1)
-                    member_required = round(
-                        required_value * active_months / req.rolling_period_months, 1
+                if not graded_by_shared_grader:
+                    # Adjust required value for rolling-period requirements
+                    # by excluding months the member was on leave.
+                    member_required = required_value
+                    if is_rolling and leave_months > 0 and req.rolling_period_months:
+                        active_months = max(req.rolling_period_months - leave_months, 1)
+                        member_required = round(
+                            required_value * active_months / req.rolling_period_months,
+                            1,
+                        )
+
+                    percentage = round(
+                        (
+                            (completed_value / member_required * 100)
+                            if member_required > 0
+                            else 100
+                        ),
+                        1,
                     )
+                    is_compliant = compliance_value >= member_required
 
-                percentage = round(
-                    (
-                        (completed_value / member_required * 100)
-                        if member_required > 0
-                        else 100
-                    ),
-                    1,
-                )
-                is_compliant = compliance_value >= member_required
-
-                # An existing member short of the target inside the catch-up
-                # period is listed with the deadline but counted neither way.
-                deadline = (
-                    None
-                    if is_compliant
-                    else catch_up_deadline(req, member_join_date(user), reference_date)
-                )
+                    # An existing member short of the target inside the
+                    # catch-up period is listed with the deadline but counted
+                    # neither way.
+                    deadline = (
+                        None
+                        if is_compliant
+                        else catch_up_deadline(
+                            req, member_join_date(user), reference_date
+                        )
+                    )
                 if deadline is None:
                     graded_count += 1
                     if is_compliant:
@@ -8971,8 +9062,8 @@ class SchedulingService:
                     "requirement_type": req.requirement_type,
                     "required_value": required_value,
                     "frequency": req.frequency,
-                    "period_start": period_start.isoformat(),
-                    "period_end": period_end.isoformat(),
+                    "period_start": open_start.isoformat() if open_start else None,
+                    "period_end": open_end.isoformat() if open_end else None,
                     "members": members,
                     "total_members": total_members,
                     "compliant_count": compliant_count,

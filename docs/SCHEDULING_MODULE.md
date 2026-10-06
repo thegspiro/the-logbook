@@ -2997,9 +2997,13 @@ skipped, as are dates outside the pattern's own start and end." in place of
 ### Smaller fixes
 
 - **Shift Compliance** shows **Not applicable** for a requirement with
-  `total_members == 0` instead of "0% · 0/0 compliant" in red (W37-1). It still
-  grades training HOURS requirements from shift attendance alone (W37-2, open).
-  Since 2026-10-03 it skips members a requirement grandfathers by join date.
+  `total_members == 0` instead of "0% · 0/0 compliant" in red (W37-1). It
+  grades only requirements marked `shift_credited` (W37-2). Since 2026-10-03 it
+  skips members a requirement grandfathers by join date. Since 2026-10-06 a
+  SHIFTS requirement is graded by the shared compliance grader from finalized
+  attendance plus counted external shifts, over the requirement's own window —
+  the same figure the training screens show (shifts-three-sources; see
+  `docs/training-compliance-calculations.md` §2c).
 - **Open Swap** reads "Offered to members cleared for your seat; it stays
   yours until one picks it up" — see
   [Open swaps are picked up by eligible members](#swap-requests) (W33-4). The

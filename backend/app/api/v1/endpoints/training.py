@@ -93,6 +93,7 @@ from app.services.training_compliance import (
     evaluate_member_requirement_detail,
     get_org_include_current_month,
     get_requirement_date_window,
+    load_credited_shift_dates,
     load_graded_records,
     member_join_date,
     requirement_applies_to_user,
@@ -192,6 +193,14 @@ async def get_training_dashboard_summary(
     by_user: dict[str, list[TrainingRecord]] = {}
     for record in records:
         by_user.setdefault(str(record.user_id), []).append(record)
+    shifts_by_user = await load_credited_shift_dates(
+        db,
+        str(org_id),
+        [m.id for m in members],
+        requirements,
+        today,
+        grading.include_current_month,
+    )
     waivers = await fetch_org_waivers(db, str(org_id))
 
     compliant = 0
@@ -212,6 +221,7 @@ async def get_training_dashboard_summary(
                 waivers=waivers.get(str(member.id), []),
                 org_include_current_month=grading.include_current_month,
                 join_date=join_date,
+                shift_dates=shifts_by_user.get(str(member.id), []),
             )
             statuses.append(req_status)
             # Inside an existing member's catch-up period the requirement is
@@ -1788,6 +1798,11 @@ async def get_compliance_summary(
     member_records = await load_graded_records(
         db, str(org_id), [str(user_id)], requirements, today, org_include_current
     )
+    shift_dates = (
+        await load_credited_shift_dates(
+            db, str(org_id), [str(user_id)], requirements, today, org_include_current
+        )
+    ).get(str(user_id), [])
 
     # Fetch waivers
     waivers = await fetch_user_waivers(db, str(org_id), str(user_id))
@@ -1803,6 +1818,7 @@ async def get_compliance_summary(
             waivers=waivers,
             org_include_current_month=org_include_current,
             join_date=join_date,
+            shift_dates=shift_dates,
         )[0]
         for req in requirements
     )
@@ -3072,6 +3088,14 @@ async def get_compliance_matrix(
         grading.include_current_month,
     ):
         records_by_user.setdefault(r.user_id, []).append(r)
+    shifts_by_user = await load_credited_shift_dates(
+        db,
+        str(org_id),
+        [m.id for m in members],
+        requirements,
+        today,
+        grading.include_current_month,
+    )
 
     # Batch-fetch all active waivers / leaves for the org
     waivers_by_user = await fetch_org_waivers(db, str(org_id))
@@ -3102,6 +3126,7 @@ async def get_compliance_matrix(
                 waivers=member_waivers,
                 org_include_current_month=grading.include_current_month,
                 join_date=join_date,
+                shift_dates=shifts_by_user.get(str(member.id), []),
             )
 
             if ev.as_of and (as_of is None or ev.as_of < as_of):
@@ -3273,6 +3298,14 @@ async def get_member_period_status(
         ),
     ):
         records_by_user.setdefault(r.user_id, []).append(r)
+    shifts_by_user = await load_credited_shift_dates(
+        db,
+        str(org_id),
+        [m.id for m in members],
+        requirements,
+        today,
+        org_include_current,
+    )
 
     waivers_by_user = await fetch_org_waivers(db, str(org_id))
 
@@ -3333,6 +3366,7 @@ async def get_member_period_status(
                 waivers=member_waivers,
                 org_include_current_month=org_include_current,
                 join_date=join_date,
+                shift_dates=shifts_by_user.get(str(member.id), []),
             )[0]
             for req in applicable
         )

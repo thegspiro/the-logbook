@@ -38,6 +38,7 @@ from app.models.training import (
 from app.models.user import User, UserStatus
 from app.services.training_compliance import (
     CATCH_UP_STATUS,
+    load_credited_shift_dates,
     member_join_date,
     requirement_applies_to_user,
     tally_standing,
@@ -89,7 +90,9 @@ def _forecast_pct(met: int, total: int, expiring_count: int) -> Optional[float]:
     return round(max(0, current - (expiring_count / total * 100)), 1)
 
 
-def _requirement_cells(requirements, user, records, today: date) -> List[str]:
+def _requirement_cells(
+    requirements, user, records, today: date, shift_dates: List[date]
+) -> List[str]:
     """One export cell per requirement column for ``user``.
 
     "N/A" where the requirement does not grade this member — their membership
@@ -106,7 +109,7 @@ def _requirement_cells(requirements, user, records, today: date) -> List[str]:
             cells.append("N/A")
             continue
         detail = TrainingService.evaluate_requirement_detail(
-            req, records, today, join_date=join_date
+            req, records, today, join_date=join_date, shift_dates=shift_dates
         )
         if detail.get("catch_up_deadline"):
             cells.append(f"Due {detail['catch_up_deadline']}")
@@ -1051,6 +1054,9 @@ class ReportExportService:
         # "Met" is judged as of the department's today, the same day the
         # compliance screens use; a caller's end_date only bounds the rows.
         today = await resolve_org_today(self.db, organization_id)
+        shifts_by_user = await load_credited_shift_dates(
+            self.db, organization_id, [u.id for u in users], requirements, today, True
+        )
         for user in users:
             records_result = await self.db.execute(
                 select(TrainingRecord)
@@ -1070,7 +1076,15 @@ class ReportExportService:
                 str(len(records)),
             ]
 
-            row.extend(_requirement_cells(requirements, user, records, today))
+            row.extend(
+                _requirement_cells(
+                    requirements,
+                    user,
+                    records,
+                    today,
+                    shifts_by_user.get(str(user.id), []),
+                )
+            )
 
             writer.writerow(row)
 
@@ -1182,6 +1196,17 @@ class ReportExportService:
             )
         )
         all_requirements = req_result.scalars().all()
+        # Full history: a rolling requirement's due date, which the at-risk
+        # list below reads, anchors on the latest shift however old.
+        shifts_by_user = await load_credited_shift_dates(
+            self.db,
+            organization_id,
+            [u.id for u in users],
+            all_requirements,
+            today,
+            True,
+            full_history=True,
+        )
 
         for user in users:
             # Only what grades this member — by type, role, and grandfathering.
@@ -1209,7 +1234,11 @@ class ReportExportService:
                 from app.services.training_service import TrainingService
 
                 detail = TrainingService.evaluate_requirement_detail(
-                    req, records, today, join_date=join_date
+                    req,
+                    records,
+                    today,
+                    join_date=join_date,
+                    shift_dates=shifts_by_user.get(str(user.id), []),
                 )
                 statuses.append(_detail_status(detail))
                 if (
@@ -1295,6 +1324,14 @@ class ReportExportService:
         # tomorrow for a US department every evening.
         org_tz = await resolve_scheduling_timezone(self.db, organization_id)
         generated_on = datetime.now(org_tz).date()
+        shifts_by_user = await load_credited_shift_dates(
+            self.db,
+            organization_id,
+            [u.id for u in users],
+            requirements,
+            generated_on,
+            True,
+        )
 
         buf = io.BytesIO()
         c = canvas.Canvas(buf, pagesize=letter)
@@ -1354,7 +1391,13 @@ class ReportExportService:
             c.drawString(col_x[2], y, f"{total_hours:.1f}")
             c.drawString(col_x[3], y, str(len(records)))
 
-            cells = _requirement_cells(requirements, user, records, generated_on)
+            cells = _requirement_cells(
+                requirements,
+                user,
+                records,
+                generated_on,
+                shifts_by_user.get(str(user.id), []),
+            )
             for i, status_text in enumerate(cells):
                 x = req_col_start + i * 70
                 if x + 60 > page_w - margin:

@@ -1035,12 +1035,16 @@ rather than "0% · 0/0 compliant" in red, which read as everyone failing it.
 Since 2026-10-03 the report also skips members a requirement exempts because
 they joined before it — see [Training](./02-training.md).
 
-> **Know what this report grades.** It counts **shift attendance** (plus
-> outside shifts) against every active HOURS or SHIFTS requirement — including
-> a training hours requirement the Training module grades from training
-> records. The two can disagree about the same member; which requirements shift
-> hours should satisfy is an open decision (workflow review W37-2, in
-> `docs/KNOWN_LIMITATIONS.md`).
+> **Know what this report grades.** It lists the HOURS and SHIFTS requirements
+> marked "Shift attendance satisfies this requirement". A **SHIFTS**
+> requirement is counted here exactly as on the Training screens _(2026-10-06)_:
+> shifts an officer has **finalized**, plus counted outside shifts, inside the
+> requirement's own compliance window, with training waivers applied — so the
+> count, the target and "compliant" match the compliance matrix and My Training
+> for the same member. A shift that has not been closed out is not counted until
+> it is. A one-time SHIFTS requirement shows "All shifts on record" as its
+> period. An **HOURS** requirement is graded here from shift attendance only
+> when it is ticked; the Training screens still grade it from training records.
 
 ![Scheduling compliance report with per-member shift totals](./images/03-14-scheduling-reports.png)
 
