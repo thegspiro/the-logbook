@@ -76,9 +76,9 @@ const getDeadlineColor = (deadlineDate: string | null): string => {
   if (!deadlineDate) return 'text-theme-text-secondary';
   const days = daysUntil(deadlineDate);
   if (isNaN(days)) return 'text-theme-text-secondary';
-  if (days < 14) return 'text-red-600';
-  if (days < 30) return 'text-yellow-600';
-  return 'text-green-600';
+  if (days < 14) return 'text-red-700 dark:text-red-400';
+  if (days < 30) return 'text-yellow-700 dark:text-yellow-400';
+  return 'text-green-700 dark:text-green-400';
 };
 
 const getDeadlineBadgeColor = (deadlineDate: string | null): string => {

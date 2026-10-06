@@ -185,7 +185,7 @@ const AnnualReportSection: React.FC = () => {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
-            <FileText className="h-5 w-5 shrink-0 text-red-500" />
+            <FileText className="h-5 w-5 shrink-0 text-red-700 dark:text-red-400" />
             Annual Compliance Report — {year}
           </h2>
           <p className="text-theme-text-muted mt-1 text-sm">Generated {formatDate(report.generated_at, tz)}</p>
@@ -257,11 +257,11 @@ const AnnualReportSection: React.FC = () => {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <div className="card p-4">
           <h3 className="text-theme-text-secondary mb-2 text-sm font-medium">Active Certifications</h3>
-          <p className="text-2xl font-bold text-green-500">{summary.total_certifications_active}</p>
+          <p className="text-2xl font-bold text-green-700 dark:text-green-400">{summary.total_certifications_active}</p>
         </div>
         <div className="card p-4">
           <h3 className="text-theme-text-secondary mb-2 text-sm font-medium">Expired Certifications</h3>
-          <p className="text-2xl font-bold text-red-500">{summary.total_certifications_expired}</p>
+          <p className="text-2xl font-bold text-red-700 dark:text-red-400">{summary.total_certifications_expired}</p>
         </div>
         <div className="card p-4">
           <h3 className="text-theme-text-secondary mb-2 text-sm font-medium">ISO Readiness</h3>
@@ -279,7 +279,9 @@ const AnnualReportSection: React.FC = () => {
                 <p className="text-theme-text-muted mb-1 text-xs">{cat.category_name}</p>
                 <p className="text-theme-text-primary text-lg font-bold">{formatHours(cat.approved_hours)} hrs</p>
                 {cat.pending_hours > 0 && (
-                  <p className="text-xs text-yellow-500">{formatHours(cat.pending_hours)} hrs pending</p>
+                  <p className="text-xs text-yellow-700 dark:text-yellow-400">
+                    {formatHours(cat.pending_hours)} hrs pending
+                  </p>
                 )}
                 <p className="text-theme-text-muted text-xs">{cat.total_entries} entries</p>
               </div>
@@ -301,15 +303,21 @@ const AnnualReportSection: React.FC = () => {
             </div>
             <div className="flex justify-between">
               <span className="text-theme-text-muted">Completed</span>
-              <span className="font-medium text-green-500">{report.recertification_summary.tasks_completed}</span>
+              <span className="font-medium text-green-700 dark:text-green-400">
+                {report.recertification_summary.tasks_completed}
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-theme-text-muted">Pending</span>
-              <span className="font-medium text-yellow-500">{report.recertification_summary.tasks_pending}</span>
+              <span className="font-medium text-yellow-700 dark:text-yellow-400">
+                {report.recertification_summary.tasks_pending}
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-theme-text-muted">Expired</span>
-              <span className="font-medium text-red-500">{report.recertification_summary.tasks_expired}</span>
+              <span className="font-medium text-red-700 dark:text-red-400">
+                {report.recertification_summary.tasks_expired}
+              </span>
             </div>
           </div>
         </div>
@@ -330,7 +338,9 @@ const AnnualReportSection: React.FC = () => {
             </div>
             <div className="flex justify-between">
               <span className="text-theme-text-muted">Expiring</span>
-              <span className="font-medium text-yellow-500">{report.instructor_summary.expiring_qualifications}</span>
+              <span className="font-medium text-yellow-700 dark:text-yellow-400">
+                {report.instructor_summary.expiring_qualifications}
+              </span>
             </div>
           </div>
         </div>
@@ -343,7 +353,9 @@ const AnnualReportSection: React.FC = () => {
             </div>
             <div className="flex justify-between">
               <span className="text-theme-text-muted">NIMS Compliant</span>
-              <span className="font-medium text-green-500">{report.multi_agency_summary.nims_compliant_exercises}</span>
+              <span className="font-medium text-green-700 dark:text-green-400">
+                {report.multi_agency_summary.nims_compliant_exercises}
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-theme-text-muted">Participants</span>
@@ -385,7 +397,7 @@ const AnnualReportSection: React.FC = () => {
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-theme-text-secondary text-sm font-medium">Record Completeness (NFPA 1401)</h3>
           <span
-            className={`rounded px-2 py-1 text-xs font-semibold ${report.record_completeness.nfpa_1401_compliant ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}
+            className={`rounded px-2 py-1 text-xs font-semibold ${report.record_completeness.nfpa_1401_compliant ? 'bg-green-500/10 text-green-700 dark:text-green-400' : 'bg-red-500/10 text-red-700 dark:text-red-400'}`}
           >
             {report.record_completeness.nfpa_1401_compliant ? 'NFPA 1401 Compliant' : 'Below NFPA 1401 Standard'}
           </span>
@@ -407,7 +419,7 @@ const AnnualReportSection: React.FC = () => {
             <div key={field.field_name} className="text-center">
               <p className="text-theme-text-muted text-xs capitalize">{field.field_name.replace('_', ' ')}</p>
               <p
-                className={`text-sm font-semibold ${field.fill_rate_pct >= 90 ? 'text-green-500' : field.fill_rate_pct >= 70 ? 'text-yellow-500' : 'text-red-500'}`}
+                className={`text-sm font-semibold ${field.fill_rate_pct >= 90 ? 'text-green-700 dark:text-green-400' : field.fill_rate_pct >= 70 ? 'text-yellow-700 dark:text-yellow-400' : 'text-red-700 dark:text-red-400'}`}
               >
                 {field.fill_rate_pct}%
               </p>
@@ -470,7 +482,7 @@ const AnnualReportSection: React.FC = () => {
                         <span className="text-theme-text-muted">Not applicable</span>
                       ) : (
                         <span
-                          className={`font-semibold ${req.compliance_pct >= 80 ? 'text-green-500' : req.compliance_pct >= 50 ? 'text-yellow-500' : 'text-red-500'}`}
+                          className={`font-semibold ${req.compliance_pct >= 80 ? 'text-green-700 dark:text-green-400' : req.compliance_pct >= 50 ? 'text-yellow-700 dark:text-yellow-400' : 'text-red-700 dark:text-red-400'}`}
                         >
                           {req.compliance_pct}%
                         </span>
@@ -551,7 +563,7 @@ const AnnualReportSection: React.FC = () => {
                     <td className="text-theme-text-secondary px-4 py-2 text-center">
                       {formatHours(member.admin_hours_approved)}
                     </td>
-                    <td className="px-4 py-2 text-center font-semibold text-green-500">
+                    <td className="px-4 py-2 text-center font-semibold text-green-700 dark:text-green-400">
                       {formatHours(sumHoursToQuarter([member.hours_completed, member.admin_hours_approved]))}
                     </td>
                     <td className="text-theme-text-secondary px-4 py-2 text-center">
@@ -560,7 +572,9 @@ const AnnualReportSection: React.FC = () => {
                     <td className="px-4 py-2 text-center">
                       <span
                         className={
-                          member.expired_certifications > 0 ? 'font-semibold text-red-500' : 'text-theme-text-muted'
+                          member.expired_certifications > 0
+                            ? 'font-semibold text-red-700 dark:text-red-400'
+                            : 'text-theme-text-muted'
                         }
                       >
                         {member.expired_certifications}
@@ -614,7 +628,7 @@ const ISOReadinessSection: React.FC = () => {
     <div className="space-y-6">
       <div>
         <h2 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
-          <BarChart3 className="h-5 w-5 text-blue-500" />
+          <BarChart3 className="h-5 w-5 text-blue-700 dark:text-blue-400" />
           ISO/FSRS Readiness Assessment — {data.year}
         </h2>
         <p className="text-theme-text-muted mt-1 text-sm">
@@ -636,10 +650,10 @@ const ISOReadinessSection: React.FC = () => {
           <p
             className={`text-4xl font-bold ${
               data.overall_readiness_pct >= 80
-                ? 'text-green-500'
+                ? 'text-green-700 dark:text-green-400'
                 : data.overall_readiness_pct >= 50
-                  ? 'text-yellow-500'
-                  : 'text-red-500'
+                  ? 'text-yellow-700 dark:text-yellow-400'
+                  : 'text-red-700 dark:text-red-400'
             }`}
           >
             {data.training_points_estimate}
@@ -662,7 +676,7 @@ const ISOReadinessSection: React.FC = () => {
               </div>
               <div className="text-right">
                 <p
-                  className={`text-lg font-bold ${cat.compliance_pct >= 80 ? 'text-green-500' : cat.compliance_pct >= 50 ? 'text-yellow-500' : 'text-red-500'}`}
+                  className={`text-lg font-bold ${cat.compliance_pct >= 80 ? 'text-green-700 dark:text-green-400' : cat.compliance_pct >= 50 ? 'text-yellow-700 dark:text-yellow-400' : 'text-red-700 dark:text-red-400'}`}
                 >
                   {cat.compliance_pct}%
                 </p>
@@ -722,7 +736,7 @@ const RecordCompletenessSection: React.FC = () => {
     <div className="space-y-6">
       <div>
         <h2 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
-          <ClipboardCheck className="h-5 w-5 text-purple-500" />
+          <ClipboardCheck className="h-5 w-5 text-purple-700 dark:text-purple-400" />
           Training Record Quality (NFPA 1401)
         </h2>
         <p className="text-theme-text-muted mt-1 text-sm">
@@ -740,7 +754,7 @@ const RecordCompletenessSection: React.FC = () => {
             </p>
           </div>
           <div
-            className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${data.nfpa_1401_compliant ? 'border border-green-500/20 bg-green-500/10 text-green-500' : 'border border-red-500/20 bg-red-500/10 text-red-500'}`}
+            className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${data.nfpa_1401_compliant ? 'border border-green-500/20 bg-green-500/10 text-green-700 dark:text-green-400' : 'border border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-400'}`}
           >
             {data.nfpa_1401_compliant ? 'NFPA 1401 Compliant' : 'Below NFPA 1401 Standard (requires 90%)'}
           </div>
@@ -761,7 +775,7 @@ const RecordCompletenessSection: React.FC = () => {
             <div key={field.field_name} className="bg-theme-input-bg/50 rounded-lg p-3">
               <p className="text-theme-text-muted mb-1 text-xs capitalize">{field.field_name.replace(/_/g, ' ')}</p>
               <p
-                className={`text-xl font-bold ${field.fill_rate_pct >= 90 ? 'text-green-500' : field.fill_rate_pct >= 70 ? 'text-yellow-500' : 'text-red-500'}`}
+                className={`text-xl font-bold ${field.fill_rate_pct >= 90 ? 'text-green-700 dark:text-green-400' : field.fill_rate_pct >= 70 ? 'text-yellow-700 dark:text-yellow-400' : 'text-red-700 dark:text-red-400'}`}
               >
                 {field.fill_rate_pct}%
               </p>
@@ -844,7 +858,7 @@ const AttestationsSection: React.FC = () => {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
-            <Shield className="h-5 w-5 shrink-0 text-green-500" />
+            <Shield className="h-5 w-5 shrink-0 text-green-700 dark:text-green-400" />
             Compliance Attestations
           </h2>
           <p className="text-theme-text-muted mt-1 text-sm">Formal sign-off records certifying department compliance</p>
@@ -957,7 +971,7 @@ const AttestationsSection: React.FC = () => {
             <div key={att.attestation_id} className="card p-4">
               <div className="mb-2 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <CheckCircle className="h-5 w-5 text-green-500" />
+                  <CheckCircle className="h-5 w-5 text-green-700 dark:text-green-400" />
                   <div>
                     <p className="text-theme-text-primary text-sm font-semibold">
                       {att.period_type === 'annual' ? 'Annual' : `Q${att.period_quarter}`} Attestation —{' '}
@@ -973,7 +987,7 @@ const AttestationsSection: React.FC = () => {
                   </div>
                 </div>
                 <span
-                  className={`text-lg font-bold ${att.compliance_percentage >= 80 ? 'text-green-500' : att.compliance_percentage >= 50 ? 'text-yellow-500' : 'text-red-500'}`}
+                  className={`text-lg font-bold ${att.compliance_percentage >= 80 ? 'text-green-700 dark:text-green-400' : att.compliance_percentage >= 50 ? 'text-yellow-700 dark:text-yellow-400' : 'text-red-700 dark:text-red-400'}`}
                 >
                   {att.compliance_percentage}%
                 </span>
@@ -1046,7 +1060,7 @@ const ForecastSection: React.FC = () => {
     <div className="space-y-6">
       <div>
         <h2 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
-          <TrendingUp className="h-5 w-5 text-orange-500" />
+          <TrendingUp className="h-5 w-5 text-orange-700 dark:text-orange-400" />
           Predictive Compliance Forecast
         </h2>
         <p className="text-theme-text-muted mt-1 text-sm">
@@ -1151,7 +1165,9 @@ const ForecastSection: React.FC = () => {
                   <td className="px-4 py-2 text-center">
                     <span
                       className={
-                        f.expiring_certifications.length > 0 ? 'font-semibold text-red-500' : 'text-theme-text-muted'
+                        f.expiring_certifications.length > 0
+                          ? 'font-semibold text-red-700 dark:text-red-400'
+                          : 'text-theme-text-muted'
                       }
                     >
                       {f.expiring_certifications.length}
@@ -1195,12 +1211,12 @@ interface SummaryCardProps {
 
 const SummaryCard: React.FC<SummaryCardProps> = ({ label, value, color, icon: Icon }) => {
   const colorMap = {
-    green: 'text-green-500',
-    yellow: 'text-yellow-500',
-    red: 'text-red-500',
-    blue: 'text-blue-500',
-    purple: 'text-purple-500',
-    orange: 'text-orange-500',
+    green: 'text-green-700 dark:text-green-400',
+    yellow: 'text-yellow-700 dark:text-yellow-400',
+    red: 'text-red-700 dark:text-red-400',
+    blue: 'text-blue-700 dark:text-blue-400',
+    purple: 'text-purple-700 dark:text-purple-400',
+    orange: 'text-orange-700 dark:text-orange-400',
   };
 
   return (
@@ -1216,9 +1232,9 @@ const SummaryCard: React.FC<SummaryCardProps> = ({ label, value, color, icon: Ic
 
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   const config: Record<string, { bg: string; text: string; label: string }> = {
-    compliant: { bg: 'bg-green-500/10', text: 'text-green-500', label: 'Compliant' },
-    at_risk: { bg: 'bg-yellow-500/10', text: 'text-yellow-500', label: 'At Risk' },
-    non_compliant: { bg: 'bg-red-500/10', text: 'text-red-500', label: 'Non-Compliant' },
+    compliant: { bg: 'bg-green-500/10', text: 'text-green-700 dark:text-green-400', label: 'Compliant' },
+    at_risk: { bg: 'bg-yellow-500/10', text: 'text-yellow-700 dark:text-yellow-400', label: 'At Risk' },
+    non_compliant: { bg: 'bg-red-500/10', text: 'text-red-700 dark:text-red-400', label: 'Non-Compliant' },
   };
   const c = config[status] ?? { bg: 'bg-theme-surface-secondary', text: 'text-theme-text-muted', label: status };
   return (
@@ -1230,7 +1246,7 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
 
 const PctBadge: React.FC<{ pct: number }> = ({ pct }) => (
   <span
-    className={`text-sm font-semibold ${pct >= 80 ? 'text-green-500' : pct >= 50 ? 'text-yellow-500' : 'text-red-500'}`}
+    className={`text-sm font-semibold ${pct >= 80 ? 'text-green-700 dark:text-green-400' : pct >= 50 ? 'text-yellow-700 dark:text-yellow-400' : 'text-red-700 dark:text-red-400'}`}
   >
     {pct.toFixed(1)}%
   </span>
