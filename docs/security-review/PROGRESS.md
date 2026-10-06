@@ -16,12 +16,19 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR [#2962](https://github.com/thegspiro/the-logbook/pull/2962)
-(Feature 10, Documents & legal, pass 7) merged — docs-only (0
-application-code changes: only `DOC-10-documents-legal.md`,
-`KNOWN_LIMITATIONS.md`, `PROGRESS.md`), so per this file's own rule it is
-not a recordable event on its own; rotation row 10 already stood ✅. This
-iteration picks up Feature 11 (Inventory), the state this PR opened from.
+**PR [#2966](https://github.com/thegspiro/the-logbook/pull/2966)**: branch
+`claude/security-review-inventory`, Feature 11 (Inventory), pass 7 — 0 code
+fixes, 0 new findings, INV-16 narrowed (the MSUP-25 fix routes
+`quantity_received`/`status` through the locked `transition_reorder_request`
+path; the remaining fields `update_reorder_request` still writes without a
+lock are a smaller surface, not a new finding). Real delta since pass 6
+reviewed in full — 77 non-merge commits, 18 of which an initial shallow-clone
+`git log` silently dropped until `git fetch --unshallow` surfaced them. Route
+count in `inventory.py` grew to 149 (+5), all five new routes carrying a
+single proportionate permission. Gate green (flake8/black/isort, migrations,
+route-permission check — 245 routes, 1566 scoped + full inventory/label/nfc/
+kiosk backend tests, frontend typecheck/lint, 1574 scoped frontend tests).
+See the Log entry below for detail.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 10, Documents &amp; legal, pass 7, PR #2962, merged docs-only — not independently recorded), preserved for history</summary>
