@@ -14,6 +14,7 @@ import type {
   ApprovalChainUpdatePayload,
   ApprovalEntityType,
   ApprovalStepRecord,
+  ApproverCoverageRow,
   Budget,
   BudgetCategory,
   BudgetSummary,
@@ -188,6 +189,12 @@ export const approvalChainService = {
     await api.delete(`/finance/approval-chains/${chainId}/steps/${stepId}`);
   },
 
+  /** Every approval step and whether anybody can act on it. Needs `finance.configure_approvals`. */
+  async getApproverCoverage(): Promise<ApproverCoverageRow[]> {
+    const response = await api.get<ApproverCoverageRow[]>('/finance/approval-chains/approver-coverage');
+    return asArray(response.data);
+  },
+
   async preview(params: { entityType: string; amount: MonetaryAmount; categoryId?: string }): Promise<ApprovalChain> {
     const response = await api.get<ApprovalChain>('/finance/approval-chains/preview', {
       params: {
@@ -204,23 +211,35 @@ export const approvalChainService = {
 // Approvals
 // =============================================================================
 
+const stepDecisionBody = (notes?: string, overrideReason?: string) => ({
+  notes: notes || undefined,
+  ...(overrideReason ? { overrideReason } : {}),
+});
+
 export const approvalService = {
   async getPending(): Promise<PendingApproval[]> {
     const response = await api.get<PendingApproval[]>('/finance/approvals/pending');
     return asArray(response.data);
   },
 
-  async approve(stepRecordId: string, notes?: string): Promise<ApprovalStepRecord> {
-    const response = await api.post<ApprovalStepRecord>(`/finance/approvals/${stepRecordId}/approve`, {
-      notes: notes || undefined,
-    });
+  /**
+   * `overrideReason` is for an approvals admin acting on a step they are not
+   * the named approver of; it is sent only when given, and recorded in the
+   * audit log.
+   */
+  async approve(stepRecordId: string, notes?: string, overrideReason?: string): Promise<ApprovalStepRecord> {
+    const response = await api.post<ApprovalStepRecord>(
+      `/finance/approvals/${stepRecordId}/approve`,
+      stepDecisionBody(notes, overrideReason)
+    );
     return response.data;
   },
 
-  async deny(stepRecordId: string, notes?: string): Promise<ApprovalStepRecord> {
-    const response = await api.post<ApprovalStepRecord>(`/finance/approvals/${stepRecordId}/deny`, {
-      notes: notes || undefined,
-    });
+  async deny(stepRecordId: string, notes?: string, overrideReason?: string): Promise<ApprovalStepRecord> {
+    const response = await api.post<ApprovalStepRecord>(
+      `/finance/approvals/${stepRecordId}/deny`,
+      stepDecisionBody(notes, overrideReason)
+    );
     return response.data;
   },
 

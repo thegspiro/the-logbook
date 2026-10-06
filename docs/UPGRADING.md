@@ -291,6 +291,50 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Finance approvals now go to the approver each step names (2026-10-04)
+
+Until this release an approval chain step's approver — "Treasurer position",
+"members with finance.manage", a named member, an email address — was a label.
+Anyone holding `finance.approve` could approve or deny any step, whatever it
+named. **From this release only the named approver can.** There is no setting
+to turn it off and no migration; the rule applies to requests already waiting.
+
+- A step with **no approver** set still takes any `finance.approve` holder,
+  exactly as before.
+- A **position** step takes active members holding that position; a
+  **permission** step takes active members granted that permission (an
+  administrator holding `*` included); a **member** step takes that member; an
+  **email** step takes the member with that account email, or the outside
+  approver through the emailed link.
+- Somebody holding `finance.configure_approvals` — the Treasurer, since
+  2026-09-06 — can still approve or deny a step they are not named on by
+  giving an **override reason**. It is written to the audit log at warning
+  severity. It does not let anyone approve their own request.
+- An emailed approval link stops working if its step has since been changed
+  away from an email approver.
+- The Approvals page lists only the steps the viewer can act on (plus, for an
+  approvals administrator, the rest, marked as needing an override). The
+  dashboard's pending-approvals count is unchanged and still counts every
+  waiting request.
+
+**What to check, before and after upgrading.** A step that names a position
+nobody active holds, a member who has left, a permission nobody has or a
+mistyped value now leaves its requests waiting with nobody able to act. Open
+**Finance → Settings → Approval Chains** and confirm every approval step names
+somebody who is still there. After upgrading,
+`GET /api/v1/finance/approval-chains/approver-coverage` (needs
+`finance.configure_approvals`) lists every approval step with how many active
+members can act on it, a `problem` when none can (`no_value`, `not_found`,
+`no_active_members`, `invalid_email`), and how many requests are waiting on it
+now. Fix each flagged step, or have an approvals administrator act on the
+waiting requests with an override reason in the meantime.
+
+Saving a step now also checks its approver: a position must exist in the
+department, a member must be active, a permission must be a real permission
+name (`*` is allowed, a module wildcard like `finance.*` is not), and an email
+step takes exactly one address. A step saved before this release keeps
+working and can still be renamed; changing its approver re-checks it.
+
 ### A reverse proxy you run yourself keeps its own upload limit (2026-09-30)
 
 The bundled proxies — the frontend container's nginx, the `production`

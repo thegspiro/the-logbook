@@ -22,8 +22,17 @@ from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.security_middleware import get_client_ip, public_rate_limit
 from app.core.utils import safe_error_detail
-from app.models.finance import ApprovalStepRecord, ApprovalStepStatus
-from app.services.finance_service import BudgetLimitExceededError, FinanceService
+from app.models.finance import (
+    ApprovalStepRecord,
+    ApprovalStepStatus,
+    ApprovalStepType,
+    ApproverType,
+)
+from app.services.finance_service import (
+    ApprovalTokenNotValidError,
+    BudgetLimitExceededError,
+    FinanceService,
+)
 
 router = APIRouter(
     prefix="/public/v1/finance/approvals", tags=["public-finance-approvals"]
@@ -91,7 +100,15 @@ async def _load_record(db: AsyncSession, token: str) -> ApprovalStepRecord:
         .options(selectinload(ApprovalStepRecord.step))
     )
     record = result.scalar_one_or_none()
-    if not record:
+    # A token whose step has since been reassigned away from an email
+    # approver no longer authorizes anything, so it reads as unknown — the
+    # service refuses it the same way (ApprovalTokenNotValidError).
+    if (
+        not record
+        or record.step is None
+        or record.step.step_type != ApprovalStepType.APPROVAL
+        or record.step.approver_type != ApproverType.EMAIL
+    ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Approval not found"
         )
@@ -158,6 +175,10 @@ async def approve_via_token(
             organization_id=str(record.chain.organization_id),
         )
         await db.commit()
+    except ApprovalTokenNotValidError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Approval not found"
+        )
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except ValueError as e:
@@ -203,6 +224,10 @@ async def deny_via_token(
             organization_id=str(record.chain.organization_id),
         )
         await db.commit()
+    except ApprovalTokenNotValidError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Approval not found"
+        )
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except ValueError as e:

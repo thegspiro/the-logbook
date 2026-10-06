@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
-import type { ApprovalChain } from '../types';
+import type { ApprovalChain, ApproverCoverageRow } from '../types';
 
 const mockList = vi.fn();
 const mockCreate = vi.fn();
@@ -11,6 +11,7 @@ const mockDelete = vi.fn();
 const mockAddStep = vi.fn();
 const mockUpdateStep = vi.fn();
 const mockDeleteStep = vi.fn();
+const mockGetCoverage = vi.fn();
 const mockCategoryList = vi.fn();
 const mockGetRoles = vi.fn();
 const mockGetPermissions = vi.fn();
@@ -27,6 +28,7 @@ vi.mock('../services/api', () => ({
     addStep: (...args: unknown[]) => mockAddStep(...args) as unknown,
     updateStep: (...args: unknown[]) => mockUpdateStep(...args) as unknown,
     deleteStep: (...args: unknown[]) => mockDeleteStep(...args) as unknown,
+    getApproverCoverage: (...args: unknown[]) => mockGetCoverage(...args) as unknown,
   },
   budgetCategoryService: {
     list: (...args: unknown[]) => mockCategoryList(...args) as unknown,
@@ -94,6 +96,35 @@ const chain: ApprovalChain = {
   ],
 };
 
+const coverageRow = (overrides: Partial<ApproverCoverageRow>): ApproverCoverageRow => ({
+  chainId: 'c1',
+  chainName: 'Large purchases',
+  chainIsActive: true,
+  stepId: 's1',
+  stepName: 'Treasurer review',
+  stepOrder: 1,
+  approverType: 'position',
+  approverValue: 'treasurer',
+  assigneeLabel: 'Treasurer position',
+  eligibleActiveCount: 1,
+  problem: null,
+  pendingRequestCount: 0,
+  ...overrides,
+});
+
+const healthyCoverage = [
+  coverageRow({}),
+  coverageRow({
+    stepId: 's2',
+    stepName: 'Trustee sign-off',
+    stepOrder: 2,
+    approverType: 'email',
+    approverValue: 'trustee@example.org',
+    assigneeLabel: 'trustee@example.org',
+    eligibleActiveCount: 0,
+  }),
+];
+
 async function openChainSteps() {
   const user = userEvent.setup();
   renderWithRouter(<ApprovalChainsSettingsPage />);
@@ -111,6 +142,7 @@ describe('ApprovalChainsSettingsPage', () => {
       mockAddStep,
       mockUpdateStep,
       mockDeleteStep,
+      mockGetCoverage,
       mockCategoryList,
       mockGetRoles,
       mockGetPermissions,
@@ -127,6 +159,7 @@ describe('ApprovalChainsSettingsPage', () => {
     mockAddStep.mockResolvedValue({});
     mockUpdateStep.mockResolvedValue({});
     mockDeleteStep.mockResolvedValue(undefined);
+    mockGetCoverage.mockResolvedValue(structuredClone(healthyCoverage));
     mockGetRoles.mockResolvedValue([{ id: 'r1', slug: 'treasurer', name: 'Treasurer' }]);
     mockGetPermissions.mockResolvedValue([{ name: 'finance.approve', description: '', category: 'finance' }]);
     mockGetUsers.mockResolvedValue([{ id: 'u9', username: 'jdoe', first_name: 'Jane', last_name: 'Doe' }]);
@@ -324,5 +357,132 @@ describe('ApprovalChainsSettingsPage', () => {
         is_default: false,
       })
     );
+  });
+
+  describe('approver coverage', () => {
+    // The outer beforeEach resets every mock and installs a healthy report;
+    // these tests override it per case.
+
+    it('shows no warning when every approval step has someone who can act on it', async () => {
+      await openChainSteps();
+
+      await waitFor(() => expect(mockGetCoverage).toHaveBeenCalledTimes(1));
+      expect(
+        screen.queryByText(/have no one who can act on them|has no one who can act on it/)
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText('No active member can act on this step')).not.toBeInTheDocument();
+    });
+
+    it('flags each step nobody can act on, with how many requests are waiting, and says so at the top', async () => {
+      mockGetCoverage.mockResolvedValue([
+        coverageRow({ problem: 'not_found', eligibleActiveCount: 0, pendingRequestCount: 3 }),
+        coverageRow({
+          stepId: 's2',
+          stepName: 'Trustee sign-off',
+          stepOrder: 2,
+          approverType: 'email',
+          approverValue: 'trustee@',
+          problem: 'invalid_email',
+          eligibleActiveCount: 0,
+        }),
+      ]);
+      await openChainSteps();
+
+      expect(
+        await screen.findByText(
+          '2 approval steps have no one who can act on them. Requests waiting on them need an approvals admin to override, or fix the step.'
+        )
+      ).toBeInTheDocument();
+      const steps = within(screen.getByRole('list', { name: 'Steps in Large purchases' }));
+      const [first, second] = steps.getAllByRole('listitem');
+      expect(within(first as HTMLElement).getByText('That position no longer exists')).toBeInTheDocument();
+      expect(within(first as HTMLElement).getByText('3 requests waiting')).toBeInTheDocument();
+      expect(within(second as HTMLElement).getByText('Not a valid email address')).toBeInTheDocument();
+      expect(within(second as HTMLElement).queryByText(/requests? waiting/)).not.toBeInTheDocument();
+    });
+
+    it.each([
+      ['no_value', 'position', 'No position chosen'],
+      ['not_found', 'specific_user', 'That member no longer exists'],
+      ['not_found', 'permission', 'That permission no longer exists'],
+      ['no_active_members', 'position', 'No active member can act on this step'],
+    ] as const)('words the %s problem for a %s approver plainly', async (problem, approverType, text) => {
+      mockGetCoverage.mockResolvedValue([
+        coverageRow({ problem, approverType, eligibleActiveCount: 0, pendingRequestCount: 1 }),
+      ]);
+      await openChainSteps();
+
+      expect(await screen.findByText(text)).toBeInTheDocument();
+      expect(screen.getByText('1 request waiting')).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          '1 approval step has no one who can act on it. Requests waiting on it need an approvals admin to override, or fix the step.'
+        )
+      ).toBeInTheDocument();
+    });
+
+    it('re-checks coverage after a step is saved', async () => {
+      const user = await openChainSteps();
+      await waitFor(() => expect(mockGetCoverage).toHaveBeenCalledTimes(1));
+      mockGetCoverage.mockResolvedValue([coverageRow({ problem: 'no_active_members', eligibleActiveCount: 0 })]);
+
+      await user.click(screen.getByRole('button', { name: 'Edit Treasurer review' }));
+      await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Save step' }));
+
+      await waitFor(() => expect(mockGetCoverage).toHaveBeenCalledTimes(2));
+      expect(await screen.findByText('No active member can act on this step')).toBeInTheDocument();
+    });
+
+    it('re-checks coverage after a step is deleted and after a chain is edited', async () => {
+      const user = await openChainSteps();
+      await waitFor(() => expect(mockGetCoverage).toHaveBeenCalledTimes(1));
+
+      await user.click(screen.getByRole('button', { name: 'Delete Treasurer review' }));
+      await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete step' }));
+      await waitFor(() => expect(mockGetCoverage).toHaveBeenCalledTimes(2));
+
+      await user.click(screen.getByRole('button', { name: 'Edit chain Large purchases' }));
+      await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Save chain' }));
+      await waitFor(() => expect(mockGetCoverage).toHaveBeenCalledTimes(3));
+    });
+
+    it('shows the API’s refusal of an approver value that does not resolve', async () => {
+      mockUpdateStep.mockRejectedValue({
+        response: {
+          status: 400,
+          data: { detail: 'Approver value "treasurer" is not a position in this organization.' },
+        },
+      });
+      const user = await openChainSteps();
+      await user.click(screen.getByRole('button', { name: 'Edit Treasurer review' }));
+      await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Save step' }));
+
+      await waitFor(() =>
+        expect(mockToastError).toHaveBeenCalledWith(
+          'Approver value "treasurer" is not a position in this organization.'
+        )
+      );
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+
+    it('says when coverage could not be checked rather than implying all is well', async () => {
+      mockGetCoverage.mockRejectedValue(new Error('offline'));
+      await openChainSteps();
+
+      expect(
+        await screen.findByText('Could not check whether every approval step has someone who can act on it.')
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('explains in the step form that only the named approver can act, and that admins can override', async () => {
+    const user = await openChainSteps();
+    await user.click(screen.getByRole('button', { name: 'Edit Treasurer review' }));
+    const dialog = within(screen.getByRole('dialog'));
+
+    expect(
+      dialog.getByText(/Only the approver chosen here can approve or deny this step in The Logbook/)
+    ).toBeInTheDocument();
+    expect(dialog.queryByText(/whatever you choose here/)).not.toBeInTheDocument();
   });
 });
