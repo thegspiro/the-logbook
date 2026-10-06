@@ -96,7 +96,7 @@ test.describe('mobile create and edit surfaces', () => {
 
   test('inventory create form remains usable and releases the page mask', async ({ page }, testInfo) => {
     await page.goto('/inventory/items');
-    await expect(page.getByRole('heading', { name: 'Inventory Items' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Inventory Items', exact: true })).toBeVisible();
 
     const addItem = await visibleButton(page, 'Add Item');
     await addItem.click();
