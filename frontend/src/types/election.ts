@@ -88,6 +88,8 @@ export interface Election {
   closed_at?: string | null;
   closed_by?: string | null;
   closed_by_name?: string | null;
+  // Corrections to the result after close, oldest first (W50-9)
+  results_revisions?: ResultsRevision[] | null;
   created_at: string;
   updated_at: string;
   total_votes?: number;
@@ -100,6 +102,15 @@ export interface Election {
  * (GET /elections/ballot). Deliberately excludes roster/PII fields
  * (attendees, eligible_voters, email_recipients, created_by, ...).
  */
+/** One correction made to a closed election's result (W50-9). */
+export interface ResultsRevision {
+  at: string;
+  by?: string | null;
+  by_name?: string | null;
+  action: string; // vote_voided | paper_batch_voided | write_ins_merged
+  detail?: string | null;
+}
+
 export interface BallotElection {
   id: string;
   title: string;

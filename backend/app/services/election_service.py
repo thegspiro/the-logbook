@@ -2381,6 +2381,13 @@ class ElectionService:
         if not vote:
             return None
 
+        election = (
+            await self.db.execute(
+                select(Election).where(Election.id == vote.election_id)
+            )
+        ).scalar_one()
+        await self._record_results_revision(election, "vote_voided", deleted_by, reason)
+
         vote.deleted_at = datetime.now(timezone.utc)
         vote.deleted_by = str(deleted_by)
         vote.deletion_reason = reason
@@ -3725,6 +3732,52 @@ class ElectionService:
         )
         return sent, failed, skipped, skipped_details
 
+    RESULTS_REVISION_LABELS: Dict[str, str] = {
+        "vote_voided": "a vote was voided",
+        "paper_batch_voided": "a paper-ballot batch was voided",
+        "write_ins_merged": "write-in candidates were merged",
+    }
+
+    async def _record_results_revision(
+        self, election: Election, action: str, by_user_id: Any, detail: str
+    ) -> None:
+        """Stamp a change to a CLOSED election's result (W50-9).
+
+        Merge Write-Ins, Void a Vote and a paper-batch void stay allowed
+        after close — they are how a certified result is corrected — but
+        they used to re-issue the tally silently: an election went from four
+        co-winners to one with the certified PDF unchanged. The owner chose
+        (2026-10-05) to keep the corrections and mark them, "revised <when>
+        by <who>", on the PDF and the Results tab. While voting is open the
+        result is not yet certified, so nothing is stamped then. The caller
+        commits.
+        """
+        if election.status != ElectionStatus.CLOSED:
+            return
+        name = None
+        if by_user_id:
+            row = (
+                await self.db.execute(
+                    select(User.first_name, User.last_name).where(
+                        User.id == str(by_user_id),
+                        User.organization_id == str(election.organization_id),
+                    )
+                )
+            ).one_or_none()
+            if row is not None:
+                name = f"{row[0] or ''} {row[1] or ''}".strip() or None
+        revisions = copy.deepcopy(election.results_revisions or [])
+        revisions.append(
+            {
+                "at": datetime.now(timezone.utc).isoformat(),
+                "by": str(by_user_id) if by_user_id else None,
+                "by_name": name,
+                "action": action,
+                "detail": detail,
+            }
+        )
+        election.results_revisions = revisions
+
     async def closed_by_name(self, election: Election) -> Optional[str]:
         """Display name of the officer who closed ``election``, or None for
         an automatic (lifecycle) close or a since-deleted account."""
@@ -4740,7 +4793,8 @@ class ElectionService:
             .where(Election.organization_id == str(organization_id))
             .with_for_update()
         )
-        if election_result.scalar_one_or_none() is None:
+        election = election_result.scalar_one_or_none()
+        if election is None:
             return 0, "Election not found"
 
         # Lock the batch next — it's the row every void of this batch
@@ -4790,6 +4844,12 @@ class ElectionService:
             batch.voided_by = str(deleted_by)
             batch.voided_at = now
             batch.void_reason = reason
+        await self._record_results_revision(
+            election,
+            "paper_batch_voided",
+            deleted_by,
+            f"{len(votes)} paper ballot(s): {reason}",
+        )
         await self.db.commit()
 
         logger.warning(
@@ -4982,6 +5042,12 @@ class ElectionService:
 
         for cand in sources:
             cand.merged_into_candidate_id = target.id
+        await self._record_results_revision(
+            election,
+            "write_ins_merged",
+            merged_by,
+            f"{', '.join(c.name for c in sources)} merged into {target.name}",
+        )
         await self.db.commit()
 
         merged_names = [c.name for c in sources]
@@ -5162,6 +5228,18 @@ class ElectionService:
                 "closed_by_display": (
                     await self.closed_by_name(election) or "automatic close"
                 ),
+                "revisions_display": [
+                    "Results revised "
+                    + await self._org_local_time(
+                        organization, datetime.fromisoformat(rev["at"])
+                    )
+                    + f" by {rev.get('by_name') or 'an officer'}: "
+                    + self.RESULTS_REVISION_LABELS.get(
+                        rev.get("action", ""), rev.get("action", "")
+                    )
+                    + (f" ({rev['detail']})" if rev.get("detail") else "")
+                    for rev in (election.results_revisions or [])
+                ],
                 "voting_method": election.voting_method,
                 "victory_condition": election.victory_condition,
                 "tie_policy": getattr(election, "tie_policy", None) or "co_winners",
@@ -6165,9 +6243,10 @@ class ElectionService:
             to_status = "open"
             new_status = ElectionStatus.OPEN
             # The reopened election has not closed yet; the eventual re-close
-            # stamps its own instant and officer.
+            # stamps its own instant and officer, and certifies afresh.
             election.closed_at = None
             election.closed_by = None
+            election.results_revisions = None
         elif election.status == ElectionStatus.OPEN:
             # Rollback from open to draft
             to_status = "draft"

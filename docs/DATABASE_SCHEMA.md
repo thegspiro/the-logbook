@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**295 tables · 4850 columns · 963 foreign keys**
+**295 tables · 4851 columns · 963 foreign keys**
 
 ---
 
@@ -157,7 +157,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`candidates`](#candidates) | `Candidate` | 15 | Candidate model for election candidates |
-| [`elections`](#elections) | `Election` | 52 | Election model for managing elections within an organization |
+| [`elections`](#elections) | `Election` | 53 | Election model for managing elections within an organization |
 | [`manual_ballot_attestations`](#manual_ballot_attestations) | `ManualBallotAttestation` | 5 | One officer's confirmation that a paper-tally batch matches the |
 | [`manual_ballot_batches`](#manual_ballot_batches) | `ManualBallotBatch` | 14 | One paper-tally entry — the set of manual votes sharing a batch id. |
 | [`saved_ballot_templates`](#saved_ballot_templates) | `SavedBallotTemplate` | 11 | Organization-scoped, reusable snapshot of a structured ballot. |
@@ -2203,6 +2203,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `quorum_type` | VARCHAR(20) | no |  | `none` |  |
 | `quorum_value` | INTEGER | yes |  |  |  |
 | `last_chain_hash` | VARCHAR(64) | yes |  |  |  |
+| `results_revisions` | JSON | yes |  |  |  |
 | `rollback_history` | JSON | yes |  |  |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | no |  | `now()` |  |

@@ -686,7 +686,9 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `election_service.py:4391-4455` `build_printable_ballot_pdf`; `GET /elections/{id}/printable-ballot` (`elections.py:1804`).
 **Fix:** round 2 renders each approval item as "☐ Approve ☐ Deny" under its title (`backend/tests/test_w50_printable_ballot_items.py`, pypdf text contains each item title). **Confirmed live** (CONFIRM-07): the PDF's text reads "Attendance Motion CN / Approval requiring attendance / Mark ONE box. ■ Approve ■ Deny" after the Chief race. **Flagged:** recording paper item votes needs Approve/Deny option rows pre-created per item at open, or a documented "paper is positions-only". Owner decides.
 
-### W50-9 — HIGH — Certified, published results can be rewritten after close — ✅ FIXED (S09, `3de83db`, corrected in `7aa3405`), candidate identity · confirmed live · FLAGGED, post-close merge / void
+### W50-9 — HIGH — Certified, published results can be rewritten after close — ✅ FIXED (S09, `3de83db`, corrected in `7aa3405`), candidate identity · confirmed live · ✅ DECIDED & FIXED (2026-10-05), post-close merge / void
+
+**Owner decision (2026-10-05):** allow the corrections with a "revised <when> by <who>" mark on the PDF and the panel. Each post-close void, batch void and write-in merge appends to `elections.results_revisions` (migration `5b1e7d3c9a42`); the certified PDF and the Results tab print every entry. Test: `backend/tests/test_w50_results_revised.py`, `ElectionResults.w50-9-revised.test.tsx`.
 
 **Did:** as `admin`: rename the winner on CLOSED EB1 (B7 C-06); merge after publish and PDF on EB3 (C-07); void a vote on CLOSED (C-08); void a confirmed batch after publish on EB2 (C-10); re-position a candidate while OPEN with votes (B3 O-37). As `secretary`, merge and void after close on E1 as planned (A8 steps 10/14).
 **Saw:** every one → 200. The PDF then read "Somebody Else … WINNER" with integrity unchanged; EB3 went from four co-winners to Finley sole winner; EB2 from a 1–1 tie to a Blair win.

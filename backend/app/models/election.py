@@ -273,6 +273,14 @@ class Election(Base):
     # Sequential vote chain hash — last hash in the chain for integrity verification
     last_chain_hash = Column(String(64), nullable=True)
 
+    # Changes to the result after it was certified at close — a voided
+    # vote, a voided paper batch, merged write-ins — each one stamped
+    # [{"at", "by", "by_name", "action", "detail"}] and printed as "Results
+    # revised <when> by <who>" on the certified PDF and the Results tab
+    # (W50-9). Cleared when a rollback reopens the election, like closed_at:
+    # the eventual re-close certifies afresh.
+    results_revisions = Column(JSON, nullable=True)
+
     # Rollback audit trail
     rollback_history = Column(JSON, nullable=True)
     # Format: [{"timestamp": "2024-01-19T10:00:00", "performed_by": "user_id",

@@ -57,6 +57,15 @@ finding below that says FLAGGED or OPEN is superseded by its line here.
   ordinary signed, chained manual votes. The printable ballot also carries a
   candidate-selection item outside `election.positions`. Guard:
   `tests/test_w50_paper_motion_options.py`.
+- **W50-9** (certified results silently revised by merge/void after
+  close) — **fixed, corrections kept and marked:** `soft_delete_vote`,
+  `void_manual_ballot_batch` and `merge_write_in_candidates` call
+  `_record_results_revision` on a CLOSED election, appending
+  `{at, by, by_name, action, detail}` to the new `elections.results_revisions`
+  (migration `5b1e7d3c9a42`, guarded, real downgrade); the certified PDF and
+  the Results tab print each as "Revised <when> by <who>". Votes are never
+  re-pointed or re-signed, so integrity verification is untouched; a
+  rollback to open clears the marks. Guard: `tests/test_w50_results_revised.py`.
 - **ELEC-16** (`list_manual_ballot_batches` unbounded) — **accepted as is.**
   Paper-tally sessions per election are naturally few; no cap and no
   pagination. Revisit if an election ever carries more than a few dozen

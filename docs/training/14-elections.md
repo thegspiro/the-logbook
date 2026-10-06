@@ -827,6 +827,15 @@ secretary"_, button **Send Report**) appears only once closed; the server now
 refuses the report while the election is open, where it used to mail a
 mid-vote tally headed "has been closed … official report".
 
+**Corrections after close are marked** _(2026-10-05)_. **Merge Write-Ins**,
+**Void a Vote** and voiding a paper-ballot batch still work once an election
+has closed — they are how a certified result is corrected — but each one now
+leaves a mark: the **Results** tab shows _"These results were revised after
+the election closed"_ with a line per correction (_"Revised <when> by <who>: a
+vote was voided (<reason>)"_), and the certified PDF prints the same lines
+under its "Election closed …" line. Rolling the election back to open clears
+the marks; the re-close certifies afresh.
+
 **What the results, the report and the certified PDF now show** _(2026-09-30)_:
 
 - **Every ballot item's outcome.** A motion's or membership vote's Approve/Deny
@@ -1202,8 +1211,6 @@ Drive"):
 - There is no seat count — a "(2 seats)" race declares one winner.
 - The emailed ballot pre-selects **Abstain** on every item; an untouched
   Submit casts no votes and uses up the link.
-- Merge Write-Ins, Void a Vote and a paper-batch void still change the results
-  after close and after publishing, with no revision mark.
 - Scheduled opening (**Open Automatically at Start Time**) sends no ballots.
 - Several screen fixes found in the same review — the delete and close dialog
   wording, a close stamp on the election cards, a test-ballot banner on the

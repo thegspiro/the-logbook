@@ -557,6 +557,17 @@ class ElectionUpdate(BaseModel):
         return _validate_ballot_item_identities(values)
 
 
+class ResultsRevision(BaseModel):
+    """One correction made to a closed election's result (W50-9)."""
+
+    at: datetime
+    by: Optional[str] = None
+    by_name: Optional[str] = None
+    # vote_voided | paper_batch_voided | write_ins_merged
+    action: str
+    detail: Optional[str] = None
+
+
 class ElectionResponse(UTCResponseBase):
     """Schema for election response"""
 
@@ -603,6 +614,9 @@ class ElectionResponse(UTCResponseBase):
     closed_at: Optional[datetime] = None
     closed_by: Optional[UUID] = None
     closed_by_name: Optional[str] = None
+    # Each change to the result after close (W50-9), oldest first, so the
+    # Results tab can mark the result "revised <when> by <who>".
+    results_revisions: Optional[List[ResultsRevision]] = None
     created_at: datetime
     updated_at: datetime
 
