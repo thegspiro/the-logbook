@@ -244,6 +244,42 @@ describe('PipelineDetailPage — enrollment progress management', () => {
     await waitFor(() => expect(mockGetEnrollmentProgress).toHaveBeenCalledTimes(2));
   });
 
+  it('shows a linked requirement as the compliance figure, offering only a waiver', async () => {
+    // W26-1: a department requirement linked into the program reads the
+    // member's compliance result; the server refuses manual progress on it.
+    mockGetEnrollmentProgress.mockResolvedValue({
+      enrollment,
+      program,
+      requirement_progress: [
+        {
+          ...certProgress,
+          status: 'in_progress',
+          progress_value: 4,
+          progress_percentage: 66.67,
+          reads_compliance: true,
+          requirement: { id: 'req-1', name: 'Annual Hazmat Hours', requirement_type: 'hours', required_hours: 6 },
+        },
+      ],
+      completed_requirements: 0,
+      total_requirements: 1,
+      next_milestones: [],
+      is_behind_schedule: false,
+    });
+    mockUpdateProgress.mockResolvedValue({ ...certProgress, status: 'waived', reads_compliance: true });
+    renderWithRouter(<PipelineDetailPage />);
+
+    await userEvent.click(await screen.findByRole('tab', { name: /Enrollments/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /Manage progress for Jane Recruit/i }));
+    const dialog = await screen.findByRole('dialog');
+
+    expect(await within(dialog).findByText(/as the compliance screens grade it \(4 of 6 hours\)/)).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /Mark complete/i })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('spinbutton')).not.toBeInTheDocument();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Waive for this program' }));
+    await waitFor(() => expect(mockUpdateProgress).toHaveBeenCalledWith('prog-rec-1', { status: 'waived' }));
+  });
+
   it('groups requirements by phase and advances to the next phase', async () => {
     const phase1 = {
       id: 'ph-1',

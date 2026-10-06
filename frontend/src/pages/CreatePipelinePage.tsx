@@ -620,8 +620,10 @@ const StepRequirements: React.FC<{
         </p>
         <p>
           For something the department already tracks — CPR, HIPAA, an imported NFPA item — use
-          <strong> Link existing</strong> rather than retyping it. The program then reads the same records the
-          department does, so a member who already holds it starts out credited.
+          <strong> Link existing</strong> rather than retyping it. The program then shows the member&apos;s standing on
+          it exactly as the compliance screens grade it, today and in its own period, so a member who already holds it
+          starts out credited. Because it is the department&apos;s record, it moves only when training is recorded;
+          within the program it can be waived but not marked off.
         </p>
       </InfoCallout>
     )}

@@ -1295,6 +1295,30 @@ Danielle's waived months from 5 to 4 and increasing her requirement from
 
 ---
 
+### Program Progress for a Linked Requirement (2026-10-06)
+
+A department requirement linked into a training program (the wizard's
+"Link existing") is not a separate tally. Its progress row is the
+member's compliance result, mapped by `compliance_projection` in
+`training_program_service.py`:
+
+```
+ev = evaluate_member_requirement_detail(requirement, records, today,
+        waivers, include_current_month, join_date, shift_dates)
+met                  → completed, 100%
+counted, not met     → value = progress_current,
+                       % = progress_current / progress_required
+                       (0% when the evaluation is "expired")
+status-only, not met → not started, 0%
+```
+
+So a member with 4 of 6 annual Hazmat hours enrolled today reads 4 of 6
+(67%) in the program, exactly as on My Training. The window is the
+requirement's own compliance window, not the enrollment date. A requirement
+a program created for itself keeps the program's own ledger. Completed,
+withdrawn, failed and expired enrollments keep the progress they finished
+with.
+
 ## Appendix: Integration Points
 
 All compliance calculations must consistently use the shared waiver service

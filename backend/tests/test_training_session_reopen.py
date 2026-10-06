@@ -199,6 +199,9 @@ class TestRestatingCorrectedHours:
             status="in_progress",
         )
         svc._get_org_scoped_progress = AsyncMock(return_value=progress)
+        # A program's own requirement: the ledger applies. A linked
+        # department requirement accrues nothing (W26-1).
+        svc._is_linked_row = AsyncMock(return_value=False)
         credit = SimpleNamespace(id="cred-1", units=existing_units)
         db.execute.return_value = _one(credit)
         svc.revoke_requirement_credit = AsyncMock(return_value=(progress, None))

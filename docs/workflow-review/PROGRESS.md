@@ -864,7 +864,7 @@ requirements; `program_name` added to the summary), W26-3 (LOW — two refused
 requests per visit, an "Enrolled 0" and a Duplicate for a plain member), W26-4
 (LOW — the wizard's new-requirement fields had no accessible names; a raw
 position slug on the review), W26-5 (NIT — the enroll picker's selection was
-colour only). Flagged: W26-1 (MED — a linked requirement starts at zero,
+colour only). Flagged: W26-1 (MED — fixed 2026-10-06 on the owner's decision to read the compliance result live; a linked requirement starts at zero,
 contradicting the compliance figure on the same screen and the wizard's
 promise). Gate: typecheck, lint, flake8, black, isort and the touched suites
 clean. Next: W27.

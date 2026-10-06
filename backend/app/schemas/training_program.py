@@ -556,6 +556,10 @@ class RequirementProgressResponse(RequirementProgressBase, UTCResponseBase):
     # "My Progress") can show the requirement's name/type. Eager-loaded by the
     # callers; from_attributes drops it unless it's declared here.
     requirement: Optional[TrainingRequirementEnhancedResponse] = None
+    # True for a linked department requirement: the row is the member's
+    # compliance result, read live, not a tally officers adjust (W26-1). Set
+    # by the enrollment progress read; False wherever it was not computed.
+    reads_compliance: bool = False
     created_at: datetime
     updated_at: datetime
 

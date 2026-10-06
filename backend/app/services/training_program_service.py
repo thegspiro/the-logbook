@@ -41,6 +41,7 @@ from app.models.training import (
     TrainingCourse,
     TrainingProgram,
     TrainingRequirement,
+    TrainingStatus,
     TrainingType,
 )
 from app.models.user import User
@@ -58,9 +59,18 @@ from app.schemas.training_program import (
     TrainingRequirementEnhancedCreate,
 )
 from app.services.notifications_service import NotificationsService
-from app.services.training_compliance import recency_cutoff
+from app.services.training_compliance import (
+    RequirementEvaluation,
+    evaluate_member_requirement_detail,
+    get_org_include_current_month,
+    load_credited_shift_dates,
+    load_graded_records,
+    member_join_date,
+    recency_cutoff,
+)
 from app.services.training_waiver_service import (
     adjust_required,
+    fetch_org_waivers,
     fetch_user_waivers,
     get_rolling_period_months,
 )
@@ -94,6 +104,51 @@ OFFICER_PROGRESS_NOTE_KEYS = (
     "passing_score",
     "passed",
 )
+
+
+# Program enrollments whose linked rows follow the compliance result. A
+# completed, withdrawn, failed or expired enrollment keeps the progress it
+# finished with: re-reading it live would reopen a program finished last year
+# the day an annual requirement's window rolled over.
+_LIVE_ENROLLMENT_STATUSES = (EnrollmentStatus.ACTIVE, EnrollmentStatus.ON_HOLD)
+
+LINKED_PROGRESS_REFUSAL = (
+    "This requirement is the department's own and reads the member's "
+    "compliance record, as the compliance screens do. Record the training "
+    "instead, or waive it for this program."
+)
+
+
+def compliance_projection(
+    ev: RequirementEvaluation,
+) -> Tuple[RequirementProgressStatus, float, float]:
+    """A compliance evaluation as program progress: (status, value, percent).
+
+    The one mapping from what the compliance grader decided to what a
+    program's progress row shows (W26-1, CLAUDE.md pitfall 29). A counted
+    requirement carries its count ("4 of 6 hours" is 4 and 67%); a status
+    requirement (certification, skills, test) is all or nothing. Only a met
+    requirement is complete; a lapsed one is worth nothing, as on My Training.
+    """
+    met = ev.status == TrainingStatus.COMPLETED.value
+    required = ev.progress_required
+    current = ev.progress_current
+    if required and required > 0 and current is not None:
+        value = float(current)
+        if met:
+            pct = 100.0
+        elif ev.status == "expired":
+            pct = 0.0
+        else:
+            pct = min(100.0, value / float(required) * 100)
+    else:
+        value = 1.0 if met else 0.0
+        pct = 100.0 if met else 0.0
+    if met:
+        return RequirementProgressStatus.COMPLETED, value, pct
+    if pct > 0:
+        return RequirementProgressStatus.IN_PROGRESS, value, pct
+    return RequirementProgressStatus.NOT_STARTED, value, pct
 
 
 class TrainingProgramService:
@@ -2442,7 +2497,9 @@ class TrainingProgramService:
             query = query.where(ProgramEnrollment.status == status)
 
         result = await self.db.execute(
-            query.order_by(ProgramEnrollment.enrolled_at.desc())
+            query.order_by(ProgramEnrollment.enrolled_at.desc()).execution_options(
+                populate_existing=True
+            )
         )
         return result.scalars().all()
 
@@ -2480,7 +2537,7 @@ class TrainingProgramService:
 
         query = query.order_by(ProgramEnrollment.enrolled_at.desc())
 
-        result = await self.db.execute(query)
+        result = await self.db.execute(query.execution_options(populate_existing=True))
         return list(result.all())
 
     async def get_enrollment_by_id(
@@ -2505,8 +2562,255 @@ class TrainingProgramService:
                 ProgramEnrollment.id == str(enrollment_id),
                 TrainingProgram.organization_id == str(organization_id),
             )
+            # A read after refresh_linked_progress or an auto-reset must see
+            # the committed rollup, not the instances the session already
+            # holds (expire_on_commit is off).
+            .execution_options(populate_existing=True)
         )
         return result.scalar_one_or_none()
+
+    # ==================== Linked Requirements Read Compliance ====================
+
+    async def linked_requirement_ids(self, program_ids: List[str]) -> Dict[str, set]:
+        """``{program_id: requirement ids}`` whose progress reads compliance.
+
+        A *linked* requirement is a department requirement a program points
+        at — the wizard's "Link existing". It is told apart from one a program
+        created for itself by ownership: a requirement some program link owns
+        (``owns_requirement``) was created inside a program, applies to nobody
+        on the compliance screens, and keeps its program-scoped progress
+        ledger — including in a duplicated program, whose links share it
+        without owning it. Every other requirement a program links is graded
+        live.
+        """
+        program_ids = [str(p) for p in program_ids]
+        if not program_ids:
+            return {}
+        links = (
+            await self.db.execute(
+                select(
+                    ProgramRequirement.program_id, ProgramRequirement.requirement_id
+                ).where(ProgramRequirement.program_id.in_(program_ids))
+            )
+        ).all()
+        requirement_ids = {str(r) for _, r in links}
+        if not requirement_ids:
+            return {}
+        owned = {
+            str(r)
+            for r in (
+                await self.db.execute(
+                    select(ProgramRequirement.requirement_id).where(
+                        ProgramRequirement.requirement_id.in_(requirement_ids),
+                        ProgramRequirement.owns_requirement.is_(True),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        }
+        linked: Dict[str, set] = {}
+        for program_id, requirement_id in links:
+            if str(requirement_id) not in owned:
+                linked.setdefault(str(program_id), set()).add(str(requirement_id))
+        return linked
+
+    async def _is_linked_row(self, progress: RequirementProgress) -> bool:
+        """Whether ``progress`` is a linked requirement's row (see above)."""
+        program_id = (
+            await self.db.execute(
+                select(ProgramEnrollment.program_id).where(
+                    ProgramEnrollment.id == str(progress.enrollment_id)
+                )
+            )
+        ).scalar_one_or_none()
+        if program_id is None:
+            return False
+        linked = await self.linked_requirement_ids([str(program_id)])
+        return str(progress.requirement_id) in linked.get(str(program_id), set())
+
+    async def _sync_linked_progress(self, enrollments: List[ProgramEnrollment]) -> set:
+        """Write the live compliance result onto each linked progress row.
+
+        The row becomes a projection of ``evaluate_member_requirement_detail``
+        — the grader behind the compliance matrix — as of the department's
+        today, with the member's graded records, shifts worked, waivers and
+        join date, so a member who already holds a linked requirement reads
+        credited from enrollment on, and the program and My Training show one
+        figure (W26-1). Stored so the enrollment rollup, phase completion and
+        the reports reading these rows see it. A WAIVED row is an officer's
+        program-level exemption and is left alone. Only active and on-hold
+        enrollments follow the live result (``_LIVE_ENROLLMENT_STATUSES``).
+
+        Batched: one load of requirements, members, records, shifts and
+        waivers per department per call, however many enrollments. Flushes,
+        does not commit. Returns the ids of enrollments whose rows changed.
+        """
+        live = [e for e in enrollments if e.status in _LIVE_ENROLLMENT_STATUSES]
+        if not live:
+            return set()
+        linked = await self.linked_requirement_ids(
+            list({str(e.program_id) for e in live})
+        )
+        wanted = {
+            str(e.id): linked[str(e.program_id)]
+            for e in live
+            if linked.get(str(e.program_id))
+        }
+        if not wanted:
+            return set()
+        rows = [
+            row
+            for row in (
+                await self.db.execute(
+                    select(RequirementProgress).where(
+                        RequirementProgress.enrollment_id.in_(list(wanted)),
+                        RequirementProgress.requirement_id.in_(
+                            list(set().union(*wanted.values()))
+                        ),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+            if str(row.requirement_id) in wanted[str(row.enrollment_id)]
+            and row.status != RequirementProgressStatus.WAIVED
+        ]
+        if not rows:
+            return set()
+
+        by_enrollment = {str(e.id): e for e in live}
+
+        def _org(row: RequirementProgress) -> str:
+            return str(by_enrollment[str(row.enrollment_id)].organization_id)
+
+        changed: set = set()
+        for org_id in {_org(r) for r in rows}:
+            org_rows = [r for r in rows if _org(r) == org_id]
+            requirements = {
+                str(req.id): req
+                for req in (
+                    await self.db.execute(
+                        select(TrainingRequirement).where(
+                            TrainingRequirement.id.in_(
+                                list({str(r.requirement_id) for r in org_rows})
+                            ),
+                            TrainingRequirement.organization_id == org_id,
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            }
+            user_ids = list(
+                {str(by_enrollment[str(r.enrollment_id)].user_id) for r in org_rows}
+            )
+            members = {
+                str(u.id): u
+                for u in (
+                    await self.db.execute(
+                        select(User).where(
+                            User.id.in_(user_ids), User.organization_id == org_id
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            }
+            today = await resolve_org_today(self.db, org_id)
+            include_current = await get_org_include_current_month(self.db, org_id)
+            records_by_user: Dict[str, list] = {}
+            for record in await load_graded_records(
+                self.db,
+                org_id,
+                user_ids,
+                list(requirements.values()),
+                today,
+                include_current,
+            ):
+                records_by_user.setdefault(str(record.user_id), []).append(record)
+            shifts_by_user = await load_credited_shift_dates(
+                self.db,
+                org_id,
+                user_ids,
+                list(requirements.values()),
+                today,
+                include_current,
+            )
+            waivers_by_user = await fetch_org_waivers(self.db, org_id)
+
+            for row in org_rows:
+                enrollment = by_enrollment[str(row.enrollment_id)]
+                requirement = requirements.get(str(row.requirement_id))
+                member = members.get(str(enrollment.user_id))
+                if requirement is None or member is None:
+                    continue
+                ev = evaluate_member_requirement_detail(
+                    requirement,
+                    records_by_user.get(str(member.id), []),
+                    today,
+                    waivers=waivers_by_user.get(str(member.id), []),
+                    org_include_current_month=include_current,
+                    join_date=member_join_date(member),
+                    shift_dates=shifts_by_user.get(str(member.id), []),
+                )
+                status, value, pct = compliance_projection(ev)
+                if (
+                    row.status == status
+                    and float(row.progress_value or 0) == value
+                    and float(row.progress_percentage or 0) == pct
+                ):
+                    continue
+                now = datetime.now(timezone.utc)
+                if status == RequirementProgressStatus.COMPLETED:
+                    if row.status != RequirementProgressStatus.COMPLETED:
+                        row.completed_at = now
+                else:
+                    row.completed_at = None
+                if status != RequirementProgressStatus.NOT_STARTED:
+                    row.started_at = row.started_at or now
+                row.status = status
+                row.progress_value = value
+                row.progress_percentage = pct
+                changed.add(str(row.enrollment_id))
+        if changed:
+            await self.db.flush()
+        return changed
+
+    async def refresh_linked_progress(
+        self, enrollments: List[ProgramEnrollment]
+    ) -> bool:
+        """Bring linked rows up to the compliance result before they are shown.
+
+        Called by every read that shows program progress, after its
+        permission check. When a row moved, commits, re-rolls the enrollment
+        percentage and lets a now-complete phase advance, as a progress
+        update would. Returns whether anything changed, so a caller holding
+        eager-loaded rows re-reads them.
+        """
+        changed = await self._sync_linked_progress(list(enrollments))
+        if not changed:
+            return False
+        await self.db.commit()
+        for enrollment_id in changed:
+            await self._recalculate_enrollment_progress(UUID(enrollment_id))
+            await self._maybe_auto_advance_phase(UUID(enrollment_id))
+        return True
+
+    async def mark_linked_rows(
+        self, program_id: Any, rows: List[RequirementProgress]
+    ) -> None:
+        """Set ``reads_compliance`` on each row for the response.
+
+        A plain instance attribute, never persisted: it tells the progress
+        screens to show the compliance figure in place of officer controls
+        the service refuses on a linked row.
+        """
+        linked = (await self.linked_requirement_ids([str(program_id)])).get(
+            str(program_id), set()
+        )
+        for row in rows:
+            row.reads_compliance = str(row.requirement_id) in linked
 
     # ==================== Progress Tracking Methods ====================
 
@@ -2566,6 +2870,14 @@ class TrainingProgramService:
             and str(progress.enrollment.user_id) != str(acting_user_id)
         ):
             return None, "You are not authorized to update this training progress"
+
+        # A linked department requirement reads the compliance result (W26-1):
+        # nothing accrues on its row and nobody marks it off here. A feed (a
+        # shift report, a session, a skills test) is answered by re-reading
+        # the compliance result; a person may only waive it for this program,
+        # or lift that waiver.
+        if await self._is_linked_row(progress):
+            return await self._update_linked_row(progress, updates, acting_user_id)
 
         # A member may not self-verify their own pipeline requirements: only a
         # training officer (can_manage) may mark one complete/verified/waived,
@@ -2964,6 +3276,44 @@ class TrainingProgramService:
 
         return progress, None
 
+    async def _update_linked_row(
+        self,
+        progress: RequirementProgress,
+        updates: RequirementProgressUpdate,
+        acting_user_id: Optional[UUID],
+    ) -> Tuple[Optional[RequirementProgress], Optional[str]]:
+        """``update_requirement_progress`` for a linked requirement's row."""
+        enrollment = (
+            await self.db.execute(
+                select(ProgramEnrollment).where(
+                    ProgramEnrollment.id == str(progress.enrollment_id)
+                )
+            )
+        ).scalar_one()
+        if acting_user_id is not None:
+            requested = updates.model_dump(exclude_unset=True)
+            status = requested.get("status")
+            status = getattr(status, "value", status)
+            waived = RequirementProgressStatus.WAIVED.value
+            current = getattr(progress.status, "value", progress.status)
+            if set(requested) - {"status", "verified_by"} or status is None:
+                return None, LINKED_PROGRESS_REFUSAL
+            if status != waived and current != waived:
+                return None, LINKED_PROGRESS_REFUSAL
+            if status == waived:
+                progress.status = RequirementProgressStatus.WAIVED
+                progress.completed_at = datetime.now(timezone.utc)
+            else:
+                # Lifting a waiver hands the row back to the compliance result.
+                progress.status = RequirementProgressStatus.NOT_STARTED
+                progress.completed_at = None
+            await self.db.commit()
+            await self._recalculate_enrollment_progress(UUID(str(enrollment.id)))
+            await self._maybe_auto_advance_phase(UUID(str(enrollment.id)))
+        await self.refresh_linked_progress([enrollment])
+        await self.db.refresh(progress)
+        return progress, None
+
     async def _get_org_scoped_progress(
         self, progress_id: Any, organization_id: UUID
     ) -> Optional[RequirementProgress]:
@@ -3029,6 +3379,28 @@ class TrainingProgramService:
         progress = await self._get_org_scoped_progress(progress_id, organization_id)
         if progress is None:
             return None, "Requirement progress not found"
+
+        # A linked department requirement accrues nothing from a feed: it
+        # reads the compliance result, which already counts the record or
+        # shift behind this credit (W26-1). No ledger row is written, so
+        # nothing is left to reverse.
+        if await self._is_linked_row(progress):
+            enrollment = (
+                await self.db.execute(
+                    select(ProgramEnrollment).where(
+                        ProgramEnrollment.id == str(progress.enrollment_id)
+                    )
+                )
+            ).scalar_one()
+            if (
+                acting_user_id is not None
+                and not can_manage
+                and str(enrollment.user_id) != str(acting_user_id)
+            ):
+                return None, "You are not authorized to update this training progress"
+            await self.refresh_linked_progress([enrollment])
+            await self.db.refresh(progress)
+            return progress, None
 
         # Preserve the authorization boundary of the real progress updater.
         # Feed callers handling a user request must identify that user; otherwise

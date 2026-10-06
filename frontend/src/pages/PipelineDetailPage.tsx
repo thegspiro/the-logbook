@@ -715,8 +715,33 @@ const RequirementProgressRow: React.FC<{
         </div>
       </div>
 
+      {/* A linked department requirement is the member's compliance result.
+          Nothing here changes it but a waiver; offering the editors would
+          offer controls the server refuses. */}
+      {record.reads_compliance && (
+        <div className="mt-3 space-y-2">
+          <p className="text-theme-text-muted text-xs">
+            {record.status === 'waived'
+              ? 'Waived for this program.'
+              : `Read from the member's training record, as the compliance screens grade it${
+                  target ? ` (${record.progress_value} of ${target.value} ${target.label})` : ''
+                }. Record the training to move it.`}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              void onUpdate(record.id, { status: record.status === 'waived' ? 'not_started' : 'waived' });
+            }}
+            disabled={saving}
+            className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-md border px-2 py-1 text-xs disabled:opacity-40"
+          >
+            {record.status === 'waived' ? 'Lift waiver' : 'Waive for this program'}
+          </button>
+        </div>
+      )}
+
       {/* Numeric value editor (hours / shifts / calls) */}
-      {numeric && (
+      {numeric && !record.reads_compliance && (
         <div className="mt-3 flex items-end gap-2">
           <div className="flex-1">
             <label className="text-theme-text-muted mb-1 block text-xs">Logged {target?.label ?? 'value'}</label>
@@ -745,7 +770,7 @@ const RequirementProgressRow: React.FC<{
 
       {/* Checklist steps: signed off one at a time, so the member watches the
           requirement fill up instead of waiting on a single all-or-nothing tick. */}
-      {checklistItems.length > 0 && (
+      {checklistItems.length > 0 && !record.reads_compliance && (
         <div className="mt-3 space-y-1.5">
           {checklistItems.map((item) => {
             const checked = doneIds.includes(item.id);
@@ -779,7 +804,7 @@ const RequirementProgressRow: React.FC<{
       )}
 
       {/* Test score entry (knowledge test): officer enters a %, pass/fail derived */}
-      {scored && (
+      {scored && !record.reads_compliance && (
         <div className="mt-3 space-y-2">
           {typeof latestScore === 'number' && (
             <div className="text-theme-text-muted text-xs">
@@ -823,53 +848,55 @@ const RequirementProgressRow: React.FC<{
       )}
 
       {/* Status quick actions — simple pass (Mark complete) / reopen */}
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => {
-            void onUpdate(record.id, { status: 'in_progress' });
-          }}
-          disabled={saving || record.status === 'in_progress'}
-          className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-md border px-2 py-1 text-xs disabled:opacity-40"
-        >
-          <Clock className="mr-1 inline h-3.5 w-3.5" /> In progress
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            void onUpdate(record.id, { status: 'completed' });
-          }}
-          disabled={saving || isDone}
-          className="rounded-md border border-green-600/40 px-2 py-1 text-xs text-green-700 hover:bg-green-500/10 disabled:opacity-40 dark:text-green-400"
-        >
-          <CheckCircle2 className="mr-1 inline h-3.5 w-3.5" /> Mark complete
-        </button>
-        {isDone && (
+      {!record.reads_compliance && (
+        <div className="mt-3 flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => {
-              void onUpdate(record.id, { status: 'not_started' });
+              void onUpdate(record.id, { status: 'in_progress' });
             }}
-            disabled={saving}
-            className="border-theme-surface-border text-theme-text-muted hover:bg-theme-surface-hover rounded-md border px-2 py-1 text-xs disabled:opacity-40"
+            disabled={saving || record.status === 'in_progress'}
+            className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-md border px-2 py-1 text-xs disabled:opacity-40"
           >
-            <Circle className="mr-1 inline h-3.5 w-3.5" /> Reopen
+            <Clock className="mr-1 inline h-3.5 w-3.5" /> In progress
           </button>
-        )}
-        {record.status !== 'not_started' && (
           <button
             type="button"
             onClick={() => {
-              void onReset(record.id, req?.name ?? 'this requirement');
+              void onUpdate(record.id, { status: 'completed' });
             }}
-            disabled={saving}
-            title="Reset accumulated progress for a new cycle"
-            className="border-theme-surface-border text-theme-text-muted hover:bg-theme-surface-hover rounded-md border px-2 py-1 text-xs disabled:opacity-40"
+            disabled={saving || isDone}
+            className="rounded-md border border-green-600/40 px-2 py-1 text-xs text-green-700 hover:bg-green-500/10 disabled:opacity-40 dark:text-green-400"
           >
-            <RotateCcw className="mr-1 inline h-3.5 w-3.5" /> Reset
+            <CheckCircle2 className="mr-1 inline h-3.5 w-3.5" /> Mark complete
           </button>
-        )}
-      </div>
+          {isDone && (
+            <button
+              type="button"
+              onClick={() => {
+                void onUpdate(record.id, { status: 'not_started' });
+              }}
+              disabled={saving}
+              className="border-theme-surface-border text-theme-text-muted hover:bg-theme-surface-hover rounded-md border px-2 py-1 text-xs disabled:opacity-40"
+            >
+              <Circle className="mr-1 inline h-3.5 w-3.5" /> Reopen
+            </button>
+          )}
+          {record.status !== 'not_started' && (
+            <button
+              type="button"
+              onClick={() => {
+                void onReset(record.id, req?.name ?? 'this requirement');
+              }}
+              disabled={saving}
+              title="Reset accumulated progress for a new cycle"
+              className="border-theme-surface-border text-theme-text-muted hover:bg-theme-surface-hover rounded-md border px-2 py-1 text-xs disabled:opacity-40"
+            >
+              <RotateCcw className="mr-1 inline h-3.5 w-3.5" /> Reset
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 };

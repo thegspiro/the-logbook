@@ -51,6 +51,7 @@ from app.services.training_compliance import (
     tally_standing,
 )
 from app.services.training_module_config_service import TrainingModuleConfigService
+from app.services.training_program_service import TrainingProgramService
 from app.services.training_service import TrainingService
 from app.services.training_waiver_service import fetch_user_waivers
 from app.utils.org_timezone import resolve_org_today
@@ -423,6 +424,20 @@ async def get_my_training_summary(
             .order_by(ProgramEnrollment.enrolled_at.desc())
         )
         enrollments = enrollments_result.scalars().all()
+        # A linked requirement reads the compliance result (W26-1), so this
+        # card and the Training Requirements list above it show one figure.
+        program_service = TrainingProgramService(db)
+        if await program_service.refresh_linked_progress(list(enrollments)):
+            enrollments_result = await db.execute(
+                select(ProgramEnrollment)
+                .where(ProgramEnrollment.user_id == str(user_id))
+                .order_by(ProgramEnrollment.enrolled_at.desc())
+                .execution_options(populate_existing=True)
+            )
+            enrollments = enrollments_result.scalars().all()
+        linked_by_program = await program_service.linked_requirement_ids(
+            list({str(e.program_id) for e in enrollments})
+        )
 
         # The card named neither the program nor its requirements, so a member
         # enrolled in two programs saw two anonymous progress bars.
@@ -488,6 +503,8 @@ async def get_my_training_summary(
                         "completed_at": (
                             rp.completed_at.isoformat() if rp.completed_at else None
                         ),
+                        "reads_compliance": str(rp.requirement_id)
+                        in linked_by_program.get(str(e.program_id), set()),
                     }
                     for rp in rps
                 ]

@@ -1375,6 +1375,14 @@ async def get_my_enrollments(
         organization_id=current_user.organization_id,
         status=status,
     )
+    # A linked requirement reads the compliance result (W26-1); bring the
+    # percentages up to it before they are shown.
+    if await service.refresh_linked_progress(list(enrollments)):
+        enrollments = await service.get_member_enrollments(
+            user_id=current_user.id,
+            organization_id=current_user.organization_id,
+            status=status,
+        )
 
     return enrollments
 
@@ -1401,6 +1409,12 @@ async def get_user_enrollments(
         organization_id=current_user.organization_id,
         status=status,
     )
+    if await service.refresh_linked_progress(list(enrollments)):
+        enrollments = await service.get_member_enrollments(
+            user_id=user_id,
+            organization_id=current_user.organization_id,
+            status=status,
+        )
 
     return enrollments
 
@@ -1465,6 +1479,21 @@ async def get_enrollment_progress(
         )
         if refreshed is not None:
             enrollment = refreshed
+
+    # A linked department requirement reads the member's compliance result
+    # rather than a tally started at enrollment (W26-1). Brought up to date
+    # here, after the permission check, so the page, the percentage and the
+    # phase all show what the compliance screens show today.
+    if await service.refresh_linked_progress([enrollment]):
+        refreshed = await service.get_enrollment_by_id(
+            enrollment_id=enrollment_id,
+            organization_id=current_user.organization_id,
+        )
+        if refreshed is not None:
+            enrollment = refreshed
+    await service.mark_linked_rows(
+        enrollment.program_id, list(enrollment.requirement_progress)
+    )
 
     # Calculate time remaining
     time_remaining_days = None
@@ -1572,6 +1601,12 @@ async def get_program_enrollments(
         organization_id=current_user.organization_id,
         status=status,
     )
+    if await service.refresh_linked_progress([enrollment for enrollment, _ in rows]):
+        rows = await service.get_program_enrollments(
+            program_id=program_id,
+            organization_id=current_user.organization_id,
+            status=status,
+        )
 
     return [
         ProgramEnrollmentWithUserResponse(

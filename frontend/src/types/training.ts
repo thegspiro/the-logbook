@@ -1216,6 +1216,12 @@ export interface RequirementProgressRecord {
   created_at: string;
   updated_at: string;
   requirement?: TrainingRequirementEnhanced;
+  /**
+   * A linked department requirement: the row is the member's compliance
+   * result, read live, and the program cannot mark it off (it can only waive
+   * it). Sent by the enrollment progress read.
+   */
+  reads_compliance?: boolean;
 }
 
 export interface RequirementProgressUpdate {
