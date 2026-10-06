@@ -4296,6 +4296,13 @@ alembic upgrade head
 docker-compose restart backend
 ```
 
+**Also check whose alert it is.** The Security Alerts screen shows only your
+department's alerts. A failed sign-in against a real account is attributed to
+that account's department, and on a single-department installation every
+alert is. On an installation hosting several departments, a brute-force alert
+against a username that matches no account belongs to no department and is
+not shown anywhere (see `docs/KNOWN_LIMITATIONS.md`).
+
 ---
 
 ### Problem: Audit log export returns empty

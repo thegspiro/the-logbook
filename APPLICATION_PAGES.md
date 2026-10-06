@@ -1505,16 +1505,17 @@ reviewable in one place.
 
 ## Settings & Administration
 
-| URL                    | Page                  | Permission                     |
-| ---------------------- | --------------------- | ------------------------------ |
-| `/settings`            | Organization Settings | `settings.manage`              |
-| `/settings/roles`      | Role Management       | `positions.manage_permissions` |
-| `/setup`               | Department Setup      | `settings.manage`              |
-| `/admin/errors`        | Error Monitoring      | `settings.manage`              |
-| `/admin/analytics`     | Analytics Dashboard   | `analytics.view`               |
-| `/admin/audit-log`     | `AuditLogPage`        | `audit.view`                   |
-| `/admin/public-portal` | Public Portal Admin   | `settings.manage`              |
-| `/account`             | User Account Settings | Any authenticated user         |
+| URL                      | Page                  | Permission                     |
+| ------------------------ | --------------------- | ------------------------------ |
+| `/settings`              | Organization Settings | `settings.manage`              |
+| `/settings/roles`        | Role Management       | `positions.manage_permissions` |
+| `/setup`                 | Department Setup      | `settings.manage`              |
+| `/admin/errors`          | Error Monitoring      | `settings.manage`              |
+| `/admin/analytics`       | Analytics Dashboard   | `analytics.view`               |
+| `/admin/audit-log`       | `AuditLogPage`        | `audit.view`                   |
+| `/admin/security-alerts` | `SecurityAlertsPage`  | `audit.view`                   |
+| `/admin/public-portal`   | Public Portal Admin   | `settings.manage`              |
+| `/account`               | User Account Settings | Any authenticated user         |
 
 > **Organization Settings** includes the **records-retention schedule**
 > (`GET/PUT /organizations/retention-policy`) — per-record-class retention

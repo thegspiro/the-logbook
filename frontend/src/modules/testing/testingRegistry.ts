@@ -1083,6 +1083,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         module: 'public_info',
       },
       { path: '/admin/audit-log', label: 'Audit log', permission: 'audit.view' },
+      { path: '/admin/security-alerts', label: 'Security alerts', permission: 'audit.view' },
       { path: '/admin/errors', label: 'Error monitoring', permission: 'settings.manage' },
       {
         path: '/ip-security',

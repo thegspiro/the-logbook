@@ -208,7 +208,7 @@ The Logbook includes a comprehensive security monitoring system that provides:
 
 - **Real-time threat detection**: Monitors all requests for suspicious patterns
 - **Automated alerting**: Generates security alerts for anomalies
-- **Dashboard visibility**: Security status accessible via API
+- **Dashboard visibility**: **Administration → Security Alerts** (`/admin/security-alerts`, `audit.view`) lists your department's alerts by state and every recorded data export; holders of `audit.export` acknowledge and resolve alerts there, with an optional resolution note. Both actions are attributed and written to the audit log, and neither can be overwritten by a second officer
 - **Log integrity verification**: Scheduled checks for tampering
 
 ### Security Monitoring API Endpoints
@@ -219,7 +219,8 @@ Access security monitoring through the API:
 GET  /api/v1/security/status              - Overall security status
 GET  /api/v1/security/alerts              - Recent security alerts
 POST /api/v1/security/alerts/{id}/acknowledge - Acknowledge an alert
-POST /api/v1/security/alerts/{id}/resolve     - Mark alert as resolved
+POST /api/v1/security/alerts/{id}/resolve     - Mark alert as resolved (optional {"note": ...})
+GET  /api/v1/security/download-activity       - Recent data exports (route, size, member, IP)
 GET  /api/v1/security/audit-log/integrity     - Verify log integrity
 GET  /api/v1/security/audit-log/status        - Get audit log statistics
 POST /api/v1/security/audit-log/checkpoint    - Create integrity checkpoint
@@ -319,12 +320,14 @@ The system monitors for data exfiltration through:
 
 ### Protected Endpoints
 
-Export endpoints with DLP monitoring:
-
-- `/api/v1/users/export`
-- `/api/v1/events/export`
-- `/api/v1/audit/export`
-- `/api/v1/reports`
+Every API route whose path contains `export` is monitored — the list lives in
+`SecurityMonitoringMiddleware.EXPORT_ENDPOINTS` (fixed paths) and
+`EXPORT_ENDPOINT_TEMPLATES` (paths with an id in them), and a test fails the
+build when a new export route is missing from either. Each completed export is
+sized from the bytes actually sent (streamed CSVs included) and recorded as a
+`data_export` audit event holding the route, the byte count, the member and
+the IP address. The exported content and the request's query string are never
+recorded — a search term can name a member.
 
 ### Alert Triggers
 

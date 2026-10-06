@@ -300,4 +300,7 @@ AUDIT_EVENT_LOGIN_FAILED = "login_failed"
 AUDIT_EVENT_LOGOUT = "logout"
 AUDIT_EVENT_ACCOUNT_LOCKED = "account_locked"
 AUDIT_EVENT_ACCOUNT_UNLOCKED = "account_unlocked"
+# Written by SecurityMonitoringMiddleware for every completed export request;
+# read back by GET /security/download-activity.
+AUDIT_EVENT_DATA_EXPORT = "data_export"
 AUDIT_CATEGORY_AUTHENTICATION = "authentication"

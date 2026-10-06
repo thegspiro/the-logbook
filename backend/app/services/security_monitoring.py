@@ -29,6 +29,13 @@ from app.models.audit import AuditLog
 from app.models.security_alert import SecurityAlertRecord
 from app.models.user import User
 
+# Outcomes of an acknowledge/resolve call that found the alert.
+ALERT_ACTION_DONE = "done"
+ALERT_ACTION_ALREADY = "already"
+
+# Filters accepted by get_recent_alerts(state=...).
+ALERT_STATES = ("open", "unacknowledged", "acknowledged", "resolved")
+
 
 class ThreatLevel(str, Enum):
     """Security threat severity levels"""
@@ -65,6 +72,10 @@ class SecurityAlert:
     description: str
     source_ip: Optional[str] = None
     user_id: Optional[str] = None
+    # The tenant the alert belongs to when the detector knows it directly
+    # (e.g. a failed sign-in against a known account, which carries no
+    # authenticated user). Falls back to the user's org in _add_alert.
+    organization_id: Optional[str] = None
     details: Dict[str, Any] = field(default_factory=dict)
     acknowledged: bool = False
     resolved: bool = False
@@ -287,6 +298,35 @@ class SecurityMonitoringService:
         # detect_data_exfiltration's actual growth path ever reached — see
         # _enforce_key_caps' docstring.)
 
+    async def _resolve_alert_organization(
+        self, db: AsyncSession, alert: SecurityAlert
+    ) -> Optional[str]:
+        """Pick the tenant an alert belongs to, so only that org sees it.
+
+        In order: the org the detector named, the alerted user's org, and —
+        for an alert with neither — the installation's only organization.
+        The last step is what makes a pre-auth alert (brute force against an
+        unknown username) visible at all on a single-department install,
+        which is the deployment this product ships for: with one tenant there
+        is nobody else it could belong to, so attributing it cannot leak
+        anything. On a multi-org install it stays NULL (platform-level) —
+        deciding who may see another tenant's login-page noise is an open
+        access-control question, not something to guess at here (SEC2-28-7).
+        """
+        if alert.organization_id:
+            return str(alert.organization_id)
+        if alert.user_id:
+            org_result = await db.execute(
+                select(User.organization_id).where(User.id == alert.user_id)
+            )
+            org_id = org_result.scalar_one_or_none()
+            if org_id:
+                return str(org_id)
+        from app.models.user import Organization
+
+        rows = (await db.execute(select(Organization.id).limit(2))).scalars().all()
+        return str(rows[0]) if len(rows) == 1 else None
+
     async def _add_alert(
         self,
         db: AsyncSession,
@@ -323,16 +363,7 @@ class SecurityMonitoringService:
                     else:
                         serializable_details[k] = v
 
-                # Attribute the alert to the owning tenant so it is only
-                # visible to (and acknowledgeable by) that org. Derived from
-                # the alert's user; user-less alerts (pre-auth / IP-only)
-                # stay NULL = platform-level.
-                organization_id = None
-                if alert.user_id:
-                    org_result = await db.execute(
-                        select(User.organization_id).where(User.id == alert.user_id)
-                    )
-                    organization_id = org_result.scalar_one_or_none()
+                organization_id = await self._resolve_alert_organization(db, alert)
 
                 record = SecurityAlertRecord(
                     id=alert.id,
@@ -498,9 +529,15 @@ class SecurityMonitoringService:
         ip: str,
         user_id: Optional[str] = None,
         success: bool = False,
+        organization_id: Optional[str] = None,
     ) -> Optional[SecurityAlert]:
         """
         Detect brute force login attempts
+
+        ``organization_id`` attributes the alert to the department whose
+        account was targeted when the failed sign-in matched one, so the alert
+        reaches that department's alert screen even though no user was
+        authenticated (SEC2-28-7).
         """
         if success:
             # Clear attempts on successful login. This branch only overwrites
@@ -570,6 +607,7 @@ class SecurityMonitoringService:
                 description=f"Brute force attack detected from {ip}",
                 source_ip=ip,
                 user_id=user_id,
+                organization_id=organization_id,
                 details={
                     "failed_attempts": len(ip_attempts),
                     "time_window": "1 hour",
@@ -585,6 +623,7 @@ class SecurityMonitoringService:
                 event_data=alert.__dict__,
                 ip_address=ip,
                 user_id=user_id,
+                organization_id=organization_id,
             )
 
             await self._add_alert(db, alert)
@@ -601,6 +640,7 @@ class SecurityMonitoringService:
                     description=f"Brute force attack targeting user {user_id}",
                     source_ip=ip,
                     user_id=user_id,
+                    organization_id=organization_id,
                     details={
                         "failed_attempts": len(user_attempts),
                         "time_window": "1 hour",
@@ -616,6 +656,7 @@ class SecurityMonitoringService:
                     event_data=alert.__dict__,
                     ip_address=ip,
                     user_id=user_id,
+                    organization_id=organization_id,
                 )
 
                 await self._add_alert(db, alert)
@@ -1179,12 +1220,15 @@ class SecurityMonitoringService:
         threat_level: Optional[ThreatLevel] = None,
         alert_type: Optional[AlertType] = None,
         db: Optional[AsyncSession] = None,
+        state: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Get recent security alerts for one organization from the database.
 
         Scoped to ``organization_id`` — an org only ever sees its own alerts;
-        platform-level (user-less) alerts are not returned here.
+        platform-level (org-less) alerts are not returned here. ``state`` is
+        one of ``ALERT_STATES``: ``open`` is everything not yet resolved,
+        ``unacknowledged`` is open and nobody has picked it up.
         """
         if db is not None:
             from app.models.security_alert import AlertType as DBAlertType
@@ -1204,39 +1248,73 @@ class SecurityMonitoringService:
                 query = query.where(
                     SecurityAlertRecord.alert_type == DBAlertType(alert_type.value)
                 )
+            if state == "open":
+                query = query.where(SecurityAlertRecord.resolved.is_(False))
+            elif state == "unacknowledged":
+                query = query.where(
+                    SecurityAlertRecord.resolved.is_(False),
+                    SecurityAlertRecord.acknowledged.is_(False),
+                )
+            elif state == "acknowledged":
+                query = query.where(
+                    SecurityAlertRecord.resolved.is_(False),
+                    SecurityAlertRecord.acknowledged.is_(True),
+                )
+            elif state == "resolved":
+                query = query.where(SecurityAlertRecord.resolved.is_(True))
             query = query.limit(limit)
 
             result = await db.execute(query)
             records = result.scalars().all()
 
-            return [
-                {
-                    "id": r.id,
-                    "alert_type": (
-                        r.alert_type.value
-                        if hasattr(r.alert_type, "value")
-                        else r.alert_type
-                    ),
-                    "threat_level": (
-                        r.threat_level.value
-                        if hasattr(r.threat_level, "value")
-                        else r.threat_level
-                    ),
-                    "timestamp": r.timestamp.isoformat() if r.timestamp else None,
-                    "description": r.description,
-                    "source_ip": r.source_ip,
-                    "user_id": r.user_id,
-                    "details": r.details or {},
-                    "acknowledged": r.acknowledged,
-                    "resolved": r.resolved,
-                }
-                for r in records
-            ]
+            return [_alert_record_to_dict(r) for r in records]
 
         # No db session: the in-memory alert list carries no organization_id, so
         # it cannot be safely tenant-scoped. Return nothing rather than risk
         # leaking another org's alerts. (Real callers always pass a db session.)
         return []
+
+    async def count_alerts_by_state(
+        self, db: AsyncSession, organization_id: str
+    ) -> Dict[str, int]:
+        """Open / unacknowledged / acknowledged / resolved totals for one org."""
+        rows = (
+            await db.execute(
+                select(
+                    SecurityAlertRecord.resolved,
+                    SecurityAlertRecord.acknowledged,
+                    func.count(SecurityAlertRecord.id),
+                )
+                .where(SecurityAlertRecord.organization_id == organization_id)
+                .group_by(
+                    SecurityAlertRecord.resolved, SecurityAlertRecord.acknowledged
+                )
+            )
+        ).all()
+        counts = {"open": 0, "unacknowledged": 0, "acknowledged": 0, "resolved": 0}
+        for resolved, acknowledged, n in rows:
+            if resolved:
+                counts["resolved"] += n
+                continue
+            counts["open"] += n
+            counts["acknowledged" if acknowledged else "unacknowledged"] += n
+        return counts
+
+    async def _get_org_alert(
+        self, db: AsyncSession, alert_id: str, organization_id: str
+    ) -> Optional[SecurityAlertRecord]:
+        # Locked so two officers acting on the same alert at once cannot both
+        # pass the "not yet resolved" check and overwrite each other's
+        # attribution in the trail.
+        result = await db.execute(
+            select(SecurityAlertRecord)
+            .where(
+                SecurityAlertRecord.id == alert_id,
+                SecurityAlertRecord.organization_id == organization_id,
+            )
+            .with_for_update()
+        )
+        return result.scalar_one_or_none()
 
     async def acknowledge_alert(
         self,
@@ -1244,32 +1322,33 @@ class SecurityMonitoringService:
         organization_id: str,
         db: AsyncSession,
         username: Optional[str] = None,
-    ) -> bool:
+    ) -> Optional[str]:
         """
         Acknowledge a security alert (persisted to DB).
 
         Scoped to ``organization_id`` so an admin can only acknowledge their own
         org's alerts — not suppress another tenant's incidents.
+
+        Returns ``None`` when no such alert exists for the org,
+        ``ALERT_ACTION_DONE`` when this call acknowledged it, and
+        ``ALERT_ACTION_ALREADY`` when it was already acknowledged or resolved —
+        the first acknowledger stays on the record rather than being
+        overwritten by whoever clicked second.
         """
-        result = await db.execute(
-            select(SecurityAlertRecord).where(
-                SecurityAlertRecord.id == alert_id,
-                SecurityAlertRecord.organization_id == organization_id,
-            )
-        )
-        record = result.scalar_one_or_none()
-        if record:
-            record.acknowledged = True
-            record.acknowledged_by = username
-            record.acknowledged_at = datetime.now(timezone.utc)
-            await db.flush()
-            # Also update in-memory cache
-            for alert in self.alerts:
-                if alert.id == alert_id:
-                    alert.acknowledged = True
-                    break
-            return True
-        return False
+        record = await self._get_org_alert(db, alert_id, organization_id)
+        if record is None:
+            return None
+        if record.acknowledged or record.resolved:
+            return ALERT_ACTION_ALREADY
+        record.acknowledged = True
+        record.acknowledged_by = username
+        record.acknowledged_at = datetime.now(timezone.utc)
+        await db.flush()
+        for alert in self.alerts:
+            if alert.id == alert_id:
+                alert.acknowledged = True
+                break
+        return ALERT_ACTION_DONE
 
     async def resolve_alert(
         self,
@@ -1277,32 +1356,66 @@ class SecurityMonitoringService:
         organization_id: str,
         db: AsyncSession,
         username: Optional[str] = None,
-    ) -> bool:
+        note: Optional[str] = None,
+    ) -> Optional[str]:
         """
         Mark a security alert as resolved (persisted to DB).
 
         Scoped to ``organization_id`` so an admin can only resolve their own
-        org's alerts.
+        org's alerts. Resolving an alert nobody acknowledged acknowledges it in
+        the same step, so the record never reads "resolved, not acknowledged".
+        Same return contract as ``acknowledge_alert``; a resolved alert is
+        never re-resolved, so its resolution note cannot be silently replaced.
         """
-        result = await db.execute(
-            select(SecurityAlertRecord).where(
-                SecurityAlertRecord.id == alert_id,
-                SecurityAlertRecord.organization_id == organization_id,
-            )
-        )
-        record = result.scalar_one_or_none()
-        if record:
-            record.resolved = True
-            record.resolved_by = username
-            record.resolved_at = datetime.now(timezone.utc)
-            await db.flush()
-            # Also update in-memory cache
-            for alert in self.alerts:
-                if alert.id == alert_id:
-                    alert.resolved = True
-                    break
-            return True
-        return False
+        record = await self._get_org_alert(db, alert_id, organization_id)
+        if record is None:
+            return None
+        if record.resolved:
+            return ALERT_ACTION_ALREADY
+        now = datetime.now(timezone.utc)
+        if not record.acknowledged:
+            record.acknowledged = True
+            record.acknowledged_by = username
+            record.acknowledged_at = now
+        record.resolved = True
+        record.resolved_by = username
+        record.resolved_at = now
+        record.resolution_note = note or None
+        await db.flush()
+        for alert in self.alerts:
+            if alert.id == alert_id:
+                alert.acknowledged = True
+                alert.resolved = True
+                break
+        return ALERT_ACTION_DONE
+
+
+def _iso(value: Optional[datetime]) -> Optional[str]:
+    return value.isoformat() if value else None
+
+
+def _alert_record_to_dict(r: SecurityAlertRecord) -> Dict[str, Any]:
+    return {
+        "id": r.id,
+        "alert_type": (
+            r.alert_type.value if hasattr(r.alert_type, "value") else r.alert_type
+        ),
+        "threat_level": (
+            r.threat_level.value if hasattr(r.threat_level, "value") else r.threat_level
+        ),
+        "timestamp": _iso(r.timestamp),
+        "description": r.description,
+        "source_ip": r.source_ip,
+        "user_id": r.user_id,
+        "details": r.details or {},
+        "acknowledged": bool(r.acknowledged),
+        "acknowledged_by": r.acknowledged_by,
+        "acknowledged_at": _iso(r.acknowledged_at),
+        "resolved": bool(r.resolved),
+        "resolved_by": r.resolved_by,
+        "resolved_at": _iso(r.resolved_at),
+        "resolution_note": r.resolution_note,
+    }
 
 
 # Global instance

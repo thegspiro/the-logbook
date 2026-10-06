@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**288 tables · 4740 columns · 940 foreign keys**
+**288 tables · 4741 columns · 940 foreign keys**
 
 ---
 
@@ -531,7 +531,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`security_alerts`](#security_alerts) | `SecurityAlertRecord` | 16 | Persistent security alert records |
+| [`security_alerts`](#security_alerts) | `SecurityAlertRecord` | 17 | Persistent security alert records |
 
 ### Skills Testing
 
@@ -7130,6 +7130,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `resolved` | BOOL | no |  | `0` |  |
 | `resolved_by` | VARCHAR(255) | yes |  |  |  |
 | `resolved_at` | DATETIME | yes |  |  |  |
+| `resolution_note` | TEXT | yes |  |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 
 **Indexes**

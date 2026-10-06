@@ -18112,6 +18112,19 @@ BottomNavigationSettings, BottomNavigation, AppLayout.navigationLayout,
 memberName) 191 passed. Rotation row 07 → ✅ (pending PR merge). Next:
 **Feature 08 (Membership pipeline).**
 
+### 2026-10-05 — SEC2-28-7 resolved by owner decision (alerts actionable, exports monitored) — one residual left open
+
+Not a rotation pass: the owner chose "build UI + backend fixes" for the
+SEC2-28-7 `KNOWN_LIMITATIONS.md` row. Shipped `/admin/security-alerts`
+(list by state, acknowledge, resolve with a note; attributed, audited, not
+overwritable), byte-counted exfiltration sizing in place of the
+`Content-Length` gate, template matching for parameterized export routes, a
+`data_export` audit row per completed export (no content, no query string)
+listed by `GET /security/download-activity`, and brute-force attribution to
+the targeted account's department. Residual, still open: anonymous
+brute-force alerts on a multi-organization install. Full write-up in
+[`SEC2-28-security-audit-ip.md`](./SEC2-28-security-audit-ip.md).
+
 ### 2026-10-05 — Feature 06 (Elections & ballots, pass 7) — 0 fixed, 0 newly discovered, 4 cross-referenced, a real delta reviewed (watchdog pickup)
 
 PR #2941 (Feature 05, Finance & approvals, pass 7) had already merged;

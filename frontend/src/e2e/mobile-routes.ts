@@ -199,6 +199,7 @@ export const ALL_ROUTES: RouteCheck[] = [
   { path: '/documents', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/members/1/training', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/admin/audit-log', maxSmallTargets: 0, maxTinyText: 0, permissions: ['audit.view'] },
+  { path: '/admin/security-alerts', maxSmallTargets: 0, maxTinyText: 0, permissions: ['audit.view'] },
   // The rest of Training Administration's tabs. Every one of these brought its
   // own padded page container into the hub's column and was indented twice on
   // a phone; `expectText` names something only that tab's body renders, since

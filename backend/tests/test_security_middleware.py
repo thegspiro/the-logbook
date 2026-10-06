@@ -2787,10 +2787,6 @@ class TestExportEndpointsCoverage:
     def test_every_non_parameterized_export_route_is_covered(self, schema):
         from app.core.security_middleware import SecurityMonitoringMiddleware
 
-        # A path parameter (e.g. training_programs.py's
-        # "/programs/{program_id}/export") can never equal a fixed string,
-        # so EXPORT_ENDPOINTS structurally cannot cover it — a known,
-        # documented limitation (CI3-33-13's comment), not new drift.
         real_export_paths = {
             path
             for path, _methods in schema["paths"].items()
@@ -2804,6 +2800,36 @@ class TestExportEndpointsCoverage:
             f"will never run for them: {sorted(missing)}. Add each to "
             "EXPORT_ENDPOINTS in app/core/security_middleware.py."
         )
+
+    @pytest.mark.unit
+    def test_every_parameterized_export_route_is_matched(self, schema):
+        """SEC2-28-7: a route with a path parameter cannot equal a fixed
+        string, so it used to go unmonitored by construction. Templates are
+        matched by pattern now; a concrete request path must match."""
+        import re
+
+        from app.core.security_middleware import SecurityMonitoringMiddleware
+
+        # Data leaves through GET/POST; a PUT/DELETE on an export *setting*
+        # (finance's /export/mappings/{mapping_id}) returns no export.
+        templated = {
+            path
+            for path, methods in schema["paths"].items()
+            if "export" in path and "{" in path and {"get", "post"} & set(methods)
+        }
+        assert templated, "expected at least one parameterized export route"
+        assert templated == set(
+            SecurityMonitoringMiddleware.EXPORT_ENDPOINT_TEMPLATES
+        ), (
+            "EXPORT_ENDPOINT_TEMPLATES must list exactly the parameterized "
+            f"export routes: {sorted(templated)}"
+        )
+        for template in templated:
+            concrete = re.sub(r"\{[^/]+\}", "abc-123", template)
+            assert SecurityMonitoringMiddleware.is_export_endpoint(concrete)
+            # One segment per parameter: a longer path is not the export.
+            longer = re.sub(r"\{[^/]+\}", "abc/123", template)
+            assert not SecurityMonitoringMiddleware.is_export_endpoint(longer)
 
     @pytest.mark.unit
     def test_no_stale_entries_for_routes_that_no_longer_exist(self, schema):

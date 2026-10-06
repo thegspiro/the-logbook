@@ -97,6 +97,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'administration approvals workflow',
   },
   {
+    path: '/admin/security-alerts',
+    source: 'src/modules/admin/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
     path: '/admin-hours',
     source: 'src/modules/admin-hours/routes.tsx',
     coverage: 'ratchet',

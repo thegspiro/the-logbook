@@ -323,6 +323,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
               { label: 'Platform Analytics', path: '/admin/platform-analytics', permission: 'settings.manage' },
               { label: 'QR Code Analytics', path: '/admin/analytics', permission: 'analytics.view' },
               { label: 'Audit Log', path: '/admin/audit-log', permission: 'audit.view' },
+              { label: 'Security Alerts', path: '/admin/security-alerts', permission: 'audit.view' },
               { label: 'Error Monitor', path: '/admin/errors', permission: 'settings.manage' },
               ...(isModuleOn('testing')
                 ? [{ label: 'Testing Home', path: '/testing', permission: 'settings.manage' }]
