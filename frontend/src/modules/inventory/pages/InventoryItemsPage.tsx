@@ -1738,7 +1738,7 @@ const InventoryItemsPage: React.FC = () => {
               </div>
             )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 whitespace-nowrap sm:justify-end">
           <button onClick={refresh} className="btn-secondary btn-icon-sm" title="Refresh">
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </button>

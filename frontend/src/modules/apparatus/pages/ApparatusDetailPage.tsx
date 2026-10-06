@@ -188,12 +188,17 @@ export const ApparatusDetailPage: React.FC = () => {
 
       {/* Tabs */}
       <div className="mx-auto max-w-7xl px-6 pt-6">
-        <div className="segmented-group-secondary hscroll flex space-x-1">
+        <div
+          role="group"
+          aria-label="Apparatus sections"
+          data-mobile-scroll-region
+          className="segmented-group-secondary hscroll flex space-x-1"
+        >
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => handleTabChange(tab.id)}
-              className={`flex flex-1 items-center justify-center space-x-2 rounded-md px-4 py-2 transition-colors ${
+              className={`touch:min-h-11 flex flex-1 shrink-0 items-center justify-center space-x-2 rounded-md px-4 py-2 whitespace-nowrap transition-colors ${
                 activeTab === tab.id
                   ? 'bg-red-800 text-white'
                   : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary'

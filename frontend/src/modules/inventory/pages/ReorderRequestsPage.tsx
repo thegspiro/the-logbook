@@ -802,7 +802,7 @@ export const ReorderRequestsPage: React.FC = () => {
             </p>
             <button
               onClick={() => setShowCreate(true)}
-              className="ml-auto text-xs font-medium text-yellow-700 hover:underline dark:text-yellow-300"
+              className="ml-auto shrink-0 text-xs font-medium whitespace-nowrap text-yellow-700 hover:underline dark:text-yellow-300"
             >
               Create reorder &rarr;
             </button>

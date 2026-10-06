@@ -847,10 +847,10 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
   return (
     <div className="bg-theme-surface rounded-lg p-6 backdrop-blur-xs">
       {/* ── Header ── */}
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-theme-text-primary text-lg font-medium">Ballot Items ({ballotItems.length})</h3>
         {!isLocked && (
-          <div className="relative flex gap-2" ref={templateRef}>
+          <div className="relative flex flex-wrap gap-2 whitespace-nowrap" ref={templateRef}>
             {ballotItems.length > 0 && (
               <button
                 type="button"

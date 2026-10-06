@@ -228,7 +228,7 @@ export const StoreProductCard: React.FC<StoreProductCardProps> = ({ offer, onAdd
           </p>
         )}
 
-        <div className="mt-auto flex items-center gap-2">
+        <div className="mt-auto flex flex-wrap items-center gap-2">
           {!soldOut && (
             <div className="border-theme-surface-border bg-theme-surface flex shrink-0 items-center rounded-lg border">
               <button
@@ -252,7 +252,7 @@ export const StoreProductCard: React.FC<StoreProductCardProps> = ({ offer, onAdd
           )}
           <button
             type="button"
-            className="btn-primary btn-md flex min-h-[44px] flex-1 items-center justify-center gap-2 font-semibold"
+            className="btn-primary btn-md flex min-h-[44px] min-w-max flex-1 items-center justify-center gap-2 font-semibold whitespace-nowrap"
             disabled={!canAdd}
             onClick={handleAdd}
           >
