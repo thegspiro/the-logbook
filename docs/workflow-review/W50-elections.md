@@ -167,7 +167,9 @@ Covered by the new `VoterOverrideManagement.test.tsx`. Re-driven: Alex Brooks pi
 
 Covered by `ElectionDetailPage.loaded.test.tsx` and the new `test_ballot_send_message.py` (unit). Re-driven: "The eligibility summary email could not be sent" (capitalised since the re-drive).
 
-### W50-9 — MED — A member checked in after the election opens cannot vote — 🚩 FLAGGED
+### W50-9 — MED — A member checked in after the election opens cannot vote — ✅ DECIDED (2026-10-05)
+
+**Owner decision (2026-10-05):** secretary override only. A late arrival does not join the frozen roll by checking in; the secretary admits them with a voter override, which is recorded with its reason. No code change: this is the behaviour the Attendance tab and the elections guide already describe.
 
 **Did:** on the open bylaw election (attendance required), checked in Jordan Avery; then Cast Vote as `member`.
 **Saw:**
