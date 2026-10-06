@@ -2,8 +2,11 @@
 
 **Prefix:** `EC` · **Iteration:** 14 · **Reviewed:** 2026-08-26 (pass 1),
 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-09 (pass 4), 2026-09-15
-(pass 5), 2026-09-17 (pass 6) · **PR:**
-[#1842](https://github.com/thegspiro/the-logbook/pull/1842) (pass 1)
+(pass 5), 2026-09-17 (pass 6), 2026-10-06 (pass 7) · **PR:**
+[#1842](https://github.com/thegspiro/the-logbook/pull/1842) (pass 1),
+[#2625](https://github.com/thegspiro/the-logbook/pull/2625) (pass 6, 0
+fixed, 0 flagged, merged), pass 7 PR recorded in `PROGRESS.md`'s Open PR
+row
 
 **Backend:** `api/v1/endpoints/equipment_check.py` (50 routes),
 `api/v1/endpoints/shift_completion.py` (21 routes),
@@ -11,6 +14,182 @@
 `services/shift_completion_service.py` (1,930 L)
 **Frontend:** in-app (no dedicated module directory)
 **Migrations:** none this iteration (no schema change)
+
+---
+
+## Pass 7 (2026-10-06) — real delta (92 commits in scope, 20 touching the primary files), 0 fixes, 0 new findings; two XC-1/XC-2 gaps found and fixed by other work during the window
+
+**Watchdog pickup.** PR #2969 (Feature 13, Apparatus & NFC, pass 14) had
+merged with 0 application-code changes (docs-only), so per `PROGRESS.md`'s
+own rule it was not independently recordable. No `claude/security-review-*`
+PR was open; rotation row 14 (Equipment check & shifts) was the first `⬜`.
+
+**Backend/Frontend/Migrations scope:** unchanged from pass 6's
+declaration, including the same shared dependencies
+(`org_scoping.py`, `core/permissions.py`, `core/audit.py`,
+`utils/model_updates.py`, `utils/sql_search.py`, `core/dependencies.py`,
+`utils/csv_export.py`, `frontend/src/utils/apiCache.ts`) and adjacent
+surfaces (`scheduling_service.py` in full;
+`scheduled_tasks.py`'s `run_end_of_shift_checklist_reminders` and
+`run_post_shift_validation` specifically, not the whole file).
+
+**Scope correction:** the frontend file list pass 3's own scope
+declaration carried, `EquipmentChecksTab.tsx`, no longer exists — it was
+removed in `cc1e20211` ("finish the move — no checklist code left in
+Scheduling", 2026-08-31), _before_ pass 6's own baseline. Its
+functionality now lives in `MyChecklistsPage.tsx`/`CheckLogPage.tsx`/
+`modules/inventory/pages/ApparatusDetailPage.tsx`. Noted here so the next
+pass doesn't look for a file that isn't there; not a finding.
+
+### Scope
+
+**Confirmed full-depth clone before trusting any commit count** —
+`git fetch --unshallow` reported "already a complete repository". `git
+log --no-merges` against the full declared scope plus shared
+dependencies and adjacent surfaces, since pass 6's merge (PR #2625,
+`1527d5057`, 2026-09-17), returned **92 non-merge commits** touching some
+in-scope path; of those, **20** touch the six primary backend files
+directly. `origin/main` is 1,241 commits ahead of the baseline overall
+(many unrelated feature rotations), so the 92-of-1241 ratio is itself
+evidence this is a correctly narrowed scope, not an under-filtered one.
+
+Of the 92: 9 carry the workflow-review rotation's `docs(workflow-review)`
+label, of which 7 are genuinely docs/test-only against this scope and **2
+are not** — `bb0bda095` (drops an ORM default on `fuel_type`, reviewed,
+benign) and `45c8bc63e` (adds an `is_in_org` check on `create_template`'s
+client-supplied `apparatus_id` — a genuine XC-1 fix, already shipped by
+that pass, not a new finding here); ~15 are pure layout/copy/touch-target
+CSS changes confirmed via `--stat` to touch no logic (and confirmed via
+grep across the full frontend diff for `window.confirm/alert/prompt`,
+`dangerouslySetInnerHTML`, `.toLocale*`, raw `fetch(` — zero hits); the
+remainder are real application-logic commits, each read via `git show`
+against all seven checklist dimensions. `run_end_of_shift_checklist_reminders`
+was touched by zero commits in the window (grepped every commit's hunk
+headers for the function name); `run_post_shift_validation` was touched
+by 4, all reviewed and clean.
+
+### Re-verified load-bearing fixes
+
+All five re-read at their current (shifted) locations, not inferred from
+file-level diff silence, since every one of their files changed
+materially this window:
+
+- **EC-16** (SAVEPOINT duplicate-report guard) — intact,
+  `shift_completion_service.py:567-607` (was 491-531). Same
+  `begin_nested()`/`except IntegrityError`/`.with_for_update()`
+  post-failure check, byte-identical logic.
+- **EC-6** (in-org `trainee_id` validation) — intact,
+  `shift_completion_service.py:446-462`.
+- **EC-13** (submitter-quantity-inflation guard) — intact,
+  `equipment_check_service.py:3518`.
+- **`.ilike()` escaping** — intact, `equipment_check_service.py:5165-5167`,
+  still `like_pattern(item_name)` + `escape=LIKE_ESCAPE_CHAR`.
+- **`SafeCsvWriter`** — intact, `equipment_check.py:1433/1448`.
+
+### Re-verified accepted/deferred items, unchanged
+
+- **EC-7** (detail/read endpoints on bare `get_current_user`) — unchanged
+  in shape, `KNOWN_LIMITATIONS.md` description still accurate.
+- **EC-8** (by-id reads for changelog text only, no org filter) — unchanged,
+  not touched by any reviewed commit.
+- **EC-11** (`get_compliance_report` hardcoded `0`) — unchanged, not
+  touched.
+- **`get_item_deployments` vs. its sibling** — still gates on
+  `require_permission("inventory.check_view", "inventory.view")`
+  (`equipment_check.py:1950-1971`) while sibling manage-only endpoints
+  still use `inventory.check_manage` (20+ occurrences, re-confirmed via
+  grep). Gap unchanged; owner decision.
+
+### Route inventory
+
+**`equipment_check.py`: 50 routes, `shift_completion.py`: 21 routes —
+both unchanged**, verified via `grep -c "^@router\.(get|post|put|patch|delete)"`
+rather than trusted from the declared scope.
+
+### Real commits reviewed, all clean — two genuine fixes landed by other work
+
+- **`45c8bc63e`** (workflow-review W46) — adds in-org (`is_in_org`)
+  validation to `create_template`'s client-supplied `apparatus_id`,
+  closing an XC-1 gap. Already shipped; verified correct.
+- **`2f08c5d6a`** — splits `training.view_analytics` out of the broader
+  `training.manage` gate for department-wide report totals, narrowing an
+  XC-2-shaped over-broad permission. Migration `84819ea78a79` is
+  evidence-gated per Pitfall #23 (frozen, `is_system`-scoped,
+  additive-only). A genuine security improvement, verified correct.
+- **`6015d4517`** — replaces a `training.manage` gate with a custom
+  org-scoped `_is_officer_of_shift`/`_authorize_report_filing` check
+  across 5 endpoints; `update_report` independently re-enforces the
+  `officer_id` match in the service layer (defense in depth).
+- **`7df93344f`** — blocks a member from filing a shift report about
+  themselves, enforced once in `create_report` covering every path.
+- **`ab531b850`** — new "officer files their own shift's report"
+  department setting; defensive JSON read degrades to prior behavior on a
+  malformed value (Pitfall #19-compliant); the batch pre-check's shift
+  lookup stays org-scoped.
+- **`49f488282`** — fixes a cross-join bug in `get_failure_log`'s _count_
+  query that inflated totals across orgs — the returned rows were already
+  org-filtered, so this was a correctness bug, not a leak.
+- **`6d2a24ec6`** — adds `html.escape` on an item name previously
+  unescaped in a notification email body — closes a latent XSS-in-email
+  gap.
+- **`92803f32f`, `2f18127c7`, `c1e85e119`, `6cd56c5cc`, `109f553a8`** —
+  department-local-date/timezone correctness series; `6cd56c5cc` adds an
+  org-scoped timezone resolve before CSV export formatting, `109f553a8`
+  adds an org lookup for PDF timestamps — both still scope by
+  `current_user.organization_id`.
+- **`014a4a44a`** — declares `ondelete="RESTRICT"` (not `SET NULL`) on 4
+  apparatus FKs; Pitfall #2's `nullable=True` pairing doesn't apply.
+- **`0eb353a2c`, `0b90e74c9`, `f30bfcaa5`, `f92fbd927`** — per-member call
+  count derivation (override scoped to already-org-validated
+  `crew_member_ids`), call-type matching correctness, checklist
+  applicability by apparatus type, and preferred-name display (exports/PDFs
+  explicitly kept on legal names by design). No security surface.
+- **Adjacent `scheduling_service.py` commits** — `ff09e2660` (apparatus-tag
+  shift resolver rewrite, org-scoping preserved on every branch),
+  `377215211` (two-way shift exchange, new org-scoped
+  `GET /scheduling/shifts/{id}/exchange-candidates`, override audited).
+  Both clean; the new swap-approval flow layers a qualification check
+  into the pre-existing, already-transactional `review_swap_request`
+  rather than adding a new unlocked read-then-write path.
+- **`apiCache.ts`** — 4 new `UNCACHEABLE_PREFIXES`/`SUBSTRINGS` entries for
+  unrelated-feature PII endpoints, all additive, nothing removed.
+- **8 unrelated-feature `permissions.py` commits** — confirmed by grep
+  not to touch any equipment-check/shift-completion permission string.
+
+### Verified good ✅ (pass 7)
+
+- No new by-id endpoint missing org-scoping; no new unvalidated
+  client-supplied FK; no new unescaped `.ilike()`; no new CSV export
+  bypassing `SafeCsvWriter`; no new cache-exclusion gap; no new
+  JSON-column shallow-copy mutation; no new seeded-grant change missing
+  its migration; no new `ondelete="SET NULL"` column missing
+  `nullable=True`; no new unlocked read-then-write capacity/
+  duplicate-submission path.
+- All five load-bearing fixes and all four accepted/deferred items
+  re-confirmed intact by direct read, not inferred from diff silence.
+
+### Schema & migration notes
+
+`validate_migrations.py --strict`: single head `15802f3df5c4`, 527
+revisions (up from 444 at baseline, consistent with 1,241 unrelated
+commits landing in the window). This feature's own migrations in the
+window (`f73b449bdb8b`, `84819ea78a79`) are both Pitfall-#23-compliant
+seeded-grant migrations, reviewed above.
+
+### Completion gate
+
+| Check                                                 | Result                                            |
+| ----------------------------------------------------- | ------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                         | ✅ 0 violations                                   |
+| `black --check` (scope)                               | ✅ clean                                          |
+| `isort --check-only` (scope)                          | ✅ clean                                          |
+| `python3 scripts/validate_migrations.py --strict`     | ✅ single head `15802f3df5c4`, 527 revisions      |
+| `python3 scripts/check_route_permissions.py --strict` | ✅ 245 routes, 0 errors, 0 warnings               |
+| `pytest tests/ -q -k "equipment or shift"`            | ✅ 1359 passed, 1 pre-existing skip (`pywebpush`) |
+| `cd frontend && npm run typecheck`                    | ✅ 0 errors                                       |
+| `cd frontend && npm run lint`                         | ✅ 0 errors, 0 warnings                           |
+
+Rotation row 14 → ✅ (pending PR merge). Next: Feature 15 (Scheduling).
 
 ---
 
