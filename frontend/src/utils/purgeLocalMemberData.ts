@@ -11,6 +11,11 @@
  *     trainee evaluations, apparatus results, and narrative remarks
  *   - the offline queues (IndexedDB): unsent equipment checks *including photo
  *     blobs*, submitted shift reports, training submissions, and event RSVPs
+ *   - offline skills testing (IndexedDB): unsent scorecards, and the copies of
+ *     live tests, published sheets and recent candidates kept for scoring
+ *     without signal. Logout asks before getting here when scorecards are
+ *     unsent (AppLayout); sign-in as someone else and an expired session do
+ *     not ask.
  *
  * Neither was cleared by logout, which cleared only the session flag, the
  * temporary access token, and the in-memory API cache.
@@ -26,6 +31,7 @@ import { clearAllQueuedChecks } from './offlineQueue';
 import { clearAllQueuedReports } from './shiftReportOfflineQueue';
 import { clearAllGenericQueued } from './genericOfflineQueue';
 import { clearAllEquipmentCheckDrafts } from './equipmentCheckDrafts';
+import { clearAllSkillsOffline } from './skillsTestOffline';
 
 export interface PurgeResult {
   /** Shift-report and equipment-check drafts removed from device storage. */
@@ -36,6 +42,8 @@ export interface PurgeResult {
   queuedReports: number;
   /** Unsent training submissions / event RSVPs discarded. */
   queuedGeneric: number;
+  /** Unsent skills-test scorecards discarded. */
+  queuedSkillsTests: number;
   /** Unsent items that were lost (i.e. never made it to the server). */
   unsyncedDiscarded: number;
 }
@@ -78,6 +86,7 @@ export async function purgeLocalMemberData(): Promise<PurgeResult> {
     queuedChecks: 0,
     queuedReports: 0,
     queuedGeneric: 0,
+    queuedSkillsTests: 0,
     unsyncedDiscarded: 0,
   };
 
@@ -111,6 +120,12 @@ export async function purgeLocalMemberData(): Promise<PurgeResult> {
     // As above.
   }
 
+  try {
+    result.queuedSkillsTests = await bounded(clearAllSkillsOffline(), 0);
+  } catch {
+    // As above.
+  }
+
   // A mounted form can have an API request in flight when termination starts.
   // Sweep again after the asynchronous IndexedDB work so a late state update
   // cannot leave a localStorage draft behind for the next device user.
@@ -120,6 +135,7 @@ export async function purgeLocalMemberData(): Promise<PurgeResult> {
     // localStorage may have become unavailable; the initial sweep still ran.
   }
 
-  result.unsyncedDiscarded = result.queuedChecks + result.queuedReports + result.queuedGeneric;
+  result.unsyncedDiscarded =
+    result.queuedChecks + result.queuedReports + result.queuedGeneric + result.queuedSkillsTests;
   return result;
 }

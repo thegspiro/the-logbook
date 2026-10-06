@@ -303,6 +303,28 @@ works and still does the same thing; you no longer have to remember it.
 > up the current state. It does not keep retrying a save that cannot succeed
 > while you believe your scoring is still going through.
 
+### Scoring with no signal _(2026-10-06)_
+
+A test you have opened on your phone keeps working when the signal goes. Your
+scoring is saved **on the device** and sent as soon as it has signal again — you
+do not have to do anything.
+
+- A banner says so while there is no signal, and the save status reads
+  **Saved on this device**.
+- **Open the test once with signal** before heading somewhere without it. The
+  phone keeps a copy of tests _you_ are examining that are not finished yet;
+  a test never opened on the device cannot be opened offline.
+- **Submitting with no signal** shows **Submitted on this device**. The test is
+  scored by the server when it reconnects — there is no result on the phone
+  until then, and the pass/fail you see afterwards is the server's.
+- Saves made offline are combined, so an hour without signal sends one update,
+  and the submission is always sent after the last save.
+- **If the server refuses it** — the test was voided or completed elsewhere, or
+  changed by someone else meanwhile — you get a message naming the test and
+  candidate, and a red banner on the test with the reason. The scoring stays on
+  the device until **you** choose **Discard from this device**; it is never
+  thrown away on its own.
+
 ### The timer records what you measured _(2026-08-08)_
 
 The examiner's stopwatch reading is what gets recorded. Previously the elapsed
@@ -1484,7 +1506,7 @@ Competency Matrix reflects new scores
 | Editing a published template changed an old scorecard            | It no longer can. Every test created from 2026-08-08 onward stores a snapshot of the template at creation. Tests completed before that were backfilled from the current template and are frozen against further edits.                                                                                                                                            |
 | Passing Points field disappeared from a criterion                | It is shown only on **critical** criteria — a non-critical criterion cannot fail the test on its own, so the threshold was never read. Check **Critical** to bring the field back; the previous value is still there.                                                                                                                                             |
 | Statement criterion text not saving                              | Ensure the criterion type is set to `statement` in the template builder. Save and republish the template.                                                                                                                                                                                                                                                         |
-| Can I score a test with no signal?                               | Not yet. Autosave covers a locked phone or a killed tab **with signal up**, which is the common case. True offline operation is scoped but not built — the blocker is that the test structure has to be _read_ from the server before you can score into it. See [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#skills-testing--offline-support-2026-08-07).      |
+| Can I score a test with no signal?                               | Yes, for a test opened on the device while it had signal — see [Scoring with no signal](#scoring-with-no-signal-2026-10-06). The scoring is sent, and scored by the server, when the device reconnects. |
 
 ---
 

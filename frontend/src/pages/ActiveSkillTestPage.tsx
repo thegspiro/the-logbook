@@ -42,6 +42,8 @@ import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import { skillsTestingService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { useAutoSave } from '../hooks/useAutoSave';
+import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { SkillsOfflineBanner } from '../components/training/SkillsOfflineBanner';
 import { formatDateTime } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { FormStatus } from '../constants/enums';
@@ -1199,7 +1201,10 @@ export const ActiveSkillTestPage: React.FC = () => {
     setActiveTestRunning,
     updateCriterionResult,
     clearCurrentTest,
+    offlineState,
+    error: loadError,
   } = useSkillsTestingStore();
+  const online = useOnlineStatus();
 
   const isOfficer = useAuthStore((state) => state.checkPermission('training.manage'));
 
@@ -1395,12 +1400,16 @@ export const ActiveSkillTestPage: React.FC = () => {
   // "Saves as you go" rather than a bare "Saved" before anything has been
   // written: the promise is what an examiner needs to read before they trust
   // the screen, not a status for a save that hasn't happened yet.
+  // Queued work is saved, but on this device only — the examiner needs to
+  // know the difference before they put the phone away.
+  const queuedHere = offlineState?.testId === currentTest?.id && offlineState?.queued === true;
   const saveStatusLabel = {
     idle: 'Saves as you go',
     saving: 'Saving…',
-    saved: 'Saved',
+    saved: queuedHere ? 'Saved on this device' : 'Saved',
     failed: 'Not saved',
   }[saveState];
+  const completionQueued = queuedHere && offlineState?.completionQueued === true;
 
   /** Set the clock running, and stamp the test as under way the first time.
    *
@@ -1783,6 +1792,14 @@ export const ActiveSkillTestPage: React.FC = () => {
 
       // Then finalize
       const completed = await completeTest(currentTest.id);
+      if (useSkillsTestingStore.getState().offlineState?.completionQueued) {
+        // No signal: the submission waits on this device and is scored by the
+        // server when it reconnects. No provisional result is shown — the
+        // server's scoring is the only one.
+        setReviewing(false);
+        toast.success('Submitted on this device — it will be scored when you are back online');
+        return;
+      }
       toast.success(
         completed.pending_validation
           ? 'Test submitted — a training officer will validate the result'
@@ -1834,6 +1851,11 @@ export const ActiveSkillTestPage: React.FC = () => {
         elapsed_seconds: activeTestTimer,
       });
       await completeTest(currentTest.id);
+      if (useSkillsTestingStore.getState().offlineState?.completionQueued) {
+        setReviewing(false);
+        toast.success('Saved on this device — results appear when you are back online');
+        return;
+      }
       showResults(currentTest.id);
     } catch (err: unknown) {
       // The scoring may already be filed — see reloadAndCheckFinalized. Showing
@@ -1969,6 +1991,19 @@ export const ActiveSkillTestPage: React.FC = () => {
     },
     [waivePrompt, handleUpdateCriterion]
   );
+
+  // Nothing to show and nothing coming: offline with no copy on this device,
+  // or a test this member cannot open. Said, rather than spinning forever.
+  if (!testLoading && !currentTest && loadError) {
+    return (
+      <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-4 px-4 text-center">
+        <p className="text-theme-text-primary">{loadError}</p>
+        <button type="button" className="btn-secondary" onClick={() => void navigate('/training/skills-testing')}>
+          Back to skills testing
+        </button>
+      </div>
+    );
+  }
 
   // Loading state
   if (testLoading || !currentTest) {
@@ -2274,6 +2309,25 @@ export const ActiveSkillTestPage: React.FC = () => {
     );
   }
 
+  // Submitted with no signal: waiting on this device for the server to score it.
+  if (completionQueued && !showingResults) {
+    return (
+      <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-4 px-4">
+        <SkillsOfflineBanner online={online} state={offlineState} testId={currentTest.id} />
+        <div className="card space-y-2 p-4">
+          <h1 className="text-theme-text-primary text-lg font-semibold">Submitted on this device</h1>
+          <p className="text-theme-text-secondary text-sm">
+            {currentTest.candidate_name} — {currentTest.template_name}. The scorecard is saved here and will be sent,
+            then scored, as soon as this device has signal. Keep it signed in until then.
+          </p>
+        </div>
+        <button type="button" className="btn-secondary" onClick={() => void navigate(backTarget)}>
+          Done
+        </button>
+      </div>
+    );
+  }
+
   // Review screen — shown after completing evaluation, before final submission
   if (reviewing) {
     return (
@@ -2294,6 +2348,8 @@ export const ActiveSkillTestPage: React.FC = () => {
             </div>
           </div>
         </div>
+
+        <SkillsOfflineBanner online={online} state={offlineState} testId={currentTest.id} />
 
         {/* Practice Mode Banner */}
         {currentTest.is_practice && (
@@ -2579,6 +2635,8 @@ export const ActiveSkillTestPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      <SkillsOfflineBanner online={online} state={offlineState} testId={currentTest.id} />
 
       {/* Practice Mode Banner */}
       {currentTest.is_practice && (

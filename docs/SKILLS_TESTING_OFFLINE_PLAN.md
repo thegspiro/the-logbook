@@ -1,6 +1,10 @@
 # Skills Testing — Offline Support Implementation Plan
 
-> Status: **Scoping document for review. No implementation code has been written.**
+> Status: **Implemented (2026-10-06).** The owner chose to build it, with a
+> skills-test-specific queue. The sections below are kept as the design
+> record; §11 says what was built and what each open question was answered
+> with.
+>
 > Autosave for the active test screen already shipped (`useAutoSave` wired into
 > `ActiveSkillTestPage`) and covers the common data-loss case — a locked phone
 > or a killed tab while the device still has signal. This document scopes the
@@ -290,3 +294,29 @@ Two things are cheaper than they would have been before the
    [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md)) need to hold offline, or is
    server-side enforcement on sync sufficient? Enforcing on sync means an
    examiner can conduct an attempt that is later rejected.
+
+---
+
+## 11. What was built (2026-10-06)
+
+| Plan item                       | Built as                                                                                                                                                                                                                                                                          |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Phase 1 — queue foundation      | `frontend/src/utils/skillsTestOffline.ts`, its own database `logbook-offline-skills` via `openIndexedDb`. One entry per test; every save merges into it (`mergeUpdates`; the one-shot `resumed` flag survives the merge)                                                          |
+| Phase 2 — ordering and failures | The drain runs each entry's steps in order — create, the merged PUT against `baseVersion`, then `POST /complete` only once nothing is left to save. A 4xx marks the entry failed with the server's reason and keeps it; a 5xx retries, then is held the same way. Never discarded |
+| Phase 3 — read path             | The store caches a live test its examiner opens and reads that copy, with queued scoring laid over it, when the network is unavailable                                                                                                                                            |
+| Phase 4 — UX                    | A banner on the scoring and review screens, "Saved on this device" as the save state, a "Submitted on this device" screen for a queued submission, a named toast when the server refuses one, and the pending count in the nav pill                                               |
+| Phase 5 — purge                 | Registered with `purgeLocalMemberData`; ownership per FE3-34-5                                                                                                                                                                                                                    |
+
+**Answers to §10:**
+
+- **§10.3 — no provisional score.** A submission queued offline shows
+  "Submitted on this device" and no result; the server's scoring is the only
+  one. Chosen as the less misleading of the two, and it keeps one scorer.
+- **§10.4 — `max_attempts` is enforced on sync.** A step refused for the cap is
+  held as a failed entry with the reason, not discarded.
+
+**§7 conflict handling** turned out not to need the deferral: `SkillTest`
+gained a `version` column after this plan was written, and the queued save is
+sent with `expected_version` set to the version it was made against. A
+concurrent edit therefore fails the entry with a 409 — kept on the device and
+named — rather than silently overwriting either side.
