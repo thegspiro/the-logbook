@@ -28,6 +28,12 @@ finding below that says FLAGGED or OPEN is superseded by its line here.
   no vote on any path, so its tally is final; a live tally stays refused.
   S10's permission shape (`elections.view`, 403 vs 404) is unchanged.
   Guard: `TestResultsVisibilityGate` in `tests/test_election_voting_flow.py`.
+- **W50-13** (override on a restricted list shown as admitting a member
+  the vote paths refused) — **fixed: an override extends the list.**
+  `_restricted_voter_ids` (the list plus override holders) is the one
+  definition read by `check_voter_eligibility`, the ballot mailer, the
+  non-voter list and the unfrozen denominator; the frozen-roll denominator
+  already added overrides. Guard: `tests/test_w50_override_extends_list.py`.
 - **ELEC-16** (`list_manual_ballot_batches` unbounded) — **accepted as is.**
   Paper-tally sessions per election are naturally few; no cap and no
   pagination. Revisit if an election ever carries more than a few dozen

@@ -3558,8 +3558,9 @@ async def add_voter_override(
     and meeting attendance restrictions.
 
     The override is recorded with a reason and the identity of the officer
-    who granted it.  This does NOT bypass election-level eligible_voters
-    lists, position-specific role requirements, or double-vote prevention.
+    who granted it. On an election restricted to an ``eligible_voters`` list
+    it also admits the member as though they were on it (W50-13). It does
+    NOT bypass double-vote prevention.
 
     Requires `elections.manage` permission.
     """

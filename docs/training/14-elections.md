@@ -395,13 +395,11 @@ The **Eligibility Roster** tab is where you find who needs one: a member who
 will not receive a ballot is explained there, row by row, and the panel points
 you to the **Overrides** tab.
 
-> **An override does not extend a specific voter list.** On an election
-> restricted to a named list of voters, an override for someone not on the list
-> is created and shown as **Override**, but that member's vote is still refused
-> ("restricted to a specific voter list") — and the eligible count and turnout
-> treat them as eligible. Whether it should admit them is an open owner
-> decision (2026-09-30, `docs/KNOWN_LIMITATIONS.md`). Add the member to the list
-> instead.
+> **An override extends a specific voter list** _(2026-10-05)_. On an election
+> restricted to a named list of voters, an override for someone not on the
+> list admits them as though they were on it: they can vote in the app, they
+> receive a ballot email, and they count in the eligible total and turnout
+> exactly as the roster shows.
 
 > **Linkable tabs** _(2026-08-12)_: every tab on the election detail page can
 > now be sent as a URL — the eligibility roster is

@@ -711,7 +711,9 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `election_service.py` `generate_and_send_election_report` (~6546-6592, `_internal_bypass_visibility=True`).
 **Fix:** S14 gates the report on status (`test_w50_s14.py`). **Confirmed live** (CONFIRM-04): `POST …/send-report` on an OPEN election → 400 "Election report is only available after the election closes"; the sink received nothing.
 
-### W50-13 — HIGH — An override on a restricted-list election says "to let a member vote" while the member is still refused, and inflates the eligible denominator — FLAGGED
+### W50-13 — HIGH — An override on a restricted-list election says "to let a member vote" while the member is still refused, and inflates the eligible denominator — ✅ DECIDED & FIXED (2026-10-05)
+
+**Owner decision (2026-10-05):** an override extends the list — the member can vote as the roster says. One definition (`_restricted_voter_ids`: the list plus override holders) now feeds the eligibility check, the ballot mailer, the non-voter list and the denominator. Test: `backend/tests/test_w50_override_extends_list.py`.
 
 **Did:** as `admin` on EB2 (`eligible_voters = [Tariq]`), B4 steps 2/8/9: an override for Tess → 201; Tess votes.
 **Saw:** 400 "restricted to a specific voter list"; roster "Tess Park · Active · Override · 0/1"; the panel "add a voter override on the Overrides tab to let a member vote"; `total_eligible_voters` 1 → 2 and "2 vote(s) cast · 100.0% turnout"; the API row `has_override: true, will_receive_ballot: false, eligible_item_count: 0, ineligibility_reason: null`.

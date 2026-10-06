@@ -1227,6 +1227,29 @@ class ElectionService:
             },
         ]
 
+    @staticmethod
+    def _restricted_voter_ids(election: Election) -> Optional[Set[str]]:
+        """The members a restricted-list election admits, or None if it has
+        no list.
+
+        A secretary voter override extends the list (W50-13, owner decision
+        2026-10-05): the roster reads "Override" and counts the member as
+        eligible, so the vote, the ballot mailer, the non-voter list and
+        the turnout denominator must all agree that the member is admitted.
+        Before this the override was recorded and shown while every vote path
+        still refused the member as "not on the list". An empty stored list
+        is read as "no list", the one meaning every reader agrees on (W50-41).
+        """
+        if not election.eligible_voters:
+            return None
+        admitted = {str(v) for v in election.eligible_voters}
+        admitted |= {
+            str(o["user_id"])
+            for o in (election.voter_overrides or [])
+            if o.get("user_id")
+        }
+        return admitted
+
     async def check_voter_eligibility(
         self,
         user_id: UUID,
@@ -1285,9 +1308,11 @@ class ElectionService:
                 reason="Election has ended",
             )
 
-        # Check if user is in eligible voters list (if specified)
-        if election.eligible_voters is not None:
-            if str(user_id) not in election.eligible_voters:
+        # Check if user is in eligible voters list (if specified). A voter
+        # override extends the list — see _restricted_voter_ids.
+        restricted_ids = self._restricted_voter_ids(election)
+        if restricted_ids is not None:
+            if str(user_id) not in restricted_ids:
                 return VoterEligibility(
                     is_eligible=False,
                     has_voted=False,
@@ -2803,8 +2828,9 @@ class ElectionService:
             }
             return len(set(snapshot) | override_ids)
 
-        if election.eligible_voters:
-            return len(election.eligible_voters)
+        restricted_ids = self._restricted_voter_ids(election)
+        if restricted_ids is not None:
+            return len(restricted_ids)
 
         org_result = await self.db.execute(
             select(Organization).where(Organization.id == str(organization_id))
@@ -3459,11 +3485,12 @@ class ElectionService:
         if not election:
             return []
 
-        # Get eligible voters
-        if election.eligible_voters:
+        # Get eligible voters (a restricted list, extended by overrides)
+        restricted_ids = self._restricted_voter_ids(election)
+        if restricted_ids is not None:
             users_result = await self.db.execute(
                 select(User)
-                .where(User.id.in_([str(v) for v in election.eligible_voters]))
+                .where(User.id.in_(sorted(restricted_ids)))
                 .where(User.organization_id == str(organization_id))
                 .options(selectinload(User.roles))
             )
@@ -6893,10 +6920,10 @@ class ElectionService:
             )
             recipients = users_result.scalars().all()
         elif election.eligible_voters:
-            # Use election's eligible voters list
+            # The election's list, plus any overridden member (W50-13)
             users_result = await self.db.execute(
                 select(User)
-                .where(User.id.in_([str(v) for v in election.eligible_voters]))
+                .where(User.id.in_(sorted(self._restricted_voter_ids(election) or [])))
                 .where(User.organization_id == str(organization_id))
                 .options(selectinload(User.roles))
             )
