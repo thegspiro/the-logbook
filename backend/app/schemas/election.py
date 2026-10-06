@@ -1428,6 +1428,48 @@ class BallotSubmissionResponse(BaseModel):
     receipt_hashes: List[str] = []
 
 
+class MemberBallotSubmission(BallotSubmission):
+    """A signed-in member's ballot (the in-app Cast Vote tab): the emailed
+    ballot's shape, optionally cast as the holder of a proxy."""
+
+    proxy_authorization_id: Optional[str] = Field(default=None, max_length=64)
+
+
+class MemberBallotItemStatus(BaseModel):
+    """Whether the voter may vote on one ballot item, and whether they have."""
+
+    ballot_item_id: str
+    eligible: bool
+    reason: Optional[str] = None
+    voted: bool = False
+
+
+class MemberBallotProxy(BaseModel):
+    authorization_id: str
+    delegating_user_id: Optional[str] = None
+    delegating_user_name: Optional[str] = None
+
+
+class MemberBallotResponse(BaseModel):
+    """The in-app ballot: every contest the emailed ballot carries (plain
+    positions included, served as ballot items), the candidates, and this
+    voter's per-item standing."""
+
+    election: BallotElectionResponse
+    candidates: List[CandidateResponse] = []
+    items: List[MemberBallotItemStatus] = []
+    proxy: Optional[MemberBallotProxy] = None
+
+
+class MyProxyAuthorizationsResponse(BaseModel):
+    """The live authorizations naming the caller as proxy holder."""
+
+    proxies: List[MemberBallotProxy] = []
+    # Set when the caller holds proxies that cannot be voted here (proxy
+    # voting off for the department, or an anonymous election).
+    unavailable_reason: Optional[str] = None
+
+
 # Proxy Voting Schemas
 
 

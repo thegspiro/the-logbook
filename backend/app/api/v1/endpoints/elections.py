@@ -47,6 +47,7 @@ from app.schemas.election import (
     AttendeeListResponse,
     AttestManualBallotsResponse,
     BallotElectionResponse,
+    BallotItem,
     BallotPreviewResponse,
     BallotSubmission,
     BallotSubmissionResponse,
@@ -77,8 +78,11 @@ from app.schemas.election import (
     ManualBallotBatchListResponse,
     ManualBallotsRequest,
     ManualBallotsResponse,
+    MemberBallotResponse,
+    MemberBallotSubmission,
     MergeWriteInsRequest,
     MergeWriteInsResponse,
+    MyProxyAuthorizationsResponse,
     NominationActionResponse,
     NominationCreate,
     NonVotersResponse,
@@ -108,6 +112,7 @@ from app.services.election_service import (
     ElectionService,
     ballot_item_candidate_positions,
     office_ineligible_message,
+    position_ballot_items,
 )
 from app.utils.org_scoping import assert_in_org
 
@@ -670,6 +675,19 @@ async def lookup_ballot_by_token(
     # with a plain `election.positions` entry (ELEC-29): then it is a
     # plain-positional candidate too, and must not be exempted from this
     # filter just because a same-named ballot item also happens to exist.
+    # A plain position is served as a ballot item too, so the page renders
+    # it as a race (ballot convergence, 2026-10-05); before, a voter
+    # eligible only for a plain position opened an empty ballot. Only the
+    # positions this token may vote for are added.
+    position_items = [
+        BallotItem.model_validate(item)
+        for item in position_ballot_items(election)
+        if voting_token.eligible_positions is None
+        or item["position"] in voting_token.eligible_positions
+    ]
+    if position_items:
+        response.ballot_items = list(response.ballot_items or []) + position_items
+
     if voting_token.eligible_positions is not None:
         allowed_positions = set(voting_token.eligible_positions)
         if response.positions is not None:
@@ -2448,6 +2466,120 @@ async def delete_candidate(
 # ============================================
 # Voting Endpoints
 # ============================================
+
+
+@router.get("/{election_id}/ballot", response_model=MemberBallotResponse)
+async def get_member_ballot(
+    election_id: UUID,
+    proxy_authorization_id: Optional[str] = Query(default=None, max_length=64),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    The in-app ballot for the current member: every ballot item and plain
+    position, the candidates, and per item whether the member may vote on
+    it and whether they already have. With ``proxy_authorization_id`` it is
+    the ballot of the member whose proxy the caller holds.
+
+    **Authentication required**
+    """
+    service = ElectionService(db)
+    ballot, error = await service.get_member_ballot(
+        current_user.id,
+        election_id,
+        current_user.organization_id,
+        proxy_authorization_id=proxy_authorization_id,
+    )
+    if error == "Election not found":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    if error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+
+    election_view = BallotElectionResponse.model_validate(ballot["election"])
+    election_view.ballot_items = [
+        BallotItem.model_validate(item) for item in ballot["ballot_items"]
+    ]
+    return MemberBallotResponse(
+        election=election_view,
+        candidates=[CandidateResponse.model_validate(c) for c in ballot["candidates"]],
+        items=ballot["items"],
+        proxy=ballot["proxy"],
+    )
+
+
+@router.post(
+    "/{election_id}/ballot",
+    response_model=BallotSubmissionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def submit_member_ballot(
+    election_id: UUID,
+    ballot: MemberBallotSubmission,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Cast the current member's in-app ballot, or a proxy ballot, atomically.
+
+    Takes the emailed ballot's submission shape (one entry per ballot item).
+    Every selection is recorded through the same checks as a single in-app
+    vote; one refused selection records nothing. An item left on Abstain
+    stays open to vote on later.
+
+    **Authentication required**
+    """
+    service = ElectionService(db)
+    try:
+        result, error = await service.submit_member_ballot(
+            user_id=current_user.id,
+            election_id=election_id,
+            organization_id=current_user.organization_id,
+            votes=[v.model_dump() for v in ballot.votes],
+            proxy_authorization_id=ballot.proxy_authorization_id,
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+        )
+    except IntegrityError:
+        # The dedup hash caught a vote the checks did not (a race with the
+        # emailed link, say); nothing from this ballot was kept (W50-6).
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Database integrity check: a vote on this ballot was already "
+                "recorded — no votes were recorded"
+            ),
+        )
+    if error == "Election not found":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    if error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    return result
+
+
+@router.get(
+    "/{election_id}/ballot/proxies", response_model=MyProxyAuthorizationsResponse
+)
+async def list_my_proxy_authorizations(
+    election_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    The proxies the current member holds in this election, for the Cast
+    Vote tab's "voting for" choice.
+
+    **Authentication required**
+    """
+    result = await ElectionService(db).get_my_proxy_authorizations(
+        election_id, current_user.organization_id, current_user.id
+    )
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
+        )
+    return result
 
 
 @router.get("/{election_id}/eligibility", response_model=VoterEligibility)

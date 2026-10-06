@@ -66,6 +66,30 @@ finding below that says FLAGGED or OPEN is superseded by its line here.
   the Results tab print each as "Revised <when> by <who>". Votes are never
   re-pointed or re-signed, so integrity verification is untouched; a
   rollback to open clears the marks. Guard: `tests/test_w50_results_revised.py`.
+- **ELEC-28 / W50-10** (in-app ballot showed positions only; the emailed
+  ballot could not carry a plain position) — **fixed: one ballot model.**
+  `position_ballot_items` serves each plain position no item claims as a
+  ballot item (id `position-<sha256 prefix>`, explicit `position`), so its
+  votes are stored, deduplicated and tallied under the position name exactly
+  as before. The token lookup adds the ones in the token's
+  `eligible_positions`; `submit_ballot_with_token` accepts them and checks
+  them against the positions snapshot (never `eligible_item_ids`), refusing
+  Approve/Deny on them. The in-app ballot (`GET/POST /{id}/ballot`) takes
+  the emailed shape and records each selection through `cast_vote(commit=
+False)` in one transaction, so eligibility, limits, the dedup hash, the
+  signature, the chain and the anonymous audit row are those of every in-app
+  vote; one refusal rolls back the ballot. `_validate_vote_limits` and the
+  in-app/proxy dedup discriminator now honour an item's method override, as
+  the token route and the tally already did (ELEC-37). `check_voter_
+eligibility`'s "already voted in this election" applies only to a ballot
+  with no items. Guard: `tests/test_ballot_convergence.py`.
+- **Proxy ballot mode** (configured proxies could not vote) — **finished
+  for named elections:** the Cast Vote tab's "Voting for" choice loads the
+  delegating member's ballot and submits through `cast_proxy_vote`
+  (`commit=False`). Refused on an anonymous election
+  (`_proxy_anonymity_error`, also in `cast_proxy_vote`) while ELEC-43 is
+  undecided, so no attributable ballot can enter an anonymous box. Guard:
+  `TestProxyBallot` in `tests/test_ballot_convergence.py`.
 - **ELEC-16** (`list_manual_ballot_batches` unbounded) — **accepted as is.**
   Paper-tally sessions per election are naturally few; no cap and no
   pagination. Revisit if an election ever carries more than a few dozen

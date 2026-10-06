@@ -317,6 +317,9 @@ POST   /api/v1/elections/{id}/rollback       # Roll back status (guarded — see
 POST   /api/v1/elections/{id}/vote           # Cast a single vote (authenticated)
 POST   /api/v1/elections/{id}/vote/bulk      # Cast votes atomically (approval/ranked/multi-position)
 GET    /api/v1/elections/{id}/eligibility    # Check current user's eligibility
+GET    /api/v1/elections/{id}/ballot         # In-app ballot: every item and position, per-item standing (?proxy_authorization_id= for a proxy ballot)
+POST   /api/v1/elections/{id}/ballot         # Cast the in-app (or proxy) ballot atomically, emailed-ballot shape
+GET    /api/v1/elections/{id}/ballot/proxies # Proxies the current member holds (named elections only)
 GET    /api/v1/elections/{id}/results        # Get results (visibility-gated)
 GET    /api/v1/elections/{id}/stats          # Ballot counts / turnout (manage)
 POST   /api/v1/elections/{id}/open-nominations  # Draft -> nomination phase (manage)

@@ -9,6 +9,8 @@ import type {
   BallotItem,
   BallotItemVote,
   BallotLookupResponse,
+  MemberBallotResponse,
+  MyProxyAuthorizationsResponse,
   BallotPreview,
   BallotSubmissionResponse,
   BallotTemplate,
@@ -291,6 +293,40 @@ export const electionService = {
    */
   async lookupBallot(token: string): Promise<BallotLookupResponse> {
     const response = await api.post<BallotLookupResponse>('/elections/ballot/lookup', { token });
+    return response.data;
+  },
+
+  /**
+   * The signed-in member's in-app ballot, or — with a proxy authorization —
+   * the ballot of the member whose proxy they hold.
+   */
+  async getMemberBallot(electionId: string, proxyAuthorizationId?: string): Promise<MemberBallotResponse> {
+    const response = await api.get<MemberBallotResponse>(`/elections/${electionId}/ballot`, {
+      params: proxyAuthorizationId ? { proxy_authorization_id: proxyAuthorizationId } : undefined,
+    });
+    return response.data;
+  },
+
+  /**
+   * Cast the in-app ballot (the emailed ballot's shape), atomically.
+   */
+  async submitMemberBallot(
+    electionId: string,
+    votes: BallotItemVote[],
+    proxyAuthorizationId?: string
+  ): Promise<BallotSubmissionResponse> {
+    const response = await api.post<BallotSubmissionResponse>(`/elections/${electionId}/ballot`, {
+      votes,
+      ...(proxyAuthorizationId ? { proxy_authorization_id: proxyAuthorizationId } : {}),
+    });
+    return response.data;
+  },
+
+  /**
+   * The proxies the signed-in member holds in this election.
+   */
+  async getMyProxies(electionId: string): Promise<MyProxyAuthorizationsResponse> {
+    const response = await api.get<MyProxyAuthorizationsResponse>(`/elections/${electionId}/ballot/proxies`);
     return response.data;
   },
 

@@ -511,16 +511,14 @@ skipped member with the reason, which is the part you act on.
 
 **What the ballot email needs, and when it says so** _(2026-09-30)_:
 
-- **Ballot emails need ballot items.** The emailed ballot page votes on ballot
-  items only, and the ballot is locked once voting opens. An election built
-  from positions and candidates alone — as the create form offers — can be
-  voted on in the app but can never be emailed. **Send Ballot Emails** is then
-  disabled, and the page now says why in text beside it: _"Ballot emails need
-  ballot items, and the ballot cannot change while voting is open. Members can
-  vote in the app."_ (it was a hover tooltip a phone or screen reader never
-  showed). A locked, empty ballot says the same. Nothing warns before **Open
-  Election**, so add at least one ballot item first if you mean to email
-  ballots (open owner decision, `docs/KNOWN_LIMITATIONS.md`).
+- **Ballot emails carry every race** _(2026-10-05)_. The emailed ballot
+  page shows ballot items **and** plain positions — a race created from the
+  create form's positions is served to it as a ballot item — so an election
+  built from positions and candidates alone can be emailed. **Send Ballot
+  Emails** is disabled only for an election with neither ballot items nor
+  positions, and the page then says why in text beside it. A member eligible
+  only for a plain position now gets that race on the link, where the page
+  used to open empty.
 - **A draft cannot be mailed.** Sending ballots is refused for a Draft or
   Nominations election ("Ballot emails cannot be sent for a draft election")
   except as a test ballot; it was already refused once closed or cancelled.
@@ -537,14 +535,14 @@ skipped member with the reason, which is the part you act on.
 
 ### Edge Cases
 
-| Scenario                                                     | Behavior                                                                                                                                                                                        |
-| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Member without email address                                 | Skipped during send; reason logged                                                                                                                                                              |
-| Ballot sent to member who already voted                      | Second submission is rejected — votes are never overwritten (double-vote prevention is enforced at the database level)                                                                          |
-| Member with zero eligible ballot items                       | Skipped during send (no empty ballot); reason shown in the send summary                                                                                                                         |
-| Election opened without ballot items or candidates           | Cannot open — at least one accepted candidate or one ballot item is required                                                                                                                    |
-| Election opened with candidates but no ballot items          | Members vote in the app; ballot emails can never be sent for it (the ballot is locked once open) — see above. Since 2026-10-05 the **Open election** dialog warns about this before you confirm |
-| A member checked in at the meeting after the election opened | Recorded as present, but **cannot vote**: the roll froze at opening. The Attendance tab says so while voting is open; add a voter override to admit them                                        |
+| Scenario                                                     | Behavior                                                                                                                                                                                                                                 |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Member without email address                                 | Skipped during send; reason logged                                                                                                                                                                                                       |
+| Ballot sent to member who already voted                      | Second submission is rejected — votes are never overwritten (double-vote prevention is enforced at the database level)                                                                                                                   |
+| Member with zero eligible ballot items                       | Skipped during send (no empty ballot); reason shown in the send summary                                                                                                                                                                  |
+| Election opened without ballot items or candidates           | Cannot open — at least one accepted candidate or one ballot item is required                                                                                                                                                             |
+| Election opened with candidates but no ballot items          | Since 2026-10-05 its positions are on the emailed ballot, so ballots can be emailed. Only an election with neither positions nor ballot items cannot email ballots, and the **Open election** dialog warns about that before you confirm |
+| A member checked in at the meeting after the election opened | Recorded as present, but **cannot vote**: the roll froze at opening. The Attendance tab says so while voting is open; add a voter override to admit them                                                                                 |
 
 ### Voter-Roll Freeze
 
@@ -607,11 +605,20 @@ are never contacted.
 
 ### In-App Voting (Authenticated)
 
-1. Navigate to **Elections** and open the active election
-2. Review each ballot item and the candidates
-3. Select your choice for each position (or your approvals/rankings for approval and ranked-choice elections)
-4. Click **Submit Vote** — for approval and ranked-choice elections all of your selections for the position are submitted together, atomically
-5. Your vote is confirmed on screen. A **receipt** you can verify later comes with the emailed ballot (see below); the in-app tab does not show one
+_(2026-10-05)_ The **Cast Vote** tab is the same ballot as the emailed link:
+every ballot item and every position race, answered the same way (Approve /
+Deny, one candidate, "Select up to N", or a ranking).
+
+1. Navigate to **Elections** and open the active election, then **Cast Vote**
+2. Make a selection on the items you are voting on now. An item you leave on
+   **Abstain** stays open — unlike the emailed link, the in-app ballot is not
+   single-use — and an item you have already voted on is shown as done
+3. Click **Cast Ballot**, check the summary in the confirmation and confirm.
+   Everything you selected is recorded together: if any selection is refused
+   (say, you are not eligible for that item), nothing is recorded and the
+   message names the item
+4. The tab shows a **receipt** for each vote, and the verify form under the
+   ballot checks a receipt later
 
 ### Email Ballot Voting (Token-Based)
 
@@ -771,14 +778,26 @@ When enabled for the organization, proxy voting allows one member to vote on beh
 
 ### Casting a Proxy Vote
 
-> **Not built _(2026-08-12)_.** This section described a flow that does not
-> exist. Proxies can be **configured** — the Proxy Voting panel on the election
-> detail page assigns them and caps how many one member may hold — but there is
-> no way to cast a vote as one. There is no "Vote as Proxy" button, no
-> "Voting as proxy for…" banner, and no proxy mode on the ballot anywhere in the
-> application. Until that is built, a member who cannot attend should be sent an
-> email ballot instead. See
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#elections--proxy-voting-has-an-admin-panel-but-no-ballot-mode-2026-08-12).
+_(2026-10-05)_ A member who holds someone's proxy votes it from the **Cast
+Vote** tab:
+
+1. Open the election's **Cast Vote** tab
+2. In **Voting for**, choose _"<member> (as their proxy)"_ instead of
+   **Myself** — the list shows only the proxies you hold, live
+3. The ballot reloads as that member's: a **"Voting as proxy for: <member>"**
+   banner, their eligibility, and the items they have already voted on shown
+   as done
+4. Make the selections and click **Cast <member>'s Ballot**. The votes are
+   recorded as theirs (double-vote prevention applies to them, not you) and
+   marked as cast by you as their proxy
+
+**Named elections only.** A proxy vote records whom it was cast for, so on an
+**anonymous** election the proxy ballot is refused — the tab says so instead
+of offering the choice. Whether an anonymous election may accept an
+attributable proxy ballot is an open owner decision (ELEC-43 in
+`docs/KNOWN_LIMITATIONS.md`). Proxy voting must also be enabled in Election
+Settings. The holder can still use the delegating member's emailed link they
+are copied on.
 
 ### Edge Cases
 
@@ -1203,11 +1222,6 @@ is still open.
 `docs/KNOWN_LIMITATIONS.md` under "Elections — Owner Decisions From the W50
 Drive"):
 
-- The in-app **Cast Vote** tab shows position races only and treats every race
-  as one-choice, so since 2026-10-05 an election with ballot items or a
-  "choose up to N" race shows no in-app ballot: the tab tells members to vote
-  from the **Vote Now** link in their ballot email, which carries the whole
-  ballot.
 - There is no seat count — a "(2 seats)" race declares one winner.
 - The emailed ballot pre-selects **Abstain** on every item; an untouched
   Submit casts no votes and uses up the link.

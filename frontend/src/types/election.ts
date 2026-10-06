@@ -102,6 +102,39 @@ export interface Election {
  * (GET /elections/ballot). Deliberately excludes roster/PII fields
  * (attendees, eligible_voters, email_recipients, created_by, ...).
  */
+/** Whether the voter may vote on one ballot item, and whether they have. */
+export interface MemberBallotItemStatus {
+  ballot_item_id: string;
+  eligible: boolean;
+  reason?: string | null;
+  voted: boolean;
+}
+
+/** A proxy the signed-in member holds in an election. */
+export interface MemberBallotProxy {
+  authorization_id: string;
+  delegating_user_id?: string | null;
+  delegating_user_name?: string | null;
+}
+
+/**
+ * GET /elections/{id}/ballot — the in-app ballot: every contest the emailed
+ * ballot carries (plain positions arrive as ballot items), the candidates,
+ * and the voter's per-item standing. `proxy` is set on a proxy ballot.
+ */
+export interface MemberBallotResponse {
+  election: BallotElection;
+  candidates: Candidate[];
+  items: MemberBallotItemStatus[];
+  proxy?: MemberBallotProxy | null;
+}
+
+/** GET /elections/{id}/ballot/proxies */
+export interface MyProxyAuthorizationsResponse {
+  proxies: MemberBallotProxy[];
+  unavailable_reason?: string | null;
+}
+
 /** One correction made to a closed election's result (W50-9). */
 export interface ResultsRevision {
   at: string;

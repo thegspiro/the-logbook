@@ -173,15 +173,25 @@ describe('ElectionDetailPage open confirmations (W50-56, W50-57)', () => {
     expect(openNominations).not.toHaveBeenCalled();
   });
 
-  it('warns that a positions-only election cannot email ballots once open (W50-11)', async () => {
+  it('warns that an election with no race at all cannot email ballots once open (W50-11)', async () => {
+    getElection.mockResolvedValue({ ...draftElection, positions: [], ballot_items: [] });
     const user = userEvent.setup();
     renderWithRouter(<ElectionDetailPage />);
 
     await user.click(await screen.findByRole('button', { name: 'Open Election' }));
     const dialog = await screen.findByRole('dialog', { name: 'Open election' });
     expect(
-      within(dialog).getByText(/no ballot items, so ballot emails cannot be sent once it opens/)
+      within(dialog).getByText(/no ballot items or positions, so ballot emails cannot be sent once it opens/)
     ).toBeInTheDocument();
+  });
+
+  it('does not warn for a positions-only election, whose positions are on the emailed ballot', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ElectionDetailPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Open Election' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Open election' });
+    expect(within(dialog).queryByText(/ballot emails cannot be sent/)).not.toBeInTheDocument();
   });
 
   it('does not warn when the election has ballot items to email', async () => {

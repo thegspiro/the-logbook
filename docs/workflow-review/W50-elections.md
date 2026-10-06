@@ -696,7 +696,9 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `elections.py` `update_candidate` (E:2065-2127); merge (S:4324-4389); void batch (S:4103); soft-delete (E:2851).
 **Fix:** S09 refuses identity edits once votes exist (`test_w50_s09.py`). `review-backend-1.md` #1 found it keying on key presence, so a statement-only edit was refused and test votes counted; `7aa3405` compares values and ignores test votes. **Confirmed live** (CONFIRM-13): a statement-only PATCH on a voted candidate → 200; a rename → 400 "Cannot change a candidate's name, position or acceptance once votes have been cast"; the unchanged name resubmitted with a new statement → 200; a candidate with no votes on the same election renames freely. **Flagged:** merge, void and batch-void after close are deliberate corrections; the owner chooses between a gate after publish and a "results revised <when> by <who>" marker on the PDF and panel.
 
-### W50-10 — HIGH — The in-app "Cast Vote" tab is not the ballot: items are missing and a multi-seat race is single-select — 🔶 INTERIM FIX (2026-10-05)
+### W50-10 — HIGH — The in-app "Cast Vote" tab is not the ballot: items are missing and a multi-seat race is single-select — ✅ FIXED (2026-10-05)
+
+**Converged (2026-10-05):** the in-app ballot is now the emailed ballot's model — `GET/POST /elections/{id}/ballot` serve and take every ballot item and plain position — so the interim hide is lifted. A member holding a proxy on a named election casts it from the same tab. Tests: `backend/tests/test_ballot_convergence.py`, `ElectionBallot.w50-receipt.test.tsx`.
 
 **Owner decision (2026-10-05):** hide the in-app ballot for ballot items and caps above 1 and point to the email link — shipped first, as `CastVoteTab` (`frontend/src/components/election-detail/CastVoteTab.w50-10.test.tsx`) — then converge the in-app ballot onto ballot items, which lifts the hide.
 

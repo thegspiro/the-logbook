@@ -119,10 +119,12 @@ describe('ElectionDetailPage, loaded', () => {
   });
 
   // The reason was a hover title on a disabled button.
-  it('says in the page why ballot emails cannot be sent', async () => {
+  // A plain position is on the emailed ballot since the 2026-10-05 ballot
+  // convergence, so a positions-only election can mail ballots.
+  it('lets a positions-only election send ballot emails', async () => {
     await renderPage();
     const send = screen.getByRole('button', { name: 'Send Ballot Emails' });
-    expect(send).toBeDisabled();
-    expect(send).toHaveAccessibleDescription(/Ballot emails need ballot items/);
+    expect(send).toBeEnabled();
+    expect(screen.queryByText(/Ballot emails need ballot items/)).not.toBeInTheDocument();
   });
 });

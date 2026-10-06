@@ -861,6 +861,11 @@ POST   /api/v1/elections/{id}/clone                                     # Fresh 
 POST   /api/v1/elections/{id}/write-ins/merge                           # Consolidate write-in variants (audited alias; vote rows untouched)
 GET    /api/v1/elections/{id}/certified-results                         # Certified results package PDF (closed elections only)
 
+# In-app ballot (authenticated; the emailed ballot's model, 2026-10-05)
+GET    /api/v1/elections/{id}/ballot                                    # Every ballot item and plain position + candidates + per-item standing (?proxy_authorization_id=)
+POST   /api/v1/elections/{id}/ballot                                    # Cast the ballot atomically: {votes: [...], proxy_authorization_id?}
+GET    /api/v1/elections/{id}/ballot/proxies                            # Proxies the caller holds (refused on anonymous elections)
+
 # Public token-ballot endpoints (no auth, rate-limited; token travels in the
 # POST body — never a query string or path)
 POST   /api/v1/elections/ballot/lookup                                  # Load ballot + candidates in one call (eligibility-filtered minimal view)

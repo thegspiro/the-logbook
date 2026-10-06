@@ -169,9 +169,9 @@ export function describePackageSendError(err: unknown, recipientEmails: string[]
 }
 
 /**
- * True when the in-app ballot cannot show this election's whole ballot: it
- * renders `election.positions` as pick-one races, so ballot items or a cap
- * above one per race are voted from the emailed link instead (W50-10).
+ * Whether ballot emails can be sent: the emailed ballot carries ballot items
+ * and plain positions (each position served as an item since the 2026-10-05
+ * ballot convergence). Candidates with no race at all have nothing to mail.
  */
-export const inAppBallotIsIncomplete = (election: Pick<Election, 'ballot_items' | 'max_votes_per_position'>): boolean =>
-  (election.ballot_items?.length ?? 0) > 0 || (election.max_votes_per_position ?? 1) > 1;
+export const electionCanEmailBallots = (election: Pick<Election, 'ballot_items' | 'positions'>): boolean =>
+  (election.ballot_items?.length ?? 0) > 0 || (election.positions?.length ?? 0) > 0;
