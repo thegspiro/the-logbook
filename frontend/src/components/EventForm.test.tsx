@@ -1108,6 +1108,29 @@ describe('EventForm', () => {
       expect(await screen.findByLabelText(/^category$/i)).toHaveValue('retired_category');
     });
 
+    it.each([
+      ['lists no categories', () => Promise.resolve(visibleTypesWith([]))],
+      ['cannot load its categories', () => Promise.reject(new Error('offline'))],
+    ])('shows a stored category when the department %s', async (_case, settings) => {
+      // The save carries the stored category either way, so it has to be on
+      // screen, and choosing None must not take away the way back to it.
+      vi.mocked(apiModule.eventService.getVisibleEventTypesWithCategories).mockImplementation(settings);
+      const user = userEvent.setup();
+      renderLocked({ attendanceLocked: false, initialData: { ...finalized, custom_category: 'retired_category' } });
+
+      await waitFor(() => {
+        expect(apiModule.eventService.getVisibleEventTypesWithCategories).toHaveBeenCalled();
+      });
+      const category = await screen.findByLabelText(/^category$/i);
+      expect(category).toHaveValue('retired_category');
+      expect(category).toBeEnabled();
+
+      await user.selectOptions(category, '');
+      expect(screen.getByLabelText(/^category$/i)).toHaveValue('');
+      await user.selectOptions(screen.getByLabelText(/^category$/i), 'retired_category');
+      expect(screen.getByLabelText(/^category$/i)).toHaveValue('retired_category');
+    });
+
     it('locks nothing on an event whose attendance is open', async () => {
       renderLocked({ attendanceLocked: false });
 

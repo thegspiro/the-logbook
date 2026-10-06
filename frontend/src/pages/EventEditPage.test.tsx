@@ -436,6 +436,9 @@ describe('EventEditPage', () => {
 
       const stale = await screen.findByLabelText(/administrative \(not a current member type\)/i);
       expect(stale).toBeChecked();
+      // A 16px box: the 44px target comes from the label wrapping it, as on
+      // every listed type.
+      expect(stale instanceof HTMLInputElement ? stale.labels?.[0] : undefined).toHaveClass('mobile-touch-target');
       // Unticking keeps the box (and focus) so a mis-tick can be undone.
       await user.click(stale);
       expect(stale).toBeInTheDocument();

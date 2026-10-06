@@ -250,8 +250,9 @@ class TestUpdateSplitsDescriptiveFromAttendanceSensitive:
 def _closed_meeting(**overrides):
     """A finalized event as the service sees it: UTC times on whole seconds
     and enum members, no location to double-book against. The times are aware
-    here; MySQL hands them back naive, which one case below and the
-    integration test cover."""
+    because the ORM's load and refresh listeners stamp UTC on what MySQL
+    returns (``app.core.database``); one case below feeds a naive value
+    directly, as a defensive check."""
     start = datetime(2026, 9, 12, 13, 0, tzinfo=timezone.utc)
     fields = {
         "title": "Ladder drill",
@@ -272,9 +273,11 @@ def _closed_meeting(**overrides):
 
 
 def _form_save(event, **changes):
-    """What the edit form sends for ``event``: every schedule and check-in
-    field it shows, times as the browser's ``…T13:00:00.000Z``, enums as their
-    lowercase values — parsed by the real schema, as the endpoint does."""
+    """A save that restates every schedule and check-in field the edit form
+    shows for ``event`` — what an API client, or an edit page from before it
+    left the locked fields out, sends. Times as the browser's
+    ``…T13:00:00.000Z``, enums as their lowercase values, parsed by the real
+    schema as the endpoint does."""
     body = {
         "title": event.title,
         "event_type": "business_meeting",
@@ -295,10 +298,13 @@ def _raw(**update_data):
 
 class TestUpdateLocksOnChangeNotPresence:
     """The lock refuses a change to what attendance was measured against, not
-    a field's mere presence. The edit form resends every field it shows, so a
-    presence check refused every save of a finalized event."""
+    a field's mere presence. A client that restates every field the form shows
+    must still be able to save a finalized event: a presence check refused
+    every such save, title fixes included."""
 
-    async def test_the_edit_form_s_unchanged_fields_ride_along_with_a_title_fix(self):
+    async def test_unchanged_locked_fields_restated_with_a_title_fix_are_accepted(
+        self,
+    ):
         event = _closed_meeting()
         svc = EventService(_mock_db(_one(event)))
 
@@ -326,7 +332,8 @@ class TestUpdateLocksOnChangeNotPresence:
         assert (event.start_datetime, event.end_datetime) == (start, end)
 
     async def test_naive_stored_times_match_the_browser_s_utc_times(self):
-        """MySQL DATETIME carries no offset, so a row can arrive naive."""
+        """Defensive: the ORM stamps UTC on load, but a naive value (one
+        assigned in memory, say) must still be read as UTC."""
         event = _closed_meeting()
         event.start_datetime = event.start_datetime.replace(tzinfo=None)
         event.end_datetime = event.end_datetime.replace(tzinfo=None)

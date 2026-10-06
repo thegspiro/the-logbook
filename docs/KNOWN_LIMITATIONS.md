@@ -4252,7 +4252,12 @@ same screen, and left as they are:
   is to the minute, differs from what is stored (a start or end saved with
   seconds). Where a later occurrence is finalized and would change, the save
   is refused and names that field. Edit the later occurrences one at a time
-  instead.
+  instead. The category part is new with this change: the form used to show
+  every event's category as None and leave it out of the save, so a series
+  save never touched it. It now loads the stored category, so a save from an
+  open occurrence also writes that category onto later open occurrences that
+  had a different one. A save from a finalized occurrence leaves all of these
+  fields out and is not affected.
 - **Reminder and validation markers an earlier series save copied are still
   there.** Before this change, a "This and all future events" save wrote the
   edited occurrence's `reminders_sent` and `validation_notification_sent` onto

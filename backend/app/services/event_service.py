@@ -1142,7 +1142,14 @@ class EventService:
                 timing.get("start_datetime") or anchor.start_datetime, tz
             )
             new_end = _wall_time(timing.get("end_datetime") or anchor.end_datetime, tz)
-            if new_end <= new_start:
+            # Only a sent time is checked. Wall time drops the fold, so a stored
+            # pair spanning the hour the clocks fall back reads as zero length,
+            # and a finalized event's edit page sends no times at all — checking
+            # the stored pair refused its title fix whenever an RSVP deadline,
+            # the one timing field it does send, came along.
+            if ("start_datetime" in timing or "end_datetime" in timing) and (
+                new_end <= new_start
+            ):
                 raise ValueError("End date/time must be after start date/time")
             shift = new_start - _wall_time(anchor.start_datetime, tz)
             length = new_end - new_start

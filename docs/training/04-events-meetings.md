@@ -794,7 +794,7 @@ for edits made from now on:
 | Conflicting times/locations            | The system checks for scheduling conflicts before creating each occurrence and warns you                                                                               |
 | Earlier occurrences in "This and all future events" | Only the occurrence you edited and the later ones change; earlier occurrences remain intact                                                               |
 | Series spanning a daylight-saving change | Each occurrence keeps its local time — a 7:00 PM drill stays at 7:00 PM _(since 2026-09-28; series created earlier may be an hour off after the change, see above)_ |
-| Editing a series with finalized attendance | Refused only when the edit actually changes times — a description-only edit goes through                                                                          |
+| Editing a series with finalized attendance | Refused when the save would change a finalized occurrence's times, type, category or check-in rules. Saved from a finalized occurrence, those fields are left out, so a description-only edit goes through. Saved from an open one, its type, category and check-in rules are copied onto every later occurrence, so even a description-only edit is refused when a finalized later one differs in any of them — edit those occurrences one at a time (see "Events — Edit Form Gaps" in `docs/KNOWN_LIMITATIONS.md`) |
 
 ---
 

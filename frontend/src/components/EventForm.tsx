@@ -523,6 +523,13 @@ export const EventForm: React.FC<EventFormProps> = ({
   const unlistedMandatoryTypes = [
     ...new Set([...(initialData?.mandatory_membership_types ?? []), ...(formData.mandatory_membership_types ?? [])]),
   ].filter((saved) => !membershipTypes.some((listed) => listed.value === saved));
+  // The same for a category the department no longer lists: it would read as
+  // None, or with no categories listed at all, show no control while the save
+  // still carries it. Drawn from what was saved too, so choosing None keeps
+  // the option there to choose again.
+  const unlistedCategories = [...new Set([initialData?.custom_category, formData.custom_category])].filter(
+    (saved): saved is string => Boolean(saved) && !customCategories.some((listed) => listed.value === saved)
+  );
 
   const toggleMandatoryMembershipType = (membershipType: string, checked: boolean) => {
     const selected = formData.mandatory_membership_types || [];
@@ -933,7 +940,7 @@ export const EventForm: React.FC<EventFormProps> = ({
         )}
 
         {/* Custom Category (optional) */}
-        {customCategories.length > 0 && (
+        {(customCategories.length > 0 || unlistedCategories.length > 0) && (
           <div>
             <label htmlFor="custom-category" className={labelClass}>
               Category
@@ -949,11 +956,11 @@ export const EventForm: React.FC<EventFormProps> = ({
               className={`${selectClass} disabled:cursor-not-allowed disabled:opacity-60`}
             >
               <option value="">None</option>
-              {/* A category removed from the department's list since the event
-                  was filed under it would otherwise read as None. */}
-              {formData.custom_category && !customCategories.some((c) => c.value === formData.custom_category) && (
-                <option value={formData.custom_category}>{formData.custom_category}</option>
-              )}
+              {unlistedCategories.map((saved) => (
+                <option key={saved} value={saved}>
+                  {saved}
+                </option>
+              ))}
               {customCategories
                 .filter((c) => visibleCustomCategories.includes(c.value))
                 .map((cat) => (
@@ -1475,7 +1482,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                 </label>
               ))}
               {unlistedMandatoryTypes.map((saved) => (
-                <div key={saved} className="flex items-center space-x-3">
+                <label key={saved} className="mobile-touch-target flex items-center justify-start space-x-3">
                   <input
                     type="checkbox"
                     id={`mandatory-${saved}`}
@@ -1483,12 +1490,12 @@ export const EventForm: React.FC<EventFormProps> = ({
                     onChange={(e) => toggleMandatoryMembershipType(saved, e.target.checked)}
                     className={checkboxClass}
                   />
-                  <label htmlFor={`mandatory-${saved}`} className="text-theme-text-secondary text-sm">
+                  <span className="text-theme-text-secondary text-sm">
                     {/* Only once the department's own list has loaded: the
                         built-in fallback lacks real tiers such as senior. */}
                     {membershipTypesLoaded ? `${saved} (not a current member type)` : saved}
-                  </label>
-                </div>
+                  </span>
+                </label>
               ))}
             </fieldset>
           )}

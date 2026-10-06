@@ -1084,10 +1084,9 @@ class TestATitleFixReachesTheRecords:
         body.update(changes)
         return EventUpdate.model_validate(body)
 
-    async def test_the_edit_form_s_full_payload_saves_a_title_fix(
-        self, db_session, dept
-    ):
-        """The form resends every field it shows. Read back from the database
+    async def test_a_full_restated_payload_saves_a_title_fix(self, db_session, dept):
+        """A client that restates every field the form shows, as the edit page
+        did before it left the locked fields out: read back from the database
         and restated unchanged, none of them counts as moving the event."""
         org, officer, member = dept
         event_id, start, end = await _training_event(

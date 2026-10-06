@@ -329,6 +329,49 @@ class TestUpdateFutureEventsAttendanceLock:
         assert count == 4
         assert series[2].check_in_minutes_before == 60
 
+    async def test_a_finalized_fall_back_night_takes_a_title_fix_with_its_deadline(
+        self,
+    ):
+        """1:00 CDT to 1:00 CST is an hour, but wall time drops the fold and
+        reads it as none. The edit page sends a finalized event no times, only
+        its RSVP deadline, so a length check against the stored pair refused a
+        title fix over times nobody can edit."""
+        night = datetime(2026, 11, 1, 6, 0, tzinfo=timezone.utc)
+        series = _drills(
+            0,
+            o0={"start_datetime": night, "end_datetime": night + timedelta(hours=1)},
+            o1={
+                "start_datetime": night + timedelta(weeks=1, hours=1),
+                "end_datetime": night + timedelta(weeks=1, hours=2),
+            },
+            o2={
+                "start_datetime": night + timedelta(weeks=2, hours=1),
+                "end_datetime": night + timedelta(weeks=2, hours=2),
+            },
+            o3={
+                "start_datetime": night + timedelta(weeks=3, hours=1),
+                "end_datetime": night + timedelta(weeks=3, hours=2),
+            },
+        )
+        before = [(e.start_datetime, e.end_datetime) for e in series]
+
+        count, db = await _save_series(
+            series,
+            EventUpdate.model_validate(
+                {
+                    "title": "Night drill (corrected)",
+                    "requires_rsvp": True,
+                    "rsvp_deadline": night - timedelta(days=1),
+                }
+            ),
+        )
+
+        assert count == 4
+        assert {e.title for e in series} == {"Night drill (corrected)"}
+        assert [(e.start_datetime, e.end_datetime) for e in series] == before
+        assert series[0].rsvp_deadline == night - timedelta(days=1)
+        db.commit.assert_awaited_once()
+
 
 class TestSeriesSaveKeepsEachOccurrencesLifecycleMarkers:
     """custom_fields carries server-written lifecycle markers. The edit form
