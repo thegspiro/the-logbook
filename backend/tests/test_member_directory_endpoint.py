@@ -123,6 +123,20 @@ async def test_department_ceiling_off_hides_contact_details(db_session):
     assert all(r.email is None for r in rows)
 
 
+async def test_archived_members_are_not_listed(db_session):
+    """W15-4: former members are not in an ordinary member's directory."""
+    org = await _org(db_session)
+    caller = await _member(db_session, org)
+    departed = await _member(db_session, org, status=UserStatus.ARCHIVED)
+    on_leave = await _member(db_session, org, status=UserStatus.LEAVE)
+
+    rows = await list_member_directory(db=db_session, current_user=caller)
+
+    ids = {str(r.id) for r in rows}
+    assert departed.id not in ids
+    assert on_leave.id in ids
+
+
 async def test_directory_is_org_scoped(db_session):
     org = await _org(db_session)
     other = await _org(db_session)

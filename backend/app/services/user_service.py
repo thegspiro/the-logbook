@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.user import User
+from app.models.user import User, UserStatus
 from app.schemas.user import (
     MemberDirectoryEntry,
     UserListResponse,
@@ -102,11 +102,16 @@ class UserService:
         Always honours each member's own contact-visibility choice — the
         directory is by definition the view of somebody who does not
         administer these records.
+
+        Archived (departed) members are left out (W15-4): a former member is
+        not somebody a member looks up, and the coordinators who manage their
+        records see them on the management roster (``GET /users``).
         """
         result = await self.db.execute(
             select(User)
             .where(User.organization_id == str(organization_id))
             .where(User.deleted_at.is_(None))
+            .where(User.status != UserStatus.ARCHIVED)
             .order_by(User.last_name, User.first_name)
         )
         entries = []

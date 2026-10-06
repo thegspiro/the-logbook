@@ -96,6 +96,7 @@ Mirrored to `docs/KNOWN_LIMITATIONS.md`.
 **Did:** as `member`, opened Members while Ian was archived.
 **Saw:** "Ian Two · IMP-002 · ARCHIVED" in the list. The directory's default filter is "All Status", and `GET /users` returns archived members to a member.
 **Why flagged:** whether members should see former members, and what of them, is a privacy and policy decision. Mirrored to `docs/KNOWN_LIMITATIONS.md`.
+**Owner decision (2026-10-05) — fixed:** hide archived members from non-managers and open their directory on Active. `GET /users/directory` (the non-manager directory, USR-8) leaves archived members out, and the Members page defaults a non-manager's filter to Active; coordinators keep the whole roster.
 
 Seen and left:
 

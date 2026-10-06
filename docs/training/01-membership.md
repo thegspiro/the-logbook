@@ -38,10 +38,10 @@ assignments, and the Membership Coordinator rename.
 
 Navigate to **Members** in the sidebar to view your department roster.
 
-The directory lists every member on the roster, whatever their status, with their name, **rank**, membership number and status, plus contact details where your department's contact-visibility setting allows. Officers with `members.manage` also see username, hire date and row actions. You can:
+The directory lists the members on the roster with their name, **rank**, membership number and status, plus contact details where your department's contact-visibility setting allows. Officers with `members.manage` also see username, hire date and row actions. You can:
 
 - **Search** by name or membership number, and by email when any email is visible to you (officers can also search by username). The box only promises an email search when your department shows you at least one email address
-- **Filter** by status (All Statuses, Active, Inactive, On Leave, Retired; officers with `members.manage` also get **Archived**)
+- **Filter** by status (All Statuses, Active, Inactive, On Leave, Retired; officers with `members.manage` also get **Archived**). A member's directory opens on **Active**; an officer's on **All Statuses**
 - **Click** any member to view their full profile
 
 > **Rank is a column now** _(2026-09-30)_. The directory used to show only name,
@@ -53,11 +53,12 @@ The directory lists every member on the roster, whatever their status, with thei
 > column of dashes. Officers always see it, because they are the ones who fill
 > it in.
 >
-> **"All Statuses" includes archived members for everyone.** Only officers get
-> the **Archived** filter, but an archived member is still listed under the
-> default filter, with an Archived badge, to every member. Whether former
-> members should appear to members at all is an open policy question — see
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md) (workflow review W15-4).
+> **Former members are not in a member's directory** _(2026-10-05)_. A member
+> without `members.manage` no longer sees archived (departed) members at all,
+> and their directory opens on **Active**; choose **All Statuses** to include
+> inactive, on-leave and retired members. Officers with `members.manage` still
+> open on the whole roster, archived members included, and keep the
+> **Archived** filter (workflow review W15-4).
 
 > **What the directory hides is not sent either** _(2026-10-05)_. A member
 > without `members.manage` now loads the directory from its own, narrower

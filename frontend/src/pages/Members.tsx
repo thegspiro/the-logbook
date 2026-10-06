@@ -79,7 +79,11 @@ const Members: React.FC = () => {
     expiringCertifications: 0,
   });
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
+  // A member's directory opens on Active (W15-4); the server already leaves
+  // archived members out of it. A coordinator keeps the whole roster, archived
+  // included, because those are the records they maintain.
+  const defaultFilterStatus = canManageMembers ? 'all' : UserStatus.ACTIVE;
+  const [filterStatus, setFilterStatus] = useState<string>(defaultFilterStatus);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [contactInfoEnabled, setContactInfoEnabled] = useState({
@@ -237,7 +241,7 @@ const Members: React.FC = () => {
   // a blank panel rather than a prompt to do something they cannot. An empty
   // result that follows from a search or a status filter is still reported to
   // everyone — that is feedback on what they asked for.
-  const listIsNarrowed = searchQuery !== '' || filterStatus !== 'all';
+  const listIsNarrowed = searchQuery !== '' || filterStatus !== defaultFilterStatus;
   const showEmptyState = canManageMembers || listIsNarrowed;
 
   // Reset to page 1 when filters change

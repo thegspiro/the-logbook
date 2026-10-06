@@ -192,6 +192,31 @@ describe('Members roster — regular member (no members.manage)', () => {
     expect(mockGetUsers).not.toHaveBeenCalled();
   });
 
+  // W15-4: a member's directory opens on Active members; the server already
+  // leaves archived ones out of it.
+  it('opens on Active members, and All Statuses shows the rest', async () => {
+    const user = userEvent.setup();
+    mockRoster.mockResolvedValue([
+      ...ROSTER,
+      makeMember({
+        id: 'u4',
+        username: 'iinactive',
+        email: 'ina@example.org',
+        first_name: 'Ina',
+        last_name: 'Inactive',
+        membership_number: '099',
+        status: UserStatus.INACTIVE,
+      }),
+    ]);
+    await renderRoster();
+
+    expect(screen.getByLabelText('Filter by status')).toHaveValue('active');
+    expect(within(table()).queryByText('Ina Inactive')).not.toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Filter by status'), 'all');
+    expect(await within(table()).findByText('Ina Inactive')).toBeInTheDocument();
+  });
+
   it('hides the username under each member name, in both layouts', async () => {
     await renderRoster();
 
@@ -382,6 +407,13 @@ describe('Members roster — membership coordinator (members.manage)', () => {
 
     await waitFor(() => expect(mockGetUsers).toHaveBeenCalledTimes(1));
     expect(mockGetDirectory).not.toHaveBeenCalled();
+  });
+
+  it('opens on the whole roster, archived included', async () => {
+    renderWithRouter(<Members />);
+
+    await waitFor(() => expect(mockGetUsers).toHaveBeenCalledTimes(1));
+    expect(screen.getByLabelText('Filter by status')).toHaveValue('all');
   });
 
   it('offers the add and import prompt on an empty roster', async () => {

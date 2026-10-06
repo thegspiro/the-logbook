@@ -208,7 +208,8 @@ async def list_member_directory(
     status, rank and the contact fields the department and each member allow —
     not the username, hire date, station, platoon or membership classification
     `GET /users` sends, so what the directory hides is not in the response
-    either. Each member's own contact-visibility choice always applies here.
+    either. Each member's own contact-visibility choice always applies here,
+    and archived (departed) members are not listed.
 
     **Authentication required**
 
