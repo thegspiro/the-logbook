@@ -149,25 +149,35 @@ not yet couple the two, and the symptom is a form that accepts submissions and
 files no requests. Coupling them (or warning on the Forms publish action) is an
 open product decision.
 
-## Claude (MCP) — claude.ai Custom Connectors Need an OAuth Server (2026-09-03)
+## Claude (MCP) — Member Sign-In (OAuth) Residuals (2026-10-06)
 
-The Claude (MCP) integration authenticates MCP clients with a static bearer
-service key. Claude Code (`claude mcp add --transport http … --header
-"Authorization: Bearer …"`) and the Messages API connector
-(`authorization_token`) accept that directly. The claude.ai custom-connector
-dialog — and Claude Desktop's remote-connector flow — authenticate remote
-servers with OAuth 2.1 plus dynamic client registration instead, and The
-Logbook is currently an OAuth _client_ (Google and Microsoft sign-in), not
-an authorization server: there is no `/authorize`, `/token` or client
-registration endpoint for a connector to talk to.
+**The original limitation is resolved.** "claude.ai custom connectors need an
+OAuth server the app does not have" (2026-09-03): the owner chose to build it,
+and The Logbook now includes an OAuth 2.1 authorization server for MCP
+clients — authorization code with PKCE (S256), admin-registered clients,
+rotating refresh tokens, a consent screen, and per-member tool gating. It is
+off by default (`MCP_OAUTH_ENABLED`, `MCP_OAUTH_ISSUER_URL`, plus the
+department's own switch); see `wiki/Integration-Claude-MCP.md` and the threat
+model in `docs/security-review/MCPO-27-mcp-oauth-server.md`.
 
-Until that is built, those clients connect through a local stdio-to-HTTP
-bridge (such as `mcp-remote`) that passes the `Authorization` header. Adding
-the authorization server is a separate change set: it needs a consent screen
-on top of the existing login, token issuance keyed to the same service-key
-gating, protected-resource metadata under `/.well-known/`, and the
-`mcp` SDK's `TokenVerifier` hook in place of the bearer check in
-`app/mcp/transport.py`.
+What is left, each a deliberate choice an owner may want to revisit:
+
+- **No dynamic client registration.** An open RFC 7591 endpoint lets anyone
+  create clients and cannot tie a client to a department, so clients are
+  registered by an IT administrator. claude.ai accepts a pre-registered client
+  ID and secret in its connector's advanced settings; a client that supports
+  only DCR still needs the service key and a local bridge. If DCR is wanted,
+  the shape that keeps the department binding is registration authenticated by
+  an administrator-minted initial access token.
+- **Loopback redirect URIs match exactly, port included.** OAuth 2.1 permits
+  any port on a loopback redirect; this server does not, so a desktop client
+  must be configured with a fixed callback port.
+- **A client that retries a refresh loses its connection.** Refresh-token
+  replay detection cannot tell a retried request from a stolen token, so it
+  ends the connection and the member reconnects. A grace window for the
+  immediately previous token would trade detection for convenience.
+- **Access tokens are bearer tokens** (no DPoP or mTLS binding), bounded to
+  15 minutes.
 
 Two smaller ones, both deliberate:
 

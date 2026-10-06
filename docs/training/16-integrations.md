@@ -954,10 +954,30 @@ Full setup detail, including client configuration, is on the
 Stateless, JSON-response transport: any worker or replica answers any request,
 and **no reverse-proxy change is needed** because it is served under `/api/`.
 
-> **Known limitation.** claude.ai custom connectors authenticate with OAuth 2.1,
-> and The Logbook is an OAuth _client_, not an authorization server — so those
-> clients cannot present a service key directly and use a local bridge for now.
-> Claude Code and the Messages API connector reach the endpoint without one.
+### Member sign-in (OAuth) _(2026-10-06)_
+
+claude.ai custom connectors and Claude Desktop authenticate with OAuth instead
+of a pasted key. **Member sign-in** lets each member connect one of those with
+their **own account**: they sign in, see what the client asks for — and how
+many tools each request would actually reach for them — and choose **Allow**
+or **Don't allow**. The connection can then do only what that member can do in
+The Logbook, within the switches above.
+
+It is **off** until three things are true: the server operator sets
+`MCP_OAUTH_ENABLED` and `MCP_OAUTH_ISSUER_URL`; an administrator ticks **Let
+members connect with their own account** on the integration; and an IT
+administrator registers the client (name, exact redirect URI, optional secret)
+in the **Member sign-in (OAuth)** panel on the card.
+
+- Members review and disconnect their own connections on the **Claude
+  connections** page (`/claude/connections`), linked from the
+  consent screen. It has no menu entry yet.
+- Changing or resetting a password ends every connection the member holds.
+- There is no self-service client registration; every client is registered by
+  someone holding `integrations.mcp_keys`.
+
+Full setup, including the claude.ai redirect URI, is on the
+`Integration-Claude-MCP` wiki page.
 
 ## Integration errors no longer leak internals _(2026-08-31)_
 
