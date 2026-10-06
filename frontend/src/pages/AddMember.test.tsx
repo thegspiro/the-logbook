@@ -88,7 +88,10 @@ const fillRequired = async (
   await user.type(phones[1] as HTMLElement, '5550101');
 };
 
-describe('AddMember', () => {
+// These tests type a whole member record a keystroke at a time, which on a
+// loaded machine — the pre-commit hook runs the suite beside other work —
+// takes longer than the default 5s even though nothing is wrong.
+describe('AddMember', { timeout: 20_000 }, () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockPreviewNextMembershipId.mockResolvedValue({ enabled: false, next_id: null });

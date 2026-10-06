@@ -61,7 +61,9 @@ beforeEach(() => {
   useOnboardingStore.setState({ departmentName: 'Falls Church VFD' });
 });
 
-describe('the administrator password', () => {
+// Each case types a full password and its confirmation a keystroke at a time;
+// on a loaded machine that alone can outrun the default 5s.
+describe('the administrator password', { timeout: 20_000 }, () => {
   it('holds back a password with a run like "abc" or "123", and says why', async () => {
     const user = userEvent.setup();
     renderStep();
