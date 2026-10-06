@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**TBD**: branch `claude/security-review-skills-testing`, Feature 19 (Skills
+**PR [#2976](https://github.com/thegspiro/the-logbook/pull/2976)**: branch
+`claude/security-review-skills-testing`, Feature 19 (Skills
 testing), pass 7 (watchdog pickup — the dedicated `/loop 30m
 /security-review` session had no open PR/branch for this feature, and PR
 #2975 had already merged ~2.5 hours earlier with nothing started since).
