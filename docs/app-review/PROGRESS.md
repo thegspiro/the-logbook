@@ -41,7 +41,7 @@ from its open list.
 | --- | -------------------------- | ------ | ------ |
 | B1  | medical-screening          | MS2    | ✅     |
 | B2  | apparatus                  | AP2    | ✅     |
-| B3  | inventory                  | INV2   | ⬜     |
+| B3  | inventory                  | INV2   | ✅     |
 | B4  | facilities                 | FAC2   | ⬜     |
 | B5  | elections                  | ELEC2  | ⬜     |
 | B6  | meetings & minutes         | MM2    | ⬜     |
@@ -2859,3 +2859,51 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   called a bug). Gate: flake8 0 · black 1,370 unchanged · tsc 0 · eslint (no
   frontend change this pass) · backend **57 passed**. See apparatus.md → Pass 5.
   Next: B3 inventory.
+- **B3 inventory ✅ (pass 5) — the real test baseline, the last open item closed,
+  and no new code defects. 0 code fixes, 1 item closed, 1 process correction.**
+  ~22,000 lines across three files, 51 commits since the last pass, so the scope
+  is stated explicitly in the findings file rather than implied: 148 route gates,
+  12 self-scoped routes, 31 LIKE calls, 8 quantity-mutating methods and every
+  bounded quantity field were checked **exhaustively**; the lots/ledger
+  internals, NFC, kiosk, labels, import/export, impact planner and vendors were
+  **not read** and carry no verdict from this pass. **The headline is a number
+  nobody had before:** passes 3–4 could only report "142 DB-free passed, 75
+  fixture errors" because the checklist said DB tests cannot run here. They can.
+  `-k inventory` is **1,169 passed, 1 skipped, 0 failed**. **Getting there
+  produced the one thing this pass needed to write down:** the suite opened with
+  **98 failures and 25 errors** on a tree I had not touched, every one of them
+  `(1054, "Unknown column 'x'")` — the session-start hook builds the schema once,
+  `main` moved several migrations past it during the session, and that failure
+  signature is indistinguishable from a real defect in the feature under review.
+  All 123 vanished after `alembic upgrade head && repair_schema.py`.
+  `CHECKLIST.md` now says to rebuild before reading such a failure as a finding,
+  because the next reviewer would otherwise lose the same time or report phantom
+  findings. **INV2-3 closes the last open item** — the `_escape_like` DRY cleanup
+  carried by passes 2, 3 and 4 is already resolved: `grep -c` returns 0, the
+  repo-wide pitfall-#25 work replaced it with `like_pattern` /
+  `LIKE_ESCAPE_CHAR`, and nobody closed the item because nobody looked. With
+  INV-4 (pass 4) and INV-6 (the follow-up) already closed, **this module now
+  carries no open code findings.** **Verified rather than inherited:** 148 routes,
+  **0** without an auth dependency; all **12** authenticated-only routes
+  correctly self-scoped — the five `users/{user_id}/…` reads through a
+  `_require_self_or_quartermaster` that raises 403 with no fall-through, and both
+  list endpoints _forcing_ the requester filter to the caller for non-managers so
+  `mine_only` cannot widen a read; **every** quantity mutation serialized by a row
+  lock, including the three private helpers, checked by resolving each call site's
+  enclosing method rather than assuming — `issue_from_pool` is pitfall #27's
+  exact shape and `_get_item_locked` documents the `populate_existing` trap that
+  makes the lock real rather than decorative; negative stock closed on both sides
+  (every `*Create`/`*Update` quantity bounded `ge=0`/`ge=1`, decrements check
+  sufficiency, migration `7d2e4f6a8b13` clamped the history); 31/31 LIKE calls
+  escaped, verified by paren-matching because a line grep false-positives on the
+  continuation line; 0 E712. Also confirmed **yesterday's AP2-5 no-op ternary
+  class is extinct repo-wide** — an AST sweep comparing each `IfExp`'s two
+  branches finds 0 in `app/`, `tests/` and `scripts/` (the regex form yields ~49
+  false positives, so the AST comparison is the check worth keeping).
+  **No new code defects**, said plainly: four passes, a follow-up and a security
+  rotation have worked this module hard, and the two dimensions most likely to
+  still hide something came back clean under exhaustive checks. Open doc gap: no
+  `docs/INVENTORY.md` — the two largest modules in the repo both lack a feature
+  doc, now a pattern rather than an oversight. Gate: flake8 0 · black 1,425
+  unchanged · isort clean · tsc 0 · eslint 0 · docs links 0 broken · backend
+  **1,169 passed**. See inventory.md → Pass 5. Next: B4 facilities.

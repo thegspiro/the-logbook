@@ -2,7 +2,172 @@
 
 **Prefix:** `INV2` · **Iteration:** B3 · **Reviewed:** 2026-08-06 (pass 1),
 2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
-2026-08-11 (follow-up)
+2026-08-11 (follow-up), 2026-10-06 (pass 5)
+
+---
+
+## Pass 5 (2026-10-06) — the real test baseline, and the last open item closed
+
+**Backend:** `endpoints/inventory.py` (7,387 L, **148** routes),
+`services/inventory_service.py` (11,627 L), `schemas/inventory.py` (2,909 L) —
+~22k lines, the largest module in the repo
+**Frontend:** none changed this pass
+**Docs:** no `docs/INVENTORY.md`
+
+### Scope — read this before reading "verified good"
+
+This module is ~22,000 lines with 51 commits since the last pass. **It was not
+read line-by-line and this pass does not claim it was.** A truncated read
+reporting "clean" is worse than an honest partial scope, so:
+
+**Reviewed exhaustively (mechanically, every instance):** all 148 route auth and
+permission gates; all 12 authenticated-only routes' self-scoping; every
+`like`/`ilike` call (31); every `# noqa: E712` (0); every quantity-mutating
+method and whether it holds a row lock (8); every `*Create`/`*Update` quantity
+field bound.
+
+**Reviewed by reading:** `issue_from_pool`, `_get_item_locked`,
+`_require_self_or_quartermaster`, `_redact_holder`, `list_equipment_requests`,
+`list_return_requests`, `extend_checkout`, the five `users/{user_id}/…` reads,
+and the three unlocked quantity helpers plus their callers.
+
+**Not reviewed:** the remaining bulk of `inventory_service.py` — lots/ledger
+internals beyond the locking question, NFC, kiosk, labels, import/export,
+impact planner, audit scheduling, vendors. Each has its own test file (68
+inventory test files exist) and prior passes covered the FK/tenancy invariants
+across the module; their _business logic_ carries no verdict from this pass.
+
+### Verified good ✅
+
+- **148 routes, 0 without an auth dependency** — enumerated mechanically (parse
+  each `@router.*`, walk to its `def`, scan the whole signature block), not
+  spot-checked. 136 carry a permission gate: `inventory.manage` ×102,
+  `inventory.view` ×34.
+- **All 12 authenticated-only routes are correctly self-scoped**, which is the
+  checklist's dimension-2 self-scoping item and the thing an `inventory.view`
+  gate could not have answered. Five `users/{user_id}/…` reads (assignments,
+  issuances, inventory, clearance, issuance-history) go through
+  `_require_self_or_quartermaster`, which returns early for self, allows
+  `inventory.manage`, and otherwise **raises 403** — no fall-through, fails
+  closed. `extend_checkout` resolves the checkout org-scoped first, then applies
+  the same own-or-manage test. `list_equipment_requests` and
+  `list_return_requests` both **force** the requester filter to the caller for
+  non-managers regardless of the `mine_only` flag
+  (`requester_id = None if (can_manage and not mine_only) else current_user.id`),
+  so the flag cannot be used to widen a read. The guard's docstring explains why
+  `inventory.view` is the wrong gate — it is in the baseline Member position, so
+  every member holds it — and `_redact_holder` closes the matching catalog-side
+  disclosure (`GET /items?assigned_to=<uuid>` reconstructing a colleague's kit).
+- **Every quantity mutation is serialized by a row lock.** Eight methods write
+  `quantity`/`quantity_issued`; five lock directly and the three that do not
+  (`_release_item_holders`, `_return_units_to_stock`, called from
+  `review_write_off`, `return_to_pool`, `review_return_request`) are private
+  helpers invoked under a caller that already holds the lock — checked by
+  resolving each call site's enclosing method, not by assuming. `issue_from_pool`
+  is the pitfall #27 shape (read `item.quantity`, compare, decrement) and locks
+  through `_get_item_locked`, whose docstring documents the trap that makes the
+  lock real: `populate_existing=True`, because without it SQLAlchemy's identity
+  map hands back the stale pre-lock copy of `quantity` and the lock is acquired
+  but useless. That is pitfall #27's second half, understood and written down.
+- **Negative stock is closed on both sides.** Every `quantity` field on a
+  `*Create`/`*Update` schema is bounded (`ge=0` or `ge=1`), so a client cannot
+  send a negative; the only decrement paths check sufficiency first
+  (`issue_from_pool`'s "Insufficient stock", `_consume_from_lots`' error
+  return); and migration `7d2e4f6a8b13` clamped the historical negatives that
+  used to 500 the item list.
+- **Injection-free.** All **31** `like`/`ilike` calls carry
+  `escape=LIKE_ESCAPE_CHAR` — verified with a paren-matching scan rather than a
+  line grep, because the kwarg routinely sits on a continuation line and a line
+  grep reports false positives. 0 `# noqa: E712` remain.
+- **The AP2-5 no-op ternary class is extinct repo-wide.** Yesterday's apparatus
+  pass removed four `a if isinstance(a, dict) else a` blocks; an AST sweep
+  comparing `ast.dump(node.body) == ast.dump(node.orelse)` over every `IfExp` in
+  `app/`, `tests/` and `scripts/` now finds **0**. (A regex for this produces ~49
+  false positives, because the backreference matches the prefix of
+  `value if value.tzinfo else value.replace(...)`, whose branches genuinely
+  differ. The AST comparison is the check worth keeping.)
+
+### INV2-3 — The last open item closed by verification, not by a fix — ✅ CLOSED
+
+**What:** passes 2–4 each carried forward a `_escape_like` DRY cleanup — a
+hand-rolled LIKE-escaper duplicated across the search methods — as the smallest
+remaining flagged item.
+
+**Where:** `inventory_service.py`; `grep -c _escape_like` now returns **0**.
+
+**Impact:** none outstanding. The helper is gone, replaced by the shared
+`like_pattern()` / `LIKE_ESCAPE_CHAR` pair from `app/utils/sql_search.py` (8
+`like_pattern` call sites), which is what CLAUDE.md pitfall #25 requires and what
+`tests/test_like_escaping.py` enforces repo-wide. The repo-wide pitfall-#25 work
+absorbed this module's copy; nobody closed the item because nobody looked.
+
+**Fix:** no code change — the item is recorded closed. With INV-4 closed in pass
+4 and INV-6 in the 2026-08-11 follow-up, **this module now carries no open
+code findings.**
+
+### No new code defects this pass
+
+Stated plainly rather than dressed up: within the scope above, this pass found
+nothing to fix in the code. Four prior app-review passes, a follow-up and a
+security-review rotation have worked this module hard, and the dimensions most
+likely to still hide something — self-scoping and quantity concurrency — came
+back clean under exhaustive rather than sampled checks. The contribution of this
+pass is therefore the test baseline below, the closed item above, and the
+process correction in Documentation gaps.
+
+### Duplication
+
+- No duplication found within the reviewed surface. The two candidates a reader
+  might expect are both already consolidated: LIKE escaping (now one
+  `like_pattern`) and the own-or-quartermaster test (now one
+  `_require_self_or_quartermaster`, 7 call sites, rather than per-endpoint
+  re-checks).
+
+### Dead code
+
+- Nothing found. `MAX_INVENTORY_CSV_BYTES` is a live module constant (2 uses),
+  not a stale flag; the AST sweep above found no no-op branches.
+
+### Documentation gaps
+
+1. **`CHECKLIST.md` gained the stale-schema trap** — the one thing this pass
+   genuinely needed to write down. The session-start hook builds the schema
+   **once**; `main` moves while a session runs; so a DB-backed suite can fail
+   with `(1054, "Unknown column 'x'")`, which is indistinguishable from a real
+   defect in the feature under review. This pass opened with **98 failures and
+   25 errors** across the inventory suite on a tree it had not touched. All 123
+   were stale schema and all 123 disappeared after
+   `alembic upgrade head && repair_schema.py`. The entry now says to rebuild
+   before reading such a failure as a finding. Without it the next reviewer
+   loses the same time, or worse, reports phantom findings.
+2. **Still no `docs/INVENTORY.md`** — 148 routes, two permission strings, pool
+   vs individual vs lot tracking, issuance allowances, departure clearance,
+   write-offs, NFC and kiosk, documented only in docstrings and the wiki's nav
+   tables. Same gap as apparatus (AP2 pass 5) and, as there, a pass of its own.
+
+### Future development
+
+1. **`docs/INVENTORY.md`** — see above. The two largest modules in the repo both
+   lack a feature doc, which is now a pattern rather than an oversight.
+2. **The unreviewed surface has no business-logic verdict** — lots/ledger, NFC,
+   kiosk, labels, import/export, impact planner, vendors. Each is a plausible
+   focused iteration; the lots ledger is the highest-value one, since it is the
+   authoritative stock record for lot-tracked items and the only quantity path
+   this pass checked solely for locking.
+3. **`MAX_INVENTORY_CSV_BYTES` is hardcoded at 10 MB.** Not a defect and not
+   flagged — a fixed cap is arguably the safer design — but it is the one
+   operational knob in this module that an operator cannot change.
+
+### Completion gate (pass 5)
+
+| Check                | Result                                                                                                                                                                     |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run typecheck`  | ✅ 0 (no frontend file changed this pass)                                                                                                                                  |
+| `flake8 app/ tests/` | ✅ 0                                                                                                                                                                       |
+| `black --check`      | ✅ clean                                                                                                                                                                   |
+| `npm run lint`       | ✅ 0 (no frontend file changed this pass)                                                                                                                                  |
+| backend tests        | ✅ **1,169 passed, 1 skipped, 0 failed** (`-k inventory`) — the first real number for this module; passes 3–4 could only report 142 DB-free passing plus 75 fixture errors |
+| docs link check      | ✅ 0 broken links                                                                                                                                                          |
 
 ---
 
