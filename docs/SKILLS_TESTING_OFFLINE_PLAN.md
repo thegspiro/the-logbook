@@ -1,7 +1,9 @@
 # Skills Testing — Offline Support Implementation Plan
 
 > Status: **Implemented (2026-10-06).** The owner chose to build it, with a
-> skills-test-specific queue and cold start (§4 Option B, client-minted ids). The sections below are kept as the design
+> skills-test-specific queue, cold start (§4 Option B, client-minted ids) and a
+> logout that is blocked with a warning while scored evaluations are unsent
+> (§5). The sections below are kept as the design
 > record; §11 says what was built and what each open question was answered
 > with.
 >
@@ -308,6 +310,12 @@ Two things are cheaper than they would have been before the
 | Phase 5 — purge                 | Registered with `purgeLocalMemberData`; ownership per FE3-34-5                                                                                                                                                                                                                    |
 
 **Answers to §10:**
+
+- **§5 — block logout with a warning.** This reverses §5.3's earlier revert, on
+  the owner's later call. `useSkillsLogoutGuard` (AppLayout's Sign Out) sends
+  what it can, then asks before the purge deletes the rest. The idle timeout and
+  an expired session still purge without asking; that residual is open in
+  [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md#skills-testing--offline-support-2026-08-07).
 
 - **§6 — A + B.** Cold start is supported. Every create carries a
   client-minted id (`mintTestId`); `create_test` accepts it once and answers a

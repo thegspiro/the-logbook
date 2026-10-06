@@ -54,12 +54,17 @@ vi.mock('../ux', () => ({
 }));
 
 import { AppLayout } from './AppLayout';
+import { ConfirmProvider } from '../../contexts/ConfirmContext';
 
+// ConfirmProvider sits above the router in App.tsx; the sign-out guard asks
+// through it.
 const renderShell = () =>
   render(
-    <MemoryRouter>
-      <AppLayout />
-    </MemoryRouter>
+    <ConfirmProvider>
+      <MemoryRouter>
+        <AppLayout />
+      </MemoryRouter>
+    </ConfirmProvider>
   );
 
 beforeEach(() => {

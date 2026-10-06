@@ -331,6 +331,12 @@ do not have to do anything.
   candidate, and a red banner on the test with the reason. The scoring stays on
   the device until **you** choose **Discard from this device**; it is never
   thrown away on its own.
+- **Signing out asks first.** If evaluations are still waiting to be sent,
+  **Sign Out** tries to send them, and if it cannot, warns you and offers **Stay
+  signed in**. Signing out anyway deletes them from the device — on a shared
+  station, the next person must not be able to read them. The automatic
+  **idle sign-out** cannot ask, so do not leave a phone with unsent
+  evaluations unattended until it has signal.
 
 ### The timer records what you measured _(2026-08-08)_
 

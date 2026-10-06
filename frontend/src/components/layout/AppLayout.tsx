@@ -10,6 +10,7 @@ import { TopProgressBar, CommandPalette, PageTransition } from '../ux';
 import { useNavigationShortcuts } from '../../hooks/useKeyboardShortcuts';
 import { useNotificationPoller } from '../../hooks/useNotificationCount';
 import { useOfflineSyncEngine } from '../../hooks/useOfflineSyncEngine';
+import { useSkillsLogoutGuard } from '../../hooks/useSkillsLogoutGuard';
 import { useKeyboardInset } from '../../hooks/useKeyboardInset';
 import { useAnyOverlaySurface } from '../../hooks/useOverlaySurface';
 import { usePullToRefresh } from '../../hooks/usePullToRefresh';
@@ -40,6 +41,7 @@ interface AppLayoutProps {
 export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const logout = useAuthStore((s) => s.logout);
+  const mayLogOut = useSkillsLogoutGuard();
   const [departmentName, setDepartmentName] = useState('Fire Department');
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   // Seeded from the last known value so the shell paints in the right shape
@@ -142,6 +144,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   };
 
   const handleLogoutConfirm = async () => {
+    setShowLogoutModal(false);
+    // Unsent skills evaluations are not purged without the examiner's say.
+    if (!(await mayLogOut())) return;
     await logout();
     sessionStorage.clear();
     void navigate('/login');

@@ -1857,3 +1857,7 @@ check, and what the design relies on:
   id check, separation of duties and the attempt cap run as before, and
   `expected_template_version` refuses a create scored against a sheet that has
   since changed. Guarded by `tests/test_skill_test_client_minted_id.py`.
+- **Logout guard (2026-10-06).** An interactive sign-out with unsent
+  evaluations is blocked behind a confirmation; choosing to sign out still
+  runs the full purge. The idle timeout and expired-session paths purge without
+  asking — deliberately unchanged, recorded as an open owner question.
