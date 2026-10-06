@@ -286,6 +286,12 @@ export const MembersAdminPage: React.FC = () => {
     }
   };
 
+  // W11-9: the server refuses to take the base Member position off anyone who
+  // is not archived — it carries the baseline access every member needs. The
+  // controls that would only earn that refusal are not offered.
+  const isLockedBasePosition = (user: Pick<UserWithRoles, 'status'>, role: Pick<Role, 'slug'>) =>
+    role.slug === 'member' && user.status !== UserStatus.ARCHIVED;
+
   const handleToggleRole = (roleId: string) => {
     setSelectedRoleIds((prev) => (prev.includes(roleId) ? prev.filter((id) => id !== roleId) : [...prev, roleId]));
   };
@@ -621,15 +627,17 @@ export const MembersAdminPage: React.FC = () => {
                               }`}
                             >
                               {role.name}
-                              <button
-                                onClick={() => {
-                                  void handleQuickRemoveRole(user, role.id);
-                                }}
-                                className="touch-target-phone ml-1 hover:text-red-600"
-                                aria-label={`Remove ${role.name} role from ${displayNameOf(user) || user.username}`}
-                              >
-                                ×
-                              </button>
+                              {!isLockedBasePosition(user, role) && (
+                                <button
+                                  onClick={() => {
+                                    void handleQuickRemoveRole(user, role.id);
+                                  }}
+                                  className="touch-target-phone ml-1 hover:text-red-600"
+                                  aria-label={`Remove ${role.name} role from ${displayNameOf(user) || user.username}`}
+                                >
+                                  ×
+                                </button>
+                              )}
                             </span>
                           ))
                         )}
@@ -765,15 +773,17 @@ export const MembersAdminPage: React.FC = () => {
                                 )}
                               </div>
                             </div>
-                            <button
-                              onClick={() => {
-                                void handleQuickRemoveUser(user.id, role);
-                              }}
-                              className="text-theme-text-muted touch-target-phone ml-2 hover:text-red-600"
-                              aria-label={`Remove ${displayNameOf(user) || user.username} from ${role.name}`}
-                            >
-                              ×
-                            </button>
+                            {!isLockedBasePosition(user, role) && (
+                              <button
+                                onClick={() => {
+                                  void handleQuickRemoveUser(user.id, role);
+                                }}
+                                className="text-theme-text-muted touch-target-phone ml-2 hover:text-red-600"
+                                aria-label={`Remove ${displayNameOf(user) || user.username} from ${role.name}`}
+                              >
+                                ×
+                              </button>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -1142,6 +1152,13 @@ export const MembersAdminPage: React.FC = () => {
                   type="checkbox"
                   checked={selectedRoleIds.includes(role.id)}
                   onChange={() => handleToggleRole(role.id)}
+                  // Held and locked: it stays ticked. Not held (a member who
+                  // somehow lacks it) can still be given it back.
+                  disabled={
+                    !!selectedUser &&
+                    isLockedBasePosition(selectedUser, role) &&
+                    selectedUser.roles.some((r) => r.id === role.id)
+                  }
                   className="form-checkbox border-theme-surface-border mt-1"
                 />
                 <div className="ml-3">
@@ -1215,6 +1232,11 @@ export const MembersAdminPage: React.FC = () => {
                   type="checkbox"
                   checked={selectedUserIds.includes(user.id)}
                   onChange={() => handleToggleUser(user.id)}
+                  disabled={
+                    !!selectedRole &&
+                    isLockedBasePosition(user, selectedRole) &&
+                    user.roles.some((r) => r.id === selectedRole.id)
+                  }
                   className="form-checkbox border-theme-surface-border mt-1"
                 />
                 <div className="ml-3 flex items-center gap-2">

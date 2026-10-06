@@ -176,7 +176,9 @@ class TestAssignUserRoles:
 
         kept = SimpleNamespace(id="role-kept", permissions=[], slug="member")
         added = SimpleNamespace(id="role-added", permissions=[], slug="treasurer")
-        target = _member(roles=[kept, SimpleNamespace(id="role-dropped")])
+        target = _member(
+            roles=[kept, SimpleNamespace(id="role-dropped", slug="driver")]
+        )
         db = _db(
             _result(scalar_one=target),
             _result(scalars_all=[kept, added]),

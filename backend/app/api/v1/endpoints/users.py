@@ -1108,6 +1108,27 @@ async def _enforce_account_reset_ceiling(
         )
 
 
+BASE_POSITION_REMOVAL_REFUSED = (
+    "The Member position carries the baseline access every member needs, so it "
+    "can only be removed from an archived member."
+)
+
+
+def _refuse_base_position_removal(user: User, role: Role) -> None:
+    """W11-9: the base ``member`` position stays while the member does.
+
+    It carries the baseline grants (members.view, training.view,
+    scheduling.view and the rest); without it a member can sign in and see
+    almost nothing, and there is no everyday reason to want that. An archived
+    member is the exception — their account is closed anyway.
+    """
+    if role.slug == ROLE_MEMBER and user.status != UserStatus.ARCHIVED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=BASE_POSITION_REMOVAL_REFUSED,
+        )
+
+
 @router.put("/{user_id}/roles", response_model=UserRoleResponse)
 async def assign_user_roles(
     user_id: UUID,
@@ -1162,6 +1183,11 @@ async def assign_user_roles(
             )
     else:
         roles = []
+
+    kept_ids = {str(r.id) for r in roles}
+    for held_role in user.roles:
+        if str(held_role.id) not in kept_ids:
+            _refuse_base_position_removal(user, held_role)
 
     # Prevent privilege escalation: the caller cannot grant a role that exceeds
     # their own permissions (e.g. assigning a wildcard "System Owner" role).
@@ -1404,6 +1430,7 @@ async def remove_role_from_user(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User does not have this role"
         )
+    _refuse_base_position_removal(user, role_to_remove)
 
     resulting_permissions: set[str] = set()
     for role in user.roles:

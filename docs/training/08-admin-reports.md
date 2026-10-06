@@ -534,6 +534,12 @@ Permission categories include:
 4. Add or remove positions.
 5. Save.
 
+> **The Member position stays on** _(2026-10-05)_. Every member holds the
+> **Member** position, which carries the baseline access they need to use the
+> app. It cannot be removed from anyone who is still a member — the remove
+> control is not offered and its box stays ticked — only from an archived
+> member.
+
 ---
 
 ## Reports
