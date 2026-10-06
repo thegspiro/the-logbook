@@ -259,7 +259,9 @@ const EventListCardBase: React.FC<EventListCardProps> = ({
                 {/* Two lines rather than one truncated one: on a phone the card is a
                     single column and the manager chips claim the right quarter of it,
                     which cut most titles to "Monthly Traini…". */}
-                <h3 className="text-theme-text-primary line-clamp-2 text-lg font-medium">{event.title}</h3>
+                <h3 className="text-theme-text-primary line-clamp-2 text-lg font-medium md:line-clamp-3">
+                  {event.title}
+                </h3>
               </div>
               <div className="mt-2 flex flex-wrap gap-2">
                 <span

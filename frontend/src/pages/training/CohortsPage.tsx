@@ -106,7 +106,7 @@ export const CohortsPage: React.FC<CohortsPageProps> = ({ embedded = false }) =>
                 }}
                 className="card-secondary hover:bg-theme-surface-hover p-5 text-left"
               >
-                <div className="mb-2 flex items-start justify-between gap-2">
+                <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
                   <h3 className="text-theme-text-primary font-semibold">{cohort.name}</h3>
                   <span className={`badge shrink-0 ${COHORT_STATUS_COLORS[cohort.status] ?? ''}`}>
                     {COHORT_STATUS_LABELS[cohort.status] ?? cohort.status}

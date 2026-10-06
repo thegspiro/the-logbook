@@ -294,7 +294,7 @@ export function AdminHubFrame<K extends string>({
                     tabIndex={isActive ? 0 : -1}
                     onClick={() => onTabChange(tab.id)}
                     onKeyDown={handleTabKeyDown}
-                    className={`focus:ring-theme-focus-ring border-b-2 px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors focus:ring-2 focus:outline-hidden ${
+                    className={`focus:ring-theme-focus-ring touch:py-3 border-b-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors focus:ring-2 focus:outline-hidden ${
                       isActive
                         ? 'text-theme-text-primary border-red-500'
                         : 'text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border border-transparent'

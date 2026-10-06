@@ -614,8 +614,16 @@
 }
 
 @utility btn-icon {
-  /* Icon-only button — guarantees the 44x44px minimum touch target (WCAG 2.5.5). */
-  @apply inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2;
+  /* Icon-only button — the 44x44px touch target (WCAG 2.5.5) on phones and
+     touch screens. A mouse is precise enough for the 36px a 20px icon and p-2
+     make, and a full 44px box there made every admin header and card toolbar
+     visibly taller than the compact controls beside it. Same condition as the
+     touch: variant and btn-icon-sm. */
+  @apply inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg p-2;
+  @media (max-width: 767px), (pointer: coarse) {
+    min-height: 44px;
+    min-width: 44px;
+  }
 }
 
 @utility segmented-group {
@@ -712,8 +720,15 @@
      replaced element while the negative margin stayed in force, turning a gap-3
      beside a checkbox into a 2px overlap at ~100 call sites at once. Rows that
      had the switch as their tallest element are 20px taller now, and that is
-     the honest cost of the control being reachable. */
-  @apply h-11 border-y-[10px] border-transparent bg-clip-padding;
+     the honest cost of the control being reachable.
+     Only on phones and touch screens: a mouse hits a 24px pill reliably, and
+     with the border on every desktop row holding a switch grew 20px for no
+     reach it needed. */
+  @apply h-6 bg-clip-padding;
+  @media (max-width: 767px), (pointer: coarse) {
+    height: 44px;
+    border-block: 10px solid transparent;
+  }
 }
 
 @utility toggle-track-sm {
