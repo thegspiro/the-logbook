@@ -4622,6 +4622,43 @@ duplicate route outright — is a product decision, not a drive-by patch.
 Exposure today is narrow: nothing in the frontend calls this route, so it
 reaches only a direct API client holding `training.manage`.
 
+## Training — Online Knowledge Tests Have No Owning Feature In The Security Rotation (2026-10-06)
+
+Found by security review SKT-19 pass 7
+(`docs/security-review/SKT-19-skills-testing.md`, pass 7 cross-feature scope
+note), while reviewing Skills Testing. `feat(training): online knowledge
+tests with a question bank and auto-grading` (`b310f532`) added a
+substantial new surface — `app/api/v1/endpoints/knowledge_tests.py`
+(1,147 L, mounted at `/training/knowledge-tests`), `app/models/knowledge_test.py`,
+`app/schemas/knowledge_test.py`, and migration `7c2e9a41b6d3` (three new
+tables: `knowledge_tests`, `knowledge_test_questions`,
+`knowledge_test_attempts`). Members sit a test online and the server grades
+it and credits a linked `knowledge_test` requirement through the same
+`update_requirement_progress` path an officer's hand-entered score uses.
+
+This file is not named in any feature's declared scope: not Feature 19
+(Skills testing — `skills_testing.py` and its service/schema/model only),
+not Feature 17 (Training core — `training.py`, `training_programs.py`,
+`training_sessions.py`), and not Feature 18 (Training extended —
+`training_submissions.py`, `training_enhancements.py`, `training_waivers.py`,
+`external_training.py`, `course_cohorts.py`, `course_syllabus.py`). It
+merged (2026-10-06 09:32 UTC) before Feature 18's pass 7 merged (16:09 UTC)
+without being added to either Training feature's scope line, so neither
+pass reviewed it, and the rotation's checklist (auth coverage, permission
+fit, tenant isolation, injection, data exposure, abuse resistance, schema
+integrity) has not yet been run against it. The commit message describes
+org-scoped FK validation on the requirement link (XC-1) and a frozen-per-attempt
+paper design, but a self-description in a commit message is exactly what
+this rotation exists to verify independently rather than accept.
+
+**Not reviewed, not fixed.** This is a scope-ownership gap, not a finding
+against any existing feature's code. The rotation should add
+`knowledge_tests.py`/`knowledge_test.py` (model and schema) to Feature 17's
+declared scope — it is the closest sibling (a requirement-credit path,
+like `training_programs.py`'s own enrollment logic) — and give it a first
+full pass before Feature 17 is next due in the rotation, rather than let it
+ride uncovered through another full cycle under Feature 17's existing ✅.
+
 The review loop (see [review-log.md](./review-log.md)) advances through one area
 per tick and appends findings. New "needs owner decision" items should be
 mirrored here so they're visible outside the log. The parallel module-by-module
