@@ -108,7 +108,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W52 | Action items: assign, work, close                                     | secretary → member | `/action-items`                                    | ✅     |
 | W53 | Documents: folders, upload, who can see what                          | secretary, member  | `/documents`                                       | ✅     |
 | W54 | Org chart and legal documents                                         | admin, member      | `/governance/org-chart`, `/governance/legal`       | ✅     |
-| W55 | Messages: send to a group, the member's inbox, message administration | admin → member     | `/communications/messages`, `/messages`            | ⬜     |
+| W55 | Messages: send to a group, the member's inbox, message administration | admin → member     | `/communications/messages`, `/messages`            | ✅     |
 | W56 | Notification rules and logs, the in-app bell                          | admin, member      | `/notifications`                                   | ⬜     |
 | W57 | Email templates: edit, preview, restore                               | admin              | `/communications/email-templates`                  | ⬜     |
 | W58 | Suggestion boxes and suggestions                                      | member → admin     | `/suggestions`, `/communications/suggestion-boxes` | ⬜     |
@@ -176,6 +176,12 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   Positions and Apparatus steps at 390px wide (W01-13), and the sign-in
   screen's "Forgot your password?", Privacy and Terms links (W02-5), and
   "Back to Login" on the forgot-password page (36px, W03).
+- **Any run touching the app shell** — nothing keeps `TopNavigation` and
+  `SideNavigation` in step. W55-1 found the inbox, the suggestion box and the
+  whole Forms & Comms admin group present only in the side layout. A test
+  comparing the two link sets would catch the next one (W55).
+- **W57, W58, W59** — on the top-navigation layout these screens had no menu
+  entry until W55; check them from the navigation, not a typed URL.
 - **W79** — on the Legal Documents page at 390px, "Open /privacy" and each
   "Read this version" summary are 20px tall (W54-6).
 - **W79** — the checklist builder's header and chip controls are 30–40px tall
@@ -207,6 +213,51 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   forever (W51-9).
 
 ## Log
+
+### W55 — Messages: send to a group, the member's inbox, message administration — 2026-10-05
+
+Driven as:
+
+- `admin` composing to one member, to a role and to everyone; scheduling,
+  editing, deleting, and reading the acknowledgment report;
+- `member` reading and acknowledging;
+- `member2` as a non-recipient, trying the message's URL and the admin
+  endpoints;
+- the inbox, the message and the admin screen repeated at 390×844.
+
+Database continued from W54.
+
+Held:
+
+- targeting, scheduling and delete, each checked from the other member's
+  inbox;
+- double-clicks acted once;
+- a cleared expiry stayed cleared;
+- every refusal (404 to a non-recipient, 403 on admin endpoints);
+- email-first delivery with SMS only through the allowlist (read from code).
+
+Fixed:
+
+- W55-1 (HIGH — on the top-navigation layout, the inbox, the suggestion box
+  and the Forms & Comms admin screens had no menu entry);
+- W55-2 (MED — the compose form replaced the server's reason with "Try
+  again"; the expiry messages are reworded too);
+- W55-3 (LOW — every row's buttons had the same name, and were 32px on a
+  phone);
+- W55-4 (LOW — unlabelled member search, and 20px checkbox rows).
+
+Flagged: none.
+
+New leads:
+
+- nothing keeps the two navigation layouts in step;
+- W57, W58 and W59 should be reached from the navigation.
+
+Gate: typecheck and lint are clean; flake8 and black are clean on the changed
+Python files. 300 communications and layout frontend tests pass (7 new), as do
+79 messaging service tests.
+
+Next: W56.
 
 ### W54 — Org chart and legal documents — 2026-10-04
 

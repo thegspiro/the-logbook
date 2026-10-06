@@ -143,6 +143,11 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
     { label: 'Members', path: '/members' },
     { label: 'Events', path: '/events' },
     { label: 'Documents', path: '/documents' },
+    // Every member's inbox for department announcements, and the suggestion
+    // box. SideNavigation has always listed both; without them here a
+    // department on this layout had no way to reach either screen.
+    { label: 'Messages', path: '/messages' },
+    { label: 'Suggestions', path: '/suggestions' },
     { label: 'Learning Center', path: '/learning' },
     // Gate mirrors SideNavigation's Department Store — see there.
     ...(isModuleOn('storefront')
@@ -309,6 +314,20 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                 : []),
               { label: 'Admin Hours', path: '/admin-hours/manage', permission: 'admin_hours.manage' },
               DIV,
+              // The Forms & Comms group from SideNavigation, with the same gates.
+              { label: 'Email Templates', path: '/communications/email-templates', permission: 'settings.manage' },
+              {
+                label: 'Member Emails & Texts',
+                path: '/communications/member-emails',
+                anyPermission: ['settings.manage', 'organization.update_settings', 'notifications.manage'],
+              },
+              { label: 'Department Messages', path: '/communications/messages', permission: 'notifications.manage' },
+              { label: 'Suggestion Boxes', path: '/communications/suggestion-boxes', permission: 'suggestions.manage' },
+              {
+                label: 'Photo Use Consent',
+                path: '/communications/photo-use-consent',
+                anyPermission: ['users.view_consents', 'notifications.manage', 'members.manage', 'users.edit'],
+              },
               ...(isModuleOn('forms') ? [{ label: 'Forms', path: '/forms', permission: 'forms.manage' }] : []),
               ...(isModuleOn('integrations')
                 ? [{ label: 'Integrations', path: '/integrations', permission: 'settings.manage' }]

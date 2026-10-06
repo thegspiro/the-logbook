@@ -558,7 +558,7 @@ class TestCreateScheduling:
             expires_at=datetime.now(timezone.utc) - timedelta(minutes=1),
         )
         assert message is None
-        assert error == "expires_at must be in the future for a published message"
+        assert error == "The expiry time must be in the future"
 
     async def test_rejects_expiry_before_naive_schedule(self):
         # Naive here means naive UTC, the service's reading of a naive value;
@@ -574,7 +574,7 @@ class TestCreateScheduling:
             expires_at=schedule - timedelta(minutes=1),
         )
         assert message is None
-        assert error == "expires_at must be later than scheduled_at"
+        assert error == "The expiry time must be later than the scheduled time"
 
 
 class TestRescheduleGuard:
@@ -704,7 +704,7 @@ class TestRescheduleGuard:
             },
         )
         assert message is None
-        assert error == "expires_at must be later than scheduled_at"
+        assert error == "The expiry time must be later than the scheduled time"
 
 
 class TestValidateTargeting:

@@ -43,9 +43,9 @@ def _validate_expiry(
         return
     if scheduled_at is not None:
         if expires_at <= scheduled_at:
-            raise ValueError("expires_at must be later than scheduled_at")
+            raise ValueError("The expiry time must be later than the scheduled time")
     elif expires_at <= now:
-        raise ValueError("expires_at must be in the future for a published message")
+        raise ValueError("The expiry time must be in the future")
 
 
 class MessagingService:

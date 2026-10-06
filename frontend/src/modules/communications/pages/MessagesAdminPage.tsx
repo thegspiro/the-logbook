@@ -45,8 +45,10 @@ function audienceLabel(m: DepartmentMessageRecord, roleNames: Record<string, str
     }
     case 'statuses':
       return `Statuses: ${(m.target_statuses ?? []).join(', ') || '—'}`;
-    case 'members':
-      return `${(m.target_member_ids ?? []).length} members`;
+    case 'members': {
+      const count = (m.target_member_ids ?? []).length;
+      return `${count} ${count === 1 ? 'member' : 'members'}`;
+    }
     default:
       return 'Everyone';
   }
@@ -297,24 +299,24 @@ const MessagesAdminPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => void handleShowReport(m.id)}
-                      aria-label="View acknowledgments"
-                      className="text-theme-text-secondary hover:bg-theme-surface-secondary rounded-md p-2"
+                      aria-label={`View acknowledgments for ${m.title}`}
+                      className="text-theme-text-secondary hover:bg-theme-surface-secondary touch:min-h-11 touch:min-w-11 inline-flex items-center justify-center rounded-md p-2"
                     >
                       <BarChart3 className="h-4 w-4" aria-hidden="true" />
                     </button>
                     <button
                       type="button"
                       onClick={() => startEdit(m)}
-                      aria-label="Edit message"
-                      className="text-theme-text-secondary hover:bg-theme-surface-secondary rounded-md p-2"
+                      aria-label={`Edit ${m.title}`}
+                      className="text-theme-text-secondary hover:bg-theme-surface-secondary touch:min-h-11 touch:min-w-11 inline-flex items-center justify-center rounded-md p-2"
                     >
                       <Pencil className="h-4 w-4" aria-hidden="true" />
                     </button>
                     <button
                       type="button"
                       onClick={() => setPendingDelete(m)}
-                      aria-label="Delete message"
-                      className="rounded-md p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30"
+                      aria-label={`Delete ${m.title}`}
+                      className="touch:min-h-11 touch:min-w-11 inline-flex items-center justify-center rounded-md p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30"
                     >
                       <Trash2 className="h-4 w-4" aria-hidden="true" />
                     </button>

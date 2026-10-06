@@ -18,6 +18,7 @@ import { UserStatus } from '../../../constants/enums';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatForDateTimeInput, localToUTC } from '../../../utils/dateFormatting';
 import { displayNameOf } from '../../../utils/memberName';
+import { getErrorMessage } from '../../../utils/errorHandling';
 import toast from 'react-hot-toast';
 
 interface MessageComposeFormProps {
@@ -147,8 +148,16 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ message, onSave
       await messagesService.createMessage(payload);
       toast.success(scheduledAt ? 'Message scheduled' : 'Message posted');
       onSaved();
-    } catch {
-      setError(isEditing ? 'Unable to save your changes. Try again.' : 'Unable to post the message. Try again.');
+    } catch (err: unknown) {
+      // The server's reason first: an expiry in the past or before the
+      // scheduled time is refused with a message saying so, and "Try again"
+      // would send the officer round the same failure.
+      setError(
+        getErrorMessage(
+          err,
+          isEditing ? 'Unable to save your changes. Try again.' : 'Unable to post the message. Try again.'
+        )
+      );
     } finally {
       setSubmitting(false);
     }
@@ -238,7 +247,7 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ message, onSave
           <legend className="text-theme-text-secondary px-1 text-sm font-medium">Roles</legend>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {roles.map((r) => (
-              <label key={r.id} className="flex items-center gap-2 text-sm">
+              <label key={r.id} className="touch:min-h-11 flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
                   className={checkboxClass}
@@ -257,7 +266,7 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ message, onSave
           <legend className="text-theme-text-secondary px-1 text-sm font-medium">Statuses</legend>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {STATUS_OPTIONS.map((s) => (
-              <label key={s.value} className="flex items-center gap-2 text-sm">
+              <label key={s.value} className="touch:min-h-11 flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
                   className={checkboxClass}
@@ -281,13 +290,14 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ message, onSave
             autoCorrect="off"
             spellCheck={false}
             className={`${inputClass} mb-2`}
+            aria-label="Search members"
             placeholder="Search members…"
             value={memberSearch}
             onChange={(e) => setMemberSearch(e.target.value)}
           />
           <div className="max-h-48 space-y-1 overflow-y-auto">
             {filteredMembers.map((m) => (
-              <label key={m.id} className="flex items-center gap-2 text-sm">
+              <label key={m.id} className="touch:min-h-11 flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
                   className={checkboxClass}
@@ -303,7 +313,7 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ message, onSave
       )}
 
       <div className="flex flex-wrap gap-4">
-        <label className="flex items-center gap-2 text-sm">
+        <label className="touch:min-h-11 flex items-center gap-2 text-sm">
           <input
             type="checkbox"
             className={checkboxClass}
@@ -312,7 +322,7 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ message, onSave
           />
           Pin to top
         </label>
-        <label className="flex items-center gap-2 text-sm">
+        <label className="touch:min-h-11 flex items-center gap-2 text-sm">
           <input
             type="checkbox"
             className={checkboxClass}
@@ -321,7 +331,7 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ message, onSave
           />
           Keep in inbox after it is read
         </label>
-        <label className="flex items-center gap-2 text-sm">
+        <label className="touch:min-h-11 flex items-center gap-2 text-sm">
           <input
             type="checkbox"
             className={checkboxClass}
