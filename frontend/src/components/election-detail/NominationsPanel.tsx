@@ -42,7 +42,9 @@ const NominationsPanel: React.FC<NominationsPanelProps> = ({
 
   const fetchData = useCallback(async () => {
     try {
-      setLoading(true);
+      // No setLoading(true) here: the placeholder below replaces the form,
+      // and the refetch after a nomination would unmount the select focus
+      // was just moved to (W50-73). The initial state is loading.
       const [candidateData, memberData] = await Promise.all([
         electionService.getCandidates(electionId),
         userService.getUsers(),

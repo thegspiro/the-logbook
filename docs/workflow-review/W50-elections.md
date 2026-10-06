@@ -289,7 +289,7 @@ and `member2` hold `elections.view` only.
 16. As `admin`: close EB1, EB2, EB3; results as `treasurer` and `admin` while closed-early; forensics joined with the audit log; rename and re-position a candidate after close; void after close; rollback refused; certified PDFs; publish, merge, batch void after publish; Roll Back and Delete dialogs on the closed anonymous EB1; delete of EB1, EB2, EB3 (500) and EB1a (200) (B7).
 17. As `admin`: EB5 close with zero votes → rollback → the dead token → the screen → delete (500); EB6 through the lifecycle task (auto-open, automatic reminder, auto-close) and EB7's nomination deadline; `auto_open_enabled` off and on; EB6 at 390×844; the lookup and vote rate limits; the module gate as `admin` and `treasurer`; cleanup (B8).
 
-**Not driven, and why — frontend round 2.** The 23 frontend fixes of that round (the items marked FIXED (frontend round 2) below) were proven by their Vitest reproductions and the full frontend gate, but the on-screen re-drive of them was cut short by an account usage limit after the first checks; the one observation it made before stopping — the in-app "Vote submitted" card did not yet show the receipt hash on the election it tried — is recorded under W50-53 as unconfirmed. Re-driving those screens is the first step of any follow-up run.
+**Re-drive (2026-10-06).** The 23 frontend fixes of round 2 were re-driven on screen after #2907 merged, two browsers at once against the same install (driver A: the list, detail and admin screens as `secretary`, `member` and `chief`; driver B: the voter-facing ballot pages, the receipt, settings, the roster and the forensics panels as `member`, `member2`, `treasurer`, `training_officer` and a signed-out visitor), each from the scenario its finding recorded, with the exact wording quoted and the mail sink read. Twenty held outright. Three did not: the W50-14 list card still dated an early close to the scheduled end (the list endpoint never sent `closed_at`), the W50-53 in-app "Vote submitted" card still showed no receipt (the page's refetch unmounted it), and W50-73's focus after a nomination sat on `<body>` (same cause, the panel's refetch). All three are fixed with tests as W50-83, W50-84 and W50-90, and the first two confirmed live again. Six more things the re-drive saw are W50-85 to W50-89, W50-91 and W50-92. Not re-driven: the 409 in the delete dialog (needs a runoff parent), the over-count override badge (the modal raised no over-count), the post-send "see banner below" text, and the "replaced by a newer ballot email" mapping — each proven only by its Vitest.
 
 **Not driven, and why.** The unfiltered empty list (driver B's elections were
 already there); applying a saved ballot template (plan said not to); the
@@ -614,7 +614,7 @@ Eighteen of the backend fixes were then re-driven live against `7aa3405` through
 
 A frontend round 2 is in progress for the items marked "FIX in progress (frontend round 2)" — the twenty frontend findings and the frontend halves of fourteen backend ones — and will add one more commit; the completion gate's frontend rows wait on it.
 
-### W50-1 — CRITICAL — Deleting any election that has issued ballot tokens returns 500, after leadership has been emailed "permanently deleted" — ✅ FIXED (round 2, `7aa3405`) · confirmed live · frontend half: ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-1 — CRITICAL — Deleting any election that has issued ballot tokens returns 500, after leadership has been emailed "permanently deleted" — ✅ FIXED (round 2, `7aa3405`) · confirmed live · frontend half: ✅ FIXED (frontend round 2; confirmed on screen 2026-10-06 — see Re-drive)
 
 **Did:** as `secretary` (E2, A9 step 11) and `admin` (EB1, EB2, EB3 in B7 C-18; EB5 in B8 step 6): Delete Election → a reason of ≥ 10 characters → "Permanently Delete Election"; also `DELETE /elections/{id}` by API. Control: EB6b and EB1a, which had no tokens, deleted with 200 (B7, B8 step 19).
 **Saw:** toast "Internal server error (Error code: LB-SYS-001)", `500 DELETE`; the election still listed with its votes, results and tokens; no `election_deleted_critical` audit row; **two mails "CRITICAL: Election Deleted — <title>" to secretary and chief per attempt** saying "All associated ballots and results have been removed … This deletion has been logged in the audit trail with critical severity." Backend log: `IntegrityError (1048, "Column 'election_id' cannot be null") [SQL: UPDATE voting_tokens SET election_id=%s …]`. Deterministic; six elections from the run are permanent leftovers.
@@ -716,7 +716,7 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `election_service.py` eligibility (S:1199-1212), `_count_eligible_voters`, the roster row builder; `VoterEligibilityRoster.tsx` panel text; `POST …/voter-overrides` (its docstring, E:3205-3214, says overrides do not bypass the list).
 **Why flagged:** the owner decides whether an override extends a restricted list. Either way, non-admitted overrides leave `_count_eligible_voters` and the row says "Not in eligible voters list — override has no effect" (`test_w50_override_restricted_list.py` once decided).
 
-### W50-14 — HIGH — After an early close, the certified PDF, the report and every screen date the close to the scheduled end; nothing records who closed it — ✅ FIXED (round 2, `7aa3405`) · confirmed live · frontend half: ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-14 — HIGH — After an early close, the certified PDF, the report and every screen date the close to the scheduled end; nothing records who closed it — ✅ FIXED (round 2, `7aa3405`) · confirmed live · frontend half: ✅ FIXED (frontend round 2) · re-drive: the detail card held, the list card did not — the list endpoint never sent `closed_at` — fixed as W50-83
 
 **Did:** as `secretary`, E1 closed at 07:07Z (A8 steps 2/7); E2, E3 (A9 step 10, A10 step 6); as `admin` EB1/EB3 (B7 C-06/R-03).
 **Saw:** PDF "Election closed 2026-10-02 00:45 CDT · Generated 2026-09-30 02:11 CDT"; report "Voting Period … — October 02, 2026 at 12:45 AM"; cards show the scheduled end; the `election_closed` audit row has `user_id: null`.
@@ -746,7 +746,7 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `ElectionWorkflowTabs.tsx:115-119` (the correction pushes); `ElectionDetailPage.tsx:206-208` (`setActiveTab('results')` on every load).
 **Fix:** S24 makes both writes `{ replace: true }` and auto-selects only when no `?tab=` is present (`ElectionDetailPage.w50-s24.test.tsx`). A member/hidden-tab case asserting `history.length` unchanged is still worth adding.
 
-### W50-18 — MED — A test ballot is indistinguishable from a real one — ✅ FIXED (round 2, `7aa3405`) · confirmed live · frontend half: ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-18 — MED — A test ballot is indistinguishable from a real one — ✅ FIXED (round 2, `7aa3405`) · confirmed live · frontend half: ✅ FIXED (frontend round 2; confirmed on screen 2026-10-06 — see Re-drive)
 
 **Did:** as `secretary`: a test ballot from Settings on the draft (A4 step 7) and while open (A5 steps 2/7); its receipt verified.
 **Saw:** subject "Ballot Available: 2027 Officer Election"; COMMUNICATION read "Resend Ballot Emails / Sent … 1:20 AM" and the resend modal warned about regenerating members' tokens before any member had a ballot; the ballot page and "Ballot Submitted" card carry no test wording; `verify-receipt` → "Your vote has been recorded and is counted" while every tally showed 0.
@@ -789,7 +789,7 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `send_ballot_emails` proxy-Cc branch; the ballot template; `POST …/proxy-authorizations`.
 **Why flagged:** decide whether the Cc is the proxy mechanism; if so the template must say "Alex Brooks holds your proxy and has been copied" and the holder's copy must say whose ballot it is. Then `test_w50_proxy_cc_wording.py`.
 
-### W50-24 — MED — Approve/Deny choices and write-ins materialise as editable "UNASSIGNED" candidates; "Write-in" is offered on yes/no items — ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-24 — MED — Approve/Deny choices and write-ins materialise as editable "UNASSIGNED" candidates; "Write-in" is offered on yes/no items — ✅ FIXED (frontend round 2; confirmed on screen 2026-10-06 — see Re-drive)
 
 **Did:** as `secretary`: a test vote's Deny (A5 step 7); the Candidates tab after the token votes (A6 step 6); the ballot page and preview on the motion (A2 step 19, A6 step 2); the merge target list (A8 step 10). As `admin`, B6 step 14.
 **Saw:** "UNASSIGNED (1) — Deny — Accepted / Edit / Remove"; later "Candidates (7)", "UNASSIGNED (3)" with Edit/Remove on the options and the write-in while open; a Write-in radio on the budget motion and the membership approval.
@@ -804,7 +804,7 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `frontend/src/pages/BallotVotingPage.tsx:47-52, 107-112`.
 **Why flagged:** a product choice between no default (Submit disabled until every item has a choice or an explicit abstain) and stating the default plus "You have not voted on N items" in the confirm step. Then `BallotVotingPage.w50-abstain.test.tsx`.
 
-### W50-26 — MED — "Extend Time" silently shortens the voting window; success is silent; a past date is refused only by the server — ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-26 — MED — "Extend Time" silently shortens the voting window; success is silent; a past date is refused only by the server — ✅ FIXED (frontend round 2; confirmed on screen 2026-10-06 — see Re-drive)
 
 **Did:** as `secretary`, A7 step 11: a New End earlier than the current end; "+1 Hour"; a past time.
 **Saw:** the earlier time accepted with no toast or confirm, `end_date` cut by 1 h 45 min with 17 link holders not told; "+1 Hour" succeeded silently; the past time → inline "End date must be in the future (Error code: LB-API-400)".
@@ -812,7 +812,7 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `ExtendElectionModal.tsx:126-139` (no comparison against `currentEndDate`); `ElectionDetailPage.tsx:558`.
 **Fix:** queue row 17. Test: `ExtendElectionModal.w50.test.tsx`.
 
-### W50-27 — MED — A reminder is a second "Ballot Available" mail, re-stamps "Sent", and the superseded link is refused as "expired" while voting is open — ✅ FIXED (round 2, `7aa3405`) · confirmed live · frontend half: ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-27 — MED — A reminder is a second "Ballot Available" mail, re-stamps "Sent", and the superseded link is refused as "expired" while voting is open — ✅ FIXED (round 2, `7aa3405`) · confirmed live · frontend half: ✅ FIXED (frontend round 2; confirmed on screen 2026-10-06 — see Re-drive)
 
 **Did:** as `secretary`, A7 steps 8/10/11; as `admin`, B3 steps 12/13; the automatic reminder (B8 step 9); a token after a rollback (B8 step 4).
 **Saw:** 17 mails with subject "Ballot Available: 2027 Officer Election", the UI placeholder as the only reminder sentence; `email_sent_at` moved and the COMMUNICATION stamp with it; the old token → "Voting token has expired" 45 hours before the end; the reminder line printed "2026-10-02 23:33 CDT" beside "October 02, 2026 at 11:33 PM".
@@ -827,7 +827,7 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `PublishResultsPanel.tsx:148-149`; `POST /elections/{id}/send-report`.
 **Fix:** S19 rewords it "Email me the results report" (`PublishResultsPanel.w50-s19.test.tsx`). A real broadcast would be a product change; not requested.
 
-### W50-29 — MED — "Roll Back" is offered on a closed anonymous election with votes, promises "Reopen voting", then the server refuses; the Close dialog says "cannot be undone" beside it — ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-29 — MED — "Roll Back" is offered on a closed anonymous election with votes, promises "Reopen voting", then the server refuses; the Close dialog says "cannot be undone" beside it — ✅ FIXED (frontend round 2; confirmed on screen 2026-10-06 — see Re-drive)
 
 **Did:** as `secretary` on E1 (A8 step 11) and `admin` on EB1 (B7 step 9): Roll Back; the Close dialog on E2, E3, EB5.
 **Saw:** the modal's bullets ("Change the election status from CLOSED to OPEN / Send email notifications … / Reopen voting") then 400 "Cannot reopen this election: its anonymity salt was destroyed…" shown twice; no audit row, no mail. The Close dialog says "cannot be undone" and the next screen offers Roll Back.
@@ -835,7 +835,7 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `ElectionDetailPage.tsx:336, 1370`; `RollbackElectionModal.tsx:77`.
 **Fix:** queue row 16. Test: `ElectionDetailPage.w50-rollback-gate.test.tsx`.
 
-### W50-30 — MED — Record Paper Ballots and Merge Write-Ins label a motion's Approve/Deny by raw item id — ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-30 — MED — Record Paper Ballots and Merge Write-Ins label a motion's Approve/Deny by raw item id — ✅ FIXED (frontend round 2; confirmed on screen 2026-10-06 — see Re-drive)
 
 **Did:** as `secretary`, A7 step 1 and A8 step 10.
 **Saw:** "Approve(item_1790747487501_k8vrul)", "Deny(item_…k8vrul)", "Approve(item_…trhd48)"; the merge target select shows the same strings and offers a Chief write-in to be counted for a motion.
@@ -878,7 +878,7 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `POST /elections/{id}/send-ballot` (no status gate, E:2417).
 **Fix:** S08 (`3de83db`) refuses CLOSED and CANCELLED; round 2 also refuses DRAFT and NOMINATIONS unless `is_test`. Test: `backend/tests/test_w50_s08.py` extended. **Confirmed live** (CONFIRM-04): `send-ballot` on a fresh draft → 400 "Ballot emails cannot be sent for a draft election"; no mail.
 
-### W50-36 — MED — After a CLOSED→OPEN rollback the screen still says the ballots were "Sent"; nothing tells the officer all links are dead — ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-36 — MED — After a CLOSED→OPEN rollback the screen still says the ballots were "Sent"; nothing tells the officer all links are dead — ✅ FIXED (frontend round 2; confirmed on screen 2026-10-06 — see Re-drive)
 
 **Did:** as `admin` on EB5, B8 steps 3/5.
 **Saw:** forensics `voting_tokens_invalidated: 21, ballots_must_be_resent: true`; the screen "Resend Ballot Emails · Sent … 2:31 AM" with no banner; the alert mail silent on links; `GET /elections/{id}` has no `rollback_history`.
@@ -922,7 +922,7 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Fix:** round 2 — `[]` normalised to `None` on create and update by a schema validator. Test: `backend/tests/test_w50_empty_eligible_list.py`.
 **Stored rows (2026-10-05, owner decision):** migration `9a4c1e7b5d22` sets every stored `[]` to NULL and logs the election ids. Test: `test_eligible_voters_empty_list_migration.py`.
 
-### W50-42 — MED — A 60-character write-in of punctuation returns 500; write-ins render double-escaped — ✅ FIXED (S15, `3de83db`) · confirmed live · frontend half: ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-42 — MED — A 60-character write-in of punctuation returns 500; write-ins render double-escaped — ✅ FIXED (S15, `3de83db`) · confirmed live · frontend half: ✅ FIXED (frontend round 2; confirmed on screen 2026-10-06 — see Re-drive)
 
 **Did:** anonymous on EB3, B6 steps 11–13: a `<script>` write-in and a 60-character punctuation write-in.
 **Saw:** `&lt;script&gt;…` stored and shown literally; the long one → 500, log `DataError (1406, "Data too long for column 'name'")`.
@@ -930,7 +930,7 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Fix:** S15 stores the name as typed (`test_w50_s15.py`; S16 is the test-ballot exemption, see W50-18). **Confirmed live** (`notes/CONFIRM-backend.md`, CONFIRM-12/16): a 62-character write-in of quotes and angle brackets → 201, stored and returned exactly once and unescaped in `/candidates`, `/results` and the certified PDF. The render check that a stored `<b>` shows as text once is frontend round 2.
 **Stored rows (2026-10-05, owner decision):** migration `b3e8d5a1c947` unescapes every stored write-in name that `html.unescape` changes and logs the candidate ids. Test: `test_unescape_write_in_names_migration.py`.
 
-### W50-43 — MED — Every ballot page load sends the lookup twice, halving the shared 10/min budget — ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-43 — MED — Every ballot page load sends the lookup twice, halving the shared 10/min budget — ✅ FIXED (frontend round 2; confirmed on screen 2026-10-06 — see Re-drive)
 
 **Did:** every ballot page load on both drivers (A4 step 7, A6 step 3b, B6 step 14); the rate-limit probe (B8 step 16).
 **Saw:** 2 × `POST /elections/ballot/lookup` per load; nine lookups in 15 s from five loads; the 11th in a minute → 429.
@@ -938,21 +938,21 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `frontend/src/pages/BallotVotingPage.tsx:65-89` (effect keyed on the captured token; StrictMode double-invoke or an unguarded dependency).
 **Fix:** queue row 30 — a ref guard; also a `hashchange` listener (W50-52). Test: `BallotVotingPage.w50-single-lookup.test.tsx`.
 
-### W50-44 — MED — A dead token after close says "You are not on the voter roll that was frozen when this election opened" — ✅ FIXED (round 2, `7aa3405`) · frontend half: ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-44 — MED — A dead token after close says "You are not on the voter roll that was frozen when this election opened" — ✅ FIXED (round 2, `7aa3405`) · frontend half: ✅ FIXED (frontend round 2; confirmed on screen 2026-10-06 — see Re-drive)
 
 **Did:** anonymous, B7 step 1 (T-19) and C-12: the lookup, the bulk route and the `/ballot` page after close and after a CLOSED→OPEN rollback.
 **Saw:** that sentence plus "contact your organization's secretary" on all three; the cause is the destroyed salt, not eligibility.
 **Where:** the public lookup (salt NULL → the hash compare fails before the status check, S:5236-5271).
 **Fix:** round 2 — status checked before the hash compare: "Voting has closed" for CLOSED; for a reopened election "Ask your secretary for a new ballot link" (`review-backend-2.md` #5 — the reopen only invalidates tokens; a resend is the officer's). Test: `test_election_token_ballot.py` extended. Tokens expired by a zero-vote rollback still answer "expired", since the expiry check runs first.
 
-### W50-45 — MED — The Audit Log page attributes every event to "system"; the API carries the real `user_id` — ✅ FIXED (round 2, `7aa3405`) · confirmed live · frontend half: ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-45 — MED — The Audit Log page attributes every event to "system"; the API carries the real `user_id` — ✅ FIXED (round 2, `7aa3405`) · confirmed live · frontend half: ✅ FIXED (frontend round 2; confirmed on screen 2026-10-06 — see Re-drive)
 
 **Did:** as `admin`, B7 R-07: `/audit-logs` page and API.
 **Saw:** USER "system" on every `vote_cast`, `vote_soft_deleted`, `candidate_updated` and `election_closed` row; the API row has `user_id` set and `username: null`.
 **Where:** `frontend/src/pages/AuditLogPage.tsx:294,360` (`entry.username || 'system'`); `/audit-logs` never fills `username`.
 **Fix:** round 2 — `username` resolved server-side (join users); "system" only when `user_id` is null. Tests: `backend/tests/test_w50_audit_username.py`; the page's fallback (`frontend/src/pages/AuditLogPage.w50.test.tsx`) is frontend round 2. **Confirmed live** (CONFIRM-06): `/audit-logs` rows carry `username` "review_secretary" / "review_admin"; anonymous `vote_cast` rows stay null by design.
 
-### W50-46 — MED — Election Settings: every switch is a bare toggle with no visible label — ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-46 — MED — Election Settings: every switch is a bare toggle with no visible label — ✅ FIXED (frontend round 2; confirmed on screen 2026-10-06 — see Re-drive)
 
 **Did:** as `secretary` (A1 steps 7/10/14) and `admin` (B1 step 18): the Proxy switch and the four Features switches.
 **Saw:** each named only by `aria-label`; the panel gives no order, so a sighted officer cannot tell which switch is which.
@@ -966,42 +966,42 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** the lookup's `eligible_item_ids` snapshot (E:584-590); the rollback path leaves tokens live (S:5273-5276).
 **Why flagged:** invalidate outstanding tokens when the ballot changes during a rollback window (with the W50-36 banner), or serve the current item list on lookup. Owner decides; then `test_w50_stale_token_items.py`.
 
-### W50-48 — LOW — "Quorum Met" asserted on every surface for elections with no quorum, including 0-vote elections — ✅ FIXED (round 2, `7aa3405`) · frontend half: ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-48 — LOW — "Quorum Met" asserted on every surface for elections with no quorum, including 0-vote elections — ✅ FIXED (round 2, `7aa3405`) · frontend half: ✅ FIXED (frontend round 2; confirmed on screen 2026-10-06 — see Re-drive)
 
 **Did:** as `secretary` (A8 step 4, A9, A10) and `admin` (B1 steps 19/20, B3 step 7, B7 R-03, B8 steps 3/12): tab, mails, PDFs, the draft clone.
 **Saw:** "Quorum Met" mid-vote and with 0 of 21 voted; the API `quorum_met: true, quorum_detail: null` with `quorum_type none`.
 **Where:** `ElectionResults.tsx:178`; `schemas/election.py` `ElectionResults.quorum_met` default True; the report template; the certified builder.
 **Fix:** S23 (`d6f828c`, `ElectionResults.w50-s23.test.tsx`) stops the tab asserting it. Round 2 returns `quorum_met: None` when `quorum_type == 'none'` and prints "No quorum requirement" on the report and PDF (`backend/tests/test_w50_quorum_none.py`).
 
-### W50-49 — LOW — "Max Proxies Per Person" is stored and shown but was never enforced; the input saves out-of-range values as "All changes saved"; the label is not bound — ✅ FIXED (round 2, `7aa3405`) · confirmed live · frontend half: ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-49 — LOW — "Max Proxies Per Person" is stored and shown but was never enforced; the input saves out-of-range values as "All changes saved"; the label is not bound — ✅ FIXED (round 2, `7aa3405`) · confirmed live · frontend half: ✅ FIXED (frontend round 2; confirmed on screen 2026-10-06 — see Re-drive)
 
 **Did:** as `admin`, B1 step 17: two authorisations for Tariq at cap 1. As `secretary`, A1 step 17: `fill('')` then `type('11')`; `getByLabel` (A1, B1).
 **Saw:** 201, 201; "111" saved green with `rangeOverflow`; no label bound.
 **Where:** `ElectionsSettingsPage.tsx:160-174` (`parseInt(...) || 1`, no `id` / `htmlFor`); `schemas/election.py:1420` (no `ge` / `le`); `election_service.py:5698-5706`.
 **Fix:** S12 (`3de83db`, `test_w50_s12.py`) enforces the cap. Round 2 adds `ge=1, le=10` on the schema; the empty box staying empty and the bound label are frontend round 2 (`ElectionsSettingsPage.w50-maxproxies.test.tsx`). **Confirmed live** (CONFIRM-07): `PATCH /elections/settings {max_proxies_per_person: 11}` → 422 "Value is out of the allowed range."; 1 saved and read back.
 
-### W50-50 — LOW — Security section prints "Vote Signatures — HMAC-SHA256" as a guarantee while the API reports `vote_signing_key_configured: false` — ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-50 — LOW — Security section prints "Vote Signatures — HMAC-SHA256" as a guarantee while the API reports `vote_signing_key_configured: false` — ✅ FIXED (frontend round 2; confirmed on screen 2026-10-06 — see Re-drive)
 
 **Did:** as `secretary`, A1 step 12.
 **Saw:** static markup against `settings.security`. Read from code: fallback to `SECRET_KEY` (`election_service.py:1825-1837`).
 **Where:** `ElectionsSettingsPage.tsx:276-306`; `elections.py:867-871`.
 **Fix:** queue row 39 — render the row from `settings.security` with a warning when the key is not configured. Test: `ElectionsSettingsPage.w50-security.test.tsx`.
 
-### W50-51 — LOW — Voter-override rows show the member's UUID; override and proxy forms demand a raw UUID with no member picker — ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven) (row) · NOTE (picker)
+### W50-51 — LOW — Voter-override rows show the member's UUID; override and proxy forms demand a raw UUID with no member picker — ✅ FIXED (frontend round 2; confirmed on screen 2026-10-06 — see Re-drive) (row) · NOTE (picker)
 
 **Did:** as `secretary` (A4 steps 4/5) and `admin` (B4 step 8).
 **Saw:** the row headline is the id while the API returns `member_name`; the forms read "Member User ID *" / "User ID of the absent member" with unbound labels.
 **Where:** `VoterOverrideManagement.tsx:139-151, 208` (`override.user_name || override.user_id` against the field `member_name`); `ProxyVotingManagement.tsx:195-233`.
 **Fix:** queue row 40 for the row (`VoterOverrideManagement.w50.test.tsx`). The picker (reuse the Attendance member search) is a usability follow-up.
 
-### W50-52 — LOW — Public ballot page: the friendly "already submitted" sentence never renders; a fragment-only navigation is ignored; the Write-in tap target is 24 px; confirm buttons 42 px — ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-52 — LOW — Public ballot page: the friendly "already submitted" sentence never renders; a fragment-only navigation is ignored; the Write-in tap target is 24 px; confirm buttons 42 px — ✅ FIXED (frontend round 2; confirmed on screen 2026-10-06 — see Re-drive)
 
 **Did:** as `member` and `member2` at 390×844, A6 steps 3/3b; anonymous, B6 T-25.
 **Saw:** "This ballot has already been fully submitted (Error code: LB-API-400)" (the suffix breaks the equality); `/ballot` → `/ballot#token=…` does no lookup and leaves the token in history; the measurements.
 **Where:** `BallotVotingPage.tsx:66-78, 89, 114-118, 550-567`; `utils/errorHandling.ts:199`.
 **Fix:** queue row 41 — compare on the API `code` / `detail` before the suffix, drop the suffix on the public page, a `hashchange` listener with scrubbing, the bordered card as the label, 44 px buttons. Test: `BallotVotingPage.w50-errors.test.tsx`.
 
-### W50-53 — LOW — In-app votes give no receipt, and no screen lets a voter verify a receipt they were told to save — ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-53 — LOW — In-app votes give no receipt, and no screen lets a voter verify a receipt they were told to save — ✅ FIXED (frontend round 2) · re-drive: the verify form held, the in-app card still showed no receipt — fixed as W50-84
 
 **Did:** as `member`, A6 steps 1/5, A10 step 5; as `treasurer`, B1 step 20.
 **Saw:** the API returns `receipt_hash`; the tab shows a toast only. `verify-receipt` has no caller in `frontend/src`.
@@ -1010,41 +1010,41 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 
 **Confirmation:** unconfirmed on screen — the browser re-drive stopped at this item; its Vitest (`ElectionBallot.w50-receipt.test.tsx`) passes.
 
-### W50-54 — LOW — A voided vote's receipt reads "No matching vote found"; token votes on a non-anonymous election have no vote id an officer can see — ✅ FIXED (round 2, `7aa3405`) · frontend half: ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-54 — LOW — A voided vote's receipt reads "No matching vote found"; token votes on a non-anonymous election have no vote id an officer can see — ✅ FIXED (round 2, `7aa3405`) · frontend half: ✅ FIXED (frontend round 2; confirmed on screen 2026-10-06 — see Re-drive)
 
 **Did:** as `admin` on EB3, B6 steps 13/16: forensics; the deleted vote's receipt.
 **Saw:** "No matching vote found for this receipt"; the `ballot_submitted_token` row carries no vote ids; `access_count: 7` counting refused submits.
 **Where:** `GET …/verify-receipt` (E:3881-3898); the token audit (S:8298-8301); forensics.
 **Fix:** round 2 — `verified: false, voided: true, message: "This vote was voided by an officer"`; token vote ids listed in forensics on named elections; only successful submits counted. Test: `test_election_token_ballot.py` extended.
 
-### W50-55 — LOW — Eligibility roster says a member created after open "will receive ballot"; send and remind skip them with a misleading sentence; the counters contradict the rows — ✅ FIXED (round 2, `7aa3405`) · frontend half: ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-55 — LOW — Eligibility roster says a member created after open "will receive ballot"; send and remind skip them with a misleading sentence; the counters contradict the rows — ✅ FIXED (round 2, `7aa3405`) · frontend half: ✅ FIXED (frontend round 2; confirmed on screen 2026-10-06 — see Re-drive)
 
 **Did:** as `admin`, B6 step 15 (Probe Newcomer created after open; send); as `secretary`, A4 step 1 and A5 step 5 (the counters).
 **Saw:** `will_receive_ballot: true`; the send said "did not meet ballot item requirements" while the reason is "Not on the voter roll frozen when the election opened"; "20 eligible / 0 Ineligible" beside rows reading "2/3"; "Will Receive Ballot" after the send.
 **Where:** the `eligibility-roster` row builder; the `send-ballot` message; `EligibilityRoster.tsx:268-316`.
 **Fix:** round 2 — the roster reads the frozen roll; the summary sentence from `skipped_details`; the counter legend and "Received ballot <when>" after a send. Test: `backend/tests/test_w50_roster_frozen_roll.py`.
 
-### W50-56 — LOW — Opening an election silently rewrites its scheduled start to "now" — ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-56 — LOW — Opening an election silently rewrites its scheduled start to "now" — ✅ FIXED (frontend round 2; confirmed on screen 2026-10-06 — see Re-drive)
 
 **Did:** as `secretary`, A9 step 5 (E2, 9:00 AM start) and A10 steps 4/8; A5 step 2 did not clamp because the start was already past.
 **Saw:** 9:00 AM → 2:27 AM; audit `start_adjusted_to_open_time: true`; ballot mails and reports then print 02:27 AM.
 **Where:** `open_election` (`start_adjusted_to_open_time` branch); `ElectionDetailPage.tsx` open handler.
 **Fix:** queue row 45 — toast "Election opened — start moved from 9:00 AM to now" (or keep the scheduled start and record `opened_at`). Test: `ElectionDetailPage.w50-open-toast.test.tsx`.
 
-### W50-57 — LOW — "Open Election" and "Open Nominations" act immediately with no confirmation; Open Nominations mails all N members with no cue — ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-57 — LOW — "Open Election" and "Open Nominations" act immediately with no confirmation; Open Nominations mails all N members with no cue — ✅ FIXED (frontend round 2; confirmed on screen 2026-10-06 — see Re-drive)
 
 **Did:** as `secretary`, A5 step 2 (Open Election: no dialog, no mail) and A3 step 1 (Open Nominations: no dialog; mail 0079 to 20).
 **Where:** `ElectionDetailPage.tsx` open handlers; `election_service.py:3395`; `docs/training/14-elections.md:437` says opening sends ballots, which it does not.
 **Fix:** queue row 46 — `useConfirm()` naming the consequences ("emails all N active members"; "ballot locks; ballots are sent separately"); correct the manual line. Test: `ElectionDetailPage.w50-open-confirm.test.tsx`.
 
-### W50-58 — LOW — Nominations: nothing tells a member when nominations end; Decline is one unconfirmed click that deletes the row; self-nomination toasts "Nomination submitted" though it is already Accepted — ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-58 — LOW — Nominations: nothing tells a member when nominations end; Decline is one unconfirmed click that deletes the row; self-nomination toasts "Nomination submitted" though it is already Accepted — ✅ FIXED (frontend round 2; confirmed on screen 2026-10-06 — see Re-drive)
 
 **Did:** as `member` and `member2`, A3 steps 2/3/5; as `training_officer`, B2 step 6; the deadline set by API (B8 step 10).
 **Saw:** mail 0079 with no deadline, no link and `text: None`; the panel sentence "Nominations close automatically at the configured deadline." never rendered (no UI sets one); Decline deleted the row for everyone; the self toast.
 **Where:** `NominationsPanel.tsx:110-112` and the decline handler; the nominations templates in `election_service.py`; `docs/training/14-elections.md:291`.
 **Fix:** queue row 47 — a deadline field on Open Nominations (or "until the secretary closes nominations"), a link and text part in the mails, `useConfirm()` on Decline, "You are now a candidate for X"; fix the manual line. Test: `NominationsPanel.w50.test.tsx`.
 
-### W50-59 — LOW — Package modal: a reserved-TLD address passes the browser check and the whole batch is refused with a validator dump; the attachment is `application/octet-stream` — ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-59 — LOW — Package modal: a reserved-TLD address passes the browser check and the whole batch is refused with a validator dump; the attachment is `application/octet-stream` — ✅ FIXED (frontend round 2; confirmed on screen 2026-10-06 — see Re-drive)
 
 **Did:** as `secretary`, A4 step 6.
 **Saw:** 422 "recipient_emails.2: value is not a valid email address: The part after the @-sign is a special-use or reserved name … (Error code: LB-VAL-001)"; the `.eml` Content-Type.
@@ -1058,46 +1058,46 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `ElectionDetailPage.tsx:244-264`.
 **Fix:** S18 sends `null` (`blankToNull`) with `ElectionUpdate` widened, and no toast when nothing changed (`ElectionDetailPage.w50-s18.test.tsx`).
 
-### W50-61 — LOW — Ballot preview dialog: focus never enters it and Escape does nothing; the help popover on `/elections` is clipped and links to the wiki root — ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-61 — LOW — Ballot preview dialog: focus never enters it and Escape does nothing; the help popover on `/elections` is clipped and links to the wiki root — ✅ FIXED (frontend round 2) · re-drive: held; the popover was then found 100 px wide — fixed as W50-86
 
 **Did:** as `secretary`, A2 step 19 and A1 step 6.
 **Where:** `BallotPreviewModal.tsx:18-42` (no `useDialog`); `HelpLink.tsx:35-48, 60-72`; `ElectionsPage.tsx:318-321`.
 **Fix:** queue row 49 — `useDialog` for the preview; flip the popover below when there is no room; an `elections` topic URL. Test: `BallotPreviewModal.w50.test.tsx`.
 
-### W50-62 — LOW — Election detail at 390 px: the info-card grid computes `0px 247px`, so "Start Date" collapses and "Voting Method" paints over "Anonymous Voting" — ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-62 — LOW — Election detail at 390 px: the info-card grid computes `0px 247px`, so "Start Date" collapses and "Voting Method" paints over "Anonymous Voting" — ✅ FIXED (frontend round 2; confirmed on screen 2026-10-06 — see Re-drive)
 
 **Did:** as `treasurer` (B1 step 21), `member` (A8 step 6) and `admin` (B8 step 14) at 390×844.
 **Saw:** `scrollWidth` 434 > 390 on a member's draft view (the status pill); the measured grid on the open detail.
 **Where:** `ElectionDetailPage.tsx` title row and the `grid-cols-1 gap-4 md:grid-cols-2` details card.
 **Fix:** queue row 50 — `min-w-0` / `flex-wrap` on the title row; truly single-column below `md`. Test: the route added to `e2e/mobile-accessibility.spec.ts` overflow assertions.
 
-### W50-63 — LOW — Position "Add" needs two taps: an invisible `fixed inset-0 z-10` scrim mounted by the combobox eats the first — ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-63 — LOW — Position "Add" needs two taps: an invisible `fixed inset-0 z-10` scrim mounted by the combobox eats the first — ✅ FIXED (frontend round 2; confirmed on screen 2026-10-06 — see Re-drive)
 
 **Did:** as `secretary`, A9 step 1 (phone) and A10 step 1 (desktop; Playwright "intercepts pointer events").
 **Where:** `ElectionsPage.tsx` create dialog position combobox.
 **Fix:** queue row 51 — mount the click-away layer only while the listbox is open. Test: `ElectionsPage.w50-position-add.test.tsx`.
 
-### W50-64 — LOW — Remind Non-Voters counts paper voters as "have not yet voted", never mentions the 60-minute cooldown, and a voided voter is reminded — ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-64 — LOW — Remind Non-Voters counts paper voters as "have not yet voted", never mentions the 60-minute cooldown, and a voided voter is reminded — ✅ FIXED (frontend round 2; confirmed on screen 2026-10-06 — see Re-drive)
 
 **Did:** as `secretary`, A7 steps 8/9; as `admin`, B3 step 12.
 **Saw:** "17 eligible voters have not yet voted" with three paper voters among them; the second reminder refused only after the click; the voided voter in the list.
 **Where:** `RemindNonVotersModal.tsx:49-52, 55-62, 74`; `POST …/remind-non-voters`.
 **Fix:** queue row 52 — "N members have no electronic ballot on file (paper ballots are not matched to members)"; show `reminder_sent_at` and disable during the cooldown. Test: `RemindNonVotersModal.w50.test.tsx`.
 
-### W50-65 — LOW — Forensics and results counters disagree — ✅ FIXED (round 2, `7aa3405`) · frontend half: ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-65 — LOW — Forensics and results counters disagree — ✅ FIXED (round 2, `7aa3405`) · frontend half: ✅ FIXED (frontend round 2; confirmed on screen 2026-10-06 — see Re-drive)
 
 **Did:** as `admin` (B4, B3 step 11) and `secretary` (A8 step 9, A10 step 6).
 **Saw:** "Total Votes: 42" counting pending paper ballots beside "2 vote(s) cast"; "Unused 59" counting superseded tokens; a timeline bucket as raw `YYYY-MM-DD HH:MM`; turnout printed 9.5% / 10% / 9.52% on one page; a voided paper batch listed as a voided vote; one Run Check writing three audit rows.
 **Where:** `GET …/forensics` (`vote_integrity.total_votes`, `voting_tokens`, `voting_timeline`); the panels' rounding; the forensics section of `ElectionDetailPage.tsx`.
 **Fix:** round 2 — one 2-dp helper; Issued / Live / Superseded / Used; a localised bucket; pending ballots labelled; one check per click. Test: `backend/tests/test_w50_forensics_counts.py`.
 
-### W50-66 — LOW — Paper-ballot batch cards: a voided card shows no reason, voider or time; a pending over-count batch carries no mark; the over-count error stays after the counts change — ✅ FIXED (round 2, `7aa3405`) · frontend half: ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-66 — LOW — Paper-ballot batch cards: a voided card shows no reason, voider or time; a pending over-count batch carries no mark; the over-count error stays after the counts change — ✅ FIXED (round 2, `7aa3405`) · frontend half: ✅ FIXED (frontend round 2; confirmed on screen 2026-10-06 — see Re-drive)
 
 **Did:** as `secretary`, A7 steps 4/5; as `admin`, B4 steps 5/8.
 **Where:** the `GET …/manual-ballots` serializer; `PaperBallotBatchesPanel.tsx`; `RecordPaperBallotsModal.tsx:154-164`.
 **Fix:** round 2 — `voided_by` / `voided_at` / `void_reason` / `over_count_override` on the batch response and card; the error clears on edit. Test: the trail listing in `test_election_nominations.py` extended.
 
-### W50-67 — LOW — Malformed `user_id` on attendee check-in → 500; candidate `statement` unbounded — ✅ FIXED (round 2, `7aa3405`) · frontend half: ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-67 — LOW — Malformed `user_id` on attendee check-in → 500; candidate `statement` unbounded — ✅ FIXED (round 2, `7aa3405`) · frontend half: ✅ FIXED (frontend round 2; confirmed on screen 2026-10-06 — see Re-drive)
 
 **Did:** as `admin`, B1 step 8 (A-22) and step 10 (D-06, 60 000 characters stored).
 **Saw:** 500, log `badly formed hexadecimal UUID string` at `elections.py:2981`.
@@ -1109,7 +1109,7 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `email_template_service.py:2286-2310` and the HTML template.
 **Fix:** round 2 — the line omitted when there is no meeting; "CDT" printed; "opens your ballot". Test: `backend/tests/test_w50_ballot_mail_wording.py`.
 
-### W50-69 — LOW — Clone copies `results_visible_immediately` from a published parent and lands on a draft "Results" tab — ✅ FIXED (round 2, `7aa3405`) · frontend half: ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-69 — LOW — Clone copies `results_visible_immediately` from a published parent and lands on a draft "Results" tab — ✅ FIXED (round 2, `7aa3405`) · frontend half: ✅ FIXED (frontend round 2; confirmed on screen 2026-10-06 — see Re-drive)
 
 **Did:** as `secretary`, A8 step 12; as `admin`, B7 R-05.
 **Saw:** the clone's draft Results tab rendering "Quorum Met / 0 votes".
@@ -1133,7 +1133,7 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `election_service.py:4874-4899`; the `ElectionsSettingsPage.tsx` Features copy; `14-elections.md:437`.
 **Why flagged:** the owner decides whether auto-open should send ballots; otherwise the copy says "Scheduled opening changes the status only — send ballots yourself".
 
-### W50-73 — LOW — Custom-item and candidate form labels are not associated with their controls; the attendance "remove" button is 28 px; a "Skip to main content" box floats mid-page after form submits; void-vote inputs have placeholders but no labels — ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
+### W50-73 — LOW — Custom-item and candidate form labels are not associated with their controls; the attendance "remove" button is 28 px; a "Skip to main content" box floats mid-page after form submits; void-vote inputs have placeholders but no labels — ✅ FIXED (frontend round 2) · re-drive: held, except that focus after a nomination sat on `<body>` — fixed as W50-90
 
 **Did:** as `secretary`, A2, A3, A4 steps 1/2, A8 step 9; as `admin`, B3 step 3.
 **Where:** the ballot-items component; `CandidateManagement.tsx`; `MeetingAttendance.tsx:157-167`; `NominationsPanel.tsx` focus handling; the forensics section.
@@ -1174,6 +1174,78 @@ Seen re-driving W50-27 and W50-18 (`notes/CONFIRM-backend.md`, CONFIRM-11 and CO
 ### W50-82 — NIT — Closing auto-sends "Election Report: <title>" to the election's creator — NOTE
 
 CONFIRM-16: closing a fresh election mailed the report to the secretary unasked (sink 0310), as every close in the drive did (Notices observed, 15 such mails). It is the same one-recipient report W50-28 relabelled "Email me the results report", so an officer who closes gets it twice if they press the button; and its "Ballots cast 3" is a vote count, not a voter count (W50-76). Pre-existing, not a defect of the fixes; whether the automatic copy on close is wanted belongs with W50-28's decision.
+
+### W50-83 — MED — The election list dated an early close to the scheduled end: `GET /elections` never sent `closed_at` — ✅ FIXED (re-drive, this PR) · confirmed live
+
+**Did:** REDRIVE-A: closed an election three days early; opened `/elections`.
+**Saw:** the card read "Closed Thursday, October 8, 2026 at 8:38 PM" — the scheduled end, in the future — while the detail card read "Closed Monday, October 5, 2026 at 8:44 PM by Sam Ortiz". `GET /elections` returned `closed_at: null`; the schema field existed, the endpoint built its response field by field and left it out.
+**Expected:** the card dated to the actual close, as the detail is.
+**Where:** `backend/app/api/v1/endpoints/elections.py` (`ElectionListResponse(...)` in `list_elections`).
+**Fix:** `closed_at=election.closed_at`. Test: `test_w50_closed_at.py::TestListCarriesClosedAt`. Confirmed live: "Closed Monday, October 5, 2026 at 9:20 PM" on a card whose scheduled end is October 8.
+
+### W50-84 — LOW — The in-app vote receipt was unmounted by the page's own refetch — ✅ FIXED (re-drive, this PR) · confirmed live
+
+**Did:** REDRIVE-B, as `member`, `member2` and `training_officer`: Cast Vote tab, select a candidate, "Submit Vote for Chief".
+**Saw:** toast "Vote for Chief submitted", card "Vote submitted for Chief", no receipt block; the API's 201 carried `receipt_hash` every time. A MutationObserver installed before the click recorded the ballot's root being removed and no receipt node ever inserted: `onVoteCast` refetched the election, the refetch raised the page's loading skeleton, and the skeleton replaced the whole page — unmounting `ElectionBallot` and the receipt state it had just recorded. The round-2 Vitest rendered `ElectionBallot` alone and could not see it.
+**Expected:** the "Vote Receipt" block with the hash under the card, as the token page shows.
+**Where:** `frontend/src/pages/ElectionDetailPage.tsx` (`fetchElection` → `setLoading(true)`; `if (loading) return` the skeleton).
+**Fix:** the skeleton shows only until the election has loaded once; a refetch after a vote, a close or a publish updates in place. Test: `ElectionDetailPage.w50-53-receipt.test.tsx` renders the real ballot inside the page. Confirmed live: the receipt block renders and the verify form on the same page reports "Vote counted".
+
+### W50-85 — LOW — A ballot link retired by a rollback reads "Voting token has expired" two days before the end — ✅ FIXED (re-drive, this PR) · confirmed live
+
+**Did:** REDRIVE-A: opened a member's pre-rollback link after a zero-vote CLOSED→OPEN rollback of an anonymous election, and again after the re-send.
+**Saw:** "Unable to Load Ballot / Voting token has expired / If you think this is a mistake, contact your organization's secretary." The rollback regenerates the anonymity salt and expires the issued tokens by `expires_at` alone, so the lookup took the W50-27 "expired" branch; the W50-44 "closed and reopened" sentence is reached only on an election whose salt is gone.
+**Expected:** a sentence saying the link was retired and a new one is the way back in.
+**Where:** `election_service.py` (`rollback_election` token invalidation; `get_ballot_by_token`).
+**Fix:** the rollback stamps `superseded_at` too, and the lookup tells a reminder's supersede (a newer live token for the same voter hash) from a rollback's (none, since the re-send keys new tokens to the new salt): the former keeps "This link was replaced by a newer ballot email", the latter says "This election was closed and reopened, so this ballot link is no longer valid. Ask your secretary for a new ballot link." Tests: `test_w50_reminder_subject_and_supersession.py::TestReopenedToken` (both before and after the re-send; the reminder case keeps its wording). Confirmed live on the public page: "This election was closed and reopened, so this ballot link no longer works. Ask your secretary for a new ballot link."
+
+### W50-86 — LOW — The help popover on `/elections` rendered about 100 px wide, a word or two a line — ✅ FIXED (re-drive, this PR) · confirmed live
+
+**Did:** REDRIVE-B: clicked "Help: elections" at 1280 px and 390 px.
+**Saw:** a 466 px-tall column "Create and / manage / department / …" (shots `b-13-help-popover*`). The absolute panel sits in a `relative inline-block` the size of the icon and had no width of its own, so it shrank to the icon's. Pre-existing; not caused by the W50-61 flip.
+**Expected:** a panel bounded by its card's `max-w-xs`.
+**Where:** `frontend/src/components/HelpLink.tsx`.
+**Fix:** `w-max` on the panel, so the card's `max-w-xs` is what bounds it. Test: `HelpLink.w50-flip.test.tsx` ("sizes the panel to its content"). Confirmed live: 320 px wide.
+
+### W50-87 — LOW — Results & Publishing at 390 px clips "Results can be published once voting closes" — ✅ FIXED (re-drive, this PR; Vitest-covered, not re-driven)
+
+**Did:** REDRIVE-A: an open election's Results & Publishing card at 390×844.
+**Saw:** the `shrink-0 text-xs` line ran to x = 416 inside a 263 px row and the card's `overflow-hidden` cut it; "Results are hidden / Only administrators…" was squeezed into a narrow column (shot `REDRIVE-A-28`).
+**Expected:** the row wraps.
+**Where:** `frontend/src/modules/elections/components/PublishResultsPanel.tsx`.
+**Fix:** both rows take `flex-wrap gap-3` and the hint drops `shrink-0`. Test: `PublishResultsPanel.w50-s19.test.tsx` ("lets the visibility row wrap").
+
+### W50-88 — NIT — The delete dialog prints a bare "0" bullet on a zero-vote election — ✅ FIXED (re-drive, this PR)
+
+**Did:** REDRIVE-A: Delete on an open election with no votes.
+**Saw:** a bullet reading "0" — `{election.total_votes && election.total_votes > 0 && (…)}` renders the number itself when it is 0.
+**Where:** `frontend/src/components/election-detail/DeleteElectionModal.tsx`.
+**Fix:** `(election.total_votes ?? 0) > 0`. Test: `DeleteElectionModal.w50-votes.test.tsx`.
+
+### W50-89 — NIT — The inline candidate edit's name, position and statement controls had no accessible name — ✅ FIXED (re-drive, this PR)
+
+**Did:** REDRIVE-A: "Edit <candidate>" on the Candidates tab.
+**Saw:** the add form names its fields (W50-73); the inline edit's input, select and textarea carried no label, id or `aria-label`.
+**Where:** `frontend/src/components/CandidateManagement.tsx`.
+**Fix:** `aria-label` "Candidate name", "Position", "Statement". Test: `CandidateManagement.w50-67-statement.test.tsx` ("names every inline edit control").
+
+### W50-90 — NIT — After a keyboard-submitted nomination, focus sat on `<body>` — ✅ FIXED (re-drive, this PR)
+
+**Did:** REDRIVE-A, as `member`: Enter on "Nominate".
+**Saw:** `document.activeElement` was `<body>` from 3 ms after submit through 3 s; Tab then landed on the position select, so the W50-73 skip-link symptom was gone, but a screen reader was left on the body. The panel's refetch set `loading`, and the loading line replaced the form — the same shape as W50-84.
+**Where:** `frontend/src/components/election-detail/NominationsPanel.tsx` (`fetchData`).
+**Fix:** the loading line is shown for the initial load only. Test: `NominationsPanel.w50-73-focus.test.tsx` now asserts focus after the refetch as well.
+
+### W50-91 — LOW — A token ballot on an election created with positions but no ballot items reads "Make a selection for each item below" over nothing, with a Submit button — NOTE (W50-11, re-observed)
+
+**Did:** REDRIVE-B: real and test tokens on an API-created election (`ballot_items: []`, two candidates for Chief).
+**Saw:** no radios, the instruction line and a Submit button; the lookup returned 200 with two candidates; the in-app ballot on the same election worked. The UI disables Send Ballot Emails for such an election (W50-11); the API does not refuse the send.
+**Where:** `BallotVotingPage.tsx` renders `election.ballot_items` only; `election_service.py` ~825.
+**Status:** the owner decision recorded under W50-11 in `docs/KNOWN_LIMITATIONS.md`, with this re-observation added to the row.
+
+### W50-92 — NIT — No verify-receipt form is reachable once an election closes — NOTE
+
+REDRIVE-B: after close the token page shows only the closed card and the detail page has no verify form, so a receipt saved during voting can be checked only while voting is open. Flagged in the round-2 fix summary; observed on screen. Open.
 
 **Static-review cross-references.** S04 (per-item victory overrides ignored by the tally), S06 (runoff decided from the pooled cross-position tally), S07 (runoff lifecycle: rollback re-close, delete of a parent), S10 (results gate, live-tally flag, 403-vs-404), S11 (approval percentages over 100% in a mixed paper election), S13 (unknown `ballot_item_ids` silently dropped and the token consumed) and S20 (reminder toast always green) were found by reading and fixed in `3de83db` / `d6f828c` without a drive step of their own; S13's refusal was observed in B6 step 6 and confirmed live (CONFIRM-12: an unknown `ballot_item_id` → 400 "This ballot is out of date…" with the token still usable afterwards); S10 and S16 held live under W50-22 and W50-18; the reminder toast was never read back (Not driven). `review-backend-1.md` #5 added the `docs/UPGRADING.md` entry "Close any election that is OPEN before you upgrade" in `3de83db`.
 

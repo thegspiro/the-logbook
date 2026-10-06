@@ -85,4 +85,16 @@ describe('CandidateManagement statement length (W50-67)', () => {
     // "Vote for me" is 11 characters
     expect(screen.getByText('4989 characters remaining')).toBeInTheDocument();
   });
+
+  // The inline edit controls had no accessible name (REDRIVE-A-4).
+  it('names every inline edit control', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CandidateManagement electionId="elec-1" election={election} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Edit Jane Doe' }));
+
+    expect(screen.getByRole('textbox', { name: 'Candidate name' })).toHaveValue('Jane Doe');
+    expect(screen.getByRole('combobox', { name: 'Position' })).toHaveValue('Chief');
+    expect(screen.getByRole('textbox', { name: 'Statement' })).toHaveValue('Vote for me');
+  });
 });
