@@ -156,12 +156,31 @@ Complete the onboarding wizard to configure your organization, create the admin 
 
 ## Configuration
 
-All settings live in `/mnt/user/appdata/the-logbook/.env`. After editing, restart with:
+All settings live in `/mnt/user/appdata/the-logbook/.env`. After editing, apply
+them with:
 
 ```bash
 cd /mnt/user/appdata/the-logbook
-docker compose restart
+docker compose up -d
 ```
+
+`up -d` recreates the containers whose configuration changed; `docker compose
+restart` keeps the environment they were created with, so an edit to `.env`
+does not take effect.
+
+Since 2026-10-06 the backend's `environment:` block in
+`unraid/docker-compose-unraid.yml` and `unraid/docker-compose-build-from-source.yml`
+passes every backend setting through from `.env`, each defaulting to the
+application's own default. Before that, a setting missing from the block —
+`SMTP_FROM_NAME`, `GOOGLE_*`, `CAPTCHA_*` and most others — was silently
+ignored. Read the matching entry in `docs/UPGRADING.md` before upgrading an
+existing install. `DB_HOST`, `DB_PORT`, `REDIS_HOST`, `REDIS_PORT` and `PORT`
+stay pinned to the bundled containers. A compose file kept by the Compose
+Manager plugin is your own copy and is not updated by this change.
+
+The Community Apps template (`the-logbook.xml`) works differently: Unraid passes
+every variable on the template to the container directly, with no allowlist, so
+any backend setting can be added there as a Variable.
 
 ### Ports
 

@@ -317,6 +317,15 @@ sed -i "s|^FRONTEND_URL=.*|FRONTEND_URL=https://logbook.yourdomain.com|" .env
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d backend frontend
 ```
 
+> **Caution**: the shipped `docker-compose.yml` pins the backend's `DB_HOST`,
+> `DB_PORT`, `REDIS_HOST` and `REDIS_PORT` to the bundled `mysql` and `redis`
+> services, and its backend `depends_on` both of them. The `DB_*` and `REDIS_*`
+> host and port lines above therefore do not reach the backend on their own.
+> Every other backend setting in `.env` does (since 2026-10-06); see
+> "How `.env` reaches the backend" in `wiki/Deployment-Docker.md`. Pointing the
+> stack at RDS and ElastiCache needs a compose override of your own that sets
+> those four values and drops the dependency.
+
 > **Note**: When using RDS and ElastiCache, you don't start the `mysql` or `redis` containers — the application connects to the managed AWS services directly. As in Method 1, pin `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so the override is applied on every later `docker compose ...` command.
 
 ### Step 6: Set Up Nginx and SSL

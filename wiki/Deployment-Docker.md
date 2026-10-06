@@ -81,6 +81,31 @@ FRONTEND_PORT=3000
 BACKEND_PORT=3001
 ```
 
+### How `.env` reaches the backend
+
+`.env` is read by Docker Compose, not by the backend: it is not copied into
+the image. Compose hands the backend only the variables named in the backend
+service's `environment:` block. Since 2026-10-06 that block in each shipped
+compose file names every backend setting, defaulting each one to the
+application's own default, so any backend setting in `.env.example.full` can be
+set from `.env`. Before that, only about a fifth of them reached the backend
+and the rest were silently ignored — see `docs/UPGRADING.md` before upgrading
+an existing install.
+
+The exceptions are pinned by the compose file: `DB_HOST`, `DB_PORT`,
+`REDIS_HOST` and `REDIS_PORT` point at the bundled `mysql` and `redis`
+services whatever `.env` says, and `VERSION` comes from the image.
+Variables that are not backend settings (`MYSQL_ROOT_PASSWORD`, `MINIO_*`,
+`ELASTIC_PASSWORD`) go only to their own services.
+
+Apply a change to `.env` with `docker compose up -d`, which recreates the
+containers whose configuration changed. `docker compose restart` keeps the
+old environment. To see what the backend will receive:
+
+```bash
+docker compose config | grep SMTP_HOST
+```
+
 ### Frontend Environment
 
 Create `frontend/.env`:

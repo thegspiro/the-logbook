@@ -7,6 +7,7 @@ with type validation and defaults.
 
 import ipaddress
 from functools import lru_cache
+from typing import get_args
 from urllib.parse import quote, urlsplit
 
 from loguru import logger
@@ -873,6 +874,34 @@ class Settings(BaseSettings):
                         f"{name} is set but no longer has any effect ({why}). "
                         "Remove it from the environment."
                     )
+        return data
+
+    @model_validator(mode="before")
+    @classmethod
+    def _empty_optional_string_means_unset(cls, data):
+        """Read an empty value for an optional string setting as unset (None).
+
+        The Compose files pass every setting through as ``${NAME:-}``, because
+        a mapping-form ``environment:`` block cannot omit a key, so an operator
+        who leaves one of these alone hands the app ``""`` rather than nothing.
+        For a ``str | None = None`` field that is not the default: code that
+        asks ``is None`` (or forwards the value to a client library) would
+        treat a blank API key, redirect URI or webhook as configured. Mapping
+        exactly ``""`` back to None makes an unconfigured stack behave as the
+        bare app does. Only fields typed ``str | None`` with a None default are
+        touched, and only the empty string, so a real value is never altered;
+        ``tests/test_compose_settings_passthrough.py`` holds the round trip.
+        """
+        if not isinstance(data, dict):
+            return data
+        data = dict(data)
+        for name, field in cls.model_fields.items():
+            if (
+                data.get(name) == ""
+                and field.default is None
+                and set(get_args(field.annotation)) == {str, type(None)}
+            ):
+                data[name] = None
         return data
 
     @field_validator("COOKIE_SECURE", mode="before")
