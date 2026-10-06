@@ -42,6 +42,18 @@ app/api/public/paypal_webhook.py::paypal_inbound_webhook::Integration::integrati
 #     public webhook: there is no caller org, and the integration id IS the credential
 app/api/public/salesforce_webhook.py::salesforce_inbound_webhook::Integration::integration_id
 
+# Reviewed 2026-10-06: safe (MCP OAuth server).
+#   - authenticate_access_token / refresh / revoke_token::McpOAuthGrant::grant_id
+#     the grant id is parsed out of a bearer token, and the row is used only
+#     when the presented token's SHA-256 matches the grant's stored digest
+#     (constant-time); the TOKEN is the credential and there is no caller org
+#     to filter on — the organization is taken from the grant. refresh and
+#     revoke_token additionally require grant.client_pk == the authenticated
+#     client. See docs/security-review/MCPO-27-mcp-oauth-server.md.
+app/mcp/oauth.py::authenticate_access_token::McpOAuthGrant::grant_id
+app/mcp/oauth.py::refresh::McpOAuthGrant::grant_id
+app/mcp/oauth.py::revoke_token::McpOAuthGrant::grant_id
+
 # Reviewed 2026-09-06: safe.
 #   - perform_sync_task::ExternalTrainingProvider::provider_id
 #     the endpoint resolves the provider with an organization_id filter and 404s otherwise before queueing this background task; hardening candidate — it holds organization_id and does not apply it here
