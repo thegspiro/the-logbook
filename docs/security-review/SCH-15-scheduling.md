@@ -1,8 +1,11 @@
 # Security Review 15 — Scheduling
 
-**Prefix:** `SCH` · **Iteration:** 15 · **Reviewed:** 2026-08-26 (pass 1) ·
-2026-09-17 (pass 6, [#2628](https://github.com/thegspiro/the-logbook/pull/2628)),
-2026-10-06 (pass 7, [#1846](https://github.com/thegspiro/the-logbook/pull/1846) pass 1 PR; pass 7 PR recorded in `PROGRESS.md`'s Open PR row)
+**Prefix:** `SCH` · **Iteration:** 15 · **Reviewed:** 2026-08-26 (pass 1),
+2026-09-17 (pass 6), 2026-10-06 (pass 7) · **PR:**
+[#1846](https://github.com/thegspiro/the-logbook/pull/1846) (pass 1),
+[#2628](https://github.com/thegspiro/the-logbook/pull/2628) (pass 6),
+[#2971](https://github.com/thegspiro/the-logbook/pull/2971) (pass 7, 0
+fixed, SCH-10 confirmed fixed)
 
 **Backend:** `api/v1/endpoints/scheduling.py` (4,147 L, 98 routes, up from 92),
 `api/v1/endpoints/scheduling_module_config.py` (3 routes, unchanged),

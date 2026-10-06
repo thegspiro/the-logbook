@@ -16,15 +16,24 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR [#2970](https://github.com/thegspiro/the-logbook/pull/2970)
-(Feature 14, Equipment check & shifts, pass 7) merged — docs-only (0
-application-code changes: only `EC-14-equipment-check-shifts.md`,
-`PROGRESS.md`), so per this file's own rule it is not a recordable event
-on its own; rotation row 14 already stood ✅. This iteration picks up
-Feature 15 (Scheduling), the state this PR opened from. (A
-`Backend Unit Tests` flake — `test_the_sequential_exchange_shares_one_budget`,
-unrelated to this PR's docs-only diff — was re-run once and passed before
-merge; not a finding.)
+**PR [#2971](https://github.com/thegspiro/the-logbook/pull/2971)**: branch
+`claude/security-review-scheduling`, Feature 15 (Scheduling), pass 7 — 0
+code fixes needed. SCH-10 confirmed genuinely fixed (not merely
+unchanged) via the shared `create_integration_client()`/
+`SSRFSafeAsyncTransport` factory `calcom_service.py` already calls into,
+matching `KNOWN_LIMITATIONS.md`'s own entry; SCH-9/SCH-13 re-confirmed
+unchanged, with a pass-6 documentation citation error corrected
+(`finalize_shift`/`save_closeout_calls` have always lived in
+`scheduling_service.py`, never `scheduling.py`). Two new standing items
+recorded (SCH-15, a scope-boundary note on a new out-of-scope feature;
+SCH-16, a LOW self-documented TOCTOU), neither needing a fix. Two
+genuine security-positive fixes verified in the real delta
+(separation-of-duties on shift reports; an XC-2 permission split). Real
+delta since pass 6 reviewed in full — 23 backend + 46 frontend non-merge
+commits. Route count in `scheduling.py` grew to 98 (+6). Gate green
+(flake8/black/isort, migrations, route-permission check — 245 routes,
+1517 scoped backend tests, frontend typecheck/lint, 336 scoped frontend
+tests). See the Log entry below for detail.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 14, Equipment check &amp; shifts, pass 7, PR #2970, merged docs-only — not independently recorded), preserved for history</summary>
