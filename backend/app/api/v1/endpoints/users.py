@@ -99,6 +99,7 @@ from app.utils.membership import (
     is_administrative,
     split_membership_type,
 )
+from app.utils.phone_numbers import validate_member_phone
 from app.utils.security_notifications import notify_security_event
 
 router = APIRouter()
@@ -223,6 +224,26 @@ async def list_member_directory(
         include_contact_info=include_contact_info,
         contact_settings=contact_settings,
     )
+
+
+def _validated_phone_changes(user: User, sent: dict) -> dict:
+    """The phone/mobile values to store, from whichever of them were sent.
+
+    Blank clears (an explicit null or empty box). Refuses a new value that is
+    not a phone number with a 400 naming the rule.
+    """
+    changes = {}
+    for field in ("phone", "mobile"):
+        if field not in sent:
+            continue
+        try:
+            changes[field] = validate_member_phone(sent[field], getattr(user, field))
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"{'Phone' if field == 'phone' else 'Mobile'}: {e}",
+            ) from e
+    return changes
 
 
 WELCOME_EMAIL_UNAVAILABLE_DETAIL = (
@@ -1626,6 +1647,13 @@ async def update_contact_info(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
+    # Validated before anything is applied, so a refused number leaves the
+    # rest of the save unapplied too. New writes only (W04-7): a number sent
+    # back unchanged passes even if it predates the rule.
+    new_phones = _validated_phone_changes(
+        user, {k: getattr(contact_update, k) for k in contact_update.model_fields_set}
+    )
+
     # Update fields if provided
     if contact_update.email is not None:
         # Check if email is already in use by another user in the organization
@@ -1653,11 +1681,8 @@ async def update_contact_info(
     # Keyed on what the caller sent, not on None: an explicit null (or a blank)
     # clears the number. `is not None` made clearing impossible -- the member
     # emptied the box, saved, and got the old number back with a 200.
-    if "phone" in contact_update.model_fields_set:
-        user.phone = (contact_update.phone or "").strip() or None
-
-    if "mobile" in contact_update.model_fields_set:
-        user.mobile = (contact_update.mobile or "").strip() or None
+    for field, value in new_phones.items():
+        setattr(user, field, value)
 
     if contact_update.notification_preferences is not None:
         # Merge, never replace. Every field on NotificationPreferences defaults
@@ -1960,6 +1985,10 @@ async def update_user_profile(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=safe_error_detail(e),
                 ) from e
+
+    # New writes only (W04-7): a number sent back unchanged passes even if it
+    # predates the rule, so a member can still save the rest of their profile.
+    update_data.update(_validated_phone_changes(user, update_data))
 
     # Snapshot for the audit trail before `emergency_contacts` is popped below.
     # Taken from `update_data` rather than the raw payload because a move to the

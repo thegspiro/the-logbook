@@ -396,6 +396,14 @@ From here you can:
 - View your **assigned roles and permissions**
 - Choose the two tabs on your **phone's bottom bar** (**Appearance → Phone navigation bar**) _(2026-10-02)_ — saved to your account, so they follow you to every device
 
+> **A phone number has to look like one** _(2026-10-05)_. Phone and mobile
+> accept digits, spaces, dashes, dots, brackets, a leading `+` and an
+> extension (`703-555-0101 ext 4`), with 7 to 15 digits — so a number from
+> across a border or a desk line with an extension both work, and text such as
+> "call me maybe" is refused with a message saying what is expected. A number
+> saved before this rule is left as it is: you can save the rest of your
+> profile without touching it, and the rule applies when you change it.
+
 ![Account Settings on its Account tab — the tab row leads to password, security, emergency contacts, appearance and notifications](./images/00-09-account-settings.png)
 
 **[SCREENSHOT — REPLACE `00-09-account-settings.png`.** The page title reads **My Account** (was User Settings), and the Appearance tab's description reads "Theme and phone navigation bar".**]**

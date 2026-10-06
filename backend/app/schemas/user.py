@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.schemas.base import UTCResponseBase
 from app.utils.membership import MemberClass, MemberStatus
+from app.utils.phone_numbers import validate_member_phone
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -209,6 +210,12 @@ class UserCreate(UserBase):
     phone: Optional[str] = Field(None, max_length=20)
     mobile: Optional[str] = Field(None, max_length=20)
 
+    @field_validator("phone", "mobile")
+    @classmethod
+    def _valid_member_phone(cls, v: Optional[str]) -> Optional[str]:
+        # A create is always a new write (W04-7); see app/utils/phone_numbers.py.
+        return validate_member_phone(v)
+
 
 class MembershipClassificationFields(BaseModel):
     """The two independent facts ``membership_type`` used to fuse.
@@ -298,6 +305,13 @@ class AdminUserCreate(MembershipClassificationFields):
     )
     phone: Optional[str] = Field(None, max_length=20)
     mobile: Optional[str] = Field(None, max_length=20)
+
+    @field_validator("phone", "mobile")
+    @classmethod
+    def _valid_member_phone(cls, v: Optional[str]) -> Optional[str]:
+        # A create is always a new write (W04-7); see app/utils/phone_numbers.py.
+        return validate_member_phone(v)
+
     date_of_birth: Optional[date] = None
     hire_date: Optional[date] = None
 
