@@ -64,7 +64,7 @@ describe('MfaSettingsCard', () => {
 
     expect(await screen.findByText('code-1111')).toBeInTheDocument();
     expect(screen.getByText('code-2222')).toBeInTheDocument();
-    expect(mockVerifySetup).toHaveBeenCalledWith('123456');
+    expect(mockVerifySetup).toHaveBeenCalledWith('123456', expect.any(String));
   });
 
   it('names the QR code for screen readers (workflow review W04)', async () => {
@@ -124,8 +124,39 @@ describe('MfaSettingsCard', () => {
     await user.type(await screen.findByLabelText(/current authenticator code to generate/i), '654321');
     await user.click(screen.getByRole('button', { name: /generate new codes/i }));
 
-    await waitFor(() => expect(mockRegenerate).toHaveBeenCalledWith('654321'));
+    await waitFor(() => expect(mockRegenerate).toHaveBeenCalledWith('654321', expect.any(String)));
     expect(await screen.findByText('new-1')).toBeInTheDocument();
+  });
+
+  it('retries a lost regeneration with the same key, and a new code with a new key (AUTH-7)', async () => {
+    const user = userEvent.setup();
+    mockGetStatus.mockResolvedValue({ mfa_enabled: true, recovery_codes_remaining: 5 });
+    mockRegenerate.mockReset();
+    mockRegenerate
+      .mockRejectedValueOnce(new Error('Network Error'))
+      .mockRejectedValueOnce(new Error('Network Error'))
+      .mockResolvedValue({ recovery_codes: ['kept-1'] });
+
+    render(<MfaSettingsCard />);
+    await user.click(await screen.findByRole('button', { name: /regenerate recovery codes/i }));
+    const input = await screen.findByLabelText(/current authenticator code to generate/i);
+    await user.type(input, '654321');
+    await user.click(screen.getByRole('button', { name: /generate new codes/i }));
+    await waitFor(() => expect(mockRegenerate).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByRole('button', { name: /generate new codes/i }));
+    await waitFor(() => expect(mockRegenerate).toHaveBeenCalledTimes(2));
+
+    const firstKey = mockRegenerate.mock.calls[0]?.[1] as string;
+    expect(firstKey).toEqual(expect.any(String));
+    expect(mockRegenerate.mock.calls[1]).toEqual(['654321', firstKey]);
+
+    await user.clear(input);
+    await user.type(input, '111222');
+    await user.click(screen.getByRole('button', { name: /generate new codes/i }));
+    await waitFor(() => expect(mockRegenerate).toHaveBeenCalledTimes(3));
+    expect(mockRegenerate.mock.calls[2]?.[0]).toBe('111222');
+    expect(mockRegenerate.mock.calls[2]?.[1]).not.toBe(firstKey);
+    expect(await screen.findByText('kept-1')).toBeInTheDocument();
   });
 
   it('disables MFA with a current authenticator code', async () => {

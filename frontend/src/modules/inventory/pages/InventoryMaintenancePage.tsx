@@ -686,7 +686,9 @@ const InventoryMaintenancePage: React.FC = () => {
                     className={inputCls}
                   >
                     <option value="">Select condition...</option>
-                    {ITEM_CONDITION_OPTIONS.map((condition) => (
+                    {/* Retiring is the item's own retire action, with its blocker checks and
+                        audit trail; the API refuses it here. */}
+                    {ITEM_CONDITION_OPTIONS.filter((condition) => condition.value !== 'retired').map((condition) => (
                       <option key={condition.value} value={condition.value}>
                         {condition.label}
                       </option>

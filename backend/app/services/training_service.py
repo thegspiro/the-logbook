@@ -340,7 +340,9 @@ class TrainingService:
         if freq == RequirementFrequency.ONE_TIME.value:
             return None, None
         elif freq == RequirementFrequency.BIANNUAL.value:
-            return None, None
+            from app.services.training_compliance import biannual_window
+
+            return biannual_window(requirement, today)
         elif freq == RequirementFrequency.QUARTERLY.value:
             quarter_month = ((today.month - 1) // 3) * 3 + 1
             start_date = date(current_year, quarter_month, 1)
@@ -386,7 +388,10 @@ class TrainingService:
         restriction", not "match nothing."
         """
         from app.models.training import RequirementType
-        from app.services.training_compliance import certification_record_matches
+        from app.services.training_compliance import (
+            certification_record_matches,
+            hours_record_counts,
+        )
 
         if req_type == RequirementType.CERTIFICATION.value:
             return certification_record_matches(requirement, record)
@@ -396,16 +401,7 @@ class TrainingService:
             return bool(record.course_id) and str(record.course_id) in course_ids
 
         if req_type == RequirementType.HOURS.value:
-            if (
-                requirement.training_type
-                and record.training_type != requirement.training_type
-            ):
-                return False
-            required_courses = getattr(requirement, "required_courses", None)
-            if required_courses:
-                course_ids = {str(c) for c in required_courses}
-                return bool(record.course_id) and str(record.course_id) in course_ids
-            return True
+            return hours_record_counts(requirement, record)
 
         if req_type in (RequirementType.SHIFTS.value, RequirementType.CALLS.value):
             return (
@@ -573,6 +569,7 @@ class TrainingService:
             apply_recency,
             catch_up_deadline,
             certification_record_matches,
+            hours_record_counts,
         )
 
         # The real day, captured before it is replaced by the evaluation
@@ -628,18 +625,7 @@ class TrainingService:
 
         # ---- HOURS ----
         if req_type == RequirementType.HOURS.value:
-            type_matched = windowed
-            if req.training_type:
-                type_matched = [
-                    r for r in windowed if r.training_type == req.training_type
-                ]
-            if req.required_courses:
-                req_courses = set(req.required_courses)
-                type_matched = [
-                    r
-                    for r in type_matched
-                    if r.course_id and str(r.course_id) in req_courses
-                ]
+            type_matched = [r for r in windowed if hours_record_counts(req, r)]
 
             completed_value = sum(r.hours_completed or 0 for r in type_matched)
             base_required = req.required_hours or 0
@@ -933,6 +919,7 @@ class TrainingService:
             apply_recency,
             catch_up_deadline,
             certification_record_matches,
+            hours_record_counts,
             recency_cutoff,
         )
 
@@ -1092,26 +1079,24 @@ class TrainingService:
                     hours_q = hours_q.where(
                         TrainingRecord.training_type == requirement.training_type
                     )
+                # The filters of hours_record_counts, applied in SQL.
+                if requirement.category_ids:
+                    hours_q = hours_q.where(
+                        TrainingRecord.category_id.in_(
+                            [str(c) for c in requirement.category_ids]
+                        )
+                    )
                 if requirement.required_courses:
                     hours_q = hours_q.where(
                         TrainingRecord.course_id.in_(requirement.required_courses)
                     )
                 completed_value = float((await self.db.execute(hours_q)).scalar() or 0)
             else:
-                hours_records = [r for r in completed_records if _in_window(r)]
-                if requirement.training_type:
-                    hours_records = [
-                        r
-                        for r in hours_records
-                        if r.training_type == requirement.training_type
-                    ]
-                if requirement.required_courses:
-                    wanted_courses = {str(c) for c in requirement.required_courses}
-                    hours_records = [
-                        r
-                        for r in hours_records
-                        if r.course_id and str(r.course_id) in wanted_courses
-                    ]
+                hours_records = [
+                    r
+                    for r in completed_records
+                    if _in_window(r) and hours_record_counts(requirement, r)
+                ]
                 completed_value = float(
                     sum(float(r.hours_completed or 0) for r in hours_records)
                 )
@@ -1451,9 +1436,16 @@ class TrainingService:
         completion to find one older than the window (the overdue case a
         window-bounded search would otherwise miss) — or when a
         requirement's own window is open-ended.
+
+        The per-requirement window is
+        ``training_compliance.completion_window``, which the department-wide
+        compliance load (``graded_records_clause``) also uses. The exemptions
+        above are this evaluator's own: ``check_requirement_progress`` reads
+        due-date anchors the compliance grader does not, so that load can
+        bound cases this one cannot.
         """
         from app.models.training import RequirementType
-        from app.services.training_compliance import recency_cutoff
+        from app.services.training_compliance import completion_window
 
         starts = []
         ends = []
@@ -1470,13 +1462,12 @@ class TrainingService:
                 or cls._due_date_type_str(req) == "certification_period"
             ):
                 return None
-            start, end = cls._get_date_window(req, today)
-            # Mirrors check_requirement_progress: a freshness cutoff narrows
-            # the start and closes an open-ended window at today.
-            cutoff = recency_cutoff(req, today)
-            if cutoff is not None:
-                start = cutoff if start is None else max(start, cutoff)
-                end = end or today
+            start, end = completion_window(req, today)
+            # Mirrors check_requirement_progress: a freshness cutoff on an
+            # open-ended window (the only way to get a start with no end)
+            # closes it at today.
+            if start is not None and end is None:
+                end = today
             if start is None or end is None:
                 return None
             starts.append(start)
@@ -1623,20 +1614,18 @@ class TrainingService:
         # whether this should default to the current year is a compliance-
         # semantics decision (see docs/module-audit/training.md), left as-is.
 
-        # Get user's roles
+        # The member, with the positions requirement_applies_to_user reads.
         user_result = await self.db.execute(
             select(User)
             .where(
                 User.id == str(user_id),
                 User.organization_id == str(organization_id),
             )
-            .options(selectinload(User.roles))
+            .options(selectinload(User.positions))
         )
         user = user_result.scalar_one_or_none()
         if not user:
             return []
-
-        user_role_ids = [str(role.id) for role in user.roles]
 
         # Get all active requirements. Ordered so a paged caller sees a
         # stable sequence across calls.
@@ -1661,20 +1650,9 @@ class TrainingService:
         # The shared definition, so /my-training, the matrix and the
         # dashboard agree on who a requirement grades — including its
         # grandfathering dates.
-        from app.services.training_compliance import (
-            member_join_date,
-            requirement_applies_to_member,
-        )
+        from app.services.training_compliance import requirement_applies_to_user
 
-        user_membership_type = getattr(user, "membership_type", None) or "active"
-        join_date = member_join_date(user)
-        return [
-            req
-            for req in requirements
-            if requirement_applies_to_member(
-                req, user_membership_type, user_role_ids, join_date=join_date
-            )
-        ]
+        return [req for req in requirements if requirement_applies_to_user(req, user)]
 
     async def get_expiring_certifications(
         self,

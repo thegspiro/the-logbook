@@ -7,6 +7,8 @@ and custom facility types.
 """
 
 import enum
+from typing import Optional
+from uuid import UUID
 
 from sqlalchemy import (
     JSON,
@@ -22,11 +24,31 @@ from sqlalchemy import (
     String,
     Text,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, validates
 from sqlalchemy.sql import func
 
 from app.core.database import Base
 from app.core.utils import generate_uuid
+
+SHARED_DOCUMENT_PREFIX = "document:"
+
+
+def shared_document_id(file_path: Optional[str]) -> Optional[str]:
+    """Canonical id of the shared ``Document`` a facility file points at.
+
+    A facility photo or document stores its file as ``"document:<uuid>"``,
+    and ``_validate_shared_document_reference`` accepts any suffix ``UUID()``
+    parses -- uppercase, braced, unhyphenated -- storing the string as sent
+    (FAC-27). ``document_id`` holds the one canonical form so the reference
+    can be found by an index rather than by parsing every row in Python.
+    """
+    if not file_path or not file_path.startswith(SHARED_DOCUMENT_PREFIX):
+        return None
+    try:
+        return str(UUID(file_path[len(SHARED_DOCUMENT_PREFIX) :]))
+    except (ValueError, AttributeError, TypeError):
+        return None
+
 
 # =============================================================================
 # Enumerations
@@ -441,6 +463,13 @@ class FacilityPhoto(Base):
     )
 
     file_path = Column(String(500), nullable=False)
+    # Derived from file_path on every assignment (see ``_derive_document_id``)
+    # and never written directly. Deliberately not a ForeignKey: a cascade
+    # would delete the reference without the facilities.delete/.manage check
+    # ``DocumentsService._delete_facility_document_references`` enforces
+    # (FAC-26), and SET NULL would leave exactly the dangling reference that
+    # sweep exists to prevent.
+    document_id = Column(String(36), nullable=True)
     file_name = Column(String(200), nullable=False)
     mime_type = Column(String(100), nullable=True)
     caption = Column(String(500), nullable=True)
@@ -454,7 +483,18 @@ class FacilityPhoto(Base):
     # Relationships
     facility = relationship("Facility", back_populates="photos")
 
-    __table_args__ = (Index("idx_facility_photos_facility", "facility_id"),)
+    @validates("file_path")
+    def _derive_document_id(self, _key, value):
+        self.document_id = shared_document_id(value)
+        return value
+
+    __table_args__ = (
+        Index("idx_facility_photos_facility", "facility_id"),
+        # FAC-41: lets the deletion sweep's locking read match its target
+        # references by index, so it locks those rows (and their gaps) rather
+        # than every shared-document reference the organization holds.
+        Index("idx_facility_photos_org_document", "organization_id", "document_id"),
+    )
 
 
 # =============================================================================
@@ -481,6 +521,9 @@ class FacilityDocument(Base):
     )
 
     file_path = Column(String(500), nullable=False)
+    # Same derivation and same reason for not being a ForeignKey as
+    # ``FacilityPhoto.document_id``.
+    document_id = Column(String(36), nullable=True)
     file_name = Column(String(200), nullable=False)
     mime_type = Column(String(100), nullable=True)
     document_type = Column(
@@ -498,8 +541,15 @@ class FacilityDocument(Base):
     # Relationships
     facility = relationship("Facility", back_populates="documents")
 
+    @validates("file_path")
+    def _derive_document_id(self, _key, value):
+        self.document_id = shared_document_id(value)
+        return value
+
     __table_args__ = (
         Index("idx_facility_documents_facility", "facility_id"),
+        # FAC-41: see the matching index on FacilityPhoto.
+        Index("idx_facility_documents_org_document", "organization_id", "document_id"),
         Index("idx_facility_documents_type", "document_type"),
         Index("idx_facility_documents_expiration", "expiration_date"),
     )

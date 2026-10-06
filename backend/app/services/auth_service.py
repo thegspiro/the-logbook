@@ -6,12 +6,13 @@ Business logic for authentication operations.
 
 import hashlib
 import secrets
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
 from uuid import UUID, uuid4
 
 from loguru import logger
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -29,8 +30,48 @@ from app.core.security import (
 from app.models.user import Organization, PasswordHistory, Role
 from app.models.user import Session as UserSession
 from app.models.user import User, UserStatus
+from app.utils.password_expiry import is_password_expired
+
+
+class RefreshTokenSuperseded(Exception):
+    """A concurrent refresh rotated the presented token first.
+
+    Two requests carrying the same valid refresh token — two tabs sharing one
+    cookie jar is the usual way — both find the session, and only one rotation
+    can win. The loser is not a replay: the token was current when it was
+    read. Revoking every session for it (the replay response) logged a member
+    out of every device with an audit trail claiming token theft (AUTH-21).
+    The browser already holds the winner's cookies, so the loser's caller
+    only needs to retry with them.
+    """
+
 
 RESET_TOKEN_EXPIRY_MINUTES = 30
+
+
+@dataclass(frozen=True)
+class AuthFailure:
+    """Why the last password sign-in failed, for the audit trail (W02-3).
+
+    Never shown to the caller, who always gets the same generic message:
+    the reason exists so the audit log can tell a mistyped password from a
+    locked account. ``user_id`` and ``organization_id`` are ``None`` when no
+    account matched; the attempted identifier is deliberately not kept,
+    since members routinely type a password into that box.
+    """
+
+    reason: str
+    user_id: Optional[str] = None
+    organization_id: Optional[str] = None
+    # True only on the attempt that crossed the threshold and set the lock.
+    locked_now: bool = False
+
+
+# AuthFailure.reason values.
+AUTH_FAILURE_UNKNOWN_USER = "unknown_user"
+AUTH_FAILURE_NO_PASSWORD = "no_password"
+AUTH_FAILURE_ACCOUNT_LOCKED = "account_locked"
+AUTH_FAILURE_INVALID_PASSWORD = "invalid_password"
 
 
 async def _check_password_history(
@@ -94,6 +135,8 @@ class AuthService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+        # Set by authenticate_user when it refuses a sign-in.
+        self.last_auth_failure: Optional[AuthFailure] = None
 
     async def authenticate_user(
         self, username: str, password: str
@@ -106,8 +149,10 @@ class AuthService:
             password: Plain text password
 
         Returns:
-            Tuple of (User, None) on success, or (None, error_message) on failure
+            Tuple of (User, None) on success, or (None, error_message) on failure.
+            On failure, ``self.last_auth_failure`` says why.
         """
+        self.last_auth_failure = None
         # Resolve the account by credentials. This is a single-org system, so
         # the canonical organization is the oldest active one — the same rule
         # registration uses. The previous lookup scoped to
@@ -170,6 +215,7 @@ class AuthService:
                 "dummy-password", hash_password("dummy-password", skip_validation=True)
             )
             logger.warning("Authentication failed for login attempt")
+            self.last_auth_failure = AuthFailure(AUTH_FAILURE_UNKNOWN_USER)
             return None, "Incorrect username or password"
 
         if not user.password_hash:
@@ -177,6 +223,7 @@ class AuthService:
                 "dummy-password", hash_password("dummy-password", skip_validation=True)
             )
             logger.warning("Authentication failed for login attempt")
+            self.last_auth_failure = self._failure(user, AUTH_FAILURE_NO_PASSWORD)
             return None, "Incorrect username or password"
 
         # Check if account is locked. The default strict anti-enumeration path
@@ -190,6 +237,7 @@ class AuthService:
         )
         if locked_until and locked_until > datetime.now(timezone.utc):
             logger.warning(f"Authentication failed: account locked - {username}")
+            self.last_auth_failure = self._failure(user, AUTH_FAILURE_ACCOUNT_LOCKED)
             if settings.ACCOUNT_LOCKOUT_REVEAL:
                 remaining_min = max(
                     1,
@@ -248,6 +296,7 @@ class AuthService:
             # Deleted between the candidate read and here; nothing to count.
             if locked_user is None:
                 await self.db.rollback()
+                self.last_auth_failure = AuthFailure(AUTH_FAILURE_UNKNOWN_USER)
                 return None, "Incorrect username or password"
 
             locked_user.failed_login_attempts = (
@@ -255,11 +304,17 @@ class AuthService:
             ) + 1
 
             # Lock the account once the configured attempt threshold is hit.
-            if locked_user.failed_login_attempts >= settings.MAX_LOGIN_ATTEMPTS:
+            locked_now = (
+                locked_user.failed_login_attempts >= settings.MAX_LOGIN_ATTEMPTS
+            )
+            if locked_now:
                 locked_user.locked_until = datetime.now(timezone.utc) + timedelta(
                     minutes=settings.ACCOUNT_LOCKOUT_DURATION_MINUTES
                 )
                 logger.warning(f"Account locked due to failed attempts - {username}")
+            self.last_auth_failure = self._failure(
+                locked_user, AUTH_FAILURE_INVALID_PASSWORD, locked_now=locked_now
+            )
 
             # Commit (not flush) so the counter persists even when the
             # caller raises HTTPException, which triggers a rollback in
@@ -291,22 +346,26 @@ class AuthService:
         user.last_login_at = datetime.now(timezone.utc)
         await self.db.flush()
 
-        # Check password age - warn but don't block (frontend handles redirect)
-        max_age_days = settings.HIPAA_MAXIMUM_PASSWORD_AGE_DAYS
-        if max_age_days > 0 and user.password_changed_at:
-            pwd_changed = (
-                user.password_changed_at.replace(tzinfo=timezone.utc)
-                if user.password_changed_at.tzinfo is None
-                else user.password_changed_at
+        # An expired password still signs in: get_current_user decides when it
+        # stops being accepted (the grace period in app/utils/password_expiry).
+        if is_password_expired(user):
+            logger.warning(
+                f"User {user.username} signed in with an expired password. "
+                "Password change required."
             )
-            age = (datetime.now(timezone.utc) - pwd_changed).days
-            if age >= max_age_days:
-                logger.warning(
-                    f"User {user.username} password expired ({age} days old, "
-                    f"max {max_age_days}). Password change required."
-                )
 
         return user, None
+
+    @staticmethod
+    def _failure(user: User, reason: str, *, locked_now: bool = False) -> AuthFailure:
+        return AuthFailure(
+            reason=reason,
+            user_id=str(user.id),
+            organization_id=(
+                str(user.organization_id) if user.organization_id else None
+            ),
+            locked_now=locked_now,
+        )
 
     async def create_user_tokens(
         self,
@@ -376,6 +435,10 @@ class AuthService:
 
         Returns:
             Tuple of (new_access_token, new_refresh_token) or (None, None)
+
+        Raises:
+            RefreshTokenSuperseded: a concurrent request presenting the same
+                token rotated it first. Nothing is revoked.
         """
         try:
             # Decode refresh token
@@ -443,21 +506,41 @@ class AuthService:
             new_refresh_token = create_refresh_token(token_data)
 
             # Rotate and immediately invalidate the token that was just used.
-            # Clear legacy grace data so it cannot be used by older code paths.
-            session.previous_refresh_token = None
-            session.previous_refresh_expires_at = None
-            session.token = new_access_token
-            session.refresh_token = new_refresh_token
-            session.expires_at = datetime.now(timezone.utc) + timedelta(
-                minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
+            # Conditional on the token still being the one presented: InnoDB
+            # re-reads the row under the UPDATE's lock, so of two concurrent
+            # refreshes exactly one matches and the other affects no rows.
+            # That tells a double-fire apart from a replay without locking
+            # the row for the read above, on the hottest path in auth.
+            now = datetime.now(timezone.utc)
+            rotation = await self.db.execute(
+                update(UserSession)
+                .where(
+                    UserSession.id == session.id,
+                    UserSession.refresh_token == refresh_token,
+                )
+                .values(
+                    token=new_access_token,
+                    refresh_token=new_refresh_token,
+                    expires_at=now
+                    + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+                    # Set in Python (UTC) to avoid a timezone mismatch with
+                    # MySQL's onupdate=func.now() server-side default.
+                    last_activity=now,
+                )
+                .execution_options(synchronize_session=False)
             )
-            # Explicitly set last_activity in Python (UTC) to avoid timezone
-            # mismatch with MySQL's onupdate=func.now() server-side default.
-            session.last_activity = datetime.now(timezone.utc)
+            if rotation.rowcount == 0:
+                logger.info(
+                    f"Concurrent refresh for user {user_id}: the token was "
+                    "rotated by a parallel request; no sessions revoked."
+                )
+                raise RefreshTokenSuperseded()
             await self.db.commit()
 
             return new_access_token, new_refresh_token
 
+        except RefreshTokenSuperseded:
+            raise
         except Exception as e:
             logger.error(f"Token refresh failed: {e}")
             return None, None
@@ -711,6 +794,7 @@ class AuthService:
         # Update password
         user.password_hash = hash_password(new_password)
         user.password_changed_at = datetime.now(timezone.utc)
+        user.password_expiry_notified_at = None
         user.must_change_password = False
         user.failed_login_attempts = 0
         user.locked_until = None
@@ -1008,6 +1092,7 @@ class AuthService:
         # Set new password and clear token
         user.password_hash = hash_password(new_password)
         user.password_changed_at = datetime.now(timezone.utc)
+        user.password_expiry_notified_at = None
         user.must_change_password = False
         user.password_reset_token = None
         user.password_reset_expires_at = None

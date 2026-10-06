@@ -77,11 +77,35 @@ async def update_self_report_config(
 ):
     """Update self-report configuration (training officers only)."""
     service = TrainingSubmissionService(db)
+    changes = updates.model_dump(exclude_unset=True)
+    previous_retention = None
+    if "attachment_retention_days" in changes:
+        previous_retention = (
+            await service.get_config(current_user.organization_id)
+        ).attachment_retention_days
     config = await service.update_config(
         organization_id=current_user.organization_id,
         updated_by=current_user.id,
-        **updates.model_dump(exclude_unset=True),
+        **changes,
     )
+    # Shortening the period deletes certificate files on the next sweep, so
+    # who set it, and from what, is kept with the rest of the audit trail.
+    if (
+        "attachment_retention_days" in changes
+        and changes["attachment_retention_days"] != previous_retention
+    ):
+        await log_audit_event(
+            db=db,
+            event_type="self_report_attachment_retention_updated",
+            event_category="training",
+            severity="warning",
+            event_data={
+                "previous_days": previous_retention,
+                "days": changes["attachment_retention_days"],
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
     return config
 
 

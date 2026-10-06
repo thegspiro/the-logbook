@@ -36,6 +36,18 @@ export const MfaSettingsCard: React.FC<{ onChange?: () => void }> = ({ onChange 
   const [showDisable, setShowDisable] = useState(false);
   const [regenCode, setRegenCode] = useState('');
   const [showRegen, setShowRegen] = useState(false);
+  // One Idempotency-Key per attempt at issuing codes. Retrying with the same
+  // code reuses it, so a response lost after the server committed returns
+  // the codes it issued instead of failing on the spent authenticator code.
+  // A different code is a new attempt and gets a new key.
+  const attemptKeys = useRef<Partial<Record<'setup' | 'regenerate', { code: string; key: string }>>>({});
+  const attemptKey = (flow: 'setup' | 'regenerate', attemptCode: string): string => {
+    const previous = attemptKeys.current[flow];
+    if (previous?.code === attemptCode) return previous.key;
+    const key = crypto.randomUUID();
+    attemptKeys.current[flow] = { code: attemptCode, key };
+    return key;
+  };
 
   const loadStatus = useCallback(async () => {
     setLoading(true);
@@ -73,7 +85,9 @@ export const MfaSettingsCard: React.FC<{ onChange?: () => void }> = ({ onChange 
     if (!code.trim()) return;
     setBusy(true);
     try {
-      const res = await authService.verifyMfaSetup(code.trim());
+      const attemptCode = code.trim();
+      const res = await authService.verifyMfaSetup(attemptCode, attemptKey('setup', attemptCode));
+      delete attemptKeys.current.setup;
       setRecoveryCodes(res.recovery_codes);
       setStep('recovery');
       toast.success('Two-factor authentication enabled');
@@ -112,7 +126,9 @@ export const MfaSettingsCard: React.FC<{ onChange?: () => void }> = ({ onChange 
     if (!regenCode.trim()) return;
     setBusy(true);
     try {
-      const res = await authService.regenerateRecoveryCodes(regenCode.trim());
+      const attemptCode = regenCode.trim();
+      const res = await authService.regenerateRecoveryCodes(attemptCode, attemptKey('regenerate', attemptCode));
+      delete attemptKeys.current.regenerate;
       setRecoveryCodes(res.recovery_codes);
       setShowRegen(false);
       setRegenCode('');

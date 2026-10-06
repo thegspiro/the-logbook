@@ -36,6 +36,13 @@ def _department_today(monkeypatch):
         "app.services.training_program_service.resolve_scheduling_timezone",
         AsyncMock(return_value=ZoneInfo("UTC")),
     )
+    # enroll_member takes the department's enrollment lock first; these
+    # mocked sessions answer a fixed list of queries, and the lock is covered
+    # on a real database by test_program_enrollment_race.py.
+    monkeypatch.setattr(
+        "app.services.training_program_service.lock_organization_scope",
+        AsyncMock(),
+    )
 
 
 def _one(obj):

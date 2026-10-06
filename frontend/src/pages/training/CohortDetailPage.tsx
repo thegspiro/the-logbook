@@ -31,6 +31,8 @@ import { SkeletonPage } from '../../components/ux/Skeleton';
 import { Breadcrumbs } from '../../components/ux/Breadcrumbs';
 import { EmptyState } from '../../components/ux/EmptyState';
 import { ConfirmDialog } from '../../components/ux/ConfirmDialog';
+import { MemberPickerModal } from '../../components/MemberPickerModal';
+import { CohortMissedClassesModal } from '../../components/training/CohortMissedClassesModal';
 import DateTimeQuarterHour from '../../components/ux/DateTimeQuarterHour';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDate, formatForDateTimeInput, formatShortDateTime, localToUTC } from '../../utils/dateFormatting';
@@ -66,6 +68,8 @@ export const CohortDetailPage: React.FC = () => {
     userId: string;
     name: string;
   } | null>(null);
+  const [pickingMember, setPickingMember] = useState(false);
+  const [missedFor, setMissedFor] = useState<{ userId: string; name: string } | null>(null);
 
   const load = useCallback(async () => {
     if (!cohortId) return;
@@ -82,6 +86,17 @@ export const CohortDetailPage: React.FC = () => {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Re-reads the cohort without the page skeleton, so an open dialog — the
+  // missed-classes decision panel — stays mounted while the roster updates.
+  const refresh = useCallback(async () => {
+    if (!cohortId) return;
+    try {
+      setCohort(await courseCohortService.getCohort(cohortId));
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to refresh the cohort'));
+    }
+  }, [cohortId]);
 
   const withBusy = async (action: () => Promise<void>) => {
     setBusy(true);
@@ -157,6 +172,32 @@ export const CohortDetailPage: React.FC = () => {
         await load();
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Could not regenerate events'));
+      }
+    });
+
+  // A late joiner is RSVP'd to the classes still to come only. When they also
+  // missed classes, the decision panel opens at once rather than leaving the
+  // officer to notice the badge.
+  const handleAddMember = (member: { userId: string; memberName: string }) =>
+    withBusy(async () => {
+      if (!cohortId) return;
+      setPickingMember(false);
+      try {
+        const result = await courseCohortService.addMembers(cohortId, { user_ids: [member.userId] });
+        result.warnings.forEach((w) => toast.error(w));
+        if (result.success_count === 0) {
+          toast.success(`${member.memberName} is already on the roster`);
+          return;
+        }
+        toast.success(`${member.memberName} added — they are on every class still to come`);
+        const refreshed = await courseCohortService.getCohort(cohortId);
+        setCohort(refreshed);
+        const added = refreshed.members.find((m) => m.user_id === member.userId);
+        if ((added?.missed_classes_pending ?? 0) > 0) {
+          setMissedFor({ userId: member.userId, name: member.memberName });
+        }
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Could not add the member'));
       }
     });
 
@@ -429,6 +470,17 @@ export const CohortDetailPage: React.FC = () => {
 
       {tab === 'roster' && (
         <div className="space-y-2">
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => setPickingMember(true)}
+              disabled={busy}
+              className="btn-primary flex items-center gap-1 text-sm"
+            >
+              <UserPlus className="h-4 w-4" aria-hidden="true" />
+              Add member
+            </button>
+          </div>
           {cohort.members.length === 0 ? (
             <EmptyState
               icon={UserPlus}
@@ -447,6 +499,18 @@ export const CohortDetailPage: React.FC = () => {
                       </span>
                     </div>
                     {member.email && <p className="text-theme-text-muted text-xs">{member.email}</p>}
+                    {(member.missed_classes_pending ?? 0) > 0 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setMissedFor({ userId: member.user_id, name: displayNameOf(member) || 'this member' })
+                        }
+                        className="mt-1 text-xs font-medium text-amber-800 hover:underline dark:text-amber-300"
+                      >
+                        {member.missed_classes_pending} class
+                        {member.missed_classes_pending === 1 ? '' : 'es'} held before they joined — decide
+                      </button>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-3">
@@ -505,6 +569,24 @@ export const CohortDetailPage: React.FC = () => {
         onConfirm={() => void handleCancelClass()}
         onClose={() => setCancelTarget(null)}
       />
+
+      <MemberPickerModal
+        isOpen={pickingMember}
+        onClose={() => setPickingMember(false)}
+        onSelect={(member) => void handleAddMember(member)}
+        title="Add a member to this cohort"
+      />
+
+      {cohortId && missedFor && (
+        <CohortMissedClassesModal
+          isOpen
+          cohortId={cohortId}
+          userId={missedFor.userId}
+          memberName={missedFor.name}
+          onClose={() => setMissedFor(null)}
+          onChanged={() => void refresh()}
+        />
+      )}
 
       <ConfirmDialog
         isOpen={removeTarget !== null}

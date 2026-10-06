@@ -17,6 +17,11 @@ from app.schemas.enum_validation import validate_enum_value
 
 # ==================== Self-Report Config Schemas ====================
 
+# Bounds on SelfReportConfig.attachment_retention_days. The frontend's
+# self-report settings editor mirrors the floor.
+ATTACHMENT_RETENTION_MIN_DAYS = 90
+ATTACHMENT_RETENTION_MAX_DAYS = 36500
+
 
 class FieldConfig(BaseModel):
     """Configuration for a single form field"""
@@ -44,6 +49,7 @@ class SelfReportConfigResponse(UTCResponseBase):
     allowed_training_types: Optional[list[str]] = None
     max_hours_per_submission: Optional[float] = None
     member_instructions: Optional[str] = None
+    attachment_retention_days: Optional[int] = None
 
     created_at: datetime
     updated_at: datetime
@@ -66,6 +72,13 @@ class SelfReportConfigUpdate(BaseModel):
     allowed_training_types: Optional[list[str]] = None
     max_hours_per_submission: Optional[float] = Field(None, ge=0.5)
     member_instructions: Optional[str] = None
+    # null clears it (keep indefinitely). The floor is there so a mistyped
+    # value cannot destroy the evidence behind a training approved last week.
+    attachment_retention_days: Optional[int] = Field(
+        None,
+        ge=ATTACHMENT_RETENTION_MIN_DAYS,
+        le=ATTACHMENT_RETENTION_MAX_DAYS,
+    )
 
 
 # ==================== Training Submission Schemas ====================

@@ -72,6 +72,8 @@ const CompliancePrintPage: React.FC = () => {
   const compliant = members.filter((m) => m.standing === 'compliant').length;
   const atRisk = members.filter((m) => m.standing === 'at_risk').length;
   const nonCompliant = members.filter((m) => m.standing === 'non_compliant').length;
+  // Nothing grades these members, so they are in none of the three counts.
+  const notApplicable = members.filter((m) => m.standing === 'not_applicable').length;
 
   const cellStyle: React.CSSProperties = {
     border: '1px solid #ccc',
@@ -109,6 +111,7 @@ const CompliancePrintPage: React.FC = () => {
               <div style={{ textAlign: 'right', fontSize: '9pt', color: '#666' }}>
                 <p style={{ margin: 0 }}>Generated: {formatDate(new Date(), tz)}</p>
                 <p style={{ margin: 0 }}>Total Members: {members.length}</p>
+                {notApplicable > 0 && <p style={{ margin: 0 }}>Not Applicable: {notApplicable}</p>}
               </div>
             </div>
           </div>
@@ -173,7 +176,8 @@ const CompliancePrintPage: React.FC = () => {
             </thead>
             <tbody>
               {members
-                .sort((a, b) => a.completion_pct - b.completion_pct)
+                // Not-applicable members (no percentage) print last.
+                .sort((a, b) => (a.completion_pct ?? 101) - (b.completion_pct ?? 101))
                 .map((m) => (
                   <tr key={m.user_id}>
                     <td style={cellStyle}>{m.member_name}</td>
@@ -182,10 +186,17 @@ const CompliancePrintPage: React.FC = () => {
                         ...cellStyle,
                         textAlign: 'center',
                         fontWeight: 600,
-                        color: m.completion_pct >= 100 ? '#166534' : m.completion_pct > 0 ? '#92400e' : '#991b1b',
+                        color:
+                          m.completion_pct === null
+                            ? '#555'
+                            : m.completion_pct >= 100
+                              ? '#166534'
+                              : m.completion_pct > 0
+                                ? '#92400e'
+                                : '#991b1b',
                       }}
                     >
-                      {Math.round(m.completion_pct)}%
+                      {m.completion_pct === null ? 'N/A' : `${Math.round(m.completion_pct)}%`}
                     </td>
                     {requirements.map((req) => {
                       const memberReq = m.requirements.find((r) => r.requirement_id === req.id);

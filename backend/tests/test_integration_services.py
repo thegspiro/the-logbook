@@ -100,6 +100,21 @@ def _mock_client(response):
     return cm
 
 
+@pytest.fixture
+def _public_dns():
+    """Resolve every host to a public address without touching the network.
+
+    The connectors re-validate their base URL with assert_outbound_url_safe()
+    before building a client, and that resolves the hostname — a real DNS
+    lookup unless something answers it here.
+    """
+    with patch(
+        "app.utils.url_validator.socket.getaddrinfo",
+        return_value=[(2, 1, 6, "", ("104.18.0.62", 0))],
+    ):
+        yield
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("service", "sender", "args"),
@@ -483,6 +498,7 @@ class TestDocumensoPayload:
         )
         assert service.api_base_url == "https://sign.example.com/api/v1"
 
+    @pytest.mark.usefixtures("_public_dns")
     async def test_connection_success(self):
         service = DocumensoService(
             {"api_base_url": "https://app.documenso.com/api/v1", "api_token": "tok"}
@@ -499,6 +515,7 @@ class TestDocumensoPayload:
         with pytest.raises(Exception, match="No Documenso API token"):
             await service.test_connection()
 
+    @pytest.mark.usefixtures("_public_dns")
     async def test_connection_unauthorized_raises(self):
         service = DocumensoService(
             {"api_base_url": "https://app.documenso.com/api/v1", "api_token": "bad"}
@@ -603,6 +620,7 @@ class TestCalcomBookingMapping:
         )
         assert service.api_base_url == "https://cal.example.com/api/v1"
 
+    @pytest.mark.usefixtures("_public_dns")
     async def test_connection_success(self):
         service = CalcomService(
             {"api_base_url": "https://api.cal.com/v1", "api_key": "cal_x"}
@@ -621,6 +639,7 @@ class TestCalcomBookingMapping:
         with pytest.raises(Exception, match="No Cal.com API key"):
             await service.test_connection()
 
+    @pytest.mark.usefixtures("_public_dns")
     async def test_list_bookings_maps_results(self):
         service = CalcomService(
             {"api_base_url": "https://api.cal.com/v1", "api_key": "cal_x"}

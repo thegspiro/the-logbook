@@ -216,6 +216,12 @@ class ComplianceReportGenerate(BaseModel):
     )
     additional_recipients: Optional[List[str]] = None
 
+    @model_validator(mode="after")
+    def _monthly_needs_a_month(self) -> "ComplianceReportGenerate":
+        if self.report_type == "monthly" and self.month is None:
+            raise ValueError("month is required for a monthly report")
+        return self
+
 
 class ComplianceReportSummary(UTCResponseBase):
     """Summary response for a stored report."""

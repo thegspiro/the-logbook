@@ -721,7 +721,7 @@ sequence terminates; and `test_ordinary_routes_stay_closed_while_either_gate_app
 is the counterweight that keeps a future "just allow a bit more" from becoming
 a bypass.
 
-#### AUTH-15 — MED — The HIPAA maximum-password-age control is enforced only in the browser — 🚩 FLAGGED
+#### AUTH-15 — MED — The HIPAA maximum-password-age control is enforced only in the browser — ✅ FIXED (2026-10-04)
 
 **What:** `HIPAA_MAXIMUM_PASSWORD_AGE_DAYS` (`core/config.py:176`, default
 **90**) has exactly three readers, and none of them refuses a request:
@@ -768,6 +768,19 @@ to fix it. It needs an owner decision on the rollout (a grace period, a
 staged threshold, a per-org opt-in, or simply accepting the cutover), which
 is exactly the class this rotation flags rather than implements. Mirrored into
 `docs/KNOWN_LIMITATIONS.md`.
+
+**Resolution (2026-10-04): FIXED with a grace period**, the rollout the owner
+chose. `get_current_user` now refuses an expired password with the same 403,
+error code and `X-Password-Change-Required` header as the `must_change_password`
+gate, and on the same allow-list, so the change itself stays reachable. It
+does so only `HIPAA_PASSWORD_EXPIRY_GRACE_DAYS` (default 14) after
+`users.password_expiry_notified_at`, which the daily `notify_expired_passwords`
+task sets when it tells the member (in-app and email), or the member's first
+authenticated request after expiry sets if that comes sooner. The column
+starts NULL, so no member is refused on the day this deploys; every password
+change clears it. The browser still sends an expired member to the change
+screen at once. Arithmetic in `app/utils/password_expiry.py`; tests in
+`backend/tests/test_password_expiry_gate.py`.
 
 #### AUTH-16 — LOW — Nothing enforced "a verified second factor is always consumed"; the non-consuming verifier survived as a landmine — ✅ FIXED
 
@@ -1112,6 +1125,17 @@ secret-shown-once response in this file (`mfa_verify_setup`'s recovery codes
 have the identical exposure), not specific to TOTP replay, and the right
 fix (an idempotency-key mechanism, or a "re-show last-issued codes" path) is
 a product decision this pass is not making unilaterally in an auth path.
+
+**Follow-up (2026-10-04): FIXED with an idempotency key**, the option the
+owner chose. `verify-setup` and `recovery-codes` accept `Idempotency-Key`; a
+retry with the same key and code from the same member within ten minutes is
+answered with the set already issued, before the spent code is checked. The
+replay is bound to the member, the endpoint and a hash of the code (a
+different code under the same key is a 422), the stored response is
+encrypted with the application key, and a set replaced since or MFA turned
+off since is never replayed. Requests without the header behave as before.
+See `app/core/issued_secrets.py` and
+`backend/tests/test_mfa_recovery_code_replay.py`.
 
 **Guard test:** `TestTotpConsumedAcrossMfaRoutes` in
 `backend/tests/test_auth_mfa_endpoints.py` —

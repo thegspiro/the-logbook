@@ -93,7 +93,7 @@ from app.services.scheduling_service import (
     open_ended_cushion_hours,
 )
 from app.services.training_compliance import (
-    compute_org_compliance_pct,
+    compute_org_compliance_tally,
     count_active_requirements,
 )
 from app.utils.org_timezone import scheduling_timezone
@@ -614,15 +614,14 @@ async def _training_compliance(ctx: MetricContext) -> tuple[str, str]:
     # training officer the department is fully current.
     if await count_active_requirements(ctx.db, ctx.organization_id) == 0:
         return UNKNOWN_VALUE, "no requirements set up yet"
-    pct = await compute_org_compliance_pct(ctx.db, ctx.organization_id)
-    active = await _scalar(
-        ctx.db,
-        select(func.count(User.id)).where(
-            User.organization_id == ctx.organization_id, *_active_member_criteria()
-        ),
-    )
-    compliant = round(active * pct / 100) if active else 0
-    return f"{round(pct)}%", f"{compliant} of {active} members current"
+    tally = await compute_org_compliance_tally(ctx.db, ctx.organization_id)
+    # Members no requirement grades are outside the percentage, so the count
+    # beside it is of graded members too — reconstructing it from the whole
+    # roster would claim members current who were never measured.
+    pct = tally.pct
+    if pct is None:
+        return UNKNOWN_VALUE, "no requirement applies to any member"
+    return f"{round(pct)}%", f"{tally.compliant} of {tally.graded} members current"
 
 
 async def _training_hours_quarter(ctx: MetricContext) -> tuple[str, str]:

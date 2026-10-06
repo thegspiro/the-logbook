@@ -685,3 +685,43 @@ class TestListApplicationsDoesNotEagerLoadChildren:
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))
+
+
+class TestGrantReportIsExact:
+    """GF-9: grant money is summed as Decimal, so cents add up exactly."""
+
+    async def test_cents_sum_exactly(self):
+        from decimal import Decimal
+
+        from app.models.grant import ApplicationStatus
+
+        def _app(requested, awarded, spent, category_spent):
+            return SimpleNamespace(
+                amount_requested=Decimal(requested),
+                amount_awarded=Decimal(awarded),
+                application_status=ApplicationStatus.AWARDED,
+                expenditures=[SimpleNamespace(amount=Decimal(spent))],
+                budget_items=[
+                    SimpleNamespace(
+                        category="equipment", amount_spent=Decimal(category_spent)
+                    )
+                ],
+                compliance_tasks=[],
+            )
+
+        # Each column as floats sums to 0.30000000000000004.
+        applications = [
+            _app("0.10", "0.10", "0.10", "0.10"),
+            _app("0.20", "0.20", "0.20", "0.20"),
+        ]
+        result = MagicMock()
+        result.scalars.return_value.unique.return_value.all.return_value = applications
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=result)
+
+        out = await GrantService(db).get_grant_report("org-1")
+
+        assert out["total_requested"] == 0.3
+        assert out["total_awarded"] == 0.3
+        assert out["total_spent"] == 0.3
+        assert out["spending_by_category"] == {"equipment": 0.3}

@@ -539,6 +539,51 @@ class TestEventRSVP:
         )
         assert len(rsvps) == 2
 
+    async def test_rsvp_listing_reports_the_credited_check_in(
+        self, db_session, setup_org_and_users
+    ):
+        """The Edit Times dialog pre-fills what the backend credits.
+
+        An override is never clamped to the scheduled start, so a dialog that
+        pre-filled the raw early tap turned an unchanged save into forty
+        credited minutes in the parking lot.
+        """
+        from app.api.v1.endpoints.events import _build_rsvp_response
+
+        org_id, user_id, _user2_id = setup_org_and_users
+        svc = EventService(db_session)
+        event = await svc.create_event(
+            event_data=_make_event_create(title="Early Tap Drill"),
+            organization_id=uuid.UUID(org_id),
+            created_by=uuid.UUID(user_id),
+        )
+        rsvp, err = await svc.create_or_update_rsvp(
+            event_id=uuid.UUID(event.id),
+            user_id=uuid.UUID(user_id),
+            rsvp_data=RSVPCreate(status="going"),
+            organization_id=uuid.UUID(org_id),
+        )
+        assert err is None
+        start = event.start_datetime.replace(tzinfo=timezone.utc)
+        rsvp.checked_in = True
+        rsvp.checked_in_at = start - timedelta(minutes=40)
+        await db_session.flush()
+        # A fresh request: nothing from the setup is left in the session.
+        db_session.expunge_all()
+
+        rsvps = await svc.list_event_rsvps(
+            event_id=uuid.UUID(event.id),
+            organization_id=uuid.UUID(org_id),
+        )
+        listed = rsvps[0]
+        response = _build_rsvp_response(listed, user=listed.user, event=listed.event)
+
+        assert response.credited_check_in_at is not None
+        assert response.credited_check_in_at.replace(tzinfo=timezone.utc) == start
+        assert response.checked_in_at.replace(tzinfo=timezone.utc) == start - (
+            timedelta(minutes=40)
+        )
+
     async def test_rsvp_waitlist_when_full(self, db_session, setup_org_and_users):
         org_id, user_id, user2_id = setup_org_and_users
         svc = EventService(db_session)

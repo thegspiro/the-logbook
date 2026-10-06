@@ -33,6 +33,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit import _get_audit_signing_key, audit_logger
 from app.core.config import settings
 from app.models.audit import AuditLog, AuditShipState
+from app.services.integration_services.base import create_integration_client
+from app.utils.ssrf_transport import UnsafeDestinationError
 from app.utils.url_validator import assert_outbound_url_safe
 
 # Bound one run's work so a huge backlog (first enablement on an old
@@ -124,7 +126,15 @@ async def ship_new_audit_logs(
     state = await _get_or_create_state(db)
     own_client = client is None
     if own_client:
-        client = httpx.AsyncClient(timeout=30.0)
+        # The shared factory, not a bare AsyncClient: the check above narrows
+        # DNS rebinding, but only the factory's pinned transport closes it, by
+        # connecting to the address it validated rather than re-resolving
+        # (SCH-10). The operator's private-destination opt-in reaches the
+        # pinning too, so a trusted on-prem collector keeps working.
+        client = create_integration_client(
+            timeout=httpx.Timeout(30.0),
+            allow_private_destinations=settings.AUDIT_SHIP_ALLOW_PRIVATE_DESTINATION,
+        )
     try:
         for _ in range(_MAX_BATCHES_PER_RUN):
             rows = (
@@ -176,6 +186,11 @@ async def ship_new_audit_logs(
     except httpx.HTTPError as exc:
         results["error"] = f"delivery failed: {exc.__class__.__name__}"
         logger.warning(f"Audit shipping delivery failed: {exc!r}")
+    except UnsafeDestinationError as exc:
+        # The pinned transport's own resolution refused the collector — the
+        # URL check above passed, so the name changed answers between the two.
+        results["error"] = f"unsafe collector URL: {exc}"
+        logger.warning(f"Audit shipping blocked unsafe collector URL: {exc}")
     except ValueError as exc:
         # Kept broad, but no longer labelled "unsafe collector URL" — the URL
         # check has its own handler above, and a ValueError raised in the loop

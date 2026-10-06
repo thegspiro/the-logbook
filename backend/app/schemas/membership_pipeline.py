@@ -630,6 +630,23 @@ class AdvanceProspectRequest(BaseModel):
     """Schema for advancing a prospect to the next step"""
 
     notes: Optional[str] = Field(None, description="Optional notes for the advancement")
+    # A checklist stage refuses to complete until its items are ticked, and
+    # the ticks arrive with the advance that completes it — there is no
+    # separate partial-progress write. Graded by _validate_step_completion.
+    completed_items: Optional[List[str]] = Field(
+        None,
+        max_length=200,
+        description="Checklist items ticked when completing a checklist stage",
+    )
+
+    @field_validator("completed_items")
+    @classmethod
+    def _bound_items(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if v is None:
+            return None
+        if any(len(item) > 255 for item in v):
+            raise ValueError("A checklist item is at most 255 characters")
+        return v
 
 
 class AssignStageRequest(BaseModel):

@@ -288,16 +288,6 @@ const MembershipTiersSection: React.FC<MembershipTiersSectionProps> = ({
                         <span className="text-theme-text-secondary text-sm">Can vote in elections</span>
                       </label>
 
-                      {/* Stored, and read by nothing. No nomination or candidate
-                        path in `election_service.py` consults
-                        `can_hold_office`, so clearing it does not stop a member
-                        being nominated or elected. CLAUDE.md pitfall #19 allows
-                        exactly two responses to that — wire a reader, or say on
-                        the control that it is not in effect — and wiring office
-                        eligibility into the ballot is a change to elections,
-                        not to this screen. Saying so is the honest half until
-                        it is. Remove this note in the same change that adds the
-                        reader. */}
                       <label className="flex items-start gap-2">
                         <input
                           type="checkbox"
@@ -307,9 +297,9 @@ const MembershipTiersSection: React.FC<MembershipTiersSectionProps> = ({
                         />
                         <span className="text-theme-text-secondary text-sm">
                           Can hold elected office
-                          <span className="text-theme-alert-warning-title block text-xs font-medium">
-                            Recorded, but not yet enforced — elections do not check this, so clearing it will not stop a
-                            member being nominated. Screen candidates by hand until it does.
+                          <span className="text-theme-text-muted block text-xs">
+                            When cleared, members at this tier cannot be nominated, accept a nomination or be added as a
+                            candidate.
                           </span>
                         </span>
                       </label>

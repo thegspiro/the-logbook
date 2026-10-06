@@ -10,7 +10,7 @@ from functools import lru_cache
 from urllib.parse import quote, urlsplit
 
 from loguru import logger
-from pydantic import PrivateAttr, field_validator, model_validator
+from pydantic import Field, PrivateAttr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -71,6 +71,22 @@ def _is_private_network_url(url: str) -> bool:
     except ValueError:
         return "." not in host or host.endswith(_PRIVATE_NETWORK_SUFFIXES)
     return addr.is_private or addr.is_link_local
+
+
+# Settings that no longer do anything. pydantic-settings refuses an unknown
+# key in a .env file, so deleting a setting outright would stop every
+# installation whose .env still names it from booting. Each retired name is
+# accepted, ignored and reported once instead.
+RETIRED_SETTINGS: dict[str, str] = {
+    "REFRESH_ROTATION_GRACE_SECONDS": (
+        "the refresh-token grace window was removed on 2026-08-12; a reused "
+        "refresh token always revokes the session"
+    ),
+    "REGISTRATION_REQUIRES_APPROVAL": (
+        "nothing ever read it; a self-registered account is active at once, and "
+        "REGISTRATION_ENABLED=false is how to keep registration closed"
+    ),
+}
 
 
 class Settings(BaseSettings):
@@ -211,9 +227,6 @@ class Settings(BaseSettings):
         30  # Short-lived access tokens (use refresh flow)
     )
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
-    # Grace window during which a just-rotated refresh token is still accepted,
-    # so concurrent legitimate refreshes don't trip replay detection. Keep short.
-    REFRESH_ROTATION_GRACE_SECONDS: int = 30
 
     # Password Policy
     PASSWORD_MIN_LENGTH: int = 12
@@ -236,6 +249,11 @@ class Settings(BaseSettings):
     HIPAA_MAXIMUM_PASSWORD_AGE_DAYS: int = (
         90  # Max days before password must be changed
     )
+    # Days an expired password keeps working, counted from when the member is
+    # first told it expired, before the API refuses everything but the
+    # password change (AUTH-15). The browser still sends them to the change
+    # screen at once; this window is for API clients, and for the rollout.
+    HIPAA_PASSWORD_EXPIRY_GRACE_DAYS: int = Field(default=14, ge=0)
     HIPAA_AUDIT_RETENTION_DAYS: int = 2555  # 7-year audit log retention (§164.312(b))
     # Where the weekly retention job writes gzipped JSONL exports of purged
     # audit rows. Include this directory in backups (see docs/BACKUP.md) —
@@ -367,9 +385,6 @@ class Settings(BaseSettings):
 
     # Registration control
     REGISTRATION_ENABLED: bool = False  # Disabled by default; admins create users
-    REGISTRATION_REQUIRES_APPROVAL: bool = (
-        True  # New registrations require admin approval
-    )
 
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True
@@ -834,6 +849,19 @@ class Settings(BaseSettings):
     # IP Logging
     IP_LOGGING_ENABLED: bool = True  # Log all request IPs with geo info
 
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_retired_settings(cls, data):
+        if isinstance(data, dict):
+            for name, why in RETIRED_SETTINGS.items():
+                if name in data:
+                    data.pop(name)
+                    logger.warning(
+                        f"{name} is set but no longer has any effect ({why}). "
+                        "Remove it from the environment."
+                    )
+        return data
+
     @field_validator("COOKIE_SECURE", mode="before")
     @classmethod
     def _empty_cookie_secure_means_auto(cls, v):
@@ -1232,6 +1260,25 @@ class Settings(BaseSettings):
     # "yourdept.org,county.gov"). Empty = allow any Google account (still
     # subject to an existing local user matching the email).
     GOOGLE_ALLOWED_DOMAINS: str = ""
+    # Authentik (self-hosted OpenID Connect). The issuer is the provider's
+    # OpenID configuration base, ending in the application slug, e.g.
+    # https://auth.example.org/application/o/the-logbook/ — discovery is read
+    # from <issuer>.well-known/openid-configuration. The provider must sign ID
+    # tokens with a signing key (RS256/ES256); client-secret (HS256) signing is
+    # refused. Accounts are linked by email only when the token says the email
+    # is verified (email_verified), as for Google.
+    AUTHENTIK_ENABLED: bool = False
+    AUTHENTIK_ISSUER_URL: str | None = None
+    AUTHENTIK_CLIENT_ID: str | None = None
+    AUTHENTIK_CLIENT_SECRET: str | None = None
+    # Absolute URL Authentik redirects back to. Must exactly match a redirect
+    # URI on the Authentik provider, e.g.
+    # https://app.example.org/api/v1/auth/oauth/authentik/callback
+    AUTHENTIK_REDIRECT_URI: str | None = None
+    # Comma-separated allowed email domains (empty = any verified email that
+    # matches an existing local user).
+    AUTHENTIK_ALLOWED_DOMAINS: str = ""
+
     # Relative SPA paths the OAuth callback redirects to. Success lands on a
     # lightweight page that establishes the session; failure returns to login.
     OAUTH_SUCCESS_REDIRECT: str = "/auth/callback"
@@ -1255,6 +1302,16 @@ class Settings(BaseSettings):
         return {
             d.strip().lower()
             for d in self.GOOGLE_ALLOWED_DOMAINS.split(",")
+            if d.strip()
+        }
+
+    def get_authentik_allowed_domains(self) -> set[str]:
+        """Allowed Authentik email domains as a lowercased set (empty = any)."""
+        if not self.AUTHENTIK_ALLOWED_DOMAINS:
+            return set()
+        return {
+            d.strip().lower()
+            for d in self.AUTHENTIK_ALLOWED_DOMAINS.split(",")
             if d.strip()
         }
 

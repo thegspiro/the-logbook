@@ -85,7 +85,7 @@ that a dependency didn't shift the ground underneath them).
   only with `.edit`+`.manage` together on `fire_chief`/`deputy_chief`/
   `assistant_chief` in `core/permissions.py` (zero diff on that file).
   Unchanged; still a permission-model design question, not a bug.
-- **FAC-41 (P2, flagged)** — `_match_facility_document_references`
+- **FAC-41 (P2, flagged; fixed 2026-10-05 — see the FAC-41 section)** — `_match_facility_document_references`
   (`documents_service.py:886-919`) still runs `select(model.id,
 model.file_path).where(model.organization_id == ..., model.file_path.like(...)).with_for_update()`
   (line 910-917) with no index-satisfied predicate — `FacilityDocument`/
@@ -96,7 +96,7 @@ model.file_path).where(model.organization_id == ..., model.file_path.like(...)).
   document's reference. Unchanged; still needs the normalized indexed
   `document_id` column pass 5 (and pass 3/4) recommended, not a mechanical
   fix.
-- **FAC-44 (P3, flagged)** — `_lock_facilities_root`
+- **FAC-44 (P3, flagged; fixed 2026-10-05 — see the FAC-44 section)** — `_lock_facilities_root`
   (`documents_service.py:1676-1695`) and `_lock_facility_folder`
   (`documents_service.py:1697-1718`) still filter on `slug` with no
   supporting index — `DocumentFolder.__table_args__`
@@ -3280,7 +3280,22 @@ repeated runs with no flakiness.
 
 **Mirrored to** `CHANGELOG.md`.
 
-### FAC-41 — P2 (scalability/contention), FLAGGED — locking a single document's facility reference locks every facility-document/photo reference row in the organization
+### FAC-41 — P2 (scalability/contention), FIXED 2026-10-05 (was flagged) — locking a single document's facility reference locks every facility-document/photo reference row in the organization
+
+**Resolved 2026-10-05 (owner decision: the schema change).**
+`facility_documents.document_id` and `facility_photos.document_id` now hold
+the canonical id of the referenced document — derived from `file_path` by a
+`@validates` hook on every write, backfilled for existing rows by migration
+`c56303befb2c` with the same `UUID()` parsing, and indexed as
+`(organization_id, document_id)`. `_match_facility_document_references` is
+still a **single** locking read, now `WHERE organization_id = :org AND
+document_id IN (:ids) FOR UPDATE`, so it locks the matching index entries and
+their gaps only: a concurrent reference to the same document still waits
+(FAC-29 holds), a reference to any other document does not.
+`tests/test_facility_lock_narrowing.py` asserts both directions with ids
+placed so the old scan would block, and fails against a database without the
+index; `tests/test_facility_document_id_backfill.py` covers the backfill. The
+original write-up follows.
 
 **Found by Codex review of the same commit, at `documents_service.py:878`
 (`_match_facility_document_references`).** The locking query
@@ -3531,7 +3546,18 @@ completion gate below).
 
 **Mirrored to** `CHANGELOG.md`.
 
-### FAC-44 — P3 (scalability/contention), FLAGGED — two `document_folders` lookups scan-and-lock sibling rows instead of doing a point lookup, because `slug` carries no index
+### FAC-44 — P3 (scalability/contention), FIXED 2026-10-05 (was flagged) — two `document_folders` lookups scan-and-lock sibling rows instead of doing a point lookup, because `slug` carries no index
+
+**Resolved 2026-10-05 (owner decision: the schema change).** Migration
+`c56303befb2c` adds `idx_doc_folders_org_slug (organization_id, slug)` and
+`idx_doc_folders_parent_slug (parent_id, slug)`. Both lookups are equality on
+the full index prefix, whose entries are ordered by primary key within it, so
+`ORDER BY id LIMIT 1 FOR UPDATE` reads the target's own entry instead of
+walking sibling folders in random-UUID order. The members, apparatus and
+events root lookups share the `(organization_id, slug)` shape and benefit
+from the same index. `tests/test_facility_lock_narrowing.py` holds a sibling
+folder whose id sorts first and asserts both locking reads complete. The
+original write-up follows.
 
 **Found during FAC-43's own live verification** (the first call site
 below), not by a separate Codex comment — see the "reproduced live"

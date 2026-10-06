@@ -298,7 +298,14 @@ status, credit hours, instructor, how many members are signed up, and an
 | **Shift remaining**       | Pushes every class that hasn't happened yet back (or forward) by a number of days. Classes that already ran keep their dates.             |
 | **Create missing events** | Appears if a class has no event — because scheduling it failed, or someone deleted the event. Safe to click any time; it only fills gaps. |
 
-The **Roster** tab lists each member with their progress through the pipeline, a link to their full progression, and a **Remove** action.
+The **Roster** tab lists each member with their progress through the pipeline, a link to their full progression, and a **Remove** action. **Add member** puts someone on a cohort that is already running _(2026-10-05)_.
+
+**A member who joins late** is signed up for every class still to come, and not for the ones already held. Each class they missed needs a decision from you, and the roster shows how many are waiting ("2 classes held before they joined — decide"). The panel opens by itself when you add someone who missed classes. For each class:
+
+- **Credit as completed** — they covered the material elsewhere. They get a completed training record for the class, dated the day it was held and worth its credit hours, and the hours count toward their pipeline requirement. Nothing about the class's own attendance changes.
+- **Schedule make-up** — pick when it runs. A copy of the class (same course, hours and pipeline linkage, titled "Make-up: …") is added to the cohort and put on that member's calendar only. They are credited the usual way, when the make-up's attendance is finalized. If you cancel the make-up, the class asks for a decision again.
+
+A decision cannot be undone from this panel once a class is credited.
 
 > **Students cannot open a cohort at all yet** _(2026-08-12)_. Cohort pages are
 > officer-only. A member who follows a cohort link, or types the URL, gets
@@ -350,11 +357,12 @@ If each meeting covers a different subject, you want a cohort.
 | A blackout date is skipped even with weekend-moving off  | Correct. "Keep the computed date" only governs weekends; a blackout date always applies.                                                                                                                                                                                                                                                                                          |
 | You run a second cohort of the same course               | It reuses the pipeline the first one built. A member who was already enrolled keeps their existing progress — right for someone repeating the course, surprising if you expected a fresh start. Use **Start new cycle** on their enrollment to reset.                                                                                                                             |
 | A member can't be enrolled (missing a prerequisite)      | They're still added to the roster and you'll see the reason. You know your department better than the rules do.                                                                                                                                                                                                                                                                   |
-| You add a member half-way through                        | They're added to the classes still to come, not the ones that already ran. **The Roster tab has no Add control** — only **Remove** — so today this is reachable only through the API (`POST /training/cohorts/{id}/members`); see [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md).                                                                                                |
+| You add a member half-way through                        | They're added to the classes still to come, not the ones that already ran. Each class they missed waits on you to credit it or schedule a make-up — see **A member who joins late** above.                                                                                                                                                                                        |
 | You remove a member                                      | Their records and any class they already attended are kept. Upcoming classes come off their calendar.                                                                                                                                                                                                                                                                             |
 | **Shift remaining** doesn't move everything              | It only moves classes that haven't started, and never moves cancelled ones.                                                                                                                                                                                                                                                                                                       |
 | **Shift remaining** across a daylight-saving change      | The class keeps its local time — a 19:00 class shifted a week across the November change is still at 19:00. _(Fixed 2026-10-04: the shift used to add days to the stored UTC time, so that class moved to 18:00, and its event, RSVP and check-in window moved with it.)_                                                                                                         |
 | **Shift remaining** is refused as "attendance finalized" | One of the classes it would move has an event whose attendance is already finalized, and those minutes are already credited. Nothing is moved — reopen that event's attendance first, or leave it out. _(Since 2026-10-04 the whole batch is checked before anything moves; it used to move the earlier classes and then stop with an error, leaving the schedule half-shifted.)_ |
+| A shift or a cohort cancel is refused partway            | _(2026-10-05)_ Nothing changes. A shift or cancel is one change: if any class refuses (a room already taken on the new date, a finalized class in a cancel), every class stays as it was. A class whose event was already cancelled from the calendar is simply left cancelled.                                                                                                   |
 | A class shouldn't count toward a certificate             | Turn off **Counts toward certification requirements** on that class. Members still get the hours.                                                                                                                                                                                                                                                                                 |
 | The course has no classes yet                            | Generation is refused with a clear message. Build the syllabus first.                                                                                                                                                                                                                                                                                                             |
 | A course is capped at 200 classes                        | Past that it's a data-entry mistake rather than a course.                                                                                                                                                                                                                                                                                                                         |
@@ -862,13 +870,13 @@ department-defined rules.
 
 ### Frequency and Due Dates
 
-| Frequency         | Description            |
-| ----------------- | ---------------------- |
-| **Annual**        | Resets each year       |
-| **Every 2 Years** | Resets every two years |
-| **Quarterly**     | Resets every quarter   |
-| **Monthly**       | Resets each month      |
-| **One Time**      | Must be completed once |
+| Frequency         | Description                                                                    |
+| ----------------- | ------------------------------------------------------------------------------ |
+| **Annual**        | Resets each year                                                               |
+| **Every 2 Years** | Graded over the requirement's year and the year before (or this year and last) |
+| **Quarterly**     | Resets every quarter                                                           |
+| **Monthly**       | Resets each month                                                              |
+| **One Time**      | Must be completed once                                                         |
 
 > The two-year option was labelled **Biannual (Every 2 Years)** until
 > 2026-09-29; it is the same setting (`biannual`), renamed because "biannual"
@@ -1591,10 +1599,11 @@ The shift report system supports a multi-stage review workflow:
 
 **For Reviewers:**
 
-- Navigate to the **Review Queue** view. It and **Flagged** appear in the view
-  strip only while **Require review before a report reaches the trainee** is on
-  in Shift Report settings; with review switched off, a report can still be
-  flagged through the API but no view in the tab lists it
+- Navigate to the **Review Queue** view. It appears in the view strip only
+  while **Require review before a report reaches the trainee** is on in Shift
+  Report settings. **Flagged** appears whenever review is on, and also with
+  review switched off while any report is still flagged — a flag set before
+  review was turned off stays reachable until someone re-reviews it
 - Review reports and approve or flag them — the review modal displays the full report content (hours, calls, rating, strengths, improvements, narrative, skills with scores, tasks) for complete context
 - **Batch review** _(2026-04-07)_ — Select multiple reports using checkboxes, toggle select-all, then click "Approve Selected" or "Flag Selected" to review up to 100 reports at once
 - Navigate to the **Flagged** view _(2026-04-07)_ — Reports previously flagged appear here for follow-up. Flagged reports can be re-reviewed and approved
@@ -2142,7 +2151,7 @@ Each instructor qualification record tracks:
 
 ![Instructor qualification roster with type, agency and expiry](./images/02-69-instructor-qualifications.png)
 
-The roster's **Status** column reports whether an officer has _verified_ the qualification, not whether it has expired — a lapsed qualification still reads "Pending" until someone verifies it. Read the **Expires** column for currency. The course a qualification is tied to is stored but not shown in this table; open the record to see it.
+The roster's **Qualifies for** column names the course or skill a qualification covers. **Status** reads **Expired** once the expiry date has passed (in the department's own date), whether or not it was verified; otherwise **Inactive** for a deactivated qualification, **Verified** once an officer has confirmed it, and **Pending** until then.
 
 ### Assigning Instructors to Sessions
 
@@ -2177,7 +2186,7 @@ After a training session, evaluations capture participant feedback and learning 
 
 ![Training effectiveness evaluations across the four Kirkpatrick levels](./images/02-70-effectiveness-evaluations.png)
 
-**Not yet built:** there is no evaluation form on this tab — it is read-only. Evaluations are submitted through the API (`POST /training/effectiveness/evaluations`), typically by an integration or a script, not by an officer in the browser.
+To record one, click **Submit Evaluation**, choose the member whose training you are evaluating, then the level. The form asks only for that level's measure: an overall rating (1–5) for Reaction, pre- and post-assessment scores (0–100) for Learning, a behavior rating and observations for Behavior, or a description of the outcome for Results. Tie it to a course if it concerns one. Integrations can still submit through `POST /training/effectiveness/evaluations`.
 
 ### Viewing Summaries
 
@@ -2352,18 +2361,18 @@ The training module has several boundary behaviors that affect how submissions a
 
 ### Compliance Calculation
 
-| Scenario                                                                   | Behavior                                                                                                                                                                                                                                           |
-| -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Membership tier marked `training_exempt`                                   | Member is fully exempt from all training requirements — shows green compliance regardless of hours.                                                                                                                                                |
-| Tier has `training_exempt_types` list                                      | Member is exempt only from requirements matching those training types. Other requirements still apply.                                                                                                                                             |
-| Tier lookup fails (corrupt config)                                         | System fails open — member is treated as non-exempt and must meet all requirements. Officers may see unexpected non-compliance for senior-tier members.                                                                                            |
-| `COURSES` requirement with empty `required_courses` list                   | Auto-completes immediately (100% progress). Appears green in the compliance matrix.                                                                                                                                                                |
-| `CERTIFICATION` requirement matching                                       | Matches records via three fallback strategies: (1) `training_type` match, (2) case-insensitive requirement name substring in course name, (3) `registry_code` substring in certification number. If none match, the member shows as non-compliant. |
-| Biannual requirement with expired certification                            | Even if the member has accumulated sufficient hours, an expired certification resets progress to 0 and blocks further activity.                                                                                                                    |
-| Requirement with a new-member cutoff, member joined before it, no deadline | Exempt — the requirement does not grade that member anywhere. Join date is the hire date, else the account's creation date.                                                                                                                        |
-| Same, with an existing-member deadline not yet passed                      | Status `catch_up`, due on the deadline; counts neither for nor against the member's standing until the deadline passes, after which it grades normally.                                                                                            |
-| Department has no active requirements                                      | Department compliance reads **Not set up** / "no requirements set up yet" rather than 100%.                                                                                                                                                        |
-| `BIANNUAL` or `ONE_TIME` frequency requirements                            | No date window applied — ALL historical training records count toward the requirement, not just recent ones.                                                                                                                                       |
+| Scenario                                                                   | Behavior                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Membership tier marked `training_exempt`                                   | Member is fully exempt from all training requirements — shows green compliance regardless of hours.                                                                                                                                                                                                                                                                                                                                                                     |
+| Tier has `training_exempt_types` list                                      | Member is exempt only from requirements matching those training types. Other requirements still apply.                                                                                                                                                                                                                                                                                                                                                                  |
+| Tier lookup fails (corrupt config)                                         | System fails open — member is treated as non-exempt and must meet all requirements. Officers may see unexpected non-compliance for senior-tier members.                                                                                                                                                                                                                                                                                                                 |
+| `COURSES` requirement with empty `required_courses` list                   | Auto-completes immediately (100% progress). Appears green in the compliance matrix.                                                                                                                                                                                                                                                                                                                                                                                     |
+| `CERTIFICATION` requirement matching                                       | Matches records by a course linked on the requirement, or via three fallback strategies: (1) `training_type` match, (2) case-insensitive requirement name substring in course name — only for records completed on or before the requirement's `name_match_until` (the upgrade date for requirements that existed then; never for requirements created since), (3) `registry_code` substring in certification number. If none match, the member shows as non-compliant. |
+| Biannual requirement with expired certification                            | Even if the member has accumulated sufficient hours, an expired certification resets progress to 0 and blocks further activity.                                                                                                                                                                                                                                                                                                                                         |
+| Requirement with a new-member cutoff, member joined before it, no deadline | Exempt — the requirement does not grade that member anywhere. Join date is the hire date, else the account's creation date.                                                                                                                                                                                                                                                                                                                                             |
+| Same, with an existing-member deadline not yet passed                      | Status `catch_up`, due on the deadline; counts neither for nor against the member's standing until the deadline passes, after which it grades normally.                                                                                                                                                                                                                                                                                                                 |
+| Department has no active requirements                                      | Department compliance reads **Not set up** / "no requirements set up yet" rather than 100%.                                                                                                                                                                                                                                                                                                                                                                             |
+| `ONE_TIME` frequency requirements                                          | No date window applied — ALL historical training records count toward the requirement. (`BIANNUAL` was the same until 2026-10-05; it now counts the requirement's year and the year before.)                                                                                                                                                                                                                                                                            |
 
 ### Waiver Behavior
 
@@ -2860,13 +2869,11 @@ Capt. Davis conducts a final evaluation session with Alex, reviews her performan
 
 Alex's membership status is now eligible for upgrade from **Probationary** to **Active** (see [Membership Management — Member Lifecycle](./01-membership.md)). The compliance matrix shows Alex green across all requirements.
 
-> **A finished programme disappears from the dashboard _(2026-08-12)_.** There
-> is a **Program Completed!** banner in the dashboard's enrollment card, but
-> nothing can reach it: the dashboard asks only for **active** enrollments, so a
-> programme drops off the list the moment it completes rather than being shown
-> as finished. Check a member's completion on their enrollment itself, or on the
-> compliance matrix, not on their dashboard. See
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#training--the-program-completed-banner-is-unreachable-2026-08-12).
+> **A finished programme disappears from the dashboard.** The dashboard's
+> enrollment card lists only **active** enrollments, so a programme drops off
+> the list the moment it completes rather than being shown as finished. Check a
+> member's completion on their enrollment itself, or on the compliance matrix,
+> not on their dashboard.
 
 **Edge case — insufficient hours:** If Alex had only accumulated 38 of the required 40 supervised hours, the system would show 95% on that requirement (38/40). Capt. Davis can navigate to the requirement detail to see exactly which shifts contributed hours: a table listing each shift date, officer, hours credited, and call types. This transparency helps identify whether additional shifts need to be scheduled.
 
@@ -3129,9 +3136,14 @@ stepper.
 
 ### What records officers should know about the files
 
-- **Approved certificates are kept indefinitely.** That is what a training
-  record is for, and nothing expires them. If your department has a
-  records-retention rule, this needs a decision from you.
+- **Certificates are kept indefinitely unless your department sets a
+  retention period** _(2026-10-05)_. In **Review Submissions → Settings →
+  Certificate Files**, enter how many days after an approval or rejection the
+  uploaded files should be kept (minimum 90). A daily task then deletes older
+  files and removes them from the submission and the member's training record —
+  the record itself, its hours and its dates stay. Leave the box empty to keep
+  files indefinitely, which is also what happens until someone sets it. Every
+  change to the period, and every file the task deletes, is in the audit log.
 - **Files are not scanned for malware.** They are checked to be genuinely the
   file type they claim and stored under a name the server chooses, so nothing
   runs on the server — but a certificate opened by an officer is whatever the

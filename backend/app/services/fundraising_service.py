@@ -6,6 +6,7 @@ and fundraising events. Provides dashboard aggregation and reporting.
 """
 
 from datetime import date, datetime, timedelta, timezone
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import func, select
@@ -772,35 +773,46 @@ class FundraisingService:
         result = await self.db.execute(query)
         donations = list(result.scalars().all())
 
-        total_donations = sum(float(d.amount) for d in donations)
+        # Money is summed as Decimal and converted once, at the end: a float
+        # running total drifts by fractions of a cent over many rows (GF-9).
+        total_donations = sum((Decimal(d.amount or 0) for d in donations), Decimal(0))
         unique_donors = len({d.donor_id for d in donations if d.donor_id})
-        average_gift = total_donations / len(donations) if donations else 0
+        average_gift = (
+            (total_donations / len(donations)).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
+            if donations
+            else Decimal(0)
+        )
 
         # Donations by payment method
-        by_method: Dict[str, float] = {}
+        by_method: Dict[str, Decimal] = {}
         for d in donations:
             method = (
                 d.payment_method.value
                 if hasattr(d.payment_method, "value")
                 else d.payment_method
             )
-            by_method[method] = by_method.get(method, 0) + float(d.amount)
-
-        # Monthly totals
-        monthly_totals: Dict[str, float] = {}
-        for d in donations:
-            month_key = d.donation_date.strftime("%Y-%m")
-            monthly_totals[month_key] = monthly_totals.get(month_key, 0) + float(
-                d.amount
+            by_method[method] = by_method.get(method, Decimal(0)) + Decimal(
+                d.amount or 0
             )
 
+        # Monthly totals
+        monthly_totals: Dict[str, Decimal] = {}
+        for d in donations:
+            month_key = d.donation_date.strftime("%Y-%m")
+            monthly_totals[month_key] = monthly_totals.get(
+                month_key, Decimal(0)
+            ) + Decimal(d.amount or 0)
+
         return {
-            "total_donations": total_donations,
+            "total_donations": float(total_donations),
             "donation_count": len(donations),
             "unique_donors": unique_donors,
-            "average_gift": round(average_gift, 2),
-            "donations_by_method": by_method,
+            "average_gift": float(average_gift),
+            "donations_by_method": {m: float(v) for m, v in by_method.items()},
             "monthly_totals": [
-                {"month": k, "total": v} for k, v in sorted(monthly_totals.items())
+                {"month": k, "total": float(v)}
+                for k, v in sorted(monthly_totals.items())
             ],
         }

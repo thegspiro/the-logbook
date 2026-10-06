@@ -37,7 +37,7 @@ vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 vi.mock('../../../hooks/useOnlineStatus', () => ({ useOnlineStatus: () => true }));
 vi.mock('../../../utils/offlineQueue', () => ({
   enqueueCheck: vi.fn(),
-  listPendingChecks: (...a: unknown[]) => mockListPendingChecks(...a) as unknown,
+  listOwnPendingChecks: (...a: unknown[]) => mockListPendingChecks(...a) as unknown,
   dequeueCheck: vi.fn(),
   markCheckSubmitted: vi.fn().mockResolvedValue({}),
   markPhotosUploaded: vi.fn().mockResolvedValue({}),

@@ -115,10 +115,12 @@ role editor can express, so left for a product decision. **Status:** flagged.
   that exact owner or the reset 403s (409 if an inconsistent owner-less state
   is detected). Verified against current code 2026-08-27 (security-review
   feature 30).
-- The `reset_initiated` audit event is written in the same transaction as the
-  deletes, so a failed reset rolls it back — it should be committed to a durable
-  sink first. **Still flagged** — a transaction-boundary change, deferred for
-  care rather than a drive-by fix.
+- **✅ Reset audit durability FIXED (2026-10-05, owner decision).** The
+  `reset_initiated` event used to share the deletes' transaction, so a failed
+  reset rolled it back. It is now written and committed in its own session
+  (`_audit_reset_durably`) before any delete, and the reset is refused if that
+  write fails; a failed reset also records `reset_failed` the same way.
+  Tests: `test_onboarding_reset_cookies.py`, `test_onboarding_reset_audit_db.py`.
 - **✅ `GET /status` disclosure FIXED (app-review B25).** It returned the org name +
   setup progress to any unauthenticated caller even post-completion. The only
   consumer (`LoginPage`) reads just `needs_onboarding`, so once `is_completed` is

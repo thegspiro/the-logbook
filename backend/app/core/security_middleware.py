@@ -10,6 +10,7 @@ import html
 import re
 import secrets
 import time
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -1051,6 +1052,27 @@ def rate_limit_password_reset():
     return Depends(_dependency)
 
 
+def rate_limit_password_reset_token():
+    """Rate limit for opening and submitting a reset link: 10 per 5 minutes.
+
+    A separate scope from the request budget above. Requesting, opening and
+    submitting used to share three requests, so one reload of the link or one
+    refused password locked a member out for five minutes (W03-7). The token is
+    384 random bits, so this budget guards against noise, not guessing.
+    """
+
+    async def _dependency(request: Request) -> None:
+        await check_rate_limit(
+            request,
+            max_requests=10,
+            window_seconds=300,
+            lockout_seconds=1800,
+            scope="password_reset_token",
+        )
+
+    return Depends(_dependency)
+
+
 def rate_limit_token_refresh():
     """More lenient rate limit for token refresh: 10 per 60 seconds."""
 
@@ -1261,6 +1283,72 @@ def get_user_agent(request: Request) -> str | None:
 # ============================================
 
 
+class _ExceptionCache:
+    """Bounded, short-lived memo of the allowlist-exception lookup (pitfall 9).
+
+    Only requests the country check would block reach the lookup, but a
+    blocked address hammering the API would otherwise cost a query each time.
+    Entries live ``TTL_SECONDS``, so an approval or a revocation takes effect
+    within that; past ``MAX_ENTRIES`` the oldest entry is dropped.
+    """
+
+    TTL_SECONDS = 60.0
+    MAX_ENTRIES = 10_000
+
+    def __init__(self) -> None:
+        self._entries: "OrderedDict[str, tuple[bool, float]]" = OrderedDict()
+
+    def get(self, ip: str) -> bool | None:
+        entry = self._entries.get(ip)
+        if entry is None:
+            return None
+        allowed, expires = entry
+        if expires < time.monotonic():
+            del self._entries[ip]
+            return None
+        return allowed
+
+    def put(self, ip: str, allowed: bool) -> None:
+        self._entries[ip] = (allowed, time.monotonic() + self.TTL_SECONDS)
+        self._entries.move_to_end(ip)
+        while len(self._entries) > self.MAX_ENTRIES:
+            self._entries.popitem(last=False)
+
+    def clear(self) -> None:
+        self._entries.clear()
+
+
+_exception_cache = _ExceptionCache()
+
+
+async def _has_ip_exception(client_ip: str) -> bool:
+    """Whether ``client_ip`` holds an approved allowlist exception (INT2-28).
+
+    Fails closed: a lookup error leaves the request blocked and is not cached,
+    so the next request asks again.
+    """
+    cached = _exception_cache.get(client_ip)
+    if cached is not None:
+        return cached
+    try:
+        from app.core.database import async_session_factory
+        from app.services.ip_security_service import ip_security_service
+
+        async with async_session_factory() as db:
+            allowed = await ip_security_service.ip_has_active_allowlist_exception(
+                db, client_ip
+            )
+    except Exception as exc:
+        # Any failure keeps the block: an exception is a relaxation, and a
+        # control that relaxes when its own lookup breaks is not a control.
+        from loguru import logger
+
+        logger.error(f"IP exception lookup failed for {client_ip}: {exc}")
+        return False
+    _exception_cache.put(client_ip, allowed)
+    return allowed
+
+
 class IPBlockingMiddleware:
     """
     Middleware for IP-based and country-based access control.
@@ -1274,15 +1362,14 @@ class IPBlockingMiddleware:
     - Logs all blocked attempts for security auditing
     - Integrates with GeoIP service for country lookup
 
-    Per-tenant IP allowlist exceptions (``IPException``) are NOT applied
-    here and never have been reachable from this middleware: this layer
-    runs pre-auth, before any tenant context exists, so honoring an
-    org-scoped exception would mean one org's approved travel exception
-    silently relaxing the geo-block for every other org's traffic too (the
-    cross-tenant bypass PR #1544 closed by passing an empty set to
-    ``is_ip_blocked`` unconditionally, below). The ``IPException`` request/
-    approve workflow still exists in the API for other purposes, but has no
-    effect on this middleware's enforcement decision.
+    An approved allowlist ``IPException`` lets its exact address past the
+    country block (owner decision INT2-28). This layer runs pre-auth with no
+    tenant context, so the lookup is keyed on the single address alone: PR
+    #1544 removed an earlier version that unioned every org's exceptions into
+    one list, and this does not bring that back. It runs only for a request
+    the country check would block, and its answers are cached briefly in a
+    bounded map (``_ExceptionCache``). If the lookup fails the request stays
+    blocked.
     """
 
     # Paths that bypass IP blocking (health checks, onboarding, etc.)
@@ -1339,6 +1426,8 @@ class IPBlockingMiddleware:
             # safely be applied here: doing so would let one tenant relax the
             # geo-blocking policy for every other tenant.
             is_blocked, reason = geoip.is_ip_blocked(client_ip, set())
+            if is_blocked and await _has_ip_exception(client_ip):
+                is_blocked = False
 
             if is_blocked:
                 # Log the blocked attempt

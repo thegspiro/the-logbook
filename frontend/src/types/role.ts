@@ -47,6 +47,8 @@ export interface UserWithRoles {
   photo_url?: string | undefined;
   status: UserStatus;
   mfa_enabled?: boolean | undefined;
+  /** Set while a sign-in lockout is in force; sent to members.manage holders only. */
+  locked_until?: string | null | undefined;
   membership_type?: string | undefined;
   hire_date?: string | undefined;
   date_of_birth?: string | undefined;

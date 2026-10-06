@@ -976,7 +976,14 @@ apparatus staffed** and **Shifts with other departments** — see
 
 ### Compliance Report
 
-The **Shift Compliance** report evaluates each member's shift attendance and hours against active training requirements of type SHIFTS or HOURS.
+The **Shift Compliance** report evaluates each member's shift attendance and hours against the active SHIFTS and HOURS requirements marked **Shift attendance satisfies this requirement** (the **Shift Credit** box on the requirement form).
+
+A SHIFTS requirement is ticked by default. An HOURS requirement is not: training hours such as annual hazmat hours are graded from training records on the training screens, and duty shifts do not count toward them. Tick the box on an HOURS requirement only when hours on shift are what it measures. Before 2026-10-05 the report graded every HOURS requirement from shifts, so an existing HOURS requirement that should stay on this report needs ticking once.
+
+The summary cards above the list count **requirement checks** — one per member
+per requirement that applies to them — so a member under three requirements is
+three checks. **Checks Met** and **Checks Not Met** split that total; they are
+not head counts of members.
 
 For each requirement, the report shows:
 
@@ -1381,20 +1388,17 @@ which positions are open to everyone regardless of rank.
 
 **How it affects shift signup:**
 
-- Every open slot in the Dashboard's **Next 30 Days** list offers a **Sign Up**
-  button. Eligibility is checked when you press it, not before — the row gives
-  no advance warning
+- The Dashboard's **Next 30 Days** list checks your eligibility for every
+  open slot it shows when it loads. A slot your rank qualifies for offers a
+  **Sign Up** button; one it does not reads **Not eligible** instead
 - Pressing **Sign Up** expands the row into a position dropdown holding **only
   the positions your rank qualifies for**, with a Confirm button beside it
-- If your rank qualifies for none of the open positions, the expanded row says
-  **"Not eligible for this shift."** instead of a dropdown
+- If the check could not run when the list loaded, the button stays and the
+  same check runs when you press it: a rank that qualifies for none of the
+  positions gets **"Not eligible for this shift."** instead of a dropdown
 - Ranks with no `eligible_positions` defined default to all positions being eligible (backward-compatible)
 
 ![An open shift row expanded after pressing Sign Up, its position dropdown holding only the positions the member's rank qualifies for](./images/03-62-dashboard-signup-positions.png)
-
-> **The button is not a promise.** It appears on every shift, so a member can
-> press Sign Up and be told they are not eligible. This is a known rough edge —
-> see [Known Limitations](../KNOWN_LIMITATIONS.md).
 
 ### Scheduling Administration _(moved 2026-09-05)_
 

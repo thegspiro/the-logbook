@@ -9,6 +9,7 @@
 
 import type { ShiftEquipmentCheckCreate } from '@/modules/inventory/types/equipmentCheck';
 import { openOfflineDb, STORE_PENDING_CHECKS } from './offlineDb';
+import { isOwnedByCurrentMember, requireQueueOwner, type OwnedQueueEntry } from './offlineQueueOwner';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -20,7 +21,7 @@ export interface QueuedPhoto {
   fileName: string;
 }
 
-export interface QueuedCheck {
+export interface QueuedCheck extends OwnedQueueEntry {
   id: string;
   shiftId: string;
   payload: ShiftEquipmentCheckCreate;
@@ -79,6 +80,7 @@ export async function enqueueCheck(
   payload: ShiftEquipmentCheckCreate,
   photoItems: { itemId: string; files: File[] }[]
 ): Promise<string> {
+  const ownerId = requireQueueOwner();
   // Generate this once, before persisting. Every drain attempt reuses the
   // stored payload, allowing the API to recognize a retry after its response
   // was lost rather than reporting a second completed check.
@@ -100,6 +102,7 @@ export async function enqueueCheck(
 
   const entry: QueuedCheck = {
     id,
+    ownerId,
     shiftId,
     payload: stablePayload,
     photos,
@@ -116,7 +119,12 @@ export async function enqueueCheck(
   });
 }
 
-/** List all pending checks in the queue. */
+/**
+ * List every check on this device, whoever queued it.
+ *
+ * Not for draining: use listOwnPendingChecks, which leaves out entries the
+ * signed-in member must not send (FE3-34-5).
+ */
 export async function listPendingChecks(): Promise<QueuedCheck[]> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
@@ -125,6 +133,11 @@ export async function listPendingChecks(): Promise<QueuedCheck[]> {
     req.onsuccess = () => resolve(req.result as QueuedCheck[]);
     req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
   });
+}
+
+/** The checks the signed-in member queued, which are the only ones to send. */
+export async function listOwnPendingChecks(): Promise<QueuedCheck[]> {
+  return (await listPendingChecks()).filter((entry) => isOwnedByCurrentMember(entry));
 }
 
 /** Remove a successfully synced check from the queue. */
@@ -218,15 +231,26 @@ export async function markPhotosUploaded(id: string, itemId: string): Promise<Qu
   }));
 }
 
-/** Return the number of items waiting in the queue. */
+/**
+ * Return the number of the signed-in member's checks waiting to send.
+ *
+ * Another member's entries and held ones are left out: this count is shown as
+ * work that will sync, and those never will under this session.
+ */
 export async function pendingCount(): Promise<number> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const store = txStore(db, 'readonly');
-    const req = store.count();
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
-  });
+  return (await listOwnPendingChecks()).length;
+}
+
+/**
+ * Give an entry queued before owners were recorded to `ownerId`, so it sends.
+ *
+ * Only an untagged entry can be claimed; one that already has an owner is left
+ * alone even if asked, so the review screen can never reassign a member's work.
+ * Returns whether the entry was claimed.
+ */
+export async function claimUntaggedCheck(id: string, ownerId: string): Promise<boolean> {
+  const claimed = await updateQueuedCheck(id, (entry) => (entry.ownerId ? null : { ...entry, ownerId }));
+  return claimed !== null;
 }
 
 /**

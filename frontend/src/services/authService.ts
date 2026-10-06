@@ -44,9 +44,16 @@ export const authService = {
 
   /**
    * Confirm enrollment with a code; returns one-time recovery codes.
+   *
+   * A retry with the same `idempotencyKey` and code gets the same codes back
+   * for a short window, so a lost response does not lose the codes.
    */
-  async verifyMfaSetup(code: string): Promise<{ recovery_codes: string[] }> {
-    const response = await api.post<{ recovery_codes: string[] }>('/auth/mfa/verify-setup', { code });
+  async verifyMfaSetup(code: string, idempotencyKey: string): Promise<{ recovery_codes: string[] }> {
+    const response = await api.post<{ recovery_codes: string[] }>(
+      '/auth/mfa/verify-setup',
+      { code },
+      { headers: { 'Idempotency-Key': idempotencyKey } }
+    );
     return response.data;
   },
 
@@ -60,10 +67,15 @@ export const authService = {
 
   /**
    * Regenerate recovery codes (requires a current authenticator code).
-   * Returns a fresh one-time set; previous codes stop working.
+   * Returns a fresh one-time set; previous codes stop working. A retry with
+   * the same `idempotencyKey` and code gets the same set back.
    */
-  async regenerateRecoveryCodes(code: string): Promise<{ recovery_codes: string[] }> {
-    const response = await api.post<{ recovery_codes: string[] }>('/auth/mfa/recovery-codes', { code });
+  async regenerateRecoveryCodes(code: string, idempotencyKey: string): Promise<{ recovery_codes: string[] }> {
+    const response = await api.post<{ recovery_codes: string[] }>(
+      '/auth/mfa/recovery-codes',
+      { code },
+      { headers: { 'Idempotency-Key': idempotencyKey } }
+    );
     return response.data;
   },
 
@@ -174,6 +186,11 @@ export const authService = {
   getMicrosoftOAuthUrl(): string {
     const baseUrl = api.defaults.baseURL || '';
     return `${baseUrl}/auth/oauth/microsoft`;
+  },
+
+  getAuthentikOAuthUrl(): string {
+    const baseUrl = api.defaults.baseURL || '';
+    return `${baseUrl}/auth/oauth/authentik`;
   },
 
   /**

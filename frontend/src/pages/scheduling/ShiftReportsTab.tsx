@@ -70,10 +70,11 @@ import { getErrorMessage } from '../../utils/errorHandling';
 import { saveDraft, loadDraft, deleteDraft } from '../../utils/shiftReportDrafts';
 import {
   enqueueShiftReport,
-  listPendingReports,
+  listOwnPendingReports,
   dequeueShiftReport,
   pendingReportCount,
 } from '../../utils/shiftReportOfflineQueue';
+import { isOwnedByCurrentMember } from '../../utils/offlineQueueOwner';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useOverlaySurface } from '../../hooks/useOverlaySurface';
 import { EmptyState } from '../../components/ux/EmptyState';
@@ -240,6 +241,33 @@ export const ShiftReportsTab: React.FC = () => {
         /* non-officer: config not available */
       });
   }, []);
+
+  // Whether any report is sitting flagged while review is switched off. The
+  // review endpoint does not consult `report_review_required`, so a report
+  // flagged before an administrator turned review off stays flagged — and
+  // with the Flagged view gated on the setting alone it was in no list an
+  // officer could act from. Asked only when review is off: with it on the
+  // view is always offered, and a department that never flags sees nothing
+  // new because the answer is empty.
+  const [hasFlaggedWithReviewOff, setHasFlaggedWithReviewOff] = useState(false);
+  useEffect(() => {
+    if (!canManage || !config || config.report_review_required) return;
+    let cancelled = false;
+    shiftCompletionService
+      .getFlaggedReports()
+      .then((flagged) => {
+        if (!cancelled) setHasFlaggedWithReviewOff(flagged.length > 0);
+      })
+      .catch(() => {
+        /* the view stays hidden, exactly as before this probe existed */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canManage, config]);
+  // Kept while the view is open so clearing the last flag does not pull the
+  // tab out from under the officer who just did it.
+  const showFlaggedView = Boolean(config?.report_review_required) || hasFlaggedWithReviewOff || viewMode === 'flagged';
 
   // Rating display helpers using config
   const ratingLabel = config?.rating_label || 'Performance Rating';
@@ -481,10 +509,13 @@ export const ShiftReportsTab: React.FC = () => {
   useEffect(() => {
     if (!isOnline) return;
     const syncQueue = async () => {
-      const pending = await listPendingReports();
+      // Only this member's own reports go out under their session (FE3-34-5).
+      const pending = await listOwnPendingReports();
       if (pending.length === 0) return;
       let synced = 0;
       for (const entry of pending) {
+        // Asked again per entry: the member can change while earlier ones send.
+        if (!isOwnedByCurrentMember(entry)) continue;
         try {
           await shiftCompletionService.batchCreateReports(entry.payload);
           await dequeueShiftReport(entry.id);
@@ -1667,7 +1698,7 @@ export const ShiftReportsTab: React.FC = () => {
                 <ClipboardCheck className="h-3.5 w-3.5" /> Review Queue
               </button>
             )}
-            {config?.report_review_required && (
+            {showFlaggedView && (
               <button
                 onClick={() => setViewMode('flagged')}
                 className={`inline-flex shrink-0 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${

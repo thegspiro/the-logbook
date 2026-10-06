@@ -6,8 +6,9 @@ annual compliance report generation, and NFPA 1401 record completeness
 validation for the compliance officer dashboard.
 """
 
+import calendar
 from collections import defaultdict
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import and_, func, or_, select
@@ -37,10 +38,14 @@ from app.models.training import (
 )
 from app.models.user import User, UserStatus
 from app.services.training_compliance import (
+    STANDING_NOT_APPLICABLE,
+    ComplianceGrading,
+    MemberGrading,
+    _load_compliance_config,
+    compute_org_compliance_pct,
     evaluate_member_requirement,
-    get_org_include_current_month,
+    load_graded_records,
     member_join_date,
-    requirement_applies_to_user,
     tally_standing,
 )
 from app.services.training_waiver_service import fetch_org_waivers
@@ -362,6 +367,20 @@ class ISOReadinessService:
         return round(_FSRS_TRAINING_POINTS * (readiness_pct / 100.0), 2)
 
 
+def _attestation_period_bounds(
+    period_type: str, year: int, quarter: Optional[int]
+) -> tuple[date, date]:
+    """First and last day of the year or quarter an attestation covers."""
+    if period_type == "quarterly" and quarter:
+        first_month = (quarter - 1) * 3 + 1
+        last_month = first_month + 2
+        return (
+            date(year, first_month, 1),
+            date(year, last_month, calendar.monthrange(year, last_month)[1]),
+        )
+    return date(year, 1, 1), date(year, 12, 31)
+
+
 class ComplianceAttestationService:
     """Manages formal compliance sign-off workflow via the audit log."""
 
@@ -381,8 +400,9 @@ class ComplianceAttestationService:
         organization_id : str
             The organization being attested.
         attestation_data : dict
-            Must contain: period_type (annual|quarterly), period_year,
-            compliance_percentage.
+            Must contain: period_type (annual|quarterly), period_year.
+            Any compliance_percentage in it is ignored — the service
+            computes the figure being attested.
             Optional: period_quarter, notes, areas_reviewed (list[str]),
             exceptions (list[dict] with requirement_name, reason, mitigation).
         attested_by : str
@@ -408,15 +428,21 @@ class ComplianceAttestationService:
                     "period_quarter must be 1, 2, 3, or 4 for quarterly attestations"
                 )
 
-        compliance_pct = attestation_data.get("compliance_percentage")
-        if compliance_pct is None:
-            raise ValueError("compliance_percentage is required")
-        # The one current caller already bounds this via
-        # AttestationCreate's Field(ge=0, le=100); re-checked here so this
-        # service method stays safe to call directly, not only through that
-        # one schema.
-        if not 0 <= compliance_pct <= 100:
-            raise ValueError("compliance_percentage must be between 0 and 100")
+        # The percentage is the server's, never the officer's (CS-8): an
+        # attestation certifies a figure, and one the attester typed in
+        # certifies nothing. It is the department compliance percentage every
+        # other screen reports, evaluated as of the period's last day — or
+        # today, for a period still running. None when no member is graded.
+        today = await resolve_org_today(self.db, organization_id)
+        period_start, period_end = _attestation_period_bounds(
+            period_type, int(period_year), attestation_data.get("period_quarter")
+        )
+        if period_start > today:
+            raise ValueError("Cannot attest a period that has not started")
+        as_of = min(period_end, today)
+        compliance_pct = await compute_org_compliance_pct(
+            self.db, organization_id, today=as_of
+        )
 
         attestation_id = generate_uuid()
         now = datetime.now(timezone.utc)
@@ -428,6 +454,7 @@ class ComplianceAttestationService:
             "period_year": period_year,
             "period_quarter": attestation_data.get("period_quarter"),
             "compliance_percentage": compliance_pct,
+            "compliance_as_of": as_of.isoformat(),
             "notes": attestation_data.get("notes", ""),
             "areas_reviewed": attestation_data.get("areas_reviewed", []),
             "exceptions": attestation_data.get("exceptions", []),
@@ -811,21 +838,70 @@ class AnnualComplianceReportService:
         pathways/tasks, instructor qualifications, multi-agency exercises,
         and effectiveness evaluations.
         """
-        start_date = date(year, 1, 1)
-        end_date = date(year, 12, 31)
+        return await self._generate_period_report(
+            organization_id, date(year, 1, 1), date(year, 12, 31), year
+        )
+
+    async def generate_monthly_report(
+        self, organization_id: str, year: int, month: int
+    ) -> Dict[str, Any]:
+        """The same report for one calendar month (CS-9).
+
+        A "monthly" report used to be the annual report relabelled. Now the
+        activity figures (training hours, admin hours, exercises, record
+        completeness, effectiveness evaluations) cover the month, and each
+        member's standing is the one the compliance screen would have shown on
+        the month's last day: evaluated as of that day, counting only records
+        completed by then. For an annual requirement that is the progress made
+        so far in the year. A month still in progress is evaluated as of
+        today. ISO readiness stays a figure for the year, and the
+        recertification summary is a snapshot of now; neither has a monthly
+        meaning.
+        """
+        start_date = date(year, month, 1)
+        end_date = date(year, month, calendar.monthrange(year, month)[1])
+        report = await self._generate_period_report(
+            organization_id, start_date, end_date, year, as_of_cap=end_date
+        )
+        report["report_type"] = "monthly_compliance"
+        report["month"] = month
+        return report
+
+    async def _generate_period_report(
+        self,
+        organization_id: str,
+        start_date: date,
+        end_date: date,
+        year: int,
+        as_of_cap: Optional[date] = None,
+    ) -> Dict[str, Any]:
+        """The report body for one period.
+
+        ``as_of_cap`` (monthly reports) evaluates standing as of that day, or
+        today if sooner, and ignores records completed after it. Without it
+        (annual reports) standing is as of today, as it always was.
+        """
         # The department's date, as the compliance matrix uses, so the annual
         # report and the screen agree about the same member on the same day.
         today = await resolve_org_today(self.db, organization_id)
-        org_include_current = await get_org_include_current_month(
-            self.db, organization_id
+        if as_of_cap is not None:
+            today = min(today, as_of_cap)
+        # The same resolution of profiles and thresholds the dashboard
+        # percentage and the compliance matrix use (CMP4-3): a department
+        # using compliance profiles used to read one figure here and another
+        # on those screens for the same members on the same day.
+        grading = ComplianceGrading.from_config(
+            await _load_compliance_config(self.db, organization_id)
         )
+        org_include_current = grading.include_current_month
 
-        # Get active members (exclude compliance-exempt). `roles` (a synonym
-        # for `positions`) is eager-loaded so the applicability filter below
-        # can pass each member's role ids without an N+1 lazy-load per member.
+        # Get active members (exclude compliance-exempt). `positions` is
+        # eager-loaded because profile matching and the applicability filter
+        # read it for every member, and touching the lazy relationship on an
+        # AsyncSession raises MissingGreenlet.
         members_result = await self.db.execute(
             select(User)
-            .options(selectinload(User.roles))
+            .options(selectinload(User.positions))
             .where(
                 User.organization_id == organization_id,
                 User.status == UserStatus.ACTIVE,
@@ -859,17 +935,34 @@ class AnnualComplianceReportService:
             )
             year_records = records_result.scalars().all()
 
-            # All records (for compliance evaluation -- not date-filtered)
-            all_records_result = await self.db.execute(
-                select(TrainingRecord).where(
-                    TrainingRecord.organization_id == organization_id,
-                    TrainingRecord.user_id.in_(member_ids),
-                )
+            # The records the standing grades from, bounded by each
+            # requirement's window, plus every completed certificate: the
+            # active/expired certificate counts below read all of them.
+            all_records = await load_graded_records(
+                self.db,
+                organization_id,
+                member_ids,
+                requirements,
+                today,
+                org_include_current,
+                also=(
+                    and_(
+                        TrainingRecord.status == TrainingStatus.COMPLETED,
+                        TrainingRecord.certification_number.isnot(None),
+                    ),
+                ),
             )
-            all_records = all_records_result.scalars().all()
         else:
             year_records = []
             all_records = []
+
+        # A period that ended in the past is graded on what was known then.
+        if as_of_cap is not None:
+            all_records = [
+                r
+                for r in all_records
+                if r.completion_date is None or r.completion_date <= today
+            ]
 
         # Build per-user record lookup
         records_by_user: Dict[str, list] = defaultdict(list)
@@ -885,10 +978,14 @@ class AnnualComplianceReportService:
 
         # Evaluate member compliance
         fully_compliant = 0
+        not_applicable_members = 0
         member_compliance: List[Dict[str, Any]] = []
         total_hours = 0.0
         total_certs_active = 0
         total_certs_expired = 0
+        # Each member's requirements and thresholds, kept for the
+        # requirement analysis below so both sections grade the same set.
+        gradings: Dict[str, MemberGrading] = {}
 
         for member in members:
             user_records = records_by_user.get(member.id, [])
@@ -898,19 +995,14 @@ class AnnualComplianceReportService:
             hours = sum(r.hours_completed or 0 for r in user_year_records)
             total_hours += hours
 
-            # A requirement that doesn't apply to this member (by
-            # applies_to_all/required_membership_types/required_roles) is not
-            # in their denominator here either -- mirrors the identical fix
-            # applied to compute_org_compliance_pct and get_compliance_matrix
-            # (see requirement_applies_to_member's docstring). Without this,
-            # a member holding a requirement never meant to apply to them
-            # (e.g. an "officers only" cert) was graded against it anyway,
-            # almost always as unmet, understating both this member's and
-            # the org-wide compliance percentage this report exists to state
-            # authoritatively.
-            applicable_reqs = [
-                req for req in requirements if requirement_applies_to_user(req, member)
-            ]
+            # A matching compliance profile narrows the requirements and may
+            # override the thresholds, and a requirement that does not apply
+            # to the member is dropped -- exactly as compute_org_compliance_pct
+            # and get_compliance_matrix resolve it, through the one shared
+            # definition rather than a copy of it (CLAUDE.md pitfall 29).
+            member_grading = grading.for_member(member, list(requirements))
+            gradings[str(member.id)] = member_grading
+            applicable_reqs = member_grading.requirements
 
             join_date = member_join_date(member)
             met_count, req_total = tally_standing(
@@ -925,8 +1017,10 @@ class AnnualComplianceReportService:
                 for req in applicable_reqs
             )
 
-            compliance_pct = (
-                round(met_count / req_total * 100, 1) if req_total > 0 else 100.0
+            # The member's own thresholds, profile overrides included. A
+            # member nothing grades is "not_applicable" with no percentage.
+            member_status, compliance_pct = grading.classify(
+                member_grading, met_count, req_total
             )
 
             # Count certifications (active vs expired)
@@ -942,18 +1036,13 @@ class AnnualComplianceReportService:
             total_certs_active += active
             total_certs_expired += expired
 
-            # A member with no applicable requirements is 100% compliant
-            # (compliance_pct is set to 100.0 above), matching
-            # compute_org_compliance_pct. The prior `req_total > 0` guard here
-            # dropped them out of the compliant bucket and mislabeled them
-            # "at_risk", which also understated the org-wide percentage.
-            if req_total == 0 or met_count >= req_total:
+            # A member with no applicable requirements is outside the
+            # org-wide percentage altogether, matching
+            # compute_org_compliance_pct (TR4-4).
+            if member_status == STANDING_NOT_APPLICABLE:
+                not_applicable_members += 1
+            elif member_status == "compliant":
                 fully_compliant += 1
-                member_status = "compliant"
-            elif compliance_pct >= 75:
-                member_status = "at_risk"
-            else:
-                member_status = "non_compliant"
 
             name = (
                 f"{member.first_name or ''} {member.last_name or ''}".strip()
@@ -973,10 +1062,14 @@ class AnnualComplianceReportService:
                 }
             )
 
+        # The denominator is the members something grades. None when nobody
+        # is graded: an empty population is reported as not applicable, not
+        # as 0% or 100%.
+        graded_members = total_members - not_applicable_members
         overall_compliance_pct = (
-            round(fully_compliant / total_members * 100, 1)
-            if total_members > 0
-            else 0.0
+            round(fully_compliant / graded_members * 100, 1)
+            if graded_members > 0
+            else None
         )
 
         # Aggregate the per-member status buckets. Without these the report's
@@ -990,13 +1083,15 @@ class AnnualComplianceReportService:
         # Requirement analysis
         requirement_analysis: List[Dict[str, Any]] = []
         for req in requirements:
-            # Same applicability filter as the member loop above: a
-            # requirement's own "members_total" must be the members it
-            # actually applies to, not the org's whole active roster, or an
-            # "officers only" requirement's percentage is diluted by every
-            # member it was never meant to grade.
+            # The members whose grading above includes this requirement: its
+            # "members_total" is the members it actually grades -- by scope and
+            # by profile -- not the org's whole active roster, or an "officers
+            # only" requirement's percentage is diluted by every member it was
+            # never meant to grade.
             applicable_members = [
-                member for member in members if requirement_applies_to_user(req, member)
+                member
+                for member in members
+                if any(r.id == req.id for r in gradings[str(member.id)].requirements)
             ]
             # Members still inside their catch-up period drop out of both
             # counts, as they do from their own standing above.
@@ -1043,9 +1138,9 @@ class AnnualComplianceReportService:
             organization_id, start_date, end_date
         )
 
-        # Effectiveness summary (scoped to the report year)
+        # Effectiveness summary (scoped to the report period)
         effectiveness_summary = await self._get_effectiveness_summary(
-            organization_id, year
+            organization_id, start_date, end_date
         )
 
         # Record completeness (NFPA 1401)
@@ -1086,10 +1181,15 @@ class AnnualComplianceReportService:
             "report_type": "annual_compliance",
             "organization_id": organization_id,
             "year": year,
+            "period_start": start_date.isoformat(),
+            "period_end": end_date.isoformat(),
+            "as_of": today.isoformat(),
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "executive_summary": {
                 "overall_compliance_pct": overall_compliance_pct,
                 "total_members": total_members,
+                "graded_members": graded_members,
+                "not_applicable_members": not_applicable_members,
                 "fully_compliant_members": fully_compliant,
                 "at_risk_members": at_risk_members,
                 "non_compliant_members": non_compliant_members,
@@ -1316,17 +1416,19 @@ class AnnualComplianceReportService:
         }
 
     async def _get_effectiveness_summary(
-        self, organization_id: str, year: int
+        self, organization_id: str, start_date: date, end_date: date
     ) -> Dict[str, Any]:
-        """Get training effectiveness evaluation summary for the given year."""
-        year_start = datetime(year, 1, 1, tzinfo=timezone.utc)
-        year_end = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+        """Training effectiveness evaluations created within the period."""
+        period_start = datetime.combine(start_date, time.min, tzinfo=timezone.utc)
+        period_end = datetime.combine(
+            end_date + timedelta(days=1), time.min, tzinfo=timezone.utc
+        )
 
         evals_result = await self.db.execute(
             select(TrainingEffectivenessEvaluation).where(
                 TrainingEffectivenessEvaluation.organization_id == organization_id,
-                TrainingEffectivenessEvaluation.created_at >= year_start,
-                TrainingEffectivenessEvaluation.created_at < year_end,
+                TrainingEffectivenessEvaluation.created_at >= period_start,
+                TrainingEffectivenessEvaluation.created_at < period_end,
             )
         )
         evals = evals_result.scalars().all()

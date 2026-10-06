@@ -249,3 +249,67 @@ async def persist_error_log(
     except Exception as log_exc:
         logger.error(f"Failed to persist error log: {log_exc}")
         return False
+
+
+TASK_ERROR_TYPE = "SCHEDULED_TASK_FAILED"
+
+
+async def persist_task_error_log(
+    organization_id: str | None,
+    task_name: str,
+    exc: BaseException,
+    extra_context: dict[str, Any] | None = None,
+) -> bool:
+    """Write a scheduled task's failure for one organization to ``error_logs``.
+
+    The request-free counterpart of :func:`persist_error_log`. A background
+    task has no request to resolve an organization from, so the caller — which
+    is already iterating organizations — names it. Without this a failed
+    reminder run or report reached Loguru and Sentry only, never the Error
+    Monitoring page the department's administrators actually read.
+
+    Writes through its own session: the task's session has usually just been
+    rolled back, and must not be committed by the error reporter. Returns True
+    when a row was written; never raises, for the same reason as
+    :func:`persist_error_log`.
+    """
+    if not organization_id:
+        return False
+
+    context: dict[str, Any] = {"source": "scheduled_task", "task": task_name}
+    traceback_text = format_traceback(exc)
+    if traceback_text:
+        context["traceback"] = traceback_text
+    if extra_context:
+        context.update(extra_context)
+
+    try:
+        from app.core.database import database_manager
+        from app.models.error_log import ErrorLog
+
+        async for session in database_manager.get_session():
+            session.add(
+                ErrorLog(
+                    organization_id=str(organization_id),
+                    error_type=TASK_ERROR_TYPE,
+                    error_message=f"{task_name}: {exc}"[:MAX_ERROR_MESSAGE_LENGTH],
+                    user_message=(
+                        f"The scheduled task '{task_name}' failed for this "
+                        "department"
+                    )[:MAX_USER_MESSAGE_LENGTH],
+                    troubleshooting_steps=[
+                        "The task runs again on its next schedule; check whether "
+                        "the next run succeeds.",
+                        "If it keeps failing, the traceback in this entry's "
+                        "context names the cause.",
+                    ],
+                    context=context,
+                    user_id=None,
+                )
+            )
+            await session.commit()
+            break
+        return True
+    except Exception as log_exc:
+        logger.error(f"Failed to persist task error log: {log_exc}")
+        return False

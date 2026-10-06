@@ -8,6 +8,40 @@
 (pass 4, merged), [#2583](https://github.com/thegspiro/the-logbook/pull/2583)
 (pass 5, merged), pass 6 (this PR)
 
+## Owner decisions applied (2026-10-05)
+
+Standing flags the owner decided, each implemented in its own commit:
+
+- **CMP4-3 — ✅ FIXED.** The owner chose to apply compliance profiles in the
+  annual report. `_generate_period_report` (behind both the annual and the
+  monthly report) now loads the configuration once into
+  `ComplianceGrading.from_config` and grades each member through
+  `ComplianceGrading.for_member` and `ComplianceGrading.classify` — the same
+  calls `compute_org_compliance_tally` and `get_compliance_matrix` make — so
+  profile narrowing (`required_requirement_ids`) and threshold overrides
+  reach the report. The requirement analysis counts a member under a
+  requirement only when that member's grading includes it. **This moves the
+  report's figures for every department using compliance profiles** (overall
+  percentage, standing counts, member rows, per-requirement
+  `members_total`); departments without profiles see no change, and stored
+  reports keep the figures they were generated with.
+  `tests/test_annual_report_compliance_profiles.py` asserts the report, the
+  matrix and `compute_org_compliance_pct` agree for a profile org.
+- **CMP4-5 — ✅ FIXED.** The owner chose to match `required_roles` against
+  the member's rank slug (`User.rank`) — the model's and schema's stated
+  intent — rather than migrate the column to position ids.
+  `requirement_applies_to_member` now takes the member's `rank` where it
+  took position ids, `requirement_applies_to_user` reads `member.rank`, and
+  `member_role_ids` is gone. Every grader goes through the helper, so all
+  of them changed at once; the scheduling shift-compliance report, which
+  already matched the rank in its own copy of the check, now calls the
+  helper too (and so also honours `required_membership_types`). **Reported
+  numbers change**: rank-scoped requirements start grading the members of
+  those ranks on every training screen and in the annual report.
+  `tests/test_required_roles_rank_matching.py` covers My Training, the
+  matrix, `compute_org_compliance_tally`, the annual report and the
+  shift-compliance report.
+
 ## Pass 6 (2026-10-03)
 
 **Not a zero-delta pass** — real commits landed in this feature's declared
@@ -436,7 +470,9 @@ rule against a wrong fix in an ambiguous area.
 (`requirement_applies_to_member`, needs a fourth branch); every caller listed
 above inherits the gap unchanged.
 
-### CMP4-3 — MED — OPEN — `generate_annual_report` never considers compliance profiles (pre-existing, not this pass's regression)
+### CMP4-3 — MED — ✅ FIXED 2026-10-05 — `generate_annual_report` never considers compliance profiles (pre-existing, not this pass's regression)
+
+_Fixed by owner decision; see "Owner decisions applied (2026-10-05)" at the top of this file. The text below is the original finding._
 
 **What:** `AnnualComplianceReportService.generate_annual_report` has never
 looked up `ComplianceProfile` rows or called `_find_matching_profile` —
@@ -509,7 +545,9 @@ the level this codebase already treats as needing "not applicable" instead.
 (the rendering), `frontend/src/types/training.ts:2585` (`AnnualReportRequirement.compliance_pct: number`,
 would need to widen to `number | null`).
 
-### CMP4-5 — MED — OPEN — `required_roles` is stored as rank **slugs** everywhere it's written, but matched as position **UUIDs** everywhere the role_ids fix (and its canonical precedent) compares it
+### CMP4-5 — MED — ✅ FIXED 2026-10-05 — `required_roles` is stored as rank **slugs** everywhere it's written, but matched as position **UUIDs** everywhere the role_ids fix (and its canonical precedent) compares it
+
+_Fixed by owner decision; see "Owner decisions applied (2026-10-05)" at the top of this file. The text below is the original finding._
 
 **What:** a fourth Codex round on this same PR caught that CMP4-1's own
 role_ids follow-up — passing `[str(r.id) for r in member.roles]` (position

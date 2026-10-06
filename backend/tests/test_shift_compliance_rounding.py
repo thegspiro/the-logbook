@@ -52,6 +52,7 @@ async def test_hours_compliance_uses_raw_minutes_before_display_rounding():
         last_name="Member",
         full_name="Short Member",
         rank=None,
+        membership_type="active",
     )
     attendance = SimpleNamespace(user_id=user_id, shift_count=1, total_minutes=53)
     db = SimpleNamespace(

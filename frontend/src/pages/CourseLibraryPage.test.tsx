@@ -133,6 +133,36 @@ describe('CourseLibraryPage management controls', () => {
       renderWithRouter(<CourseLibraryPage />);
       expect(await screen.findByRole('button', { name: /add your first course/i })).toBeInTheDocument();
     });
+
+    // W25-4: a deactivated course left the library with no way back.
+    it('lists inactive courses on request and reactivates one', async () => {
+      const user = userEvent.setup();
+      const inactive: TrainingCourse = { ...course, id: 'course-2', name: 'Hazmat Ops', code: 'HM-1', active: false };
+      await renderPage();
+      expect(mockGetCourses).toHaveBeenLastCalledWith(true);
+
+      mockGetCourses.mockResolvedValue([course, inactive]);
+      await user.click(screen.getByRole('button', { name: /filters/i }));
+      await user.click(screen.getByRole('checkbox', { name: 'Show inactive courses' }));
+
+      await waitFor(() => expect(mockGetCourses).toHaveBeenLastCalledWith(false));
+      expect(await screen.findByText('Hazmat Ops')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Deactivate Hazmat Ops' })).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Reactivate Hazmat Ops' }));
+      expect(mockUpdateCourse).toHaveBeenCalledWith('course-2', { active: true });
+    });
+  });
+
+  describe('inactive courses without training.manage', () => {
+    it('are not offered', async () => {
+      const user = userEvent.setup();
+      hasManagePermission = false;
+      await renderPage();
+      await user.click(screen.getByRole('button', { name: /filters/i }));
+      expect(screen.queryByRole('checkbox', { name: 'Show inactive courses' })).not.toBeInTheDocument();
+      expect(mockGetCourses).toHaveBeenCalledWith(true);
+    });
   });
 });
 

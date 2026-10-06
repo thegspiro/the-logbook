@@ -382,6 +382,13 @@ export interface RSVP {
    * either way; this is what an organizer looks at to decide whether it should.
    */
   early_check_in_minutes?: number | null | undefined;
+  /**
+   * When the backend credits this member's attendance from — the override if
+   * set, otherwise the tap clamped to the scheduled start. Reported by the
+   * roster listing only; the Edit Times dialog pre-fills it rather than
+   * re-deriving the clamp.
+   */
+  credited_check_in_at?: string | null | undefined;
   override_check_in_at?: string | undefined;
   override_check_out_at?: string | undefined;
   override_duration_minutes?: number | undefined;

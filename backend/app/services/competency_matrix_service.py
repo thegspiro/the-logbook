@@ -31,6 +31,7 @@ from app.models.user import User, UserStatus
 from app.services.training_compliance import (
     CATCH_UP_STATUS,
     apply_recency,
+    biannual_window,
     catch_up_deadline,
     certification_record_matches,
     get_org_include_current_month,
@@ -264,8 +265,7 @@ class CompetencyMatrixService:
         if freq == RequirementFrequency.ONE_TIME.value:
             return None, None
         elif freq == RequirementFrequency.BIANNUAL.value:
-            base_year = req.year if req.year else current_year
-            return date(base_year - 1, 1, 1), date(base_year, 12, 31)
+            return biannual_window(req, today)
         elif freq == RequirementFrequency.QUARTERLY.value:
             quarter_month = ((today.month - 1) // 3) * 3 + 1
             start_date = date(current_year, quarter_month, 1)

@@ -177,9 +177,19 @@ class TrainingCategory(Base):
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
-    # Relationships
+    # Relationships. ``remote_side`` belongs on the many-to-one side: placed on
+    # the collection, as it once was here, it turns ``subcategories`` into the
+    # parent and ``parent_category`` into the child list. No cascade: a parent
+    # going away leaves its children as top-level categories, which is what
+    # the FK's SET NULL says too.
+    parent_category = relationship(
+        "TrainingCategory",
+        remote_side=[id],
+        back_populates="subcategories",
+    )
     subcategories = relationship(
-        "TrainingCategory", backref="parent_category", remote_side=[id]
+        "TrainingCategory",
+        back_populates="parent_category",
     )
 
     __table_args__ = (
@@ -457,6 +467,12 @@ class TrainingRecord(Base):
         return f"<TrainingRecord(user_id={self.user_id}, course={self.course_name}, status={self.status})>"
 
 
+def _default_shift_credited(context) -> bool:
+    """A new SHIFTS requirement is shift-credited unless the caller says not."""
+    value = context.get_current_parameters().get("requirement_type")
+    return str(getattr(value, "value", value)) == RequirementType.SHIFTS.value
+
+
 class TrainingRequirement(Base):
     """
     Training Requirement model
@@ -496,6 +512,13 @@ class TrainingRequirement(Base):
         String(100)
     )  # e.g., "NFPA", "NREMT", "Pro Board", state name
     registry_code = Column(String(50))  # e.g., "NFPA 1001", "EMR"
+    # CERTIFICATION only: a record completed on or before this date may still
+    # satisfy the requirement because its course name contains the
+    # requirement's name; a later one needs a linked course, the training type
+    # or the registry code. Set by migration 60aaf273de27 to the day it ran,
+    # for the requirements that existed then; NULL (every requirement created
+    # since) means no name matching. See certification_record_matches.
+    name_match_until = Column(Date, nullable=True)
     is_editable = Column(
         Boolean, default=True
     )  # Department can override registry requirements
@@ -508,6 +531,21 @@ class TrainingRequirement(Base):
     # hands-on radios drill that a Vector course must not check off).
     allows_external_credit = Column(
         Boolean, default=False, nullable=False, server_default="0"
+    )
+
+    # May shift attendance satisfy this requirement? Read only by the
+    # scheduling Shift Compliance report (``get_shift_compliance``), which
+    # grades from shifts worked rather than training records. Before this
+    # flag it graded every HOURS requirement that way, so a training-hours
+    # requirement such as annual hazmat hours read compliant on ordinary duty
+    # shifts while every training screen said otherwise (W37-2). A SHIFTS
+    # requirement counts shifts by definition, so it defaults on; an HOURS
+    # requirement is shift-credited only when an officer says so.
+    shift_credited = Column(
+        Boolean,
+        default=_default_shift_credited,
+        nullable=False,
+        server_default="0",
     )
 
     # Requirement Quantities (based on requirement_type)
@@ -801,6 +839,13 @@ class CohortMemberStatus(str, enum.Enum):
     ACTIVE = "active"
     WITHDRAWN = "withdrawn"
     COMPLETED = "completed"
+
+
+class MissedClassResolution(str, enum.Enum):
+    """What an officer decided for a class held before a member joined"""
+
+    CREDITED = "credited"
+    MAKEUP_SCHEDULED = "makeup_scheduled"
 
 
 class DateRollPolicy(str, enum.Enum):
@@ -1115,6 +1160,14 @@ class CourseCohortClass(Base):
     # not accept it for.
     counts_toward_certification = Column(Boolean, default=True, nullable=False)
     cancellation_reason = Column(Text)
+    # Set on a make-up session scheduled for one late-joining member (W27-3).
+    # Such a class is never itself a class a later joiner "missed": it was
+    # somebody else's catch-up, not part of the course.
+    makeup_for_class_id = Column(
+        String(36),
+        ForeignKey("course_cohort_classes.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
@@ -1187,6 +1240,67 @@ class CourseCohortMember(Base):
 
     __table_args__ = (
         UniqueConstraint("cohort_id", "user_id", name="uq_cohort_member_user"),
+    )
+
+
+class CohortMissedClass(Base):
+    """An officer's decision for a class held before a member joined (W27-3).
+
+    A member added to a running cohort is RSVP'd only to classes still to come,
+    so every class before they joined needs a decision: credit them for it
+    (they covered the material elsewhere), or schedule a make-up session for
+    them alone. One row per member and class; a class with no row is still
+    awaiting a decision.
+    """
+
+    __tablename__ = "course_cohort_missed_classes"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    cohort_id = Column(
+        String(36),
+        ForeignKey("course_cohorts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    cohort_member_id = Column(
+        String(36),
+        ForeignKey("course_cohort_members.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    cohort_class_id = Column(
+        String(36),
+        ForeignKey("course_cohort_classes.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    resolution = Column(
+        Enum(MissedClassResolution, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
+    training_record_id = Column(
+        String(36),
+        ForeignKey("training_records.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    makeup_class_id = Column(
+        String(36),
+        ForeignKey("course_cohort_classes.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    recorded_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    recorded_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint(
+            "cohort_member_id", "cohort_class_id", name="uq_cohort_missed_class"
+        ),
     )
 
     def __repr__(self):
@@ -2389,6 +2503,13 @@ class SelfReportConfig(Base):
 
     # Instructions displayed to members
     member_instructions = Column(Text, nullable=True)
+
+    # Days a decided (approved or rejected) submission's certificate files
+    # are kept after the decision; null = keep indefinitely, which is what
+    # every department had before this setting existed. Read by the
+    # self_report_attachment_retention scheduled task
+    # (app/services/self_report_attachment_retention.py).
+    attachment_retention_days = Column(Integer, nullable=True)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

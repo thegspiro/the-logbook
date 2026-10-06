@@ -1,17 +1,11 @@
-"""A "monthly" compliance report is currently the annual one, relabelled.
+"""A "monthly" compliance report is built from its month (CS-9).
 
-`generate_report` takes `report_type="monthly"` and a month, builds the period
-label, stores `period_month` — and then asks
-`AnnualComplianceReportService.generate_annual_report(org, year=year)` for the
-figures. Its own comment says "If monthly, filter/annotate the data"; only the
-annotation happens. Two monthly reports for different months of the same year
-therefore hold identical numbers, and the stored payload still calls itself
-`annual_compliance`.
-
-These tests pin that, so the fix — which needs a decision about what "compliant
-in July" means for an annually-recurring requirement, not just a refactor —
-changes something deliberate rather than sliding past review. See
-`docs/KNOWN_LIMITATIONS.md`.
+It used to be the annual report relabelled: `generate_report` built the
+period label and stored `period_month`, then asked
+`generate_annual_report(org, year=year)` for the figures, so two monthly
+reports of one year held identical numbers. The monthly path now calls
+`generate_monthly_report(org, year=year, month=month)`; what a month's figures
+mean is pinned against real rows in `test_monthly_compliance_report.py`.
 
 DB mocked; no MySQL.
 """
@@ -26,33 +20,20 @@ def _source() -> str:
 
 
 def test_the_month_reaches_the_stored_row():
-    """The label and the column are right; it is the figures that are not."""
     source = _source()
     assert 'period_month=month if report_type == "monthly" else None' in source
     assert 'period_label = datetime(year, month, 1).strftime("%B %Y")' in source
 
 
-def test_the_figures_come_from_the_whole_year():
-    """The defect, stated as an assertion.
-
-    When the builder learns to take a range, this is the test that should fail.
-    Replace it with one that asserts the month is passed through — do not
-    delete it.
-    """
+def test_the_figures_come_from_the_month():
+    """Replaces the test that stated the defect: the month is passed through."""
     source = _source()
-    assert "generate_annual_report(" in source
-    assert "year=year" in source
-    # No date range is threaded through today.
-    assert "start_date=" not in source
-    assert "month=month" not in source.split("generate_annual_report(")[1][:200]
+    monthly_call = source.split("generate_monthly_report(")[1][:200]
+    assert "month=month" in monthly_call
 
 
-def test_monthly_only_annotates():
-    """`report_period` is added; nothing is filtered."""
-    source = _source()
-    monthly_branch = source.split('if report_type == "monthly" and month:')[-1]
-    assert '"type": "monthly"' in monthly_branch
-    assert "filter" not in monthly_branch.split("elapsed_ms")[0].lower()
+def test_a_monthly_report_without_a_month_is_refused():
+    assert 'raise ValueError("A monthly report needs a month")' in _source()
 
 
 def test_report_type_is_still_constrained_to_the_known_values():

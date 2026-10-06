@@ -13,6 +13,7 @@ panel was reviewed end to end:
 
 import ast
 import uuid
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -33,7 +34,10 @@ from app.models.training import (
     RequirementProgress,
     TrainingModuleConfig,
     TrainingProgram,
+    TrainingRecord,
     TrainingRequirement,
+    TrainingStatus,
+    TrainingType,
 )
 from app.models.user import User
 from app.schemas.training_module_config import (
@@ -537,3 +541,49 @@ async def test_pipeline_progress_names_the_program_and_its_requirements(
     assert [r["requirement_name"] for r in entry["requirements"]] == [
         "Supervised Driving Hours"
     ]
+
+
+@pytest.mark.integration
+async def test_a_pending_record_survives_a_full_history(
+    db_session, setup_org_and_admin
+):
+    """An undated record must not fall off the end of the 100-row history.
+
+    MySQL sorts NULL last under ``DESC``, so ordering by completion date alone
+    dropped a member's pending submission once they had 100 completed ones.
+    """
+    org_id, admin_id = setup_org_and_admin
+    user = await _member(db_session, setup_org_and_admin)
+    start = date(2020, 1, 1)
+    for i in range(100):
+        db_session.add(
+            TrainingRecord(
+                id=str(uuid.uuid4()),
+                organization_id=org_id,
+                user_id=admin_id,
+                course_name=f"Drill {i}",
+                training_type=TrainingType.CONTINUING_EDUCATION,
+                completion_date=start + timedelta(days=i),
+                hours_completed=1,
+                status=TrainingStatus.COMPLETED,
+            )
+        )
+    pending_id = str(uuid.uuid4())
+    db_session.add(
+        TrainingRecord(
+            id=pending_id,
+            organization_id=org_id,
+            user_id=admin_id,
+            course_name="Awaiting sign-off",
+            training_type=TrainingType.CONTINUING_EDUCATION,
+            hours_completed=2,
+            status=TrainingStatus.SCHEDULED,
+        )
+    )
+    await db_session.flush()
+
+    result = await get_my_training_summary(db=db_session, current_user=user)
+
+    ids = [r["id"] for r in result["training_records"]]
+    assert len(ids) == 100
+    assert ids[0] == pending_id

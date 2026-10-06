@@ -30,7 +30,7 @@
 
 ## Findings
 
-### W36-1 — MED — The six Scheduling Notifications switches are read by nothing — ✅ LABELLED, FLAGGED
+### W36-1 — MED — The six Scheduling Notifications switches are read by nothing — ✅ REMOVED
 
 **Did:** `scheduling_officer`, Notifications. All six preset switches read off:
 New Assignment, Assignment Confirmed, Assignment Declined, Time-Off Approved,
@@ -58,6 +58,11 @@ fails against the old panel.
 **Flagged because:** whether to wire a reader (each sender consulting its rule,
 with absence meaning today's behaviour) or remove the switches is the owner's
 call. Mirrored into `docs/KNOWN_LIMITATIONS.md`.
+**Resolved 2026-10-05 (owner decision):** the six switches were removed. The
+panel now holds only the decline, assignment, reminder and equipment-alert
+settings, each read by its sender. `schedule_change` rules already stored stay
+in the database, inert, and the notification rules screen still labels them
+not in effect.
 
 ### W36-2 — LOW — Eligibility's membership-type and open-position chips showed their state by colour only — ✅ FIXED
 

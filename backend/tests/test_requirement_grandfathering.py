@@ -56,6 +56,8 @@ def _req(**overrides):
         name="Live Fire",
         description=None,
         requirement_type=RequirementType.CERTIFICATION,
+        # Credited by course name: a legacy requirement, records to this date.
+        name_match_until=date(2026, 10, 5),
         frequency=RequirementFrequency.ONE_TIME,
         training_type=None,
         required_hours=None,
@@ -77,6 +79,7 @@ def _req(**overrides):
         applies_to_all=True,
         required_membership_types=None,
         required_roles=None,
+        required_positions=None,
         new_member_cutoff_date=None,
         existing_member_deadline=None,
         applies_to_joined_before=None,
@@ -152,21 +155,25 @@ class TestAppliesByJoinDate:
         assert not requirement_applies_to_member(req, "active", join_date=VETERAN)
         assert requirement_applies_to_member(req, "active", join_date=RECRUIT)
 
-    def test_user_form_reads_role_ids_from_positions(self):
-        req = _req(applies_to_all=False, required_roles=["pos-officer"])
-        officer = SimpleNamespace(
+    def test_user_form_reads_the_rank_for_required_roles(self):
+        # required_roles holds rank slugs (CMP4-5); a position id there is
+        # not how any writer fills it, and holding that position is no match.
+        req = _req(applies_to_all=False, required_roles=["captain"])
+        captain = SimpleNamespace(
             membership_type="active",
-            positions=[SimpleNamespace(id="pos-officer")],
+            rank="captain",
+            positions=[],
             hire_date=VETERAN,
             created_at=None,
         )
         member = SimpleNamespace(
             membership_type="active",
-            positions=[],
+            rank="firefighter",
+            positions=[SimpleNamespace(id="captain", slug="officer")],
             hire_date=VETERAN,
             created_at=None,
         )
-        assert requirement_applies_to_user(req, officer)
+        assert requirement_applies_to_user(req, captain)
         assert not requirement_applies_to_user(req, member)
 
 

@@ -14,6 +14,30 @@
 
 ---
 
+## Owner decision applied (2026-10-05) — certification name matching
+
+`docs/KNOWN_LIMITATIONS.md` → "Training — Credit From Event Attendance"
+flagged that `certification_record_matches` credited a CERTIFICATION
+requirement from any record whose course name contained the requirement's
+name. The owner chose to keep that match for legacy records only. The
+matcher now applies it to a record completed on or before the requirement's
+new `name_match_until` column (undated records by `created_at`); migration
+`60aaf273de27` sets it to the day it runs on every existing requirement, and
+requirements created since carry none. Because every grader calls the one
+matcher, the matrix, `compute_org_compliance_pct`, the annual report, the
+profile card, My Training and the competency matrix change together.
+**Reported figures move** for members whose only credit for a certification
+was a course-name substring on a record completed after the upgrade.
+
+The bounded record load (`graded_records_clause`, TR4-2 below) needs no
+change and stays exact: a certification still selects the member's whole
+completed history (or everything since a freshness cutoff), because the
+registry-code, course and type matches carry no date bound; the cut-off only
+narrows what the grader accepts from that superset.
+`tests/test_certification_name_match_cutoff.py` covers the matcher and every
+grader; `tests/test_graded_records_bounded_load.py` still compares bounded and
+unbounded grading figure for figure.
+
 ## Pass 3 (2026-09-04) — Codex follow-up: 1 fix, 1 flagged, 1 corrected claim
 
 **PR:** [#2217](https://github.com/thegspiro/the-logbook/pull/2217) merged
@@ -588,7 +612,7 @@ UPDATE statement, including its expanding `IN`-list bindparam, clears
 standard mocked-bind unit test for the table-missing guard, in the manner
 of the `email_service` migration's own test.
 
-### TR3-2 — LOW (abuse resistance) — `get_member_requirements_progress`'s pagination bounds the response, not the scan behind it — 🚩 FLAGGED
+### TR3-2 — LOW (abuse resistance) — `get_member_requirements_progress`'s pagination bounds the response, not the scan behind it — ✅ ACCEPTED (owner, 2026-10-05: the ceiling is one member's history)
 
 **Reported by Codex on this PR; confirmed.** See the "Scope addition"
 correction above for the mechanism. `limit`/`offset` on the MCP tool
@@ -1061,7 +1085,7 @@ training heat maps and dashboard'`) asserting `isCacheable(...)` is `false`
 for `/training/competency-matrix`, `/training/compliance-matrix` (existing
 behavior, pinned), and `/training/dashboard-summary`.
 
-#### TR2-2 — LOW (abuse resistance) — `GET /training/records` has no pagination — 🚩 FLAGGED
+#### TR2-2 — LOW (abuse resistance) — `GET /training/records` has no pagination — ✅ FIXED 2026-10-05 (`skip`/`limit` capped at 500 with `X-Total-Count`; `trainingService.getRecords` walks the pages, so per-member screens still see the whole history)
 
 See `docs/KNOWN_LIMITATIONS.md` → "Training — `GET /training/records` Has No
 Pagination". `list_records` (`training.py`) returns every matching
@@ -1107,7 +1131,7 @@ to reach the endpoint at all, but the same PII-in-cache class as TR2-1.
 test: `apiCache.test.ts` → `'returns false for the training-session approval
 roster'`.
 
-#### TR2-4 — LOW (abuse resistance) — `get_training_dashboard_summary` is an unbounded per-request scan, now uncached — 🚩 FLAGGED
+#### TR2-4 — LOW (abuse resistance) — `get_training_dashboard_summary` is an unbounded per-request scan, now uncached — ✅ FIXED (2026-10-05), certification residual open
 
 Also raised by Codex, against the TR2-1 fix itself. `get_training_dashboard_summary`
 (`training.py`) loads every active `User` in the org, every active
@@ -1120,8 +1144,9 @@ caching it is the HIPAA-shaped problem TR2-1/TR2-3 close), which means every
 mount or manual refresh now re-runs this unbounded scan against the live
 database.
 
-See `docs/KNOWN_LIMITATIONS.md` → "Training — Dashboard Summary Is an
-Unbounded Per-Request Scan". Not fixed here: the query needs a
+See `docs/KNOWN_LIMITATIONS.md` → "Training — Compliance Grading Still
+Reads Full History for Certifications and One-Time Requirements" (the
+residual, after the fix below). Not fixed in pass 2: the query needs a
 date-window-aware bound (e.g. limiting `TrainingRecord` rows to what each
 requirement's own lookback/recertification window actually needs, matching
 `training_compliance.py`'s `get_requirement_date_window` logic) or a move to
@@ -1132,6 +1157,10 @@ drive-by change alongside a cache-exclusion security fix. Mirrors the same
 abuse-resistance class as TR2-2 (unbounded per-request read that grows with
 department history), and the fix removing this endpoint's cache-based
 mitigation makes it more pressing than TR2-2, not less.
+
+**Fixed (2026-10-05), on the owner's decision ("bound the records loaded via
+each requirement's date window — same results"):** fixed together with TR4-2.
+See the fix note there.
 
 ### Verified good ✅ (pass 2, not previously stated this way)
 
@@ -1414,7 +1443,7 @@ role_ids=None)` into `training_compliance.py` — the exact precedence
 > `AttributeError` until fixed, confirming the helper's stricter contract
 > rather than a false positive.
 
-### TR4-2 — LOW (abuse resistance) — `get_compliance_matrix` has its own unbounded record scan, distinct from TR2-4 — 🚩 FLAGGED
+### TR4-2 — LOW (abuse resistance) — `get_compliance_matrix` has its own unbounded record scan, distinct from TR2-4 — ✅ FIXED (2026-10-05), certification residual open
 
 **Reported by Codex on PR #2455; confirmed.** `get_compliance_matrix`
 loads every active member, requirement, and `TrainingRecord` for the org
@@ -1434,7 +1463,44 @@ entry (not folded into TR2-4's, since fixing TR2-4 would not fix this).
 department size on the member/requirement axes even though the record axis
 is not; same abuse-resistance class as TR2-2/TR2-4/TR3-2.
 
-### TR4-3 — LOW/MED (Pitfall #29) — Three endpoints, three different definitions of "compliant" — 🚩 FLAGGED
+**Fixed (2026-10-05), with TR2-4, on the owner's decision:** both endpoints
+now load records through `load_graded_records`
+(`training_compliance.py`). So do the other department-wide graders found
+loading every record into the shared grader: `compute_org_compliance_tally`,
+`get_member_period_status`, the annual/monthly compliance report and the
+profile card's `get_compliance_summary`. The load is bounded by
+`graded_records_clause`, which follows `_grade_member_requirement` branch by
+branch. Each requirement takes its window from `completion_window`, which is
+the frequency window narrowed by `recency_days` and resolved on the grader's
+own per-requirement as-of date. `TrainingService._preload_window` now uses
+the same helper. A caller's own extra reads (the dashboard's
+expiring/recent/year lists, the roster's period, the report's certificate
+count) are OR'd in. Records are ordered by id, so ties resolve the same way
+in any subset.
+
+Results are identical, not approximately equal.
+`tests/test_graded_records_bounded_load.py` grades an eight-year fixture
+bounded and unbounded. It covers every requirement type, frequency and
+due-date type, plus profiles, waivers, grandfathering, NULL-date,
+future-dated and non-completed records. It asserts that every caller's
+output matches and that every member × requirement cell matches on seven
+evaluation dates under both `include_current_month` settings. It also
+asserts that the windowed load excludes out-of-window and unread-status
+rows. Mutating a bound by one day, dropping the as-of shift, bounding
+certifications by their window or dropping the IN_PROGRESS read each fails
+it.
+
+**Residual (still unbounded):** certification requirements without
+`recency_days`, which load the member's whole COMPLETED history. The
+name/registry-code substring match is case-folded by Python and cannot be
+reproduced exactly by a collation-dependent SQL `LIKE`, so bounding it is
+an owner decision, not a drive-by. Also unbounded: one-time requirements
+without `recency_days`, which have no window, and the fallback types'
+IN_PROGRESS read. Recorded in `docs/KNOWN_LIMITATIONS.md` → "Training —
+Compliance Grading Still Reads Full History for Certifications and One-Time
+Requirements".
+
+### TR4-3 — LOW/MED (Pitfall #29) — Three endpoints, three different definitions of "compliant" — ✅ FIXED (2026-10-05)
 
 **Reported by Codex on PR #2455; confirmed.** `get_compliance_matrix` and
 `compute_org_compliance_pct` (after TR4-1's fix) now agree on both which
@@ -1458,7 +1524,24 @@ with one obviously-correct fix. Mirrored into `docs/KNOWN_LIMITATIONS.md`.
 trust gap (a chief-facing summary card that can read differently from the
 detail screen it links to) rather than a security boundary.
 
-### TR4-4 — LOW (Pitfall #29 corollary) — A member with zero applicable requirements counts as "compliant," inflating the org percentage — 🚩 FLAGGED
+**Fixed (2026-10-05), on the owner's decision:** the card now uses the same
+definition as the matrix. `ComplianceGrading` (`training_compliance.py`) is
+the one resolution of a member's requirement set — profile match,
+`required_requirement_ids`, threshold overrides, then
+`requirement_applies_to_user` — and its `classify` applies
+`classify_standing` with the member's thresholds. `get_compliance_matrix`,
+`compute_org_compliance_tally` and `get_training_dashboard_summary` all go
+through it, so the card's compliant count and percentage equal
+`compute_org_compliance_pct`'s, and members TR4-4 calls not applicable are
+excluded. The card's intervention list keeps its "any open item" rule (it
+backs the matrix's `status=noncompliant` deep link, which filters on open
+items), and `requirements_at_risk` now counts only members whose profile
+selects the requirement, matching the matrix's by-requirement axis. Card
+numbers change for orgs using compliance profiles or non-100% thresholds.
+Guard test: `tests/test_compliance_matrix_endpoint.py::
+TestDashboardCardAgreesWithMatrix`.
+
+### TR4-4 — LOW (Pitfall #29 corollary) — A member with zero applicable requirements counts as "compliant," inflating the org percentage — ✅ FIXED (2026-10-05)
 
 **Reported by Codex on PR #2455; confirmed, and pre-existing.**
 `classify_standing` returns `("compliant", 100.0)` whenever `total_count
@@ -1497,6 +1580,24 @@ instead — proving the two conventions coexist by design elsewhere in this
 codebase, which is precedent for _how_ to fix this, not evidence that the
 member-level side is already correct. Mirrored into
 `docs/KNOWN_LIMITATIONS.md`.
+
+**Fixed (2026-10-05), on the owner's decision:** a member nothing grades is
+excluded from the denominator of every compliance percentage and shown as
+not applicable. `classify_standing` returns `("not_applicable", None)` for an
+empty tally (`STANDING_NOT_APPLICABLE`), and every caller follows it:
+`compute_org_compliance_pct` now counts only graded members on both sides
+(via `compute_org_compliance_tally`, and returns `None` when requirements
+exist but none applies to anyone), the compliance matrix row carries
+`standing: "not_applicable"` with a null `completion_pct`, the dashboard
+summary card, the member-status roster, the profile-card summary, the annual
+report (members and executive summary), the compliance-status report and the
+compliance forecast all report the member as not applicable rather than
+100%. The frontend `Standing` gains `NOT_APPLICABLE`, rendered muted, and
+`complianceMatrixModel.evaluateMember` follows `rollUpRequirements`'s null
+precedent. `TestEmptyRequiredRequirementIds::test_explicit_empty_list_means_
+nothing_required` now asserts the new decision. Department percentages move
+for any org with such members: they were counted as compliant, so the
+figure falls (or, where every member is graded, is unchanged).
 
 **Impact:** LOW — same-org, `training.manage`-gated; inflates a reported
 percentage rather than exposing data or bypassing a control.
@@ -1775,3 +1876,38 @@ flag was re-confirmed unchanged at its existing citation.
 
 No files changed by this pass other than this findings doc and
 `docs/security-review/PROGRESS.md`.
+
+## Resolved after pass 6 (2026-10-05)
+
+- **Enum-validation gap (bulk/historical-import).** Owner decision: keep
+  per-row failure, validated in the endpoint with a clear per-row message.
+  - `create_records_bulk` checks each row's `training_type` and `status`
+    with `validate_enum_value` before building the record. A bad value
+    fails that row as `Row N: Invalid training_type 'x'. Valid values: …`,
+    and a valid value is stored in its canonical lowercase form.
+  - Each row's insert now runs in its own `begin_nested()` savepoint, so a
+    rejected flush fails that row only. Previously a rejected flush left the
+    session needing a rollback, and every later row and the final commit
+    failed with it.
+  - In `confirm_historical_import`, a `create_new` mapping whose
+    `new_training_type` is not a training type creates no course, and its
+    rows fail with that message instead of the whole confirm failing on the
+    course flush.
+  - The request-level `default_training_type` and `default_status` get
+    `@field_validator`s, because every row falls back to them and a bad one
+    could only fail the whole import.
+  - A row's CSV type column still falls back to the default when it is not a
+    training type (the parser also reads a free-text `category` column), but
+    case and spacing are forgiven first. "Certification" is now kept rather
+    than becoming the default. The hardcoded type set is replaced by the
+    `TrainingType` enum.
+  - Tests: `tests/test_training_import_enum_rows.py`.
+
+- **TR2-4 / TR4-2 (unbounded compliance record scans).** Owner decision:
+  bound the records loaded via each requirement's date window, with
+  identical results. `load_graded_records` / `graded_records_clause`
+  (`training_compliance.py`) now feed every department-wide grader.
+  Certifications without `recency_days`, one-time requirements without it,
+  and the fallback types' IN_PROGRESS read stay unbounded because exact
+  equivalence needs them. See the fix note under TR4-2. Tests:
+  `tests/test_graded_records_bounded_load.py`.

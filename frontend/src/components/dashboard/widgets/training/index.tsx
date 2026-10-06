@@ -46,10 +46,21 @@ export const ComplianceOverviewWidget = ({ data }: { data: TrainingDashboardSumm
       icon={CheckCircle}
       href="/training/admin?page=dashboard&tab=compliance&status=noncompliant"
     >
-      <div className="text-theme-text-primary text-3xl font-bold">{data.stats.compliance_percentage}%</div>
-      <p className="text-theme-text-muted text-sm">
-        {data.stats.compliant_members} of {data.stats.tracked_members} active, non-exempt members
-      </p>
+      {data.stats.compliance_percentage === null ? (
+        <>
+          <div className="text-theme-text-muted text-3xl font-bold">N/A</div>
+          <p className="text-theme-text-muted text-sm">No active requirement applies to any tracked member.</p>
+        </>
+      ) : (
+        <>
+          <div className="text-theme-text-primary text-3xl font-bold">{data.stats.compliance_percentage}%</div>
+          <p className="text-theme-text-muted text-sm">
+            {/* Members nothing grades are outside the percentage, so the count is of graded members. */}
+            {data.stats.compliant_members} of {data.stats.graded_members ?? data.stats.tracked_members} graded members
+            {data.stats.not_applicable_members ? ` · ${data.stats.not_applicable_members} not applicable` : ''}
+          </p>
+        </>
+      )}
     </Card>
   );
 export const UpcomingExpirationsWidget = ({ data, days = 90 }: { data: TrainingDashboardSummary; days?: number }) => (

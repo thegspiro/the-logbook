@@ -203,6 +203,27 @@ describe('MyTrainingPage', () => {
     expect(screen.getByText(/Supervised Driving Hours ·/)).toBeInTheDocument();
   });
 
+  it('lists an undated pending record under the default date range', async () => {
+    mockGetMyTraining.mockResolvedValue({
+      ...mockTrainingData,
+      training_records: [
+        ...mockTrainingData.training_records,
+        {
+          id: 'rec-pending',
+          course_name: 'Awaiting Sign-off',
+          training_type: 'continuing_education',
+          status: 'scheduled',
+          completion_date: null,
+          hours_completed: 0,
+          expiration_date: null,
+          instructor: null,
+        },
+      ],
+    });
+    renderWithRouter(<MyTrainingPage />);
+    expect(await screen.findByText('Awaiting Sign-off')).toBeInTheDocument();
+  });
+
   describe('member visibility settings tab', () => {
     it('is hidden from a member who cannot configure the panel', async () => {
       renderWithRouter(<MyTrainingPage />);

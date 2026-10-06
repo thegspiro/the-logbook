@@ -3,7 +3,7 @@
  */
 
 import api from './apiClient';
-import type { NotificationLogScope } from '../constants/enums';
+import type { NotificationLogScope, Standing } from '../constants/enums';
 import type {
   NotificationRuleRecord,
   NotificationLogRecord,
@@ -282,12 +282,13 @@ export interface ComplianceMatrixMember {
   user_id: string;
   member_name: string;
   requirements: ComplianceMatrixCell[];
-  completion_pct: number;
+  /** Null when nothing grades the member (standing `not_applicable`). */
+  completion_pct: number | null;
   membership_type?: string | null;
   /** Counts of requirements that apply to this member, not to the whole org. */
   requirements_met?: number;
   requirements_total?: number;
-  standing?: 'compliant' | 'at_risk' | 'non_compliant';
+  standing?: Standing;
 }
 
 export interface ComplianceMatrixRequirement {

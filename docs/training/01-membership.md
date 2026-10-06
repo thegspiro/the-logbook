@@ -735,10 +735,12 @@ rather than Advance — the same button, naming what it does there.
 
 ![An applicant's drawer on the last stage of the pipeline — their details, the stage they are on, and Convert where Advance sits elsewhere](./images/01-35-applicant-drawer-final-stage.png)
 
-> **Checklist Progress reads "No checklist data recorded yet" for everyone.**
-> Nothing in the application records which checklist items are done — see
-> `docs/KNOWN_LIMITATIONS.md`. Track a checklist stage's items in the stage
-> notes until that is built, and leave the stage's item list unconfigured.
+**On a checklist stage** _(2026-10-05)_ the drawer lists the stage's items as
+checkboxes. Tick each one as it is done, then **Advance**: the ticks go with the
+advance, and when the stage requires every item, Advance is refused until all
+are ticked. Dragging the card to the next column sends no ticks, so a checklist
+stage with items is advanced from the drawer. **Skip Stage** still moves an
+applicant past it without ticks.
 
 ### Printing Applicant Badges
 
@@ -805,7 +807,7 @@ Form Submission, Document Upload, Meeting, Checklist, Interview Requirement, Med
 
 When enabled, the prospect automatically moves to the next stage without coordinator intervention.
 
-> **Edge case:** Auto-advance on the final stage converts the applicant only if the pipeline has auto-transfer on approval enabled. That setting defaults to off and can only be changed through the API, so a pipeline set up in the app always needs a coordinator to click **Convert**.
+> **Edge case:** Auto-advance on the final stage converts the applicant only if the pipeline has auto-transfer on approval enabled. That setting defaults to off; turn it on under **Pipeline Settings → Automatic Transfer to Membership**. With it off, a coordinator clicks **Convert**.
 
 ### Automated Email Stages
 
@@ -888,8 +890,15 @@ any of the configuration below appears. From there you can:
 - Set a default pipeline for new prospects
 - Turn the pipeline's **Public Application Status Page** on or off, and with it **Show upcoming stages** _(2026-09-24)_. Untick that and the applicant's page lists only the visible stages they have completed — not the stage they are on now, and not how many stages remain
 - Choose **When an Applicant Becomes a Member** _(2026-09-30)_: a member class and starting status for operational applicants and for administrative applicants, applied by automatic conversion and pre-filled in the Convert dialog
+- Turn **Automatic Transfer to Membership** on or off _(2026-10-05)_
 
-Auto-transfer on final-stage approval (`auto_transfer_on_approval`) has no control on this page; it can only be set through the API.
+**Automatic Transfer to Membership** decides what completing the final stage
+does. When on, the applicant becomes a full member at that moment — the same as
+**Convert to Member**, with nobody clicking it — so if the final stage is a vote
+or a sign-off, recording it is what makes them a member. Skipping the final
+stage never converts anyone, and every required stage must be complete first.
+It is off unless somebody turns it on; with it off, an applicant who finishes
+waits on the pipeline for a coordinator to click **Convert**.
 
 > **Hint:** You can create multiple pipelines for different scenarios (e.g., "Standard Application", "Lateral Transfer", "Junior Firefighter").
 

@@ -53,7 +53,7 @@ import type {
 import { useTimezone } from '../hooks/useTimezone';
 import { useRanks } from '../hooks/useRanks';
 import { formatShortDateTime, localToUTC } from '../utils/dateFormatting';
-import { getErrorMessage } from '../utils/errorHandling';
+import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
 import { positionLabel } from '../modules/scheduling/utils/positionLabels';
 import { asArray, expectArray } from '../utils/asArray';
 import { displayNameOf } from '../utils/memberName';
@@ -437,10 +437,11 @@ const EventRequestsTab: React.FC = () => {
       setScheduleNotes('');
       await refreshDetail(requestId);
     } catch (err) {
-      const message = getErrorMessage(err, 'Failed to schedule request.');
-      toast.error(
-        message.includes('already booked') ? message : 'Failed to schedule request. The room may be double-booked.'
-      );
+      // The server's sentence when it gave one: a double-booked room, or an
+      // event whose attendance is already closed, are different fixes and the
+      // coordinator can only tell them apart by reading which it was. The
+      // room hint is kept for a failure that came back without a reason.
+      toast.error(getErrorDetail(err) || 'Failed to schedule request. The room may be double-booked.');
     } finally {
       setActionLoading(false);
     }
@@ -458,8 +459,8 @@ const EventRequestsTab: React.FC = () => {
       setPostponeReason('');
       setPostponeNewDate('');
       await refreshDetail(requestId);
-    } catch {
-      toast.error('Failed to postpone request.');
+    } catch (err) {
+      toast.error(getErrorDetail(err) || 'Failed to postpone request.');
     } finally {
       setActionLoading(false);
     }

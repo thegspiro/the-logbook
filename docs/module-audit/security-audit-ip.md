@@ -182,7 +182,9 @@ people out):**
   context to scope an `IPException` to safely. The `IPException` request/
   approve workflow still exists in the API but has had no effect on this
   middleware's enforcement decision since that fix. See
-  `docs/security-review/SEC2-28-security-audit-ip.md`.
+  `docs/security-review/SEC2-28-security-audit-ip.md`. **Since 2026-10-05**
+  (owner decision INT2-28) an approved exception again lets its exact address
+  through, looked up per address rather than unioned; see SEC2-28-5.
 - **Runtime country-rule management is a platform-operator action.** Geo-blocking
   is an edge control that runs before any tenant/auth context exists, so per-org
   `CountryBlockRule` rows don't fit the enforcement model (and there's no

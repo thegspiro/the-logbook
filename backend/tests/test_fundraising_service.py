@@ -9,6 +9,7 @@ roll up). DB mocked; no MySQL.
 """
 
 from datetime import date, datetime
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from zoneinfo import ZoneInfo
@@ -510,3 +511,30 @@ class TestListPagination:
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))
+
+
+class TestFundraisingReportIsExact:
+    """GF-9: money is summed as Decimal, so cents add up exactly."""
+
+    async def test_cents_sum_exactly(self):
+        # As floats, 0.10 + 0.20 sums to 0.30000000000000004.
+        donations = [
+            _donation(Decimal("0.10"), "d1", "cash", "2026-01-10"),
+            _donation(Decimal("0.20"), "d2", "cash", "2026-01-11"),
+        ]
+        db = _db([_scalars(donations)])
+        out = await FundraisingService(db).get_fundraising_report("org-1")
+        assert out["total_donations"] == 0.3
+        assert out["donations_by_method"] == {"cash": 0.3}
+        assert out["monthly_totals"] == [{"month": "2026-01", "total": 0.3}]
+
+    async def test_average_gift_rounds_half_up_to_the_cent(self):
+        donations = [
+            _donation(Decimal("0.01"), "d1"),
+            _donation(Decimal("0.02"), "d2"),
+        ]
+        db = _db([_scalars(donations)])
+        out = await FundraisingService(db).get_fundraising_report("org-1")
+        # 0.015 is half a cent: half-up gives 0.02, where float rounding of
+        # an inexact 0.015 can give 0.01.
+        assert out["average_gift"] == 0.02

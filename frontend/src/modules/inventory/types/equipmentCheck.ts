@@ -714,6 +714,8 @@ export interface ApparatusComplianceRecord {
   failCount: number;
   hasDeficiency: boolean;
   deficiencySince?: string;
+  /** False when no active checklist reaches this apparatus. Absent on an older backend. */
+  hasChecklist?: boolean;
 }
 
 export interface MemberComplianceReportRecord {

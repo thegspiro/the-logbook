@@ -338,3 +338,186 @@ class MicrosoftOAuthService:
                 return None, "domain_not_allowed"
 
         return await _link_existing_user(self.db, email, claims.get("sub"), "microsoft")
+
+
+class AuthentikOAuthError(Exception):
+    """Raised for recoverable OAuth failures; message is a short error code."""
+
+
+# Asymmetric algorithms only. An Authentik provider without a signing key signs
+# ID tokens with the client secret (HS256); accepting that would let anyone
+# holding the secret mint tokens, so it is refused and the guide says to set a
+# signing key.
+_AUTHENTIK_ALGORITHMS = ["RS256", "RS384", "RS512", "ES256", "ES384", "ES512"]
+_AUTHENTIK_DISCOVERY_TTL_SECONDS = 3600
+# One entry: the configured issuer's discovery document and when it expires.
+# Bounded by construction (pitfall #9) — a new issuer replaces the old entry.
+_authentik_discovery: dict[str, Tuple[float, dict]] = {}
+
+
+def _authentik_issuer() -> str:
+    """The configured issuer, with the trailing slash Authentik's tokens carry."""
+    issuer = (settings.AUTHENTIK_ISSUER_URL or "").strip()
+    return issuer if issuer.endswith("/") else f"{issuer}/"
+
+
+def _same_origin(url: str, issuer: str) -> bool:
+    from urllib.parse import urlsplit
+
+    a, b = urlsplit(url), urlsplit(issuer)
+    return bool(a.scheme) and (a.scheme, a.netloc) == (b.scheme, b.netloc)
+
+
+class AuthentikOAuthService:
+    """
+    "Sign in with Authentik" via its OpenID Connect provider (authorization-code
+    flow). Same account policy as Google: link to existing users only, require
+    a verified email, optionally restrict by email domain. Endpoints come from
+    the issuer's discovery document; each must be on the issuer's own origin,
+    so a tampered document cannot send the client secret elsewhere.
+    """
+
+    SCOPES = "openid email profile"
+
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    @staticmethod
+    def is_configured() -> bool:
+        """True only when Authentik login is enabled and fully configured."""
+        return bool(
+            settings.AUTHENTIK_ENABLED
+            and settings.AUTHENTIK_ISSUER_URL
+            and settings.AUTHENTIK_CLIENT_ID
+            and settings.AUTHENTIK_CLIENT_SECRET
+            and settings.AUTHENTIK_REDIRECT_URI
+        )
+
+    @staticmethod
+    async def discovery() -> dict:
+        """The issuer's OpenID configuration, validated and cached for an hour."""
+        import time
+
+        issuer = _authentik_issuer()
+        cached = _authentik_discovery.get(issuer)
+        if cached and cached[0] > time.monotonic():
+            return cached[1]
+
+        url = f"{issuer}.well-known/openid-configuration"
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(url)
+        except httpx.HTTPError as exc:
+            logger.error(f"Authentik discovery request failed: {exc}")
+            raise AuthentikOAuthError("provider_unavailable")
+        if resp.status_code != 200:
+            logger.warning(f"Authentik discovery rejected (status {resp.status_code})")
+            raise AuthentikOAuthError("provider_unavailable")
+
+        try:
+            document = resp.json()
+        except ValueError:
+            raise AuthentikOAuthError("provider_unavailable")
+        if not isinstance(document, dict) or document.get("issuer") != issuer:
+            # The issuer is what every ID token is checked against; a document
+            # naming another one is the wrong provider or a misconfigured URL.
+            logger.warning("Authentik discovery issuer does not match configuration")
+            raise AuthentikOAuthError("provider_misconfigured")
+        for key in ("authorization_endpoint", "token_endpoint", "jwks_uri"):
+            endpoint = document.get(key)
+            if not isinstance(endpoint, str) or not _same_origin(endpoint, issuer):
+                logger.warning(f"Authentik discovery {key} is not on the issuer origin")
+                raise AuthentikOAuthError("provider_misconfigured")
+
+        _authentik_discovery.clear()
+        _authentik_discovery[issuer] = (
+            time.monotonic() + _AUTHENTIK_DISCOVERY_TTL_SECONDS,
+            document,
+        )
+        return document
+
+    @staticmethod
+    def build_authorization_url(discovery: dict, state: str) -> str:
+        """Build the Authentik consent URL to redirect the user to."""
+        params = {
+            "client_id": settings.AUTHENTIK_CLIENT_ID,
+            "redirect_uri": settings.AUTHENTIK_REDIRECT_URI,
+            "response_type": "code",
+            "scope": AuthentikOAuthService.SCOPES,
+            "state": state,
+        }
+        return f"{discovery['authorization_endpoint']}?{urlencode(params)}"
+
+    async def exchange_code_for_idinfo(self, code: str) -> dict:
+        """Exchange an authorization code for a verified ID-token claim set."""
+        discovery = await self.discovery()
+        data = {
+            "code": code,
+            "client_id": settings.AUTHENTIK_CLIENT_ID,
+            "client_secret": settings.AUTHENTIK_CLIENT_SECRET,
+            "redirect_uri": settings.AUTHENTIK_REDIRECT_URI,
+            "grant_type": "authorization_code",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(discovery["token_endpoint"], data=data)
+        except httpx.HTTPError as exc:
+            logger.error(f"Authentik token exchange request failed: {exc}")
+            raise AuthentikOAuthError("token_exchange_failed")
+
+        if resp.status_code != 200:
+            logger.warning(
+                f"Authentik token exchange rejected (status {resp.status_code})"
+            )
+            raise AuthentikOAuthError("token_exchange_failed")
+
+        id_token_str = resp.json().get("id_token")
+        if not id_token_str:
+            raise AuthentikOAuthError("missing_id_token")
+
+        import asyncio
+
+        # PyJWKClient fetches the key set synchronously; keep it off the loop.
+        return await asyncio.to_thread(
+            self._verify_id_token, id_token_str, discovery["jwks_uri"]
+        )
+
+    @staticmethod
+    def _verify_id_token(id_token_str: str, jwks_uri: str) -> dict:
+        """Verify the ID token against the provider's key set and return claims."""
+        import jwt
+        from jwt import PyJWKClient
+
+        try:
+            signing_key = PyJWKClient(jwks_uri).get_signing_key_from_jwt(id_token_str)
+            claims: dict = jwt.decode(
+                id_token_str,
+                signing_key.key,
+                algorithms=_AUTHENTIK_ALGORITHMS,
+                audience=settings.AUTHENTIK_CLIENT_ID,
+                issuer=_authentik_issuer(),
+            )
+        except jwt.PyJWTError as exc:
+            # Bad signature, HS256, wrong audience/issuer, expired, etc.
+            logger.warning(f"Authentik ID token verification failed: {exc}")
+            raise AuthentikOAuthError("invalid_id_token")
+        return claims
+
+    async def resolve_user(self, claims: dict) -> Tuple[Optional[User], Optional[str]]:
+        """Map verified Authentik claims to an existing local user."""
+        email = (claims.get("email") or "").strip().lower()
+        # An Authentik instance can let people enrol themselves with any
+        # address; only a verified one may claim an existing local account.
+        if not email or claims.get("email_verified") is not True:
+            return None, "unverified_email"
+
+        allowed_domains = settings.get_authentik_allowed_domains()
+        if allowed_domains:
+            domain = email.rsplit("@", 1)[-1]
+            if domain not in allowed_domains:
+                logger.warning(
+                    f"Authentik login blocked: domain '{domain}' not allowed"
+                )
+                return None, "domain_not_allowed"
+
+        return await _link_existing_user(self.db, email, claims.get("sub"), "authentik")

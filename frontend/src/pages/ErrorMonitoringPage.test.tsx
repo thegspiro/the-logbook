@@ -162,6 +162,23 @@ describe('ErrorMonitoringPage', () => {
     expect(screen.getByText('Client')).toBeInTheDocument();
   });
 
+  it('labels a scheduled task failure as such, not as the client', async () => {
+    mockGetErrors.mockResolvedValue([
+      makeError({
+        id: 'err-3',
+        errorType: 'SCHEDULED_TASK_FAILED',
+        context: { source: 'scheduled_task', task: 'Shift reminders' },
+      }),
+    ]);
+
+    renderWithRouter(<ErrorMonitoringPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Scheduled task')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Client')).not.toBeInTheDocument();
+  });
+
   it('shows how many times a collapsed error occurred', async () => {
     mockGetErrors.mockResolvedValue([makeError({ context: { source: 'frontend', occurrences: 47 } })]);
 

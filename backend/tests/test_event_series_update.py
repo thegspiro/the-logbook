@@ -276,7 +276,7 @@ class TestUpdateFutureEventsAttendanceLock:
 
         assert str(excinfo.value) == attendance_locked_error(
             "changing check_in_minutes_before across this series "
-            "(1 finalized occurrence would change)"
+            "(1 of 4 occurrences have finalized attendance)"
         )
         assert {e.description for e in series} == {None}
         assert series[2].check_in_minutes_before == 30
@@ -296,7 +296,7 @@ class TestUpdateFutureEventsAttendanceLock:
 
         assert str(excinfo.value) == attendance_locked_error(
             "changing require_checkout across this series "
-            "(2 finalized occurrences would change)"
+            "(2 of 4 occurrences have finalized attendance)"
         )
 
     async def test_moving_the_series_clock_is_refused_when_any_occurrence_is_closed(
@@ -317,7 +317,7 @@ class TestUpdateFutureEventsAttendanceLock:
 
         assert str(excinfo.value) == attendance_locked_error(
             "changing end_datetime, start_datetime across this series "
-            "(1 finalized occurrence would change)"
+            "(1 of 4 occurrences have finalized attendance)"
         )
         assert series[0].start_datetime == datetime(2026, 9, 1, tzinfo=timezone.utc)
 

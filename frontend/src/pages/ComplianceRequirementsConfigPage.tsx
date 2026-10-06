@@ -1434,8 +1434,12 @@ export default function ComplianceRequirementsConfigPage() {
                         </p>
                         {report.summary && (
                           <p className="text-theme-text-secondary mt-1 text-xs">
-                            Compliance: {report.summary.overall_compliance_pct.toFixed(1)}% ·{' '}
-                            {report.summary.fully_compliant_members}/{report.summary.total_members} members compliant
+                            Compliance:{' '}
+                            {report.summary.overall_compliance_pct === null
+                              ? 'N/A'
+                              : `${report.summary.overall_compliance_pct.toFixed(1)}%`}{' '}
+                            · {report.summary.fully_compliant_members}/
+                            {report.summary.graded_members ?? report.summary.total_members} members compliant
                           </p>
                         )}
                         {report.errorMessage && (
