@@ -16,6 +16,23 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2966](https://github.com/thegspiro/the-logbook/pull/2966)**: branch
+`claude/security-review-inventory`, Feature 11 (Inventory), pass 7 — 0 code
+fixes, 0 new findings, INV-16 narrowed (the MSUP-25 fix routes
+`quantity_received`/`status` through the locked `transition_reorder_request`
+path; the remaining fields `update_reorder_request` still writes without a
+lock are a smaller surface, not a new finding). Real delta since pass 6
+reviewed in full — 77 non-merge commits, 18 of which an initial shallow-clone
+`git log` silently dropped until `git fetch --unshallow` surfaced them. Route
+count in `inventory.py` grew to 149 (+5), all five new routes carrying a
+single proportionate permission. Gate green (flake8/black/isort, migrations,
+route-permission check — 245 routes, 1566 scoped + full inventory/label/nfc/
+kiosk backend tests, frontend typecheck/lint, 1574 scoped frontend tests).
+See the Log entry below for detail.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 10, Documents &amp; legal, pass 7, PR #2962, merged docs-only — not independently recorded), preserved for history</summary>
+
 **PR [#2962](https://github.com/thegspiro/the-logbook/pull/2962)**: branch
 `claude/security-review-documents-legal`,
 Feature 10 (Documents & legal), pass 7 — 0 code fixes (DOC-9's remaining
@@ -34,6 +51,8 @@ migrations, route-permission check — 245 routes, 562 scoped + 12,951
 full-suite backend tests, frontend typecheck + lint). See the Log entry
 below for detail. PR #2957 (Feature 09) merged since the prior iteration, so
 its note below is now superseded.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 09, Medical screening, pass 7, PR #2957, merged), preserved for history</summary>
@@ -17822,7 +17841,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
-| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
+| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
@@ -17853,6 +17872,76 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-06 — Feature 11 (Inventory, pass 7) — real delta (77 commits), 0 fixes, INV-16 narrowed, 0 new findings (watchdog pickup)
+
+Watchdog pickup. PR #2962 (Feature 10, Documents & legal, pass 7) had
+merged with 0 application-code changes (docs-only per this file's own
+rule — only `DOC-10-documents-legal.md`, `KNOWN_LIMITATIONS.md`,
+`PROGRESS.md`), so it is not independently recordable; cleared above.
+Rotation row 11 (Inventory) was the first `⬜`.
+
+**Not zero-delta, unlike pass 6.** `git log --no-merges` against the
+declared scope since pass 6's merge initially returned 59 commits against
+this repo's shallow clone — silently dropping 18 real commits a
+`git fetch --unshallow` surfaced (several NFC phases, storage-area
+put-away/print, two label-printing commits). True count: **77 non-merge
+commits**, all accounted for before concluding anything. ~16 are the
+separate workflow-review rotation's own `docs(workflow-review)` entries
+(confirmed to document fixes already present in the application commits
+reviewed below); ~19 are pure layout/copy/test-stub changes confirmed via
+`--stat` to touch no auth/tenancy/data-exposure surface; the remaining ~27
+are real application-logic changes, each read via `git show`.
+
+**INV-16 narrowed, not closed:** the MSUP-25 fix (`57e81e4d2`) added a
+guard rejecting `quantity_received`/`status` changes through
+`update_reorder_request`'s unlocked PATCH path, forcing those two fields
+through the row-locked `transition_reorder_request` instead. The remaining
+gap is now scoped to the other fields this PATCH still writes without a
+lock (`notes`, `quantity_requested`, vendor/line details) — verified by
+reading both functions in full, not inferred from the commit message.
+`KNOWN_LIMITATIONS.md`'s INV-16 entry amended with this correction.
+INV-8/INV-9, INV-17 and INV-22 all re-verified unchanged at their current
+line numbers.
+
+**Route count: 149 (+5) in `inventory.py`**, `labels.py` unchanged at 12,
+1 WebSocket unchanged — verified by diffing decorator counts against the
+pass-6 baseline commit, then diffing the five new decorator lines
+directly. All five new routes (`POST /labels/mark-printed`,
+`POST /storage-areas/{area_id}/put-away`, `GET/POST /label-setups`,
+`DELETE /label-setups/{setup_id}`) carry a single proportionate
+permission (`inventory.manage`), no OR-gate.
+
+**27 real commits reviewed, all clean** — highlights: a server-issued
+`badge_code` replacing a client-visible id as the scannable credential
+(`0549b7e02`, closes a forgeable-credential gap), applicant labels now
+print the internal `_short_id` instead of the prospect's public
+status-check token (`9937d6521`, closes a credential leak via a printed
+label), a new `inventory.kiosk` permission for self-service NFC kiosks
+(seeded to no position, org-scoped, audit-logged, `734f2904c`),
+organization-shared label-setup storage with a locked
+`copy.deepcopy()` write and in-org `printer_id` validation (XC-1,
+`c1e30031f`), and an offline-queue `ownerId` stamp closing a mid-sync
+sign-out/sign-in cross-member leak (`b574c324a`, FE3-34-5). Every new
+PII-bearing route (`/nfc-scans`, `/nfc/audits`, `/not-seen`,
+`/nfc/resolve-member`) was added to `UNCACHEABLE_PREFIXES`/
+`UNCACHEABLE_SUBSTRINGS` in the same commit that introduced it — verified
+in lockstep, not trailing. Full list and verdicts in the findings doc.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean over
+22 scope files (feature's footprint grew by 5 files since pass 6 —
+`inventory_kiosk.py`, `inventory_last_seen.py`, `inventory_nfc.py`,
+`inventory_notification_service.py`, `inventory_audit_schedule_service.py`,
+`utils/inventory_nfc.py`, `utils/label_renderer.py`, `models/label_printer.py`);
+`validate_migrations.py --strict` passed (527 revisions, single head, no
+migration this module this pass); `check_route_permissions.py --strict`
+245 routes, 0 errors/warnings; scoped backend tests (`-k "inventory or
+label or nfc or kiosk"`) 1566 passed, 1 pre-existing skip (`pywebpush`);
+frontend `npm run typecheck` 0 errors; `npm run lint` 0 errors/warnings;
+scoped frontend suite (`npx vitest run src/modules/inventory`) 1574
+passed (105 files). Findings doc:
+[`INV-11-inventory.md`](./INV-11-inventory.md)'s **Pass 7** section.
+Rotation row 11 → ✅ (pending PR merge). Next: Feature 12 (Facilities).
 
 ### 2026-10-06 — Feature 10 (Documents & legal, pass 7) — 0 code fixes (DOC-9/DOC-30 already fixed externally), DOC-8 re-verified open, 1 doc-citation correction (watchdog pickup)
 
