@@ -97,13 +97,18 @@ const TimeQuarterHour: React.FC<TimeQuarterHourProps> = ({
 
   const label = ariaLabel || placeholder || 'Time';
 
+  // The selects keep their natural width and the row wraps when they do not fit
+  // (a wrapping row breaks on natural widths before anything shrinks). The 4rem
+  // floor only matters for a column narrower than one select: below it they
+  // clipped their own values to "-" and "A". It also clears the 44px touch
+  // minimum, so no separate touch width is needed.
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex flex-wrap items-center gap-1.5">
       <select
         id={id}
         value={hour12Index !== null ? String(hour12Index) : ''}
         onChange={handleHourChange}
-        className={`${className ?? ''} touch:min-w-[44px]`}
+        className={`${className ?? ''} w-auto min-w-16`}
         required={required}
         aria-label={`${label} hour`}
       >
@@ -120,7 +125,7 @@ const TimeQuarterHour: React.FC<TimeQuarterHourProps> = ({
       <select
         value={minute !== null ? String(minute).padStart(2, '0') : ''}
         onChange={handleMinuteChange}
-        className={`${className ?? ''} touch:min-w-[44px]`}
+        className={`${className ?? ''} w-auto min-w-16`}
         required={required}
         aria-label={`${label} minute`}
       >
@@ -135,7 +140,7 @@ const TimeQuarterHour: React.FC<TimeQuarterHourProps> = ({
       <select
         value={period}
         onChange={handlePeriodChange}
-        className={`${className ?? ''} touch:min-w-[44px]`}
+        className={`${className ?? ''} w-auto min-w-16`}
         aria-label={`${label} AM/PM`}
       >
         <option value="AM">AM</option>

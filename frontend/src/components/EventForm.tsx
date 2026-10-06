@@ -944,7 +944,9 @@ export const EventForm: React.FC<EventFormProps> = ({
           <span>Schedule</span>
         </h2>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {/* Side by side only from lg: a date and three time selects need about
+            380px, and a tablet's half-width column is under 200. */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <div>
             <label htmlFor="start-datetime" className={labelClass}>
               Start Date & Time <span className="text-red-700 dark:text-red-500">*</span>
