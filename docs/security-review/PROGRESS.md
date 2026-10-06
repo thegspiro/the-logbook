@@ -17918,7 +17918,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
-| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | 🔄     |
+| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
@@ -17945,6 +17945,80 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-06 — Feature 15 (Scheduling, pass 7) — real delta (23 backend + 46 frontend commits), 0 fixes needed, SCH-10 confirmed fixed, 2 new standing items recorded (watchdog pickup)
+
+Watchdog pickup. PR #2970 (Feature 14, Equipment check & shifts, pass 7)
+had merged with 0 application-code changes (docs-only per this file's
+own rule — only `EC-14-equipment-check-shifts.md`, `PROGRESS.md`), so it
+is not independently recordable; cleared above. Rotation row 15
+(Scheduling) was the first `⬜`.
+
+**Real delta since pass 6 (PR #2628, merged 2026-09-17): 23 backend +
+46 frontend non-merge commits.** Confirmed the clone was already
+full-depth before trusting the count. Of the 13 declared backend files,
+real content changes landed in only 7 (confirmed via `git diff --stat`,
+not assumed); the other 6 (including `calcom_service.py`) had zero
+diff. Of the frontend's 7 workflow-review-labeled commits, each was
+individually verified to touch real logic as its own PR body discloses
+— per the lesson this rotation run's Equipment-check pass learned, where
+two similarly-labeled commits turned out not to be docs-only.
+
+**SCH-10 confirmed fixed, not merely unchanged.** `calcom_service.py`
+itself has zero diff since pass 6, but the DNS-rebinding TOCTOU it
+flagged is closed anyway: the file already builds its HTTP client via
+the shared `create_integration_client()` factory, which now wraps
+`SSRFSafeAsyncTransport` (per `KNOWN_LIMITATIONS.md`'s own SCH-10 entry,
+resolved 2026-10-05, naming `calcom_service.py` among the six senders it
+covers). Verified by reading the actual import/call sites rather than
+re-asserting the doc's claim.
+
+**A pass-6 documentation citation error corrected**, not a code
+regression: pass 6 cited `finalize_shift`/`save_closeout_calls` as
+living in `scheduling.py`, but `scheduling.py` is only ~4,100 lines —
+both methods have always lived in `scheduling_service.py`, confirmed
+against the pass-6 baseline commit's own tree. Both re-verified intact
+at their current (shifted) locations, lock-ordering unchanged.
+
+**Two new standing items recorded** (neither a vulnerability needing a
+fix): **SCH-15** — a new "External Shift Hours" feature
+(`external_shift_hours.py` + 3 sibling files) that feeds data
+`scheduling_service.py` reads but sits outside this feature's declared
+13-file scope; reviewed opportunistically and found clean (org-scoped,
+FK validated in-org, `nullable=True` on its `SET NULL` FKs), with a
+recommendation that the next pass formally add it to scope. **SCH-16** —
+a LOW, self-documented TOCTOU in a new call-type-deletion usage check
+(`0b90e74c9`), parallel in shape to SCH-13's own class but narrower
+(degrades a stale requirement rather than corrupting data), accepted by
+the author in-code and recorded here rather than left to be
+rediscovered.
+
+**Two genuine security-positive fixes landed in the window**, verified
+rather than taken on commit messages: `7df93344f` (separation-of-duties
+— a shift report can no longer name its own officer as trainee) and
+`2f08c5d6a` (XC-2 — department-wide report totals now require a new
+`training.view_analytics` permission instead of the much more broadly
+held `training.manage`, seeded via migration `84819ea78a79`).
+
+**Route count: `scheduling.py` grew to 98 (+6)**, verified by decorator
+parse, all with an auth dependency; `scheduling_module_config.py`
+unchanged at 3 (zero diff).
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean
+over the full scope; `validate_migrations.py --strict` passed (527
+revisions, single head, no migration this module this pass);
+`check_route_permissions.py --strict` 245 routes, 0 errors/warnings;
+scoped backend tests (`-k "scheduling or shift or swap or calcom or
+position_slots or call_tracking or call_type"`) 1517 passed, 1
+pre-existing skip (`pywebpush`); frontend `npm run typecheck` 0 errors;
+`npm run lint` 0 errors/warnings; scoped frontend suite (`npx vitest run
+src/modules/scheduling`) 336 passed (25 files). Findings doc:
+[`SCH-15-scheduling.md`](./SCH-15-scheduling.md)'s **Pass 7** section.
+No `KNOWN_LIMITATIONS.md` change needed this pass — SCH-10's existing
+entry there already recorded the fix this pass independently confirmed;
+SCH-15/SCH-16 are tracked in the findings doc itself rather than
+mirrored, since neither is an owner-decision item. Rotation row 15 → ✅
+(pending PR merge). Next: Feature 16 (Events & requests).
 
 ### 2026-10-06 — Feature 14 (Equipment check & shifts, pass 7) — real delta (92 commits in scope, 20 touching primary files), 0 fixes, 0 new findings; two XC-1/XC-2 gaps found and fixed by other work during the window (watchdog pickup)
 
