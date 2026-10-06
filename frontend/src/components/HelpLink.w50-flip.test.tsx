@@ -76,3 +76,17 @@ describe('HelpLink popover placement and topic URL (W50-61)', () => {
     );
   });
 });
+
+// The on-screen re-drive found the popover ~100px wide, a word or two a line:
+// the absolute panel sizes to its icon-wide containing block unless told to
+// take its content width, which the card's max-w-xs then bounds.
+describe('HelpLink popover width', () => {
+  it('sizes the panel to its content rather than the icon', async () => {
+    HTMLElement.prototype.getBoundingClientRect = () => rectAt(300);
+    render(<HelpLink topic="elections" tooltip="Create and manage department elections." />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Help: elections' }));
+
+    expect(panelAround('Create and manage department elections.')).toHaveClass('w-max');
+  });
+});

@@ -1,6 +1,189 @@
 # Security Review 11 — Inventory
 
-**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3), [#2422](https://github.com/thegspiro/the-logbook/pull/2422) (pass 4), [#2561](https://github.com/thegspiro/the-logbook/pull/2561) (pass 5), [#2616](https://github.com/thegspiro/the-logbook/pull/2616) (pass 6)
+**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3), [#2422](https://github.com/thegspiro/the-logbook/pull/2422) (pass 4), [#2561](https://github.com/thegspiro/the-logbook/pull/2561) (pass 5), [#2616](https://github.com/thegspiro/the-logbook/pull/2616) (pass 6), [#2966](https://github.com/thegspiro/the-logbook/pull/2966) (pass 7)
+
+---
+
+## Pass 7 (2026-10-06) — real delta (77 commits), 0 fixes, INV-16 narrowed, 0 new findings
+
+**Watchdog pickup.** PR #2962 (Feature 10, Documents & legal, pass 7) had
+merged with 0 application-code changes (docs-only), so per `PROGRESS.md`'s
+own rule it was not independently recordable. No `claude/security-review-*`
+PR was open; rotation row 11 (Inventory) was the first `⬜`.
+
+**Backend:** same seven files pass 6 declared, plus five files this pass's
+real delta added to the feature's actual footprint — `inventory_kiosk.py`,
+`inventory_last_seen.py`, `inventory_nfc.py` (endpoints + schemas +
+services), `inventory_notification_service.py`,
+`inventory_audit_schedule_service.py`, `utils/inventory_nfc.py`,
+`utils/label_renderer.py`, `models/label_printer.py`.
+**Frontend:** `modules/inventory/*` (unchanged scope).
+**Migrations:** none touching this feature this pass (527 revisions total,
+single head, unchanged structurally for this module).
+
+### Scope
+
+**Not zero-delta, unlike pass 6.** `git log --no-merges --since
+<pass-6-merge-time> -- <scope files>` initially returned 59 commits against
+this repo's shallow clone — silently dropping 18 real commits (several NFC
+phases, storage-area put-away/print, two label-printing commits) that the
+shallow history couldn't resolve as reachable. `git fetch --unshallow` before
+concluding anything surfaced the true count: **77 non-merge commits**. This
+is the same class of history gap prior passes have hit from the squash/
+orphan-merge side; here it was from the shallow-clone side, and the fix is
+the same discipline — verify the count independently rather than trust the
+first `git log` that returns a plausible-looking number.
+
+Of the 77: ~16 are the separate workflow-review rotation's own
+`docs(workflow-review): W15/W17/W22/W31/W38–W47` entries (confirmed via
+commit message + `--stat` to be documenting fixes already present in the
+application commits reviewed below — e.g. W17's fix is `9937d6521`, read
+directly); ~19 are pure layout/copy/test-stub changes confirmed via `--stat`
+to touch only CSS utility classes, copy strings, or unrelated files, with no
+auth/tenancy/data-exposure dimension; the remaining ~27 are real
+application-logic changes, each read via `git show` and checked against all
+seven checklist dimensions.
+
+### Re-verified standing findings
+
+- **INV-8 / INV-9** — **still open**, unchanged. `check_member_allowance`
+  (`inventory.py:6066-6071`) and `get_member_size_preferences`
+  (`inventory.py:7029-7033`) both still gated on
+  `Depends(require_permission("inventory.view"))` only. Still an owner
+  decision (no established narrower-gate precedent for this module), already
+  in `KNOWN_LIMITATIONS.md`.
+- **INV-16 — narrowed, not closed.** `57e81e4d2` (the MSUP-25 fix, see
+  below) added a guard to `update_reorder_request`
+  (`inventory_service.py:8636-8669`) rejecting `quantity_received` and
+  `status` changes through this unlocked path — those two fields can now
+  only move through the row-locked `transition_reorder_request`
+  (`:8674-8689`, `.with_for_update()` + `version` check). What pass 6 flagged
+  as "any field" is now scoped to the remaining fields `update_reorder_request`
+  still writes without a lock (`notes`, `quantity_requested`, vendor/line
+  details) — a real narrowing, verified by reading both functions in full,
+  not inferred from the commit message. `KNOWN_LIMITATIONS.md` amended with
+  this correction rather than opened as a new finding, since the underlying
+  question (lock the whole PATCH, or keep narrowing field-by-field) is
+  unchanged.
+- **INV-17** — **still open**, unchanged. `InventoryMaintenancePage.tsx:248`
+  still calls `createMaintenanceRecord` unconditionally with no lookup for
+  an existing open record. The one maintenance-touching commit this window
+  (`57e81e4d2`) only removed "retired" from the condition-after dropdown and
+  closed a second RETIRED-via-maintenance domain-lock bypass; it does not
+  touch this logic.
+- **INV-22** — **still open**, unchanged. `get_fulfillment_options`
+  (`inventory_service.py:9520-9547`, `.scalars().unique().all()`, `[:limit]`
+  applied at `:9640` after full materialization) and
+  `get_requestable_categories` (`:9672-9690`) both still unbounded in
+  Python, same shape as pass 6.
+
+### Route inventory
+
+`inventory.py`: **149** routes, up from pass 6's 144 (`labels.py`: 12,
+unchanged; 1 WebSocket, unchanged). Verified by diffing
+`grep -c "^@router\.\(get|post|put|patch|delete|websocket\)"` against the
+pass-6 baseline commit and the current tree, then diffing the decorator
+lines directly to confirm exactly 5 new routes, all added by `c1e30031f` /
+`69c6de218` / `25119679e`: `POST /labels/mark-printed`,
+`POST /storage-areas/{area_id}/put-away`, `GET /label-setups`,
+`POST /label-setups`, `DELETE /label-setups/{setup_id}`. All five carry
+`require_permission("inventory.manage")` — a single permission, no OR-gate —
+reviewed below, all clean.
+
+### Real commits reviewed, all clean
+
+- **`57e81e4d2` (MSUP-25)** — generalizes the medical-domain re-check under
+  lock across five medical-supplies writes and closes a second
+  RETIRED-via-maintenance bypass; narrows INV-16 as described above.
+  Exemplary: id-ordered locking read, fails closed.
+- **`0549b7e02`** — server-issued `badge_code` replaces the client-visible
+  membership-number/short-id as the scannable credential; both scanners now
+  resolve server-side via rate-limited `/member-badges/resolve`. Fixes a real
+  forgeable-credential bug (a client could previously construct a valid scan
+  payload from a visible id).
+- **`410e46990`** — member-badge label printing moved from `members.view`
+  (a baseline grant) to `members.manage`/`members.manage_id_cards`, closing
+  an over-broad permission gate on a sensitive print action.
+- **`5273c49a4`** — new CR80 ID-card endpoints/service: org-scoped query,
+  `MAX_CARDS_PER_JOB=500` cap, locked read-modify-write +
+  `copy.deepcopy()` on the org settings JSON column.
+- **`9937d6521`** — applicant labels now print the internal `_short_id`
+  instead of the prospect's public status-check token — closes a credential
+  leak via a physically-printed label.
+- **`29da4419d`** — equipment-request status notifications: org-scoped
+  re-read inside the background task, HTML-escaped template variables,
+  email-only (no SMS), consistent with CLAUDE.md Pitfall #18.
+- **`28934f50c`** — the inventory WebSocket's module-gate now runs
+  `get_request_enabled_modules` against a typed `HTTPConnection` and enforces
+  the module switch _after_ auth (closing a bypass via code 4003); a status
+  query param gained a type, turning a prior 500 into a 422.
+- **`2f18127c7` / `c1e85e119` / `109f553a8`** — swap `date.today()` /
+  `datetime.utcnow()` for `resolve_org_today()` across expiry/
+  maintenance-due logic. Correctness-only (Pitfall #29 class), org-scoped.
+- **`734f2904c`** (NFC phase 4b, self-service kiosk) — new
+  `inventory.kiosk` permission, seeded to no position by default, org-scoped
+  via `current_user.organization_id`, gated behind the feature switch,
+  audit-logged, and reuses the existing restriction-check logic rather than
+  duplicating it.
+- **`c1e30031f`** — organization-shared label-setup storage (replacing
+  per-browser `localStorage`) plus a print-history table. Locked
+  read-modify-write with `copy.deepcopy()` on org settings, a 20-setup cap,
+  `printer_id` validated in-org before storage (XC-1), and
+  `organization_id` denormalized directly onto the new
+  `InventoryLabelPrint` table.
+- **`8a0d9eafe`, `68cad931c`, `6e68f7d94`, `ffa7a3864`, `25119679e`,
+  `999a71954`, `69c6de218`** — label/storage-area printing features (sheet
+  start-position, org-scoped printed-by name lookup, cycle-bounded
+  storage-area path building, the new put-away endpoint with a 1–500 cap and
+  a custody-status blocklist). All org-scoped, all bounded.
+- **NFC frontend phases (`7cbbf5be6`, `3a9c88fe1`, `b85bee97a`, `39a98e17f`,
+  `cf78107a6`, `61e9ad495`)** — each new PII-bearing endpoint
+  (`/nfc-scans`, `/nfc/audits`, `/not-seen`, `/nfc/resolve-member`) was added
+  to `UNCACHEABLE_PREFIXES`/`UNCACHEABLE_SUBSTRINGS` in the **same commit**
+  that introduced it — verified the cache-exclusion list grew in lockstep
+  rather than trailing.
+- **`b574c324a`** — offline-queue entries now stamp `ownerId` at write time;
+  drain/flush paths filter to the signed-in member's own entries with a
+  per-entry re-check, closing a window where a mid-sync sign-out/sign-in
+  could send another member's queued check under the new session's cookies
+  (tracked as FE3-34-5).
+- **Frontend UI/copy/defensive-rendering commits** (`19e1b03da`,
+  `c97b06ab3`, `ba2a90cf0`, `dbeee842b`, `ebd2f6916`, `34aa7288e`,
+  `5d2d958f0`, `4cf2fb682`, `f30bfcaa5`, `f92fbd927`) — malformed-response
+  crash guards, status-label wording, preferred-name display,
+  checklist-completion UX. Confirmed by diff, not commit message alone: none
+  touches auth, tenancy, or data exposure.
+
+### Verified good ✅ (pass 7)
+
+- Every new PII-bearing route this pass introduced is already in
+  `UNCACHEABLE_PREFIXES`/`UNCACHEABLE_SUBSTRINGS`, added in the same commit
+  — not a trailing gap.
+- No new by-id endpoint missing org-scoping; no new client-supplied FK
+  stored without in-org validation (the new `label-setups`/put-away routes
+  validate `printer_id`/`area_id` in-org before writing); no new unbounded
+  query beyond the already-standing INV-22; no new CSV export; no new
+  `.like()`/`.ilike()` usage; no new JSON-column mutation via a shallow
+  `dict()` copy (the new settings writes use `copy.deepcopy()`, per
+  Pitfall #12).
+- The five new routes all carry a single, proportionate permission
+  (`inventory.manage`) with no OR-gate.
+
+### Completion gate
+
+| Check                                                   | Result                                            |
+| ------------------------------------------------------- | ------------------------------------------------- |
+| `flake8` (22 scope files)                               | ✅ 0 violations                                   |
+| `black --check` (22 scope files)                        | ✅ clean, 22 files unchanged                      |
+| `isort --check-only` (22 scope files)                   | ✅ clean                                          |
+| `python3 scripts/validate_migrations.py --strict`       | ✅ single head (`15802f3df5c4`), 527 revisions    |
+| `python3 scripts/check_route_permissions.py --strict`   | ✅ 245 routes, 0 errors, 0 warnings               |
+| `pytest tests/ -k "inventory or label or nfc or kiosk"` | ✅ 1566 passed, 1 pre-existing skip (`pywebpush`) |
+| `npm run typecheck` (`tsc-native.mjs --noEmit`)         | ✅ clean                                          |
+| `npm run lint` (`eslint --max-warnings 10`)             | ✅ 0 errors/warnings                              |
+| `npx vitest run src/modules/inventory`                  | ✅ 1574 passed (105 files)                        |
+
+Rotation row 11 → ✅ (pending PR merge). Next: Feature 12 (Facilities).
 
 ---
 

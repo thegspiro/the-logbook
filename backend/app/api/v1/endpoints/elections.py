@@ -298,6 +298,7 @@ async def list_elections(
                 start_date=election.start_date,
                 end_date=election.end_date,
                 status=election.status.value,
+                closed_at=election.closed_at,
                 positions=election.positions,
                 total_votes=vote_counts_map.get(election.id, 0),
                 meeting_id=election.meeting_id,

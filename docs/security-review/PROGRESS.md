@@ -16,6 +16,125 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2972](https://github.com/thegspiro/the-logbook/pull/2972)**: branch
+`claude/security-review-events-requests`, Feature 16 (Events & requests),
+pass 7 — 0 code fixes needed. EV-26 confirmed genuinely fixed (not
+merely unchanged) via a per-department upsert lock serializing
+room-booking overlap checks, matching `KNOWN_LIMITATIONS.md`'s own
+entry; EV-23 re-verified unchanged (accepted product decision). A
+scope-tracking gap found and closed: three new feature files reviewed
+clean and added to the declared scope. One security-adjacent fix
+verified (11 routes leaking/over-sanitizing an internal error marker,
+now correctly 409). Real delta since pass 6 reviewed in full — 33
+non-merge commits. Route count in `events.py` grew to 58 (+2). Gate
+green (flake8/black/isort, migrations, route-permission check — 245
+routes, 1224 scoped backend tests, frontend typecheck/lint). See the
+Log entry below for detail.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 7, PR #2971, merged docs-only — not independently recorded), preserved for history</summary>
+
+**PR [#2971](https://github.com/thegspiro/the-logbook/pull/2971)**: branch
+`claude/security-review-scheduling`, Feature 15 (Scheduling), pass 7 — 0
+code fixes needed. SCH-10 confirmed genuinely fixed (not merely
+unchanged) via the shared `create_integration_client()`/
+`SSRFSafeAsyncTransport` factory `calcom_service.py` already calls into,
+matching `KNOWN_LIMITATIONS.md`'s own entry; SCH-9/SCH-13 re-confirmed
+unchanged, with a pass-6 documentation citation error corrected
+(`finalize_shift`/`save_closeout_calls` have always lived in
+`scheduling_service.py`, never `scheduling.py`). Two new standing items
+recorded (SCH-15, a scope-boundary note on a new out-of-scope feature;
+SCH-16, a LOW self-documented TOCTOU), neither needing a fix. Two
+genuine security-positive fixes verified in the real delta
+(separation-of-duties on shift reports; an XC-2 permission split). Real
+delta since pass 6 reviewed in full — 23 backend + 46 frontend non-merge
+commits. Route count in `scheduling.py` grew to 98 (+6). Gate green
+(flake8/black/isort, migrations, route-permission check — 245 routes,
+1517 scoped backend tests, frontend typecheck/lint, 336 scoped frontend
+tests). See the Log entry below for detail.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 14, Equipment check &amp; shifts, pass 7, PR #2970, merged docs-only — not independently recorded), preserved for history</summary>
+
+**PR [#2970](https://github.com/thegspiro/the-logbook/pull/2970)**: branch
+`claude/security-review-equipment-check-shifts`, Feature 14 (Equipment
+check & shifts), pass 7 — 0 code fixes, 0 new findings. All five
+load-bearing fixes (EC-16, EC-6, EC-13, the `.ilike()` escaping,
+`SafeCsvWriter`) re-confirmed intact at their current (shifted) lines;
+all four accepted/deferred items (EC-7, EC-8, EC-11, the
+`get_item_deployments` permission gap) re-confirmed unchanged. Two of the
+window's commits turned out to be real, already-shipped security fixes
+(an XC-1 FK-validation gap on `create_template` and an XC-2 over-broad
+`training.manage` gate), both verified correct rather than taken on their
+commit messages. Real delta since pass 6 reviewed in full — 92 non-merge
+commits in scope (20 touching the primary files directly) out of 1,241
+total on `main`, with a full-depth-clone check run first. Route counts
+unchanged at 50/21. Gate green (flake8/black/isort, migrations,
+route-permission check — 245 routes, 1359 scoped backend tests, frontend
+typecheck/lint). See the Log entry below for detail.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 13, Apparatus &amp; NFC, pass 14, PR #2969, merged docs-only — not independently recorded), preserved for history</summary>
+
+**PR [#2969](https://github.com/thegspiro/the-logbook/pull/2969)**: branch
+`claude/security-review-apparatus-nfc`, Feature 13 (Apparatus & NFC), pass
+14 (rotation pass 7) — 0 code fixes, 0 new findings. Every AP-1 through
+AP-18 finding already stood ✅ FIXED going into this pass; AP-17/AP-18
+(the two most recent, highest-risk fixes) re-confirmed intact at their
+current (shifted) line numbers rather than assumed from zero diff. Real
+delta since pass 13 reviewed in full — 25 non-merge commits (out of 775
+total on `main` in that window), with a full-depth-clone check run first.
+Route count in `apparatus.py` grew to 90 (+2, a read-only NFPA-compliance
+pair), `nfc_tags.py` unchanged at 5. Gate green (flake8/black/isort,
+migrations, route-permission check — 245 routes, 876 scoped backend
+tests, frontend typecheck/lint, 67 scoped frontend tests). See the Log
+entry below for detail.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 7, PR #2968, merged docs-only — not independently recorded), preserved for history</summary>
+
+**PR [#2968](https://github.com/thegspiro/the-logbook/pull/2968)**: branch
+`claude/security-review-facilities`, Feature 12 (Facilities), pass 7 — 0
+code fixes, 0 new findings. FAC-13/FAC-30 re-verified unchanged (both
+owner decisions); FAC-41/FAC-44 re-read in full and confirmed fixed and
+intact rather than taken on their own prior "FIXED" annotation. Real delta
+since pass 6 reviewed in full — 28 non-merge commits, with a full-depth-
+clone check run first (confirmed no shallow-clone truncation risk, unlike
+the immediately prior Inventory pass). Route count unchanged at 98. Gate
+green (flake8/black/isort, migrations, route-permission check — 245
+routes, 209 scoped backend tests, frontend typecheck/lint, 110 scoped
+frontend tests). See the Log entry below for detail.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 11, Inventory, pass 7, PR #2966, merged docs-only — not independently recorded), preserved for history</summary>
+
+**PR [#2966](https://github.com/thegspiro/the-logbook/pull/2966)**: branch
+`claude/security-review-inventory`, Feature 11 (Inventory), pass 7 — 0 code
+fixes, 0 new findings, INV-16 narrowed (the MSUP-25 fix routes
+`quantity_received`/`status` through the locked `transition_reorder_request`
+path; the remaining fields `update_reorder_request` still writes without a
+lock are a smaller surface, not a new finding). Real delta since pass 6
+reviewed in full — 77 non-merge commits, 18 of which an initial shallow-clone
+`git log` silently dropped until `git fetch --unshallow` surfaced them. Route
+count in `inventory.py` grew to 149 (+5), all five new routes carrying a
+single proportionate permission. Gate green (flake8/black/isort, migrations,
+route-permission check — 245 routes, 1566 scoped + full inventory/label/nfc/
+kiosk backend tests, frontend typecheck/lint, 1574 scoped frontend tests).
+See the Log entry below for detail.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 10, Documents &amp; legal, pass 7, PR #2962, merged docs-only — not independently recorded), preserved for history</summary>
+
 **PR [#2962](https://github.com/thegspiro/the-logbook/pull/2962)**: branch
 `claude/security-review-documents-legal`,
 Feature 10 (Documents & legal), pass 7 — 0 code fixes (DOC-9's remaining
@@ -34,6 +153,8 @@ migrations, route-permission check — 245 routes, 562 scoped + 12,951
 full-suite backend tests, frontend typecheck + lint). See the Log entry
 below for detail. PR #2957 (Feature 09) merged since the prior iteration, so
 its note below is now superseded.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 09, Medical screening, pass 7, PR #2957, merged), preserved for history</summary>
@@ -17822,12 +17943,12 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
-| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
-| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
-| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
+| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
+| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
+| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ⬜     |
@@ -17853,6 +17974,407 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-06 — Feature 16 (Events & requests, pass 7) — real delta (33 commits), 0 fixes needed, EV-26 confirmed fixed, scope widened by 3 files (watchdog pickup)
+
+Watchdog pickup. PR #2971 (Feature 15, Scheduling, pass 7) had merged
+with 0 application-code changes (docs-only per this file's own rule —
+only `SCH-15-scheduling.md`, `PROGRESS.md`), so it is not independently
+recordable; cleared above. Rotation row 16 (Events & requests) was the
+first `⬜`.
+
+**Real delta since pass 6 (PR #2630, merged 2026-09-17): 33 non-merge
+commits** touching the 12 declared scope files — a genuinely active
+window, unlike pass 6's near-zero-delta. Confirmed the clone was already
+full-depth before trusting the count.
+
+**EV-26 confirmed fixed, not merely unchanged.** `5b0929492`
+("serialize room bookings per department") adds a per-department upsert
+lock taken before `check_overlapping_events`'s locking read, and makes
+`update_event` take that lock before its own event-row lock. All three
+standing call sites re-verified to go through the locked path by direct
+read. `KNOWN_LIMITATIONS.md`'s EV-26 entry already documents the fix and
+its accepted cross-department residual — re-read and confirmed
+accurate. Closed as fixed. **EV-23 re-verified unchanged** (shifted to
+`event_service.py:2181`), still an accepted product decision.
+
+**Scope gap found and closed.** Two real Events-feature commits added
+three new backend files
+(`event_attendance_petitions.py`/`event_attendance_petition_service.py`/
+`event_organizer_service.py`) outside the declared 12-file scope.
+Reviewed all three in full this pass against all seven checklist
+dimensions and found clean (every route authenticated, separation of
+duties enforced on petition review, every by-id lookup org-scoped, the
+client-supplied organizer/alternate ids validated in-org per XC-1,
+correct lock ordering, PII escaped before email, the new endpoint
+already in `UNCACHEABLE_SUBSTRINGS`) — now added to this feature's
+declared scope so a future pass diffs them rather than silently
+skipping them.
+
+**One security-adjacent fix verified** (`f00912e1b`): 11 routes that
+either leaked the raw `ATTENDANCE_LOCKED::` internal marker or
+over-sanitized a legitimate lock message into a generic 500/400 instead
+of the correct 409, now fixed with a new AST guard test.
+
+**Route count: `events.py` grew to 58 (+2)** (a permission-gated settings
+route and the new organizer-transfer route, both reviewed clean);
+`event_requests.py` unchanged at 23.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean
+over the full (now-13-file) scope; `validate_migrations.py --strict`
+passed (527 revisions, single head, no migration this module this
+pass); `check_route_permissions.py --strict` 245 routes, 0
+errors/warnings; scoped backend tests (`-k "event"`) 1224 passed, 1
+pre-existing skip (`pywebpush`); frontend `npm run typecheck` 0 errors;
+`npm run lint` 0 errors/warnings. Findings doc:
+[`EV-16-events-requests.md`](./EV-16-events-requests.md)'s **Pass 7**
+section. No `KNOWN_LIMITATIONS.md` change needed — its EV-26 entry
+already recorded the fix this pass independently confirmed, and EV-23's
+entry re-verified accurate. Rotation row 16 → ✅ (pending PR merge).
+Next: Feature 17 (Training core).
+
+### 2026-10-06 — Feature 15 (Scheduling, pass 7) — real delta (23 backend + 46 frontend commits), 0 fixes needed, SCH-10 confirmed fixed, 2 new standing items recorded (watchdog pickup)
+
+Watchdog pickup. PR #2970 (Feature 14, Equipment check & shifts, pass 7)
+had merged with 0 application-code changes (docs-only per this file's
+own rule — only `EC-14-equipment-check-shifts.md`, `PROGRESS.md`), so it
+is not independently recordable; cleared above. Rotation row 15
+(Scheduling) was the first `⬜`.
+
+**Real delta since pass 6 (PR #2628, merged 2026-09-17): 23 backend +
+46 frontend non-merge commits.** Confirmed the clone was already
+full-depth before trusting the count. Of the 13 declared backend files,
+real content changes landed in only 7 (confirmed via `git diff --stat`,
+not assumed); the other 6 (including `calcom_service.py`) had zero
+diff. Of the frontend's 7 workflow-review-labeled commits, each was
+individually verified to touch real logic as its own PR body discloses
+— per the lesson this rotation run's Equipment-check pass learned, where
+two similarly-labeled commits turned out not to be docs-only.
+
+**SCH-10 confirmed fixed, not merely unchanged.** `calcom_service.py`
+itself has zero diff since pass 6, but the DNS-rebinding TOCTOU it
+flagged is closed anyway: the file already builds its HTTP client via
+the shared `create_integration_client()` factory, which now wraps
+`SSRFSafeAsyncTransport` (per `KNOWN_LIMITATIONS.md`'s own SCH-10 entry,
+resolved 2026-10-05, naming `calcom_service.py` among the six senders it
+covers). Verified by reading the actual import/call sites rather than
+re-asserting the doc's claim.
+
+**A pass-6 documentation citation error corrected**, not a code
+regression: pass 6 cited `finalize_shift`/`save_closeout_calls` as
+living in `scheduling.py`, but `scheduling.py` is only ~4,100 lines —
+both methods have always lived in `scheduling_service.py`, confirmed
+against the pass-6 baseline commit's own tree. Both re-verified intact
+at their current (shifted) locations, lock-ordering unchanged.
+
+**Two new standing items recorded** (neither a vulnerability needing a
+fix): **SCH-15** — a new "External Shift Hours" feature
+(`external_shift_hours.py` + 3 sibling files) that feeds data
+`scheduling_service.py` reads but sits outside this feature's declared
+13-file scope; reviewed opportunistically and found clean (org-scoped,
+FK validated in-org, `nullable=True` on its `SET NULL` FKs), with a
+recommendation that the next pass formally add it to scope. **SCH-16** —
+a LOW, self-documented TOCTOU in a new call-type-deletion usage check
+(`0b90e74c9`), parallel in shape to SCH-13's own class but narrower
+(degrades a stale requirement rather than corrupting data), accepted by
+the author in-code and recorded here rather than left to be
+rediscovered.
+
+**Two genuine security-positive fixes landed in the window**, verified
+rather than taken on commit messages: `7df93344f` (separation-of-duties
+— a shift report can no longer name its own officer as trainee) and
+`2f08c5d6a` (XC-2 — department-wide report totals now require a new
+`training.view_analytics` permission instead of the much more broadly
+held `training.manage`, seeded via migration `84819ea78a79`).
+
+**Route count: `scheduling.py` grew to 98 (+6)**, verified by decorator
+parse, all with an auth dependency; `scheduling_module_config.py`
+unchanged at 3 (zero diff).
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean
+over the full scope; `validate_migrations.py --strict` passed (527
+revisions, single head, no migration this module this pass);
+`check_route_permissions.py --strict` 245 routes, 0 errors/warnings;
+scoped backend tests (`-k "scheduling or shift or swap or calcom or
+position_slots or call_tracking or call_type"`) 1517 passed, 1
+pre-existing skip (`pywebpush`); frontend `npm run typecheck` 0 errors;
+`npm run lint` 0 errors/warnings; scoped frontend suite (`npx vitest run
+src/modules/scheduling`) 336 passed (25 files). Findings doc:
+[`SCH-15-scheduling.md`](./SCH-15-scheduling.md)'s **Pass 7** section.
+No `KNOWN_LIMITATIONS.md` change needed this pass — SCH-10's existing
+entry there already recorded the fix this pass independently confirmed;
+SCH-15/SCH-16 are tracked in the findings doc itself rather than
+mirrored, since neither is an owner-decision item. Rotation row 15 → ✅
+(pending PR merge). Next: Feature 16 (Events & requests).
+
+### 2026-10-06 — Feature 14 (Equipment check & shifts, pass 7) — real delta (92 commits in scope, 20 touching primary files), 0 fixes, 0 new findings; two XC-1/XC-2 gaps found and fixed by other work during the window (watchdog pickup)
+
+Watchdog pickup. PR #2969 (Feature 13, Apparatus & NFC, pass 14) had
+merged with 0 application-code changes (docs-only per this file's own
+rule — only `AP-13-apparatus-nfc.md`, `PROGRESS.md`), so it is not
+independently recordable; cleared above. Rotation row 14 (Equipment
+check & shifts) was the first `⬜`.
+
+**Real delta since pass 6 (PR #2625, merged 2026-09-17): 92 non-merge
+commits touching some in-scope path, 20 touching the six primary backend
+files directly** — out of 1,241 total commits on `main` in that window,
+confirming the scope was correctly narrowed rather than under-filtered.
+Confirmed the clone was already full-depth before trusting the count
+(`git fetch --unshallow` → "already a complete repository"). Of the 92:
+9 carry the workflow-review rotation's own label (7 genuinely docs/
+test-only, 2 real — see below); ~15 are pure layout/copy/touch-target CSS
+changes confirmed via `--stat` and a targeted grep (no
+`window.confirm/alert/prompt`, `dangerouslySetInnerHTML`, `.toLocale*`, or
+raw `fetch(` in the frontend diff); the remainder are real
+application-logic commits, each read via `git show`. Of the two
+adjacent-surface functions this feature's own scope covers in
+`scheduled_tasks.py`, `run_end_of_shift_checklist_reminders` was touched
+by zero commits in the window and `run_post_shift_validation` by 4, all
+reviewed clean.
+
+**Two of the window's "workflow-review" commits were not doc-only** and
+turned out to be genuine, already-shipped security fixes: `45c8bc63e`
+added in-org FK validation to `create_template`'s client-supplied
+`apparatus_id` (closing an XC-1 gap), and `2f08c5d6a` split
+`training.view_analytics` out of the broader `training.manage` gate on
+department-wide report totals (narrowing an XC-2-shaped over-broad
+permission, migration `84819ea78a79` evidence-gated per Pitfall #23).
+Both independently verified correct rather than taken on their commit
+messages.
+
+**All five load-bearing fixes re-read at their current (shifted)
+locations**, not inferred from file-level diff silence since every file
+changed materially: EC-16 (now `shift_completion_service.py:567-607`),
+EC-6 (`:446-462`), EC-13 (`equipment_check_service.py:3518`), the
+`.ilike()` escaping (`:5165-5167`), and `SafeCsvWriter` usage
+(`equipment_check.py:1433/1448`) — all intact. The four accepted/deferred
+items (EC-7, EC-8, EC-11, the `get_item_deployments` vs. sibling
+permission gap) all re-confirmed unchanged.
+
+**Route counts unchanged**: `equipment_check.py` 50, `shift_completion.py`
+21 — verified by decorator count, not trusted from the declared scope.
+
+**Scope correction, not a finding:** `EquipmentChecksTab.tsx`, named in
+pass 3's own scope declaration, no longer exists — removed in `cc1e20211`
+(2026-08-31, before pass 6's baseline) when its functionality moved into
+`MyChecklistsPage.tsx`/`CheckLogPage.tsx`/`modules/inventory/pages/
+ApparatusDetailPage.tsx`. Noted in the findings doc so the next pass
+doesn't look for it.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean over
+the full scope; `validate_migrations.py --strict` passed (527 revisions,
+single head, no migration this module this pass); `check_route_permissions.py
+--strict` 245 routes, 0 errors/warnings; scoped backend tests (`-k
+"equipment or shift"`) 1359 passed, 1 pre-existing skip (`pywebpush`);
+frontend `npm run typecheck` 0 errors; `npm run lint` 0 errors/warnings
+(no dedicated frontend module for this feature, matching pass 6's own
+practice). Findings doc:
+[`EC-14-equipment-check-shifts.md`](./EC-14-equipment-check-shifts.md)'s
+**Pass 7** section. No `KNOWN_LIMITATIONS.md` change needed — all four
+open items there re-verified accurate. Rotation row 14 → ✅ (pending PR
+merge). Next: Feature 15 (Scheduling).
+
+### 2026-10-06 — Feature 13 (Apparatus & NFC, pass 14 / rotation pass 7) — real delta (25 commits), 0 fixes, 0 new findings, route count +2 (NFPA compliance) (watchdog pickup)
+
+Watchdog pickup. PR #2968 (Feature 12, Facilities, pass 7) had merged
+with 0 application-code changes (docs-only per this file's own rule —
+only `FAC-12-facilities.md`, `PROGRESS.md`), so it is not independently
+recordable; cleared above. Rotation row 13 (Apparatus & NFC) was the
+first `⬜`. Every AP-1 through AP-18 finding in this feature's own
+findings doc already carried an ✅ FIXED disposition going into this
+pass — zero open or flagged items — so this pass's job was re-verifying
+that stayed true against the real delta, not re-litigating anything.
+
+**Real delta since pass 13 (PR #2623, merged 2026-09-17): 25 non-merge
+commits** out of 775 total non-merge commits on `main` in that window.
+Confirmed the clone was already full-depth before trusting the count
+(`git fetch --unshallow` → "already a complete repository"). Of the 25:
+4 pure layout/copy/test-only changes; 1 (`bb0bda095`, the workflow-review
+rotation's own W48 pass) carries a `docs(workflow-review)` label but is
+not doc-only — it also drops an ORM default on `fuel_type` and touches
+three apparatus frontend files (read in full, benign); the remaining 20
+are real application-logic commits, each read via `git show` against all
+seven checklist dimensions.
+
+**AP-17 and AP-18 re-confirmed intact**, not assumed from zero diff on
+their own lines (both shifted by intervening unrelated insertions, not
+touched themselves): AP-17 now `apparatus_service.py:1724-1730` (was
+1680-1684), AP-18's two call sites now `:469-477` and `:675-683` (were
+419-425 / 625-631). A related app-review commit (`667cbd10d`) extended
+the same `assert_in_org` FK-validation pattern to four more integrity-only
+fields, consistent with AP-17/AP-18's own precedent rather than drifting
+from it.
+
+**Route count: `apparatus.py` 90 (+2), `nfc_tags.py` 5 (unchanged)** —
+verified by `grep -c "^@router\."`, not trusted from a commit message.
+The two new routes are a read-only NFPA-compliance settings/summary pair
+(`d566001eb`), both permission-gated and org-scoped.
+
+**20 real commits reviewed, all clean** — highlights: a new NFPA
+compliance CRUD feature with every by-id query org-scoped and its
+client-supplied apparatus id resolved through the already org-scoped
+`get_apparatus` (XC-1); a public kiosk NFC badge-tap endpoint that
+resolves location only by `display_code`, re-checks feature flags every
+tap, rate-limits by IP+room, strips the response to first-name+initial,
+and answers an unknown card identically to an ineligible one to avoid a
+membership oracle; NFC card-reissue tombstoning with an org-scoped
+existing-card lookup and an `assert_in_org`-validated `user_id`; and an
+`ondelete` audit confirming all ~35 `SET NULL` FKs in `models/apparatus.py`
+still pair with `nullable=True`. No commit in this window touches
+`EquipmentCheckTemplateBuilder.tsx`/`equipmentCheckHierarchy.ts` — on
+inspection those files live under `modules/inventory/`, not
+`modules/apparatus/`, so passes 6-10's save/delete-race invariant was
+never in this feature's own scope.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean over
+the full scope; `validate_migrations.py --strict` passed (527 revisions,
+single head, no migration this module this pass); `check_route_permissions.py
+--strict` 245 routes, 0 errors/warnings; scoped backend tests (`-k
+"apparatus or nfc or evoc or driver_exception"`) 876 passed, 1
+pre-existing skip (`pywebpush`); frontend `npm run typecheck` 0 errors;
+`npm run lint` 0 errors/warnings; scoped frontend suite (`npx vitest run
+src/modules/apparatus`) 67 passed (8 files). Findings doc:
+[`AP-13-apparatus-nfc.md`](./AP-13-apparatus-nfc.md)'s **Pass 14**
+section. No `KNOWN_LIMITATIONS.md` change needed — this feature carries
+no open items there. Rotation row 13 → ✅ (pending PR merge). Next:
+Feature 14 (Equipment check & shifts).
+
+### 2026-10-06 — Feature 12 (Facilities, pass 7) — real delta (28 commits), 0 fixes, 0 new findings, FAC-41/FAC-44 confirmed fixed and intact (watchdog pickup)
+
+Watchdog pickup. PR #2966 (Feature 11, Inventory, pass 7) had merged with
+0 application-code changes (docs-only per this file's own rule — only
+`INV-11-inventory.md`, `KNOWN_LIMITATIONS.md`, `PROGRESS.md`), so it is
+not independently recordable; cleared above. Rotation row 12 (Facilities)
+was the first `⬜`.
+
+**Real delta since pass 6 (PR #2621, merged 2026-09-17T03:26:59Z): 28
+non-merge commits.** Confirmed the clone was already full-depth before
+trusting the count (`git fetch --unshallow` reported "already a complete
+repository" — the shallow-clone truncation the immediately prior Inventory
+pass hit did not apply here). 10 are pure layout/copy/test-only changes
+(one of which is the separate workflow-review rotation's own W49 pass,
+form-accessibility only); 8 touch `permissions.py` in diff context near
+`FACILITIES_*` constants for unrelated features without changing a
+facilities grant (confirmed by grep, not diff-silence); 10 are real
+application-logic changes, each read via `git show`.
+
+**FAC-13 and FAC-30 re-verified unchanged** at their current line numbers
+(`facilities.py:3833-3843` / `documents_service.py:57-61`) — both still
+owner decisions, already in `KNOWN_LIMITATIONS.md`. Specifically confirmed
+this pass that the DOC-9 perf rewrite of `accessible_folder_ids`
+(`870ea19b4`, landed in this window) does not touch FAC-13's code path
+(`get_facility_sub_folders` calls `can_access_folder` directly, never the
+rewritten function), so DOC-9's fix could not have changed FAC-13's
+disposition either way.
+
+**FAC-41/FAC-44 re-read in full and confirmed fixed and intact**, not
+taken on the doc's own prior "FIXED 2026-10-05" annotation: the fix
+(`17bdf7797`, migration `c56303befb2c`) preserves org-scoping in the
+rewritten query, keeps the new `document_id` column a non-FK by design
+(preserving FAC-26's permission-check reasoning), and stays a single
+locking read throughout (FAC-29's guarantee holds). It is also the most
+recent commit in this pass's 28-commit delta, so nothing since has had a
+chance to regress it.
+
+**Route count: 98, unchanged.** Verified by parsing every
+`@router.(get|post|put|patch|delete)(` decorator and confirming a
+permission dependency in each signature — the real-commit diff this
+window touched no route decorator.
+
+**10 real commits reviewed, all clean** — the FAC-41/FAC-44 fix itself;
+the shared DOC-9 rewrite (verified not to interact with facilities'
+folder-ACL path); two department-local-date correctness swaps; an
+`ondelete="RESTRICT"` addition (not `SET NULL`, so Pitfall #2 doesn't
+apply); and three frontend commits adding a room-NFC-tag check-in route
+that is explicitly tracked as the Locations feature's own LOC-37 finding,
+not a Facilities one (confirmed, not taken on the commit message alone —
+the route is deliberately ungated at the router level because auth is
+enforced server-side by the existing org-scoped `GET
+/locations/{id}/display`).
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean over
+the full scope; `validate_migrations.py --strict` passed (527 revisions,
+single head, no migration this module this pass); `check_route_permissions.py
+--strict` 245 routes, 0 errors/warnings; scoped backend tests (`-k
+"facilit"`) 209 passed, 1 pre-existing skip (`pywebpush`); frontend `npm
+run typecheck` 0 errors; `npm run lint` 0 errors/warnings; scoped frontend
+suite (`npx vitest run src/modules/facilities`) 110 passed (15 files).
+Findings doc: [`FAC-12-facilities.md`](./FAC-12-facilities.md)'s **Pass 7**
+section. No `KNOWN_LIMITATIONS.md` change needed — FAC-13/FAC-30's entries
+were re-verified accurate, and FAC-41/FAC-44 were never mirrored there
+(they were scalability flags with a recommended fix, not owner-decision
+items) so there's nothing to update now that they're fixed. Rotation row
+12 → ✅ (pending PR merge). Next: Feature 13 (Apparatus & NFC).
+
+### 2026-10-06 — Feature 11 (Inventory, pass 7) — real delta (77 commits), 0 fixes, INV-16 narrowed, 0 new findings (watchdog pickup)
+
+Watchdog pickup. PR #2962 (Feature 10, Documents & legal, pass 7) had
+merged with 0 application-code changes (docs-only per this file's own
+rule — only `DOC-10-documents-legal.md`, `KNOWN_LIMITATIONS.md`,
+`PROGRESS.md`), so it is not independently recordable; cleared above.
+Rotation row 11 (Inventory) was the first `⬜`.
+
+**Not zero-delta, unlike pass 6.** `git log --no-merges` against the
+declared scope since pass 6's merge initially returned 59 commits against
+this repo's shallow clone — silently dropping 18 real commits a
+`git fetch --unshallow` surfaced (several NFC phases, storage-area
+put-away/print, two label-printing commits). True count: **77 non-merge
+commits**, all accounted for before concluding anything. ~16 are the
+separate workflow-review rotation's own `docs(workflow-review)` entries
+(confirmed to document fixes already present in the application commits
+reviewed below); ~19 are pure layout/copy/test-stub changes confirmed via
+`--stat` to touch no auth/tenancy/data-exposure surface; the remaining ~27
+are real application-logic changes, each read via `git show`.
+
+**INV-16 narrowed, not closed:** the MSUP-25 fix (`57e81e4d2`) added a
+guard rejecting `quantity_received`/`status` changes through
+`update_reorder_request`'s unlocked PATCH path, forcing those two fields
+through the row-locked `transition_reorder_request` instead. The remaining
+gap is now scoped to the other fields this PATCH still writes without a
+lock (`notes`, `quantity_requested`, vendor/line details) — verified by
+reading both functions in full, not inferred from the commit message.
+`KNOWN_LIMITATIONS.md`'s INV-16 entry amended with this correction.
+INV-8/INV-9, INV-17 and INV-22 all re-verified unchanged at their current
+line numbers.
+
+**Route count: 149 (+5) in `inventory.py`**, `labels.py` unchanged at 12,
+1 WebSocket unchanged — verified by diffing decorator counts against the
+pass-6 baseline commit, then diffing the five new decorator lines
+directly. All five new routes (`POST /labels/mark-printed`,
+`POST /storage-areas/{area_id}/put-away`, `GET/POST /label-setups`,
+`DELETE /label-setups/{setup_id}`) carry a single proportionate
+permission (`inventory.manage`), no OR-gate.
+
+**27 real commits reviewed, all clean** — highlights: a server-issued
+`badge_code` replacing a client-visible id as the scannable credential
+(`0549b7e02`, closes a forgeable-credential gap), applicant labels now
+print the internal `_short_id` instead of the prospect's public
+status-check token (`9937d6521`, closes a credential leak via a printed
+label), a new `inventory.kiosk` permission for self-service NFC kiosks
+(seeded to no position, org-scoped, audit-logged, `734f2904c`),
+organization-shared label-setup storage with a locked
+`copy.deepcopy()` write and in-org `printer_id` validation (XC-1,
+`c1e30031f`), and an offline-queue `ownerId` stamp closing a mid-sync
+sign-out/sign-in cross-member leak (`b574c324a`, FE3-34-5). Every new
+PII-bearing route (`/nfc-scans`, `/nfc/audits`, `/not-seen`,
+`/nfc/resolve-member`) was added to `UNCACHEABLE_PREFIXES`/
+`UNCACHEABLE_SUBSTRINGS` in the same commit that introduced it — verified
+in lockstep, not trailing. Full list and verdicts in the findings doc.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean over
+22 scope files (feature's footprint grew by 5 files since pass 6 —
+`inventory_kiosk.py`, `inventory_last_seen.py`, `inventory_nfc.py`,
+`inventory_notification_service.py`, `inventory_audit_schedule_service.py`,
+`utils/inventory_nfc.py`, `utils/label_renderer.py`, `models/label_printer.py`);
+`validate_migrations.py --strict` passed (527 revisions, single head, no
+migration this module this pass); `check_route_permissions.py --strict`
+245 routes, 0 errors/warnings; scoped backend tests (`-k "inventory or
+label or nfc or kiosk"`) 1566 passed, 1 pre-existing skip (`pywebpush`);
+frontend `npm run typecheck` 0 errors; `npm run lint` 0 errors/warnings;
+scoped frontend suite (`npx vitest run src/modules/inventory`) 1574
+passed (105 files). Findings doc:
+[`INV-11-inventory.md`](./INV-11-inventory.md)'s **Pass 7** section.
+Rotation row 11 → ✅ (pending PR merge). Next: Feature 12 (Facilities).
 
 ### 2026-10-06 — Feature 10 (Documents & legal, pass 7) — 0 code fixes (DOC-9/DOC-30 already fixed externally), DOC-8 re-verified open, 1 doc-citation correction (watchdog pickup)
 

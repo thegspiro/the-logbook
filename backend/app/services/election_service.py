@@ -81,6 +81,10 @@ from app.utils.org_timezone import (
 # What a member sees when they open the link a reminder replaced. Not
 # "expired": the election is still open and their newer email works.
 SUPERSEDED_TOKEN_MESSAGE = "This link was replaced by a newer ballot email"
+REOPENED_TOKEN_MESSAGE = (
+    "This election was closed and reopened, so this ballot link is no longer "
+    "valid. Ask your secretary for a new ballot link."
+)
 
 # " - Runoff Round 2" and friends, only at the very end of a title.
 # The shipped (subject, html, text) of each leadership alert, used when the
@@ -5997,7 +6001,12 @@ class ElectionService:
                         # Floor to the second: MySQL DATETIME(0) ROUNDS
                         # fractional seconds, so expiring at now=:56.9 would
                         # store :57 and leave the token briefly valid.
-                        .values(expires_at=now.replace(microsecond=0))
+                        # superseded_at too, so the lookup can say the link
+                        # was retired rather than that voting is over.
+                        .values(
+                            expires_at=now.replace(microsecond=0),
+                            superseded_at=now.replace(microsecond=0),
+                        )
                     )
                     tokens_invalidated = invalidate_result.rowcount or 0
             to_status = "open"
@@ -8390,9 +8399,22 @@ class ElectionService:
 
         # A link a reminder retired is also expired, so this must come
         # first: "expired" reads as voting being over, and the member's
-        # newer email still holds a working link (W50-27).
+        # newer email still holds a working link (W50-27). A rollback
+        # retires links the same way but issues nothing in their place —
+        # and the re-send that follows keys new tokens to a fresh salt — so
+        # a retired link with no newer one for its holder was reopened,
+        # not reminded.
         if voting_token.superseded_at is not None:
-            return None, None, SUPERSEDED_TOKEN_MESSAGE
+            newer = await self.db.execute(
+                select(func.count(VotingToken.id))
+                .where(VotingToken.election_id == voting_token.election_id)
+                .where(VotingToken.voter_hash == voting_token.voter_hash)
+                .where(VotingToken.superseded_at.is_(None))
+                .where(VotingToken.id != voting_token.id)
+            )
+            if (newer.scalar() or 0) > 0:
+                return None, None, SUPERSEDED_TOKEN_MESSAGE
+            return None, None, REOPENED_TOKEN_MESSAGE
 
         # Check if token has expired
         token_exp = self._ensure_utc(voting_token.expires_at)
@@ -8456,15 +8478,7 @@ class ElectionService:
                 # the compare cannot say whether the holder is on the roll —
                 # only that the link predates the reopen and a re-sent
                 # ballot is the way back in.
-                return (
-                    None,
-                    None,
-                    (
-                        "This election was closed and reopened, so this "
-                        "ballot link is no longer valid. Ask your secretary "
-                        "for a new ballot link."
-                    ),
-                )
+                return None, None, REOPENED_TOKEN_MESSAGE
             return (
                 None,
                 None,

@@ -578,11 +578,11 @@ internal code or _"An unexpected error occurred"_. All of them now show the
 sentence. (For integrators: the refusal is an HTTP **409**, where some routes
 answered 400 or 404.)
 
-A closed event can still be edited for housekeeping — the title, the
-description, the location — from the ordinary edit form. Only a change to its
-times, its check-in rules or its type is refused, because the credited hours
-were worked out from those. The form re-sends every field each time; a field
-saved unchanged is not counted as a change.
+**A finalized event can still be edited** _(2026-10-04)_. Its title,
+description, location, RSVP, reminder and guest sign-in settings all stay
+editable. Its type, category, schedule and check-in rules are shown greyed out
+on the edit form, because members' credited hours were calculated from them;
+to change one, have attendance reopened first, then finalize again.
 
 **On a Training event, finalizing writes each member's training record**
 _(2026-09-29)_. Every checked-in member gets a **Completed** record for the
@@ -794,7 +794,7 @@ for edits made from now on:
 | Conflicting times/locations            | The system checks for scheduling conflicts before creating each occurrence and warns you                                                                               |
 | Earlier occurrences in "This and all future events" | Only the occurrence you edited and the later ones change; earlier occurrences remain intact                                                               |
 | Series spanning a daylight-saving change | Each occurrence keeps its local time — a 7:00 PM drill stays at 7:00 PM _(since 2026-09-28; series created earlier may be an hour off after the change, see above)_ |
-| Editing a series with finalized attendance | Refused only when the edit actually changes times — a description-only edit goes through                                                                          |
+| Editing a series with finalized attendance | Refused when the save would change a finalized occurrence's times, type, category or check-in rules. Saved from a finalized occurrence, those fields are left out, so a description-only edit goes through. Saved from an open one, its type, category and check-in rules are copied onto every later occurrence, so even a description-only edit is refused when a finalized later one differs in any of them — edit those occurrences one at a time (see "Events — Edit Form Gaps" in `docs/KNOWN_LIMITATIONS.md`) |
 
 ---
 

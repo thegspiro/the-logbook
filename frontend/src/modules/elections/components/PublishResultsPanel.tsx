@@ -94,8 +94,9 @@ export const PublishResultsPanel: React.FC<PublishResultsPanelProps> = ({ electi
           </div>
         </div>
 
-        {/* Visibility toggle */}
-        <div className="bg-theme-surface-secondary flex items-center justify-between rounded-lg p-4">
+        {/* Visibility toggle. flex-wrap: at phone width the explanatory line
+            otherwise runs past the card's clipped edge (REDRIVE-A-2). */}
+        <div className="bg-theme-surface-secondary flex flex-wrap items-center justify-between gap-3 rounded-lg p-4">
           <div className="flex items-center gap-3">
             {resultsPublished ? (
               <Eye className="h-5 w-5 text-green-600 dark:text-green-400" />
@@ -143,13 +144,13 @@ export const PublishResultsPanel: React.FC<PublishResultsPanelProps> = ({ electi
               )}
             </button>
           ) : (
-            <p className="text-theme-text-muted shrink-0 text-xs">Results can be published once voting closes</p>
+            <p className="text-theme-text-muted text-xs">Results can be published once voting closes</p>
           )}
         </div>
 
         {/* Email report (only when closed) */}
         {isClosed && (
-          <div className="bg-theme-surface-secondary flex items-center justify-between rounded-lg p-4">
+          <div className="bg-theme-surface-secondary flex flex-wrap items-center justify-between gap-3 rounded-lg p-4">
             <div className="flex items-center gap-3">
               <Mail className="text-theme-text-muted h-5 w-5" />
               <div>
