@@ -64,6 +64,7 @@ import { RejoinServiceFields } from '../components/RejoinServiceFields';
 import { useRejoinServiceOptions } from '../hooks/useRejoinServiceOptions';
 import { ServiceHistorySection } from '../components/member-profile/ServiceHistorySection';
 import { QualificationsSection } from '../components/member-profile/QualificationsSection';
+import { UndoDropControl } from '../components/member-profile/UndoDropControl';
 import { isCertificationExpired, isCertificationExpiringSoon } from '../utils/certificationExpiry';
 import { blankToNull } from '../utils/formValues';
 import { displayNameOf, givenName } from '../utils/memberName';
@@ -1310,6 +1311,19 @@ export const MemberProfilePage: React.FC = () => {
                         You see this because you manage members. Other members see a status only when it is not Active.
                       </p>
                     )}
+                    {/* W15-3: a drop made by mistake can be undone for a week;
+                        the control asks the server whether it still can. */}
+                    {!isSelf &&
+                      userId &&
+                      (user.status === UserStatus.DROPPED_VOLUNTARY ||
+                        user.status === UserStatus.DROPPED_INVOLUNTARY) && (
+                        <UndoDropControl
+                          userId={userId}
+                          memberName={displayNameOf(user) || user.username}
+                          tz={tz}
+                          onUndone={() => fetchUserData(userId)}
+                        />
+                      )}
                     {/* Only a departed member can be anonymized; the backend
                         refuses every other status and the caller's own record. */}
                     {!isSelf && (ANONYMIZABLE_STATUSES as readonly string[]).includes(user.status) && (

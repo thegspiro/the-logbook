@@ -8,7 +8,7 @@ report is automatically generated, saved to documents, and optionally emailed.
 
 import copy
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
@@ -580,6 +580,175 @@ async def get_property_return_preview(
         "items": report_data["items"],
         "html": html_content,
     }
+
+
+# ==================== Undo a mistaken drop (W15-3) ====================
+
+# How long after a drop it can still be undone. The action erases the drop
+# from the member's service history as though it never happened, which is
+# right for a mistake caught soon after and wrong for somebody who really left
+# and came back: that is a rejoin, recorded through the status change with its
+# gap and its service-credit choice. A week covers "dropped the wrong Smith on
+# Friday, noticed on Monday" without turning the undo into a backdating tool.
+UNDO_DROP_WINDOW_DAYS = 7
+
+DROPPED_STATUSES = frozenset(
+    {UserStatus.DROPPED_VOLUNTARY, UserStatus.DROPPED_INVOLUNTARY}
+)
+
+# Where an undone drop may put the member back. Suspended is left out on
+# purpose: undoing a drop must not launder an unresolved suspension.
+UNDO_DROP_RESTORE_STATUSES = frozenset(
+    {
+        UserStatus.ACTIVE,
+        UserStatus.PROBATIONARY,
+        UserStatus.INACTIVE,
+        UserStatus.LEAVE,
+    }
+)
+
+
+class UndoDropAvailability(BaseModel):
+    available: bool
+    available_until: datetime | None = None
+    detail: str | None = None
+
+
+class UndoDropRequest(BaseModel):
+    restore_status: str = Field(
+        "active", description="active | probationary | inactive | leave"
+    )
+    reason: str | None = Field(None, max_length=500)
+
+
+def _undo_drop_availability(member: User) -> UndoDropAvailability:
+    if member.status not in DROPPED_STATUSES:
+        return UndoDropAvailability(
+            available=False, detail="Only a dropped member's drop can be undone."
+        )
+    changed = member.status_changed_at
+    if changed is None:
+        return UndoDropAvailability(
+            available=False,
+            detail="This drop has no recorded date, so it cannot be undone. "
+            "Change the member's status instead.",
+        )
+    if changed.tzinfo is None:
+        changed = changed.replace(tzinfo=timezone.utc)
+    until = changed + timedelta(days=UNDO_DROP_WINDOW_DAYS)
+    if datetime.now(timezone.utc) > until:
+        return UndoDropAvailability(
+            available=False,
+            available_until=until,
+            detail=(
+                f"A drop can be undone for {UNDO_DROP_WINDOW_DAYS} days. To bring "
+                "this member back, change their status: that records a rejoin."
+            ),
+        )
+    return UndoDropAvailability(available=True, available_until=until)
+
+
+async def _load_member(
+    db: AsyncSession, user_id: UUID, organization_id: str, *, for_update: bool
+) -> User:
+    query = (
+        select(User)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == organization_id)
+        .where(User.deleted_at.is_(None))
+    )
+    if for_update:
+        query = query.with_for_update().execution_options(populate_existing=True)
+    return ensure_found((await db.execute(query)).scalar_one_or_none(), "Member")
+
+
+@router.get("/{user_id}/undo-drop", response_model=UndoDropAvailability)
+async def get_undo_drop_availability(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Whether this member's drop can still be undone, and until when.
+
+    Requires `members.manage` permission.
+    """
+    member = await _load_member(
+        db, user_id, current_user.organization_id, for_update=False
+    )
+    return _undo_drop_availability(member)
+
+
+@router.post("/{user_id}/undo-drop", response_model=MemberStatusChangeResponse)
+async def undo_member_drop(
+    user_id: UUID,
+    request: UndoDropRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Undo a drop made by mistake (W15-3).
+
+    Within a week of the drop, puts the member back in the status they should
+    have (Active unless told otherwise) and reopens the service stint the drop
+    closed, so their length of service runs on as if the drop had not
+    happened. Unlike a rejoin, no gap and no new stint are recorded. The
+    property return report and any departure clearance the drop created are
+    left as they are, for the quartermaster to close.
+
+    Requires `members.manage` permission.
+    """
+    try:
+        restore = UserStatus(request.restore_status)
+    except ValueError:
+        restore = None
+    if restore not in UNDO_DROP_RESTORE_STATUSES:
+        allowed = ", ".join(sorted(s.value for s in UNDO_DROP_RESTORE_STATUSES))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"An undone drop can restore the member to: {allowed}",
+        )
+
+    # Locked, populate_existing (Pitfall #27): two officers undoing the same
+    # drop at once must not both reopen a stint.
+    member = await _load_member(
+        db, user_id, current_user.organization_id, for_update=True
+    )
+    availability = _undo_drop_availability(member)
+    if not availability.available:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=availability.detail
+        )
+
+    dropped_as = UserStatus(member.status)
+    await MemberServiceHistoryService(db).undo_separation(member, dropped_as)
+
+    member.status = restore
+    member.status_changed_at = datetime.now(timezone.utc)
+    member.status_change_reason = request.reason or "Drop undone"
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="member_drop_undone",
+        event_category="user_management",
+        severity="warning",
+        event_data={
+            "target_user_id": str(user_id),
+            "member_name": member.full_name,
+            "undone_status": dropped_as.value,
+            "restored_status": restore.value,
+            "reason": request.reason,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return MemberStatusChangeResponse(
+        user_id=str(user_id),
+        previous_status=dropped_as.value,
+        new_status=restore.value,
+    )
 
 
 # ==================== Property Return Reminders ====================

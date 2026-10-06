@@ -1140,6 +1140,18 @@ happen automatically — the dialog has no per-change options for them.
 > the drop note above, and — when bringing a member back — the earlier-service
 > choice.
 
+**Undo a drop made by mistake** _(2026-10-05)_. For a week after a member is
+dropped, their profile shows **Dropped by mistake? You can undo this drop
+until …** under Status, with **Restore as** (Active, Probationary, Inactive or
+On Leave), an optional reason and **Undo drop**. Undoing puts the member back
+and reopens the service stint the drop closed, so their length of service runs
+on as if the drop had not happened — no gap and no second stint. It works on
+the day of the drop, when a rejoin cannot (a return date must fall after the
+last day of service). The property return report and any departure clearance
+the drop created are left for the quartermaster to close. After the week, or
+for a member who really left and has come back, change their status instead,
+which records the rejoin (workflow review W15-3).
+
 ![The Change Member Status dialog with a drop status selected and its property-return note](./images/01-29-status-change-modal.png)
 
 > **Screenshot needed:**
