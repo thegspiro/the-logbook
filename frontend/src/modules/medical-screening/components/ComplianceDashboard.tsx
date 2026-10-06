@@ -8,6 +8,7 @@ import React, { useEffect } from 'react';
 import { AlertTriangle, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { useMedicalScreeningStore } from '../store/medicalScreeningStore';
 import { SCREENING_TYPE_LABELS } from '../types';
+import { SelfRecordedBadge } from './SelfRecordedBadge';
 
 export const ComplianceDashboard: React.FC = () => {
   const { expiringScreenings, fetchExpiringScreenings } = useMedicalScreeningStore();
@@ -39,8 +40,9 @@ export const ComplianceDashboard: React.FC = () => {
                     <Clock className="h-4 w-4 shrink-0 text-blue-500" />
                   )}
                   <div>
-                    <p className="text-theme-text-primary text-sm font-medium">
+                    <p className="text-theme-text-primary flex flex-wrap items-center gap-2 text-sm font-medium">
                       {screening.user_name ?? screening.prospect_name ?? 'Unknown'}
+                      {screening.self_recorded && <SelfRecordedBadge />}
                     </p>
                     <p className="text-theme-text-muted text-xs">
                       {SCREENING_TYPE_LABELS[screening.screening_type] ?? screening.screening_type}

@@ -94,6 +94,7 @@ frontend/src/modules/medical-screening/
 | `result_data`     | `EncryptedJSON` 🔒 | Structured result data (scores, measurements)        |
 | `reviewed_by`     | `String(36)`       | FK to users (reviewer)                               |
 | `reviewed_at`     | `DateTime`         | When review occurred                                 |
+| `self_recorded`   | `Boolean`          | Status last set by the record's own subject (MS-7)   |
 | `notes`           | `EncryptedText` 🔒 | Additional notes                                     |
 
 > **Deleting a requirement keeps its records** _(2026-09-29)_. `requirement_id`

@@ -13,6 +13,7 @@ import { useMedicalScreeningStore } from '../store/medicalScreeningStore';
 import { ScreeningRequirementForm } from '../components/ScreeningRequirementForm';
 import { ScreeningRecordForm } from '../components/ScreeningRecordForm';
 import { ComplianceDashboard } from '../components/ComplianceDashboard';
+import { SelfRecordedBadge } from '../components/SelfRecordedBadge';
 import { ConfirmDialog } from '../../../components/ux/ConfirmDialog';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { SCREENING_TYPE_LABELS, SCREENING_STATUS_LABELS, SCREENING_STATUS_COLORS } from '../types';
@@ -323,6 +324,7 @@ export const MedicalScreeningPage: React.FC = () => {
                     >
                       {SCREENING_STATUS_LABELS[record.status] ?? record.status}
                     </span>
+                    {record.self_recorded && <SelfRecordedBadge />}
                   </div>
                   <p className="text-theme-text-muted mt-1 text-xs">
                     {record.user_name ??

@@ -109,6 +109,8 @@ export interface ScreeningRecord {
   result_data?: Record<string, unknown> | undefined;
   reviewed_by?: string | undefined;
   reviewed_at?: string | undefined;
+  /** The status was last set by the member the record is about (MS-7). */
+  self_recorded: boolean;
   notes?: string | undefined;
   user_name?: string | undefined;
   prospect_name?: string | undefined;
@@ -172,6 +174,7 @@ export interface ComplianceItem {
   expiration_date?: string | undefined;
   days_until_expiration?: number | undefined;
   status?: ScreeningStatus | undefined;
+  self_recorded: boolean;
 }
 
 export interface ComplianceSummary {
@@ -183,6 +186,8 @@ export interface ComplianceSummary {
   non_compliant_count: number;
   expiring_soon_count: number;
   is_fully_compliant: boolean;
+  /** Compliant items whose record the subject recorded themself (MS-7). */
+  self_recorded_count: number;
   items: ComplianceItem[];
 }
 
@@ -196,4 +201,5 @@ export interface ExpiringScreening {
   prospect_name?: string | undefined;
   expiration_date: string;
   days_until_expiration: number;
+  self_recorded: boolean;
 }

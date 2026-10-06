@@ -34,6 +34,7 @@ const baseRecord: ScreeningRecord = {
   organization_id: 'org-1',
   screening_type: 'physical_exam',
   status: 'passed',
+  self_recorded: false,
   provider_name: 'Valley Medical Center',
   result_summary: 'Cleared for duty',
   notes: 'Follow-up in 6 months',

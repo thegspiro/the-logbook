@@ -190,6 +190,10 @@ class ScreeningRecordResponse(ScreeningRecordBase, UTCResponseBase):
     prospect_id: Optional[str] = None
     reviewed_by: Optional[str] = None
     reviewed_at: Optional[datetime] = None
+    self_recorded: bool = Field(
+        default=False,
+        description="The record's status was last set by the member it is about.",
+    )
     user_name: Optional[str] = None
     prospect_name: Optional[str] = None
     reviewer_name: Optional[str] = None
@@ -214,6 +218,12 @@ class ComplianceItem(BaseModel):
     expiration_date: Optional[date] = None
     days_until_expiration: Optional[int] = None
     status: Optional[str] = None
+    self_recorded: bool = Field(
+        default=False,
+        description="The record this item is graded on was recorded by its own "
+        "subject (MS-7). It still counts; it is shown so it is not trusted "
+        "silently.",
+    )
 
 
 class ComplianceSummary(BaseModel):
@@ -227,6 +237,10 @@ class ComplianceSummary(BaseModel):
     non_compliant_count: int
     expiring_soon_count: int
     is_fully_compliant: bool
+    self_recorded_count: int = Field(
+        default=0,
+        description="Compliant items whose record the subject recorded themself.",
+    )
     items: List[ComplianceItem]
 
 
@@ -288,3 +302,4 @@ class ExpiringScreening(BaseModel):
     prospect_name: Optional[str] = None
     expiration_date: date
     days_until_expiration: int
+    self_recorded: bool = False

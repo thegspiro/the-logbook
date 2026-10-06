@@ -37,6 +37,7 @@ const baseRecord: ScreeningRecord = {
   user_id: 'u-1',
   screening_type: 'physical_exam',
   status: 'passed',
+  self_recorded: false,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-05T00:00:00Z',
 };

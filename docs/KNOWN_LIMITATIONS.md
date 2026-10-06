@@ -3636,41 +3636,6 @@ it carries the same up-to-90-seconds staleness the rest of the catalog's
 already-cacheable fields do. Not fixed; correctly flagged rather than
 patched, per Codex review on PR #2382.
 
-## MS-7 — A Medical Screening Record Can Be Self-Created and Self-Cleared, With No Reviewer Distinct From the Subject (2026-09-02)
-
-`medical_screening_service.py`'s `create_record`/`update_record` place no
-constraint on the relationship between the caller (anyone holding
-`medical_screening.manage`) and `data.user_id` (the record's subject). A
-`.manage` holder can `POST /medical-screening/records` with `user_id` equal
-to their own id and `status="passed"` directly — no review step, no second
-approver, nothing comparable to `MeetingMinutes`' `assert_different_person`
-(MM-9's sibling `Meeting` gap, above, is the closest existing precedent in
-this codebase). `update_record` does set `reviewed_by`/`reviewed_at` to the
-caller/now() when the new status is `passed`/`failed`/`waived`, which reads
-like a review-tracking mechanic but gates nothing:
-`get_compliance_status` — the only place `status` is consulted for
-compliance — checks membership in `{PASSED, COMPLETED, WAIVED}` and never
-looks at `reviewed_by` at all, so a self-administered `PASSED` set on
-**create** (never touching `update_record`) counts identically to a
-genuinely reviewed one.
-
-Not a cross-tenant or unauthenticated exposure — the permission is not
-baseline-granted to any position or rank (an administrator must explicitly
-assign it), and every write is audit-logged, so self-certification is
-discoverable after the fact, not silent. It is an integrity/trust-boundary
-gap on fitness-for-duty and drug-screening PHI: an EMS coordinator or
-officer who also holds `.manage` and is themselves a line member can clear
-their own screening with no independent check.
-
-Not fixed because both remedies are behavior changes needing a product
-decision: blocking `data.user_id == current_user.id` outright would break
-the legitimate small-department case where the same person is both the only
-one authorized to log screenings and a line member needing their own result
-recorded (the exam happened externally; the app is just where the result is
-typed in), and a full second-approver workflow is a feature, not a same-day
-fix. Found in `docs/security-review/MS-09-medical-screening.md` (feature 09,
-pass 3, MS-7).
-
 ## MS-14 — `medical_screening.view` Grants Full Narrative PHI, With No Finer-Grained Read Tier (2026-10-06)
 
 Five routes are gated on `medical_screening.view`:

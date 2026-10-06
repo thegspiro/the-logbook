@@ -372,6 +372,35 @@ schema tests + integration tests of the subject list and a prospect create)
 and `ScreeningRecordForm.subjectPicker.test.tsx` (replaces
 `ScreeningRecordForm.linkageNotice.test.tsx`).
 
+### MS-7 — ✅ FIXED (allow but flag) — a self-recorded screening is marked in the compliance views
+
+Owner choice: allow but flag. A `.manage` holder can still record or clear
+their own screening — blocking it would break the department where one person
+logs everyone's results — but the result is no longer indistinguishable from
+an independently recorded one:
+
+- New column `screening_records.self_recorded` (migration `9c1445489666`,
+  guarded — `screening_records` is a `create_all`-only table — with a real
+  downgrade). True when the record's status was last set by its own subject:
+  `create_record` marks it when the caller is `user_id`; `update_record`
+  recomputes it whenever the payload carries a status (the edit form always
+  does), so a colleague's save clears it and an edit that omits the status
+  keeps it. Backfill marks rows where `reviewed_by = user_id`, and rows with no
+  reviewer whose `medical_screening.record_created` audit event (record id on
+  it since MS-8) was written by the subject.
+- Surfaced in every compliance view: `ScreeningRecordResponse.self_recorded`,
+  `ComplianceItem.self_recorded`, `ComplianceSummary.self_recorded_count`,
+  `ExpiringScreening.self_recorded`, and the MCP member-compliance tool's
+  projection. The Records tab and the Compliance tab's expiring list show an
+  amber **Self-recorded** badge (`SelfRecordedBadge.tsx`). Compliance still
+  counts the record.
+- `record_created` / `record_updated` audit events carry `self_recorded`.
+
+`MyComplianceSummary` (the member's own dashboard counts) is unchanged — it is
+the subject's own view. A second-approver workflow was not chosen and is not
+built. Guarded by `backend/tests/test_medical_screening_self_recorded.py`
+(integration, 8 tests) and `SelfRecordedBadge.test.tsx`.
+
 ---
 
 ## Pass 6 (2026-09-16)
@@ -1086,7 +1115,7 @@ route capture `"me"` as a `user_id`.
 
 ## Findings
 
-### MS-7 — MED — No reviewer distinct from the subject or the creator on screening records — 🚩 FLAGGED
+### MS-7 — MED — No reviewer distinct from the subject or the creator on screening records — 🚩 FLAGGED (✅ allow-but-flag fixed 2026-10-05, see "Owner decisions" at the top)
 
 **What:** `create_record` and `update_record` place no constraint on the
 relationship between `current_user` (the caller, who must hold

@@ -215,6 +215,7 @@ Navigate to **Medical Screening > Records** tab to view all records.
 | **Result Data**     | JSON (optional)            | Structured result data (lab values, measurements, scores)                                                |
 | **Reviewed By**     | Foreign key (optional)     | Officer who reviewed the result                                                                          |
 | **Reviewed At**     | Datetime (optional)        | When the result was reviewed                                                                             |
+| **Self-recorded**   | Set by the system          | The record's status was last saved by the member it is about — see below                                 |
 | **Notes**           | Text (optional)            | Additional notes or comments                                                                             |
 
 > **HIPAA Note:** The `result_summary`, `result_data`, and `notes` fields may contain PHI. The system does not cache API responses for medical screening endpoints (they are included in `UNCACHEABLE_PREFIXES`). Every view of screening records, compliance and the expiring list is logged in the audit trail, one entry per page load. Limit the specificity of data entered — record compliance outcomes (passed/failed/waived) rather than detailed medical findings when possible.
@@ -260,6 +261,27 @@ Navigate to **Medical Screening > Records** tab to view all records.
 ![The Add Screening Record dialog](./images/13-07-add-record-linkage-notice.png)
 
 **[SCREENSHOT — REPLACE `13-07-add-record-linkage-notice.png`.** The frame still shows the retired amber "Not linked" notice. The dialog now opens with a **Record is for** choice (Member / Prospect) and a name list above Linked Requirement; retake it with a member selected.**]**
+
+### Self-Recorded Screenings
+
+A screening manager may record their own screening — in a small department the
+person who logs everyone's external results often needs their own entered too —
+and the result counts toward compliance like any other. It is not trusted
+silently, though: a record whose status was last saved by the member it is
+about carries an amber **Self-recorded** badge on the Records tab and in the
+expiring list on the Compliance tab, and the compliance summary for that member
+reports how many of their compliant items rest on a self-recorded result.
+
+The badge follows whoever last saved the record's status:
+
+- Adding a record for yourself, or saving the status on your own record, marks it.
+- Another manager saving the record's status (the Edit dialog always saves it)
+  clears the mark — they have looked at the result and stood behind it, and they
+  become its **Reviewed By** when the status is Passed, Failed or Waived.
+- An edit that does not touch the status leaves the mark as it was.
+
+If your department wants every result independently confirmed, have a second
+manager open and save each self-recorded record.
 
 ### Status Workflow
 

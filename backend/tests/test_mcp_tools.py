@@ -3420,6 +3420,8 @@ class TestTwentySixthRoundFindings:
                 "last_screening_date": "2026-01-01",
                 "expiration_date": "2027-01-01",
                 "days_until_expiration": 120,
+                # Who recorded it (MS-7), not what it found.
+                "self_recorded": False,
             }
         ]
         assert "waived" not in json.dumps(body)

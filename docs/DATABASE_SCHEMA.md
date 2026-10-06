@@ -394,7 +394,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`screening_records`](#screening_records) | `ScreeningRecord` | 18 | Individual screening instance for a user or prospective member. |
+| [`screening_records`](#screening_records) | `ScreeningRecord` | 19 | Individual screening instance for a user or prospective member. |
 | [`screening_requirements`](#screening_requirements) | `ScreeningRequirement` | 11 | Organization-level definition of a required screening. |
 
 ### Meeting Minutes
@@ -5995,6 +5995,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `result_data` | TEXT | yes |  |  |  |
 | `reviewed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `reviewed_at` | DATETIME | yes |  |  |  |
+| `self_recorded` | BOOL | no |  | `0` |  |
 | `notes` | TEXT | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |

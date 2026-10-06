@@ -335,6 +335,7 @@ async def create_record(
         record = await service.create_record(
             organization_id=current_user.organization_id,
             data=data,
+            recorded_by=str(current_user.id),
         )
     except ValueError as exc:
         raise HTTPException(
@@ -350,6 +351,7 @@ async def create_record(
             "record_id": record.id,
             "record_user_id": data.user_id,
             "screening_type": data.screening_type,
+            "self_recorded": record.self_recorded,
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -379,7 +381,7 @@ async def update_record(
             record_id,
             current_user.organization_id,
             data,
-            reviewed_by=current_user.id,
+            reviewed_by=str(current_user.id),
         )
     except ValueError as exc:
         raise HTTPException(
@@ -396,7 +398,7 @@ async def update_record(
         event_type="medical_screening.record_updated",
         event_category="medical_screening",
         severity="info",
-        event_data={"record_id": record_id},
+        event_data={"record_id": record_id, "self_recorded": record.self_recorded},
         user_id=str(current_user.id),
         username=current_user.username,
     )

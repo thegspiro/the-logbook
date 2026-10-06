@@ -60,6 +60,11 @@ _SCREENABLE_MEMBER_STATUSES = (
 _SCREENABLE_PROSPECT_STATUSES = (ProspectStatus.ACTIVE, ProspectStatus.ON_HOLD)
 
 
+def _is_self(actor_id: Optional[str], subject_user_id: Optional[str]) -> bool:
+    """Whether the person writing a record is the member it is about."""
+    return bool(actor_id) and str(actor_id) == str(subject_user_id or "")
+
+
 class MedicalScreeningService:
     """Service for medical screening operations."""
 
@@ -264,8 +269,13 @@ class MedicalScreeningService:
         self,
         organization_id: str,
         data: ScreeningRecordCreate,
+        recorded_by: Optional[str] = None,
     ) -> ScreeningRecord:
-        """Create a new screening record."""
+        """Create a new screening record.
+
+        ``recorded_by`` is the caller; when it is the record's own subject the
+        record is marked ``self_recorded`` (MS-7).
+        """
         # MS-3 (XC-1): the record is org-stamped from the caller, but its
         # subject/requirement ids come from the client. This record holds PHI,
         # so a foreign user_id doesn't just dangle — it attaches medical
@@ -311,6 +321,7 @@ class MedicalScreeningService:
             result_summary=data.result_summary,
             result_data=data.result_data,
             notes=data.notes,
+            self_recorded=_is_self(recorded_by, data.user_id),
         )
         self.db.add(record)
         await self.db.flush()
@@ -335,12 +346,19 @@ class MedicalScreeningService:
         # screening_type and status are NOT NULL columns; an explicit null on
         # either used to reach db.flush() unguarded and 500 as a raw
         # IntegrityError instead of the clean 400 apply_updates raises.
-        apply_updates(record, data.model_dump(exclude_unset=True))
+        changes = data.model_dump(exclude_unset=True)
+        apply_updates(record, changes)
         if reviewed_by and data.status in ("passed", "failed", "waived"):
             from datetime import datetime, timezone
 
             record.reviewed_by = reviewed_by
             record.reviewed_at = datetime.now(timezone.utc)
+        # MS-7: whoever submits the status owns it. The edit form always sends
+        # the status, so saving a record — with its result on screen — counts,
+        # which is also what lets a colleague's save clear a self-recorded
+        # pass. An update that leaves the status out keeps the flag.
+        if reviewed_by and "status" in changes:
+            record.self_recorded = _is_self(reviewed_by, record.user_id)
         await self.db.flush()
         return record
 
@@ -428,6 +446,7 @@ class MedicalScreeningService:
         items: List[ComplianceItem] = []
         compliant_count = 0
         expiring_soon_count = 0
+        self_recorded_count = 0
 
         for req in requirements:
             # Find the most recent passing/completed record for this requirement type
@@ -469,8 +488,11 @@ class MedicalScreeningService:
                     # No expiration = compliant indefinitely
                     is_compliant = True
 
+            self_recorded = bool(latest and latest.self_recorded)
             if is_compliant:
                 compliant_count += 1
+                if self_recorded:
+                    self_recorded_count += 1
 
             items.append(
                 ComplianceItem(
@@ -482,6 +504,7 @@ class MedicalScreeningService:
                     expiration_date=(latest.expiration_date if latest else None),
                     days_until_expiration=days_until_exp,
                     status=latest.status if latest else None,
+                    self_recorded=self_recorded,
                 )
             )
 
@@ -510,6 +533,7 @@ class MedicalScreeningService:
             non_compliant_count=len(requirements) - compliant_count,
             expiring_soon_count=expiring_soon_count,
             is_fully_compliant=compliant_count == len(requirements),
+            self_recorded_count=self_recorded_count,
             items=items,
         )
 
@@ -606,6 +630,7 @@ class MedicalScreeningService:
                     prospect_name=names["prospects"].get(record.prospect_id),
                     expiration_date=record.expiration_date,
                     days_until_expiration=days_left,
+                    self_recorded=bool(record.self_recorded),
                 )
             )
 

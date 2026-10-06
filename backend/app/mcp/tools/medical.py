@@ -73,6 +73,7 @@ def register(server: Any) -> None:
             "non_compliant_count": summary.non_compliant_count,
             "expiring_soon_count": summary.expiring_soon_count,
             "is_fully_compliant": summary.is_fully_compliant,
+            "self_recorded_count": summary.self_recorded_count,
             "items": [
                 {
                     "requirement_id": item.requirement_id,
@@ -82,6 +83,7 @@ def register(server: Any) -> None:
                     "last_screening_date": iso(item.last_screening_date),
                     "expiration_date": iso(item.expiration_date),
                     "days_until_expiration": item.days_until_expiration,
+                    "self_recorded": item.self_recorded,
                 }
                 for item in summary.items
             ],
