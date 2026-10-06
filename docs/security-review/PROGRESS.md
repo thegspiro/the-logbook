@@ -16,6 +16,24 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2972](https://github.com/thegspiro/the-logbook/pull/2972)**: branch
+`claude/security-review-events-requests`, Feature 16 (Events & requests),
+pass 7 — 0 code fixes needed. EV-26 confirmed genuinely fixed (not
+merely unchanged) via a per-department upsert lock serializing
+room-booking overlap checks, matching `KNOWN_LIMITATIONS.md`'s own
+entry; EV-23 re-verified unchanged (accepted product decision). A
+scope-tracking gap found and closed: three new feature files reviewed
+clean and added to the declared scope. One security-adjacent fix
+verified (11 routes leaking/over-sanitizing an internal error marker,
+now correctly 409). Real delta since pass 6 reviewed in full — 33
+non-merge commits. Route count in `events.py` grew to 58 (+2). Gate
+green (flake8/black/isort, migrations, route-permission check — 245
+routes, 1224 scoped backend tests, frontend typecheck/lint). See the
+Log entry below for detail.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 7, PR #2971, merged docs-only — not independently recorded), preserved for history</summary>
+
 **PR [#2971](https://github.com/thegspiro/the-logbook/pull/2971)**: branch
 `claude/security-review-scheduling`, Feature 15 (Scheduling), pass 7 — 0
 code fixes needed. SCH-10 confirmed genuinely fixed (not merely
@@ -34,6 +52,8 @@ commits. Route count in `scheduling.py` grew to 98 (+6). Gate green
 (flake8/black/isort, migrations, route-permission check — 245 routes,
 1517 scoped backend tests, frontend typecheck/lint, 336 scoped frontend
 tests). See the Log entry below for detail.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 14, Equipment check &amp; shifts, pass 7, PR #2970, merged docs-only — not independently recorded), preserved for history</summary>
@@ -17928,7 +17948,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
-| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
+| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ⬜     |
@@ -17954,6 +17974,64 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-06 — Feature 16 (Events & requests, pass 7) — real delta (33 commits), 0 fixes needed, EV-26 confirmed fixed, scope widened by 3 files (watchdog pickup)
+
+Watchdog pickup. PR #2971 (Feature 15, Scheduling, pass 7) had merged
+with 0 application-code changes (docs-only per this file's own rule —
+only `SCH-15-scheduling.md`, `PROGRESS.md`), so it is not independently
+recordable; cleared above. Rotation row 16 (Events & requests) was the
+first `⬜`.
+
+**Real delta since pass 6 (PR #2630, merged 2026-09-17): 33 non-merge
+commits** touching the 12 declared scope files — a genuinely active
+window, unlike pass 6's near-zero-delta. Confirmed the clone was already
+full-depth before trusting the count.
+
+**EV-26 confirmed fixed, not merely unchanged.** `5b0929492`
+("serialize room bookings per department") adds a per-department upsert
+lock taken before `check_overlapping_events`'s locking read, and makes
+`update_event` take that lock before its own event-row lock. All three
+standing call sites re-verified to go through the locked path by direct
+read. `KNOWN_LIMITATIONS.md`'s EV-26 entry already documents the fix and
+its accepted cross-department residual — re-read and confirmed
+accurate. Closed as fixed. **EV-23 re-verified unchanged** (shifted to
+`event_service.py:2181`), still an accepted product decision.
+
+**Scope gap found and closed.** Two real Events-feature commits added
+three new backend files
+(`event_attendance_petitions.py`/`event_attendance_petition_service.py`/
+`event_organizer_service.py`) outside the declared 12-file scope.
+Reviewed all three in full this pass against all seven checklist
+dimensions and found clean (every route authenticated, separation of
+duties enforced on petition review, every by-id lookup org-scoped, the
+client-supplied organizer/alternate ids validated in-org per XC-1,
+correct lock ordering, PII escaped before email, the new endpoint
+already in `UNCACHEABLE_SUBSTRINGS`) — now added to this feature's
+declared scope so a future pass diffs them rather than silently
+skipping them.
+
+**One security-adjacent fix verified** (`f00912e1b`): 11 routes that
+either leaked the raw `ATTENDANCE_LOCKED::` internal marker or
+over-sanitized a legitimate lock message into a generic 500/400 instead
+of the correct 409, now fixed with a new AST guard test.
+
+**Route count: `events.py` grew to 58 (+2)** (a permission-gated settings
+route and the new organizer-transfer route, both reviewed clean);
+`event_requests.py` unchanged at 23.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean
+over the full (now-13-file) scope; `validate_migrations.py --strict`
+passed (527 revisions, single head, no migration this module this
+pass); `check_route_permissions.py --strict` 245 routes, 0
+errors/warnings; scoped backend tests (`-k "event"`) 1224 passed, 1
+pre-existing skip (`pywebpush`); frontend `npm run typecheck` 0 errors;
+`npm run lint` 0 errors/warnings. Findings doc:
+[`EV-16-events-requests.md`](./EV-16-events-requests.md)'s **Pass 7**
+section. No `KNOWN_LIMITATIONS.md` change needed — its EV-26 entry
+already recorded the fix this pass independently confirmed, and EV-23's
+entry re-verified accurate. Rotation row 16 → ✅ (pending PR merge).
+Next: Feature 17 (Training core).
 
 ### 2026-10-06 — Feature 15 (Scheduling, pass 7) — real delta (23 backend + 46 frontend commits), 0 fixes needed, SCH-10 confirmed fixed, 2 new standing items recorded (watchdog pickup)
 
