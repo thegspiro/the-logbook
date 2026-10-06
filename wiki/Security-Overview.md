@@ -764,6 +764,12 @@ the legacy unkeyed SHA-256 scheme, and a no-downgrade guard rejects a later
 unkeyed row after any keyed row. This makes it impossible to modify historical
 logs without detection.
 
+Each row records a fingerprint of the key that signed it and is verified only
+against that key. Rows signed with `SECRET_KEY` before a dedicated
+`AUDIT_LOG_SIGNING_KEY` took effect keep verifying, but only up to the first
+row signed with the dedicated key — `SECRET_KEY` is never a standing second
+key. Ballot signatures (`VOTE_SIGNING_KEY`) are handled the same way.
+
 ### What is Logged
 
 #### Authentication Events

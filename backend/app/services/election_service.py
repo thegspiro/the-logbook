@@ -406,6 +406,20 @@ def _tier_benefits(user: Any, org: Any) -> dict:
     return benefits if isinstance(benefits, dict) else {}
 
 
+# Domain label for the key fingerprint stored on each vote; distinct from the
+# audit log's so the two fingerprints of one shared key do not match.
+_VOTE_KEY_ID_LABEL = b"logbook:vote-signing-key-id:v1"
+
+
+def vote_signing_key_id(key: str) -> str:
+    """Return the fingerprint recorded on a vote signed with ``key``.
+
+    A keyed digest of a fixed label, truncated: it identifies the key without
+    revealing it, since recovering the key from it means breaking the HMAC.
+    """
+    return hmac.new(key.encode(), _VOTE_KEY_ID_LABEL, hashlib.sha256).hexdigest()[:16]
+
+
 def office_ineligible_message(name: Optional[str]) -> str:
     return (
         f"{name or 'This member'}'s membership tier cannot hold elected office. "
@@ -1659,7 +1673,7 @@ class ElectionService:
         )
 
         # Sign the vote for tampering detection
-        vote.vote_signature = self._sign_vote(vote)
+        self._apply_vote_signature(vote)
 
         # Sequential chain hash — links this vote to the previous one
         vote.chain_hash = self._compute_chain_hash(
@@ -2024,14 +2038,57 @@ class ElectionService:
             )
         return key
 
-    def _sign_vote(self, vote: Vote) -> str:
+    @staticmethod
+    def _legacy_vote_signing_key(current_key: str) -> Optional[str]:
+        """SECRET_KEY, when a distinct dedicated VOTE_SIGNING_KEY is set.
+
+        Before 2026-10-06 the Unraid compose files did not pass
+        VOTE_SIGNING_KEY through, so installs that set it in ``.env`` signed
+        every ballot with the SECRET_KEY fallback. Those ballots must keep
+        verifying once the dedicated key arrives (owner decision,
+        2026-10-06); verify_vote_integrity bounds how far.
+        """
+        dedicated = settings.VOTE_SIGNING_KEY
+        secret = settings.SECRET_KEY
+        if not dedicated or not secret or secret in (dedicated, current_key):
+            return None
+        return secret
+
+    def _apply_vote_signature(self, vote: Vote) -> None:
+        """Sign ``vote`` and record which key signed it."""
+        signing_key = self._get_vote_signing_key()
+        vote.vote_signature = self._sign_vote(vote, signing_key)
+        vote.signing_key_id = vote_signing_key_id(signing_key)
+
+    async def _vote_key_cutover(self, current_key_id: str) -> Optional[datetime]:
+        """When the first vote recording the dedicated key was cast.
+
+        Deliberately not scoped to one organization: the signing key is a
+        deployment setting, so the moment it took effect is a fact about the
+        deployment. Only this timestamp leaves the query, and an election
+        created after the key arrived then cannot hold a SECRET_KEY ballot
+        merely because none of its own ballots predate it.
+        """
+        cutover = (
+            await self.db.execute(
+                select(func.min(Vote.voted_at)).where(
+                    Vote.signing_key_id == current_key_id
+                )
+            )
+        ).scalar()
+        return self._ensure_utc(cutover)
+
+    def _sign_vote(self, vote: Vote, signing_key: Optional[str] = None) -> str:
         """Generate a cryptographic signature for a vote to detect tampering.
 
         The signature covers all immutable vote fields so any modification
         (changing candidate, deleting and re-inserting, altering rank, or
         converting a proxy vote) will produce a different signature.
+        ``signing_key`` overrides the current key; verification passes the
+        key a vote's ``signing_key_id`` names.
         """
-        signing_key = self._get_vote_signing_key()
+        if signing_key is None:
+            signing_key = self._get_vote_signing_key()
         # Include vote_rank for ranked-choice integrity and proxy fields.
         # voted_at must be canonicalized to a round-trip-stable form: MySQL
         # DATETIME has second precision and returns naive values, so the raw
@@ -2110,15 +2167,58 @@ class ElectionService:
         tampered = []
         unsigned = 0
 
+        current_key = self._get_vote_signing_key()
+        current_id = vote_signing_key_id(current_key)
+        legacy_key = self._legacy_vote_signing_key(current_key)
+        legacy_id = vote_signing_key_id(legacy_key) if legacy_key else None
+        # SECRET_KEY verifies a ballot only if it was cast no later than the
+        # first ballot signed with the dedicated key, so it cannot become a
+        # permanent second key. voted_at is inside the signature, so moving
+        # it earlier needs a key that signs. Looked up only when needed.
+        cutover: Optional[datetime] = None
+        cutover_loaded = False
+        legacy_verified = 0
+
         for vote in all_votes:
             if not vote.vote_signature:
                 unsigned += 1
                 continue
-            expected = self._sign_vote(vote)
-            if vote.vote_signature == expected:
-                valid += 1
-            else:
+            recorded = getattr(vote, "signing_key_id", None)
+            if recorded is not None and recorded not in (current_id, legacy_id):
+                # Signed with a key that is no longer configured.
                 tampered.append(str(vote.id))
+                continue
+            if recorded in (None, current_id) and hmac.compare_digest(
+                vote.vote_signature, self._sign_vote(vote, current_key)
+            ):
+                valid += 1
+                continue
+            if legacy_key is None or recorded == current_id:
+                tampered.append(str(vote.id))
+                continue
+            if not hmac.compare_digest(
+                vote.vote_signature, self._sign_vote(vote, legacy_key)
+            ):
+                tampered.append(str(vote.id))
+                continue
+            if not cutover_loaded:
+                cutover = await self._vote_key_cutover(current_id)
+                cutover_loaded = True
+            voted_at = self._ensure_utc(vote.voted_at)
+            if cutover is not None and (voted_at is None or voted_at > cutover):
+                tampered.append(str(vote.id))
+                continue
+            valid += 1
+            legacy_verified += 1
+
+        if legacy_verified:
+            logger.warning(
+                f"Vote integrity | election={election_id}: {legacy_verified} "
+                "ballots verified with SECRET_KEY, the fallback that signed them "
+                "before VOTE_SIGNING_KEY reached the backend. They are accepted "
+                "only up to the first ballot signed with VOTE_SIGNING_KEY; "
+                "rotating SECRET_KEY will make them unverifiable."
+            )
 
         # Verify the sequential vote chain by RECONSTRUCTING the order from
         # the hashes themselves: from prev_chain, exactly one remaining vote
@@ -4284,7 +4384,7 @@ class ElectionService:
                     manual_batch_id=batch_id,
                     vote_dedup_hash=None,
                 )
-                vote.vote_signature = self._sign_vote(vote)
+                self._apply_vote_signature(vote)
                 vote.chain_hash = self._compute_chain_hash(
                     election.last_chain_hash, vote.vote_signature
                 )
@@ -6654,7 +6754,7 @@ class ElectionService:
                 ),
             ),
         )
-        vote.vote_signature = self._sign_vote(vote)
+        self._apply_vote_signature(vote)
         vote.chain_hash = self._compute_chain_hash(
             election.last_chain_hash, vote.vote_signature
         )
@@ -8642,7 +8742,7 @@ class ElectionService:
         )
 
         # Sign the vote for tampering detection
-        vote.vote_signature = self._sign_vote(vote)
+        self._apply_vote_signature(vote)
 
         # Sequential chain hash and voter receipt
         vote.chain_hash = self._compute_chain_hash(
@@ -8882,7 +8982,7 @@ class ElectionService:
                     discriminator=discriminator,
                 ),
             )
-            new_vote.vote_signature = self._sign_vote(new_vote)
+            self._apply_vote_signature(new_vote)
             new_vote.chain_hash = self._compute_chain_hash(
                 election.last_chain_hash, new_vote.vote_signature
             )

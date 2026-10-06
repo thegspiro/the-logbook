@@ -107,7 +107,10 @@ of a rotation safe: nothing breaks the moment you deploy the new key.
 
 > `SECRET_KEY` (JWT signing) is different — rotating it signs everyone out by
 > design. `AUDIT_LOG_SIGNING_KEY` must not be casually rotated: historical
-> audit rows verify under the key that wrote them.
+> audit rows verify under the key that wrote them. Rows written before a
+> dedicated `AUDIT_LOG_SIGNING_KEY` (or `VOTE_SIGNING_KEY`) took effect were
+> signed with `SECRET_KEY` and still verify under it, so rotating
+> `SECRET_KEY` also makes those rows read as tampered.
 
 ---
 

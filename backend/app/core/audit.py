@@ -50,6 +50,58 @@ def _get_audit_signing_key() -> str:
     return settings.AUDIT_LOG_SIGNING_KEY or settings.SECRET_KEY
 
 
+# Domain label for the key fingerprint stored on each row. A keyed digest of a
+# fixed label, truncated, identifies the key without revealing it: recovering
+# the key from it is as hard as forging the HMAC itself.
+_KEY_ID_LABEL = b"logbook:audit-log-signing-key-id:v1"
+_KEY_ID_LENGTH = 16
+
+
+def audit_signing_key_id(key: str) -> str:
+    """Return the fingerprint recorded on a row signed with ``key``."""
+    return hmac.new(key.encode(), _KEY_ID_LABEL, hashlib.sha256).hexdigest()[
+        :_KEY_ID_LENGTH
+    ]
+
+
+class _AuditKeyring:
+    """The keys a verification run may check a row against.
+
+    ``current`` is the key new rows are signed with. ``legacy`` is
+    ``SECRET_KEY``, and exists only when a distinct dedicated key is
+    configured: before 2026-10-06 the shipped compose files did not pass
+    ``AUDIT_LOG_SIGNING_KEY`` through, so installs that set it in ``.env``
+    signed every row with the fallback. Those rows must keep verifying once
+    the dedicated key arrives (owner decision, 2026-10-06), but SECRET_KEY
+    must not become a permanent second key — so it is accepted only for rows
+    before the chain's cut-over, the first row recording the dedicated key.
+    """
+
+    def __init__(self) -> None:
+        self.current = _get_audit_signing_key()
+        self.current_id = audit_signing_key_id(self.current)
+        dedicated = settings.AUDIT_LOG_SIGNING_KEY
+        secret = settings.SECRET_KEY
+        self.legacy: str | None = (
+            secret if dedicated and secret and secret != dedicated else None
+        )
+        self.legacy_id = audit_signing_key_id(self.legacy) if self.legacy else None
+        self.legacy_rows: list[int] = []
+
+    def warn_if_legacy_used(self, what: str) -> None:
+        """One WARNING per run, not per row, naming what SECRET_KEY verified."""
+        if not self.legacy_rows:
+            return
+        logger.warning(
+            f"Audit integrity: {len(self.legacy_rows)} {what} verified with "
+            "SECRET_KEY, the fallback that signed them before "
+            "AUDIT_LOG_SIGNING_KEY reached the backend (ids "
+            f"{self.legacy_rows[0]}-{self.legacy_rows[-1]}). They are accepted "
+            "only before the first row signed with AUDIT_LOG_SIGNING_KEY; "
+            "rotating SECRET_KEY will make them unverifiable."
+        )
+
+
 class AuditLogger:
     """
     Tamper-proof audit logger with cryptographic hash chains
@@ -84,6 +136,7 @@ class AuditLogger:
         log_data: dict[str, Any],
         previous_hash: str,
         version: int = _CURRENT_HASH_VERSION,
+        key: str | None = None,
     ) -> str:
         """
         Calculate the integrity hash for a log entry.
@@ -99,6 +152,9 @@ class AuditLogger:
           before the column existed).
         - ``1``: legacy unkeyed SHA-256, retained ONLY to verify entries written
           before the keyed upgrade. Never used for new entries.
+
+        ``key`` overrides the signing key for keyed versions; verification
+        passes the key a row's ``signing_key_id`` names.
         """
         # json.dumps with sort_keys produces identical output regardless of
         # Python dict insertion order or MySQL JSON key reordering.
@@ -131,7 +187,7 @@ class AuditLogger:
 
         if version >= _KEYED_MIN_VERSION:
             return hmac.new(
-                _get_audit_signing_key().encode(),
+                (key if key is not None else _get_audit_signing_key()).encode(),
                 data_string.encode(),
                 hashlib.sha256,
             ).hexdigest()
@@ -159,6 +215,77 @@ class AuditLogger:
             "ip_address": log.ip_address,
             "event_data": log.event_data,
         }
+
+    def _check_keyed_row(
+        self,
+        log: AuditLog,
+        previous_hash: str,
+        row_version: int,
+        keyring: _AuditKeyring,
+        cutover_id: int | None,
+    ) -> tuple[str | None, str]:
+        """Check a keyed row's stored hash against the key it names.
+
+        Returns ``(error, calculated_hash)``; ``error`` is None when the row
+        verifies. A row recording the current key's id verifies only with that
+        key. A row with no id (written before ids were recorded) verifies with
+        the current key, else SECRET_KEY; a row recording SECRET_KEY's id,
+        only with SECRET_KEY. Either SECRET_KEY path is refused after
+        ``cutover_id``, the first row that records the dedicated key.
+        """
+        log_data = self._build_hash_data(log)
+        stored = log.current_hash or ""
+        recorded = getattr(log, "signing_key_id", None)
+        calculated = self.calculate_hash(
+            log_data, previous_hash, row_version, keyring.current
+        )
+
+        if recorded is not None and recorded not in (
+            keyring.current_id,
+            keyring.legacy_id,
+        ):
+            return (
+                "Unknown signing key - the row's signing_key_id matches "
+                "neither the configured audit signing key nor SECRET_KEY",
+                calculated,
+            )
+        if recorded in (None, keyring.current_id) and hmac.compare_digest(
+            calculated, stored
+        ):
+            return None, calculated
+        if keyring.legacy is None or recorded == keyring.current_id:
+            return "Hash mismatch - log entry has been tampered with", calculated
+
+        legacy_hash = self.calculate_hash(
+            log_data, previous_hash, row_version, keyring.legacy
+        )
+        if not hmac.compare_digest(legacy_hash, stored):
+            return "Hash mismatch - log entry has been tampered with", (
+                calculated if recorded is None else legacy_hash
+            )
+        if cutover_id is not None and log.id > cutover_id:
+            return (
+                "Signed with SECRET_KEY after the audit chain moved to "
+                "AUDIT_LOG_SIGNING_KEY - the legacy key is accepted only for "
+                f"entries before id {cutover_id}",
+                legacy_hash,
+            )
+        keyring.legacy_rows.append(log.id)
+        return None, legacy_hash
+
+    @staticmethod
+    def _cutover_in(logs, keyring: _AuditKeyring) -> int | None:
+        """First row id in ``logs`` that records the dedicated key, if any."""
+        if keyring.legacy is None:
+            return None
+        return min(
+            (
+                log.id
+                for log in logs
+                if getattr(log, "signing_key_id", None) == keyring.current_id
+            ),
+            default=None,
+        )
 
     async def create_log_entry(
         self,
@@ -231,9 +358,11 @@ class AuditLogger:
                     "event_data": event_data,
                 }
 
-                # Calculate current hash with the keyed (HMAC) algorithm.
+                # Calculate current hash with the keyed (HMAC) algorithm, and
+                # record which key signed it so verification never has to guess.
+                signing_key = _get_audit_signing_key()
                 current_hash = self.calculate_hash(
-                    log_data, previous_hash, _CURRENT_HASH_VERSION
+                    log_data, previous_hash, _CURRENT_HASH_VERSION, signing_key
                 )
 
                 # Create log entry
@@ -254,6 +383,7 @@ class AuditLogger:
                     previous_hash=previous_hash,
                     current_hash=current_hash,
                     hash_version=_CURRENT_HASH_VERSION,
+                    signing_key_id=audit_signing_key_id(signing_key),
                 )
 
                 db.add(log_entry)
@@ -324,12 +454,36 @@ class AuditLogger:
         # still present a self-consistent chain. ``max_version_seen`` tracks the
         # high-water mark; a lower-versioned row after it is treated as tamper.
         max_version_seen = _LEGACY_HASH_VERSION
+        keyring = _AuditKeyring()
+        # SECRET_KEY is accepted only before the cut-over. A run that starts
+        # at the chain's beginning holds every earlier row and finds it among
+        # them; a window starting mid-chain must ask the table, or a window
+        # past the cut-over would accept SECRET_KEY because it never saw it.
+        if start_id is not None and keyring.legacy is not None:
+            cutover_id = (
+                await db.execute(
+                    select(func.min(AuditLog.id)).where(
+                        AuditLog.signing_key_id == keyring.current_id
+                    )
+                )
+            ).scalar()
+        else:
+            cutover_id = self._cutover_in(logs, keyring)
         for i, log in enumerate(logs):
             row_version = log.hash_version or _LEGACY_HASH_VERSION
-            log_data = self._build_hash_data(log)
-            calculated_hash = self.calculate_hash(
-                log_data, log.previous_hash, row_version
-            )
+            if row_version >= _KEYED_MIN_VERSION:
+                hash_error, calculated_hash = self._check_keyed_row(
+                    log, log.previous_hash, row_version, keyring, cutover_id
+                )
+            else:
+                calculated_hash = self.calculate_hash(
+                    self._build_hash_data(log), log.previous_hash, row_version
+                )
+                hash_error = (
+                    None
+                    if calculated_hash == log.current_hash
+                    else "Hash mismatch - log entry has been tampered with"
+                )
 
             if (
                 row_version < _KEYED_MIN_VERSION
@@ -363,15 +517,15 @@ class AuditLogger:
                 )
             max_version_seen = max(max_version_seen, row_version)
 
-            # Check if hash matches
-            if calculated_hash != log.current_hash:
+            if hash_error is not None:
                 results["verified"] = False
                 results["errors"].append(
                     {
                         "log_id": log.id,
-                        "error": "Hash mismatch - log entry has been tampered with",
+                        "error": hash_error,
                         "expected_hash": log.current_hash,
                         "calculated_hash": calculated_hash,
+                        "signing_key_id": getattr(log, "signing_key_id", None),
                     }
                 )
 
@@ -399,7 +553,9 @@ class AuditLogger:
                 # boundary (see archive_expired_logs) is the one sanctioned
                 # alternative to genesis.
                 if log.previous_hash != "0" * 64 and not (
-                    await self._is_archived_boundary(db, log.id, log.previous_hash)
+                    await self._is_archived_boundary(
+                        db, log.id, log.previous_hash, keyring, cutover_id
+                    )
                 ):
                     results["verified"] = False
                     results["errors"].append(
@@ -450,6 +606,7 @@ class AuditLogger:
                     }
                 )
 
+        keyring.warn_if_legacy_used("audit entries or archive attestations")
         return results
 
     async def rehash_chain(self, db: AsyncSession) -> int:
@@ -480,6 +637,8 @@ class AuditLogger:
         # scheme without the key — are the only rows this recovery path repairs.
         previous_hash = "0" * 64
         count = 0
+        keyring = _AuditKeyring()
+        cutover_id = self._cutover_in(logs, keyring)
         for log in logs:
             row_version = log.hash_version or _LEGACY_HASH_VERSION
 
@@ -496,15 +655,17 @@ class AuditLogger:
 
             if row_version >= _KEYED_MIN_VERSION:
                 # Keyed row: verify against its stored hash, never overwrite it.
-                log_data = self._build_hash_data(log)
-                expected = self.calculate_hash(log_data, previous_hash, row_version)
-                if expected != log.current_hash:
+                hash_error, _ = self._check_keyed_row(
+                    log, previous_hash, row_version, keyring, cutover_id
+                )
+                if hash_error is not None:
                     raise ValueError(
                         "Refusing to rehash: keyed audit entry "
-                        f"{log.id} does not match its stored hash. This is a "
-                        "genuine integrity signal (tamper or a bug in keyed "
-                        "hashing), not a legacy-hash mismatch — rehash will not "
-                        "overwrite it. Investigate via the integrity report."
+                        f"{log.id} does not match its stored hash ({hash_error}). "
+                        "This is a genuine integrity signal (tamper or a bug in "
+                        "keyed hashing), not a legacy-hash mismatch — rehash "
+                        "will not overwrite it. Investigate via the integrity "
+                        "report."
                     )
                 # Chain forward from the authoritative stored hash.
                 previous_hash = log.current_hash
@@ -519,6 +680,7 @@ class AuditLogger:
                 count += 1
             previous_hash = correct_hash
 
+        keyring.warn_if_legacy_used("audit entries")
         if count > 0:
             await db.flush()
             logger.info(f"Rehashed {count} legacy audit log entries to fix hash chain")
@@ -546,11 +708,15 @@ class AuditLogger:
             "previous_hash": row.previous_hash,
             "current_hash": row.current_hash,
             "hash_version": row.hash_version,
+            "signing_key_id": getattr(row, "signing_key_id", None),
         }
 
     @staticmethod
     def compute_archive_attestation(
-        first_log_id: int, last_log_id: int, last_log_hash: str
+        first_log_id: int,
+        last_log_id: int,
+        last_log_hash: str,
+        key: str | None = None,
     ) -> str:
         """Keyed HMAC attesting that a checkpoint range was legitimately
         archived by the retention job. Kept out of the checkpoint's own
@@ -558,15 +724,27 @@ class AuditLogger:
         enough to sanction a head deletion."""
         data = f"audit-archive|{first_log_id}|{last_log_id}|{last_log_hash}"
         return hmac.new(
-            _get_audit_signing_key().encode(), data.encode(), hashlib.sha256
+            (key if key is not None else _get_audit_signing_key()).encode(),
+            data.encode(),
+            hashlib.sha256,
         ).hexdigest()
 
     async def _is_archived_boundary(
-        self, db: AsyncSession, head_id: int, previous_hash: str
+        self,
+        db: AsyncSession,
+        head_id: int,
+        previous_hash: str,
+        keyring: _AuditKeyring | None = None,
+        cutover_id: int | None = None,
     ) -> bool:
         """Whether the current chain head legitimately follows an archived
         (exported-and-purged) range: some checkpoint below the head must
-        record this exact boundary hash with a valid keyed attestation."""
+        record this exact boundary hash with a valid keyed attestation.
+
+        An attestation made with SECRET_KEY (an archive run before the
+        dedicated key reached the backend) is accepted only for a range that
+        ends before ``cutover_id``, the same bound the rows are held to."""
+        keyring = keyring or _AuditKeyring()
         result = await db.execute(
             select(AuditLogCheckpoint)
             .where(AuditLogCheckpoint.archived_at.isnot(None))
@@ -574,12 +752,22 @@ class AuditLogger:
             .where(AuditLogCheckpoint.last_log_id < head_id)
         )
         for cp in result.scalars().all():
+            if not cp.archive_attestation:
+                continue
             expected = self.compute_archive_attestation(
-                cp.first_log_id, cp.last_log_id, cp.last_log_hash
+                cp.first_log_id, cp.last_log_id, cp.last_log_hash, keyring.current
             )
-            if cp.archive_attestation and hmac.compare_digest(
-                cp.archive_attestation, expected
+            if hmac.compare_digest(cp.archive_attestation, expected):
+                return True
+            if keyring.legacy is None or (
+                cutover_id is not None and cp.last_log_id >= cutover_id
             ):
+                continue
+            legacy = self.compute_archive_attestation(
+                cp.first_log_id, cp.last_log_id, cp.last_log_hash, keyring.legacy
+            )
+            if hmac.compare_digest(cp.archive_attestation, legacy):
+                keyring.legacy_rows.append(cp.last_log_id)
                 return True
         return False
 

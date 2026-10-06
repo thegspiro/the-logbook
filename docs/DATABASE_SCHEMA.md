@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**289 tables · 4757 columns · 943 foreign keys**
+**289 tables · 4759 columns · 943 foreign keys**
 
 ---
 
@@ -111,7 +111,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`audit_log_checkpoints`](#audit_log_checkpoints) | `AuditLogCheckpoint` | 13 | Periodic integrity checkpoints for audit logs |
-| [`audit_logs`](#audit_logs) | `AuditLog` | 18 | Tamper-proof audit log entries |
+| [`audit_logs`](#audit_logs) | `AuditLog` | 19 | Tamper-proof audit log entries |
 | [`audit_ship_state`](#audit_ship_state) | `AuditShipState` | 5 | High-water mark for off-host audit-log shipping. |
 
 ### Call_Tracking
@@ -161,7 +161,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`manual_ballot_attestations`](#manual_ballot_attestations) | `ManualBallotAttestation` | 5 | One officer's confirmation that a paper-tally batch matches the |
 | [`manual_ballot_batches`](#manual_ballot_batches) | `ManualBallotBatch` | 14 | One paper-tally entry — the set of manual votes sharing a batch id. |
 | [`saved_ballot_templates`](#saved_ballot_templates) | `SavedBallotTemplate` | 11 | Organization-scoped, reusable snapshot of a structured ballot. |
-| [`votes`](#votes) | `Vote` | 25 | Vote model for recording votes |
+| [`votes`](#votes) | `Vote` | 26 | Vote model for recording votes |
 | [`voting_tokens`](#voting_tokens) | `VotingToken` | 16 | Voting token model for secure anonymous ballot access |
 
 ### Email Templates
@@ -1839,6 +1839,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `previous_hash` | VARCHAR(64) | no |  |  |  |
 | `current_hash` | VARCHAR(64) | no | IDX |  |  |
 | `hash_version` | INTEGER | yes |  |  |  |
+| `signing_key_id` | VARCHAR(16) | yes |  |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 
 **Indexes**
@@ -2288,6 +2289,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `vote_rank` | INTEGER | yes |  |  |  |
 | `voted_at` | DATETIME | no |  | `now()` |  |
 | `vote_signature` | VARCHAR(128) | yes |  |  |  |
+| `signing_key_id` | VARCHAR(16) | yes |  |  |  |
 | `vote_dedup_hash` | VARCHAR(64) | yes | UQ |  |  |
 | `chain_hash` | VARCHAR(64) | yes |  |  |  |
 | `receipt_hash` | VARCHAR(64) | yes |  |  |  |

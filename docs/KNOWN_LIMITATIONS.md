@@ -299,6 +299,39 @@ officer whose browser held `top` — now sees the `left` default until somebody
 sets it in Settings. The old value lived in one browser's `localStorage` and
 was not reachable from the server, so there was nothing to migrate.
 
+## Audit and Ballot Signing — `SECRET_KEY` Still Verifies Rows From Before the Dedicated Key (2026-10-06)
+
+Until 2026-10-06 the shipped compose files did not pass
+`AUDIT_LOG_SIGNING_KEY` (nor, on the Unraid files, `VOTE_SIGNING_KEY`) to the
+backend, so an install that set either in `.env` signed with the `SECRET_KEY`
+fallback. **Owner decision (2026-10-06): those rows keep verifying.** Each new
+audit row and ballot records `signing_key_id`, a 16-hex HMAC fingerprint of the
+key that signed it, and verification checks a row only against the key it
+names. A row with no fingerprint is checked against the dedicated key, then
+`SECRET_KEY`; `SECRET_KEY` is accepted only before the cut-over — the first
+audit row recording the dedicated key, or for ballots the `voted_at` of the
+first ballot recording it — and one `WARNING` per run reports how many rows it
+verified. What this leaves, accepted rather than fixed:
+
+- **The cut-over is read from the database.** An attacker who holds
+  `SECRET_KEY` **and** can write the audit table can rewrite every row from
+  the cut-over onward as `SECRET_KEY` rows with no fingerprint, and the chain
+  verifies. Against an attacker holding only one of the two, nothing changes.
+  Closing it needs a trust boundary outside the database — an operator-set
+  last-legacy-id, as `AUDIT_LOG_LEGACY_MAX_ID` is for the unkeyed era — which
+  would make every affected install set a value by hand on upgrade, the step
+  the owner's decision set out to avoid. The ballot chain is unkeyed SHA-256,
+  so the same attacker can already re-order it; the ballot bound is the
+  earliest dedicated-key `voted_at` across the deployment, which a backdated
+  `SECRET_KEY` ballot can still precede.
+- **A retention archive attested with `SECRET_KEY`** sanctions the chain head
+  only when its range ends before the cut-over row; that row is itself
+  eventually purged, after which the bound moves to the earliest surviving
+  dedicated-key row.
+- **`SECRET_KEY` cannot be rotated** without the pre-upgrade rows reading as
+  tampered, for as long as they are kept. Before this change they would have
+  read as tampered as soon as the dedicated key arrived.
+
 ## Found by the September 24 – October 4 Documentation Pass (2026-10-04)
 
 Five items surfaced while bringing the guides up to date with the window's

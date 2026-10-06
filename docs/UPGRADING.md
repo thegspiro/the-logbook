@@ -176,29 +176,47 @@ first restart. The groups most likely to carry such a line:
   container.
 - **Audit shipping and signing keys** — `AUDIT_SHIP_*`,
   `AUDIT_ALLOW_CHAIN_REHASH`, `ENCRYPTION_KEYS_LEGACY`, `AUDIT_LOG_SIGNING_KEY`,
-  and on the Unraid files `VOTE_SIGNING_KEY`. Read the next paragraph before
-  upgrading if either signing key is in your `.env`.
+  and on the Unraid files `VOTE_SIGNING_KEY`. Read the next paragraph if
+  either signing key is in your `.env`.
 - **Monitoring and startup** — `SENTRY_*`, `LOG_FORMAT`, `DB_ECHO`,
   `REDIS_REQUIRED`, `SECURITY_BLOCK_INSECURE_DEFAULTS`, `REGISTRATION_ENABLED`.
 
-**A signing key that never arrived signed nothing.** Production startup warns
-when `AUDIT_LOG_SIGNING_KEY` is unset, so many installs added it to `.env` —
-where it did not reach the backend, and every audit row since was signed with
-the fallback, `SECRET_KEY`. Once the key arrives, the integrity check verifies
-those rows with the new key and reports each one as tampered. The same applies
-to `VOTE_SIGNING_KEY` and existing ballots on the Unraid files
-(`docker-compose.yml` already passed that one through). Before upgrading, check
-whether the key is reaching the running container:
+**A signing key that never arrived signed nothing, and the old records keep
+verifying.** Production startup warns when `AUDIT_LOG_SIGNING_KEY` is unset,
+so many installs added it to `.env` — where it did not reach the backend, and
+every audit row since was signed with the fallback, `SECRET_KEY`. The same
+applies to `VOTE_SIGNING_KEY` and ballots on the Unraid files
+(`docker-compose.yml` already passed that one through). Leave the key in
+`.env`; there is nothing to comment out. Once it arrives:
+
+- New audit rows and ballots are signed with the dedicated key, and each
+  records a short fingerprint of the key that signed it (migration
+  `01f36743137a` adds `signing_key_id` to `audit_logs` and `votes`; it is
+  never the key, nor anything the key can be recovered from).
+- Rows signed before the key arrived still verify: a row with no fingerprint
+  is checked against the dedicated key, then against `SECRET_KEY`. The
+  integrity check logs one `WARNING` per run saying how many it verified with
+  `SECRET_KEY`.
+- `SECRET_KEY` is accepted only for rows written **before the first row signed
+  with the dedicated key** — for ballots, cast no later than the first ballot
+  signed with it. A row after that point signed with `SECRET_KEY` is reported
+  as tampered, as is a row that matches neither key.
+
+Two things follow. **Keep `SECRET_KEY` unchanged** for as long as you need the
+pre-upgrade audit rows and ballots to verify: rotating it makes them read as
+tampered, exactly as rotating the dedicated key would. And an off-host audit
+collector (`AUDIT_SHIP_*`) verifying the shipped batches' HMAC must be given
+the dedicated key, since shipping signs with it from the first restart. To see
+whether a key was reaching the container before the upgrade:
 
 ```bash
 docker compose exec backend printenv AUDIT_LOG_SIGNING_KEY VOTE_SIGNING_KEY
 ```
 
-A key that prints nothing here but is set in `.env` has never been used.
-Comment it out of `.env` before the restart, so the backend keeps signing
-with the key that signed the existing records. Moving to a dedicated key
-afterwards is a key rotation, and the audit chain cannot be re-keyed in
-place (see `docs/KEY_ROTATION.md`).
+A key that printed nothing there but is set in `.env` had never been used,
+and the rows written meanwhile are the ones `SECRET_KEY` now verifies. See
+`docs/KNOWN_LIMITATIONS.md`, "Audit and ballot signing — `SECRET_KEY` still
+verifies rows from before the dedicated key".
 
 **What can stop the boot.** A value that never reached the app was never
 validated either. A typo such as `EMAIL_ENABLED=ture` or `SMTP_PORT=587x`

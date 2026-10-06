@@ -503,6 +503,12 @@ class Vote(Base):
     # Cryptographic signature for tampering detection
     # HMAC-SHA256(id:election_id:candidate_id:voter_hash:position:vote_rank:is_proxy:proxy_delegating:voted_at)
     vote_signature = Column(String(128), nullable=True)
+    # Fingerprint of the key that produced vote_signature
+    # (vote_signing_key_id), never the key itself. NULL on votes cast before
+    # it was recorded: those verify against VOTE_SIGNING_KEY, else SECRET_KEY,
+    # and SECRET_KEY only up to the election's first vote that records the
+    # dedicated key (ElectionService.verify_vote_integrity).
+    signing_key_id = Column(String(16), nullable=True)
 
     # MySQL-compatible dedup hash — SHA256(election_id:voter_id_or_hash:position)
     # Unique constraint on this column prevents double-voting at DB level.

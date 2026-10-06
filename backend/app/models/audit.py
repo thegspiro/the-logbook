@@ -91,6 +91,13 @@ class AuditLog(Base):
     # per-row so pre-upgrade entries still verify under their original
     # scheme while all new entries are forgery-resistant.
     hash_version = Column(Integer, nullable=True)
+    # Fingerprint of the key that signed this row (audit_signing_key_id),
+    # never the key itself. NULL on rows written before it was recorded:
+    # those verify against AUDIT_LOG_SIGNING_KEY, else SECRET_KEY — the key
+    # that signed them when the dedicated one never reached the container.
+    # SECRET_KEY is accepted only up to the first row that records the
+    # dedicated key; see AuditLogger.verify_integrity.
+    signing_key_id = Column(String(16), nullable=True)
 
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
