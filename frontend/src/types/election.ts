@@ -60,6 +60,8 @@ export interface Election {
   anonymous_voting: boolean;
   allow_write_ins: boolean;
   max_votes_per_position: number;
+  // How many candidates each race elects (W50-11); 1 on older servers
+  seats_per_position?: number;
   results_visible_immediately: boolean;
   eligible_voters?: string[];
   email_sent: boolean;
@@ -158,6 +160,7 @@ export interface BallotElection {
   allow_write_ins: boolean;
   voting_method: VotingMethod;
   max_votes_per_position: number;
+  seats_per_position?: number;
 }
 
 /** POST /elections/ballot/lookup — election + candidates in one round-trip */
@@ -201,6 +204,7 @@ export interface ElectionCreate {
   anonymous_voting?: boolean | undefined;
   allow_write_ins?: boolean | undefined;
   max_votes_per_position?: number | undefined;
+  seats_per_position?: number | undefined;
   results_visible_immediately?: boolean | undefined;
   eligible_voters?: string[] | undefined;
   voting_method?: VotingMethod | undefined;
@@ -233,6 +237,7 @@ export interface ElectionUpdate {
   anonymous_voting?: boolean;
   allow_write_ins?: boolean;
   max_votes_per_position?: number;
+  seats_per_position?: number;
   results_visible_immediately?: boolean;
   eligible_voters?: string[];
   voting_method?: VotingMethod;

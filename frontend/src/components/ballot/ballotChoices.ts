@@ -25,6 +25,7 @@ export interface BallotSettings {
   allow_write_ins: boolean;
   voting_method: string;
   max_votes_per_position: number;
+  seats_per_position?: number | undefined;
 }
 
 export const emptyChoice = (): ItemChoice => ({

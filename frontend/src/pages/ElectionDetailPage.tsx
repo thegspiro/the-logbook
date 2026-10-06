@@ -1328,6 +1328,14 @@ export const ElectionDetailPage: React.FC = () => {
               <div className="text-theme-text-muted text-sm">Winner</div>
               <div className="text-theme-text-primary mt-1 text-sm font-medium">{getVictoryDescription(election)}</div>
             </div>
+            {(election.seats_per_position ?? 1) > 1 && (
+              <div>
+                <div className="text-theme-text-muted text-sm">Seats per Race</div>
+                <div className="text-theme-text-primary mt-1 text-sm font-medium">
+                  {`${election.seats_per_position} elected per race`}
+                </div>
+              </div>
+            )}
             <div>
               <div className="text-theme-text-muted text-sm">Anonymous Voting</div>
               <div className="text-theme-text-primary mt-1 text-sm font-medium">

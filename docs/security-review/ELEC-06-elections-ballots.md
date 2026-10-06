@@ -97,6 +97,15 @@ eligibility`'s "already voted in this election" applies only to a ballot
   (`_proxy_anonymity_error`, also in `cast_proxy_vote`) while ELEC-43 is
   undecided, so no attributable ballot can enter an anonymous box. Guard:
   `TestProxyBallot` in `tests/test_ballot_convergence.py`.
+- **W50-11** (a "(2 seats)" race declared one winner) — **fixed:
+  `elections.seats_per_position`** (migration `8c4f2a6e1d93`, guarded,
+  real downgrade; default 1, so every stored election tallies as before).
+  `_declare_seat_winners` marks up to that many qualifiers; a multi-seat
+  race's percentages are of ballots cast (`_count_ballots_cast`, already
+  conservative for paper) rather than of vote rows. `seat_rule_error`
+  refuses ranked choice and a per-race cap below the seats on create and
+  on update against the stored half. Votes, signatures and the chain are
+  untouched — this is tally-only. Guard: `tests/test_w50_seats_per_position.py`.
 - **ELEC-16** (`list_manual_ballot_batches` unbounded) — **accepted as is.**
   Paper-tally sessions per election are naturally few; no cap and no
   pagination. Revisit if an election ever carries more than a few dozen

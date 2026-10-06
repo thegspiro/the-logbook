@@ -126,6 +126,7 @@ export const BallotItemCard: React.FC<BallotItemCardProps> = ({
                 {selectionCap === null
                   ? 'Select every candidate you approve of.'
                   : `Select up to ${selectionCap} candidates.`}
+                {(settings.seats_per_position ?? 1) > 1 && ` ${settings.seats_per_position} will be elected.`}
               </p>
               {candidates.map((candidate) => {
                 const isChecked = choice?.candidate_ids.includes(candidate.id) ?? false;

@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**295 tables · 4851 columns · 963 foreign keys**
+**295 tables · 4852 columns · 963 foreign keys**
 
 ---
 
@@ -157,7 +157,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`candidates`](#candidates) | `Candidate` | 15 | Candidate model for election candidates |
-| [`elections`](#elections) | `Election` | 53 | Election model for managing elections within an organization |
+| [`elections`](#elections) | `Election` | 54 | Election model for managing elections within an organization |
 | [`manual_ballot_attestations`](#manual_ballot_attestations) | `ManualBallotAttestation` | 5 | One officer's confirmation that a paper-tally batch matches the |
 | [`manual_ballot_batches`](#manual_ballot_batches) | `ManualBallotBatch` | 14 | One paper-tally entry — the set of manual votes sharing a batch id. |
 | [`saved_ballot_templates`](#saved_ballot_templates) | `SavedBallotTemplate` | 11 | Organization-scoped, reusable snapshot of a structured ballot. |
@@ -2182,6 +2182,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `anonymous_voting` | BOOL | no |  | `True` |  |
 | `allow_write_ins` | BOOL | no |  | `False` |  |
 | `max_votes_per_position` | INTEGER | no |  | `1` |  |
+| `seats_per_position` | INTEGER | no |  | `1` |  |
 | `results_visible_immediately` | BOOL | no |  | `False` |  |
 | `eligible_voters` | JSON | yes |  |  |  |
 | `voting_method` | VARCHAR(50) | no |  | `simple_majority` |  |

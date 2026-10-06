@@ -116,6 +116,7 @@ from app.schemas.election import (
     VoteResponse,
     VoterOverrideListResponse,
     VoterOverrideRecord,
+    seat_rule_error,
 )
 from app.services.election_service import (
     ElectionService,
@@ -1223,6 +1224,7 @@ async def update_election(
         "anonymous_voting",
         "allow_write_ins",
         "max_votes_per_position",
+        "seats_per_position",
         "results_visible_immediately",
         "eligible_voters",
         "voting_method",
@@ -1283,6 +1285,26 @@ async def update_election(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Percentage quorum cannot exceed 100",
+            )
+
+    # The seat count is checked against the stored half of a partial
+    # update, like quorum above: switching a two-seat race to ranked choice
+    # is refused even when the PATCH names only the method.
+    if {
+        "seats_per_position",
+        "max_votes_per_position",
+        "voting_method",
+        "ballot_items",
+    } & set(update_data):
+        seat_error = seat_rule_error(
+            update_data.get("seats_per_position", election.seats_per_position),
+            update_data.get("max_votes_per_position", election.max_votes_per_position),
+            update_data.get("voting_method", election.voting_method),
+            update_data.get("ballot_items", election.ballot_items),
+        )
+        if seat_error:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=seat_error
             )
 
     # A nominee keeps a position string the election no longer lists: the

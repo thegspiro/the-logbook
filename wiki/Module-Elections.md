@@ -185,6 +185,12 @@ later confirmed count again everywhere; electronic votes (no
 - **Live turnout dashboard** — meeting-night panel (fullscreen-capable)
   with ballots received vs eligible and quorum progress; auto-refreshes;
   never shows candidate tallies before close.
+- **Seats per race** — per-election `seats_per_position` (1–50, W50-11):
+  a multi-seat race marks up to that many winners. The victory condition
+  decides who qualifies, measured against ballots cast rather than vote
+  rows; a tie on the last seat follows the tie policy. Refused with ranked
+  choice (on the election or any item) and with a `max_votes_per_position`
+  below the seat count. Runoffs and clones copy it.
 - **Tie policy** — per-election `tie_policy`: `co_winners` (legacy
   default), `runoff`, `revote`, `chair_decides`. Non-legacy policies
   declare no winner on a tie, flag it in results and the UI, and audit

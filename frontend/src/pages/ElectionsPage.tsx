@@ -43,6 +43,7 @@ export const ElectionsPage: React.FC = () => {
     anonymous_voting: true,
     allow_write_ins: false,
     max_votes_per_position: 1,
+    seats_per_position: 1,
     results_visible_immediately: false,
     voting_method: VM.SIMPLE_MAJORITY,
     victory_condition: VC.MOST_VOTES,
@@ -239,6 +240,7 @@ export const ElectionsPage: React.FC = () => {
           anonymous_voting: true,
           allow_write_ins: false,
           max_votes_per_position: 1,
+          seats_per_position: 1,
           results_visible_immediately: false,
           voting_method: VM.SIMPLE_MAJORITY,
           victory_condition: VC.MOST_VOTES,
@@ -904,6 +906,8 @@ export const ElectionsPage: React.FC = () => {
                           victory_condition: condition,
                           victory_percentage: undefined,
                           victory_threshold: undefined,
+                          // Ranked choice elects one per race (W50-11).
+                          ...(method === VM.RANKED_CHOICE ? { seats_per_position: 1, max_votes_per_position: 1 } : {}),
                         });
                       }}
                       className="form-input mt-1 shadow-xs"
@@ -1178,6 +1182,32 @@ export const ElectionsPage: React.FC = () => {
                       </select>
                       <p className="text-theme-text-muted mt-1 text-xs">
                         With any option other than co-winners, a tie is flagged in the results with no winner declared.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label htmlFor="election-seats" className="text-theme-text-primary block text-sm font-medium">
+                        Seats per Race
+                      </label>
+                      <input
+                        id="election-seats"
+                        type="number"
+                        min={1}
+                        max={50}
+                        value={formData.seats_per_position ?? 1}
+                        disabled={formData.voting_method === VM.RANKED_CHOICE}
+                        onChange={(e) => {
+                          const seats = Math.min(50, Math.max(1, Math.trunc(Number(e.target.value)) || 1));
+                          // A voter picks as many as there are seats; the
+                          // server refuses a cap below the seat count.
+                          setFormData({ ...formData, seats_per_position: seats, max_votes_per_position: seats });
+                        }}
+                        aria-describedby="election-seats-help"
+                        className="form-input mt-1 w-24 shadow-xs"
+                      />
+                      <p id="election-seats-help" className="text-theme-text-muted mt-1 text-xs">
+                        How many people each race elects — a board race with two seats elects its top two, and voters
+                        may choose up to that many. Ranked choice elects one per race.
                       </p>
                     </div>
                   </div>

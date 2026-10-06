@@ -3321,7 +3321,19 @@ class ElectionService:
         # supermajority / threshold conditions below graded against it. The
         # turnout helper already estimates paper voters conservatively (and
         # prefers the officer-attested count), so it is the one definition.
-        if voting_method == "approval":
+        # A Yes/No item decides one question; only a candidate race fills
+        # seats (W50-11).
+        seats = (
+            1
+            if item is not None and item.get("vote_type") == "approval"
+            else (getattr(election, "seats_per_position", 1) or 1)
+        )
+
+        # A multi-seat race has the same shape: a voter marks up to one
+        # candidate per seat, so dividing by vote rows would cap a candidate
+        # every voter chose at 1/seats of the total and no one could reach a
+        # majority (W50-11).
+        if voting_method == "approval" or seats > 1:
             total_votes = self._count_ballots_cast(election, votes, recorded_ballots)
             # If no voter tracking is possible at all, fall back to total votes
             if total_votes == 0:
@@ -3347,6 +3359,17 @@ class ElectionService:
             )
 
         results.sort(key=lambda x: x.vote_count, reverse=True)
+
+        if seats > 1:
+            self._declare_seat_winners(
+                results,
+                election,
+                victory_condition,
+                seats,
+                victory_percentage,
+                total_votes,
+            )
+            return results
 
         # Determine winners based on victory_condition
         if victory_condition == "most_votes":
@@ -3399,6 +3422,65 @@ class ElectionService:
                         result.is_winner = True
 
         return results
+
+    @staticmethod
+    def _declare_seat_winners(
+        results: List[CandidateResult],
+        election: Election,
+        victory_condition: str,
+        seats: int,
+        victory_percentage: Optional[int],
+        total_votes: int,
+    ) -> None:
+        """Mark up to ``seats`` winners in a multi-seat race (W50-11).
+
+        ``results`` is sorted by votes, highest first. The victory condition
+        decides who *qualifies* — every candidate with a vote under
+        most_votes, the vote or percentage bar under the others — and the
+        seats go to the highest qualifiers. When candidates tie on the last
+        seat's count and there are not enough seats left for all of them,
+        the tie is flagged (``is_tied``) and the election's tie policy
+        decides it, exactly as a one-seat tie: co_winners seats them all,
+        any other policy seats none of them and leaves the seat to the
+        runoff, revote or chair.
+        """
+        if victory_condition == "majority":
+            required = total_votes // 2 + 1
+            qualifying = [r for r in results if r.vote_count >= required]
+        elif victory_condition == "supermajority":
+            bar = victory_percentage or 67
+            qualifying = [r for r in results if r.percentage >= bar]
+        elif victory_condition == "threshold":
+            if election.victory_threshold:
+                qualifying = [
+                    r for r in results if r.vote_count >= election.victory_threshold
+                ]
+            elif victory_percentage:
+                qualifying = [r for r in results if r.percentage >= victory_percentage]
+            else:
+                qualifying = []
+        else:
+            qualifying = [r for r in results if r.vote_count > 0]
+
+        if len(qualifying) <= seats:
+            for r in qualifying:
+                r.is_winner = True
+            return
+
+        cut_line = qualifying[seats - 1].vote_count
+        above = [r for r in qualifying if r.vote_count > cut_line]
+        at_cut = [r for r in qualifying if r.vote_count == cut_line]
+        for r in above:
+            r.is_winner = True
+        if len(above) + len(at_cut) <= seats:
+            for r in at_cut:
+                r.is_winner = True
+            return
+        policy = getattr(election, "tie_policy", None) or "co_winners"
+        for r in at_cut:
+            r.is_tied = True
+            if policy == "co_winners":
+                r.is_winner = True
 
     def _calculate_ranked_choice_results(
         self,
@@ -5016,6 +5098,7 @@ class ElectionService:
             anonymous_voting=source.anonymous_voting,
             allow_write_ins=source.allow_write_ins,
             max_votes_per_position=source.max_votes_per_position,
+            seats_per_position=getattr(source, "seats_per_position", 1) or 1,
             # Not copied: this is the ONLY field the update endpoint lets an
             # officer change on a CLOSED election, which is how results get
             # published after the fact. That makes it a post-close decision
@@ -5579,12 +5662,18 @@ class ElectionService:
         )
         all_candidates = list(candidates_result.scalars().all())
 
+        seats = getattr(election, "seats_per_position", 1) or 1
+
         def _advancing(ranked: List[Candidate]) -> List[Candidate]:
-            if len(ranked) < 2:
-                return []  # Can't have a runoff with less than 2 candidates
+            # A runoff needs more candidates than seats, or every one of
+            # them would be elected unopposed.
+            if len(ranked) <= seats:
+                return []
             if election.runoff_type == "eliminate_lowest":
                 return ranked[:-1]
-            return ranked[:2]  # top_two, and the default
+            # top_two, and the default; a multi-seat race keeps one more
+            # candidate than it has seats, so the runoff is still a contest.
+            return ranked[: max(2, seats + 1)]
 
         advancing_candidates: List[Candidate] = []
         runoff_positions: List[str] = []
@@ -5723,6 +5812,7 @@ class ElectionService:
             voter_anonymity_salt=secrets.token_hex(32),
             allow_write_ins=False,  # No write-ins in runoffs
             max_votes_per_position=election.max_votes_per_position,
+            seats_per_position=getattr(election, "seats_per_position", 1) or 1,
             results_visible_immediately=election.results_visible_immediately,
             eligible_voters=election.eligible_voters,
             voter_overrides=copy.deepcopy(election.voter_overrides),

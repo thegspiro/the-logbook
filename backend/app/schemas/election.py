@@ -95,6 +95,49 @@ def _validate_ballot_item_identities(items):
     return items
 
 
+MAX_SEATS_PER_POSITION = 50
+
+
+def seat_rule_error(
+    seats: Optional[int],
+    max_votes: Optional[int],
+    voting_method: Optional[str],
+    ballot_items: Optional[List[Any]] = None,
+) -> Optional[str]:
+    """Why a seat count cannot work with the rest of the configuration.
+
+    Shared by create (schema) and update (endpoint, against the stored half
+    of a partial update). Instant-runoff counting elects one candidate, so a
+    multi-seat race needs plurality, majority, supermajority or approval
+    voting; and unless the method is approval (no cap), a voter must be able
+    to pick as many candidates as there are seats.
+    """
+    seats = seats or 1
+    if seats <= 1:
+        return None
+    methods = {voting_method or "simple_majority"}
+    for item in ballot_items or []:
+        override = (
+            item.get("voting_method")
+            if isinstance(item, dict)
+            else getattr(item, "voting_method", None)
+        )
+        if override:
+            methods.add(override)
+    if "ranked_choice" in methods:
+        return (
+            "A race with more than one seat cannot use ranked-choice voting, "
+            "which elects one candidate per race"
+        )
+    if (voting_method or "simple_majority") != "approval" and (max_votes or 1) < seats:
+        return (
+            f"Voters must be able to choose as many candidates as there are "
+            f"seats: max votes per position ({max_votes or 1}) is below "
+            f"seats per position ({seats})"
+        )
+    return None
+
+
 # Ballot Item Schemas
 
 
@@ -303,6 +346,7 @@ class ElectionBase(BaseModel):
     anonymous_voting: bool = Field(default=True)
     allow_write_ins: bool = Field(default=False)
     max_votes_per_position: int = Field(default=1, ge=1)
+    seats_per_position: int = Field(default=1, ge=1, le=MAX_SEATS_PER_POSITION)
     results_visible_immediately: bool = Field(default=False)
     eligible_voters: Optional[List[UUID]] = Field(
         default=None,
@@ -452,6 +496,14 @@ class ElectionBase(BaseModel):
             and self.quorum_value > 100
         ):
             raise ValueError("Percentage quorum cannot exceed 100")
+        seat_error = seat_rule_error(
+            self.seats_per_position,
+            self.max_votes_per_position,
+            self.voting_method,
+            self.ballot_items,
+        )
+        if seat_error:
+            raise ValueError(seat_error)
         return self
 
 
@@ -482,6 +534,7 @@ class ElectionUpdate(BaseModel):
     anonymous_voting: Optional[bool] = None
     allow_write_ins: Optional[bool] = None
     max_votes_per_position: Optional[int] = Field(None, ge=1)
+    seats_per_position: Optional[int] = Field(None, ge=1, le=MAX_SEATS_PER_POSITION)
     results_visible_immediately: Optional[bool] = None
     eligible_voters: Optional[List[UUID]] = None
     voting_method: Optional[str] = None
@@ -590,6 +643,7 @@ class ElectionResponse(UTCResponseBase):
     anonymous_voting: bool = True
     allow_write_ins: bool = False
     max_votes_per_position: int = 1
+    seats_per_position: int = 1
     results_visible_immediately: bool = False
     eligible_voters: Optional[List[UUID]] = None
     voting_method: str = "simple_majority"
@@ -682,6 +736,7 @@ class BallotElectionResponse(UTCResponseBase):
     allow_write_ins: bool = False
     voting_method: str = "simple_majority"
     max_votes_per_position: int = 1
+    seats_per_position: int = 1
 
     model_config = ConfigDict(from_attributes=True)
 

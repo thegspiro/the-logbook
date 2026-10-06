@@ -176,6 +176,10 @@ class Election(Base):
     anonymous_voting = Column(Boolean, nullable=False, default=True)
     allow_write_ins = Column(Boolean, nullable=False, default=False)
     max_votes_per_position = Column(Integer, nullable=False, default=1)
+    # How many candidates each race elects (W50-11). max_votes_per_position
+    # is only how many a voter may pick; without a seat count the tally
+    # declared one winner in a "(2 seats)" board race.
+    seats_per_position = Column(Integer, nullable=False, default=1, server_default="1")
     results_visible_immediately = Column(Boolean, nullable=False, default=False)
     eligible_voters = Column(JSON, nullable=True)  # List of user IDs or role slugs
 

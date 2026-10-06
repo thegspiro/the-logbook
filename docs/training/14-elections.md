@@ -73,6 +73,7 @@ Key pages:
    - **Start Date** — When voting opens
    - **End Date** — When voting closes
    - **How is the Winner Determined?** — The voting method and victory condition, chosen together as one option (see below)
+   - **Seats per Race** — How many people each race elects (1 to 50). A two-seat board race elects its top two, and each voter may choose up to two. The victory condition decides who qualifies and the seats go to the highest qualifiers; a tie on the last seat is settled by the tie policy. Ranked choice elects one per race, so choosing it sets this back to 1
    - **Anonymous Voting** — Whether votes are anonymous (recommended for officer elections)
    - **Allow Write-Ins** — Whether voters can write in candidates not on the ballot
 3. Click **Create** — the election is created in **Draft** status
@@ -1222,7 +1223,6 @@ is still open.
 `docs/KNOWN_LIMITATIONS.md` under "Elections — Owner Decisions From the W50
 Drive"):
 
-- There is no seat count — a "(2 seats)" race declares one winner.
 - The emailed ballot pre-selects **Abstain** on every item; an untouched
   Submit casts no votes and uses up the link.
 - Scheduled opening (**Open Automatically at Start Time**) sends no ballots.

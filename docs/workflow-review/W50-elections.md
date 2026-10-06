@@ -219,7 +219,7 @@ The link after voting shows "Unable to Load Ballot — This ballot has already b
 
 | Section                 | Result                                                                              |
 | ----------------------- | ----------------------------------------------------------------------------------- |
-| 1. The job gets done    | Create, nominate, candidates, open, vote in app and by link, close; W50-11 flagged  |
+| 1. The job gets done    | Create, nominate, candidates, open, vote in app and by link, close; W50-11 fixed    |
 | 2. The right people     | ✅ member refused every manage call and page; W50-9 flagged                         |
 | 3. Wrong input, failure | ✅ empty create refused; seven double-clicks acted once; bad and used links refused |
 | 4. Browser signals      | 403 on results after close (W50-10)                                                 |
@@ -708,7 +708,9 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `frontend/src/components/ElectionBallot.tsx:60-78, 232` (iterates `election.positions`; ignores `ballot_items` and `max_votes_per_position`); `BallotVotingPage.tsx:396-402`.
 **Why flagged:** either rewrite `ElectionBallot` on the token page's model, or hide the tab when the election has ballot items or a cap > 1 and say "Vote from the ballot link in your email". The second is small and can ship first (`ElectionBallot.w50.test.tsx`); S24 records the gap as a design decision (email-first token ballot), not a regression.
 
-### W50-11 — HIGH — A "(2 seats)" board race declares one winner; the module has no seat count — FLAGGED
+### W50-11 — HIGH — A "(2 seats)" board race declares one winner; the module has no seat count — ✅ FIXED (2026-10-05)
+
+**Owner decision (2026-10-05): a real seat count.** `elections.seats_per_position` (migration `8c4f2a6e1d93`, default 1) is set on the create form (**Seats per Race**) and the settings API; the tally marks up to that many qualifiers, measured against ballots cast, with a last-seat tie settled by the tie policy. Ranked choice and a cap below the seats are refused. The ballot says "N will be elected" and the detail page shows the seat count. Guards: `tests/test_w50_seats_per_position.py`, `BallotItemCard.seats.test.tsx`, `ElectionsPage.w50-seats.test.tsx`.
 
 **Did:** as `secretary` on E2 (A9 steps 2/10): `max_votes_per_position = 2` by API (no UI), three token ballots, close, publish.
 **Saw:** "Finley Grant ✓ Winner 3 / Harper Hayes 2" with one `is_winner`; the report "Finley Grant — ELECTED"; nothing anywhere says two seats.
