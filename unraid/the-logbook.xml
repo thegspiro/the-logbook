@@ -51,6 +51,7 @@
   <!-- Security Keys (AUTO-GENERATED) -->
   <Config Name="Secret Key" Target="SECRET_KEY" Default="" Mode="" Description="JWT secret key - GENERATE with: openssl rand -hex 32" Type="Variable" Display="always" Required="true" Mask="true"></Config>
   <Config Name="Encryption Key" Target="ENCRYPTION_KEY" Default="" Mode="" Description="Encryption key - GENERATE with: openssl rand -hex 32" Type="Variable" Display="always" Required="true" Mask="true"></Config>
+  <Config Name="Encryption Salt" Target="ENCRYPTION_SALT" Default="" Mode="" Description="Encryption key-derivation salt, unique per installation - GENERATE with: openssl rand -hex 16. Set it once and never change it: data encrypted under one salt cannot be read under another." Type="Variable" Display="always" Required="true" Mask="true"></Config>
 
   <!-- Application Settings -->
   <Config Name="Allowed Origins" Target="ALLOWED_ORIGINS" Default="http://[IP]:[PORT:7880]" Mode="" Description="CORS allowed origins (comma-separated)" Type="Variable" Display="advanced" Required="true" Mask="false">http://[IP]:[PORT:7880]</Config>

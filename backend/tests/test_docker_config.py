@@ -615,6 +615,32 @@ class TestUnraidComposeSecuritySwitches:
         assert "SECURITY_REQUIRE_TLS=false" in self.setup_script
 
 
+class TestUnraidTemplateRequiredSecrets:
+    """The Unraid template defaults ENVIRONMENT to production, where
+    validate_security_configuration refuses to boot while any of these is
+    empty. Unraid passes only the variables the template lists, so a secret
+    missing from it is one every template install has to discover by hand —
+    ENCRYPTION_SALT was, and the backend boot-looped until it was added."""
+
+    @pytest.fixture(autouse=True)
+    def _setup(self):
+        self.template = _read(ROOT_DIR / "unraid" / "the-logbook.xml")
+
+    def test_template_defaults_to_production(self):
+        assert re.search(
+            r'Target="ENVIRONMENT"[^>]*>production<', self.template
+        ), "the premise of this class changed; revisit which secrets are required"
+
+    @pytest.mark.parametrize(
+        "setting", ["SECRET_KEY", "ENCRYPTION_KEY", "ENCRYPTION_SALT", "DB_PASSWORD"]
+    )
+    def test_boot_blocking_secret_is_a_required_masked_field(self, setting: str):
+        match = re.search(rf'<Config [^>]*Target="{setting}"[^>]*>', self.template)
+        assert match, f"{setting} is missing from the Unraid template"
+        assert 'Required="true"' in match.group(0)
+        assert 'Mask="true"' in match.group(0)
+
+
 # ===========================================================================
 # Health Endpoint Contract Tests
 # ===========================================================================
