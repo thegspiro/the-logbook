@@ -1147,6 +1147,22 @@ class TradeCandidateResponse(BaseModel):
     model_config = _response_config
 
 
+class OpenSwapPickupResponse(BaseModel):
+    """An open swap the caller is cleared to pick up (W33-4)."""
+
+    swap_request_id: str
+    shift_id: str
+    shift_date: date
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    position: Optional[str] = None
+    requesting_user_name: Optional[str] = None
+    apparatus_label: Optional[str] = None
+    reason: Optional[str] = None
+
+    model_config = _response_config
+
+
 class ExchangeCandidateResponse(BaseModel):
     """A seat the caller could exchange theirs for, with both sides qualified."""
 

@@ -20,6 +20,7 @@ import type {
   AssignmentUpdate,
   SwapRequestCreate,
   ExchangeCandidate,
+  OpenSwapPickup,
   SwapRequestReview,
   SwapRequestFilters,
   PaginatedResponse,
@@ -1050,6 +1051,16 @@ export const schedulingService = {
       accept,
       ...(note ? { note } : {}),
     });
+    return response.data;
+  },
+  /** Open swaps the caller is cleared to pick up. */
+  async getOpenSwaps(): Promise<OpenSwapPickup[]> {
+    const response = await api.get<OpenSwapPickup[]>('/scheduling/swap-requests/open');
+    return asArray(response.data);
+  },
+  /** Take an open swap; the seat moves to the caller. */
+  async pickUpOpenSwap(requestId: string): Promise<SchedulingSwapRequest> {
+    const response = await api.post<SchedulingSwapRequest>(`/scheduling/swap-requests/${requestId}/pick-up`);
     return response.data;
   },
   async cancelSwapRequest(requestId: string): Promise<void> {

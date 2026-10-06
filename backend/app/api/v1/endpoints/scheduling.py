@@ -53,6 +53,7 @@ from app.schemas.scheduling import (
     GenerateShiftsRequest,
     LateSignupOpenRequest,
     MemberHoursHistoryResponse,
+    OpenSwapPickupResponse,
     PlatoonBulkAssign,
     PlatoonBulkAssignResult,
     PlatoonOverviewResponse,
@@ -2495,6 +2496,70 @@ async def create_swap_request(
             status_code=400,
             detail=_safe_detail("Unable to create swap request.", error),
         )
+    enriched = await service.enrich_swap_requests([result])
+    return enriched[0]
+
+
+@router.get("/swap-requests/open", response_model=list[OpenSwapPickupResponse])
+async def list_open_swaps(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.swap")),
+):
+    """Open swaps the caller is cleared to pick up.
+
+    An open swap names nobody, so it is offered to every member cleared for
+    the seat by the signup eligibility rule — the same rule the exchange
+    picker and the pickup itself apply. Another member's open swap is visible
+    here only when the caller could take it.
+
+    **Permissions required:** scheduling.swap
+    """
+    service = SchedulingService(db)
+    return await service.get_open_swaps_for_member(
+        current_user.organization_id, current_user.id
+    )
+
+
+@router.post(
+    "/swap-requests/{request_id}/pick-up", response_model=ShiftSwapRequestResponse
+)
+async def pick_up_open_swap(
+    request_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.swap")),
+):
+    """Pick up an open swap; the seat moves to the caller.
+
+    Member self-service, like accepting a targeted offer: it is the offerer
+    withdrawing and the caller signing up, so it is bounded by the member
+    signup window and by the same eligibility, leave, overlap and seat-cap
+    checks as a signup.
+
+    **Permissions required:** scheduling.swap
+    """
+    service = SchedulingService(db)
+    result, error = await service.pick_up_open_swap(
+        request_id, current_user.organization_id, current_user.id
+    )
+    if error or result is None:
+        raise HTTPException(
+            status_code=400,
+            detail=_safe_detail("Unable to pick up this shift.", error),
+        )
+    await log_audit_event(
+        db=db,
+        event_type="shift_open_swap_picked_up",
+        event_category="scheduling",
+        severity="INFO",
+        event_data={
+            "organization_id": str(current_user.organization_id),
+            "swap_request_id": str(request_id),
+            "shift_id": str(result.offering_shift_id),
+            "from_user_id": str(result.requesting_user_id),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     enriched = await service.enrich_swap_requests([result])
     return enriched[0]
 

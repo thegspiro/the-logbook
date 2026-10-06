@@ -104,7 +104,7 @@ Covered by a new `RequestsTab.test.tsx` case. It holds the first review open,
 and fails with two calls when the guard is removed. Re-driven: a double-clicked
 time-off Approve showed one "Request approved" and no error.
 
-### W33-4 — MED — An open swap cannot be picked up, and approving it moves nothing — FLAGGED
+### W33-4 — MED — An open swap cannot be picked up, and approving it moves nothing — ✅ FIXED (2026-10-05, owner decision)
 
 **Did:**
 
@@ -135,6 +135,23 @@ time-off Approve showed one "Request approved" and no error.
 The first is a visibility decision about other members' requests. Mirrored
 into `docs/KNOWN_LIMITATIONS.md`.
 
+**Owner decision and fix (2026-10-05):** offer an open swap to the members
+eligible for the seat; a pickup moves the assignment.
+
+- `GET /scheduling/swap-requests/open` lists pending open swaps the caller is
+  cleared for, by the signup eligibility rule the two-way exchange check uses
+  (`get_eligible_positions` through `_seat_in`); the Requests tab shows them
+  under **Open shifts you can pick up**.
+- `POST /scheduling/swap-requests/{id}/pick-up` moves the seat to the caller
+  after the member signup window and the full `_validate_assignment_candidate`
+  checks — eligibility, leave, overlap, EVOC and the seat cap. There is no
+  override on this path.
+- Officer approval of an open swap is refused and the Requests tab no longer
+  offers it; deny still works. The dialog reads "Offered to members cleared for
+  your seat; it stays yours until one picks it up".
+- Covered by `backend/tests/test_open_swap_pickup.py`,
+  `OpenSwapPickups.test.tsx` and `RequestsTab.test.tsx`.
+
 ### W33-5 — LOW — An answered request vanished and the list said "No requests" — ✅ FIXED
 
 **Did:** `member` at 390×844, Requests, after both requests were approved.
@@ -149,16 +166,16 @@ Re-driven at 390×844.
 
 ## Checklist
 
-| Section                 | Result                                                                        |
-| ----------------------- | ----------------------------------------------------------------------------- |
-| 1. The job gets done    | ✅ sign up, request swap and time off, officer approves; ⚠ W33-4 open swap    |
-| 2. The right people     | ✅ `member2` 403/404 on another member's requests                             |
-| 3. Wrong input, failure | ✅ double sign-up and double submits acted once; fixed W33-3 (double approve) |
-| 4. Browser signals      | Fixed W33-3 (a 400 from the second review); otherwise clean                   |
-| 5. Coming back to it    | ✅ requests and assignments persist; fixed W33-5 (answered requests hidden)   |
-| 6. On a phone           | ✅ Requests, My Shifts and the swap dialog at 390×844                         |
-| 7. Everyone can use it  | Fixed W33-1; swap type state (W33-4)                                          |
-| 8. What happens around  | ✅ approval notices, time off cancels the seat; fixed W33-2; flagged W33-4    |
+| Section                 | Result                                                                         |
+| ----------------------- | ------------------------------------------------------------------------------ |
+| 1. The job gets done    | ✅ sign up, request swap and time off, officer approves; open swap fixed W33-4 |
+| 2. The right people     | ✅ `member2` 403/404 on another member's requests                              |
+| 3. Wrong input, failure | ✅ double sign-up and double submits acted once; fixed W33-3 (double approve)  |
+| 4. Browser signals      | Fixed W33-3 (a 400 from the second review); otherwise clean                    |
+| 5. Coming back to it    | ✅ requests and assignments persist; fixed W33-5 (answered requests hidden)    |
+| 6. On a phone           | ✅ Requests, My Shifts and the swap dialog at 390×844                          |
+| 7. Everyone can use it  | Fixed W33-1; swap type state (W33-4)                                           |
+| 8. What happens around  | ✅ approval notices, time off cancels the seat; fixed W33-2 and W33-4          |
 
 ## Completion gate
 

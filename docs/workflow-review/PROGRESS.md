@@ -765,7 +765,9 @@ row's Sign up / Confirm / Swap / Approve buttons had one shared name), W33-2
 a double-clicked Approve reviewed twice and showed an error), W33-5 (LOW — an
 answered request vanished behind the Pending filter with "No requests").
 Flagged: W33-4 (MED — an open swap is visible to nobody else and approving it
-moves nothing; the dialog's "Any member can pick it up" is corrected). Gate:
+moves nothing; the dialog's "Any member can pick it up" is corrected). W33-4
+fixed 2026-10-05 on the owner's decision: open swaps are offered to members
+cleared for the seat, and a pickup moves the assignment. Gate:
 typecheck, lint and the scheduling suites clean. Next: W34.
 
 ### W32 — Shift templates and patterns, then generate a month of shifts — 2026-09-29

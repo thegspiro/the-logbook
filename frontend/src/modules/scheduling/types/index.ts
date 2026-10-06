@@ -101,6 +101,19 @@ export interface SwapRequestReview {
  * where both members are cleared for the seat they would take, by the same
  * rule that refuses an unqualified exchange when it is submitted.
  */
+/** An open swap the caller is cleared to pick up (`GET /swap-requests/open`). */
+export interface OpenSwapPickup {
+  swap_request_id: string;
+  shift_id: string;
+  shift_date: string;
+  start_time?: string | null;
+  end_time?: string | null;
+  position?: string | null;
+  requesting_user_name?: string | null;
+  apparatus_label?: string | null;
+  reason?: string | null;
+}
+
 export interface ExchangeCandidate {
   shift_id: string;
   shift_date: string;

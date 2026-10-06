@@ -634,9 +634,10 @@ one reading "→ Offered to <name>"]**
 > roster. Find the cover first, then put that member on it."
 
 **[PRODUCTION NOTE — 2026-10-04. New beat, about 20 seconds; re-time Chapter 6.
-Approving an open swap moving nothing is an open limitation (W33-4,
-`docs/KNOWN_LIMITATIONS.md`), not a bug in the take — if it is fixed, revise
-this beat.]**
+2026-10-05: W33-4 is fixed, so this beat is now wrong — revise it before
+recording. An open swap row reads "→ Open to any member cleared for the seat"
+and has no Approve button: a member cleared for the seat picks it up from their
+own Requests tab and the seat moves then. The officer can still Deny it.]**
 
 ### SETTING SHIFT CLOSE-OUT RULES (19:45 – 20:15)
 

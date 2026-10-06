@@ -457,6 +457,8 @@ require `medical_screening.view`; without it the metric is returned with an
 ```
 GET    /api/v1/scheduling/shifts/{shift_id}/trade-candidates
 POST   /api/v1/scheduling/swap-requests/{request_id}/respond
+GET    /api/v1/scheduling/swap-requests/open              # 2026-10-05, scheduling.swap
+POST   /api/v1/scheduling/swap-requests/{request_id}/pick-up  # 2026-10-05, scheduling.swap
 GET    /api/v1/scheduling/standing-shifts
 GET    /api/v1/scheduling/standing-shifts/preview
 POST   /api/v1/scheduling/standing-shifts

@@ -5241,10 +5241,21 @@ class SchedulingService:
             if not recipient_ids:
                 return
 
+            # An open swap is completed by a member picking it up, not by the
+            # shift officer's review, so asking them to "review and respond"
+            # would send them to an Approve that is not offered (W33-4).
             message = (
-                f"{req_name} has requested a shift swap "
-                f"for the {shift_date_str} shift. "
-                f"Please review and respond."
+                (
+                    f"{req_name} has asked for cover for the {shift_date_str} "
+                    f"shift. Members cleared for the seat can pick it up from "
+                    f"their Requests tab; it stays theirs until one does."
+                )
+                if self._is_open_swap(swap_request)
+                else (
+                    f"{req_name} has requested a shift swap "
+                    f"for the {shift_date_str} shift. "
+                    f"Please review and respond."
+                )
             )
 
             await self._send_notification(
@@ -6052,16 +6063,15 @@ class SchedulingService:
                         )
                     )
                 else:
-                    # An open request has no destination yet. Approval records
-                    # the review without moving the offering assignment, but
-                    # its member and shift must still be live and mutable.
-                    candidates.append(
-                        (
-                            offering_shift,
-                            swap_request.requesting_user_id,
-                            req_assignment.position,
-                            "offering shift",
-                        )
+                    # An open swap is completed by the member who picks it up
+                    # (``pick_up_open_swap``), not by approval: there is nobody
+                    # to move the seat to, and approving one used to tell the
+                    # member "Swap Request Approved" while they were still on
+                    # the roster (W33-4). Denying it is still the officer's.
+                    return await reject(
+                        "An open swap is completed when an eligible member "
+                        "picks it up — approving it would move nothing. Deny "
+                        "it, or assign cover from the shift roster."
                     )
                 if target_assign:
                     candidates.append(
@@ -6401,6 +6411,267 @@ class SchedulingService:
     #: Prefixed to the reviewer's notes when an officer approves an exchange
     #: whose members are not both qualified for the seats they take.
     QUALIFICATION_OVERRIDE_NOTE = "[Approved with qualification override]"
+
+    #: Recorded on an open swap a member picked up. Shown on the Requests tab.
+    OPEN_SWAP_PICKED_UP_NOTE = "Picked up by a member cleared for the seat."
+
+    #: How many open swaps the pickup list shows. Same horizon as the
+    #: exchange picker: the list is read by a person on a phone.
+    OPEN_SWAP_LIMIT = 100
+
+    @staticmethod
+    def _is_open_swap(swap_request: ShiftSwapRequest) -> bool:
+        """No member named and no shift asked for in return."""
+        return not swap_request.target_user_id and not swap_request.requesting_shift_id
+
+    async def get_open_swaps_for_member(
+        self, organization_id: UUID, user_id: UUID
+    ) -> List[Dict[str, Any]]:
+        """Pending open swaps ``user_id`` is cleared to pick up (W33-4).
+
+        The eligibility rule is the exchange picker's, deliberately: the
+        seat's position judged by ``get_eligible_positions`` (rank grants,
+        qualifications, completed training, EVOC, open positions) through
+        ``_seat_in``. A second definition here would offer a seat the pickup
+        then refuses, or hide one it would allow (Pitfall #29).
+
+        Lists only upcoming, open, non-training seats on shifts the member is
+        not already on. Leave, overlap and capacity are left to the pickup,
+        which re-checks everything against live state under locks.
+        """
+        member = (
+            await self.db.execute(
+                select(User).where(
+                    User.id == str(user_id),
+                    User.organization_id == str(organization_id),
+                )
+            )
+        ).scalar_one_or_none()
+        if member is None:
+            return []
+
+        active = ShiftAssignment.assignment_status.notin_(
+            self.INACTIVE_ASSIGNMENT_STATUSES
+        )
+        members_shifts = select(ShiftAssignment.shift_id).where(
+            ShiftAssignment.user_id == str(user_id),
+            ShiftAssignment.organization_id == str(organization_id),
+            active,
+        )
+        today = await resolve_org_today(self.db, organization_id)
+        rows = (
+            await self.db.execute(
+                select(ShiftSwapRequest, Shift, ShiftAssignment)
+                .join(Shift, Shift.id == ShiftSwapRequest.offering_shift_id)
+                .join(
+                    ShiftAssignment,
+                    and_(
+                        ShiftAssignment.shift_id == ShiftSwapRequest.offering_shift_id,
+                        ShiftAssignment.user_id == ShiftSwapRequest.requesting_user_id,
+                    ),
+                )
+                .where(
+                    ShiftSwapRequest.organization_id == str(organization_id),
+                    Shift.organization_id == str(organization_id),
+                    ShiftAssignment.organization_id == str(organization_id),
+                    ShiftSwapRequest.status == SwapRequestStatus.PENDING,
+                    ShiftSwapRequest.target_user_id.is_(None),
+                    ShiftSwapRequest.requesting_shift_id.is_(None),
+                    ShiftSwapRequest.requesting_user_id != str(user_id),
+                    active,
+                    ShiftAssignment.is_training.is_(False),
+                    Shift.status != ShiftStatus.CANCELLED,
+                    Shift.is_finalized.is_(False),
+                    Shift.shift_date >= today,
+                    Shift.shift_date
+                    <= today + timedelta(days=self.EXCHANGE_HORIZON_DAYS),
+                    Shift.id.notin_(members_shifts),
+                )
+                .order_by(Shift.shift_date, Shift.start_time, ShiftSwapRequest.id)
+                .limit(self.OPEN_SWAP_LIMIT)
+            )
+        ).all()
+        if not rows:
+            return []
+
+        from app.services.shift_eligibility_service import ShiftEligibilityService
+
+        eligible = await ShiftEligibilityService(self.db).get_eligible_positions_bulk(
+            member,
+            str(organization_id),
+            sorted({str(shift.id) for _, shift, _ in rows}),
+        )
+        names = await self._get_user_name_map(
+            sorted({str(req.requesting_user_id) for req, _, _ in rows})
+        )
+        apparatus = await self._get_apparatus_map(
+            organization_id,
+            sorted(
+                {str(shift.apparatus_id) for _, shift, _ in rows if shift.apparatus_id}
+            ),
+        )
+        results: List[Dict[str, Any]] = []
+        for req, shift, seat in rows:
+            if not self._seat_in(eligible.get(str(shift.id), []), seat.position):
+                continue
+            unit = (
+                apparatus.get(str(shift.apparatus_id)) if shift.apparatus_id else None
+            )
+            results.append(
+                {
+                    "swap_request_id": str(req.id),
+                    "shift_id": str(shift.id),
+                    "shift_date": shift.shift_date,
+                    "start_time": shift.start_time,
+                    "end_time": shift.end_time,
+                    "position": getattr(seat.position, "value", seat.position),
+                    "requesting_user_name": names.get(str(req.requesting_user_id)),
+                    "apparatus_label": unit.label if unit else None,
+                    "reason": req.reason,
+                }
+            )
+        return results
+
+    async def pick_up_open_swap(
+        self,
+        request_id: UUID,
+        organization_id: UUID,
+        member_id: UUID,
+    ) -> Tuple[Optional[ShiftSwapRequest], Optional[str]]:
+        """An eligible member takes an open swap; the seat moves to them.
+
+        The open-swap counterpart of ``respond_to_swap_offer``, and bounded the
+        same way: it is the offerer withdrawing and the picker signing up, in
+        one step, so it takes the member signup window, and the seat is placed
+        through ``_validate_assignment_candidate`` with position eligibility
+        and capacity enforced — the duplicate, overlap, leave, eligibility,
+        EVOC and seat-cap checks a signup gets. Nothing here bypasses either.
+
+        Locks request, then shift, then the offered seat — the order
+        ``respond_to_swap_offer`` and ``review_swap_request`` take — so two
+        members picking up the same swap serialize on the request row and the
+        second finds it no longer pending.
+        """
+
+        async def reject(message: str):
+            await self.db.rollback()
+            return None, message
+
+        try:
+            swap_request = (
+                await self.db.execute(
+                    select(ShiftSwapRequest)
+                    .where(
+                        ShiftSwapRequest.id == str(request_id),
+                        ShiftSwapRequest.organization_id == str(organization_id),
+                    )
+                    .with_for_update()
+                )
+            ).scalar_one_or_none()
+            if not swap_request:
+                return await reject("Swap request not found")
+            if not self._is_open_swap(swap_request):
+                return await reject("This swap is not open for anyone to pick up")
+            if swap_request.status != SwapRequestStatus.PENDING:
+                return await reject("This swap has already been picked up or closed")
+            if str(swap_request.requesting_user_id) == str(member_id):
+                return await reject("You cannot pick up your own shift")
+
+            offering_shift = (
+                await self.db.execute(
+                    select(Shift)
+                    .where(
+                        Shift.id == str(swap_request.offering_shift_id),
+                        Shift.organization_id == str(organization_id),
+                    )
+                    .with_for_update()
+                )
+            ).scalar_one_or_none()
+            if not offering_shift:
+                return await reject("That shift no longer exists")
+            if offering_shift.status == ShiftStatus.CANCELLED:
+                return await reject("That shift was cancelled")
+            if offering_shift.is_finalized:
+                return await reject("That shift was finalized")
+
+            window_error = await self.signup_closed_reason(
+                offering_shift, organization_id, SignupActor.MEMBER
+            )
+            if window_error:
+                return await reject(window_error)
+
+            offered_assignment = (
+                await self.db.execute(
+                    select(ShiftAssignment)
+                    .where(
+                        ShiftAssignment.shift_id == str(swap_request.offering_shift_id),
+                        ShiftAssignment.organization_id == str(organization_id),
+                        ShiftAssignment.user_id == str(swap_request.requesting_user_id),
+                        ShiftAssignment.assignment_status.notin_(
+                            self.INACTIVE_ASSIGNMENT_STATUSES
+                        ),
+                    )
+                    .with_for_update()
+                )
+            ).scalar_one_or_none()
+            if not offered_assignment:
+                return await reject(
+                    "The member who offered this shift is no longer on it"
+                )
+            # Same refusal as a targeted offer: a training seat carries the
+            # trainee's program and evaluator, which a pickup cannot move.
+            if offered_assignment.is_training:
+                return await reject(
+                    "A training seat cannot be picked up. Ask a duty officer "
+                    "to reassign it."
+                )
+
+            # The vacating seat is excluded from the duplicate and capacity
+            # checks: it moves in this transaction, so counting it would
+            # refuse every pickup on a full crew.
+            error = await self._validate_assignment_candidate(
+                organization_id=organization_id,
+                shift=offering_shift,
+                user_id=member_id,
+                position=offered_assignment.position,
+                exclude_assignment_ids={str(offered_assignment.id)},
+                require_mutable=True,
+                reject_past=True,
+                window_checked=True,
+                enforce_position_eligibility=True,
+                enforce_capacity=True,
+            )
+            if error:
+                return await reject(error)
+
+            offered_assignment.user_id = str(member_id)
+            # Recorded as the target so the request reads, afterwards, as the
+            # handover it became: the Requests tab names who took it, and the
+            # offerer's notice below names them too.
+            swap_request.target_user_id = str(member_id)
+            swap_request.status = SwapRequestStatus.APPROVED
+            swap_request.reviewed_by = str(member_id)
+            swap_request.reviewed_at = datetime.now(timezone.utc)
+            swap_request.reviewer_notes = self.OPEN_SWAP_PICKED_UP_NOTE
+            await self.db.commit()
+            await self.db.refresh(swap_request)
+
+            await self._notify_offer_answered(
+                swap_request, organization_id, accepted=True
+            )
+            await self.db.commit()
+            await self._cancel_swaps_for_vacated_seats(
+                organization_id,
+                [(swap_request.offering_shift_id, swap_request.requesting_user_id)],
+                exclude_request_id=swap_request.id,
+            )
+            return swap_request, None
+        except CodedValueError as exc:
+            await self.db.rollback()
+            return None, str(exc)
+        except Exception as e:
+            await self.db.rollback()
+            return None, str(e)
 
     #: Recorded on a swap withdrawn because its seat went away. Shown on the
     #: Requests tab, so it names the cause rather than the mechanism.

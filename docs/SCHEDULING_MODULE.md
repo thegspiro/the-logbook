@@ -462,6 +462,36 @@ GET    /api/v1/scheduling/shifts/{id}/exchange-candidates   # Member self-servic
   exchange cannot be submitted, the override only ever applies to one that
   lapsed while pending; a deliberate one-off seating is made from the roster.
 
+**Open swaps are picked up by eligible members** _(2026-10-05, W33-4)_ — an
+open swap (no target member, no requested shift) is offered to every member
+cleared for its seat, and the first to pick it up takes it:
+
+```
+GET    /api/v1/scheduling/swap-requests/open            # scheduling.swap
+POST   /api/v1/scheduling/swap-requests/{id}/pick-up    # scheduling.swap
+```
+
+- **One eligibility rule.** The list filters with `get_eligible_positions_bulk`
+  through `_seat_in`, exactly as the exchange picker does, and the pickup
+  places the member through `_validate_assignment_candidate` with
+  `enforce_position_eligibility` and `enforce_capacity` on — the duplicate,
+  overlap, leave, eligibility, EVOC and seat-cap checks a signup gets, after
+  the member signup window. The offered seat is excluded from the capacity
+  count because it moves in the same transaction. Nothing waives either; there
+  is no override on a pickup.
+- **Listed:** pending open swaps, non-training seats, on upcoming open and
+  unfinalized shifts within 90 days that the caller is not already on, from
+  other members, capped at 100.
+- **Pickup** locks request → shift → seat (the order `respond_to_swap_offer`
+  and `review_swap_request` use), moves the assignment's `user_id`, records the
+  picker as `target_user_id`, marks the request approved with the picker as
+  reviewer, tells the offerer, cancels the offerer's other pending swaps of the
+  seat, and writes a `shift_open_swap_picked_up` audit event. A second
+  concurrent pickup waits on the request lock and is told it is no longer open.
+- **Officer approval of an open swap is refused** — there is nobody to move the
+  seat to, and it used to report "Swap Request Approved" while the member stayed
+  rostered. Deny still works; the Requests tab shows no Approve on one.
+
 **Expiry** _(2026-08-23)_ — a pending offer holds the seat with the member who
 made it, so left alone it survives the shift itself: the offerer believes they
 are covered, the duty officer sees a name that will not turn up, and nobody is
@@ -2928,9 +2958,10 @@ skipped, as are dates outside the pattern's own start and end." in place of
   `total_members == 0` instead of "0% · 0/0 compliant" in red (W37-1). It still
   grades training HOURS requirements from shift attendance alone (W37-2, open).
   Since 2026-10-03 it skips members a requirement grandfathers by join date.
-- **Open Swap** reads "An officer finds cover; it stays yours until then" — no
-  other member can see an open swap and approving one moves nothing (W33-4,
-  open). The Requests tab's quick Approve/Deny drop a double click, and a
+- **Open Swap** reads "Offered to members cleared for your seat; it stays
+  yours until one picks it up" — see
+  [Open swaps are picked up by eligible members](#swap-requests) (W33-4). The
+  Requests tab's quick Approve/Deny drop a double click, and a
   filtered empty list says it is showing one status only (W33-3, W33-5).
 - **Concurrent first saves of shift settings** collided on the unique
   `organization_id` index and 500'd; the insert now runs in a savepoint and

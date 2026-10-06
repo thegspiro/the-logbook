@@ -108,9 +108,10 @@ guarded. Limits in `docs/KNOWN_LIMITATIONS.md`; endpoints in
 
 ### Swaps
 
-- **Open Swap** now reads "An officer finds cover; it stays yours until then".
-  It never could be picked up by another member, and approving it moves nothing
-  — open in `docs/KNOWN_LIMITATIONS.md` (W33-4).
+- **Open Swap** is offered to every member cleared for the seat _(2026-10-05)_:
+  they see it on the Requests tab under **Open shifts you can pick up**, and the
+  first to pick it up takes the seat. Officers no longer approve one — approving
+  used to move nothing — but can still deny it (W33-4).
 - **Officers approve offers to a named member** and **pending swaps are
   cancelled with their seat** _(2026-09-30)_ — see
   [Trades a member can complete](#trades-a-member-can-complete).
@@ -804,6 +805,8 @@ GET    /api/v1/scheduling/templates          # List templates
 POST   /api/v1/scheduling/templates          # Create template
 POST   /api/v1/scheduling/patterns           # Create shift pattern
 POST   /api/v1/scheduling/swap-requests      # Request swap
+GET    /api/v1/scheduling/swap-requests/open # Open swaps the caller is cleared to pick up (2026-10-05)
+POST   /api/v1/scheduling/swap-requests/{id}/pick-up # Take an open swap; the seat moves to the caller
 POST   /api/v1/scheduling/time-off           # Request time off
 GET    /api/v1/scheduling/summary            # Counts, incl. active_templates / active_patterns (2026-09-29)
 *      /api/v1/scheduling/external-hours/*   # Shifts with other departments (2026-09-27) — see docs/SCHEDULING_MODULE.md
