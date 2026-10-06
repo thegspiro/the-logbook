@@ -745,6 +745,46 @@ export interface NotificationsSummary {
   notifications_sent_this_month: number;
 }
 
+/** Qualifications entered directly on a member's record (QUAL-1). */
+export const memberQualificationService = {
+  async list(userId: string): Promise<import('../types/user').MemberQualification[]> {
+    const response = await api.get<import('../types/user').MemberQualification[]>(`/users/${userId}/qualifications`);
+    return response.data;
+  },
+
+  /** Records or corrects one qualification; resolves with the member's updated list. */
+  async save(
+    userId: string,
+    code: string,
+    data: import('../types/user').MemberQualificationSave
+  ): Promise<import('../types/user').MemberQualification[]> {
+    const response = await api.put<import('../types/user').MemberQualification[]>(
+      `/users/${userId}/qualifications/${encodeURIComponent(code)}`,
+      data
+    );
+    return response.data;
+  },
+
+  async remove(userId: string, code: string): Promise<import('../types/user').MemberQualification[]> {
+    const response = await api.delete<import('../types/user').MemberQualification[]>(
+      `/users/${userId}/qualifications/${encodeURIComponent(code)}`
+    );
+    return response.data;
+  },
+
+  /** Checks a CSV (dryRun) or writes the rows that pass. */
+  async importCsv(file: File, dryRun: boolean): Promise<import('../types/user').QualificationImportResult> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post<import('../types/user').QualificationImportResult>(
+      '/users/qualifications/import',
+      formData,
+      { params: { dry_run: dryRun }, headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return response.data;
+  },
+};
+
 export const memberStatusService = {
   async changeStatus(
     userId: string,

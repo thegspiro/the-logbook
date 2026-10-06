@@ -20,8 +20,9 @@ import { MEMBERS_SETTINGS_SECTIONS } from './members/admin/settings/membersSetti
 const MembersAdminPage = lazyWithRetry(() => import('./MembersAdminPage'));
 const AddMember = lazyWithRetry(() => import('./AddMember'));
 const ImportMembers = lazyWithRetry(() => import('./ImportMembers'));
+const QualificationImport = lazyWithRetry(() => import('./QualificationImport'));
 
-type AdminTab = 'manage' | 'add' | 'import' | 'settings';
+type AdminTab = 'manage' | 'add' | 'import' | 'qualifications' | 'settings';
 
 /**
  * Settings is always last — the frame's rule, on every module. Adding and
@@ -41,6 +42,9 @@ const ALL_TABS: (AdminHubTab<AdminTab> & { permission?: string })[] = [
   { id: 'manage', label: 'Member Management' },
   { id: 'add', label: 'Add Member', permission: 'users.create' },
   { id: 'import', label: 'Import Members', permission: 'users.create' },
+  // members.manage, which reaching this hub already requires: the endpoint
+  // writes qualifications onto existing members, it creates nobody.
+  { id: 'qualifications', label: 'Import Qualifications' },
   { id: 'settings', label: 'Settings' },
 ];
 
@@ -119,6 +123,7 @@ export const MembersAdminHub: React.FC = () => {
         {activeTab === 'manage' && <MembersAdminPage />}
         {activeTab === 'add' && <AddMember />}
         {activeTab === 'import' && <ImportMembers />}
+        {activeTab === 'qualifications' && <QualificationImport />}
         {activeTab === 'settings' && (
           <div className="mx-auto max-w-7xl space-y-6 py-6">
             {/* The roster settings, which moved here from the global settings

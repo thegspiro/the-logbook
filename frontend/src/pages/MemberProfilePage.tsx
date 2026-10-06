@@ -63,6 +63,7 @@ import { AnonymizeMemberModal } from '../components/AnonymizeMemberModal';
 import { RejoinServiceFields } from '../components/RejoinServiceFields';
 import { useRejoinServiceOptions } from '../hooks/useRejoinServiceOptions';
 import { ServiceHistorySection } from '../components/member-profile/ServiceHistorySection';
+import { QualificationsSection } from '../components/member-profile/QualificationsSection';
 import { isCertificationExpired, isCertificationExpiringSoon } from '../utils/certificationExpiry';
 import { blankToNull } from '../utils/formValues';
 import { displayNameOf, givenName } from '../utils/memberName';
@@ -1330,6 +1331,12 @@ export const MemberProfilePage: React.FC = () => {
                 stint records how the member left, including an involuntary drop. */}
             {userId && (isSelf || canManageMembers) && (
               <ServiceHistorySection userId={userId} canEdit={canManageMembers} tz={tz} refreshKey={user.status} />
+            )}
+
+            {/* What the member is certified to do, as shift eligibility reads
+                it. members.manage only, matching the endpoint. */}
+            {userId && canManageMembers && (
+              <QualificationsSection userId={userId} memberName={displayNameOf(user)} tz={tz} />
             )}
 
             {/* Quick Stats — only when the viewer can see at least one of the

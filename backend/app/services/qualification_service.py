@@ -441,6 +441,49 @@ class QualificationService:
         await self.db.flush()
         return record
 
+    @classmethod
+    def is_record_sourced(cls, row: MemberQualification) -> bool:
+        """Whether this grant was derived from a training record.
+
+        Only such grants are removed when the supporting records are voided;
+        see ``sync_from_training_record``.
+        """
+        return row.notes == cls.RECORD_SOURCED_NOTE
+
+    async def grant_manual(
+        self,
+        user_id: str,
+        organization_id: str,
+        qualification_code: str,
+        granted_on: Optional[date] = None,
+        expires_on: Optional[date] = None,
+        notes: Optional[str] = None,
+    ) -> MemberQualification:
+        """Record a qualification an officer entered directly (QUAL-1).
+
+        The profile panel and the CSV import both write through here. The row
+        is always the officer's afterwards: notes equal to
+        ``RECORD_SOURCED_NOTE`` are dropped, because that marker is what lets a
+        record correction delete a grant, and an entry an officer made — a
+        licence held before the department used this system — must survive a
+        voided training record. Editing a record-derived grant here therefore
+        converts it into a direct entry, which is what an officer correcting it
+        by hand means.
+        """
+        if granted_on and expires_on and expires_on < granted_on:
+            raise ValueError("The expiry date cannot be before the granted date")
+        cleaned = (notes or "").strip() or None
+        if cleaned == self.RECORD_SOURCED_NOTE:
+            cleaned = None
+        return await self.grant(
+            user_id=user_id,
+            organization_id=organization_id,
+            qualification_code=qualification_code,
+            granted_on=granted_on,
+            expires_on=expires_on,
+            notes=cleaned,
+        )
+
     async def revoke(
         self,
         user_id: str,

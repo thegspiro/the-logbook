@@ -117,6 +117,7 @@ displaying their card.
 - **Emergency Contacts** - Emergency contact list. **Visible only to leadership (`members.manage`) and to the member themselves** — the section is hidden entirely for everyone else, and no setting publishes it. Date of birth is restricted the same way
 - **Membership** - Rank, member type, station, platoon and "Member since"; officers also see the status here
 - **Service History** - Credited and prior length of service, stint by stint. Shown only to the member and to `members.manage` holders (see [Former Members Who Rejoin](#former-members-who-rejoin-2026-09-24))
+- **Qualifications** - What the member is certified to do (EMT, Paramedic, Driver / Operator, Firefighter I/II), each marked **In force** or **Not in force** as shift eligibility reads it today, and whether it came **from a training record** or was **entered directly**. Shown only to `members.manage` holders, who can add, edit and remove entries here (see [Entering Qualifications Directly](#entering-qualifications-directly-2026-10-06))
 - **Quick Stats** - Training, hours and equipment counts the viewer is allowed to see
 - **Leave of Absence** - Any active leave periods. Shown only to the member themselves and to `members.manage` holders, the same rule the leave endpoint applies _(2026-09-28 — a colleague's profile used to ask for them anyway and get two refusals)_
 
@@ -1035,18 +1036,53 @@ starts empty. A department that recorded somebody as an EMT _rank_ has said
 where they sit, not which card they hold or when it expires — and inventing an
 expiry date would be worse than having none.
 
-> **Qualifications are recorded through courses, not entered directly.** Set
-> **Certifies** on a course in the Course Library, and recording a member's
-> completion of that course creates or renews the qualification. There is **no
-> panel for entering, editing or expiring one on its own** — so a card a member
-> has held for years needs a training record to match, an incorrect expiry is
-> corrected by **editing the training record that produced it** — never by
-> filing a second completion, which would invent training history that never
-> happened — and setting **Certifies** on a
-> course does **not** backfill records already filed against it.
->
+Qualifications arrive two ways. Set **Certifies** on a course in the Course
+Library, and recording a member's completion of that course creates or renews
+the qualification; or enter it directly, on the member's profile or by CSV
+(below). Setting **Certifies** on a course does **not** backfill records already
+filed against it — enter those directly instead.
+
 > Because shift eligibility reads the expiry **as of the shift date**, a stale
 > or missing qualification decides who may be rostered — it is not cosmetic.
+
+### Entering Qualifications Directly _(2026-10-06)_
+
+**Required Permission:** `members.manage`
+
+A licence a member held before your department used The Logbook — a decade-old
+Paramedic card, a county Driver / Operator certificate — is entered directly,
+without inventing a training record to match it.
+
+**On the member's profile:** the **Qualifications** card lists what the member
+holds. **Add** picks a qualification and takes an optional granted date, expiry
+date (leave it blank if it does not expire) and notes. The pencil corrects the
+dates; the bin removes the qualification after you confirm. Each entry shows
+whether the scheduler counts it **today** — a lapsed card, or one granted with a
+future start date, reads **Not in force**.
+
+**From a CSV file:** **Members > Administration > Import Qualifications**. The
+file needs a `membership_number` or `email` column to find each member, a
+`qualification` column (the code, such as `emt`, or the name, such as
+`Driver / Operator`), and optionally `granted_on`, `expires_on` (YYYY-MM-DD, or
+MM/DD/YYYY) and `notes`. **Download template** gives a starting file.
+
+1. Choose the file. It is **checked first and nothing is written**: the screen
+   lists the rows ready to import and every rejected row by its spreadsheet line
+   with the reason — a member number or email that matches nobody in your
+   department, an unknown qualification, a date that is not a date, an expiry
+   before the grant date, or a second row for the same member and qualification.
+2. Click **Import N rows** to write the rows that passed. Fix the rejected rows
+   in the file and import it again; rows already imported are simply updated.
+
+A member who already holds the qualification has its dates replaced by the
+file's.
+
+**Direct entries and training records.** A qualification granted by a training
+record is removed again if every record supporting it is later voided. One you
+entered directly is yours: voiding a record does not remove it. Editing a
+record-derived qualification on the profile turns it into a direct entry, and
+the panel says so before you save. Filing a later completion of a certifying
+course still renews the dates from that record.
 
 ---
 

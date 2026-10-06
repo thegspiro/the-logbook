@@ -480,6 +480,54 @@ export interface ServicePeriodInput {
   notes: string | null;
 }
 
+/**
+ * A qualification on a member's record (QUAL-1). snake_case, matching the
+ * backend's member_qualification schema, which has no alias generator.
+ */
+export interface MemberQualification {
+  id: string;
+  user_id: string;
+  qualification_code: string;
+  label: string;
+  /** The shift seats it clears the holder for. */
+  positions: string[];
+  granted_on: string | null;
+  expires_on: string | null;
+  notes: string | null;
+  /** "training_record" when a completed course granted it; "manual" when entered directly. */
+  source: 'manual' | 'training_record';
+  /** Whether shift eligibility counts it today — computed by the backend's own rule. */
+  in_force: boolean;
+}
+
+/** Every field is sent on every save: a null date is "no bound", not "unchanged". */
+export interface MemberQualificationSave {
+  granted_on: string | null;
+  expires_on: string | null;
+  notes: string | null;
+}
+
+export interface QualificationImportRow {
+  row: number;
+  user_id: string;
+  member_name: string;
+  qualification_code: string;
+  label: string;
+  granted_on: string | null;
+  expires_on: string | null;
+  action: 'create' | 'update';
+}
+
+export interface QualificationImportResult {
+  dry_run: boolean;
+  total_rows: number;
+  valid_rows: number;
+  imported: number;
+  rows: QualificationImportRow[];
+  /** One entry per rejected row; `row` is the spreadsheet line number. */
+  errors: { row: number; message: string }[];
+}
+
 export interface MemberStatusChangeResponse {
   user_id: string;
   previous_status: string;

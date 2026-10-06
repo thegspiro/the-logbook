@@ -3539,46 +3539,6 @@ public link would be its own defect — or removing the column and its
 enforcement. Recorded rather than fixed because both directions are product
 calls, not documentation ones.
 
-## QUAL-1 — Qualifications Can Only Be Written Through a Course, Never Entered Directly (2026-08-26)
-
-`member_qualifications` (`app/models/qualification.py`) **does** have a
-supported officer workflow, and an earlier version of this entry wrongly said
-it had none. The Course Library exposes a **Certifies** selector
-(`CourseLibraryPage.tsx`, `course.grants_qualification`), and recording a
-member's completion calls `_sync_qualifications`
-(`api/v1/endpoints/training.py:510`) to create or renew the row — from a single
-record, a bulk create, an update, and both historical-import paths.
-
-The real gap is narrower: **a qualification cannot be entered, edited or
-expired on its own.** There is no panel on the member profile, nothing in
-Members administration, and no direct import. Every row has to arrive as a
-side effect of a training record against a course whose `grants_qualification`
-was set before that record was filed.
-
-That has three practical consequences worth recording:
-
-- **A pre-existing card cannot be recorded without inventing a course
-  completion.** A member who has held a Paramedic licence for a decade needs a
-  training record dated to match, against a course that certifies it.
-- **An expiry is corrected on the record that produced it, not on the
-  qualification.** `PATCH /training/records/{record_id}` accepts
-  `expiration_date` and re-runs `_sync_qualifications`, which recomputes
-  `expires_on` from the supporting records — so a typo is fixed by editing that
-  record. **Filing a second completion for a correction would invent training
-  history that never happened**; a new record is for a genuine renewal. What is
-  missing is any way to reach `expires_on` without going through a training
-  record at all.
-- **Setting `grants_qualification` on a course is not retroactive.** Records
-  filed against that course _before_ the selector was set wrote no
-  qualification, and nothing backfills them.
-
-Because shift eligibility reads `expires_on` **as of the shift date**, a stale
-or missing row is not cosmetic — it decides who may be rostered.
-
-Closing this is an ordinary piece of UI work: a qualifications panel on the
-member profile gated on `members.manage`, plus a CSV import. It was
-deliberately out of scope of the change that added the model.
-
 ## MIG-1 — Nothing Prevents Two Open Branches From Claiming the Same `down_revision` (2026-08-31)
 
 The week to 2026-08-31 produced **seven forked Alembic heads** — the highest

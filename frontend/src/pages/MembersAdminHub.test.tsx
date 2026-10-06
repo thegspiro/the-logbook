@@ -26,6 +26,7 @@ vi.mock('../services/adminHubService', () => ({
 vi.mock('./MembersAdminPage', () => ({ default: () => <p>Member management body</p> }));
 vi.mock('./AddMember', () => ({ default: () => <p>Add member body</p> }));
 vi.mock('./ImportMembers', () => ({ default: () => <p>Import members body</p> }));
+vi.mock('./QualificationImport', () => ({ default: () => <p>Qualification import body</p> }));
 
 import { renderWithRouter } from '../test/utils';
 import MembersAdminHub from './MembersAdminHub';
@@ -56,6 +57,7 @@ describe('MembersAdminHub', () => {
         'Member Management',
         'Add Member',
         'Import Members',
+        'Import Qualifications',
         'Settings',
       ]);
     });
@@ -81,7 +83,13 @@ describe('MembersAdminHub', () => {
     renderAt('');
 
     await waitFor(() => {
-      expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Member Management', 'Settings']);
+      expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
+        'Member Management',
+        // Writes onto existing members, so members.manage — which the hub
+        // already requires — is enough; no users.create.
+        'Import Qualifications',
+        'Settings',
+      ]);
     });
   });
 

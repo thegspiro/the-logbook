@@ -56,6 +56,7 @@ from app.api.v1.endpoints import (
     member_badges,
     member_id_cards,
     member_leaves,
+    member_qualifications,
     member_service_history,
     member_status,
     membership_pipeline,
@@ -322,6 +323,9 @@ api_router.include_router(
 api_router.include_router(member_status.router, prefix="/users", tags=["member-status"])
 api_router.include_router(
     member_service_history.router, prefix="/users", tags=["member-status"]
+)
+api_router.include_router(
+    member_qualifications.router, prefix="/users", tags=["member-qualifications"]
 )
 api_router.include_router(
     membership_pipeline.router,
