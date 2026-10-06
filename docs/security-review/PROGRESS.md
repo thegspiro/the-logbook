@@ -16,6 +16,16 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2968](https://github.com/thegspiro/the-logbook/pull/2968)
+(Feature 12, Facilities, pass 7) merged — docs-only (0 application-code
+changes: only `FAC-12-facilities.md`, `PROGRESS.md`), so per this file's
+own rule it is not a recordable event on its own; rotation row 12 already
+stood ✅. This iteration picks up Feature 13 (Apparatus & NFC), the state
+this PR opened from.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 7, PR #2968, merged docs-only — not independently recorded), preserved for history</summary>
+
 **PR [#2968](https://github.com/thegspiro/the-logbook/pull/2968)**: branch
 `claude/security-review-facilities`, Feature 12 (Facilities), pass 7 — 0
 code fixes, 0 new findings. FAC-13/FAC-30 re-verified unchanged (both
@@ -27,6 +37,8 @@ the immediately prior Inventory pass). Route count unchanged at 98. Gate
 green (flake8/black/isort, migrations, route-permission check — 245
 routes, 209 scoped backend tests, frontend typecheck/lint, 110 scoped
 frontend tests). See the Log entry below for detail.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 11, Inventory, pass 7, PR #2966, merged docs-only — not independently recorded), preserved for history</summary>
@@ -17860,7 +17872,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | 🔄     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
