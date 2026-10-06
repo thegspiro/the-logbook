@@ -1275,6 +1275,40 @@ export interface RegistryImportResult {
   source_url?: string;
 }
 
+/** What a program import creates — the same shape on a dry run and a real one. */
+export interface ProgramImportSummary {
+  program_name: string;
+  structure_type: string;
+  phase_count: number;
+  phases: Array<{
+    phase_number: number;
+    name: string;
+    requirement_count: number;
+    milestone_count: number;
+  }>;
+  program_requirement_count: number;
+  milestone_count: number;
+  /** Requirements the department does not have yet; the import creates them. */
+  requirements_created: string[];
+  /** Existing department requirements the program will link to. */
+  requirements_reused: string[];
+}
+
+export interface ProgramImportPreview {
+  success: boolean;
+  dry_run: true;
+  summary: ProgramImportSummary;
+}
+
+export interface ProgramImportResult {
+  success: boolean;
+  dry_run: false;
+  program_id: string;
+  program_name: string;
+  summary: ProgramImportSummary;
+  message: string;
+}
+
 export interface RegistryInfo {
   key: string;
   name: string;

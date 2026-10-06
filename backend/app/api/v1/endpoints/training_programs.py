@@ -2079,6 +2079,11 @@ async def export_program(
 @router.post("/programs/import")
 async def import_program(
     payload: dict,
+    dry_run: bool = Query(
+        False,
+        description="Validate the file and report what it would create, "
+        "without creating anything",
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("training.manage")),
 ):
@@ -2088,6 +2093,9 @@ async def import_program(
     Creates the program, all phases, milestones, and any requirements
     that don't already exist (matched by name + source). Requirements
     that already exist in the department are reused.
+
+    With ``dry_run=true`` nothing is created: the response carries the
+    summary the officer confirms before importing for real.
 
     **Requires permission: training.manage**
     """
@@ -2099,13 +2107,18 @@ async def import_program(
 
     service = TrainingProgramService(db)
     try:
-        program = await service.import_program_from_json(
+        result = await service.import_program_from_json(
             payload,
             current_user.organization_id,
             current_user.id,
+            dry_run=dry_run,
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    program = result.program
+    if program is None:
+        return {"success": True, "dry_run": True, "summary": result.summary}
 
     await log_audit_event(
         db,
@@ -2123,8 +2136,10 @@ async def import_program(
 
     return {
         "success": True,
+        "dry_run": False,
         "program_id": str(program.id),
         "program_name": program.name,
+        "summary": result.summary,
         "message": f"Program '{program.name}' imported successfully",
     }
 

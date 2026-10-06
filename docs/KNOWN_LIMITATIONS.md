@@ -1647,18 +1647,6 @@ with no handler behind it. It is a category dropdown now, wired to the PATCH
 endpoint that had been there all along, and covered by
 `ExternalTrainingPage.test.tsx`.
 
-## Training — Program Import Has No Preview (2026-08-11)
-
-Not implemented. The guide described a preview of what an imported package would
-create, with a **Confirm Import** button. Choosing a file imports it there and
-then; the only checkpoint is the structural validation that rejects a file with
-no `program` key.
-
-A preview would mean a dry-run mode on `import_program_from_json` returning a
-summary rather than committing — worth doing, and not something to bolt onto a
-documentation pass. The guide now says plainly that there is no confirmation
-step.
-
 ## Equipment Checks — Two Legacy Columns Still Written, No Longer Authoritative (2026-08-10)
 
 `check_template_items.lot_number` and `.expiration_date` predate

@@ -2114,14 +2114,19 @@ Officers can share training programs between departments:
 
 1. Navigate to **Training > Programs**
 2. Click **Import** and choose the JSON package file
-3. The package is imported **as soon as you choose the file** — a toast names
-   the program that was created, or says what was wrong with the file
+3. The file is checked and a **preview** opens before anything is created: the
+   program name and structure, each phase with its requirement count, the
+   milestone count, the requirements the import will **create** in your
+   department, and the existing requirements it will **link** to
+4. Click **Confirm Import** to create the program, or **Cancel** to leave the
+   department untouched — a toast names the program that was created
 
-**There is no preview and no confirmation step.** A file that is not a program
-export is rejected before anything is created ("Invalid import format — missing
-'program' key"), so a mis-clicked file is not destructive, but a package that
-_is_ valid is imported without asking twice. Import into a scratch department
-first if you want to see what a package contains before it lands in yours.
+The preview runs the real import and then discards it, so a file it accepts is
+a file the import accepts. A file that is not a program export, or that carries
+an invalid value or a category from another department, is rejected at the
+preview step with the reason, and nothing is created. New requirements are
+listed by name because they outlive a regretted import: deleting the program
+afterwards leaves them in the department's requirement list.
 
 **Edge Cases:**
 

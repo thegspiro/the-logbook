@@ -8,6 +8,7 @@ import asyncio
 import calendar
 import copy
 import json
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -149,6 +150,17 @@ def compliance_projection(
     if pct > 0:
         return RequirementProgressStatus.IN_PROGRESS, value, pct
     return RequirementProgressStatus.NOT_STARTED, value, pct
+
+
+@dataclass
+class ProgramImportResult:
+    """Outcome of ``import_program_from_json``.
+
+    ``program`` is None on a dry run, which stages and discards the import.
+    """
+
+    summary: Dict[str, Any]
+    program: Optional[TrainingProgram] = None
 
 
 class TrainingProgramService:
@@ -5360,13 +5372,74 @@ class TrainingProgramService:
         data: dict,
         organization_id: UUID,
         created_by: UUID,
-    ) -> TrainingProgram:
+        *,
+        dry_run: bool = False,
+    ) -> ProgramImportResult:
         """Import a training program from a portable JSON export.
 
         Creates the program, phases, milestones, and any referenced
         requirements that don't already exist (matched by name + source).
+
+        With ``dry_run`` the same build runs inside a SAVEPOINT that is then
+        rolled back, and only the summary is returned. Running the real build
+        rather than a parallel read-only walk is deliberate: the preview must
+        reject exactly the files the import would reject (enum values, foreign
+        category ids) and count requirements exactly as the import resolves
+        them, and a second implementation would drift from the first.
+        """
+        if not dry_run:
+            program, summary = await self._build_program_from_json(
+                data, organization_id, created_by
+            )
+            await self.db.commit()
+            await self.db.refresh(program)
+            return ProgramImportResult(program=program, summary=summary)
+
+        savepoint = await self.db.begin_nested()
+        try:
+            _, summary = await self._build_program_from_json(
+                data, organization_id, created_by
+            )
+        finally:
+            await savepoint.rollback()
+        return ProgramImportResult(program=None, summary=summary)
+
+    async def _build_program_from_json(
+        self,
+        data: dict,
+        organization_id: UUID,
+        created_by: UUID,
+    ) -> Tuple[TrainingProgram, Dict[str, Any]]:
+        """Stage an imported program in the session without committing.
+
+        Returns the program and a summary of what the import creates.
         """
         prog_data = data.get("program", {})
+        # A requirement referenced twice in one file is created once and then
+        # resolved; tracking the ids created here keeps that second reference
+        # from being reported as a pre-existing requirement being reused.
+        created_requirement_ids: set = set()
+        requirements_created: List[str] = []
+        requirements_reused: List[str] = []
+        phase_summaries: List[Dict[str, Any]] = []
+        milestone_count = 0
+
+        async def _resolve(req_data: dict) -> Tuple[Optional[str], bool]:
+            req_id, req_created = await self._resolve_or_create_requirement(
+                req_data, organization_id, created_by
+            )
+            if req_id is None:
+                return req_id, req_created
+            name = str(req_data.get("name"))
+            if req_created:
+                created_requirement_ids.add(str(req_id))
+                requirements_created.append(name)
+            elif (
+                str(req_id) not in created_requirement_ids
+                and name not in requirements_reused
+            ):
+                requirements_reused.append(name)
+            return req_id, req_created
 
         # Uploaded JSON — validate the enum-backed field before it reaches
         # the DB enum column (invalid values crash at flush as a 500).
@@ -5418,14 +5491,19 @@ class TrainingProgramService:
             self.db.add(phase)
             await self.db.flush()
             phases_by_number[phase.phase_number] = phase
+            phase_summary: Dict[str, Any] = {
+                "phase_number": phase.phase_number,
+                "name": phase.name,
+                "requirement_count": 0,
+                "milestone_count": len(phase_data.get("milestones", [])),
+            }
+            phase_summaries.append(phase_summary)
+            milestone_count += phase_summary["milestone_count"]
 
             for req_data in phase_data.get("requirements", []):
-                req_id, req_created = await self._resolve_or_create_requirement(
-                    req_data.get("requirement", {}),
-                    organization_id,
-                    created_by,
-                )
+                req_id, req_created = await _resolve(req_data.get("requirement", {}))
                 if req_id:
+                    phase_summary["requirement_count"] += 1
                     self.db.add(
                         ProgramRequirement(
                             program_id=program.id,
@@ -5477,13 +5555,11 @@ class TrainingProgramService:
                 phase.prerequisite_phase_ids = linked
 
         # Program-level requirements
+        program_requirement_count = 0
         for req_data in data.get("program_requirements", []):
-            req_id, req_created = await self._resolve_or_create_requirement(
-                req_data.get("requirement", {}),
-                organization_id,
-                created_by,
-            )
+            req_id, req_created = await _resolve(req_data.get("requirement", {}))
             if req_id:
+                program_requirement_count += 1
                 self.db.add(
                     ProgramRequirement(
                         program_id=program.id,
@@ -5518,9 +5594,19 @@ class TrainingProgramService:
                 )
             )
 
-        await self.db.commit()
-        await self.db.refresh(program)
-        return program
+        milestone_count += len(data.get("program_milestones", []))
+        summary: Dict[str, Any] = {
+            "program_name": program.name,
+            "structure_type": program.structure_type.value,
+            "phase_count": len(phase_summaries),
+            "phases": phase_summaries,
+            "program_requirement_count": program_requirement_count,
+            "milestone_count": milestone_count,
+            "requirements_created": requirements_created,
+            "requirements_reused": requirements_reused,
+        }
+        await self.db.flush()
+        return program, summary
 
     async def _resolve_or_create_requirement(
         self,
