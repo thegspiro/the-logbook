@@ -1117,6 +1117,19 @@
   @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors duration-150;
 }
 
+/* Text in a colour an administrator chose — an apparatus status or type, a
+   facility status. The stored value is picked to look right as a tint, so used
+   as-is for text a mid-tone like green-500 reads at about 2.2:1 on white. Mixing
+   toward black (light) or white (dark) keeps the hue while clearing the 4.5:1
+   AA floor for any stored colour; the element sets --data-color. */
+@utility text-data-color {
+  color: color-mix(in oklab, var(--data-color) 55%, black);
+
+  @variant dark {
+    color: color-mix(in oklab, var(--data-color) 60%, white);
+  }
+}
+
 @utility link-underline {
   /* #15 Animated underline for links */
   @apply relative;

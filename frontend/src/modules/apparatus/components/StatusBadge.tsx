@@ -90,10 +90,10 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md' })
   if (status.color) {
     return (
       <span
-        className={`${sizeClasses} inline-flex items-center gap-1 rounded-sm border font-semibold`}
+        className={`${sizeClasses} text-data-color inline-flex items-center gap-1 rounded-sm border font-semibold`}
         style={{
           backgroundColor: `${status.color}20`,
-          color: status.color,
+          '--data-color': status.color,
           borderColor: `${status.color}50`,
         }}
       >

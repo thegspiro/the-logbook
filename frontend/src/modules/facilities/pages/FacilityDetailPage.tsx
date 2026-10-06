@@ -147,10 +147,10 @@ export default function FacilityDetailPage() {
           )}
           {facility.statusRecord && (
             <span
-              className="rounded-full px-2.5 py-1 text-xs font-medium"
+              className={`rounded-full px-2.5 py-1 text-xs font-medium ${facility.statusRecord.color ? 'text-data-color' : ''}`}
               style={{
                 backgroundColor: facility.statusRecord.color ? `${facility.statusRecord.color}20` : undefined,
-                color: facility.statusRecord.color || undefined,
+                '--data-color': facility.statusRecord.color || undefined,
               }}
             >
               {facility.statusRecord.name}

@@ -92,10 +92,10 @@ export const ApparatusTypeBadge: React.FC<ApparatusTypeBadgeProps> = ({ type, si
   if (type.color) {
     return (
       <span
-        className={`${sizeClasses} inline-flex items-center gap-1 rounded-sm border font-semibold`}
+        className={`${sizeClasses} text-data-color inline-flex items-center gap-1 rounded-sm border font-semibold`}
         style={{
           backgroundColor: `${type.color}20`,
-          color: type.color,
+          '--data-color': type.color,
           borderColor: `${type.color}50`,
         }}
       >
