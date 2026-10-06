@@ -94,6 +94,10 @@ class TestIntegrationToDict:
         mock.enabled = True
         mock.contains_phi = False
         mock.last_sync_at = None
+        mock.last_success_at = None
+        mock.last_error = None
+        mock.last_error_at = None
+        mock.consecutive_error_count = 0
         mock.created_at = None
         mock.updated_at = None
         for k, v in overrides.items():
@@ -126,6 +130,12 @@ class TestIntegrationToDict:
             "enabled",
             "contains_phi",
             "last_sync_at",
+            "last_success_at",
+            "last_error",
+            "last_error_at",
+            "consecutive_error_count",
+            "health",
+            "supports_sync",
             "created_at",
             "updated_at",
         }

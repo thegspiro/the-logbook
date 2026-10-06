@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import { McpServiceKeyPanel } from '../components/integrations/McpServiceKeyPanel';
-import { useLocation, useNavigate } from 'react-router';
+import { Link as RouterLink, useLocation, useNavigate } from 'react-router';
 import {
   Plug,
   Calendar,
@@ -1569,6 +1569,16 @@ const IntegrationsPage: React.FC = () => {
                   ))}
                 </div>
                 <div className="flex flex-wrap justify-end gap-2">
+                  {integration.status !== 'coming_soon' && canManage && (
+                    <RouterLink
+                      to={`/integrations/${integration.id}`}
+                      aria-label={`${integration.name} health and run history`}
+                      className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-11 flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm transition-colors"
+                    >
+                      <Activity className="h-3.5 w-3.5" aria-hidden="true" />
+                      <span>Details</span>
+                    </RouterLink>
+                  )}
                   {integration.status === ConnectionStatus.CONNECTED &&
                     integration.integration_type === 'claude-mcp' &&
                     (canManage || canIssueKeys) && (

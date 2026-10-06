@@ -11,6 +11,7 @@ import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
 const IntegrationsPage = lazyWithRetry(() => import('../../pages/IntegrationsPage'));
+const IntegrationDetailPage = lazyWithRetry(() => import('../../pages/IntegrationDetailPage'));
 
 export const getIntegrationsRoutes = () => {
   return (
@@ -21,6 +22,16 @@ export const getIntegrationsRoutes = () => {
           <ProtectedRoute requiredModule="integrations" moduleLabel="Integrations" requiredPermission="settings.manage">
             <Suspense fallback={null}>
               <IntegrationsPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/integrations/:integrationId"
+        element={
+          <ProtectedRoute requiredModule="integrations" moduleLabel="Integrations" requiredPermission="settings.manage">
+            <Suspense fallback={null}>
+              <IntegrationDetailPage />
             </Suspense>
           </ProtectedRoute>
         }

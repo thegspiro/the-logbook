@@ -964,3 +964,30 @@ async def pull_org_from_salesforce(
     if not contacts:
         return empty
     return await sync_service.sync_inbound_contacts(contacts)
+
+
+async def run_salesforce_sync(
+    db: AsyncSession, integration: Integration
+) -> dict[str, Any]:
+    """Run one full sync for an org, as its ``sync_direction`` allows.
+
+    Shared by the scheduled auto-sync and Retry Sync so both do the same
+    thing. Returns the per-direction counts; raises when Salesforce is not
+    connected or a call fails. Does not commit and does not touch
+    ``last_sync_at`` — the caller records the run.
+    """
+    org_id = str(integration.organization_id)
+    sync_service = await get_salesforce_sync_service(db, org_id)
+    if not sync_service:
+        raise Exception("Salesforce is not connected for this department")
+    config = integration.config or {}
+    direction = str(config.get("sync_direction", "push")).lower()
+    sync_types = config.get("sync_types") or ["members", "training", "events"]
+    results: dict[str, Any] = {}
+    if direction in ("push", "both"):
+        results["push"] = await push_org_to_salesforce(
+            db, sync_service, org_id, sync_types
+        )
+    if direction in ("pull", "both"):
+        results["pull"] = await pull_org_from_salesforce(db, sync_service, integration)
+    return results

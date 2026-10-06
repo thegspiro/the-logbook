@@ -5,9 +5,11 @@ Endpoints for managing external integration configurations.
 """
 
 import re
+import time
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,11 +18,11 @@ from app.api.dependencies import get_current_user, require_permission
 from app.api.v1.endpoints.mcp_keys import require_audit_entry
 from app.core.audit import log_audit_event
 from app.core.database import get_db
-from app.core.security_middleware import get_client_ip
+from app.core.security_middleware import check_rate_limit, get_client_ip
 from app.core.utils import sanitize_connector_error
 from app.mcp.constants import MCP_INTEGRATION_TYPE, MCP_MOUNT_PATH
 from app.mcp.keys import McpKeyService
-from app.models.integration import Integration
+from app.models.integration import Integration, IntegrationSyncLog
 from app.models.user import User
 from app.schemas.integration import (
     INTEGRATION_CONFIG_SCHEMAS,
@@ -28,9 +30,26 @@ from app.schemas.integration import (
     IntegrationConnectRequest,
     IntegrationUpdateRequest,
 )
+from app.services.integration_health import (
+    finish_integration_run,
+    health_state,
+    record_integration_run,
+    sanitize_integration_error,
+    start_integration_run,
+    sync_log_to_dict,
+)
 from app.utils.url_validator import validate_integration_url
 
 router = APIRouter()
+
+# Integration types whose Retry Sync re-runs a data sync; every other type's
+# Retry Sync re-checks its connection, since it has nothing to synchronize.
+SYNC_CAPABLE_TYPES = frozenset({"salesforce"})
+
+# Minimum gap between two Retry Sync runs of one integration. A retry calls
+# the provider for real — a Salesforce sync pushes every member — so it is
+# limited per integration, not only per caller IP.
+RETRY_SYNC_COOLDOWN_SECONDS = 60
 
 # Pattern for secret-like keys in config
 _SECRET_KEY_PATTERN = re.compile(
@@ -296,6 +315,10 @@ def _sanitize_config(config: dict[str, Any] | None) -> dict[str, Any]:
     return sanitized
 
 
+def _iso(value: Any) -> str | None:
+    return value.isoformat() if isinstance(value, datetime) else None
+
+
 def _integration_to_dict(
     integration: Integration, *, sanitize_secrets: bool = True
 ) -> dict[str, Any]:
@@ -317,6 +340,14 @@ def _integration_to_dict(
         "last_sync_at": (
             integration.last_sync_at.isoformat() if integration.last_sync_at else None
         ),
+        "last_success_at": _iso(getattr(integration, "last_success_at", None)),
+        "last_error": getattr(integration, "last_error", None),
+        "last_error_at": _iso(getattr(integration, "last_error_at", None)),
+        "consecutive_error_count": int(
+            getattr(integration, "consecutive_error_count", 0) or 0
+        ),
+        "health": health_state(integration),
+        "supports_sync": integration.integration_type in SYNC_CAPABLE_TYPES,
         "created_at": (
             integration.created_at.isoformat() if integration.created_at else None
         ),
@@ -828,10 +859,32 @@ async def test_connection(
     # Delegate to the appropriate service
     from app.services.integration_services import test_integration_connection
 
+    started = time.monotonic()
     try:
         result_msg = await test_integration_connection(integration)
+        await record_integration_run(
+            db,
+            integration,
+            operation="connection_test",
+            trigger="manual",
+            success=True,
+            user_id=str(current_user.id),
+            started_monotonic=started,
+        )
+        await db.commit()
         return {"success": True, "message": result_msg}
     except Exception as e:
+        await record_integration_run(
+            db,
+            integration,
+            operation="connection_test",
+            trigger="manual",
+            success=False,
+            error=e,
+            user_id=str(current_user.id),
+            started_monotonic=started,
+        )
+        await db.commit()
         # Most failure paths here raise a hand-authored, safe message (e.g.
         # "Salesforce rejected these credentials") as bare Exception, or as
         # PayPalError for the PayPal connector. Several test_connection
@@ -847,3 +900,197 @@ async def test_connection(
             "success": False,
             "message": sanitize_connector_error(e, trusted_types=(PayPalError,)),
         }
+
+
+# ============================================================
+# Health: sync history and Retry Sync
+# ============================================================
+
+
+async def _get_org_integration(
+    db: AsyncSession, integration_id: str, organization_id: str, *, lock: bool = False
+) -> Integration:
+    query = select(Integration).where(
+        Integration.id == integration_id,
+        Integration.organization_id == str(organization_id),
+    )
+    if lock:
+        query = query.with_for_update()
+    integration = (await db.execute(query)).scalar_one_or_none()
+    if not integration:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Integration not found"
+        )
+    return integration
+
+
+@router.get("/{integration_id}/sync-history")
+async def get_integration_sync_history(
+    integration_id: str,
+    limit: int = Query(50, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.manage")),
+):
+    """Recent runs of one integration, newest first. Requires `integrations.manage`.
+
+    At most the last 50 are kept. Error text was sanitized when it was stored,
+    and a run's summary holds counts only, never the records that moved.
+    """
+    integration = await _get_org_integration(
+        db, integration_id, current_user.organization_id
+    )
+    rows = (
+        (
+            await db.execute(
+                select(IntegrationSyncLog)
+                .where(
+                    IntegrationSyncLog.integration_id == integration.id,
+                    IntegrationSyncLog.organization_id
+                    == str(current_user.organization_id),
+                )
+                .order_by(
+                    IntegrationSyncLog.started_at.desc(), IntegrationSyncLog.id.desc()
+                )
+                .limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return {"runs": [sync_log_to_dict(row) for row in rows]}
+
+
+def _as_utc(value: datetime) -> datetime:
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+
+async def _run_retry(db: AsyncSession, integration: Integration) -> tuple[str, Any]:
+    """Run the integration once; return (success message, counts). Raises on failure."""
+    if integration.integration_type in SYNC_CAPABLE_TYPES:
+        from app.services.integration_services import salesforce_sync_service
+
+        counts = await salesforce_sync_service.run_salesforce_sync(db, integration)
+        return "Salesforce sync completed", counts
+    if integration.integration_type == MCP_INTEGRATION_TYPE:
+        outcome = await _test_mcp_connection(db, integration)
+        if not outcome["success"]:
+            raise Exception(outcome["message"])
+        return outcome["message"], None
+
+    from app.services.integration_services import test_integration_connection
+
+    return await test_integration_connection(integration), None
+
+
+@router.post("/{integration_id}/retry-sync")
+async def retry_integration_sync(
+    integration_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.manage")),
+):
+    """Re-run an integration now and record the result. Requires `integrations.manage`.
+
+    A sync-capable integration (Salesforce) runs the sync its configured
+    direction allows; any other integration re-checks its connection. Limited
+    to 10 calls a minute per caller IP and one run per integration every
+    ``RETRY_SYNC_COOLDOWN_SECONDS`` — a 429 with ``Retry-After`` otherwise.
+    """
+    await check_rate_limit(
+        request,
+        max_requests=10,
+        window_seconds=60,
+        lockout_seconds=300,
+        scope="integration_retry_sync",
+    )
+    # Locked while the cooldown is checked and the run row is written, so two
+    # simultaneous retries cannot both pass the check. The lock is released by
+    # the commit below, before the provider is called.
+    integration = await _get_org_integration(
+        db, integration_id, current_user.organization_id, lock=True
+    )
+    if not integration.enabled or integration.status != "connected":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Connect the integration before retrying it.",
+        )
+
+    last_retry = (
+        await db.execute(
+            select(IntegrationSyncLog.started_at)
+            .where(
+                IntegrationSyncLog.integration_id == integration.id,
+                IntegrationSyncLog.trigger_source == "retry",
+            )
+            .order_by(IntegrationSyncLog.started_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    now = datetime.now(timezone.utc)
+    if last_retry is not None:
+        wait = timedelta(seconds=RETRY_SYNC_COOLDOWN_SECONDS) - (
+            now - _as_utc(last_retry)
+        )
+        if wait.total_seconds() > 0:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="This integration was retried moments ago. Wait a minute "
+                "before retrying it again.",
+                headers={"Retry-After": str(max(1, int(wait.total_seconds()) + 1))},
+            )
+
+    is_sync = integration.integration_type in SYNC_CAPABLE_TYPES
+    run = await start_integration_run(
+        db,
+        integration,
+        operation=(
+            f"{integration.integration_type}_sync" if is_sync else "connection_test"
+        ),
+        trigger="retry",
+        user_id=str(current_user.id),
+    )
+    await db.commit()
+
+    error: Exception | None = None
+    message = ""
+    counts: Any = None
+    try:
+        message, counts = await _run_retry(db, integration)
+    except Exception as exc:
+        error = exc
+        # A failed sync may have staged member updates; none of them commit.
+        await db.rollback()
+        await db.refresh(integration)
+        await db.refresh(run)
+
+    await finish_integration_run(
+        db,
+        integration,
+        run,
+        success=error is None,
+        summary=counts if isinstance(counts, dict) else None,
+        error=error,
+        mark_synced=is_sync,
+    )
+    await log_audit_event(
+        db,
+        "integration.retry_sync",
+        "integrations",
+        "info" if error is None else "warning",
+        {
+            "integration_id": integration.id,
+            "integration_type": integration.integration_type,
+            "success": error is None,
+        },
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+        ip_address=get_client_ip(request),
+    )
+    await db.commit()
+    await db.refresh(integration)
+
+    return {
+        "success": error is None,
+        "message": message if error is None else sanitize_integration_error(error),
+        "integration": _integration_to_dict(integration),
+    }

@@ -1158,9 +1158,10 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ## Integrations
 
-| URL             | Page         | Permission        |
-| --------------- | ------------ | ----------------- |
-| `/integrations` | Integrations | `settings.manage` |
+| URL                            | Page                                                             | Permission        |
+| ------------------------------ | ---------------------------------------------------------------- | ----------------- |
+| `/integrations`                | Integrations                                                     | `settings.manage` |
+| `/integrations/:integrationId` | Integration detail — health, last error, run history, Retry Sync | `settings.manage` |
 
 > _(2026-04-11)_ The Integrations page now includes **Salesforce CRM** as a connectable integration. Configuration requires `integrations.manage` permission. Features: OAuth 2.0 connection, bidirectional sync (members↔contacts, training→tasks, events→events), configurable field mappings, webhook-based real-time updates, and sync history dashboard. Supports both production and sandbox Salesforce environments.
 

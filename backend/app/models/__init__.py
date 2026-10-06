@@ -192,7 +192,7 @@ from app.models.grant import (
     RecurringFrequency,
     ReportingFrequency,
 )
-from app.models.integration import Integration
+from app.models.integration import Integration, IntegrationSyncLog
 from app.models.inventory import (
     AssignmentType,
     CheckOutRecord,
@@ -487,6 +487,7 @@ __all__ = [
     "MessageTargetType",
     # Integration models
     "Integration",
+    "IntegrationSyncLog",
     "McpServiceKey",
     # Analytics models
     "AnalyticsEvent",

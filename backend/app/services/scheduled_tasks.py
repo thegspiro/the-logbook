@@ -101,6 +101,7 @@ Recommended crontab (add to host or container cron):
 
 import copy
 import html as _html
+import time
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
@@ -6618,10 +6619,9 @@ async def run_salesforce_auto_sync(db: AsyncSession) -> Dict[str, Any]:
     from datetime import timezone as dt_timezone
 
     from app.models.integration import Integration
+    from app.services.integration_health import record_integration_run
     from app.services.integration_services.salesforce_sync_service import (
-        get_salesforce_sync_service,
-        pull_org_from_salesforce,
-        push_org_to_salesforce,
+        run_salesforce_sync,
     )
 
     result = await db.execute(
@@ -6648,21 +6648,20 @@ async def run_salesforce_auto_sync(db: AsyncSession) -> Dict[str, Any]:
             continue
         enabled += 1
         org_id = str(integration.organization_id)
+        started = time.monotonic()
         try:
-            sync_service = await get_salesforce_sync_service(db, org_id)
-            if not sync_service:
-                continue
-            direction = str(config.get("sync_direction", "push")).lower()
-            sync_types = config.get("sync_types") or [
-                "members",
-                "training",
-                "events",
-            ]
-            if direction in ("push", "both"):
-                await push_org_to_salesforce(db, sync_service, org_id, sync_types)
-            if direction in ("pull", "both"):
-                await pull_org_from_salesforce(db, sync_service, integration)
+            counts = await run_salesforce_sync(db, integration)
             integration.last_sync_at = datetime.now(dt_timezone.utc)
+            await record_integration_run(
+                db,
+                integration,
+                operation="salesforce_sync",
+                trigger="scheduled",
+                success=True,
+                summary=counts,
+                started_monotonic=started,
+                mark_synced=True,
+            )
             await db.commit()
             synced += 1
         except Exception as e:
@@ -6671,6 +6670,23 @@ async def run_salesforce_auto_sync(db: AsyncSession) -> Dict[str, Any]:
                 "Salesforce auto-sync failed for org {}", org_id
             )
             await persist_task_error_log(str(org_id), "Salesforce auto-sync", e)
+            # Recorded on the integration as well, so the failure shows on its
+            # detail page and not only in the server's task error log.
+            try:
+                await db.refresh(integration)
+                await record_integration_run(
+                    db,
+                    integration,
+                    operation="salesforce_sync",
+                    trigger="scheduled",
+                    success=False,
+                    error=e,
+                    started_monotonic=started,
+                )
+                await db.commit()
+            except Exception:
+                await db.rollback()
+                logger.warning("Could not record auto-sync failure for org {}", org_id)
             failed += 1
 
     return {

@@ -304,7 +304,7 @@ Once Cal.com is connected, a **Meeting** pipeline stage gains a **Scheduling** o
 > works, but it lists bookings fetched live from your Cal.com account — there is
 > nothing to photograph without a connected one, and our documentation
 > environment has no third-party accounts. See
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#integrations--no-detail-page-no-error-history-no-event-triggers-2026-08-12).
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#integrations--no-per-event-notification-triggers-2026-08-12).
 
 ---
 
@@ -457,11 +457,12 @@ Each member opens **Subscribe to my shifts** at the top of
 > **You cannot choose which events post _(2026-08-12)_.** Earlier versions of
 > this guide had a step for selecting event triggers and described checkboxes
 > for New Member, Training Completed, Event Scheduled and Shift Change. There is
-> no such control — a messaging integration collects a webhook URL and nothing
-> more — and there is no Test Connection button on an integration. The Slack
-> connect dialog is pictured under
+> no such control — a messaging integration collects a webhook URL and posts
+> every notification the department sends. Use **Test** on the card to check a
+> webhook, and the integration's **Details** page to see whether recent
+> deliveries succeeded. The Slack connect dialog is pictured under
 > [Connecting an Integration](#connecting-an-integration). See
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#integrations--no-detail-page-no-error-history-no-event-triggers-2026-08-12).
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#integrations--no-per-event-notification-triggers-2026-08-12).
 
 ---
 
@@ -724,15 +725,16 @@ The integrations dashboard shows health status for each connected integration:
 | **Gray dot**        | Not connected — available to configure               |
 | **Red X**           | Connection lost — credentials may have expired       |
 
-> **There is no integration detail page _(2026-08-12)_.** This section used to
-> say you could click an integration to see its last sync timestamp, last error
-> message, consecutive error count and sync history. `/integrations` is the only
-> page — the integrations are cards on it, and clicking one does not open
-> anything further. Of those four figures only the **last sync timestamp** is
-> recorded at all; there is no error message, error counter or sync history in
-> the data model, and no **Retry Sync** control anywhere. What you get is the
-> status on the card itself. See
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#integrations--no-detail-page-no-error-history-no-event-triggers-2026-08-12).
+> **Integration detail page _(2026-10-05)_.** Click **Details** on any
+> integration card to open its health page: last sync, last success, the last
+> error and when it happened, how many runs in a row have failed, and its last
+> 50 runs — syncs, connection checks and chat deliveries, each with what
+> triggered it. **Retry sync** (Salesforce) re-runs the sync; for other
+> integrations the same button reads **Retry connection check**. It can be
+> pressed once a minute per integration. Error text is cleaned before it is
+> stored, so it never shows a webhook URL, token or email address. Health is
+> reported as _Healthy_, _Recent failure_, _Failing_ (three or more failures in
+> a row) or _Not run yet_.
 
 ---
 

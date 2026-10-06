@@ -578,6 +578,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'fast route-level mobile presentation ratchet — integrations catalogue',
   },
   {
+    path: '/integrations/:integrationId',
+    source: 'src/modules/integrations/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
     path: '/inventory',
     source: 'src/modules/inventory/routes.tsx',
     coverage: 'ratchet',

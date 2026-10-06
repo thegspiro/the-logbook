@@ -1077,6 +1077,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       },
       { path: '/integrations', label: 'Integrations', permission: 'settings.manage', module: 'integrations' },
       {
+        path: '/integrations/:integrationId',
+        label: 'Integration detail',
+        permission: 'settings.manage',
+        module: 'integrations',
+      },
+      {
         path: '/admin/public-portal',
         label: 'Public portal administration',
         permission: 'settings.manage',

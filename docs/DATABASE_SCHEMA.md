@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**288 tables · 4741 columns · 940 foreign keys**
+**289 tables · 4757 columns · 943 foreign keys**
 
 ---
 
@@ -312,7 +312,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`integrations`](#integrations) | `Integration` | 14 | Stores integration configurations per organization |
+| [`integration_sync_logs`](#integration_sync_logs) | `IntegrationSyncLog` | 12 | One run of an integration: a sync, a connection check, a chat delivery. |
+| [`integrations`](#integrations) | `Integration` | 18 | Stores integration configurations per organization |
 
 ### Inventory
 
@@ -4692,6 +4693,31 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 ## Integrations
 
+### `integration_sync_logs`
+
+**IntegrationSyncLog** · `app/models/integration.py`
+
+> One run of an integration: a sync, a connection check, a chat delivery. Bounded per integration (``MAX_SYNC_HISTORY`` in app.services.integration_health). ``summary`` holds integer counts only and ``error_message`` is sanitized, so the history never carries the records that moved or a provider's raw response.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
+| `integration_id` | VARCHAR(36) | no | FK, IDX |  | → `integrations.id` ON DELETE CASCADE |
+| `operation` | VARCHAR(50) | no |  |  |  |
+| `trigger_source` | VARCHAR(20) | no |  |  |  |
+| `status` | VARCHAR(20) | no |  |  |  |
+| `started_at` | DATETIME | no |  | `now()` |  |
+| `finished_at` | DATETIME | yes |  |  |  |
+| `duration_ms` | INTEGER | yes |  |  |  |
+| `summary` | JSON | yes |  |  |  |
+| `error_message` | TEXT | yes |  |  |  |
+| `triggered_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+
+**Indexes**
+
+- `ix_integration_sync_logs_integration_started` (`integration_id`, `started_at`)
+
 ### `integrations`
 
 **Integration** · `app/models/integration.py`
@@ -4712,6 +4738,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `enabled` | BOOL | yes |  | `False` |  |
 | `contains_phi` | BOOL | yes |  | `False` |  |
 | `last_sync_at` | DATETIME | yes |  |  |  |
+| `last_success_at` | DATETIME | yes |  |  |  |
+| `last_error` | TEXT | yes |  |  |  |
+| `last_error_at` | DATETIME | yes |  |  |  |
+| `consecutive_error_count` | INTEGER | no |  | `0` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
@@ -10031,7 +10061,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (345 references)
+### → `users` (346 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10185,6 +10215,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `instructor_qualifications` | `created_by` | SET NULL | yes |
 | `instructor_qualifications` | `user_id` | CASCADE | no |
 | `instructor_qualifications` | `verified_by` | SET NULL | yes |
+| `integration_sync_logs` | `triggered_by` | SET NULL | yes |
 | `inventory_categories` | `created_by` | RESTRICT | yes |
 | `inventory_impact_plans` | `created_by` | SET NULL | yes |
 | `inventory_item_pins` | `user_id` | CASCADE | no |
@@ -10381,7 +10412,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (234 references)
+### → `organizations` (235 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10489,6 +10520,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `grant_applications` | `organization_id` | CASCADE | no |
 | `grant_opportunities` | `organization_id` | CASCADE | no |
 | `instructor_qualifications` | `organization_id` | CASCADE | no |
+| `integration_sync_logs` | `organization_id` | CASCADE | no |
 | `inventory_categories` | `organization_id` | CASCADE | no |
 | `inventory_impact_plans` | `organization_id` | CASCADE | no |
 | `inventory_item_pins` | `organization_id` | CASCADE | no |
@@ -11388,6 +11420,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `grant_applications` | `opportunity_id` | SET NULL | yes |
+
+### → `integrations` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `integration_sync_logs` | `integration_id` | CASCADE | no |
 
 ### → `inventory_nfc_audits` (1 references)
 
